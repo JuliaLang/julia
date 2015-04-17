@@ -66,18 +66,23 @@ function show(io::IO, x::IntrinsicFunction)
     print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
-show(io::IO, x::UnionType) = print(io, "Union", x.types)
+function show(io::IO, x::UnionType)
+    print(io, "Union")
+    show_delim_array(io, x.types, '(', ',', ')', false)
+end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
 function show(io::IO, x::DataType)
-    if isvarargtype(x)
-        print(io, x.parameters[1], "...")
-    else
-        show(io, x.name)
-        if length(x.parameters) > 0
-            show_comma_array(io, x.parameters, '{', '}')
+    show(io, x.name)
+    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
+        print(io, '{')
+        n = length(x.parameters)
+        for i = 1:n
+            show(io, x.parameters[i])
+            i < n && print(io, ',')
         end
+        print(io, '}')
     end
 end
 
@@ -204,6 +209,7 @@ end
 
 show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
+show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
 show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
@@ -983,7 +989,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      sz::(Integer, Integer) = (s = tty_size(); (s[1]-4, s[2])),
+                      sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
                       pre::AbstractString = " ",
                       sep::AbstractString = "  ",
                       post::AbstractString = "",

@@ -351,7 +351,7 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-let _nipartitions = Dict{(Int,Int),Int}()
+let _nipartitions = Dict{Tuple{Int,Int},Int}()
     global npartitions
     function npartitions(n::Int,m::Int)
         if n < m || m == 0

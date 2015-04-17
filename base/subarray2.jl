@@ -22,7 +22,7 @@ for i = 1:4
     end
     @eval begin
         stagedfunction getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
-            if $i == 1 && length(IV) == LD  # linear indexing
+            if $i == 1 && length(IV.parameters) == LD  # linear indexing
                 meta = Expr(:meta, :inline)
                 if iscontiguous(V)
                     return :($meta; V.parent[V.first_index + i_1 - 1])
@@ -36,7 +36,7 @@ for i = 1:4
             end
         end
         stagedfunction setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
-            if $i == 1 && length(IV) == LD  # linear indexing
+            if $i == 1 && length(IV.parameters) == LD  # linear indexing
                 meta = Expr(:meta, :inline)
                 if iscontiguous(V)
                     return :($meta; V.parent[V.first_index + i_1 - 1] = v)
@@ -107,6 +107,7 @@ end
 # NP may not be equal to length(Itypes), because a view of a 2d matrix A
 # can be constructed as V = A[5:13] or as V = A[2:4, 1:3, 1].
 function index_generate(NP, Itypes, Vsym, Isyms)
+    Itypes = Itypes.parameters
     if isempty(Isyms)
         Isyms = Any[1]  # this handles the syntax getindex(V)
     end

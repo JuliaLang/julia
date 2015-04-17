@@ -495,7 +495,7 @@ DLLEXPORT jl_value_t *jl_is_char_signed()
 DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 {
     size_t i;
-    for(i=0; i < jl_tuple_len(dt->names); i++) {
+    for(i=0; i < jl_datatype_nfields(dt); i++) {
         offsets[i] = jl_field_offset(dt, i);
     }
 }
@@ -549,7 +549,7 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
 
 DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    if(field > jl_tuple_len(ty->names))
+    if(field > jl_datatype_nfields(ty))
         jl_error("This type does not have that many fields");
     return ty->fields[field].offset;
 }

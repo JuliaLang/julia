@@ -84,7 +84,7 @@ end
 # check type stability
 for T = (Float32,Float64,BigFloat)
     for f = (sind,cosd,sinpi,cospi)
-        @test Base.return_types(f,(T,)) == [T]
+        @test Base.return_types(f,Tuple{T}) == [T]
     end
 end
 

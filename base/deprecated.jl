@@ -200,9 +200,9 @@ end
 @deprecate median!(v::AbstractVector; checknan::Bool=true)  median!(v)
 
 @deprecate Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) Dict{K,V}(zip(ks, vs))
-@deprecate Dict{K,V}(ks::(K...), vs::(V...))                     Dict{K,V}(zip(ks, vs))
-@deprecate Dict{K}(ks::(K...), vs::Tuple)                        Dict{K,Any}(zip(ks, vs))
-@deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
+@deprecate Dict{K,V}(ks::Tuple{K,...}, vs::Tuple{V,...})         Dict{K,V}(zip(ks, vs))
+@deprecate Dict{K}(ks::Tuple{K,...}, vs::Tuple)                  Dict{K,Any}(zip(ks, vs))
+@deprecate Dict{V}(ks::Tuple, vs::Tuple{V,...})                  Dict{Any,V}(zip(ks, vs))
 @deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))
 
 @deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) (n % T)

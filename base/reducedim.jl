@@ -353,7 +353,7 @@ function findmax{T}(A::AbstractArray{T}, region)
             zeros(Int, reduced_dims0(A, region)), A)
 end
 
-size_skip1{T}(dims::(), Aref::AbstractArray{T,0}) = CartesianIndex(())
+size_skip1{T}(dims::Tuple{}, Aref::AbstractArray{T,0}) = CartesianIndex(())
 size_skip1{T,N}(dims::NTuple{N,Int}, Aref::AbstractArray{T,N}) = CartesianIndex(skip1(dims...))
 @inline size_skip1{T,M,N}(dims::NTuple{M,Int}, Aref::AbstractArray{T,N}) = size_skip1(tuple(dims..., 1), Aref)
 skip1(x, t...) = t

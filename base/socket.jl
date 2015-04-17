@@ -1,3 +1,4 @@
+
 ## IP ADDRESS HANDLING ##
 abstract IPAddr
 
@@ -494,7 +495,7 @@ function recvfrom(sock::UDPSocket)
         error("UDPSocket is not initialized and open")
     end
     _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::(Union(IPv4, IPv6), Vector{UInt8})
+    stream_wait(sock,sock.recvnotify)::Tuple{Union(IPv4, IPv6), Vector{UInt8}}
 end
 
 

@@ -1,5 +1,3 @@
-const NonTupleType = Union(DataType,UnionType,TypeConstructor)
-
 typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
@@ -39,20 +37,37 @@ call{T}(::Type{T}, args...) = convert(T, args...)::T
 
 convert{T}(::Type{T}, x::T) = x
 
-convert(::(), ::()) = ()
+convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
+convert{T}(::Type{Tuple{T,...}}, x::Tuple) = cnvt_all(T, x...)
+cnvt_all(T) = ()
+cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
+
+stagedfunction tuple_type_head{T<:Tuple}(::Type{T})
+    T.parameters[1]
+end
+
+isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
+isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
+unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
+
+stagedfunction tuple_type_tail{T<:Tuple}(::Type{T})
+    if isvatuple(T) && length(T.parameters) == 1
+        return T
+    end
+    Tuple{argtail(T.parameters...)...}
+end
 
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-convert(T::(Type, Type...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
-convert(T::(Any, Any...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
+convert{T<:Tuple{Any,Any,...}}(::Type{T}, x::Tuple{Any, Any, ...}) =
+    tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
 
-convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
-cnvt_all(T) = ()
-cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
+oftype(x,c) = convert(typeof(x),c)
+
+unsigned(x::Int) = reinterpret(UInt, x)
+signed(x::UInt) = reinterpret(Int, x)
 
 # conversions used by ccall
 ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
@@ -65,6 +80,8 @@ unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults 
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
 reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
+
+sizeof(x) = Core.sizeof(x)
 
 abstract IO
 
@@ -220,7 +237,7 @@ function precompile(f::ANY, args::Tuple)
         f = f.name.module.call
     end
     if isgeneric(f)
-        ccall(:jl_compile_hint, Void, (Any, Any), f, args)
+        ccall(:jl_compile_hint, Void, (Any, Any), f, Tuple{args...})
     end
 end
 
@@ -247,7 +264,7 @@ end
 
 call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert((Int...), d))
+call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert(Tuple{Int,...}, d))
 
 call{T}(::Type{Array{T}}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
@@ -258,10 +275,30 @@ call{T}(::Type{Array{T}}, m::Integer, n::Integer, o::Integer) =
 
 # TODO: possibly turn these into deprecations
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
-Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert((Int...), d))
+Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert(Tuple{Int,...}, d))
 Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
+
+# SimpleVector
+
+function getindex(v::SimpleVector, i::Int)
+    if !(1 <= i <= length(v))
+        throw(BoundsError())
+    end
+    unsafe_load(convert(Ptr{Any},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+end
+
+length(v::SimpleVector) = v.length
+endof(v::SimpleVector) = v.length
+start(v::SimpleVector) = 1
+next(v::SimpleVector,i) = (v[i],i+1)
+done(v::SimpleVector,i) = (i > v.length)
+isempty(v::SimpleVector) = (v.length == 0)
+
+map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
+
+getindex(v::SimpleVector, I::AbstractArray) = Any[ v[i] for i in I ]
 
 immutable Nullable{T}
     isnull::Bool

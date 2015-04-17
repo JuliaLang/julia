@@ -226,10 +226,10 @@ function complete_methods(ex_org::Expr)
         found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
     end
     out = UTF8String[]
-    t_in = tuple(args_ex...) # Input types
+    t_in = Tuple{args_ex...} # Input types
     for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(method.sig[1 : min(length(args_ex), end)], t_in) != None &&
+        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != None &&
             push!(out,string(method))
     end
     return out

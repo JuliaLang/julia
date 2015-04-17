@@ -17,7 +17,7 @@ function available(names=readdir("METADATA"))
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
+            haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
@@ -134,7 +134,7 @@ requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,(VersionNumber,Bool)}()
+    pkgs = Dict{ByteString,Tuple{VersionNumber,Bool}}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())

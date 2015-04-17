@@ -15,7 +15,7 @@ function next(e::Enumerate, state)
 end
 done(e::Enumerate, state) = done(e.itr, state[2])
 
-eltype{I}(::Type{Enumerate{I}}) = (Int, eltype(I))
+eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
 # zip
 
@@ -28,7 +28,7 @@ end
 zip(a) = a
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = min(length(z.a), length(z.b))
-eltype{I1,I2}(::Type{Zip2{I1,I2}}) = (eltype(I1), eltype(I2))
+eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
 start(z::Zip2) = (start(z.a), start(z.b))
 function next(z::Zip2, st)
     n1 = next(z.a,st[1])
@@ -43,7 +43,10 @@ immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
 end
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = min(length(z.a), length(z.z))
-eltype{I,Z}(::Type{Zip{I,Z}}) = tuple(eltype(I), eltype(Z)...)
+stagedfunction tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+    Tuple{S, T.parameters...}
+end
+eltype{I,Z}(::Type{Zip{I,Z}}) = tuple_type_cons(eltype(I), eltype(Z))
 start(z::Zip) = tuple(start(z.a), start(z.z))
 function next(z::Zip, st)
     n1 = next(z.a, st[1])

@@ -11,7 +11,7 @@ convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
 convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
 convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
-function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
+function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
     d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
     return Diagonal{T}(Array(T,d[1]))
 end

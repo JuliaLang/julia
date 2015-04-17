@@ -77,7 +77,7 @@ void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_cell_1d(0);
         jl_cell_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f) jl_get_specialization(f, jl_null);
+        if (f) jl_get_specialization(f, (jl_tupletype_t*)jl_typeof(jl_emptytuple));
     }
     else {
         jl_module_run_initializer(m);
@@ -203,7 +203,9 @@ static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 // - later, it refers to either old Base or new Base
 jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
-    return (m==jl_core_module||m==jl_old_base_module||jl_base_module==NULL) ? m : jl_base_module;
+    if (m==jl_core_module || m==jl_old_base_module)
+        return m;
+    return (jl_base_module==NULL) ? jl_core_module : jl_base_module;
 }
 
 int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
@@ -507,7 +509,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (ewc) {
-        thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, thk);
+        thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_emptysvec, thk);
         if (!jl_in_inference) {
             jl_type_infer(thk, jl_tuple_type, thk);
         }
@@ -601,14 +603,10 @@ DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
-void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
+void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 {
-    for(size_t i=0; i < jl_tuple_len(t); i++) {
-        jl_value_t *elt = jl_tupleref(t,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
-        }
-    }
+    if (!jl_is_tuple_type(t))
+        jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
 }
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
@@ -616,13 +614,14 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
+        jl_is_tuple_type(super) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;
     gc_wb(tt, tt->super);
-    if (jl_tuple_len(tt->parameters) > 0) {
-        tt->name->cache = (jl_value_t*)jl_null;
+    if (jl_svec_len(tt->parameters) > 0) {
+        tt->name->cache = (jl_value_t*)jl_emptysvec;
         jl_reinstantiate_inner_types(tt);
     }
 }
@@ -631,21 +630,26 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 
 extern int jl_boot_file_loaded;
 
+static int type_contains(jl_value_t *ty, jl_value_t *x);
+static int svec_contains(jl_svec_t *svec, jl_value_t *x)
+{
+    assert(jl_is_svec(svec));
+    size_t i, l=jl_svec_len(svec);
+    for(i=0; i < l; i++) {
+        jl_value_t *e = jl_svecref(svec, i);
+        if (e==x || type_contains(e, x))
+            return 1;
+    }
+    return 0;
+}
+
 static int type_contains(jl_value_t *ty, jl_value_t *x)
 {
     if (ty == x) return 1;
-    if (jl_is_tuple(ty)) {
-        size_t i, l=jl_tuple_len(ty);
-        for(i=0; i < l; i++) {
-            jl_value_t *e = jl_tupleref(ty,i);
-            if (e==x || type_contains(e, x))
-                return 1;
-        }
-    }
     if (jl_is_uniontype(ty))
-        return type_contains(jl_fieldref(ty,0), x);
+        return svec_contains((jl_svec_t*)jl_fieldref(ty,0), x);
     if (jl_is_datatype(ty))
-        return type_contains((jl_value_t*)((jl_datatype_t*)ty)->parameters, x);
+        return svec_contains(((jl_datatype_t*)ty)->parameters, x);
     return 0;
 }
 
@@ -653,14 +657,14 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                     jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged,
+                                    jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
                                     jl_value_t *call_func, int iskw)
 {
-    // argtypes is a tuple ((types...), (typevars...))
-    jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
-    argtypes = (jl_tuple_t*)jl_t0(argtypes);
+    // argdata is svec({types...}, svec(typevars...))
+    jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
+    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
     jl_value_t *gf=NULL;
-    JL_GC_PUSH3(&gf, &argtypes, &t);
+    JL_GC_PUSH3(&gf, &tvars, &argtypes);
 
     if (bnd && bnd->value != NULL && !bnd->constp) {
         jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
@@ -673,22 +677,22 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                 // DataType: define `call`, for backwards compat with outer constructors
                 if (call_func == NULL)
                     call_func = (jl_value_t*)jl_module_call_func(jl_current_module);
-                size_t na = jl_tuple_len(argtypes);
-                jl_tuple_t *newargtypes = jl_alloc_tuple(1 + na);
+                size_t na = jl_nparams(argtypes);
+                jl_svec_t *newargtypes = jl_alloc_svec(1 + na);
                 JL_GC_PUSH1(&newargtypes);
                 size_t i=0;
                 if (iskw) {
                     assert(na > 0);
                     // for kw sorter, keep container argument first
-                    jl_tupleset(newargtypes, 0, jl_tupleref(argtypes, 0));
+                    jl_svecset(newargtypes, 0, jl_tparam(argtypes, 0));
                     i++;
                 }
-                jl_tupleset(newargtypes, i, jl_wrap_Type(gf));
+                jl_svecset(newargtypes, i, jl_wrap_Type(gf));
                 i++;
                 for(; i < na+1; i++) {
-                    jl_tupleset(newargtypes, i, jl_tupleref(argtypes, i-1));
+                    jl_svecset(newargtypes, i, jl_tparam(argtypes, i-1));
                 }
-                argtypes = newargtypes;
+                argtypes = jl_apply_tuple_type(newargtypes);
                 JL_GC_POP();
                 gf = call_func;
                 name = call_sym;
@@ -724,9 +728,10 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         }
     }
 
-    size_t na = jl_tuple_len(argtypes);
+    // TODO
+    size_t na = jl_nparams(argtypes);
     for(size_t i=0; i < na; i++) {
-        jl_value_t *elt = jl_tupleref(argtypes,i);
+        jl_value_t *elt = jl_tparam(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
@@ -735,8 +740,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     }
 
     int ishidden = !!strchr(name->name, '#');
-    for(size_t i=0; i < jl_tuple_len(t); i++) {
-        jl_value_t *tv = jl_tupleref(t,i);
+    for(size_t i=0; i < jl_svec_len(tvars); i++) {
+        jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
         if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
@@ -756,10 +761,10 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         if (bp_owner) gc_wb(bp_owner, gf);
     }
     assert(jl_is_function(f));
-    assert(jl_is_tuple(argtypes));
-    assert(jl_is_tuple(t));
+    assert(jl_is_tuple_type(argtypes));
+    assert(jl_is_svec(tvars));
 
-    jl_add_method((jl_function_t*)gf, argtypes, f, t, isstaged == jl_true);
+    jl_add_method((jl_function_t*)gf, argtypes, f, tvars, isstaged == jl_true);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
@@ -770,7 +775,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     return gf;
 }
 
-void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl_sym_t *fname)
+void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname)
 {
     jl_array_t *vinfo;
     size_t nvars;
@@ -778,9 +783,9 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl
     if (li->ast && jl_is_expr(li->ast)) {
         vinfo = jl_lam_vinfo((jl_expr_t*)li->ast);
         nvars = jl_array_len(vinfo);
-        for(size_t i=0; i < jl_tuple_len(t); i++) {
+        for(size_t i=0; i < jl_svec_len(t); i++) {
             for(size_t j=0; j < nvars; j++) {
-                jl_value_t *tv = jl_tupleref(t,i);
+                jl_value_t *tv = jl_svecref(t,i);
                 if (jl_is_typevar(tv)) {
                     if ((jl_sym_t*)jl_cellref((jl_array_t*)jl_cellref(vinfo,j),0) ==
                         ((jl_tvar_t*)tv)->name) {

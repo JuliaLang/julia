@@ -170,13 +170,13 @@ function showerror(io::IO, ex::MethodError)
 end
 
 const UNSHOWN_METHODS = ObjectIdDict(
-    which(call, (Type, Any...)) => true
+    which(call, Tuple{Type, Any, ...}) => true
 )
 function show_method_candidates(io::IO, ex::MethodError)
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
 
-    lines = Array((IOBuffer, Int), 0)
+    lines = []
     # These functions are special cased to only show if first argument is matched.
     special = ex.f in [convert, getindex, setindex!]
     funcs = [ex.f]
@@ -184,20 +184,21 @@ function show_method_candidates(io::IO, ex::MethodError)
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
-    ex.f == convert && push!(funcs, call)
+    ex.f === convert && push!(funcs, call)
 
     for func in funcs
         name = isgeneric(func) ? func.env.name : :anonymous
         for method in methods(func)
             haskey(UNSHOWN_METHODS, method) && continue
             buf = IOBuffer()
-            use_constructor_syntax = func == call && !isempty(method.sig) && isa(method.sig[1], DataType) &&
-                                     !isempty(method.sig[1].parameters) && isa(method.sig[1].parameters[1], DataType)
-            print(buf, "  ", use_constructor_syntax ? method.sig[1].parameters[1].name : name)
+            sig = method.sig.parameters
+            use_constructor_syntax = func == call && !isempty(sig) && isa(sig[1], DataType) &&
+                                     !isempty(sig[1].parameters) && isa(sig[1].parameters[1], DataType)
+            print(buf, "  ", use_constructor_syntax ? sig[1].parameters[1].name : name)
             right_matches = 0
             tv = method.tvars
-            if !isa(tv,Tuple)
-                tv = (tv,)
+            if !isa(tv,SimpleVector)
+                tv = svec(tv)
             end
             if !isempty(tv)
                 show_delim_array(buf, tv, '{', ',', '}', false)
@@ -205,13 +206,19 @@ function show_method_candidates(io::IO, ex::MethodError)
             print(buf, "(")
             t_i = [Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
             right_matches = 0
-            for i = 1 : min(length(t_i), length(method.sig))
+            for i = 1 : min(length(t_i), length(sig))
                 i > (use_constructor_syntax ? 2 : 1) && print(buf, ", ")
                 # If isvarargtype then it checks wether the rest of the input arguements matches
                 # the varargtype
-                j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
+                if Base.isvarargtype(sig[i])
+                    sigstr = string(sig[i].parameters[1], "...")
+                    j = length(t_i)
+                else
+                    sigstr = string(sig[i])
+                    j = i
+                end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
+                t_in = typeintersect(Tuple{sig[1:i]...}, Tuple{t_i[1:j]...})
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in == None && special && i == 1 && break
@@ -220,44 +227,49 @@ function show_method_candidates(io::IO, ex::MethodError)
                 elseif t_in == None
                     if Base.have_color
                         Base.with_output_color(:red, buf) do buf
-                            print(buf, "::$(method.sig[i])")
+                            print(buf, "::$sigstr")
                         end
                     else
-                        print(buf, "!Matched::$(method.sig[i])")
+                        print(buf, "!Matched::$sigstr")
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
                     # signature then there will be a type intersect
-                    t_i[i] = method.sig[i]
+                    t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(buf, "::$(method.sig[i])")
+                    print(buf, "::$sigstr")
                 end
             end
             special && right_matches==0 && continue
 
-            if length(t_i) > length(method.sig) && !isempty(method.sig) && Base.isvarargtype(method.sig[end])
+            if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
-                for t in typeof(ex.args)[length(method.sig):end]
-                    if t <: method.sig[end].parameters[1]
+                for t in typeof(ex.args).parameters[length(sig):end]
+                    if t <: sig[end].parameters[1]
                         right_matches += 1
                     end
                 end
             end
 
             if right_matches > 0
-                if length(t_i) < length(method.sig)
+                if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
-                    for sigtype in method.sig[length(t_i)+1:end]
+                    for sigtype in sig[length(t_i)+1:end]
+                        if Base.isvarargtype(sigtype)
+                            sigstr = string(sigtype.parameters[1], "...")
+                        else
+                            sigstr = string(sigtype)
+                        end
                         print(buf, ", ")
                         if Base.have_color
                             Base.with_output_color(:red, buf) do buf
-                                print(buf, "::$sigtype")
+                                print(buf, "::$sigstr")
                             end
                         else
-                            print(buf, "!Matched::$sigtype")
+                            print(buf, "!Matched::$sigstr")
                         end
                     end
                 end
@@ -320,7 +332,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     count = 0
     for i = 1:length(t)
         lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i], true)
-        if lkup === ()
+        if lkup === nothing
             continue
         end
         fname, file, line, fromC = lkup

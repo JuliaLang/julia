@@ -24,48 +24,46 @@ function typejoin(a::ANY, b::ANY)
         end
         return reduce(typejoin, Bottom, u.types)
     end
-    if isa(a,Tuple)
-        if !isa(b,Tuple)
+    if a <: Tuple
+        if !(b <: Tuple)
             return Any
         end
-        la = length(a)::Int; lb = length(b)::Int
+        ap, bp = a.parameters, b.parameters
+        la = length(ap)::Int; lb = length(bp)::Int
         if la==0 || lb==0
             return Tuple
         end
         if la < lb
-            if isvarargtype(a[la])
+            if isvarargtype(ap[la])
                 c = cell(la)
-                c[la] = Vararg{typejoin(a[la].parameters[1], tailjoin(b,la))}
+                c[la] = Vararg{typejoin(ap[la].parameters[1], tailjoin(bp,la))}
                 n = la-1
             else
                 c = cell(la+1)
-                c[la+1] = Vararg{tailjoin(b,la+1)}
+                c[la+1] = Vararg{tailjoin(bp,la+1)}
                 n = la
             end
         elseif lb < la
-            if isvarargtype(b[lb])
+            if isvarargtype(bp[lb])
                 c = cell(lb)
-                c[lb] = Vararg{typejoin(b[lb].parameters[1], tailjoin(a,lb))}
+                c[lb] = Vararg{typejoin(bp[lb].parameters[1], tailjoin(ap,lb))}
                 n = lb-1
             else
                 c = cell(lb+1)
-                c[lb+1] = Vararg{tailjoin(a,lb+1)}
+                c[lb+1] = Vararg{tailjoin(ap,lb+1)}
                 n = lb
             end
         else
             c = cell(la)
             n = la
         end
-        for i=1:n
-            ai = a[i]; bi = b[i]
-            va = false
-            if isvarargtype(ai); va=true; ai = ai.parameters[1]; end
-            if isvarargtype(bi); va=true; bi = bi.parameters[1]; end
-            t = typejoin(ai,bi)
-            c[i] = va ? Vararg{t} : t
+        for i = 1:n
+            ai = ap[i]; bi = bp[i]
+            ci = typejoin(unwrapva(ai),unwrapva(bi))
+            c[i] = isvarargtype(ai) || isvarargtype(bi) ? Vararg{ci} : ci
         end
-        return tuple(c...)
-    elseif isa(b,Tuple)
+        return Tuple{c...}
+    elseif b <: Tuple
         return Any
     end
     while !is(b,Any)
@@ -91,12 +89,11 @@ function typejoin(a::ANY, b::ANY)
     return Any
 end
 
-# reduce typejoin over tup[i:end]
-function tailjoin(tup, i)
+# reduce typejoin over A[i:end]
+function tailjoin(A, i)
     t = Bottom
-    for j = i:length(tup)
-        tj = tup[j]
-        t = typejoin(t, isvarargtype(tj)?tj.parameters[1]:tj)
+    for j = i:length(A)
+        t = typejoin(t, unwrapva(A[j]))
     end
     return t
 end
@@ -140,9 +137,9 @@ function promote(x, y, z)
      convert(promote_typeof(x,y,z), z))
 end
 function promote(x, y, zs...)
-    tuple(convert(promote_typeof(x,y,zs...), x),
-          convert(promote_typeof(x,y,zs...), y),
-          convert((promote_typeof(x,y,zs...)...), zs)...)
+    (convert(promote_typeof(x,y,zs...), x),
+     convert(promote_typeof(x,y,zs...), y),
+     convert(Tuple{promote_typeof(x,y,zs...),...}, zs)...)
 end
 # TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 

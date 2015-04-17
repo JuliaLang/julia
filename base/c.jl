@@ -55,11 +55,11 @@ sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
 disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
 
-function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
+function ccallable(f::Function, rt::Type, argt::Type, name::Union(AbstractString,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{UInt8}), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
+function ccallable(f::Function, argt::Type, name::Union(AbstractString,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{UInt8}), f, C_NULL, argt, name)
 end
 
