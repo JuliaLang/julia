@@ -119,6 +119,8 @@ Compiler improvements
 Library improvements
 --------------------
 
+  * Build with USE_GPL_LIBS=0 to exclude all GPL libraries and code. ([#10870])
+
   * Linear algebra
 
     * The `LinAlg` module is now exported.
@@ -1360,3 +1362,4 @@ Too numerous to mention.
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
+[#10870]: https://github.com/JuliaLang/julia/issues/10870
