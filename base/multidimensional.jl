@@ -149,6 +149,14 @@ stagedfunction eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
 
+stagedfunction eachindex{S,T,M,N}(::LinearSlow, A::AbstractArray{S,M}, B::AbstractArray{T,N})
+    K = max(M,N)
+    startargs = fill(1, K)
+    stopargs = [:(max(size(A,$i),size(B,$i))) for i=1:K]
+    meta = Expr(:meta, :inline)
+    :($meta; CartesianRange(CartesianIndex{$K}($(startargs...)), CartesianIndex{$K}($(stopargs...))))
+end
+
 eltype{I}(::Type{CartesianRange{I}}) = I
 eltype{I}(::CartesianRange{I}) = I
 

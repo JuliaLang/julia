@@ -57,7 +57,7 @@ write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
 function write(s::IO, a::AbstractArray)
     nb = 0
-    for i = 1:length(a)
+    for i in eachindex(a)
         nb += write(s, a[i])
     end
     nb
@@ -125,7 +125,7 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
 function read!{T}(s::IO, a::Array{T})
-    for i = 1:length(a)
+    for i in eachindex(a)
         a[i] = read(s, T)
     end
     return a
