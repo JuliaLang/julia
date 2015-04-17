@@ -104,9 +104,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
-#ifdef JL_DEBUG_BUILD
 #include "llvm/Support/CommandLine.h"
-#endif
 #include "llvm/Transforms/Utils/Cloning.h"
  // For disasm
 #include "llvm/Support/MachO.h"
