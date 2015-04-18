@@ -2770,3 +2770,8 @@ gc()
 # issue #10867
 @test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
 @test collect(enumerate((Tuple,3))) == [(1,Tuple), (2,3)]
+
+# issue #10878
+function g10878(x; kw...); end
+invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
+@code_typed invoke_g10878()
