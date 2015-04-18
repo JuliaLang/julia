@@ -142,10 +142,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t 
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
-
-#ifndef _OS_WINDOWS_
 DLLEXPORT void jl_raise_debugger(void);
-#endif
 
 // timers
 // Returns time in nanosec
