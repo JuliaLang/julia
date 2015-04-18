@@ -22,7 +22,6 @@ function show(io::IO, x::ANY)
                 shown_set[x] = true
                 recorded = true
 
-                nf = nfields(t)
                 for i=1:nf
                     f = fieldname(t, i)
                     if !isdefined(x, f)

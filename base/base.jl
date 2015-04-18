@@ -284,7 +284,7 @@ Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
 
 function getindex(v::SimpleVector, i::Int)
     if !(1 <= i <= length(v))
-        throw(BoundsError())
+        throw(BoundsError(v,i))
     end
     unsafe_load(convert(Ptr{Any},data_pointer_from_objref(v)) + i*sizeof(Ptr))
 end

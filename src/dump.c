@@ -62,7 +62,7 @@ static jl_fptr_t id_to_fptrs[] = {
   jl_f_typeassert, jl_f_apply,
   jl_f_top_eval, jl_f_isdefined,
   jl_f_tuple, jl_f_svec,
-  jl_f_get_field, jl_f_set_field, jl_f_field_type,
+  jl_f_get_field, jl_f_set_field, jl_f_field_type, jl_f_nfields,
   jl_f_arraylen, jl_f_arrayref,
   jl_f_arrayset, jl_f_arraysize,
   jl_f_instantiate_type, jl_f_kwcall,

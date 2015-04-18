@@ -3068,6 +3068,7 @@ void jl_init_types(void)
     jl_anytuple_type->uid = 0;
     jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type));
     jl_anytuple_type->types = jl_anytuple_type->parameters;
+    jl_anytuple_type->nfields = 1;
 
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
                                        (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_any_type);

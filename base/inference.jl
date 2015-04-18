@@ -145,6 +145,7 @@ t_func[issubtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[isdefined] = (1, Inf, (args...)->Bool)
 t_func[Core.sizeof] = (1, 1, x->Int)
+t_func[nfields] = (1, 1, x->Int)
 t_func[Union] = (0, Inf,
                  (args...)->(if all(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
@@ -274,7 +275,7 @@ const getfield_tfunc = function (A, s0, name)
             end
         end
         snames = s.name.names
-        for i=1:nfields(s)
+        for i=1:length(snames)
             if is(snames[i],fld)
                 R = s.types[i]
                 if length(s.parameters) == 0
@@ -291,7 +292,7 @@ const getfield_tfunc = function (A, s0, name)
             return Bottom
         end
         i::Int = A[2]
-        nf = nfields(s)
+        nf = s.types.length
         if isvatuple(s) && i >= nf
             return s.types[nf].parameters[1]
         end

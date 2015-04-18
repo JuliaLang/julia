@@ -1,8 +1,5 @@
 ## indexing ##
 
-nfields(t::DataType) = t.types.length
-nfields(v) = typeof(v).types.length
-
 length(t::Tuple) = nfields(t)
 endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
