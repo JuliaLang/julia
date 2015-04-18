@@ -520,6 +520,7 @@ function stop_timer(timer::Timer)
 end
 
 function sleep(sec::Real)
+    sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
     w = Condition()
     timer = Timer(function (tmr)
         notify(w)
