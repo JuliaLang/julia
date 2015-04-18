@@ -148,7 +148,7 @@ The better approach is to dispatch to specific methods to handle each
 type of input.  Note, however, that the number of distinct methods
 needed grows exponentially in the number of dimensions, and since
 Julia supports arrays of any dimension the number of methods required
-is in fact infinite.  Fortunately, ``stagedfunction``\s allow one to
+is in fact infinite.  Fortunately, ``@generated function``\s allow one to
 generate the necessary methods quite straightforwardly.  The resulting
 code looks quite a lot like the runtime approach above, but all of the
 type analysis is performed at the time of method instantiation.  For a
@@ -270,7 +270,7 @@ A few details
   about which of these three notions of dimensionality is relevant in
   each circumstance.
 
-- Because the processing needed to implement all of the stagedfunction
+- Because the processing needed to implement all of the ``@generated``
   expressions isn't readily available at the time ``subarray.jl``
   appears in the bootstrap process, ``SubArray`` functionality is
   split into two files, the second being ``subarray2.jl``.

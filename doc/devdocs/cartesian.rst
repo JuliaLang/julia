@@ -81,9 +81,9 @@ you need to work with older julia versions, currently you
 should use the ``@ngenerate`` macro described in `an older version of this documentation <http://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions>`_.
 
 Starting in Julia 0.4-pre, the recommended approach is to use
-a ``stagedfunction``.  Here's an example::
+a ``@generated function``.  Here's an example::
 
-  stagedfunction mysum{T,N}(A::Array{T,N})
+  @generated function mysum{T,N}(A::Array{T,N})
       quote
           s = zero(T)
           @nloops $N i A begin

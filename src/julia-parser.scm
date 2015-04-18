@@ -1120,6 +1120,7 @@
            `(const ,expr)
            expr)))
     ((stagedfunction function macro)
+     (if (eq? word 'stagedfunction) (syntax-deprecation-warning s "stagedfunction" "@generated function"))
      (let* ((paren (eqv? (require-token s) #\())
             (sig   (parse-call s))
             (def   (if (or (symbol? sig)

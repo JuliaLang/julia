@@ -2,7 +2,7 @@
 module IteratorsMD
 
 import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex
-import Base: simd_outer_range, simd_inner_length, simd_index
+import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
 export CartesianIndex, CartesianRange
@@ -13,11 +13,11 @@ linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 # CartesianIndex
 abstract CartesianIndex{N}
 
-stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Integer})
+@generated function Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Integer})
     indextype = gen_cartesian(N)
     return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
+@generated function Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
     length(index) == N && return :(CartesianIndex(index))
     length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
     args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
@@ -53,43 +53,43 @@ length{I<:CartesianIndex}(::Type{I})=length(super(I))
 # indexing
 getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 
-stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
+@generated function getindex{N}(A::Array, index::CartesianIndex{N})
     :(Base.arrayref(A, $(cartindex_exprs((index,), (:index,))...)))
 end
-stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
+@generated function getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
     :(Base.arrayref(A, $(cartindex_exprs((i, index), (:i, :index))...)))
 end
-stagedfunction getindex{M,N}(A::Array, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+@generated function getindex{M,N}(A::Array, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
     :(Base.arrayref(A, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
 end
-stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
+@generated function setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((index,), (:index,))...)))
 end
-stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
+@generated function setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
     :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((i, index), (:i, :index))...)))
 end
-stagedfunction setindex!{T,M,N}(A::Array{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+@generated function setindex!{T,M,N}(A::Array{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
     :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
 end
 
-stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
+@generated function getindex{N}(A::AbstractArray, index::CartesianIndex{N})
     :(getindex(A, $(cartindex_exprs((index,), (:index,))...)))
 end
-stagedfunction getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
+@generated function getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
     :(getindex(A, $(cartindex_exprs((i, index), (:i, :index))...)))
 end
-stagedfunction setindex!{T,N}(A::AbstractArray{T}, v, index::CartesianIndex{N})
+@generated function setindex!{T,N}(A::AbstractArray{T}, v, index::CartesianIndex{N})
     :(setindex!(A, v, $(cartindex_exprs((index,), (:index,))...)))
 end
-stagedfunction setindex!{T,N}(A::AbstractArray{T}, v, i::Integer, index::CartesianIndex{N})
+@generated function setindex!{T,N}(A::AbstractArray{T}, v, i::Integer, index::CartesianIndex{N})
     :(setindex!(A, v, $(cartindex_exprs((i, index), (:i, :index))...)))
 end
 for AT in (AbstractVector, AbstractMatrix, AbstractArray)  # nix ambiguity warning
     @eval begin
-        stagedfunction getindex{M,N}(A::$AT, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+        @generated function getindex{M,N}(A::$AT, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
             :(getindex(A, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
         end
-        stagedfunction setindex!{M,N}(A::$AT, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+        @generated function setindex!{M,N}(A::$AT, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
             :(setindex!(A, v, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
         end
     end
@@ -115,7 +115,7 @@ end
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)
     @eval begin
-        stagedfunction ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
+        @generated function ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
             I = index1
             args = [:($($op)(index1[$d],index2[$d])) for d = 1:N]
             :($I($(args...)))
@@ -123,7 +123,7 @@ for op in (:+, :-, :min, :max)
     end
 end
 
-stagedfunction *{N}(a::Integer, index::CartesianIndex{N})
+@generated function *{N}(a::Integer, index::CartesianIndex{N})
     I = index
     args = [:(a*index[$d]) for d = 1:N]
     :($I($(args...)))
@@ -136,13 +136,13 @@ immutable CartesianRange{I<:CartesianIndex}
     stop::I
 end
 
-stagedfunction CartesianRange{N}(I::CartesianIndex{N})
+@generated function CartesianRange{N}(I::CartesianIndex{N})
     startargs = fill(1, N)
     :(CartesianRange($I($(startargs...)), I))
 end
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
 
-stagedfunction eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
+@generated function eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     startargs = fill(1, N)
     stopargs = [:(size(A,$i)) for i=1:N]
     meta = Expr(:meta, :inline)
@@ -160,7 +160,7 @@ end
 eltype{I}(::Type{CartesianRange{I}}) = I
 eltype{I}(::CartesianRange{I}) = I
 
-stagedfunction start{I<:CartesianIndex}(iter::CartesianRange{I})
+@generated function start{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
     cmp = [:(iter.start[$d] > iter.stop[$d]) for d = 1:N]
     extest = Expr(:||, cmp...)
@@ -170,7 +170,7 @@ stagedfunction start{I<:CartesianIndex}(iter::CartesianRange{I})
         $extest ? $exstop : iter.start
     end
 end
-stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+@generated function next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
     N = length(I)
     meta = Expr(:meta, :inline)
     quote
@@ -181,7 +181,7 @@ stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
         index, newindex
     end
 end
-stagedfunction done{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+@generated function done{I<:CartesianIndex}(iter::CartesianRange{I}, state)
     N = length(I)
     :(state[$N] > iter.stop[$N])
 end
@@ -191,7 +191,7 @@ start{I<:CartesianIndex{0}}(iter::CartesianRange{I}) = false
 next{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = iter.start, true
 done{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = state
 
-stagedfunction length{I<:CartesianIndex}(iter::CartesianRange{I})
+@generated function length{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
     N == 0 && return 1
     args = [:(iter.stop[$i]-iter.start[$i]+1) for i=1:N]
@@ -200,7 +200,7 @@ end
 
 last(iter::CartesianRange) = iter.stop
 
-stagedfunction simd_outer_range{I}(iter::CartesianRange{I})
+@generated function simd_outer_range{I}(iter::CartesianRange{I})
     N = length(I)
     N == 0 && return :(CartesianRange(CartesianIndex{0}(),CartesianIndex{0}()))
     startargs = [:(iter.start[$i]) for i=2:N]
@@ -212,7 +212,7 @@ simd_inner_length{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianInde
 simd_inner_length(iter::CartesianRange, I::CartesianIndex) = iter.stop[1]-iter.start[1]+1
 
 simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::Int) = iter.start
-stagedfunction simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
+@generated function simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
     args = [d == 1 ? :(I1+iter.start[1]) : :(Ilast[$(d-1)]) for d = 1:N+1]
     meta = Expr(:meta, :inline)
     :($meta; CartesianIndex{$(N+1)}($(args...)))
@@ -225,7 +225,7 @@ using .IteratorsMD
 
 ### From array.jl
 
-stagedfunction checksize(A::AbstractArray, I...)
+@generated function checksize(A::AbstractArray, I...)
     N = length(I)
     quote
         @nexprs $N d->(size(A, d) == length(I[d]) || throw(DimensionMismatch("index $d has length $(length(I[d])), but size(A, $d) = $(size(A,d))")))
@@ -241,7 +241,7 @@ end
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
-stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector)...)
+@generated function _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -256,7 +256,7 @@ stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,Abstract
 end
 
 # Version that uses linear indexing for src
-stagedfunction _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector)...)
+@generated function _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -278,9 +278,9 @@ end
 _getindex(A, I::Tuple{Vararg{Union(Int,AbstractVector),}}) =
     _getindex!(similar(A, index_shape(I...)), A, I...)
 
-# The stagedfunction here is just to work around the performance hit
+# The @generated function here is just to work around the performance hit
 # of splatting
-stagedfunction getindex(A::Array, I::Union(Real,AbstractVector)...)
+@generated function getindex(A::Array, I::Union(Real,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -290,7 +290,7 @@ stagedfunction getindex(A::Array, I::Union(Real,AbstractVector)...)
 end
 
 # Also a safe version of getindex!
-stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector)...)
+@generated function getindex!(dest, src, I::Union(Real,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
@@ -301,7 +301,7 @@ stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector)...)
 end
 
 
-stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
+@generated function setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
     N = length(J)
     if x<:AbstractArray
         ex=quote
@@ -333,7 +333,7 @@ stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
 end
 
 
-stagedfunction findn{T,N}(A::AbstractArray{T,N})
+@generated function findn{T,N}(A::AbstractArray{T,N})
     quote
         nnzA = countnz(A)
         @nexprs $N d->(I_d = Array(Int, nnzA))
@@ -395,8 +395,8 @@ end
 # then test whether the corresponding linear index is in linindex.
 # One exception occurs when only a small subset of the total
 # is desired, in which case we fall back to the div-based algorithm.
-#stagedfunction merge_indexes{T<:Integer}(V, parentindexes::NTuple, parentdims::Dims, linindex::Union(Colon,Range{T}), lindim)
-stagedfunction merge_indexes_in{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+#@generated function merge_indexes{T<:Integer}(V, parentindexes::NTuple, parentdims::Dims, linindex::Union(Colon,Range{T}), lindim)
+@generated function merge_indexes_in{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
     N = length(parentindexes.parameters)   # number of parent axes we're merging
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     lengthexpr = linindex == Colon ? (:(prod(size(V)[lindim:end]))) : (:(length(linindex)))
@@ -437,7 +437,7 @@ end
 # This could be written as a regular function, but performance
 # will be better using Cartesian macros to avoid the heap and
 # an extra loop.
-stagedfunction merge_indexes_div{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+@generated function merge_indexes_div{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
     N = length(parentindexes.parameters)
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     Istride_N = symbol("Istride_$N")
@@ -479,7 +479,7 @@ cumprod!(B, A) = cumprod!(B, A, 1)
 for (f, op) in ((:cumsum!, :+),
                 (:cumprod!, :*))
     @eval begin
-        stagedfunction ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
+        @generated function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
             quote
                 if size(B, axis) < 1
                     return B
@@ -552,7 +552,7 @@ end
 # (uses linear indexing, which is defined in bitarray.jl)
 # (code is duplicated for safe and unsafe versions for performance reasons)
 
-stagedfunction unsafe_getindex(B::BitArray, I_0::Int, I::Int...)
+@generated function unsafe_getindex(B::BitArray, I_0::Int, I::Int...)
     N = length(I)
     quote
         stride = 1
@@ -565,7 +565,7 @@ stagedfunction unsafe_getindex(B::BitArray, I_0::Int, I::Int...)
     end
 end
 
-stagedfunction getindex(B::BitArray, I_0::Int, I::Int...)
+@generated function getindex(B::BitArray, I_0::Int, I::Int...)
     N = length(I)
     quote
         stride = 1
@@ -597,7 +597,7 @@ end
 
 getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
-stagedfunction unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
+@generated function unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -632,7 +632,7 @@ end
 
 # general multidimensional non-scalar indexing
 
-stagedfunction unsafe_getindex(B::BitArray, I::Union(Int,AbstractVector{Int})...)
+@generated function unsafe_getindex(B::BitArray, I::Union(Int,AbstractVector{Int})...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -656,7 +656,7 @@ end
 
 # general version with Real (or logical) indexing which dispatches on the appropriate method
 
-stagedfunction getindex(B::BitArray, I::Union(Real,AbstractVector)...)
+@generated function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
@@ -673,7 +673,7 @@ end
 # bounds check and is defined in bitarray.jl)
 # (code is duplicated for safe and unsafe versions for performance reasons)
 
-stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I_0::Int, I::Int...)
+@generated function unsafe_setindex!(B::BitArray, x::Bool, I_0::Int, I::Int...)
     N = length(I)
     quote
         stride = 1
@@ -687,7 +687,7 @@ stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I_0::Int, I::Int...)
     end
 end
 
-stagedfunction setindex!(B::BitArray, x::Bool, I_0::Int, I::Int...)
+@generated function setindex!(B::BitArray, x::Bool, I_0::Int, I::Int...)
     N = length(I)
     quote
         stride = 1
@@ -723,7 +723,7 @@ function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
     return B
 end
 
-stagedfunction unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
+@generated function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
     quote
         length(X) == 0 && return B
@@ -754,7 +754,7 @@ stagedfunction unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I:
     end
 end
 
-stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
+@generated function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
     quote
         f0 = first(I0)
@@ -786,7 +786,7 @@ end
 
 # general multidimensional non-scalar indexing
 
-stagedfunction unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,AbstractArray{Int})...)
+@generated function unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,AbstractArray{Int})...)
     N = length(I)
     quote
         refind = 1
@@ -799,7 +799,7 @@ stagedfunction unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,Abst
     end
 end
 
-stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I::Union(Int,AbstractArray{Int})...)
+@generated function unsafe_setindex!(B::BitArray, x::Bool, I::Union(Int,AbstractArray{Int})...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
@@ -818,7 +818,7 @@ function setindex!(B::BitArray, x, i::Real)
     return unsafe_setindex!(B, convert(Bool,x), to_index(i))
 end
 
-stagedfunction setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
+@generated function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
     N = length(I)
     quote
         checkbounds(B, I...)
@@ -837,7 +837,7 @@ function setindex!(B::BitArray, X::AbstractArray, i::Real)
     return unsafe_setindex!(B, X, j)
 end
 
-stagedfunction setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
+@generated function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
     N = length(I)
     quote
         checkbounds(B, I...)
@@ -851,7 +851,7 @@ end
 
 ## findn
 
-stagedfunction findn{N}(B::BitArray{N})
+@generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
         I = ntuple($N, x->Array(Int, nnzB))
@@ -870,7 +870,7 @@ end
 
 ## isassigned
 
-stagedfunction isassigned(B::BitArray, I_0::Int, I::Int...)
+@generated function isassigned(B::BitArray, I_0::Int, I::Int...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
@@ -889,7 +889,7 @@ end
 ## permutedims
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
-    @eval stagedfunction permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+    @eval @generated function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         quote
             dimsB = size(B)
             length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
@@ -936,7 +936,7 @@ immutable Prehashed
 end
 hash(x::Prehashed) = x.hash
 
-stagedfunction unique{T,N}(A::AbstractArray{T,N}, dim::Int)
+@generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         1 <= dim <= $N || return copy(A)
         hashes = zeros(UInt, size(A, dim))

@@ -210,7 +210,7 @@ convert(::Type{Array}, S::SharedArray) = S.s
 getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-stagedfunction getindex(S::SharedArray, I::Union(Real,AbstractVector)...)
+@generated function getindex(S::SharedArray, I::Union(Real,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -221,7 +221,7 @@ end
 setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
 setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
-stagedfunction setindex!(S::SharedArray, x, I::Union(Real,AbstractVector)...)
+@generated function setindex!(S::SharedArray, x, I::Union(Real,AbstractVector)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote

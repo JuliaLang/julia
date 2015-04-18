@@ -13,7 +13,7 @@ convert(::Type{Float16}, x::MathConst) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, convert(T,x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, Float64(x))
 
-stagedfunction call{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
+@generated function call{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
     f = T(big(c()),r())
     :($f)
 end
@@ -43,13 +43,13 @@ end
 <=(x::FloatingPoint,y::MathConst) = x < y
 
 # MathConst vs Rational
-stagedfunction <{T}(x::MathConst, y::Rational{T})
+@generated function <{T}(x::MathConst, y::Rational{T})
     bx = big(x())
     bx < 0 && T <: Unsigned && return true
     rx = rationalize(T,bx,tol=0)
     rx < bx ? :($rx < y) : :($rx <= y)
 end
-stagedfunction <{T}(x::Rational{T}, y::MathConst)
+@generated function <{T}(x::Rational{T}, y::MathConst)
     by = big(y())
     by < 0 && T <: Unsigned && return false
     ry = rationalize(T,by,tol=0)
