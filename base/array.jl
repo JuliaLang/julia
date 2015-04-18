@@ -322,7 +322,7 @@ end
 # sure about the behaviour and use unsafe_getindex; in the general case
 # we can't and must use getindex, otherwise silent corruption can happen)
 
-stagedfunction getindex_bool_1d(A::Array, I::AbstractArray{Bool})
+@generated function getindex_bool_1d(A::Array, I::AbstractArray{Bool})
     idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
     quote
         checkbounds(A, I)
@@ -401,7 +401,7 @@ end
 # sure about the behaviour and use unsafe_getindex; in the general case
 # we can't and must use getindex, otherwise silent corruption can happen)
 
-stagedfunction assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
+@generated function assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
     idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
     quote
         checkbounds(A, I)
@@ -414,7 +414,7 @@ stagedfunction assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
     end
 end
 
-stagedfunction assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+@generated function assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
     idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
     quote
         checkbounds(A, I)
