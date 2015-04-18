@@ -1470,7 +1470,10 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                     }
                     else if (jl_is_function(fv)) {
                         jl_function_t *ff = (jl_function_t*)fv;
-                        if ((ff->fptr == jl_f_apply && alen==4 &&
+                        if ((ff->fptr == jl_f_get_field && alen==3 &&
+                             expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_long_type) ||
+                            ff->fptr == jl_f_nfields ||
+                            (ff->fptr == jl_f_apply && alen==4 &&
                              expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_function_type)) {
                             esc = false;
                         }
@@ -2193,20 +2196,20 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
         jl_value_t *fldt   = expr_type(args[2], ctx);
 
+        // VA tuple
+        if (ctx->vaStack && symbol_eq(args[1], ctx->vaName)) {
+            Value *valen = emit_n_varargs(ctx);
+            Value *idx = emit_unbox(T_size,
+                                    emit_unboxed(args[2], ctx),fldt);
+            idx = emit_bounds_check(builder.CreateGEP(ctx->argArray, ConstantInt::get(T_size, ctx->nReqArgs)),
+                                    (jl_value_t*)jl_any_type, idx, valen, ctx);
+            idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
+            JL_GC_POP();
+            return tbaa_decorate(tbaa_user, builder.
+                                 CreateLoad(builder.CreateGEP(ctx->argArray,idx),false));
+        }
+
         if (fldt == (jl_value_t*)jl_long_type && jl_is_leaf_type((jl_value_t*)stt)) {
-            // VA tuple
-            if (jl_is_tuple_type(stt) && ctx->vaStack && symbol_eq(args[1], ctx->vaName)) {
-                // TODO: restore this case
-                Value *valen = emit_n_varargs(ctx);
-                Value *idx = emit_unbox(T_size,
-                                        emit_unboxed(args[2], ctx),fldt);
-                idx = emit_bounds_check(builder.CreateGEP(ctx->argArray, ConstantInt::get(T_size, ctx->nReqArgs)),
-                                        (jl_value_t*)jl_any_type, idx, valen, ctx);
-                idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
-                JL_GC_POP();
-                return tbaa_decorate(tbaa_user, builder.
-                                     CreateLoad(builder.CreateGEP(ctx->argArray,idx),false));
-            }
             if ((jl_is_structtype(stt) || jl_is_tuple_type(stt)) && !jl_subtype((jl_value_t*)jl_module_type, (jl_value_t*)stt, 0)) {
                 size_t nfields = jl_datatype_nfields(stt);
                 Value *strct = emit_expr(args[1], ctx);
@@ -2256,22 +2259,27 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
         // TODO: faster code for integer index
     }
-    else if (f->fptr == &jl_f_instantiate_type && nargs > 0) {
-        size_t i;
-        for(i=1; i <= nargs; i++) {
-            if (!is_constant(args[i], ctx))
-                break;
+    else if (f->fptr == &jl_f_nfields && nargs==1) {
+        if (ctx->vaStack && symbol_eq(args[1], ctx->vaName) && !ctx->vars[ctx->vaName].isAssigned) {
+            JL_GC_POP();
+            return emit_n_varargs(ctx);
         }
-        if (i > nargs) {
-            jl_value_t *ty = static_eval(expr, ctx, true, true);
-            if (ty!=NULL && jl_is_leaf_type(ty)) {
-                if (jl_has_typevars(ty)) {
-                    // add root for types not cached. issue #7065
-                    jl_add_linfo_root(ctx->linfo, ty);
-                }
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
+        if (jl_is_type_type(aty)) {
+            jl_value_t *tp0 = jl_tparam0(aty);
+            if (jl_is_leaf_type(tp0)) {
+                (void*)emit_expr(args[1], ctx);
                 JL_GC_POP();
-                return literal_pointer_val(ty);
+                assert(jl_is_datatype(tp0));
+                return ConstantInt::get(T_size, jl_datatype_nfields(tp0));
             }
+        }
+        else if (jl_is_leaf_type(aty)) {
+            Value *arg1 = emit_expr(args[1], ctx);
+            JL_GC_POP();
+            if (aty == (jl_value_t*)jl_datatype_type)
+                return emit_datatype_nfields(arg1);
+            return ConstantInt::get(T_size, jl_datatype_nfields(aty));
         }
     }
     else if (f->fptr == &jl_f_sizeof && nargs == 1) {
@@ -2288,6 +2296,24 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 (sty->name->names == jl_emptysvec && sty->size > 0)) {
                 JL_GC_POP();
                 return ConstantInt::get(T_size, sty->size);
+            }
+        }
+    }
+    else if (f->fptr == &jl_f_instantiate_type && nargs > 0) {
+        size_t i;
+        for(i=1; i <= nargs; i++) {
+            if (!is_constant(args[i], ctx))
+                break;
+        }
+        if (i > nargs) {
+            jl_value_t *ty = static_eval(expr, ctx, true, true);
+            if (ty!=NULL && jl_is_leaf_type(ty)) {
+                if (jl_has_typevars(ty)) {
+                    // add root for types not cached. issue #7065
+                    jl_add_linfo_root(ctx->linfo, ty);
+                }
+                JL_GC_POP();
+                return literal_pointer_val(ty);
             }
         }
     }

@@ -715,6 +715,15 @@ JL_CALLABLE(jl_f_field_type)
     return jl_field_type(st, field_index);
 }
 
+JL_CALLABLE(jl_f_nfields)
+{
+    JL_NARGS(nfields, 1, 1);
+    jl_value_t *x = args[0];
+    if (!jl_is_datatype(x))
+        x = jl_typeof(x);
+    return jl_box_long(jl_datatype_nfields(x));
+}
+
 // conversion -----------------------------------------------------------------
 
 DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
@@ -1222,6 +1231,7 @@ void jl_init_primitives(void)
     add_builtin_func("getfield",  jl_f_get_field);
     add_builtin_func("setfield!",  jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
+    add_builtin_func("nfields", jl_f_nfields);
     add_builtin_func("_expr", jl_f_new_expr);
 
     add_builtin_func("arraylen", jl_f_arraylen);

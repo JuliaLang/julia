@@ -139,7 +139,7 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GlobalRef, NewvarNode, GenSym,
     # object model functions
-    fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
+    fieldtype, getfield, setfield!, nfields, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize,
     # _apply, kwcall,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
