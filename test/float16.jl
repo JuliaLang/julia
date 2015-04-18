@@ -55,6 +55,8 @@ g = Float16(1.)
 @test repr(Inf16) == "Inf16"
 @test sprint(showcompact, Inf16) == "Inf"
 
+@test repr(Float16(44099)) == "Float16(4.41e4)"
+
 for z1 in (Float16(0.0), Float16(-0.0)), z2 in (Float16(0.0), Float16(-0.0))
     @test z1 == z2
     @test isequal(z1, z1)
@@ -94,7 +96,7 @@ let
 end
 
 # issue #5948
-@test string(reinterpret(Float16, 0x7bff)) == "65500.0"
+@test string(reinterpret(Float16, 0x7bff)) == "6.55e4"
 
 @test log10(Float16(100)) == Float16(2.0)
 

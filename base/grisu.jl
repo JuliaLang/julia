@@ -71,7 +71,9 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
         end
     end
     neg && write(io,'-')
-    if pt <= -4 || pt > 6 || (pt >= n && mode != SHORTEST) # .00001 to 100000.
+    exp_form = pt <= -4 || pt > 6
+    exp_form = exp_form || (pt >= len && abs(mod(x + 0.05, 10^(pt - len)) - 0.05) > 0.05) # see issue #6608
+    if exp_form # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)
         write(io, '.')

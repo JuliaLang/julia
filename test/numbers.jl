@@ -402,6 +402,15 @@ end
 @test repr(NaN) == "NaN"
 @test repr(-NaN) == "NaN"
 @test repr(Float64(pi)) == "3.141592653589793"
+# issue 6608
+@test sprint(showcompact, 666666.6) == "6.66667e5"
+@test sprint(showcompact, 666666.049) == "666666.0"
+@test sprint(showcompact, 666665.951) == "666666.0"
+@test sprint(showcompact, 66.66666) == "66.6667"
+@test sprint(showcompact, -666666.6) == "-6.66667e5"
+@test sprint(showcompact, -666666.049) == "-666666.0"
+@test sprint(showcompact, -666665.951) == "-666666.0"
+@test sprint(showcompact, -66.66666) == "-66.6667"
 
 @test repr(1.0f0) == "1.0f0"
 @test repr(-1.0f0) == "-1.0f0"
