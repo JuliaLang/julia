@@ -298,7 +298,7 @@ isempty(v::SimpleVector) = (v.length == 0)
 
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
-getindex(v::SimpleVector, I::AbstractArray) = Any[ v[i] for i in I ]
+getindex(v::SimpleVector, I::AbstractArray) = svec(Any[ v[i] for i in I ]...)
 
 immutable Nullable{T}
     isnull::Bool
