@@ -121,7 +121,11 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
                     else
                         snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
                     if (handle->errmsg) {
+#ifdef _OS_WINDOWS_
+                        LocalFree((void*)handle->errmsg);
+#else
                         free(handle->errmsg);
+#endif
                         handle->errmsg = NULL;
                     }
                     error = jl_uv_dlopen(path, handle, flags);
@@ -137,7 +141,11 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         if (handle->errmsg) {
+#ifdef _OS_WINDOWS_
+            LocalFree((void*)handle->errmsg);
+#else
             free(handle->errmsg);
+#endif
             handle->errmsg = NULL;
         }
         error = jl_uv_dlopen(path, handle, flags);
