@@ -94,7 +94,7 @@ promote_union(T::UnionType) = promote_type(T.types...)
 promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)
-    if method_exists(zero, (Type{T},))
+    if method_exists(zero, Tuple{Type{T}})
         x = f(zero(T))
         z = zero(x) + zero(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
@@ -107,7 +107,7 @@ end
 
 function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     T = promote_union(S)
-    if method_exists(zero, (Type{T},))
+    if method_exists(zero, Tuple{Type{T}})
         x = f(zero(T))
         z = one(x) * one(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
