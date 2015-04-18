@@ -606,7 +606,7 @@ function test_no_diagonal()
     @test issub(Ty((Int,String,Vector{Any})),
                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
-    @test isequal_type(Ty(Array{(Integer,Integer),1}),
+    @test isequal_type(Ty(Array{Tuple{Integer,Integer},1}),
                        inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
 
     @test issub(Ty((Float32,Array{Real,1})),
@@ -667,18 +667,18 @@ function test_3()
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
     @test !issub(Ty((String,Int,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
-    @test !issub(Ty((Int,String,Vector{(Integer,)})),
+    @test !issub(Ty((Int,String,Vector{Tuple{Integer}})),
                  @UnionAll T tupletype(T,T,inst(ArrayT,tupletype(T),1)))
 
     @test !issub(Ty((Int,String,Vector{Any})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
-    @test isequal_type(Ty(Array{(Any,),1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
+    @test isequal_type(Ty(Array{Tuple{Any},1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
 
-    @test isequal_type(Ty(Array{(Int,Int),1}),
+    @test isequal_type(Ty(Array{Tuple{Int,Int},1}),
                        inst(ArrayT, (@UnionAll T<:Ty(Int) tupletype(T,T)), 1))
-    @test !issub(Ty(Array{(Int,Integer),1}),
+    @test !issub(Ty(Array{Tuple{Int,Integer},1}),
                  inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
 
 

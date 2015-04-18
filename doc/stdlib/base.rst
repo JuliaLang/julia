@@ -394,7 +394,7 @@ Types
       julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
-      12-element Array{(Int64,Symbol,DataType),1}:
+      12-element Array{Tuple{Int64,Symbol,DataType},1}:
        (0,:device,UInt64)
        (8,:inode,UInt64)
        (16,:mode,UInt64)
@@ -490,13 +490,13 @@ Generic Functions
    ``apply`` is called to implement the ``...`` argument splicing syntax,
    and is usually not called directly: ``apply(f,x) === f(x...)``
 
-.. function:: method_exists(f, tuple) -> Bool
+.. function:: method_exists(f, Tuple type) -> Bool
 
-   Determine whether the given generic function has a method matching the given tuple of argument types.
+   Determine whether the given generic function has a method matching the given ``Tuple`` of argument types.
 
    .. doctest::
 
-   	julia> method_exists(length, (Array,))
+   	julia> method_exists(length, Tuple{Array})
    	true
 
 .. function:: applicable(f, args...) -> Bool
@@ -1004,6 +1004,6 @@ Internals
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
 
-.. function:: precompile(f,args::(Any...,))
+.. function:: precompile(f,args::Tuple{Vararg{Any}})
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``, but do not execute it.
