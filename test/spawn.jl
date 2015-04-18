@@ -92,6 +92,9 @@ rm(file)
     end
 end
 
+# Uninitialized input pipes cannot be piped to a program
+@test_throws ErrorException run(pipe(Base.Pipe(C_NULL), `cat`))
+
 readall(setenv(`sh -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
 readall(setenv(`sh -c "echo \$TEST"`,Dict("TEST"=>"Hello World"))) == "Hello World\n"
 readall(setenv(`sh -c "pwd"`;dir="/")) == readall(setenv(`sh -c "cd / && pwd"`))
