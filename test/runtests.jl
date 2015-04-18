@@ -217,3 +217,19 @@ if VERSION < v"0.4.0-dev+4319"
     @test @compat Tuple{:a, Tuple{:b}} == (:a, (:b,))
     @test @compat Tuple{:a, Tuple{:b, :c}} == (:a, (:b, :c))
 end
+
+# Ensure eachindex iterates over the whole array
+let A, B, s
+    A = reshape(1:20,4,5)
+    s = 0
+    for i in eachindex(A)
+        s += A[i]
+    end
+    @test s == 210
+    B = sparse(A)
+    s = 0
+    for i in eachindex(B)
+        s += B[i]
+    end
+    @test s == 210
+end
