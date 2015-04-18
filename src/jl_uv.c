@@ -210,6 +210,7 @@ DLLEXPORT void jl_uv_connectioncb(uv_stream_t *stream, int status)
 DLLEXPORT void jl_uv_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
 {
     JULIA_CB(getaddrinfo,req->data,2,CB_PTR,addr,CB_INT32,status);
+    free(req);
 }
 
 DLLEXPORT void jl_uv_asynccb(uv_handle_t *handle)
