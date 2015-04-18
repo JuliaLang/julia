@@ -68,7 +68,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
    number. This function allows you to save profiling results for
    future analysis.
 
-.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{(count, linfo)}
+.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
    Given a previous profiling run, determine who called a particular
    function. Supplying the filename (and optionally, range of line

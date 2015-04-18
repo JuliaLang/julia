@@ -263,7 +263,7 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 2
 
-.. function:: hvcat(rows::(Int...), values...)
+.. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
    Horizontal and vertical concatenation in one call. This function is called for
    block matrix syntax. The first argument specifies the number of arguments to

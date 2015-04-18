@@ -217,7 +217,7 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
     if a*n/s == start && c*n/s == stop
         return LinSpace(a, c, len, s)
     end
-    error("linspace($start, $stop, $len): cannot be constructed")
+    return LinSpace(start, stop, len, n)
 end
 function linspace{T<:FloatingPoint}(start::T, stop::T, len::Real)
     T_len = convert(T, len)
