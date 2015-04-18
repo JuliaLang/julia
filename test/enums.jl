@@ -167,4 +167,7 @@ end
 @test repr(apple) == "apple::"*string(Fruit)
 @test string(apple) == "apple"
 
+@enum LogLevel DEBUG INFO WARN ERROR CRITICAL
+@test DEBUG < CRITICAL
+
 end # module
