@@ -91,6 +91,9 @@ else
 JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
+# Whether to use GPL libraries or not.
+USE_GPL_LIBS ?= 1
+
 # Directories where said libraries get installed to
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
 bindir = $(prefix)/bin

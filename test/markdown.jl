@@ -122,6 +122,8 @@ end
 
 ref(x) = Reference(x)
 
+if Base.USE_GPL_LIBS
+
 ref(fft)
 
 writemime(io::IO, m::MIME"text/plain", r::Reference) =
@@ -137,6 +139,7 @@ writemime(io::IO, m::MIME"text/html", r::Reference) =
     end
 @test html(fft_ref) == "<p>Behaves like <a href=\"test\">fft &#40;see Julia docs&#41;</a></p>\n"
 
+end # USE_GPL_LIBS
 
 @test md"""
 ````julia

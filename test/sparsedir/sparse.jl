@@ -74,6 +74,7 @@ for i = 1:5
 end
 
 # complex matrix-vector multiplication and left-division
+if Base.USE_GPL_LIBS
 for i = 1:5
     a = speye(5) + 0.1*sprandn(5, 5, 0.2)
     b = randn(5,3) + im*randn(5,3)
@@ -145,6 +146,7 @@ for i = 1:5
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
+end
 end
 
 # matrix multiplication and kron
@@ -705,9 +707,11 @@ let D = Diagonal(ones(10,10)),
 end
 
 # explicit zeros
+if Base.USE_GPL_LIBS
 a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
 @test_approx_eq lufact(a)\[2.0, 3.0] [2.0, 3.0]
 @test_approx_eq cholfact(a)\[2.0, 3.0] [2.0, 3.0]
+end
 
 # issue #10113
 let S = spzeros(5,1), I = [false,true,false,true,false]
