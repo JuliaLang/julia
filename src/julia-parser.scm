@@ -831,12 +831,18 @@
              `(call * ,ex ,(parse-unary s))))
           (else ex))))
 
+(define (invalid-identifier-name? ex)
+  ;; TODO: remove this hack when we remove the special Dict syntax
+  (or (and (not (eq? ex '=>)) (syntactic-op? ex))
+      (eq? ex '....)))
+
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
         (error (string "unexpected " t)))
     ;; TODO: ? should probably not be listed here except for the syntax hack in osutils.jl
-    (cond ((and (operator? t) (not (memq t '(: |'| ?))) (not (syntactic-unary-op? t)))
+    (cond ((and (operator? t) (not (memq t '(: |'| ?))) (not (syntactic-unary-op? t))
+		(not (invalid-identifier-name? t)))
            (let* ((op  (take-token s))
                   (nch (peek-char (ts:port s))))
              (if (and (or (eq? op '-) (eq? op '+))
@@ -1697,9 +1703,7 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    ;; TODO: remove this hack when we remove the special Dict syntax
-    (if (or (and (not (eq? ex '=>)) (syntactic-op? ex))
-            (eq? ex '....))
+    (if (invalid-identifier-name? ex)
         (error (string "invalid identifier name \"" ex "\"")))
     ex))
 
