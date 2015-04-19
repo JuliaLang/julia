@@ -216,6 +216,11 @@ if VERSION < v"0.4.0-dev+4319"
     @test @compat Tuple{:a, :b} == (:a, :b)
     @test @compat Tuple{:a, Tuple{:b}} == (:a, (:b,))
     @test @compat Tuple{:a, Tuple{:b, :c}} == (:a, (:b, :c))
+    @test @compat Tuple{Int} == (Int,)
+    @test @compat Tuple{Int, Float64} == (Int, Float64)
+    @test @compat Tuple{Int, Tuple{Float64}} == (Int, (Float64,))
+    @test @compat Tuple{Int, Tuple{Float64, Char}} == (Int, (Float64, Char))
+    @test @compat Tuple{Int, Vararg{Float64}} == (Int, Float64...)
 end
 
 # Ensure eachindex iterates over the whole array
