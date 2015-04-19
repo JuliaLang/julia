@@ -192,7 +192,6 @@ globalRNG() = GLOBAL_RNG
 
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
-rand(::Tuple{}) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
 rand(dims::Integer...) = rand(convert(Tuple{Vararg{Int}}, dims))
 rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
@@ -211,7 +210,6 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Var
 
 # MersenneTwister & RandomDevice
 @inline rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float64}) = rand(r, CloseOpen)
-rand{T<:Union(Float16, Float32)}(r::Union(RandomDevice,MersenneTwister), ::Type{T}) = convert(T, rand(r, Float64))
 
 rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
 rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
