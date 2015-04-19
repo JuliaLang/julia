@@ -549,7 +549,7 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
 
 DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    if(field > jl_datatype_nfields(ty))
+    if (field > jl_datatype_nfields(ty))
         jl_error("This type does not have that many fields");
     return ty->fields[field].offset;
 }

@@ -609,7 +609,8 @@ ssize_t jl_max_jlgensym_in(jl_value_t *v)
     ssize_t genid = -1;
     if (jl_is_gensym(v)) {
         genid = ((jl_gensym_t*)v)->id;
-    } else if (jl_is_expr(v)) {
+    }
+    else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
         size_t i, l = jl_array_len(e->args);
         for (i = 0; i < l; i++) {

@@ -193,7 +193,8 @@ DLLEXPORT void jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
         *pp = x;
-    } else {
+    }
+    else {
         if (!jl_is_datatype(ety))
             jl_error("pointerset: invalid pointer");
         size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->alignment);
@@ -249,7 +250,7 @@ void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
     size_t offs = jl_field_offset(st,i);
     if (jl_field_isptr(st,i)) {
         *(jl_value_t**)((char*)v + offs) = rhs;
-        if(rhs != NULL) gc_wb(v, rhs);
+        if (rhs != NULL) gc_wb(v, rhs);
     }
     else {
         jl_assign_bits((char*)v + offs, rhs);
@@ -581,11 +582,11 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
         tn = t->name;
     // init before possibly calling jl_new_typename
     t->super = super;
-    if(super != NULL) gc_wb(t, t->super);
+    if (super != NULL) gc_wb(t, t->super);
     t->parameters = parameters;
     gc_wb(t, t->parameters);
     t->types = ftypes;
-    if(ftypes != NULL) gc_wb(t, t->types);
+    if (ftypes != NULL) gc_wb(t, t->types);
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->pointerfree = 0;

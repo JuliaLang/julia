@@ -980,7 +980,8 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!strip_ir_metadata || llvmf->isDeclaration()) {
         // print the function IR as-is
         llvmf->print(stream);
-    } else {
+    }
+    else {
         // make a copy of the function and strip metadata from the copy
         llvm::ValueToValueMapTy VMap;
         Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
@@ -1047,7 +1048,8 @@ const jl_value_t *jl_dump_function_asm(void *f)
     assert(fptr != 0);
     if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
         jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
-    } else {
+    }
+    else {
         jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
     }
     fstream.flush();
@@ -1931,18 +1933,18 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     }
     else if (f->fptr == &jl_f_typeof && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
-        if (!jl_is_typevar(aty) && aty != (jl_value_t*)jl_any_type) {
-            Value *arg1 = emit_expr(args[1], ctx);
-            if (jl_is_leaf_type(aty)) {
-                if (jl_is_type_type(aty))
-                    aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
-                JL_GC_POP();
-                return literal_pointer_val(aty);
-            }
-            arg1 = boxed(arg1,ctx);
-            JL_GC_POP();
-            return emit_typeof(arg1);
+        Value *arg1 = emit_expr(args[1], ctx), *ret;
+        if (jl_is_leaf_type(aty)) {
+            if (jl_is_type_type(aty))
+                aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
+            ret = literal_pointer_val(aty);
         }
+        else {
+            arg1 = boxed(arg1,ctx);
+            ret = emit_typeof(arg1);
+        }
+        JL_GC_POP();
+        return ret;
     }
     else if (f->fptr == &jl_f_typeassert && nargs==2) {
         jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
