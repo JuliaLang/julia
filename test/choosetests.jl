@@ -16,7 +16,7 @@ function choosetests(choices = [])
         "linalg", "core", "keywordargs", "numbers", "strings",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
-        "intfuncs", "simdloop", "blas", "fft", "dsp", "sparse",
+        "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
@@ -31,6 +31,10 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n"
     ]
 
+    if Base.USE_GPL_LIBS
+        testnames = [testnames, "fft", "dsp"; ]
+    end
+
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
@@ -44,12 +48,16 @@ function choosetests(choices = [])
     if "linalg" in tests
         # specifically selected case
         filter!(x -> x != "linalg", tests)
-        prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4",
-            "linalg/lapack", "linalg/triangular", "linalg/tridiag",
-            "linalg/bidiag", "linalg/diagonal",
-            "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
-            "linalg/arnoldi", "linalg/symmetric"])
+        linalgtests = ["linalg1", "linalg2", "linalg3", "linalg4",
+                       "linalg/lapack", "linalg/triangular", "linalg/tridiag",
+                       "linalg/bidiag", "linalg/diagonal",
+                       "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
+                       "linalg/symmetric"]
+        if Base.USE_GPL_LIBS
+            push!(linalgtests, "linalg/arnoldi")
         end
+        prepend!(tests, linalgtests)
+    end
 
     net_required_for = ["socket", "parallel"]
     net_on = true

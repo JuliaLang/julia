@@ -20,8 +20,10 @@ include("sparse/sparsematrix.jl")
 include("sparse/csparse.jl")
 
 include("sparse/linalg.jl")
-include("sparse/umfpack.jl")
-include("sparse/cholmod.jl")
-include("sparse/spqr.jl")
+if Base.USE_GPL_LIBS
+    include("sparse/umfpack.jl")
+    include("sparse/cholmod.jl")
+    include("sparse/spqr.jl")
+end
 
 end # module SparseMatrix
