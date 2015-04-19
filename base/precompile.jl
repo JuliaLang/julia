@@ -452,6 +452,8 @@ precompile(Base.spawn, (Cmd, (Base.TTY, Base.TTY, Base.TTY), Bool, Bool))
 precompile(Base.spawn, (Cmd,))
 
 # Speed up repl help
-sprint(Markdown.term, @doc fft)
-sprint(Docs.repl_search, "fft")
-sprint(Docs.repl_corrections, "fft")
+if Base.USE_GPL_LIBS
+    sprint(Markdown.term, @doc fft)
+    sprint(Docs.repl_search, "fft")
+    sprint(Docs.repl_corrections, "fft")
+end
