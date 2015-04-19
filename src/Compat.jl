@@ -8,6 +8,11 @@ if VERSION >= v"0.4.0-dev+3184"
     export @ngenerate, @nsplat
 end
 
+if VERSION < v"0.4.0-dev+1624"
+    eachindex(A::AbstractArray) = 1:length(A)
+    export eachindex
+end
+
 if VERSION < v"0.4.0-dev+1419"
     export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
     const UInt = Uint
