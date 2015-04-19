@@ -980,7 +980,8 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!strip_ir_metadata || llvmf->isDeclaration()) {
         // print the function IR as-is
         llvmf->print(stream);
-    } else {
+    }
+    else {
         // make a copy of the function and strip metadata from the copy
         llvm::ValueToValueMapTy VMap;
         Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
@@ -1047,7 +1048,8 @@ const jl_value_t *jl_dump_function_asm(void *f)
     assert(fptr != 0);
     if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
         jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
-    } else {
+    }
+    else {
         jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
     }
     fstream.flush();

@@ -322,7 +322,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 #ifdef COPY_STACKS
         if (t->stkbuf) {
             restore_stack(t, where, NULL);
-        } else {
+        }
+        else {
 #ifdef ASM_COPY_STACKS
             void *stackbase = jl_stackbase;
 #ifdef _CPU_X86_64_
