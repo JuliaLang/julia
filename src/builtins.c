@@ -1313,7 +1313,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
 {
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
-    if(depth > MAX_DEPTH) { // cheap way of bailing out of cycles
+    if (depth > MAX_DEPTH) { // cheap way of bailing out of cycles
         return jl_printf(out, "•");
     }
     depth++;
@@ -1525,7 +1525,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
             if (j != tlen-1)
                 n += jl_printf(out, ", ");
         }
-        if(j < tlen) n += jl_printf(out, " ...");
+        if (j < tlen) n += jl_printf(out, " ...");
         n += jl_printf(out, "]");
     }
     else if (jl_typeis(v,jl_loaderror_type)) {
