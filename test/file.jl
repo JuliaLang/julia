@@ -344,6 +344,72 @@ emptyf = open(emptyfile)
 close(emptyf)
 rm(emptyfile)
 
+
+###########################################################################
+## This section tests cp files, directories, absolute and relative links. #
+###########################################################################
+function check_dir(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
+    isdir(orig_path) || throw(ArgumentError("'$orig_path' is not a directory."))
+    # copied_path must also be a dir.
+    @test isdir(copied_path)
+    readir_orig = readdir(orig_path)
+    readir_copied = readdir(copied_path)
+    @test readir_orig == readir_copied
+    # check recursive
+    for name in readir_orig
+        @test name in readir_copied
+        check_cp(joinpath(orig_path, name), joinpath(copied_path, name), follow_symlinks)
+    end
+end
+
+function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
+    if islink(orig_path)
+        if !follow_symlinks
+            # copied_path must be a link
+            @test islink(copied_path)
+            readlink_orig = readlink(orig_path)
+            # copied_path must have the same link value:
+            #    this is true for absolute and relative links
+            @test readlink_orig == readlink(copied_path)
+            if isabspath(readlink_orig)
+                @test isabspath(readlink(copied_path))
+            end
+        else
+            # copied_path may not be a link if follow_symlinks=true
+            @test islink(orig_path) == !islink(copied_path)
+            if isdir(orig_path)
+                check_dir(orig_path, copied_path, follow_symlinks)
+            else
+                # copied_path must also be a file.
+                @test isfile(copied_path)
+                # copied_path must have same content
+                @test readall(orig_path) == readall(copied_path)
+            end
+        end
+    elseif isdir(orig_path)
+        check_cp_main(orig_path, copied_path, follow_symlinks)
+    else
+        # copied_path must also be a file.
+        @test isfile(copied_path)
+        # copied_path must have same content
+        @test readall(orig_path) == readall(copied_path)
+    end
+end
+
+function check_cp_main(orig::AbstractString, copied::AbstractString, follow_symlinks::Bool)
+    if isdir(orig)
+        check_dir(orig, copied, follow_symlinks)
+    else
+        check_cp(orig, copied, follow_symlinks)
+    end
+end
+
+function cp_and_test(src::AbstractString, dst::AbstractString, follow_symlinks::Bool)
+    cp(src, dst; follow_symlinks=follow_symlinks)
+    check_cp_main(src, dst, follow_symlinks)
+end
+
+# issue #8698
 # Test copy file
 afile = joinpath(dir, "a.txt")
 touch(afile)
@@ -353,44 +419,11 @@ write(af, "This is indeed a test")
 bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
-mktempdir() do tmpdir
-    src = joinpath(tmpdir, "src")
-    dst = joinpath(tmpdir, "dst")
-    mkdir(src)
-
-    @test_throws ArgumentError cp(src, dst)
-end
-
-# Recursive copy
-mktempdir() do tmpdir
-    src = joinpath(tmpdir, "src")
-    dst = joinpath(tmpdir, "dst")
-    mkdir(src)
-    touch(joinpath(src, "foo"))
-    mkdir(joinpath(src, "bar"))
-    touch(joinpath(src, "bar", "qux"))
-
-    cp(src, dst, recursive=true)
-    @test isfile(joinpath(dst, "foo"))
-    @test isfile(joinpath(dst, "bar", "qux"))
-end
-
-# issue #10434
-mktempdir() do tmpdir
-    src = joinpath(tmpdir, "src")
-    dst = joinpath(tmpdir, "dst")
-    mkdir(src)
-
-    try cp(src, dst) end
-    @test !ispath(dst)
-end
-
-# issue #8698
 cfile = joinpath(dir, "c.txt")
 open(cfile, "w") do cf
     write(cf, "This is longer than the contents of afile")
 end
-cp(afile, cfile)
+cp(afile, cfile; remove_destination=true)
 
 a_stat = stat(afile)
 b_stat = stat(bfile)
@@ -403,6 +436,238 @@ close(af)
 rm(afile)
 rm(bfile)
 rm(cfile)
+
+# issue #10506 #10434
+## Tests for directories and links to directories
+@non_windowsxp_only begin
+    function setup_dirs(tmpdir)
+        srcdir = joinpath(tmpdir, "src")
+        srcdir_cp = joinpath(tmpdir, "srcdir_cp")
+        mkdir(srcdir)
+        abs_dirlink = joinpath(tmpdir, "abs_dirlink")
+        symlink(abspath(srcdir), abs_dirlink)
+        cd(tmpdir)
+        rel_dirlink = "rel_dirlink"
+        symlink("src", rel_dirlink)
+        cd(pwd_)
+
+        cfile = joinpath(srcdir, "c.txt")
+        open(cfile, "w") do cf
+            write(cf, "This is c.txt with unicode - 这是一个文件")
+        end
+
+        abs_dirlink_cp = joinpath(tmpdir, "abs_dirlink_cp")
+        path_rel_dirlink = joinpath(tmpdir, rel_dirlink)
+        path_rel_dirlink_cp = joinpath(tmpdir, "rel_dirlink_cp")
+
+        test_src_paths = [srcdir, abs_dirlink, path_rel_dirlink]
+        test_cp_paths = [srcdir_cp, abs_dirlink_cp, path_rel_dirlink_cp]
+        return test_src_paths, test_cp_paths
+    end
+
+    function cp_follow_symlinks_false_check(s, d; remove_destination=false)
+        cp(s, d; remove_destination=remove_destination, follow_symlinks=false)
+        @test isdir(s) == isdir(d)
+        @test islink(s) == islink(d)
+        islink(s) && @test readlink(s) == readlink(d)
+        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        # all should contain 1 file named  "c.txt"
+        @test "c.txt" in readdir(d)
+        @test length(readdir(d)) == 1
+    end
+
+    ## Test require `remove_destination=true` (remove destination first) for existing
+    #  directories and existing links to directories
+    mktempdir() do tmpdir
+        # Setup new copies for the test
+        test_src_paths, test_cp_paths = setup_dirs(tmpdir)
+        for (s, d) in zip(test_src_paths, test_cp_paths)
+            cp_follow_symlinks_false_check(s, d)
+        end
+        # Test require `remove_destination=true`
+        for s in test_src_paths
+            for d in test_cp_paths
+                @test_throws ArgumentError cp(s, d; remove_destination=false)
+                @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
+            end
+        end
+        # Test remove the existing path first and copy
+        for (s, d) in zip(test_src_paths, test_cp_paths)
+            cp_follow_symlinks_false_check(s, d; remove_destination=true)
+        end
+        # Test remove the existing path first and copy an empty dir
+        emptydir = joinpath(tmpdir, "emptydir")
+        mkdir(emptydir)
+        for d in test_cp_paths
+            cp(emptydir, d; remove_destination=true, follow_symlinks=false)
+            # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
+            @test isdir(d) && !islink(d)
+            # none should contain any file
+            @test isempty(readdir(d))
+        end
+    end
+
+    # Test full: absolute and relative directory links
+    mktempdir() do tmpdir
+        maindir = joinpath(tmpdir, "mytestdir")
+        mkdir(maindir)
+        targetdir = abspath(joinpath(maindir, "targetdir"))
+        mkdir(targetdir)
+        subdir1 = joinpath(maindir, "subdir1")
+        mkdir(subdir1)
+
+        cfile = abspath(joinpath(maindir, "c.txt"))
+        open(cfile, "w") do cf
+            write(cf, "This is c.txt - 这是一个文件")
+        end
+        open(abspath(joinpath(targetdir, "file1.txt")), "w") do cf
+            write(cf, "This is file1.txt - 这是一个文件")
+        end
+
+        abs_dl = joinpath(maindir, "abs_linkto_targetdir")
+        symlink(targetdir, abs_dl)
+        # Setup relative links
+        cd(subdir1)
+        rel_dl = "rel_linkto_targetdir"
+        rel_dir = joinpath("..", "targetdir")
+        symlink(rel_dir, rel_dl)
+        cd(pwd_)
+        # TEST: Directory with links: Test each option
+        maindir_cp = joinpath(dirname(maindir),"maindir_cp")
+        maindir_cp_keepsym = joinpath(dirname(maindir),"maindir_cp_keepsym")
+        cp_and_test(maindir, maindir_cp, true)
+        cp_and_test(maindir, maindir_cp_keepsym, false)
+    end
+end
+
+# issue #10506 #10434
+## Tests for files and links to files as well as directories and links to directories
+@unix_only begin
+    function setup_files(tmpdir)
+        srcfile = joinpath(tmpdir, "srcfile.txt")
+        srcfile_cp = joinpath(tmpdir, "srcfile_cp.txt")
+        open(srcfile, "w") do f
+            write(f, "This is srcfile.txt with unicode - 这是一个文件")
+        end
+        srcfile_content = readall(srcfile)
+        abs_filelink = joinpath(tmpdir, "abs_filelink")
+        symlink(abspath(srcfile), abs_filelink)
+        cd(tmpdir)
+        rel_filelink = "rel_filelink"
+        symlink("srcfile.txt", rel_filelink)
+        cd(pwd_)
+
+        abs_filelink_cp = joinpath(tmpdir, "abs_filelink_cp")
+        path_rel_filelink = joinpath(tmpdir, rel_filelink)
+        path_rel_filelink_cp = joinpath(tmpdir, "rel_filelink_cp")
+
+        test_src_paths = [srcfile, abs_filelink, path_rel_filelink]
+        test_cp_paths = [srcfile_cp, abs_filelink_cp, path_rel_filelink_cp]
+        return test_src_paths, test_cp_paths, srcfile_content
+    end
+
+    function cp_follow_symlinks_false_check(s, d, srcfile_content; remove_destination=false)
+        cp(s, d; remove_destination=remove_destination, follow_symlinks=false)
+        @test isfile(s) == isfile(d)
+        @test islink(s) == islink(d)
+        islink(s) && @test readlink(s) == readlink(d)
+        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        # all should contain the same
+        @test readall(s) == readall(d) == srcfile_content
+    end
+
+    ## Test require `remove_destination=true` (remove destination first) for existing
+    #  files and existing links to files
+    mktempdir() do tmpdir
+        # Setup new copies for the test
+        test_src_paths, test_cp_paths, srcfile_content = setup_files(tmpdir)
+        for (s, d) in zip(test_src_paths, test_cp_paths)
+            cp_follow_symlinks_false_check(s, d, srcfile_content)
+        end
+        # Test require `remove_destination=true`
+        for s in test_src_paths
+            for d in test_cp_paths
+                @test_throws ArgumentError cp(s, d; remove_destination=false)
+                @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
+            end
+        end
+        # Test remove the existing path first and copy: follow_symlinks=false
+        for (s, d) in zip(test_src_paths, test_cp_paths)
+            cp_follow_symlinks_false_check(s, d, srcfile_content; remove_destination=true)
+        end
+        # Test remove the existing path first and copy an other file
+        otherfile = joinpath(tmpdir, "otherfile.txt")
+        otherfile_content = "This is otherfile.txt with unicode - 这是一个文件"
+        open(otherfile, "w") do f
+            write(f, otherfile_content)
+        end
+        for d in test_cp_paths
+            cp(otherfile, d; remove_destination=true, follow_symlinks=false)
+            # Expect no link because a file is copied (follow_symlinks=false does not effect this)
+            @test isfile(d) && !islink(d)
+            # all should contain otherfile_content
+            @test readall(d) == otherfile_content
+        end
+    end
+
+    # Test full: absolute and relative file links and absolute and relative directory links
+    mktempdir() do tmpdir
+        maindir = joinpath(tmpdir, "mytestdir")
+        mkdir(maindir)
+        targetdir = abspath(joinpath(maindir, "targetdir"))
+        mkdir(targetdir)
+        subdir1 = joinpath(maindir, "subdir1")
+        mkdir(subdir1)
+
+        cfile = abspath(joinpath(maindir, "c.txt"))
+        open(cfile, "w") do cf
+            write(cf, "This is c.txt - 这是一个文件")
+        end
+        open(abspath(joinpath(targetdir, "file1.txt")), "w") do cf
+            write(cf, "This is file1.txt - 这是一个文件")
+        end
+
+        abs_fl = joinpath(maindir, "abs_linkto_c.txt")
+        symlink(cfile, abs_fl)
+        abs_dl = joinpath(maindir, "abs_linkto_targetdir")
+        symlink(targetdir, abs_dl)
+        # Setup relative links
+        cd(subdir1)
+        rel_fl = "rel_linkto_c.txt"
+        rel_file = joinpath("..", "c.txt")
+        symlink(rel_file, rel_fl)
+        rel_dl = "rel_linkto_targetdir"
+        rel_dir = joinpath("..", "targetdir")
+        symlink(rel_dir, rel_dl)
+        rel_file_read_txt = readall(rel_file)
+        cd(pwd_)
+        # Setup copytodir
+        copytodir = joinpath(tmpdir, "copytodir")
+        mkdir(copytodir)
+        cp(cfile, joinpath(copytodir, basename(cfile)))
+        subdir_test = joinpath(copytodir, "subdir_test")
+        mkdir(subdir_test)
+        cp(targetdir, joinpath(copytodir, basename(targetdir)); follow_symlinks=false)
+        # TEST: Directory with links: Test each option
+        maindir_cp =  joinpath(dirname(maindir),"maindir_cp")
+        maindir_cp_keepsym =  joinpath(dirname(maindir),"maindir_cp_keepsym")
+        cp_and_test(maindir, maindir_cp, true)
+        cp_and_test(maindir, maindir_cp_keepsym, false)
+
+        ## Tests single Files, File Links
+        rel_flpath = joinpath(subdir1, rel_fl)
+        # `cp file`
+        cp_and_test(cfile, joinpath(copytodir,"cfile_cp.txt"), true)
+        cp_and_test(cfile, joinpath(copytodir,"cfile_cp_keepsym.txt"), false)
+        # `cp absolute file link`
+        cp_and_test(abs_fl, joinpath(copytodir,"abs_fl_cp.txt"), true)
+        cp_and_test(abs_fl, joinpath(copytodir,"abs_fl_cp_keepsym.txt"), false)
+        # `cp relative file link`
+        cp_and_test(rel_flpath, joinpath(subdir_test,"rel_fl_cp.txt"), true)
+        cp_and_test(rel_flpath, joinpath(subdir_test,"rel_fl_cp_keepsym.txt"), false)
+    end
+end
+
 
 ###################
 # FILE* interface #
