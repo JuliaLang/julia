@@ -33,7 +33,6 @@ JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_applicable);
 JL_CALLABLE(jl_f_invoke);
-JL_CALLABLE(jl_f_yieldto);
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_nfields);
 

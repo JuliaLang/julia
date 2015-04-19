@@ -1225,7 +1225,6 @@ void jl_init_primitives(void)
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isdefined", jl_f_isdefined);
-    add_builtin_func("yieldto", jl_f_yieldto);
 
     // functions for internal use
     add_builtin_func("getfield",  jl_f_get_field);

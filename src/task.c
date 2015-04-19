@@ -143,7 +143,6 @@ extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
 JL_THREAD jl_task_t *jl_root_task;
-JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 JL_THREAD jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
 JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
@@ -357,18 +356,18 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
+JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 extern int jl_in_gc;
-static jl_value_t *switchto(jl_task_t *t)
+DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     if (t->state == done_sym || t->state == failed_sym) {
-        jl_task_arg_in_transit = jl_nothing;
         if (t->exception != jl_nothing)
             jl_throw(t->exception);
         return t->result;
     }
-    if (jl_in_gc) {
+    if (jl_in_gc)
         jl_error("task switch not allowed from inside gc finalizer");
-    }
+    jl_task_arg_in_transit = arg;
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
     jl_task_arg_in_transit = jl_nothing;
@@ -461,12 +460,6 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 }
 
 #endif /* !COPY_STACKS */
-
-jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
-{
-    jl_task_arg_in_transit = arg;
-    return switchto(t);
-}
 
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
@@ -883,22 +876,6 @@ JL_CALLABLE(jl_unprotect_stack)
     mprotect(stk, jl_page_size-1, PROT_READ|PROT_WRITE|PROT_EXEC);
 #endif
     return jl_nothing;
-}
-
-JL_CALLABLE(jl_f_yieldto)
-{
-    JL_NARGSV(yieldto, 1);
-    JL_TYPECHK(yieldto, task, args[0]);
-    if (nargs == 2) {
-        jl_task_arg_in_transit = args[1];
-    }
-    else if (nargs > 2) {
-        jl_task_arg_in_transit = jl_f_tuple(NULL, &args[1], nargs-1);
-    }
-    else {
-        jl_task_arg_in_transit = jl_emptytuple;
-    }
-    return switchto((jl_task_t*)args[0]);
 }
 
 DLLEXPORT jl_value_t *jl_get_current_task(void)
