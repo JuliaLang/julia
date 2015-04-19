@@ -40,17 +40,18 @@ Arrays
 Basic Functions
 ---------------
 
-============================ ==============================================================================
-Function                     Description
-============================ ==============================================================================
-:func:`eltype(A) <eltype>`   the type of the elements contained in A
-:func:`length(A) <length>`   the number of elements in A
-:func:`ndims(A) <ndims>`     the number of dimensions of A
-:func:`size(A) <size>`       a tuple containing the dimensions of A
-:func:`size(A,n) <size>`     the size of A in a particular dimension
-:func:`stride(A,k) <stride>` the stride (linear index distance between adjacent elements) along dimension k
-:func:`strides(A) <strides>` a tuple of the strides in each dimension
-============================ ==============================================================================
+================================  ==============================================================================
+Function                          Description
+================================  ==============================================================================
+:func:`eltype(A) <eltype>`        the type of the elements contained in ``A``
+:func:`length(A) <length>`        the number of elements in ``A``
+:func:`ndims(A) <ndims>`          the number of dimensions of ``A``
+:func:`size(A) <size>`            a tuple containing the dimensions of ``A``
+:func:`size(A,n) <size>`          the size of ``A`` in a particular dimension
+:func:`eachindex(A) <eachindex>`  an efficient iterator for visiting each position in ``A``
+:func:`stride(A,k) <stride>`      the stride (linear index distance between adjacent elements) along dimension ``k``
+:func:`strides(A) <strides>`      a tuple of the strides in each dimension
+================================  ==============================================================================
 
 Construction and Initialization
 -------------------------------
@@ -218,16 +219,16 @@ The general syntax for indexing into an n-dimensional array A is::
 
     X = A[I_1, I_2, ..., I_n]
 
-where each I\_k may be:
+where each ``I_k`` may be:
 
 1. A scalar integer
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
 4. A boolean vector
 
-The result X generally has dimensions
+The result ``X`` generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
-``(i_1, i_2, ..., i_n)`` of X containing the value
+``(i_1, i_2, ..., i_n)`` of ``X`` containing the value
 ``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions
 indexed with scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
@@ -235,6 +236,13 @@ a dimension indexed by a boolean vector will be the number of true values in the
 As a special part of this syntax, the ``end`` keyword may be used to represent the last
 index of each dimension within the indexing brackets, as determined by the size of the
 innermost array being indexed.
+
+Alternatively, single elements of a multidimensional array can be indexed as
+::
+    x = A[I]
+
+where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
+See :ref:`man-array-iteration` below.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
@@ -275,7 +283,7 @@ The general syntax for assigning values in an n-dimensional array A is::
 
     A[I_1, I_2, ..., I_n] = X
 
-where each I\_k may be:
+where each ``I_k`` may be:
 
 1. A scalar value
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
@@ -312,6 +320,49 @@ Example:
      1  -1  -1
      2  -1  -1
      3   6   9
+
+.. _man-array-iteration:
+
+Iteration
+---------
+
+The recommended ways to iterate over a whole array are
+::
+
+    for a in A
+        # Do something with the element a
+    end
+
+    for i in eachindex(A)
+        # Do something with i and/or A[i]
+    end
+
+The first construct is used when you need the value, but not index, of each element.  In the second construct, ``i`` will be an ``Int`` if ``A`` is an array
+type with fast linear indexing; otherwise, it will be a ``CartesianIndex``::
+
+    A = rand(4,3)
+    B = sub(A, 1:3, 2:3)
+    julia> for i in eachindex(B)
+               @show i
+           end
+           i = Base.IteratorsMD.CartesianIndex_2(1,1)
+           i = Base.IteratorsMD.CartesianIndex_2(2,1)
+           i = Base.IteratorsMD.CartesianIndex_2(3,1)
+           i = Base.IteratorsMD.CartesianIndex_2(1,2)
+           i = Base.IteratorsMD.CartesianIndex_2(2,2)
+           i = Base.IteratorsMD.CartesianIndex_2(3,2)
+
+In contrast with ``for i = 1:length(A)``, iterating with ``eachindex`` provides an efficient way to iterate over any array type.
+
+Array traits
+------------
+
+If you write a custom ``AbstractArray`` type, you can specify that it has fast linear indexing using
+::
+
+    Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
+
+This setting will cause ``eachindex`` iteration over a ``MyArray`` to use integers.  If you don't specify this trait, the default value ``LinearSlow()`` is used.
 
 Vectorized Operators and Functions
 ----------------------------------
