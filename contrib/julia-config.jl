@@ -13,7 +13,7 @@ function imagePath()
 end
 
 function libDir()
-    abspath(dirname(Sys.dlpath("libjulia")));
+    abspath(dirname(Libdl.dlpath("libjulia")));
 end
 
 function includeDir()
