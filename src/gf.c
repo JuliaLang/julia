@@ -1390,7 +1390,7 @@ static jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     size_t i;
     for(i=0; i < nargs; i++) {
         jl_value_t *ai = args[i];
-        if (!jl_is_typevar(ai) && jl_is_type(ai))
+        if (jl_is_type(ai))
             types[i] = (jl_value_t*)jl_wrap_Type(ai);
         else
             types[i] = jl_typeof(ai);
