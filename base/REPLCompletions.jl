@@ -334,11 +334,23 @@ function completions(string, pos)
                 isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
-                          pname != "REQUIRE" && startswith(pname, s)
+                        pname != "REQUIRE" && startswith(pname, s)
+                        # Valid file paths are
+                        #   <Mod>.jl
+                        #   <Mod>/src/<Mod>.jl
+                        #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
                             endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
                         else
-                            push!(suggestions, pname)
+                            mod_name = if endswith(pname, ".jl")
+                                pname[1:end - 3]
+                            else
+                                pname
+                            end
+                            if isfile(joinpath(dir, pname, "src",
+                                               "$mod_name.jl"))
+                                push!(suggestions, mod_name)
+                            end
                         end
                     end
                 end
