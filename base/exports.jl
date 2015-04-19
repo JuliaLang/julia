@@ -1008,6 +1008,7 @@ export
     task_local_storage,
     unlock,
     yield,
+    yieldto,
 
 # time
     sleep,

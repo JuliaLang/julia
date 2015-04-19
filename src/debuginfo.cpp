@@ -544,7 +544,8 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             if (frame_info_line.FileName)
                 *filename = strdup(frame_info_line.FileName);
             *line = frame_info_line.LineNumber;
-        } else if (*fromC) {
+        }
+        else if (*fromC) {
             // No debug info, use dll name instead
             *filename = fname;
         }

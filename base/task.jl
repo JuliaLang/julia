@@ -16,6 +16,8 @@ current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 istaskstarted(t::Task) = isdefined(t, :last)
 
+yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
+
 # yield to a task, throwing an exception in it
 function throwto(t::Task, exc)
     t.exception = exc

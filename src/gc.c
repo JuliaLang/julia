@@ -446,18 +446,18 @@ static int verifying;
 static void add_lostval_parent(jl_value_t* parent)
 {
     for(int i = 0; i < lostval_parents_done.len; i++) {
-        if((jl_value_t*)lostval_parents_done.items[i] == parent)
+        if ((jl_value_t*)lostval_parents_done.items[i] == parent)
             return;
     }
     for(int i = 0; i < lostval_parents.len; i++) {
-        if((jl_value_t*)lostval_parents.items[i] == parent)
+        if ((jl_value_t*)lostval_parents.items[i] == parent)
             return;
     }
     arraylist_push(&lostval_parents, parent);
 }
 
 #define verify_val(v) do {                                              \
-        if(lostval == (jl_value_t*)(v) && (v) != 0) {                   \
+        if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
             jl_printf(JL_STDOUT,                                        \
                       "Found lostval 0x%lx at %s:%d oftype: ",          \
                       (uintptr_t)(lostval), __FILE__, __LINE__);        \
@@ -468,7 +468,7 @@ static void add_lostval_parent(jl_value_t* parent)
 
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
-        if(*(jl_value_t**)(slot) == lostval && (obj) != lostval) {      \
+        if (*(jl_value_t**)(slot) == lostval && (obj) != lostval) {     \
             jl_printf(JL_STDOUT, "Found parent %s 0x%lx at %s:%d\n",    \
                       ty, (uintptr_t)(obj), __FILE__, __LINE__);        \
             jl_printf(JL_STDOUT, "\tloc 0x%lx : ", (uintptr_t)(slot));  \
@@ -1046,7 +1046,8 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
     end = (gcval_t*)&(GC_PAGE_DATA(v)[end_offset]);
     if (__likely(v != end)) {
         p->newpages = (gcval_t*)((char*)v + osize);
-    } else {
+    }
+    else {
         // like the freelist case, but only update the page metadata when it is full
         gcpage_t* pg = page_metadata(v);
         assert(pg->osize == p->osize);
@@ -1154,7 +1155,10 @@ static void sweep_pool_region(int region_i, int sweep_mask)
                     pfl[p_n] = sweep_page(p, pg, pfl[p_n], sweep_mask, osize);
                 }
             }
-        } else if (pg_i < lb) lb = pg_i;
+        }
+        else if (pg_i < lb) {
+            lb = pg_i;
+        }
     }
     regions_ub[region_i] = ub;
     regions_lb[region_i] = lb;
@@ -1206,7 +1210,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
             goto free_page;
         }
     }
-    else if(pg->gc_bits == GC_CLEAN) {
+    else if (pg->gc_bits == GC_CLEAN) {
         goto free_page;
     }
 
@@ -1718,7 +1722,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 #undef MARK
 
  queue_the_root:
-    if(mark_sp >= mark_stack_size) grow_mark_stack();
+    if (mark_sp >= mark_stack_size) grow_mark_stack();
     mark_stack[mark_sp++] = (jl_value_t*)v;
     max_msp = max_msp > mark_sp ? max_msp : mark_sp;
     return bits;
@@ -2181,7 +2185,7 @@ void jl_gc_collect(int full)
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
     uint64_t post_time = 0, finalize_time = 0;
 #endif
-    if(mark_sp == 0 || sweeping) {
+    if (mark_sp == 0 || sweeping) {
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
         uint64_t sweep_t0 = jl_hrtime();
 #endif
@@ -2232,7 +2236,8 @@ void jl_gc_collect(int full)
                 sweep_mask = GC_MARKED;
                 promoted_bytes = 0;
                 quick_count = 0;
-            } else {
+            }
+            else {
                 collect_interval = default_collect_interval/2;
                 sweep_mask = GC_MARKED_NOESC;
             }
@@ -2349,7 +2354,8 @@ void *reallocb(void *b, size_t sz)
         void* b2 = allocb(sz);
         memcpy(b2, b, page_metadata(buff)->osize);
         return b2;
-    } else {
+    }
+    else {
         bigval_t* bv = (bigval_t*)realloc(bigval_header(buff), sz + (BVOFFS + 1)*sizeof(void*));
         return (char*)bv + (BVOFFS + 1)*sizeof(void*);
     }

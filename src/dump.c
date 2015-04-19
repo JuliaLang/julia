@@ -70,7 +70,7 @@ static jl_fptr_t id_to_fptrs[] = {
   jl_f_methodexists, jl_f_applicable,
   jl_f_invoke, jl_apply_generic,
   jl_unprotect_stack,
-  jl_f_yieldto, jl_f_sizeof, jl_f_new_expr,
+  jl_f_sizeof, jl_f_new_expr,
   NULL };
 
 // pointers to non-AST-ish objects in a compressed tree
@@ -226,7 +226,8 @@ static void jl_load_sysimg_so()
 #else
         if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
             jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
-        } else {
+        }
+        else {
             jl_sysimage_base = 0;
         }
 #endif
@@ -1123,7 +1124,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (usetable)
             arraylist_push(&backref_list, f);
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&f->linfo);
-        if(f->linfo != NULL) gc_wb(f, f->linfo);
+        if (f->linfo != NULL) gc_wb(f, f->linfo);
         f->env = jl_deserialize_value(s, &f->env);
         gc_wb(f, f->env);
         f->fptr = jl_deserialize_fptr(s);
@@ -1144,9 +1145,9 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         gc_wb(li, li->name);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
-        if(li->specTypes) gc_wb(li, li->specTypes);
+        if (li->specTypes) gc_wb(li, li->specTypes);
         li->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->specializations);
-        if(li->specializations) gc_wb(li, li->specializations);
+        if (li->specializations) gc_wb(li, li->specializations);
         li->inferred = read_int8(s);
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         gc_wb(li, li->file);
@@ -1154,11 +1155,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
         gc_wb(li, li->module);
         li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
-        if(li->roots) gc_wb(li, li->roots);
+        if (li->roots) gc_wb(li, li->roots);
         li->def = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
         gc_wb(li, li->def);
         li->capt = jl_deserialize_value(s, &li->capt);
-        if(li->capt) gc_wb(li, li->capt);
+        if (li->capt) gc_wb(li, li->capt);
         li->fptr = &jl_trampoline;
         li->functionObject = NULL;
         li->cFunctionList = NULL;
@@ -1205,11 +1206,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             jl_binding_t *b = jl_get_binding_wr(m, name);
             b->value = jl_deserialize_value(s, &b->value);
             gc_wb_buf(m, b);
-            if(b->value != NULL) gc_wb(m, b->value);
+            if (b->value != NULL) gc_wb(m, b->value);
             b->type = jl_deserialize_value(s, &b->type);
             gc_wb(m, b->type);
             b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
-            if(b->owner != NULL) gc_wb(m, b->owner);
+            if (b->owner != NULL) gc_wb(m, b->owner);
             int8_t flags = read_int8(s);
             b->constp = (flags>>2) & 1;
             b->exportp = (flags>>1) & 1;
@@ -1225,7 +1226,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             i++;
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
-        if(m->constant_table != NULL) gc_wb(m, m->constant_table);
+        if (m->constant_table != NULL) gc_wb(m, m->constant_table);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
