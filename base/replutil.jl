@@ -204,7 +204,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                 show_delim_array(buf, tv, '{', ',', '}', false)
             end
             print(buf, "(")
-            t_i = [Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
+            t_i = Any[Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
                 i > (use_constructor_syntax ? 2 : 1) && print(buf, ", ")
@@ -221,10 +221,10 @@ function show_method_candidates(io::IO, ex::MethodError)
                 t_in = typeintersect(Tuple{sig[1:i]...}, Tuple{t_i[1:j]...})
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
-                t_in == None && special && i == 1 && break
+                t_in === Union() && special && i == 1 && break
                 if use_constructor_syntax && i == 1
                     right_matches += i
-                elseif t_in == None
+                elseif t_in === Union()
                     if Base.have_color
                         Base.with_output_color(:red, buf) do buf
                             print(buf, "::$sigstr")

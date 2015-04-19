@@ -65,7 +65,7 @@ int jl_is_type(jl_value_t *v)
 {
     jl_value_t *t = jl_typeof(v);
     return (t == (jl_value_t*)jl_datatype_type || t == (jl_value_t*)jl_uniontype_type ||
-            t == (jl_value_t*)jl_typector_type || t == (jl_value_t*)jl_tvar_type);
+            t == (jl_value_t*)jl_typector_type);
 }
 
 STATIC_INLINE int is_unspec(jl_datatype_t *dt)
@@ -1328,7 +1328,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     S = m;
                 }
             }
-            if (jl_is_type(S)) {
+            if (jl_is_type(S) || jl_is_typevar(S)) {
                 if (!jl_is_typevar(S) && !jl_is_leaf_type(S) && S != jl_bottom_type) {
                     S = (jl_value_t*)jl_new_typevar(underscore_sym,
                                                     (jl_value_t*)jl_bottom_type, S);
@@ -3050,7 +3050,7 @@ void jl_init_types(void)
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_emptysvec);
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"),
-                                   jl_type_type, jl_emptysvec,
+                                   jl_any_type, jl_emptysvec,
                                    jl_svec(4, jl_symbol("name"),
                                            jl_symbol("lb"), jl_symbol("ub"),
                                            jl_symbol("bound")),
