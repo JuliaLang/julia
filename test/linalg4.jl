@@ -53,7 +53,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     end
     A = convert(Matrix{elty}, A'A)
     for ul in (:U, :L)
-        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix, Type{Val{ul}}),copy(A), Val{ul}))
     end
 end
 
