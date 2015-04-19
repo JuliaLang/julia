@@ -392,42 +392,51 @@ end
 
 ## Moore-Penrose pseudoinverse
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
-    m, n        = size(A)
-    (m == 0 || n == 0) && return Array(T, n, m)
+    m, n = size(A)
+    Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
+    if m == 0 || n == 0
+        return Array(Tout, n, m)
+    end
     if istril(A)
-       if( istriu(A) )
-          maxabsA = maximum(abs(diag(A)))
-          B = zeros(T,n,m);
-          for i = 1:min(m,n)
-             if( abs(A[i,i]) > tol*maxabsA && isfinite(one(T)/A[i,i]) )
-                 B[i,i] = one(T)/A[i,i]
-             end
-          end
-          return B;
-       end
+        if istriu(A)
+            maxabsA = maximum(abs(diag(A)))
+            B = zeros(Tout, n, m);
+            for i = 1:min(m, n)
+                if abs(A[i,i]) > tol*maxabsA
+                    Aii = inv(A[i,i])
+                    if isfinite(Aii)
+                        B[i,i] = Aii
+                    end
+                end
+            end
+            return B;
+        end
     end
     SVD         = svdfact(A, thin=true)
-    S           = eltype(SVD[:S])
-    Sinv        = zeros(S, length(SVD[:S]))
-    index       = SVD[:S] .> tol*maximum(SVD[:S])
-    Sinv[index] = one(S) ./ SVD[:S][index]
-    Sinv[find(!isfinite(Sinv))] = zero(S)
-    return SVD[:Vt]'scale(Sinv, SVD[:U]')
+    Stype       = eltype(SVD.S)
+    Sinv        = zeros(Stype, length(SVD.S))
+    index       = SVD.S .> tol*maximum(SVD.S)
+    Sinv[index] = one(Stype) ./ SVD.S[index]
+    Sinv[find(!isfinite(Sinv))] = zero(Stype)
+    return SVD.Vt'scale(Sinv, SVD.U')
 end
 function pinv{T}(A::StridedMatrix{T})
     tol = eps(real(float(one(T))))*maximum(size(A))
     return pinv(A, tol)
 end
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
-pinv(x::Number) = isfinite(one(x)/x) ? one(x)/x : zero(x)
+function pinv(x::Number)
+    xi = inv(x)
+    return ifelse(isfinite(xi), xi, zero(xi))
+end
 
 ## Basis for null space
 function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
-    SVD = svdfact(A, thin=false)
-    indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
-    return SVD[:V][:,indstart:end]
+    SVD = svdfact(A, thin = false)
+    indstart = sum(SVD.S .> max(m,n)*maximum(SVD.S)*eps(eltype(SVD.S))) + 1
+    return SVD.Vt[indstart:end,:]'
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
