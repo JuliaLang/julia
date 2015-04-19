@@ -61,9 +61,15 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
+ifeq ($(USE_GPL_LIBS), 1)
 STAGE1_DEPS =
 STAGE2_DEPS = Rmath-julia
 STAGE3_DEPS = suitesparse-wrapper
+else
+STAGE1_DEPS =
+STAGE2_DEPS =
+STAGE3_DEPS =
+endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
 STAGE1_DEPS += libuv
@@ -121,8 +127,10 @@ endif
 endif
 endif
 
+ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_FFTW), 0)
 STAGE1_DEPS += fftw
+endif
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -149,8 +157,10 @@ ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
 
+ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
+endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)

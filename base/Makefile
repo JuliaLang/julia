@@ -50,6 +50,11 @@ ifeq ($(USE_BLAS64), 1)
 else
 	@echo "const USE_BLAS64 = false" >> $@
 endif
+ifeq ($(USE_GPL_LIBS), 1)
+	@echo "const USE_GPL_LIBS = true" >> $@
+else
+	@echo "const USE_GPL_LIBS = false" >> $@
+endif
 	@echo "const libfftw_name = \"$(LIBFFTWNAME)\"" >> $@
 	@echo "const libfftwf_name = \"$(LIBFFTWFNAME)\"" >> $@
 	@echo "const libllvm_version = \"$(LLVM_VER)\"" >> $@
