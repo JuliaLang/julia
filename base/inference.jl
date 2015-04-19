@@ -2297,7 +2297,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
         cost /= 4
     end
-    if !inline_worthy(body, cost)
+    inline_op = (f===(+) || f===(*) || f===min || f===max) && (3 <= length(argexprs) <= 9) &&
+        meth[3].sig == Tuple{Any,Any,Any,Vararg{Any}}
+    if !inline_op && !inline_worthy(body, cost)
         if incompletematch
             # inline a typeassert-based call-site, rather than a
             # full generic lookup, using the inliner to handle
