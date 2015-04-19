@@ -860,11 +860,12 @@
                  (let ((next (peek-token s)))
                    (cond ((or (closing-token? next) (newline? next) (eq? next '=))
                           op)  ; return operator by itself, as in (+)
-                         ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
+                         ((or (eqv? next #\{)  ;; this case is +{T}(x::T) = ...
+			      (and (not (memq op unary-ops))
+				   (eqv? next #\( )))
                           (ts:put-back! s op)
                           (parse-factor s))
-			 ((and (not (memq op unary-ops))
-			       (not (eqv? next #\( )))
+			 ((not (memq op unary-ops))
 			  (error (string "\"" op "\" is not a unary operator")))
                          (else
                           (let ((arg (parse-unary s)))
