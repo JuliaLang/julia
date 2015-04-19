@@ -253,14 +253,31 @@ c, r, res = test_complete(s)
 @test length(c) == 0
 
 # Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkdir(p))
+mkp(p) = ((@assert !isdir(p)); mkpath(p))
 temp_pkg_dir() do
-    mkp(Pkg.dir("CompletionFooPackage"))
+    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+    # but not <Mod>/ if no corresponding .jl file is found
+    pkg_dir = Pkg.dir("CompletionFooPackage", "src")
+    mkp(pkg_dir)
+    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+
+    pkg_dir = Pkg.dir("CompletionFooPackage2.jl", "src")
+    mkp(pkg_dir)
+    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+
+    touch(Pkg.dir("CompletionFooPackage3.jl"))
+
+    mkp(Pkg.dir("CompletionFooPackageNone"))
+    mkp(Pkg.dir("CompletionFooPackageNone2.jl"))
 
     s = "using Completion"
     c,r = test_complete(s)
     @test "CompletionFoo" in c #The module
     @test "CompletionFooPackage" in c #The package
+    @test "CompletionFooPackage2" in c #The package
+    @test "CompletionFooPackage3" in c #The package
+    @test !("CompletionFooPackageNone" in c) #The package
+    @test !("CompletionFooPackageNone2" in c) #The package
     @test s[r] == "Completion"
 end
 
@@ -269,12 +286,17 @@ push!(LOAD_PATH, path)
 try
     # Should not throw an error even though the path do no exist
     test_complete("using ")
-    Pack_folder = joinpath(path,"Test_pack")
+    Pack_folder = joinpath(path, "Test_pack")
     mkpath(Pack_folder)
+
+    Pack_folder2 = joinpath(path, "Test_pack2", "src")
+    mkpath(Pack_folder2)
+    touch(joinpath(Pack_folder2, "Test_pack2.jl"))
 
     # Test it completes on folders
     c,r,res = test_complete("using Test_p")
-    @test "Test_pack" in c
+    @test !("Test_pack" in c)
+    @test "Test_pack2" in c
 
     # Test that it also completes on .jl files in pwd()
     cd(Pack_folder) do
