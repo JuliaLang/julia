@@ -11,9 +11,9 @@ Tasks
 
    Create a ``Task`` (i.e. thread, or coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
-.. function:: yieldto(task, args...)
+.. function:: yieldto(task, arg = nothing)
 
-   Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``args`` are returned from the task's last call to ``yieldto``. This is a low-level call that only switches tasks, not considering states or scheduling in any way.
+   Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``arg`` is returned from the task's last call to ``yieldto``. This is a low-level call that only switches tasks, not considering states or scheduling in any way. Its use is discouraged.
 
 .. function:: current_task()
 
