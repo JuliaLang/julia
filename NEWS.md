@@ -266,6 +266,8 @@ Library improvements
     * `code_llvm` now outputs stripped IR without debug info or other attached metadata.
       Use `code_llvm_raw` for the unstripped output ([#10747]).
 
+    * Added `readlink` which returns the value of a symbolic link "path" ([#10714]).
+
 Deprecated or removed
 ---------------------
 
@@ -1360,6 +1362,7 @@ Too numerous to mention.
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10679]: https://github.com/JuliaLang/julia/issues/10679
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
+[#10714]: https://github.com/JuliaLang/julia/pull/10714
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
