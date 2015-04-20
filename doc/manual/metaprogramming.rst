@@ -1037,11 +1037,11 @@ possible implementation is the following::
 
 The same thing can be done using recursion::
 
-    sub2ind_rec(dims::()) = 1
-    sub2ind_rec(dims::(),i1::Integer, I::Integer...) =
+    sub2ind_rec(dims::Tuple{}) = 1
+    sub2ind_rec(dims::Tuple{},i1::Integer, I::Integer...) =
         i1==1 ? sub2ind_rec(dims,I...) : throw(BoundsError())
-    sub2ind_rec(dims::(Integer,Integer...), i1::Integer) = i1
-    sub2ind_rec(dims::(Integer,Integer...), i1::Integer, I::Integer...) =
+    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer) = i1
+    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer, I::Integer...) =
         i1 + dims[1]*(sub2ind_rec(tail(dims),I...)-1)
 
 Both these implementations, although different, do essentially the same
