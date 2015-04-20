@@ -737,6 +737,9 @@ Deprecated or removed
   * `insert!` now throws a `BoundsError` if
     `index > length(collection)+1` ([#7373]).
 
+  * No longer exported from `Base`:
+    * `start_timer`, `stop_timer`, `start_reading`, `stop_reading`, `start_watching` ([#10885]).
+
 Julia v0.2.0 Release Notes
 ==========================
 
