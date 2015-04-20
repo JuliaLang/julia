@@ -3,7 +3,7 @@
 #abstract Any <: Any
 #abstract Type{T}
 
-#abstract Vararg{T}
+#abstract Vararg{T,N}
 #Tuple = (Any...)
 
 #type Symbol
