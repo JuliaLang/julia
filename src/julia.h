@@ -1003,6 +1003,15 @@ DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 #define jl_long_type     jl_int32_type
 #endif
 
+STATIC_INLINE int jl_is_vararg_fixedlen(jl_value_t *v)
+{
+    assert(jl_is_vararg_type(v));
+    jl_value_t *lenv = jl_tparam1(v);
+    if (jl_is_typevar(lenv))
+        return ((jl_tvar_t*)lenv)->bound != 0;
+    return jl_is_long(lenv);
+}
+
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
