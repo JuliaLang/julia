@@ -112,14 +112,10 @@ setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer) = i < j ? (A.data[i
 setindex!(A::LowerTriangular, x, i::Integer, j::Integer) = i >= j ? (A.data[i,j] = x; A) : throw(BoundsError())
 setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer) = i > j ? (A.data[i,j] = x; A) : throw(BoundsError())
 
-istril{T,S}(A::LowerTriangular{T,S}) = true
-istril{T,S}(A::UnitLowerTriangular{T,S}) = true
-istril{T,S}(A::UpperTriangular{T,S}) = false
-istril{T,S}(A::UnitUpperTriangular{T,S}) = false
-istriu{T,S}(A::LowerTriangular{T,S}) = false
-istriu{T,S}(A::UnitLowerTriangular{T,S}) = false
-istriu{T,S}(A::UpperTriangular{T,S}) = true
-istriu{T,S}(A::UnitUpperTriangular{T,S}) = true
+istril(A::LowerTriangular) = true
+istril(A::UnitLowerTriangular) = true
+istriu(A::UpperTriangular) = true
+istriu(A::UnitUpperTriangular) = true
 
 transpose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(transpose(A.data))
 transpose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(transpose(A.data))
