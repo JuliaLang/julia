@@ -1,6 +1,9 @@
 # Method and method-table pretty-printing
 
 function argtype_decl(n, t) # -> (argname, argtype)
+    if isvarargtype(t)
+        return argtype_decl_vararg(n, t)
+    end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -12,14 +15,23 @@ function argtype_decl(n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    if isvarargtype(t)
+    return s, string(t)
+end
+
+function argtype_decl_vararg(n, t)
+    s = string(n.args[1])
+    if n.args[2].head == :...
+        # x... or x::T... declaration
         if t.parameters[1] === Any
             return string(s, "..."), ""
         else
             return s, string(t.parameters[1], "...")
         end
     end
-    return s, string(t)
+    # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
+    s, length(n.args[2].args) < 4 ?
+       string("Vararg{", t.parameters[1], "}") :
+       string("Vararg{", t.parameters[1], ",", t.parameters[2], "}")
 end
 
 function arg_decl_parts(m::Method)

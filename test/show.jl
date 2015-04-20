@@ -221,3 +221,28 @@ end
 
 # issue #9865
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+
+# Vararg methods in method tables
+function test_mt(f, str)
+    mt = methods(f)
+    @test length(mt) == 1
+    defs = mt.defs
+    io = IOBuffer()
+    show(io, defs)
+    strio = takebuf_string(io)
+    @test strio[1:length(str)] == str
+end
+begin
+    local f1, f2, f3, f4, f5
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    f4(x::Vararg{Any,3}) = [x...]
+    f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+    test_mt(f1, "f1(x...)")
+    test_mt(f2, "f2(x::Vararg{Any})")
+    test_mt(f3, "f3(x::Vararg{T})")   # FIXME? better as x::Vararg?
+    test_mt(f4, "f4(x::Vararg{Any,3})")
+    intstr = string(Int)
+    test_mt(f5, "f5{T,N}(A::AbstractArray{T,N},indexes::Vararg{$intstr,N})")
+end
