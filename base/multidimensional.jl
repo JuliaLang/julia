@@ -149,10 +149,27 @@ stagedfunction eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
 
+stagedfunction eachindex{S,T,M,N}(::LinearSlow, A::AbstractArray{S,M}, B::AbstractArray{T,N})
+    K = max(M,N)
+    startargs = fill(1, K)
+    stopargs = [:(max(size(A,$i),size(B,$i))) for i=1:K]
+    meta = Expr(:meta, :inline)
+    :($meta; CartesianRange(CartesianIndex{$K}($(startargs...)), CartesianIndex{$K}($(stopargs...))))
+end
+
 eltype{I}(::Type{CartesianRange{I}}) = I
 eltype{I}(::CartesianRange{I}) = I
 
-start(iter::CartesianRange) = iter.start
+stagedfunction start{I<:CartesianIndex}(iter::CartesianRange{I})
+    N = length(I)
+    cmp = [:(iter.start[$d] > iter.stop[$d]) for d = 1:N]
+    extest = Expr(:||, cmp...)
+    inc = [d < N ? :(iter.start[$d]) : :(iter.stop[$N]+1) for d = 1:N]
+    exstop = :(CartesianIndex{$N}($(inc...)))
+    quote
+        $extest ? $exstop : iter.start
+    end
+end
 stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
     N = length(I)
     meta = Expr(:meta, :inline)

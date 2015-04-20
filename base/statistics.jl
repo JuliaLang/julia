@@ -190,7 +190,7 @@ end
 ##### standard deviation #####
 
 function sqrt!(A::AbstractArray)
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = sqrt(A[i])
     end
     A
@@ -657,4 +657,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
-

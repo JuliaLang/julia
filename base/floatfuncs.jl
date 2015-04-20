@@ -73,7 +73,7 @@ for f in (:trunc,:floor,:ceil,:round)
             [ ($f)(T, x[i,j])::T for i = 1:size(x,1), j = 1:size(x,2) ]
         end
         function ($f){T}(::Type{T}, x::AbstractArray)
-            reshape([ ($f)(T, x[i])::T for i = 1:length(x) ], size(x))
+            reshape([ ($f)(T, x[i])::T for i in eachindex(x) ], size(x))
         end
     end
 end
@@ -85,7 +85,7 @@ function round{R}(x::AbstractArray{R,2}, r::RoundingMode)
     [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
 end
 function round(x::AbstractArray, r::RoundingMode)
-    reshape([ round(x[i], r) for i = 1:length(x) ], size(x))
+    reshape([ round(x[i], r) for i in eachindex(x) ], size(x))
 end
 
 function round{T,R}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
@@ -95,7 +95,7 @@ function round{T,R}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
     [ round(T, x[i,j], r)::T for i = 1:size(x,1), j = 1:size(x,2) ]
 end
 function round{T}(::Type{T}, x::AbstractArray, r::RoundingMode)
-    reshape([ round(T, x[i], r)::T for i = 1:length(x) ], size(x))
+    reshape([ round(T, x[i], r)::T for i in eachindex(x) ], size(x))
 end
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
