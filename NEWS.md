@@ -24,6 +24,9 @@ New language features
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
 
+  * Varargs functions may now declare the varargs length as `x::Vararg{T,N}` to
+    restrict dispatch.
+
 Language changes
 ----------------
 
