@@ -119,6 +119,7 @@ detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
 setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[x for x in env]; setenv(cmd, dir=dir); cmd)
 setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
+setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") = (cmd.env = ByteString[k*"="*string(v) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
 setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)

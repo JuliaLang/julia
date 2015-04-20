@@ -169,16 +169,20 @@ function show(io::IO, ::EnvHash)
 end
 
 # temporarily set and then restore an environment value
-function with_env(f::Function, key::AbstractString, val)
-    old = get(ENV,key,nothing)
-    val != nothing ? (ENV[key]=val) : _unsetenv(key)
+function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
+    old = Dict{T,Any}()
+    for (key,val) in keyvals
+        old[key] = get(ENV,key,nothing)
+        val != nothing ? (ENV[key]=val) : _unsetenv(key)
+    end
     try f()
     finally
-        old != nothing ? (ENV[key]=old) : _unsetenv(key)
-    catch
-        rethrow()
+        for (key,val) in old
+            val != nothing ? (ENV[key]=val) : _unsetenv(key)
+        end
     end
 end
+withenv(f::Function) = f() # handle empty keyvals case; see #10853
 
 ## misc environment-related functionality ##
 

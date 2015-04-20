@@ -92,9 +92,12 @@ rm(file)
     end
 end
 
-readall(setenv(`sh -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
-readall(setenv(`sh -c "echo \$TEST"`,Dict("TEST"=>"Hello World"))) == "Hello World\n"
-readall(setenv(`sh -c "pwd"`;dir="/")) == readall(setenv(`sh -c "cd / && pwd"`))
+@test readall(setenv(`sh -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
+@test readall(setenv(`sh -c "echo \$TEST"`,Dict("TEST"=>"Hello World"))) == "Hello World\n"
+@test readall(setenv(`sh -c "echo \$TEST"`,"TEST"=>"Hello World")) == "Hello World\n"
+@test (withenv("TEST"=>"Hello World") do
+       readall(`sh -c "echo \$TEST"`); end) == "Hello World\n"
+@test readall(setenv(`sh -c "pwd"`;dir="..")) == readall(setenv(`sh -c "cd .. && pwd"`))
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
