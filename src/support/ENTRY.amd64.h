@@ -1,5 +1,3 @@
-/*  $NetBSD: _setjmp.S,v 1.8 2005/10/05 20:18:12 christos Exp $ */
-
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
  * All rights reserved.
@@ -15,7 +13,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
+ * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -31,38 +29,46 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *  from: @(#)_setjmp.s 5.1 (Berkeley) 4/23/90
+ *	from: @(#)DEFS.h	5.1 (Berkeley) 4/23/90
+ * $FreeBSD: src/sys/amd64/include/asm.h,v 1.18 2007/08/22 04:26:07 jkoshy Exp $
  */
 
-/*#include <machine/asm.h>
-#if defined(LIBC_SCCS)
-    RCSID("$NetBSD: _setjmp.S,v 1.8 2005/10/05 20:18:12 christos Exp $")
+#define _START_ENTRY .p2align 4,0x90
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__ELF__)
+#ifndef __APPLE__
+#define EXT_(csym)          csym
+#define EXT(csym)           EXT_(csym)
 #endif
-*/
+#define HIDENAME(asmsym)    .asmsym
+.text
+_START_ENTRY
+.globl EXT(CNAME)
+.type EXT(CNAME),@function
+EXT(CNAME):
 
-/*
- * C library -- _setjmp, _longjmp
- *
- *  _longjmp(a,v)
- * will generate a "return(v)" from the last call to
- *  _setjmp(a)
- * by restoring registers from the stack.
- * The previous signal state is NOT restored.
- */
+#elif defined(_WIN32)
+#define EXT_(csym)          csym
+#define EXT(csym)           EXT_(csym)
+#define HIDENAME(asmsym)    .asmsym
 
-#define CNAME jl_longjmp
-#include "ENTRY.i387.h"
-    mov    edx,DWORD PTR [esp+4]
-    mov    eax,DWORD PTR [esp+8]
-    mov    ebp,DWORD PTR [edx+0]
-    mov    ebx,DWORD PTR [edx+4]
-    mov    edi,DWORD PTR [edx+8]
-    mov    esi,DWORD PTR [edx+12]
-    mov    esp,DWORD PTR [edx+16]
-    mov    ecx,DWORD PTR [edx+20]
-    test   eax,eax
-    jne    a
-    inc    eax
-a:  mov    DWORD PTR [esp],ecx
-    ret
-#include "END.h"
+#ifndef _MSC_VER
+.intel_syntax noprefix
+.text
+_START_ENTRY
+.globl EXT(CNAME)
+.section .drectve
+.ascii " -export:" XSTR(CNAME)
+.section .text
+.def EXT(CNAME)
+.scl 2
+.type 32
+.endef
+EXT(CNAME):
+#else
+.code
+CNAME proc
+#endif
+
+#endif
