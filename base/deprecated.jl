@@ -442,6 +442,8 @@ end
 @deprecate cholfact(A::AbstractMatrix, β::Number) cholfact(A, shift=β)
 @deprecate ldltfact(A::AbstractMatrix, β::Number) ldltfact(A, shift=β)
 
+@deprecate with_env(f::Function, key::AbstractString, val) withenv(f, key=>val)
+
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)

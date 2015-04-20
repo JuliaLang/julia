@@ -246,7 +246,7 @@ function update(branch::AbstractString)
             Git.run(`checkout -q $branch`)
         end
         # TODO: handle merge conflicts
-        Base.with_env("GIT_MERGE_AUTOEDIT","no") do
+        Base.withenv("GIT_MERGE_AUTOEDIT"=>"no") do
             Git.run(`pull --rebase -q`, out=DevNull)
         end
     end

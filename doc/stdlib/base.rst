@@ -676,12 +676,19 @@ System
 
 .. function:: setenv(command, env; dir=working_dir)
 
-   Set environment variables to use when running the given command. ``env`` is either
-   a dictionary mapping strings to strings, or an array of strings of the form
-   ``"var=val"``.
+   Set environment variables to use when running the given
+   command. ``env`` is either a dictionary mapping strings to strings,
+   an array of strings of the form ``"var=val"``, or zero or more
+   ``"var"=>val`` pair arguments.  In order to modify (rather than
+   replace) the existing environment, create ``env`` by ``copy(ENV)``
+   and then setting ``env["var"]=val`` as desired, or use ``withenv``.
 
-   The ``dir`` keyword argument can be used to specify a working directory for the
-   command.
+   The ``dir`` keyword argument can be used to specify a working
+   directory for the command.
+
+.. function:: withenv(f::Function, kv::Pair...)
+
+   Execute ``f()`` in an environment that is temporarily modified (not replaced as in ``setenv``) by zero or more ``"var"=>val`` arguments ``kv``.  ``withenv`` is generally used via the ``withenv(kv...) do ... end`` syntax.  A value of ``nothing`` can be used to temporarily unset an environment variable (if it is set).  When ``withenv`` returns, the original environment has been restored.
 
 .. function:: pipe(from, to, ...)
 
