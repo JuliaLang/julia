@@ -21,7 +21,7 @@ for i = 1:4
         setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $(varsOther...)) = setindex!(V, v, $(vars_toindex...))
     end
     @eval begin
-        stagedfunction getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
+        @generated function getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
             if $i == 1 && length(IV.parameters) == LD  # linear indexing
                 meta = Expr(:meta, :inline)
                 if iscontiguous(V)
@@ -35,7 +35,7 @@ for i = 1:4
                 $ex
             end
         end
-        stagedfunction setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
+        @generated function setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
             if $i == 1 && length(IV.parameters) == LD  # linear indexing
                 meta = Expr(:meta, :inline)
                 if iscontiguous(V)
@@ -53,7 +53,7 @@ for i = 1:4
     end
 end
 # V[] notation (extracts the first element)
-stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV})
+@generated function getindex{T,N,P,IV}(V::SubArray{T,N,P,IV})
     Isyms = ones(Int, N)
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -62,7 +62,7 @@ stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV})
     end
 end
 # Splatting variants
-stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Int...)
+@generated function getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Int...)
     Isyms = [:(I[$d]) for d = 1:length(I)]
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -70,7 +70,7 @@ stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Int...)
         $ex
     end
 end
-stagedfunction setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Int...)
+@generated function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Int...)
     Isyms = [:(I[$d]) for d = 1:length(I)]
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -99,7 +99,7 @@ function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,N})
 end
 setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Union(Real,AbstractVector)...) = setindex!(V, v, to_index(I)...)
 setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, x, J::Union(Int,AbstractVector)...) = _setindex!(V, x, J...)
-stagedfunction _setindex!(V::SubArray, x, J::Union(Real,AbstractVector)...)
+@generated function _setindex!(V::SubArray, x, J::Union(Real,AbstractVector)...)
     gen_setindex_body(length(J))
 end
 

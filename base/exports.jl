@@ -1385,6 +1385,7 @@ export
     @parallel,
 
     # metaprogramming utilities
+    @generated,
     @gensym,
     @eval,
     @vectorize_1arg,
