@@ -266,6 +266,9 @@ Library improvements
     * `code_llvm` now outputs stripped IR without debug info or other attached metadata.
       Use `code_llvm_raw` for the unstripped output ([#10747]).
 
+    * New `withenv(var=>val, ...) do ... end` function to temporarily
+      modify environment variables ([#10914]).
+
 Deprecated or removed
 ---------------------
 
@@ -1366,3 +1369,5 @@ Too numerous to mention.
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
+[#10885]: https://github.com/JuliaLang/julia/issues/10885
+[#10914]: https://github.com/JuliaLang/julia/issues/10914
