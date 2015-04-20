@@ -18,7 +18,12 @@ New language features
 
   * Keyword argument names can be computed, using syntax such as `f(; symbol => val)` ([#7704]).
 
-  * (TODO pending final syntax) staged functions ([#7311]).
+  * The `@generated function` enables generation of specialized methods depending
+    upon the types of its arguments. Sometimes referred to as a staged function,
+    it operates at two different stages of evaluation. At compile time, the generated
+    function is called with its arguments bound to the types for which it should
+    specialize. The quoted expression it returns forms the body of the specialized
+    method which is then called at run time. ([#7311]).
 
   * (Also with syntax todo) Documentation system for functions, methods, types
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
