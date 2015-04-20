@@ -742,7 +742,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!isstaged && jl_nparams(type) > mt->max_args && jl_is_va_tuple(decl)) {
+    if (!isstaged && jl_nparams(type) > mt->max_args
+        && jl_is_va_tuple(decl)
+        && !jl_is_vararg_fixedlen(jl_tparam(decl, jl_svec_len(decl->parameters)-1))) {
         size_t nspec = mt->max_args + 2;
         limited = jl_alloc_svec(nspec);
         for(i=0; i < nspec-1; i++) {
@@ -926,6 +928,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     return newmeth;
 }
 
+// a holds the argument types, b the signature, tvars the parameters.
+// On output, *penv holds (parameter1, value1, ...) pairs from intersection.
 static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
                                 jl_svec_t *tvars)
 {
