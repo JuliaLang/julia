@@ -259,7 +259,7 @@ master = Base.TTY(RawFD(fdm); readable = true)
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
 p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-start_reading(master)
+Base.start_reading(master)
 Base.wait_readnb(master,1)
 write(master,"1\nquit()\n")
 
