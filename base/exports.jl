@@ -1299,6 +1299,7 @@ export
     setenv,
     spawn,
     success,
+    withenv,
 
 # C interface
     cfunction,
