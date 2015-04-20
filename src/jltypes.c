@@ -3096,7 +3096,8 @@ void jl_init_types(void)
 
     jl_svec_t *tv;
     tv = jl_svec2(tvar("T"), tvar("N"));
-    jl_vararg_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Vararg"), jl_any_type, tv);
+    vararg_sym = jl_symbol("Vararg");
+    jl_vararg_type = jl_new_abstracttype((jl_value_t*)vararg_sym, jl_any_type, tv);
 
     jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), jl_any_type, jl_emptysvec,
                                        jl_emptysvec, jl_emptysvec, 0, 0, 0);
