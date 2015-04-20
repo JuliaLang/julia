@@ -28,17 +28,17 @@ function add_ttnode(subtypes::Dict{String, TTNode}, sname::String, t::Type)
 end
 
 # Get a string name for the type
-typ_name(t::UnionType) = string(t)
+typ_name(t::Union) = string(t)
 typ_name(t::TypeConstructor) = string(t)
 typ_name(t) = string(t.name)
 
 # Store a type and its type hierarchy chain
 # Recurse till we reach the top level type
-function store_type(sname::String, t::UnionType)
-    suptype = UnionType
+function store_type(sname::String, t::Union)
+    suptype = Union
     tnode = TTNode(sname, t)
 
-    # store unions under UnionType type
+    # store unions under Union type
     subtypes = store_type(typ_name(suptype), suptype)
     add_ttnode(subtypes, sname, tnode)
 

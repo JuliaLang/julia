@@ -274,4 +274,4 @@ end
 @test isa(convert(Nullable{Int}, nothing), Nullable{Int})
 
 # issue #11675
-@test repr(Nullable()) == "Nullable{Union()}()"
+@test repr(Nullable()) == "Nullable{Union{}}()"

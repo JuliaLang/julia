@@ -2,9 +2,11 @@
 
 abstract IO
 
-typealias Callable Union(Function,DataType)
+typealias Callable Union{Function,DataType}
 
-const Bottom = Union()
+const Bottom = Union{}
+
+call(::Type{Union}, args...) = Union{args...}
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.

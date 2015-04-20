@@ -67,9 +67,9 @@ function show(io::IO, x::IntrinsicFunction)
     print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
-function show(io::IO, x::UnionType)
+function show(io::IO, x::Union)
     print(io, "Union")
-    show_delim_array(io, x.types, '(', ',', ')', false)
+    show_delim_array(io, x.types, '{', ',', '}', false)
 end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
@@ -812,7 +812,7 @@ xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
                 show(io, x); println(io))
 
 # Types
-xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
+xdump(fn::Function, io::IO, x::Union, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
     fields = fieldnames(x)
@@ -857,7 +857,7 @@ function dumptype(io::IO, x, n::Int, indent)
                                 length(t.parameters) > 0 ? "{$targs}" : "",
                                 " = ", t)
                     end
-                elseif isa(t, UnionType)
+                elseif isa(t, Union)
                     if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end

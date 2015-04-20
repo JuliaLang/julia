@@ -967,10 +967,16 @@ JL_CALLABLE(jl_trampoline)
 JL_CALLABLE(jl_f_instantiate_type)
 {
     JL_NARGSV(instantiate_type, 1);
-    if (!jl_is_datatype(args[0]))
+    if (args[0] == (jl_value_t*)jl_uniontype_type) {
+        size_t i;
+        for(i=1; i < nargs; i++) {
+            if (!jl_is_type(args[i]) && !jl_is_typevar(args[i]))
+                jl_error("invalid union type");
+        }
+    }
+    else if (!jl_is_datatype(args[0])) {
         JL_TYPECHK(instantiate_type, typector, args[0]);
-    if (args[0] == (jl_value_t*)jl_anytuple_type)
-        return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
+    }
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
@@ -981,26 +987,6 @@ DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *t)
     for(i=0; i < jl_svec_len(p); i++)
         ((jl_tvar_t*)jl_svecref(p,i))->bound = 0;
     return tc;
-}
-
-JL_CALLABLE(jl_f_union)
-{
-    if (nargs == 0) return (jl_value_t*)jl_bottom_type;
-    if (nargs == 1) return args[0];
-    size_t i;
-    jl_svec_t *argt = jl_alloc_svec_uninit(nargs);
-    for(i=0; i < nargs; i++) {
-        if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
-            jl_error("invalid union type");
-        }
-        else {
-            jl_svecset(argt, i, args[i]);
-        }
-    }
-    JL_GC_PUSH1(&argt);
-    jl_value_t *u = jl_type_union(argt);
-    JL_GC_POP();
-    return u;
 }
 
 // generic function reflection ------------------------------------------------
@@ -1178,7 +1164,6 @@ void jl_init_primitives(void)
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("svec", jl_f_svec);
-    add_builtin_func("Union", jl_f_union);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("applicable", jl_f_applicable);
     add_builtin_func("invoke", jl_f_invoke);
@@ -1211,7 +1196,7 @@ void jl_init_primitives(void)
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
-    add_builtin("UnionType", (jl_value_t*)jl_uniontype_type);
+    add_builtin("Union", (jl_value_t*)jl_uniontype_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
@@ -1251,18 +1236,18 @@ void jl_init_primitives(void)
 
 // toys for debugging ---------------------------------------------------------
 
-static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, char *head)
+static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, char *head, char *opn, char *cls)
 {
     size_t i, n=0, len = jl_svec_len(t);
     n += jl_printf(out, "%s", head);
-    n += jl_printf(out, "(");
+    n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {
         jl_value_t *v = jl_svecref(t,i);
         n += jl_static_show(out, v);
         if (i != len-1)
             n += jl_printf(out, ", ");
     }
-    n += jl_printf(out, ")");
+    n += jl_printf(out, "%s", cls);
     return n;
 }
 
@@ -1293,7 +1278,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_static_show_x(out, (jl_value_t*)li->module, depth);
         if (li->specTypes) {
             n += jl_printf(out, ".");
-            n += jl_show_svec(out, li->specTypes->parameters, li->name->name);
+            n += jl_show_svec(out, li->specTypes->parameters, li->name->name, "(", ")");
         }
         else {
             n += jl_printf(out, ".%s(?)", li->name->name);
@@ -1304,7 +1289,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (jl_is_svec(v)) {
-        n += jl_show_svec(out, (jl_svec_t*)v, "svec");
+        n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
@@ -1391,8 +1376,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
     }
     else if (jl_is_uniontype(v)) {
-        n += jl_printf(out, "Union");
-        n += jl_show_svec(out, ((jl_uniontype_t*)v)->types, "");
+        n += jl_show_svec(out, ((jl_uniontype_t*)v)->types, "Union", "{", "}");
     }
     else if (jl_is_typector(v)) {
         n += jl_static_show_x(out, ((jl_typector_t*)v)->body, depth);
