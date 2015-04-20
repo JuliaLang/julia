@@ -873,7 +873,7 @@ do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.
 
 Generated functions
-----------------
+-------------------
 
 A very special macro is ``@generated``, which allows you to define so-called
 *generated functions*. These have the capability to generate specialized
@@ -899,14 +899,14 @@ ordinary functions:
    *types* of the arguments, not their values.
 
 3. Instead of calculating something or performing some action, you return
-   from a *quoted expression* which, when evaluated, does what you want.
+   a *quoted expression* which, when evaluated, does what you want.
 
 It's easiest to illustrate this with an example. We can declare a generated
 function ``foo`` as
 
 .. doctest::
 
-    julia> @generate foo(x)
+    julia> @generated function foo(x)
                println(x)
                return :(x*x)
            end
