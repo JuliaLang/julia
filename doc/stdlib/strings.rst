@@ -135,11 +135,11 @@
 
 .. function:: lpad(string, n, p)
 
-   Make a string at least ``n`` characters long by padding on the left with copies of ``p``.
+   Make a string at least ``n`` columns wide when printed, by padding on the left with copies of ``p``.
 
 .. function:: rpad(string, n, p)
 
-   Make a string at least ``n`` characters long by padding on the right with copies of ``p``.
+   Make a string at least ``n`` columns wide when printed, by padding on the right with copies of ``p``.
 
 .. function:: search(string, chars, [start])
 
