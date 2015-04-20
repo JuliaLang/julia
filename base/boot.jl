@@ -30,7 +30,7 @@
 #    pointerfree::Bool
 #end
 
-#type UnionType <: Type
+#type Union <: Type
 #    types::Tuple
 #end
 
@@ -126,7 +126,7 @@ import Core.Intrinsics.ccall
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
+    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
@@ -249,7 +249,7 @@ immutable UTF8String <: AbstractString
     data::Array{UInt8,1}
 end
 
-typealias ByteString Union(ASCIIString,UTF8String)
+typealias ByteString Union{ASCIIString,UTF8String}
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
@@ -262,14 +262,14 @@ type WeakRef
 end
 
 TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
+    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, Any)::TypeVar
 TypeVar(n::Symbol, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), Any, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, Any, ub)::TypeVar :
+     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, ub::Type)::TypeVar)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), lb::Type, ub)::TypeVar :
+     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, lb::Type, ub)::TypeVar :
      ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar)
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar

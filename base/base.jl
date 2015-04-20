@@ -66,7 +66,7 @@ ccall(:jl_get_system_hooks, Void, ())
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
-function finalizer(o::ANY, f::Union(Function,Ptr))
+function finalizer(o::ANY, f::Union{Function,Ptr})
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end

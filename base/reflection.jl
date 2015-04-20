@@ -143,8 +143,8 @@ function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
         append!(matching, new::Array{Any,1})
     else
         ti = t[i]
-        if isa(ti, UnionType)
-            for ty in (ti::UnionType).types
+        if isa(ti, Union)
+            for ty in (ti::Union).types
                 t[i] = ty
                 if _methods(f,t,i-1,lim,matching) === false
                     t[i] = ty

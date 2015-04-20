@@ -13,7 +13,7 @@ export serialize, deserialize
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
     Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
-    DataType, UnionType, Function,
+    DataType, Union, Function,
     Tuple, Array, Expr,
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
@@ -613,9 +613,9 @@ function deserialize_expr(s::SerializationState, len)
     e
 end
 
-function deserialize(s::SerializationState, ::Type{UnionType})
+function deserialize(s::SerializationState, ::Type{Union})
     types = deserialize(s)
-    Union(types...)
+    Union{types...}
 end
 
 function deserialize_datatype(s::SerializationState)

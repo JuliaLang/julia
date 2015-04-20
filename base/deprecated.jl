@@ -527,3 +527,6 @@ end
 function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
+
+const UnionType = Union
+export UnionType

@@ -173,13 +173,14 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b);
 
 // --- type union ---
 
-static int count_union_components(jl_svec_t *types)
+static int count_union_components(jl_value_t **types, size_t n)
 {
     size_t i, c=0;
-    for(i=0; i < jl_svec_len(types); i++) {
-        jl_value_t *e = jl_svecref(types,i);
+    for(i=0; i < n; i++) {
+        jl_value_t *e = types[i];
         if (jl_is_uniontype(e)) {
-            c += count_union_components(((jl_uniontype_t*)e)->types);
+            jl_svec_t *ts = ((jl_uniontype_t*)e)->types;
+            c += count_union_components(jl_svec_data(ts), jl_svec_len(ts));
         }
         else {
             c++;
@@ -188,13 +189,14 @@ static int count_union_components(jl_svec_t *types)
     return c;
 }
 
-static void flatten_type_union(jl_svec_t *types, jl_value_t **out, size_t *idx)
+static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
 {
     size_t i;
-    for(i=0; i < jl_svec_len(types); i++) {
-        jl_value_t *e = jl_svecref(types,i);
+    for(i=0; i < n; i++) {
+        jl_value_t *e = types[i];
         if (jl_is_uniontype(e)) {
-            flatten_type_union(((jl_uniontype_t*)e)->types, out, idx);
+            jl_svec_t *ts = ((jl_uniontype_t*)e)->types;
+            flatten_type_union(jl_svec_data(ts), jl_svec_len(ts), out, idx);
         }
         else {
             out[*idx] = e;
@@ -220,13 +222,13 @@ static int union_elt_morespecific(const void *a, const void *b)
 // type definitions. (issue #2365)
 int inside_typedef = 0;
 
-jl_svec_t *jl_compute_type_union(jl_svec_t *types)
+static jl_svec_t *jl_compute_type_union(jl_value_t **types, size_t ntypes)
 {
-    size_t n = count_union_components(types);
+    size_t n = count_union_components(types, ntypes);
     jl_value_t **temp;
     JL_GC_PUSHARGS(temp, n+1);
     size_t idx=0;
-    flatten_type_union(types, temp, &idx);
+    flatten_type_union(types, ntypes, temp, &idx);
     assert(idx == n);
     size_t i, j, ndel=0;
     for(i=0; i < n; i++) {
@@ -263,17 +265,24 @@ jl_svec_t *jl_compute_type_union(jl_svec_t *types)
     return result;
 }
 
+jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
+{
+    if (n == 0) return (jl_value_t*)jl_bottom_type;
+    if (n == 1) return ts[0];
+    jl_svec_t *types = jl_compute_type_union(ts, n);
+    if (jl_svec_len(types) == 0) return (jl_value_t*)jl_bottom_type;
+    if (jl_svec_len(types) == 1) return jl_svecref(types, 0);
+    JL_GC_PUSH1(&types);
+    jl_uniontype_t *tu = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,NWORDS(sizeof(jl_uniontype_t)));
+    tu->types = types;
+    gc_wb(tu, types);
+    JL_GC_POP();
+    return (jl_value_t*)tu;
+}
+
 jl_value_t *jl_type_union(jl_svec_t *types)
 {
-    types = jl_compute_type_union(types);
-    if (jl_svec_len(types) == 1)
-        return jl_svecref(types, 0);
-    if (jl_svec_len(types) == 0)
-        return (jl_value_t*)jl_bottom_type;
-    JL_GC_PUSH1(&types);
-    jl_value_t *tu = (jl_value_t*)jl_new_uniontype(types);
-    JL_GC_POP();
-    return tu;
+    return jl_type_union_v(jl_svec_data(types), jl_svec_len(types));
 }
 
 // --- type intersection ---
@@ -1647,6 +1656,8 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (tc == (jl_value_t*)jl_anytuple_type)
         return (jl_value_t*)jl_apply_tuple_type_v(params, n);
+    if (tc == (jl_value_t*)jl_uniontype_type)
+        return (jl_value_t*)jl_type_union_v(params, n);
     if (n == 0) {
         if (jl_is_typector(tc))
             return (jl_value_t*)((jl_typector_t*)tc)->body;
@@ -3168,7 +3179,7 @@ void jl_init_types(void)
     jl_nothing = newstruct(jl_void_type);
     jl_void_type->instance = jl_nothing;
 
-    jl_uniontype_type = jl_new_datatype(jl_symbol("UnionType"),
+    jl_uniontype_type = jl_new_datatype(jl_symbol("Union"),
                                         jl_type_type, jl_emptysvec,
                                         jl_svec(1, jl_symbol("types")),
                                         jl_svec(1, jl_simplevector_type),
