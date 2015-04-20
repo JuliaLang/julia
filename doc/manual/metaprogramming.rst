@@ -251,6 +251,14 @@ In this example, the literal value of `a` is interpolated:
     julia> ex = :($a + b)
     :(1 + b)
 
+Interpolating into an unquoted expression is not supported and will
+cause a compile-time error:
+
+.. doctest::
+
+    julia> $a + b
+    ERROR: unsupported or misplaced expression $
+
 In this example, the tuple ``(1,2,3)`` is interpolated as an
 expression into a conditional test:
 
@@ -770,14 +778,6 @@ expression argument given to :obj:`@eval` can be a block::
     @eval begin
       # multiple lines
     end
-
-Interpolating into an unquoted expression is not supported and will
-cause a compile-time error:
-
-.. doctest::
-
-    julia> $a + b
-    ERROR: unsupported or misplaced expression $
 
 .. _man-non-standard-string-literals2:
 
