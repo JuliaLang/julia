@@ -1523,6 +1523,7 @@ end
 
 
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
     done = RemoteRef()
     timercb(aw) = begin

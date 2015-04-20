@@ -140,6 +140,9 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
     @test isready(rr1)
 end
 
+@test_throws ArgumentError sleep(-1)
+@test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
+
 # specify pids for pmap
 @test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
 
