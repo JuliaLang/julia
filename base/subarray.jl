@@ -57,7 +57,7 @@ end
 # For S4, J[1] corresponds to I[2], because of the slice along
 # dimension 1 in S2
 
-stagedfunction slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+@generated function slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     Jp = J.parameters
@@ -87,7 +87,7 @@ function _sub(A, I)
     sub_unsafe(A, I)
 end
 
-stagedfunction sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+@generated function sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
@@ -123,7 +123,7 @@ end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-stagedfunction slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+@generated function slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
@@ -214,7 +214,7 @@ stagedfunction slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}
     end
 end
 
-stagedfunction sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+@generated function sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
     Jp = J.parameters
     IVp = IV.parameters
     N = length(Jp)
@@ -332,10 +332,10 @@ function tailsize(P, d)
     s
 end
 
-stagedfunction linearindexing{T,N,P,I,LD}(A::SubArray{T,N,P,I,LD})
+@generated function linearindexing{T,N,P,I,LD}(A::SubArray{T,N,P,I,LD})
     length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
 end
-stagedfunction linearindexing{A<:SubArray}(::Type{A})
+@generated function linearindexing{A<:SubArray}(::Type{A})
     T,N,P,I,LD = A.parameters
     length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
 end
@@ -349,7 +349,7 @@ first(::Colon) = 1
 in(::Int, ::Colon) = true
 
 ## Strides
-stagedfunction strides{T,N,P,I}(V::SubArray{T,N,P,I})
+@generated function strides{T,N,P,I}(V::SubArray{T,N,P,I})
     Ip = I.parameters
     all(map(x->x<:Union(RangeIndex,Colon), Ip)) || throw(ArgumentError("strides valid only for RangeIndex indexing"))
     strideexprs = Array(Any, N+1)

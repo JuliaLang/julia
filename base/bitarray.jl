@@ -380,7 +380,7 @@ end
 # we can't and must use getindex, otherwise silent corruption can happen)
 # (multiple signatures for disambiguation)
 for IT in [AbstractVector{Bool}, AbstractArray{Bool}]
-    @eval stagedfunction getindex(B::BitArray, I::$IT)
+    @eval @generated function getindex(B::BitArray, I::$IT)
         idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
         quote
             checkbounds(B, I)
@@ -446,7 +446,7 @@ function setindex!(B::BitArray, x, I::BitArray)
     return B
 end
 
-stagedfunction setindex!(B::BitArray, x, I::AbstractArray{Bool})
+@generated function setindex!(B::BitArray, x, I::AbstractArray{Bool})
     idxop = I <: Array{Bool} ? :unsafe_getindex : :getindex
     quote
         checkbounds(B, I)
@@ -493,7 +493,7 @@ function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     return B
 end
 
-stagedfunction setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+@generated function setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
     idxop = I <: Array{Bool} ? :unsafe_getindex : :getindex
     quote
         checkbounds(B, I)

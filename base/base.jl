@@ -43,7 +43,17 @@ convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
-stagedfunction tuple_type_head{T<:Tuple}(::Type{T})
+macro generated(f)
+    isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
+    if is(f.head, :function) || isdefined(:length) && is(f.head, :(=)) && length(f.args) == 2 && f.args[1].head == :call
+        f.head = :stagedfunction
+        return Expr(:escape, f)
+    else
+        error("invalid syntax; @generated must be used with a function definition")
+    end
+end
+
+@generated function tuple_type_head{T<:Tuple}(::Type{T})
     T.parameters[1]
 end
 
@@ -51,7 +61,7 @@ isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
 
-stagedfunction tuple_type_tail{T<:Tuple}(::Type{T})
+@generated function tuple_type_tail{T<:Tuple}(::Type{T})
     if isvatuple(T) && length(T.parameters) == 1
         return T
     end
