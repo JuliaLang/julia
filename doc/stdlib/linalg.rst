@@ -966,7 +966,10 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be
    all ones).
 
-
 .. function:: blas_set_num_threads(n)
 
    Set the number of threads the BLAS library should use.
+
+.. data:: I
+
+   An object of type ``UniformScaling``, representing an identity matrix of any size.

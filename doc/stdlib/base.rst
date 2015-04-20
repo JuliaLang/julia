@@ -148,6 +148,11 @@ Getting Around
 
    This function should only be used interactively.
 
+.. data:: ans
+
+   A variable referring to the last computed value, automatically set at the
+   interactive prompt.
+
 All Objects
 -----------
 
