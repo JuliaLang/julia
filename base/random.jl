@@ -262,7 +262,7 @@ rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
 function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = rand(r, T)
     end
     A
@@ -356,7 +356,7 @@ end
 function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen})
     rand!(r, A, Close1Open2)
     I32 = one(Float32)
-    for i in 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = T(Float32(A[i])-I32) # faster than "A[i] -= one(T)" for T==Float16
     end
     A
@@ -1104,7 +1104,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 function randn!(rng::AbstractRNG, A::AbstractArray{Float64})
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = randn(rng)
     end
     A
@@ -1137,7 +1137,7 @@ function randexp_unlikely(rng, idx, x)
 end
 
 function randexp!(rng::AbstractRNG, A::Array{Float64})
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = randexp(rng)
     end
     A
