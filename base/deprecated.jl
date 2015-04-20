@@ -319,6 +319,9 @@ end
 @deprecate flipud(A::AbstractArray) flipdim(A, 1)
 @deprecate fliplr(A::AbstractArray) flipdim(A, 2)
 
+@deprecate sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T}) sub2ind(tuple(dims...), sub...)
+@deprecate ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T) ind2sub!(sub, tuple(dims...), ind)
+
 @deprecate strftime     Libc.strftime
 @deprecate strptime     Libc.strptime
 @deprecate flush_cstdio Libc.flush_cstdio

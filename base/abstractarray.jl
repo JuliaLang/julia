@@ -1007,97 +1007,66 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-sub2ind(dims) = 1
-sub2ind(dims, i::Integer) = Int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, Int(i), Int(j))
-sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, Int(i0),Int(i1),Int(i2))
-sub2ind(dims, i0::Int, i1::Int, i2::Int) =
-    i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(dims, Int(i0),Int(i1),Int(i2),Int(i3))
-sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
-    i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
+sub2ind(dims::Tuple{}) = 1
+sub2ind(dims::Tuple{},I::Integer...) = sum(I) - length(I) + 1
+sub2ind(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer) = i1
+sub2ind(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer, I::Integer...) = i1 + dims[1]*(sub2ind(tail(dims),I...)-1)
 
-function sub2ind(dims, I::Integer...)
-    ndims = length(dims)
-    index = Int(I[1])
-    stride = 1
-    for k=2:ndims
-        stride = stride * dims[k-1]
-        index += (Int(I[k])-1) * stride
-    end
-    return index
-end
-
-function sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T})
-    ndims = length(dims)
-    ind = sub[1]
-    stride = 1
-    for k in 2:ndims
-        stride = stride * dims[k - 1]
-        ind += (sub[k] - 1) * stride
-    end
-    return ind
-end
-
-sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
-    [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
-
-function ind2sub(dims::Tuple{Integer,Vararg{Integer}}, ind::Int)
-    ndims = length(dims)
-    stride = dims[1]
-    for i=2:ndims-1
-        stride *= dims[i]
-    end
-
-    sub = ()
-    for i=(ndims-1):-1:1
-        rest = rem(ind-1, stride) + 1
-        sub = tuple(div(ind - rest, stride) + 1, sub...)
-        ind = rest
-        stride = div(stride, dims[i])
-    end
-    return tuple(ind, sub...)
-end
-
-ind2sub(dims::Tuple{Vararg{Integer}}, ind::Integer) = ind2sub(dims, Int(ind))
 ind2sub(dims::Tuple{}, ind::Integer) = ind==1 ? () : throw(BoundsError())
-ind2sub(dims::Tuple{Integer,}, ind::Int) = (ind,)
-ind2sub(dims::Tuple{Integer,Integer}, ind::Int) =
-    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
-ind2sub(dims::Tuple{Integer,Integer,Integer}, ind::Int) =
-    (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
-     div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
-ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), Int(ind))
+ind2sub(dims::Tuple{Integer}, ind::Integer) = (ind,)
+function ind2sub(dims::Tuple{Integer,Vararg{Integer}}, ind::Integer)
+    @_inline_meta()
+    ind2 = div(ind-1,dims[1])+1
+    tuple(ind-dims[1]*(ind2-1), ind2sub(tail(dims),ind2)...)
+end
 
-function ind2sub{T<:Integer}(dims::Tuple{Integer,Vararg{Integer}}, ind::AbstractVector{T})
-    n = length(dims)
-    l = length(ind)
-    t = ntuple(n, x->Array(Int, l))
-    for i = 1:l
-        s = ind2sub(dims, ind[i])
-        for j = 1:n
-            t[j][i] = s[j]
+# TODO in v0.5: either deprecate line 1 or add line 2
+ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), ind)
+# sub2ind(a::AbstractArray, I::Integer...) = sub2ind(size(a), I...)
+
+function sub2ind{T<:Integer}(dims::Tuple{Vararg{Integer}}, I::AbstractVector{T}...)
+    N = length(dims)
+    M = length(I[1])
+    indices = Array{T}(length(I[1]))
+    copy!(indices,I[1])
+
+    s = dims[1]
+    for j=2:length(I)
+        Ij = I[j]
+        for i=1:M
+            indices[i] += s*(Ij[i]-1)
+        end
+        s*= (j <= N ? dims[j] : 1)
+    end
+    return indices
+end
+
+function ind2sub{N,T<:Integer}(dims::NTuple{N,Integer}, ind::AbstractVector{T})
+    M = length(ind)
+    t = NTuple{N,Vector{T}}(ntuple(N,n->Array{T}(M)))
+    copy!(t[1],ind)
+    for j = 1:N-1
+        d = dims[j]
+        tj = t[j]
+        tj2 = t[j+1]
+        for i = 1:M
+            ind2 = div(tj[i]-1, d)
+            tj[i] -= d*ind2
+            tj2[i] = ind2+1
         end
     end
     return t
 end
 
-function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
+function ind2sub!{T<:Integer}(sub::Array{T}, dims::Tuple{Vararg{T}}, ind::T)
     ndims = length(dims)
-    stride = dims[1]
-    for i in 2:(ndims - 1)
-        stride *= dims[i]
+    for i=1:ndims-1
+        ind2 = div(ind-1,dims[i])+1
+        sub[i] = ind - dims[i]*(ind2-1)
+        ind = ind2
     end
-    for i in (ndims - 1):-1:1
-        rest = rem1(ind, stride)
-        sub[i + 1] = div(ind - rest, stride) + 1
-        ind = rest
-        stride = div(stride, dims[i])
-    end
-    sub[1] = ind
-    return
+    sub[ndims] = ind
+    return sub
 end
 
 # Generalized repmat
@@ -1113,26 +1082,18 @@ function repeat{T}(A::Array{T};
         throw(ArgumentError("inner/outer repetitions must be set for all input dimensions"))
     end
 
-    size_in = Array(Int, ndims_in)
-    size_out = Array(Int, ndims_out)
-    inner_size_out = Array(Int, ndims_out)
+    inner = vcat(inner, ones(Int,ndims_out-length_inner))
+    outer = vcat(outer, ones(Int,ndims_out-length_outer))
 
-    for i in 1:ndims_in
-        size_in[i] = size(A, i)
-    end
-    for i in 1:ndims_out
-        t1 = ndims_in < i ? 1 : size_in[i]
-        t2 = length_inner < i ? 1 : inner[i]
-        t3 = length_outer < i ? 1 : outer[i]
-        size_out[i] = t1 * t2 * t3
-        inner_size_out[i] = t1 * t2
-    end
+    size_in = size(A)
+    size_out = ntuple(i->inner[i]*size(A,i)*outer[i],ndims_out)::Dims
+    inner_size_out = ntuple(i->inner[i]*size(A,i),ndims_out)::Dims
 
     indices_in = Array(Int, ndims_in)
     indices_out = Array(Int, ndims_out)
 
     length_out = prod(size_out)
-    R = Array(T, size_out...)
+    R = Array(T, size_out)
 
     for index_out in 1:length_out
         ind2sub!(indices_out, size_out, index_out)
@@ -1144,7 +1105,7 @@ function repeat{T}(A::Array{T};
                 indices_in[t] = fld1(indices_in[t], inner[t])
             end
         end
-        index_in = sub2ind(size_in, indices_in)
+        index_in = sub2ind(size_in, indices_in...)
         R[index_out] = A[index_in]
     end
 
