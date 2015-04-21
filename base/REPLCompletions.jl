@@ -284,7 +284,9 @@ end
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = Base.incomplete_tag(parse(partial , raise=false))
+    inc_tag = Base.syntax_deprecation_warnings(false) do
+        Base.incomplete_tag(parse(partial, raise=false))
+    end
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
@@ -308,7 +310,9 @@ function completions(string, pos)
 
      if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = parse(partial[frange] * ")", raise=false)
+        ex = Base.syntax_deprecation_warnings(false) do
+            parse(partial[frange] * ")", raise=false)
+        end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false
         end

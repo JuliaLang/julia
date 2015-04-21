@@ -141,6 +141,15 @@ _repl_start = Condition()
 syntax_deprecation_warnings(warn::Bool) =
     Bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
 
+function syntax_deprecation_warnings(f::Function, warn::Bool)
+    prev = syntax_deprecation_warnings(warn)
+    try
+        f()
+    finally
+        syntax_deprecation_warnings(prev)
+    end
+end
+
 function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
