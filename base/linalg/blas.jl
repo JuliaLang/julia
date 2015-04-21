@@ -215,7 +215,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
     end
 end
 function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T}))
-    length(x) == length(y) || throw(DimensionMismatch("x has length $length(x), but y has length $length(y)"))
+    length(x) == length(y) || throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
     y
 end
