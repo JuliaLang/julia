@@ -1192,7 +1192,6 @@ DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned 
 DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
-DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(const char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
