@@ -38,7 +38,7 @@ the following elements:
    and includes tests for the contents of ``Tmp``. The value of using
    :obj:`import` versus :obj:`using` is that you can call :obj:`reload`
    ``("Tmp")`` instead of having to restart the REPL when your
-   definintions change. Of course, the cost is the need to prepend
+   definitions change. Of course, the cost is the need to prepend
    ``Tmp.`` to uses of names defined in your module. (You can lower that
    cost by keeping your module name short.)
 
