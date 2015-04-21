@@ -132,7 +132,7 @@ end
 
 function repl_callback(ast::ANY, show_value)
     global _repl_enough_stdin = true
-    stop_reading(STDIN)
+    Base.stop_reading(STDIN)
     put!(repl_channel, (ast, show_value))
 end
 
