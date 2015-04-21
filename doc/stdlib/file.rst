@@ -254,6 +254,13 @@
 
    Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 
+.. function:: relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+
+   Return a relative filepath to path either from the current directory or from an optional
+   start directory.
+   This is a path computation: the filesystem is not accessed to confirm the existence or
+   nature of path or startpath.
+
 .. function:: expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path with the

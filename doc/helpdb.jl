@@ -5354,6 +5354,15 @@ Millisecond(v)
 
 "),
 
+("Base","relpath","relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+
+   Return a relative filepath to path either from the current directory or from an optional
+   start directory.
+   This is a path computation: the filesystem is not accessed to confirm the existence or
+   nature of path or startpath.
+
+"),
+
 ("Base","expanduser","expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path
