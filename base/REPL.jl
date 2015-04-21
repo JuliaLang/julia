@@ -555,7 +555,9 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 const julia_green = "\033[1m\033[32m"
 
 function return_callback(s)
-    ast = Base.parse_input_line(bytestring(LineEdit.buffer(s)))
+    ast = Base.syntax_deprecation_warnings(false) do
+        Base.parse_input_line(bytestring(LineEdit.buffer(s)))
+    end
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
@@ -682,7 +684,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             line = strip(line)
             haskey(Docs.keywords, symbol(line)) ? # Special-case keywords, which won't parse
                 :(Base.Docs.@repl $(symbol(line))) :
-                parse("Base.Docs.@repl $line", raise=false)
+                Base.syntax_deprecation_warnings(false) do
+                    parse("Base.Docs.@repl $line", raise=false)
+                end
         end)
 
     # Set up shell mode
@@ -771,7 +775,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             sz = sizeof(string)
             while pos <= sz
                 oldpos = pos
-                ast, pos = Base.parse(string, pos, raise=false)
+                ast, pos = Base.syntax_deprecation_warnings(false) do
+                    Base.parse(string, pos, raise=false)
+                end
                 if isa(ast, Expr) && ast.head == :error
                     # Insert all the remaining text as one line (might be empty)
                     LineEdit.replace_line(s, strip(bytestring(string.data[max(oldpos, 1):end])))
