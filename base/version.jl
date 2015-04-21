@@ -220,7 +220,9 @@ function banner(io::IO = STDOUT)
         end
     end
     commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
-
+    disclaimer = """Note that the REPL is only meant for prototype development. If you are
+    interested in the performance of a piece of code, please put that code
+    inside of a function so that Julia's JIT compiler can optimize it."""
     if have_color
         tx = "\033[0m\033[1m" # text
         jl = "\033[0m\033[1m" # julia
@@ -238,7 +240,9 @@ function banner(io::IO = STDOUT)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
         $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
-        \033[0m""")
+        $(disclaimer)
+        \033[0m
+        """)
     else
         print(io,"""
                        _
@@ -249,6 +253,8 @@ function banner(io::IO = STDOUT)
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
         |__/                   |  $(Sys.MACHINE)
+
+        $(disclaimer)
 
         """)
     end
