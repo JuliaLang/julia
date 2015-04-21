@@ -2272,7 +2272,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         if (jl_is_type_type(aty)) {
             jl_value_t *tp0 = jl_tparam0(aty);
             if (jl_is_leaf_type(tp0)) {
-                (void*)emit_expr(args[1], ctx);
+                emit_expr(args[1], ctx);
                 JL_GC_POP();
                 assert(jl_is_datatype(tp0));
                 return ConstantInt::get(T_size, jl_datatype_nfields(tp0));
