@@ -1217,41 +1217,63 @@ end
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
-mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
-function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
+mapslices(f, A...; dims = ()) = _mapslices(f, A, [dims...])
+function _mapslices(f, A, dims)
     if isempty(dims)
-        return map(f,A)
+        return map(f, A...)
     end
 
-    dimsA = [size(A)...]
-    ndimsA = ndims(A)
-    alldims = [1:ndimsA;]
+    ndimsA = [ndims(a)::Int for a in A]
+    ndmaxind = indmax(ndimsA)
+    ndmax = ndimsA[ndmaxind]
+    for i = 1:length(A)
+        if length(dims) < ndimsA[i] < ndmax
+            throw(DimensionMismatch("argument $i had wrong number of dimensions. Dimension of broadcast argument cannot be larger than $(length(dims))"))
+        end
+    end
+
+    dimsA = [[size(a)...] for a in A]
+    alldims = [1:ndimsA[ndmaxind];]
 
     otherdims = setdiff(alldims, dims)
 
-    idx = cell(ndimsA)
-    fill!(idx, 1)
-    Asliceshape = tuple(dimsA[dims]...)
-    itershape   = tuple(dimsA[otherdims]...)
-    for d in dims
-        idx[d] = 1:size(A,d)
-    end
+    idx = [cell(n) for n in ndimsA]
+    Asliceshape = cell(length(A))
 
-    r1 = f(reshape(A[idx...], Asliceshape))
+    for i = 1:length(A)
+        fill!(idx[i], 1)
+        if ndimsA[i] == ndmax
+            for d in dims
+                idx[i][d] = 1:size(A[i], d)
+            end
+            Asliceshape[i] = tuple(dimsA[i][dims]...)
+        end
+    end
+    itershape = tuple(dimsA[ndmaxind][otherdims]...)
+
+    args = []
+    for i = 1:length(A)
+        if ndimsA[i] < ndmax
+            push!(args, A[i])
+        else
+            push!(args, reshape(A[i][idx[i]...], Asliceshape[i]))
+        end
+    end
+    r1 = f(args...)
 
     # determine result size and allocate
-    Rsize = copy(dimsA)
+    Rsize = copy(dimsA[ndmaxind])
     # TODO: maybe support removing dimensions
     if !isa(r1, AbstractArray) || ndims(r1) == 0
         r1 = [r1]
     end
-    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
+    Rsize[dims] = [size(r1)...; ones(Int, max(0, length(dims) - ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))
     fill!(ridx, 1)
     for d in dims
-        ridx[d] = 1:size(R,d)
+        ridx[d] = 1:size(R, d)
     end
 
     R[ridx...] = r1
@@ -1261,10 +1283,18 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
         if first
             first = false
         else
-            ia = [idxs...]
-            idx[otherdims] = ia
-            ridx[otherdims] = ia
-            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+            args = Any[]
+            for i = 1:length(A)
+                ia = [idxs...]
+                ridx[otherdims] = ia
+                if ndimsA[i] < ndmax
+                    push!(args, A[i])
+                else
+                    idx[i][otherdims] = ia
+                    push!(args, reshape(A[i][idx[i]...], Asliceshape[i]))
+                end
+            end
+            R[ridx...] = f(args...)
         end
     end
 
