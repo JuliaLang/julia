@@ -201,6 +201,7 @@ if [ -n "$USEMSVC" ]; then
   make -C deps install-libuv install-utf8proc
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
+  echo 'override STAGE1_DEPS += dsfmt' >> Make.user
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
 fi
