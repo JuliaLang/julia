@@ -205,7 +205,13 @@ let s = 0
     @test s == 0
 end
 
-# sums (see #5798)
+# sums of ranges
+@test sum(1:100) == 5050
+@test sum(0:100) == 5050
+@test sum(-100:100) == 0
+@test sum(0:2:100) == 2550
+
+# overflowing sums (see #5798)
 if WORD_SIZE == 64
     @test sum(Int128(1):10^18) == div(10^18 * (Int128(10^18)+1), 2)
     @test sum(Int128(1):10^18-1) == div(10^18 * (Int128(10^18)-1), 2)
@@ -213,6 +219,12 @@ else
     @test sum(Int64(1):10^9) == div(10^9 * (Int64(10^9)+1), 2)
     @test sum(Int64(1):10^9-1) == div(10^9 * (Int64(10^9)-1), 2)
 end
+
+# Tricky sums of FloatRange #8272
+@test sum(10000.:-0.0001:0) == 5.00000005e11
+@test sum(0:0.001:1) == 500.5
+@test sum(0:0.000001:1) == 500000.5
+@test sum(0:0.1:10) == 505.
 
 # operations with scalars
 @test (1:3) - 2 == -1:1
