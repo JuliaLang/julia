@@ -274,6 +274,9 @@ Library improvements
     * New `withenv(var=>val, ...) do ... end` function to temporarily
       modify environment variables ([#10914]).
 
+    * New function `relpath` returns a relative filepath to path either from the current
+      directory or from an optional start directory ([#10893]).
+
 Deprecated or removed
 ---------------------
 
@@ -1375,4 +1378,5 @@ Too numerous to mention.
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
 [#10885]: https://github.com/JuliaLang/julia/issues/10885
+[#10893]: https://github.com/JuliaLang/julia/pull/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914

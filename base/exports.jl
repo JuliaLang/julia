@@ -1242,6 +1242,7 @@ export
     joinpath,
     normpath,
     realpath,
+    relpath,
     splitdir,
     splitdrive,
     splitext,
