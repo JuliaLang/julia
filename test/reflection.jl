@@ -92,3 +92,63 @@ not_const = 1
 @test isimmutable([]) == false
 @test isimmutable("abc") == true
 
+## find bindings tests
+@test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
+@test_throws ErrorException ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sdi597sl3)
+
+module TestMod7648
+using Base.Test
+export a9475, c7648, foo7648
+
+const c7648 = 8
+d7648 = 9
+const f7648 = 10
+foo7648(x) = x
+
+    module TestModSub9475
+    using Base.Test
+    using ..TestMod7648
+    export a9475
+    a9475 = 5
+    b9475 = 7
+    let
+        @test Base.binding_module(:a9475)==current_module()
+        @test Base.binding_module(:c7648)==TestMod7648
+        @test Base.module_name(current_module())==:TestModSub9475
+        @test Base.fullname(current_module())==(:TestMod7648, :TestModSub9475)
+        @test Base.module_parent(current_module())==TestMod7648
+    end
+    end # module TestModSub9475
+
+using .TestModSub9475
+
+let
+    @test Base.binding_module(:d7648)==current_module()
+    @test Base.binding_module(:a9475)==TestModSub9475
+    @test Base.module_name(current_module())==:TestMod7648
+    @test Base.module_parent(current_module())==Main
+end
+end # module TestMod7648
+
+let
+    @test Base.binding_module(TestMod7648, :d7648)==TestMod7648
+    @test Base.binding_module(TestMod7648, :a9475)==TestMod7648.TestModSub9475
+    @test Base.binding_module(TestMod7648.TestModSub9475, :b9475)==TestMod7648.TestModSub9475
+    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :c7648, :foo7648])
+    @test isconst(TestMod7648, :c7648)
+    @test !isconst(TestMod7648, :d7648)
+    @test !isgeneric(isa)
+end
+
+let
+    using TestMod7648
+    @test Base.binding_module(:a9475)==TestMod7648.TestModSub9475
+    @test Base.binding_module(:c7648)==TestMod7648
+    @test isgeneric(foo7648)
+    @test Base.function_name(foo7648)==:foo7648
+    @test Base.function_module(foo7648, (Any,))==TestMod7648
+    @test functionloc(foo7648, (Any,))[1]=="reflection.jl"
+    @test TestMod7648.TestModSub9475.foo7648.env.defs==@which foo7648(5)
+    @test TestMod7648==@which foo7648
+    @test TestMod7648.TestModSub9475==@which a9475
+end
