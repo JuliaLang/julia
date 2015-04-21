@@ -310,4 +310,29 @@ else
     import Base: Libc, Libdl
 end
 
+if VERSION < v"0.4.0-dev+2418"
+    function findprev(A, start)
+        for i = start:-1:1
+            A[i] != 0 && return i
+        end
+        0
+    end
+    findlast(A) = findprev(A, length(A))
+    function findprev(A, v, start)
+        for i = start:-1:1
+            A[i] == v && return i
+        end
+        0
+    end
+    findlast(A, v) = findprev(A, v, length(A))
+    function findprev(testf::Function, A, start)
+        for i = start:-1:1
+            testf(A[i]) && return i
+        end
+        0
+    end
+    findlast(testf::Function, A) = findprev(testf, A, length(A))
+    export findprev, findlast
+end
+
 end # module
