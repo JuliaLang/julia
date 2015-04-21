@@ -162,8 +162,8 @@ function relpath(path::AbstractString, startpath::AbstractString = ".")
     prefix_num = findlast(x -> !isempty(x), start_arr) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
-        relpath_ = isempty(pathpart)                                      ?
-            (prefix^prefix_num) * pardir                                  :
+        relpath_ = isempty(pathpart)     ?
+            (prefix^prefix_num) * pardir :
             (prefix^prefix_num) * pardir * path_separator * pathpart
     else
         relpath_ = pathpart
