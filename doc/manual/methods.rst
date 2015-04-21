@@ -541,18 +541,16 @@ translates to the following three methods::
     f() = f(1,2)
 
 This means that calling ``f()`` is equivalent to calling ``f(1,2)``. In
-this case the result would be ``5``, because ``f(1,2)`` invokes the first
-method of ``f`` above.
-
-However, this need not always be the case. If you define a fourth
-method::
+this case the result is ``5``, because ``f(1,2)`` invokes the first
+method of ``f`` above. However, this need not always be the case. If you
+define a fourth method that is more specialized for integers::
 
     f(a::Int,b::Int) = a-2b
 
 then the result of both ``f()`` and ``f(1,2)`` is ``-3``. In other words,
 optional arguments are tied to a function, not to any specific method of
 that function. It depends on the types of the optional arguments which
-method is called. When optional arguments are defined in terms of a global
+method is invoked. When optional arguments are defined in terms of a global
 variable, the type of the optional argument may even change at run-time.
 
 Keyword arguments behave quite differently from ordinary positional arguments.
