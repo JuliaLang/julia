@@ -521,6 +521,12 @@ The default mode used is always :const:`RoundNearest`, which rounds to the neare
 representable value, with ties rounded towards the nearest value with an even
 least significant bit.
 
+.. warning:: Rounding is generally only correct for basic arithmetic functions
+	     (:func:`+`, :func:`-`, :func:`*`, :func:`/` and :func:`sqrt`) and
+	     type conversion operations. Many other functions assume the
+	     default :const:`RoundNearest` mode is set, and can give erroneous
+	     results when operating under other rounding modes.
+
 Background and References
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
