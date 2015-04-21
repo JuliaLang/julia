@@ -523,6 +523,8 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
+.. _man-Note-on-optional-and-keyword-arguments:
+
 Note on Optional and keyword Arguments
 --------------------------------------
 
@@ -538,14 +540,20 @@ translates to the following three methods::
     f(a) = f(a,2)
     f() = f(1,2)
 
-The first method is the original definition of ``f``. The second and third methods 
-call ``f`` using the default values of ``a`` and ``b``. It should be noted that 
-these function calls are subject to method dispatch as usual, and so they may also 
-call different methods of ``f``. For example, if you have also defined
+This means that calling ``f()`` is equivalent to calling ``f(1,2)``. In
+this case the result would be ``5``, because ``f(1,2)`` invokes the first
+method of ``f`` above.
+
+However, this need not always be the case. If you define a fourth
+method::
 
     f(a::Int,b::Int) = a-2b
- 
-then the result of ``f()`` will be ``1 - 4 = -3`` instead of ``1 + 4 = 5``.
+
+then the result of both ``f()`` and ``f(1,2)`` is ``-3``. In other words,
+optional arguments are tied to a function, not to any specific method of
+that function. It depends on the types of the optional arguments which
+method is called. When optional arguments are defined in terms of a global
+variable, the type of the optional argument may even change at run-time.
 
 Keyword arguments behave quite differently from ordinary positional arguments.
 In particular, they do not participate in method dispatch. Methods are
