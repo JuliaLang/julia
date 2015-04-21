@@ -73,6 +73,27 @@ Any[
 
 "),
 
+("Base","Base","Base.linearindexing(A)
+
+   \"linearindexing\" defines how an AbstractArray most efficiently
+   accesses its elements.  If \"Base.linearindexing(A)\" returns
+   \"Base.LinearFast()\", this means that linear indexing with only
+   one index is an efficient operation.  If it instead returns
+   \"Base.LinearSlow()\" (by default), this means that the array
+   intrinsically accesses its elements with indices specified for
+   every dimension.  Since converting a linear index to multiple
+   indexing subscripts is typically very expensive, this provides a
+   traits-based mechanism to enable efficient generic code for all
+   array types.
+
+   An abstract array subtype \"MyArray\" that wishes to opt into fast
+   linear indexing behaviors should define \"linearindexing\" in the
+   type-domain:
+
+   Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+
+"),
+
 ("Base","countnz","countnz(A)
 
    Counts the number of nonzero values in array A (dense or sparse).
@@ -410,7 +431,7 @@ Any[
 
 "),
 
-("Base","hvcat","hvcat(rows::(Int...), values...)
+("Base","hvcat","hvcat(rows::Tuple{Vararg{Int}}, values...)
 
    Horizontal and vertical concatenation in one call. This function is
    called for block matrix syntax. The first argument specifies the
@@ -1400,6 +1421,13 @@ Any[
 
 "),
 
+("Base","ans","ans
+
+   A variable referring to the last computed value, automatically set
+   at the interactive prompt.
+
+"),
+
 ("Base","is","is(x, y) -> Bool
 ===(x, y) -> Bool
 ≡(x, y) -> Bool
@@ -1772,7 +1800,7 @@ Any[
       julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
-      12-element Array{(Int64,Symbol,DataType),1}:
+      12-element Array{Tuple{Int64,Symbol,DataType},1}:
        (0,:device,UInt64)
        (8,:inode,UInt64)
        (16,:mode,UInt64)
@@ -1894,12 +1922,12 @@ Any[
 
 "),
 
-("Base","method_exists","method_exists(f, tuple) -> Bool
+("Base","method_exists","method_exists(f, Tuple type) -> Bool
 
    Determine whether the given generic function has a method matching
-   the given tuple of argument types.
+   the given \"Tuple\" of argument types.
 
-      julia> method_exists(length, (Array,))
+      julia> method_exists(length, Tuple{Array})
       true
 
 "),
@@ -2164,11 +2192,27 @@ Any[
 ("Base","setenv","setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command.
-   \"env\" is either a dictionary mapping strings to strings, or an
-   array of strings of the form \"\"var=val\"\".
+   \"env\" is either a dictionary mapping strings to strings, an array
+   of strings of the form \"\"var=val\"\", or zero or more
+   \"\"var\"=>val\" pair arguments.  In order to modify (rather than
+   replace) the existing environment, create \"env\" by \"copy(ENV)\"
+   and then setting \"env[\"var\"]=val\" as desired, or use
+   \"withenv\".
 
    The \"dir\" keyword argument can be used to specify a working
    directory for the command.
+
+"),
+
+("Base","withenv","withenv(f::Function, kv::Pair...)
+
+   Execute \"f()\" in an environment that is temporarily modified (not
+   replaced as in \"setenv\") by zero or more \"\"var\"=>val\"
+   arguments \"kv\".  \"withenv\" is generally used via the
+   \"withenv(kv...) do ... end\" syntax.  A value of \"nothing\" can
+   be used to temporarily unset an environment variable (if it is
+   set).  When \"withenv\" returns, the original environment has been
+   restored.
 
 "),
 
@@ -2366,7 +2410,7 @@ Any[
 
 "),
 
-("Base","assert","assert(cond[, text])
+("Base","assert","assert(cond)
 
    Throw an \"AssertionError\" if \"cond\" is false. Also available as
    the macro \"@assert expr\".
@@ -2682,7 +2726,7 @@ Any[
 
 "),
 
-("Base","precompile","precompile(f, args::(Any..., ))
+("Base","precompile","precompile(f, args::Tuple{Vararg{Any}})
 
    Compile the given function \"f\" for the argument tuple (of types)
    \"args\", but do not execute it.
@@ -5023,7 +5067,7 @@ Millisecond(v)
 
 ("Base","readlink","readlink(path) -> AbstractString
 
-    Returns the value of a symbolic link \"path\".
+   Returns the value of a symbolic link \"path\".
 
 "),
 
@@ -5354,12 +5398,12 @@ Millisecond(v)
 
 "),
 
-("Base","relpath","relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+("Base","relpath","relpath(path::AbstractString, startpath::AbstractString = \".\") -> AbstractString
 
-   Return a relative filepath to path either from the current directory or from an optional
-   start directory.
-   This is a path computation: the filesystem is not accessed to confirm the existence or
-   nature of path or startpath.
+   Return a relative filepath to path either from the current
+   directory or from an optional start directory. This is a path
+   computation: the filesystem is not accessed to confirm the
+   existence or nature of path or startpath.
 
 "),
 
@@ -5693,9 +5737,9 @@ Millisecond(v)
 
 ("Base","print_shortest","print_shortest(io, x)
 
-   Print the shortest possible representation of number \"x\" as a
-   floating point number, ensuring that it would parse to the exact
-   same number.
+   Print the shortest possible representation, with the minimum number
+   of consecutive non-zero digits, of number \"x\", ensuring that it
+   would parse to the exact same number.
 
 "),
 
@@ -6910,7 +6954,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cholfact","cholfact(A) -> CHOLMOD.Factor
+("Base","cholfact","cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite
    matrix \"A\". A fill-reducing permutation is used.  The main
@@ -6918,6 +6962,12 @@ popdisplay(d::Display)
    \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
    defined. The function calls the C library CHOLMOD and many other
    functions from the library are wrapped but not exported.
+
+   Setting optional \"shift\" keyword argument computes the
+   factorization of \"A+shift*I\" instead of \"A\".  If the \"perm\"
+   argument is nonempty, it should be a permutation of *1:size(A,1)*
+   giving the ordering to use (instead of CHOLMOD's default AMD
+   ordering).
 
 "),
 
@@ -6939,7 +6989,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","ldltfact","ldltfact(A) -> CHOLMOD.Factor
+("Base","ldltfact","ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian
    matrix \"A\". A fill-reducing permutation is used.  The main
@@ -6947,6 +6997,12 @@ popdisplay(d::Display)
    \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
    defined. The function calls the C library CHOLMOD and many other
    functions from the library are wrapped but not exported.
+
+   Setting optional \"shift\" keyword argument computes the
+   factorization of \"A+shift*I\" instead of \"A\".  If the \"perm\"
+   argument is nonempty, it should be a permutation of *1:size(A,1)*
+   giving the ordering to use (instead of CHOLMOD's default AMD
+   ordering).
 
 "),
 
@@ -8275,6 +8331,13 @@ popdisplay(d::Display)
 ("Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
 
    Set the number of threads the BLAS library should use.
+
+"),
+
+("Base.LinAlg.BLAS","I","I
+
+   An object of type \"UniformScaling\", representing an identity
+   matrix of any size.
 
 "),
 
@@ -10995,18 +11058,24 @@ golden
 
 ("Base","get_rounding","get_rounding(T)
 
-   Get the current floating point rounding mode for type \"T\". Valid
-   modes are \"RoundNearest\", \"RoundToZero\", \"RoundUp\",
+   Get the current floating point rounding mode for type \"T\",
+   controlling the rounding of basic arithmetic functions (\"+()\",
+   \"-()\", \"*()\", \"/()\" and \"sqrt()\") and type conversion.
+
+   Valid modes are \"RoundNearest\", \"RoundToZero\", \"RoundUp\",
    \"RoundDown\", and \"RoundFromZero\" (\"BigFloat\" only).
 
 "),
 
 ("Base","set_rounding","set_rounding(T, mode)
 
-   Set the rounding mode of floating point type \"T\". Note that this
-   may affect other types, for instance changing the rounding mode of
-   \"Float64\" will change the rounding mode of \"Float32\". See
-   \"get_rounding\" for available modes
+   Set the rounding mode of floating point type \"T\", controlling the
+   rounding of basic arithmetic functions (\"+()\", \"-()\", \"*()\",
+   \"/()\" and \"sqrt()\") and type conversion.
+
+   Note that this may affect other types, for instance changing the
+   rounding mode of \"Float64\" will change the rounding mode of
+   \"Float32\". See \"get_rounding\" for available modes
 
 "),
 
@@ -11245,13 +11314,14 @@ golden
 
 "),
 
-("Base","yieldto","yieldto(task, args...)
+("Base","yieldto","yieldto(task, arg = nothing)
 
    Switch to the given task. The first time a task is switched to, the
    task's function is called with no arguments. On subsequent
-   switches, \"args\" are returned from the task's last call to
+   switches, \"arg\" is returned from the task's last call to
    \"yieldto\". This is a low-level call that only switches tasks, not
-   considering states or scheduling in any way.
+   considering states or scheduling in any way. Its use is
+   discouraged.
 
 "),
 
@@ -12108,7 +12178,7 @@ golden
 
 "),
 
-("Base.Profile","callers","callers(funcname[, data, lidict][, filename=<filename>][, linerange=<start:stop>]) -> Vector{(count, linfo)}
+("Base.Profile","callers","callers(funcname[, data, lidict][, filename=<filename>][, linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
    Given a previous profiling run, determine who called a particular
    function. Supplying the filename (and optionally, range of line
@@ -12469,15 +12539,15 @@ golden
 
 ("Base","lpad","lpad(string, n, p)
 
-   Make a string at least \"n\" characters long by padding on the left
-   with copies of \"p\".
+   Make a string at least \"n\" columns wide when printed, by padding
+   on the left with copies of \"p\".
 
 "),
 
 ("Base","rpad","rpad(string, n, p)
 
-   Make a string at least \"n\" characters long by padding on the
-   right with copies of \"p\".
+   Make a string at least \"n\" columns wide when printed, by padding
+   on the right with copies of \"p\".
 
 "),
 

@@ -268,15 +268,22 @@ General Number Functions and Constants
 
 .. function:: get_rounding(T)
 
-   Get the current floating point rounding mode for type ``T``. Valid modes
-   are ``RoundNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, and
-   ``RoundFromZero`` (``BigFloat`` only).
+   Get the current floating point rounding mode for type ``T``, controlling
+   the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
+   :func:`*`, :func:`/` and :func:`sqrt`) and type conversion.
+
+   Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
+   ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
 
 .. function:: set_rounding(T, mode)
 
-   Set the rounding mode of floating point type ``T``. Note that this may
-   affect other types, for instance changing the rounding mode of ``Float64``
-   will change the rounding mode of ``Float32``. See ``get_rounding`` for available modes
+   Set the rounding mode of floating point type ``T``, controlling the
+   rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
+   :func:`/` and :func:`sqrt`) and type conversion.
+
+   Note that this may affect other types, for instance changing the rounding
+   mode of ``Float64`` will change the rounding mode of ``Float32``. See
+   ``get_rounding`` for available modes
 
 .. function:: with_rounding(f::Function, T, mode)
 
