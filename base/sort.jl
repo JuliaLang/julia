@@ -400,7 +400,7 @@ end
 
 ## sorting multi-dimensional arrays ##
 
-sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, [dim])
+sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, dims = [dim])
 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
