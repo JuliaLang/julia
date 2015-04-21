@@ -301,6 +301,8 @@ end
 searchindex(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
+searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
+searchindex(s::AbstractString, c::Char) = searchindex(s,c,start(s))
 
 function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     if length(t) == 1
