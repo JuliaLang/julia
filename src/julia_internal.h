@@ -52,6 +52,7 @@ JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_tuple);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
+extern DLLEXPORT jl_function_t *jl_typeinf_func;
 
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;

@@ -1892,6 +1892,9 @@ i7652()
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
 
+# issue #7795
+@test unsafe_load(cglobal(:jl_typeinf_func, Any)) === Base.typeinf_ext
+
 # issue #7810
 type Foo7810{T<:AbstractVector}
     v::T
