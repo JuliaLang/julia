@@ -238,3 +238,20 @@ let A, B, s
     end
     @test s == 210
 end
+
+# findlast, findprev
+let a = [0,1,2,3,0,1,2,3]
+    @test findlast(a) == 8
+    @test findlast(a.==0) == 5
+    @test findlast(a.==5) == 0
+    @test findlast([1,2,4,1,2,3,4], 3) == 6
+    @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
+    @test findlast(isodd, [2,4,6,2,0]) == 0
+    @test findprev(a,4) == 4
+    @test findprev(a,5) == 4
+    @test findprev(a,1) == 0
+    @test findprev(a,1,4) == 2
+    @test findprev(a,1,8) == 6
+    @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+end
