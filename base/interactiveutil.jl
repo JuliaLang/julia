@@ -222,6 +222,9 @@ code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 
 function gen_call_with_extracted_types(fcn, ex0)
+     if isa(ex0, Symbol)
+         return Expr(:call, fcn, Meta.quot(ex0))
+     end
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         # keyword args not used in dispatch, so just remove them
@@ -234,7 +237,7 @@ function gen_call_with_extracted_types(fcn, ex0)
                     Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
     end
     ex = expand(ex0)
-    exret = Expr(:call, :error, "expression is not a function call")
+    exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
