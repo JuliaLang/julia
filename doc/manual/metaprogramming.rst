@@ -883,10 +883,13 @@ work with expressions at parsing-time and cannot access the types of their
 inputs, a generated function gets expanded at a time when the types of
 the arguments are known, but the function is not yet compiled.
 
-Depending on the types of the arguments, a generated function returns a
-quoted expression which then forms the method body of the specialized
-method. Thus, generated functions provide a flexible framework to move
-work from run-time to compile-time.
+Instead of performing some calculation or action, a generated function
+declaration returns a quoted expression which then forms the body for the
+method corresponding to the types of the arguments. When called, the body
+expression is compiled (or fetched from a cache, on subsequent calls) and
+only the returned expression - not the code that generated it - is evaluated.
+Thus, generated functions provide a flexible framework to move work from
+run-time to compile-time.
 
 When defining generated functions, there are three main differences to
 ordinary functions:
