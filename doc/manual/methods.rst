@@ -523,7 +523,7 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
-.. _man-Note-on-optional-and-keyword-arguments:
+.. _man-note-on-optional-and-keyword-arguments:
 
 Note on Optional and keyword Arguments
 --------------------------------------

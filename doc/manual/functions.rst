@@ -448,7 +448,7 @@ specified:
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see :ref:`man-note-on-optinal-and-keyword-arguments`).
+(see :ref:`man-note-on-optional-and-keyword-arguments`).
 
 
 Keyword Arguments
