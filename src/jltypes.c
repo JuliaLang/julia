@@ -398,6 +398,30 @@ jl_datatype_t *jl_wrap_vararg(jl_value_t *t)
     return (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)jl_vararg_type, env, 1);
 }
 
+static int intersect_vararg_tuple(jl_value_t *cn, cenv_t *eqc, int len)
+{
+    size_t i;
+    // Check for a length-constrained vararg
+    if (!jl_is_long(cn)) {
+        // set cn from eqc parameters
+        for (i = 0; i < eqc->n; i+=2)
+            if (eqc->data[i] == cn) {
+                cn = eqc->data[i+1];
+                break;
+            }
+    }
+    if (jl_is_long(cn)) {
+        long valen = jl_unbox_long(cn);
+        if (valen != len)
+            return 0;
+    }
+    else if (jl_is_typevar(cn) && ((jl_tvar_t*)cn)->bound) {
+        // set eqc parameter from valen, to support func{T,N}(x::Vararg{T,N})
+        extend(cn, jl_box_long(len), eqc);
+    }
+    return 1;
+}
+
 static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
                                    cenv_t *penv, cenv_t *eqc, variance_t var)
 {
@@ -411,14 +435,15 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
     jl_value_t *result = (jl_value_t*)tc;
     jl_value_t *ce = NULL;
     JL_GC_PUSH2(&tc, &ce);
-    size_t ai=0, bi=0, ci, i;
-    jl_value_t *ae=NULL, *be=NULL, *bn=NULL;
+    size_t ai=0, bi=0, ci;
+    jl_value_t *ae=NULL, *be=NULL, *an=NULL, *bn=NULL;
     int aseq=0, bseq=0;
     for(ci=0; ci < n; ci++) {
         if (ai < al) {
             ae = jl_svecref(ap,ai);
             if (jl_is_vararg_type(ae)) {
                 aseq=1;
+                an = jl_tparam1(ae);
                 ae = jl_tparam0(ae);
             }
             ai++;
@@ -451,26 +476,16 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
             ce = (jl_value_t*)jl_wrap_vararg(ce);
         jl_svecset(tc, ci, ce);
     }
-    // Check for a length-constrained vararg:
+    if (aseq) {
+        if (!intersect_vararg_tuple(an, eqc, bi-ai+1)) {
+            JL_GC_POP();
+            return (jl_value_t*)jl_bottom_type;
+        }
+    }
     if (bseq) {
-        if (!jl_is_long(bn)) {
-            // set bn from eqc parameters
-            for (i = 0; i < eqc->n; i+=2)
-                if (eqc->data[i] == bn) {
-                    bn = eqc->data[i+1];
-                    break;
-                }
-        }
-        if (jl_is_long(bn)) {
-            long valen = jl_unbox_long(bn);
-            if (valen != (ai-bi+1)) {
-                JL_GC_POP();
-                return (jl_value_t*)jl_bottom_type;
-            }
-        }
-        else if (jl_is_typevar(bn) && ((jl_tvar_t*)bn)->bound) {
-            // set eqc parameter from valen, to support func{T,N}(x::Vararg{T,N})
-            extend(bn, jl_box_long(ai-bi+1), eqc);
+        if (!intersect_vararg_tuple(bn, eqc, ai-bi+1)) {
+            JL_GC_POP();
+            return (jl_value_t*)jl_bottom_type;
         }
     }
  done_intersect_tuple:
