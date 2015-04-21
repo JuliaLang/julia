@@ -29,6 +29,16 @@ names(m::Module, all::Bool, imported::Bool) = sort!(ccall(:jl_module_names, Arra
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
 
+binding_module(var::Symbol) = binding_module(current_module(), var)
+function binding_module(m::Module, var::Symbol)
+    if isdefined(m, var) # this returns true for 'used' bindings
+        mod = ccall(:jl_get_module_of_binding, Any, (Any, Any), m, var)
+    else
+        error("\"$var\" is not bound in module $m")
+    end
+    mod
+end
+
 fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
 function fieldnames(v)
     t = typeof(v)
@@ -65,6 +75,9 @@ function fieldoffsets(x::DataType)
     ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
     offsets
 end
+
+type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
+field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
 
 # subtypes
 function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
@@ -231,19 +244,4 @@ function function_module(f, types::ANY)
         error("no matching methods")
     end
     m[1].func.code.module
-end
-
-#
-
-type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
-field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
-
-binding_module(var::Symbol) = binding_module(current_module(), var)
-function binding_module(m::Module, var::Symbol)
-    if isdefined(m, var) # this returns true for 'used' bindings
-        mod = ccall(:jl_get_module_of_binding, Any, (Any, Any), m, var)
-    else
-        error("Symbol $var is not bound in the module $m and not exported by any module 'used' within $m.")
-    end
-    mod
 end
