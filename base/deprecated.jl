@@ -296,22 +296,8 @@ const MemoryError = OutOfMemoryError
 @deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)
 
 # 1470
-@deprecate integer(s::AbstractString)   parseint(Int,s)
-@deprecate unsigned(s::AbstractString)  parseint(UInt,s)
-@deprecate int(s::AbstractString)       parseint(Int,s)
-@deprecate uint(s::AbstractString)      parseint(UInt,s)
-@deprecate int8(s::AbstractString)      parseint(Int8,s)
-@deprecate uint8(s::AbstractString)     parseint(UInt8,s)
-@deprecate int16(s::AbstractString)     parseint(Int16,s)
-@deprecate uint16(s::AbstractString)    parseint(UInt16,s)
-@deprecate int32(s::AbstractString)     parseint(Int32,s)
-@deprecate uint32(s::AbstractString)    parseint(UInt32,s)
-@deprecate int64(s::AbstractString)     parseint(Int64,s)
-@deprecate uint64(s::AbstractString)    parseint(UInt64,s)
-@deprecate int128(s::AbstractString)    parseint(Int128,s)
-@deprecate uint128(s::AbstractString)   parseint(UInt128,s)
-@deprecate float64(s::AbstractString)   parsefloat(Float64,s)
-@deprecate float32(s::AbstractString)   parsefloat(Float32,s)
+@deprecate integer(s::AbstractString)   Int(s)
+@deprecate unsigned(s::AbstractString)  UInt(s)
 
 for (f,t) in ((:integer, Integer), (:signed, Signed),
               (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
@@ -409,12 +395,7 @@ for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32
               (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
               (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
     @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parseint($t,s) for s in a]
-    end
-end
-for (f,t) in ((:float32, Float32), (:float64, Float64))
-    @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parsefloat($t,s) for s in a]
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) map($t,a)
     end
 end
 
@@ -520,10 +501,10 @@ end
 
 export float32_isvalid, float64_isvalid
 
-@deprecate parsefloat(s::AbstractString) parse(Float64,s)
-@deprecate parsefloat(T, s)              parse(T, s)
+@deprecate parsefloat(s::AbstractString) Float64(s)
+@deprecate parsefloat(T, s)              T(s)
 
-@deprecate parseint(s)                parse(Int, s)
+@deprecate parseint(s)                Int(s)
 @deprecate parseint(s,base)           parse(Int, s, base)
 @deprecate parseint(T::Type, s)       parse(T, s)
 @deprecate parseint(T::Type, s, base) parse(T, s, base)

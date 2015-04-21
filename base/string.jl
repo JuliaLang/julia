@@ -1635,7 +1635,8 @@ function parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString)
     isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
 
-float(x::AbstractString) = parse(Float64,x)
+call{T<:Real}(::Type{T},a::AbstractString) = parse(T,a)
+float(x::AbstractString) = Float64(x)
 
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 

@@ -74,7 +74,6 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 BigInt(x::BigInt) = x
-BigInt(s::AbstractString) = parse(BigInt,s)
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
