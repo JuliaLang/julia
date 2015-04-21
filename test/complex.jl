@@ -768,3 +768,6 @@ end
 
 # issue/PR #10148
 @test typeof(Int8(1) - im) == Complex{Int8}
+
+# issue #10926
+@test typeof(π - 1im) == Complex{Float64}
