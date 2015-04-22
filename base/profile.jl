@@ -122,7 +122,7 @@ start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
 stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
 
-is_running() = Bool(ccall(:jl_profile_is_running, Cint, ()))
+is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 

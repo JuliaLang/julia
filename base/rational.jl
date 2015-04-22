@@ -61,7 +61,7 @@ convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x),
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
-convert(::Type{Bool}, x::Rational) = (x!=0) # to resolve ambiguity
+convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
 convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 
 convert(::Type{FloatingPoint}, x::Rational) = float(x.num)/float(x.den)

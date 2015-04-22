@@ -469,7 +469,7 @@ function deserialize(s, ::Type{Array})
             i = 1
             while i <= n
                 b = read(s, UInt8)
-                v = Bool(b>>7)
+                v = b>>7 != 0
                 count = b&0x7f
                 nxt = i+count
                 while i < nxt
