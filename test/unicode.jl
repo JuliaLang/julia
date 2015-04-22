@@ -1,27 +1,28 @@
 # UTF16
-u8 = "\U1d565\U1d7f6\U00066\U2008a"
+u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
 u16 = utf16(u8)
-@test sizeof(u16) == 14
-@test length(u16.data) == 8 && u16.data[end] == 0
-@test length(u16) == 4
+@test sizeof(u16) == 18
+@test length(u16.data) == 10 && u16.data[end] == 0
+@test length(u16) == 5
 @test utf8(u16) == u8
 @test collect(u8) == collect(u16)
-@test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(Uint8, 14), 1, reinterpret(Uint8, u16.data), 1, 14))
+@test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(Uint8, 18), 1, reinterpret(Uint8, u16.data), 1, 18))
 @test u8 == utf16(pointer(u16)) == utf16(convert(Ptr{Int16}, pointer(u16)))
+@test_throws ArgumentError utf16(utf32(char(0x120000)))
 
 # UTF32
 u32 = utf32(u8)
-@test sizeof(u32) == 16
-@test length(u32.data) == 5 && u32.data[end] == 0
-@test length(u32) == 4
+@test sizeof(u32) == 20
+@test length(u32.data) == 6 && u32.data[end] == char(0)
+@test length(u32) == 5
 @test utf8(u32) == u8
 @test collect(u8) == collect(u32)
-@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(Uint8, 16), 1, reinterpret(Uint8, u32.data), 1, 16))
+@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(Uint8, 20), 1, reinterpret(Uint8, u32.data), 1, 20))
 @test u8 == utf32(pointer(u32)) == utf32(convert(Ptr{Int32}, pointer(u32)))
 
 # Wstring
 w = wstring(u8)
-@test length(w) == 4 && utf8(w) == u8 && collect(u8) == collect(w)
+@test length(w) == 5 && utf8(w) == u8 && collect(u8) == collect(w)
 @test u8 == WString(w.data)
 
 if !success(`iconv --version`)
