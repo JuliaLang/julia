@@ -811,7 +811,7 @@ function write{T}(s::AsyncStream, a::Array{T})
         return buffer_or_write(s, pointer(a), n);
     else
         check_open(s)
-        invoke(write,(IO,Array),s,a)
+        invoke(write, Tuple{IO, Array},s,a)
     end
 end
 
