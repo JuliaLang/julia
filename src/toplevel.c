@@ -314,11 +314,12 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         if (jl_binding_resolved_p(m, var)) {
             jl_binding_t *mb = jl_get_binding(m, var);
             jl_module_t *m0 = m;
+            int isimp = jl_is_imported(m, var);
             assert(mb != NULL);
-            if (mb->owner == m0 || mb->imported) {
+            if (mb->owner == m0 || isimp) {
                 m = (jl_module_t*)mb->value;
                 if ((mb->owner == m0 && m != NULL && !jl_is_module(m)) ||
-                    (mb->imported && (m == NULL || !jl_is_module(m))))
+                    (isimp && (m == NULL || !jl_is_module(m))))
                     jl_errorf("invalid module path (%s does not name a module)", var->name);
                 // If the binding has been resolved but is (1) undefined, and (2) owned
                 // by the module we're importing into, then allow the import into the
