@@ -51,7 +51,7 @@ function newmethod(funcs, f)
     return newmethod(applicable)
 end
 
-function trackmethod(def)
+@hygienic function trackmethod(def)
     name = uncurly(unblock(def).args[1].args[1])
     f = esc(name)
     quote
@@ -143,7 +143,7 @@ uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 namify(ex::Expr) = namify(ex.args[1])
 namify(sy::Symbol) = sy
 
-function mdify(ex)
+@hygienic function mdify(ex)
     if isa(ex, AbstractString)
         :(@doc_str $ex)
     elseif isexpr(ex, :macrocall) && namify(ex) == symbol("@mstr")
@@ -153,7 +153,7 @@ function mdify(ex)
     end
 end
 
-function namedoc(meta, def, name)
+@hygienic function namedoc(meta, def, name)
     quote
         @init
         $(esc(def))
@@ -162,7 +162,7 @@ function namedoc(meta, def, name)
     end
 end
 
-function funcdoc(meta, def)
+@hygienic function funcdoc(meta, def)
     quote
         @init
         f, m = $(trackmethod(def))
@@ -171,7 +171,7 @@ function funcdoc(meta, def)
     end
 end
 
-function objdoc(meta, def)
+@hygienic function objdoc(meta, def)
     quote
         @init
         f = $(esc(def))
@@ -182,7 +182,7 @@ end
 
 fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
 
-function docm(meta, def)
+@hygienic function docm(meta, def)
     def′ = unblock(def)
     isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
     isexpr(def′, :type) && return namedoc(meta, def, namify(def′.args[2]))
@@ -192,7 +192,7 @@ function docm(meta, def)
     return objdoc(meta, def)
 end
 
-function docm(ex)
+@hygienic function docm(ex)
     isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
     isexpr(ex, :->) && return docm(ex.args...)
     isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))

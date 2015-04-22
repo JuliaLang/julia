@@ -700,7 +700,8 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
+            cmdmac = Expr(:., :Base, Expr(:quote, symbol("@cmd")))
+            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, cmdmac, line)), outstream(repl))
         end)
 
     ################################# Stage II #############################

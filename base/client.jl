@@ -75,8 +75,9 @@ function repl_cmd(cmd, out)
 end
 
 function repl_hook(input::AbstractString)
+    cmdmac = Expr(:., :Base, Expr(:quote, symbol("@cmd")))
     Expr(:call, :(Base.repl_cmd),
-         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+         macroexpand(Expr(:macrocall,cmdmac,input)))
 end
 
 display_error(er) = display_error(er, [])

@@ -18,7 +18,7 @@ function choosetests(choices = [])
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
         "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall",
+        "operators", "path", "ccall", "macros",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",

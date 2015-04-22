@@ -58,16 +58,16 @@ end
 # efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
 # equation (3).
 macro evalpoly(z, p...)
-    a = :($(esc(p[end])))
-    b = :($(esc(p[end-1])))
+    a = :($(p[end]))
+    b = :($(p[end-1]))
     as = []
     for i = length(p)-2:-1:1
-        ai = symbol("a", i)
+        ai = Expr(:hygienic, symbol("a", i))
         push!(as, :($ai = $a))
         a = :(muladd(r, $ai, $b))
-        b = :(muladd(-s, $ai, $(esc(p[i]))))
+        b = :(muladd(-s, $ai, $(p[i])))
     end
-    ai = :a0
+    ai = Expr(:hygienic, :a0)
     push!(as, :($ai = $a))
     C = Expr(:block,
              :(x = real(tt)),
@@ -76,8 +76,8 @@ macro evalpoly(z, p...)
              :(s = x*x + y*y),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, symbol("@horner"), :tt, map(esc, p)...)
-    :(let tt = $(esc(z))
+    R = quote @horner(tt, $(p...)) end
+    :(let tt = $z
           isa(tt, Complex) ? $C : $R
       end)
 end

@@ -159,3 +159,10 @@ function popmeta!(body::Expr, sym::Symbol)
     return (false, [])
 end
 popmeta!(arg, sym) = (false, [])
+
+# Enable hygiene in all quotes inside this annotation
+# This is useful for subroutines of macro expanders
+export @hygienic
+macro hygienic(exp)
+  Expr(:with_hygiene, exp)
+end

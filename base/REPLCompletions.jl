@@ -386,7 +386,7 @@ function shell_completions(string, pos)
     if all(map(s -> isa(s, AbstractString), args.args[end].args))
         # Treat this as a path (perhaps give a list of commands in the future as well?)
         return complete_path(join(args.args[end].args), pos)
-    elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
+    elseif isexpr(arg, :incomplete) || isexpr(arg, :error)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))

@@ -10,7 +10,7 @@ Base.start{T<:Enum}(::Type{T}) = 1
 # next, done defined per Enum
 
 # generate code to test whether expr is in the given set of values
-function membershiptest(expr, values)
+@hygienic function membershiptest(expr, values)
     lo, hi = extrema(values)
     sv = sort(values)
     if sv == [lo:hi;]
@@ -89,10 +89,10 @@ macro enum(T,syms...)
     blk = quote
         # enum definition
         immutable $(esc(T)) <: Enum
-            val::$enumT
+            $(:val)::$enumT
             function $(esc(typename))(x::Integer)
-                $(membershiptest(:x, values)) || enum_argument_error($(Meta.quot(typename)), x)
-                new(x)
+                $(membershiptest(quote x end, values)) || enum_argument_error($(Meta.quot(typename)), x)
+                $:new(x)
             end
         end
         Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
