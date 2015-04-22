@@ -713,10 +713,37 @@ JL_CALLABLE(jl_f_get_field)
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     jl_value_t *rt = args[1];
 
+    // TODO: temporary FieldRef harness
     if (jl_is_type(rt) &&
         ((jl_datatype_t*)(rt))->name == jl_fieldref_type->name) {
-        printf("Hello FieldRef!\n");
+
+        jl_value_t *frv = jl_svecref(((jl_datatype_t*)rt)->parameters, 0);
+
+        if (vt == (jl_value_t*)jl_module_type) {
+            JL_TYPECHK(getfield, symbol, frv);
+            return jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)frv);
+        }
+        if (!jl_is_datatype(vt))
+            jl_type_error("getfield", (jl_value_t*)jl_datatype_type, v);
+
+        jl_datatype_t *st = (jl_datatype_t*)vt;
+        size_t idx;
+        if (jl_is_long(frv)) {
+            idx = jl_unbox_long(frv)-1;
+            if (idx >= jl_datatype_nfields(st))
+                jl_bounds_error(args[0], args[1]);
+        }
+        else {
+            JL_TYPECHK(getfield, symbol, frv);
+            jl_sym_t *fld = (jl_sym_t*)frv;
+            idx = jl_field_index(st, fld, 1);
+        }
+        jl_value_t *fval = jl_get_nth_field(v,idx);
+        if (fval == NULL)
+            jl_throw(jl_undefref_exception);
+        return fval;
     }
+    // end FieldRef harness
 
     if (vt == (jl_value_t*)jl_module_type) {
         JL_TYPECHK(getfield, symbol, args[1]);
