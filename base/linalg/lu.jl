@@ -175,9 +175,7 @@ function logdet{T<:Complex,S}(A::LU{T,S})
     if isodd(sum(A.ipiv .!= 1:n))
         s = Complex(real(s), imag(s)+π)
     end
-    r, a = reim(s)
-    a = π-mod2pi(π-a) #Take principal branch with argument (-pi,pi]
-    complex(r,a)
+    complex(real(s),rem2pi(imag(s),RoundNearest))
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info

@@ -11,7 +11,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, modf, ^, mod2pi,
+       clamp, modf, ^, mod2pi, rem2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
        besselj0, besselj1, besselj, besseljx,
        bessely0, bessely1, bessely, besselyx,
@@ -22,7 +22,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2,
+             max, min, minmax, ^, exp2, rem,
              exp10, expm1, log1p,
              sign_mask, exponent_mask, exponent_one, exponent_half,
              significand_mask, significand_bits, exponent_bits, exponent_bias
@@ -247,6 +247,12 @@ function frexp{T<:FloatingPoint}(A::Array{T})
     return (f, e)
 end
 
+
+rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
+    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
+rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
+    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
+
 modf(x) = rem(x,one(x)), trunc(x)
 
 const _modff_temp = Float32[0]
@@ -323,6 +329,35 @@ const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - 
 
 const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
 const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
+
+function rem2pi(x::Float64, ::RoundingMode{:Nearest})
+    abs(x) < pi && return x
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n&2 == 2 # add pi
+            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+        else # add 0
+            return y[1]
+        end
+    else
+        if n&2 == 2 # subtract pi/2
+            return add22condh(y[1],y[2],-pi1o2_h,-pi1o2_l)
+        else # add pi/2
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
+        end
+    end
+end
+
+rem2pi(x::Float32, ::RoundingMode{:Nearest}) = Float32(rem2pi(Float64(x),RoundNearest))
+rem2pi(x::Int32, ::RoundingMode{:Nearest}) = rem2pi(Float64(x),RoundNearest)
+function rem2pi(x::Int64, ::RoundingMode{:Nearest})
+  fx = Float64(x)
+  fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+  rem2pi(fx,RoundNearest)
+end
+
 
 function mod2pi(x::Float64) # or modtau(x)
 # with r = mod2pi(x)
