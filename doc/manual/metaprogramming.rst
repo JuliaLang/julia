@@ -872,3 +872,226 @@ entirely in Julia. You can read their source and see precisely what they
 do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.
 
+Generated functions
+-------------------
+
+A very special macro is ``@generated``, which allows you to define so-called
+*generated functions*. These have the capability to generate specialized
+code depending on the types of their arguments with more flexibility and/or
+less code than what can be achieved with multiple dispatch. While macros
+work with expressions at parsing-time and cannot access the types of their
+inputs, a generated function gets expanded at a time when the types of
+the arguments are known, but the function is not yet compiled.
+
+Instead of performing some calculation or action, a generated function
+declaration returns a quoted expression which then forms the body for the
+method corresponding to the types of the arguments. When called, the body
+expression is compiled (or fetched from a cache, on subsequent calls) and
+only the returned expression - not the code that generated it - is evaluated.
+Thus, generated functions provide a flexible framework to move work from
+run-time to compile-time.
+
+When defining generated functions, there are three main differences to
+ordinary functions:
+
+1. You annotate the function declaration with the ``@generated`` macro.
+   This adds some information to the AST that lets the compiler know that
+   this is a generated function.
+
+2. In the body of the generated function you only have access to the
+   *types* of the arguments, not their values.
+
+3. Instead of calculating something or performing some action, you return
+   a *quoted expression* which, when evaluated, does what you want.
+
+It's easiest to illustrate this with an example. We can declare a generated
+function ``foo`` as
+
+.. doctest::
+
+    julia> @generated function foo(x)
+               println(x)
+               return :(x*x)
+           end
+    foo (generic function with 1 method)
+
+Note that the body returns a quoted expression, namely ``:(x*x)``, rather
+than just the value of ``x*x``.
+
+From the callers perspective, they are very similar to regular functions;
+in fact, you don't have to know if you're calling a regular or generated
+function or a - the syntax and result of the call is just the same.
+Let's see how ``foo`` behaves:
+
+.. doctest::
+
+    julia> x = foo(2); # note: not printing the result
+    Int64              # this is the println() statement in the body
+    julia> x           # now we print x
+    4
+
+    julia> y = foo("bar");
+    ASCIIString
+    julia> y
+    "barbar"
+
+So, we see that in the body of the generated function, ``x`` is the
+*type* of the passed argument, and the value returned by the generated
+function, is the result of evaluating the quoted expression we returned
+from the definition, now with the *value* of ``x``.
+
+What happens if we evaluate ``foo`` again with a type that we have already
+used?
+
+.. doctest::
+
+    julia> foo(4)
+    16
+
+Note that there is no printout of ``Int64``. The body of the generated
+function is only executed *once* (not entirely true, see note below) when
+the method for that specific set of argument types is compiled. After that,
+the expression returned from the generated function on the first invocation
+is re-used as the method body.
+
+The reason for the disclaimer above is that the number of times a generated
+function is generated is really an implementation detail; it *might* be only
+once, but it *might* also be more often. As a consequence, you should
+*never* write a generated function with side effects - when, and how often,
+the side effects occur is undefined. (This is true for macros too - and just
+like for macros, the use of `eval` in a generated function is a sign that
+you're doing something the wrong way.)
+
+The example generated function ``foo`` above did not do anything a normal
+function ``foo(x)=x*x`` could not do, except printing the the type on the
+first invocation (and incurring a higher compile-time cost). However, the
+power of a generated function lies in its ability to compute different quoted
+expression depending on the types passed to it:
+
+.. doctest::
+
+   julia> @generated function bar(x)
+              if x <: Integer
+                  return :(x^2)
+              else
+                  return :(x)
+              end
+          end
+    bar (generic function with 1 method)
+
+    julia> bar(4)
+    16
+    julia> bar("baz")
+    "baz"
+
+(although of course this contrived example is easily implemented using
+multiple dispatch...)
+
+We can, of course, abuse this to produce some interesting behavior::
+
+   julia> @generated function baz(x)
+              if rand() < .9
+                  return :(x^2)
+              else
+                  return :("boo!")
+              end
+          end
+
+Since the body of the generated function is non-deterministic, its behavior
+is undefined; the expression returned on the *first* invocation will be
+used for *all* subsequent invocations with the same type (again, with the
+exception covered by the disclaimer above). When we call the generated
+function with ``x`` of a new type, ``rand()`` will be called again to
+see which method body to use for the new type. In this case, for one
+*type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
+
+*Don't copy these examples!*
+
+These examples are hopefully helpful to illustrate how generated functions
+work, both in the definition end and at the call site; however, *don't
+copy them*, for the following reasons:
+
+* the `foo` function has side-effects, and it is undefined exactly when,
+  how often or how many times these side-effects will occur
+* the `bar` function solves a problem that is better solved with multiple
+  dispatch - defining `bar(x) = x` and `bar(x::Integer) = x^2` will do
+  the same thing, but it is both simpler and faster.
+* the `baz` function is pathologically insane
+
+Instead, now that we have a better understanding for how generated functions
+work, let's use them to build some more advanced functionality...
+
+An advanced example
+~~~~~~~~~~~~~~~~~~~
+
+Julia's base library has a function ``sub2ind`` function to calculate a
+linear index into an n-dimensional array, based on a set of n multilinear
+indices - in other words, to calculate the index ``i`` that can be used to
+index into an array ``A`` using ``A[i]``, instead of ``A[x,y,z,...]``. One
+possible implementation is the following::
+
+    function sub2ind_loop(dims::NTuple{N}, I::Integer...)
+        ind = I[N] - 1
+        for i = N-1:-1:1
+            ind = I[i]-1 + dims[i]*ind
+        end
+        return ind + 1
+    end
+
+The same thing can be done using recursion::
+
+    sub2ind_rec(dims::Tuple{}) = 1
+    sub2ind_rec(dims::Tuple{},i1::Integer, I::Integer...) =
+        i1==1 ? sub2ind_rec(dims,I...) : throw(BoundsError())
+    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer) = i1
+    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer, I::Integer...) =
+        i1 + dims[1]*(sub2ind_rec(tail(dims),I...)-1)
+
+Both these implementations, although different, do essentially the same
+thing: a runtime loop over the dimensions of the array, collecting the
+offset in each dimension into the final index.
+
+However, all the information we need for the loop is embedded in the type
+information of the arguments. Thus, we can utilize generated functions to
+move the iteration to compile-time; in compiler parlance, we use generated
+functions to manually unroll the loop. The body becomes almost identical,
+but instead of calculating the linear index, we build up an *expression*
+that calculates the index::
+
+    @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
+        ex = :(I[$N] - 1)
+        for i = N-1:-1:1
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        end
+        return :($ex + 1)
+    end
+
+**What code will this generate?**
+
+An easy way to find out, is to extract the body into another (regular)
+function::
+
+    @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
+        sub2ind_gen_impl(dims, I...)
+    end
+
+    function sub2ind_gen_impl{N}(dims::NTuple{N}, I...)
+        ex = :(I[$N] - 1)
+        for i = N-1:-1:1
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        end
+        return :($ex + 1)
+    end
+
+We can now execute ``sub2ind_gen_impl`` and examine the expression it
+returns::
+
+    julia> sub2ind_gen_impl((Int,Int), Int, Int)
+    :(((I[1] - 1) + dims[1] * ex) + 1)
+
+So, the method body that will be used here doesn't include a loop at all
+- just indexing into the two tuples, multiplication and addition/subtraction.
+All the looping is performed compile-time, and we avoid looping during
+execution entirely. Thus, we only loop *once per type*, in this case once
+per ``N`` (except in edge cases where the function is generated more than
+once - see disclaimer above).
