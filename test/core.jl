@@ -112,6 +112,11 @@ end
 let T = TypeVar(:T,Union(Float32,Float64),true)
     @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
 end
+# Vararg{T,N}
+let N = TypeVar(:N,true)
+    @test is(Bottom,typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real}))
+    @test is(Bottom,typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}}))
+end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
@@ -516,6 +521,29 @@ begin
 
     @test firstlast(Val{true}) == "First"
     @test firstlast(Val{false}) == "Last"
+end
+
+# x::Vararg{T,N} declarations
+begin
+    local f1, f2, f3, f4, f5, f6
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    f4(x::Vararg{Any,3}) = [x...]
+    @test f1(1,2,3) == [1,2,3]
+    @test f2(1,2,3) == [1,2,3]
+    @test f3(1,2,3) == [1,2,3]
+    @test_throws MethodError f4(1,2)
+    @test f4(1,2,3) == [1,2,3]
+    @test_throws MethodError f4(1,2,3,4)
+    f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+    @test_throws MethodError f5(zeros(2,2), 1)
+    @test_throws MethodError f5(zeros(2,2), 1.0, 2.0)
+    @test f5(zeros(2,2), 1, 2) == [1,2]
+    @test_throws MethodError f5(zeros(2,2), 1, 2, 3)
+    f6{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) = [indexes...]
+    @test f6(zeros(2,2), 1.0, 2) == [1.0,2.0]
+    @test_throws MethodError f6(zeros(2,2), 1, 2:3)
 end
 
 # try/finally

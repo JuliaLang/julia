@@ -457,7 +457,7 @@ DLLEXPORT extern jl_value_t *jl_nothing;
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
-extern jl_sym_t *dots_sym;
+extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
 extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
@@ -1002,6 +1002,15 @@ DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+STATIC_INLINE int jl_is_vararg_fixedlen(jl_value_t *v)
+{
+    assert(jl_is_vararg_type(v));
+    jl_value_t *lenv = jl_tparam1(v);
+    if (jl_is_typevar(lenv))
+        return ((jl_tvar_t*)lenv)->bound != 0;
+    return jl_is_long(lenv);
+}
 
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
