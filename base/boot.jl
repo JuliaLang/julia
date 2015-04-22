@@ -283,8 +283,7 @@ _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
 
-Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
-Module() = Module(:anonymous)
+Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Int32), name, std_imports)::Module
 
 Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
 
