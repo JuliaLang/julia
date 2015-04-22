@@ -1164,6 +1164,12 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         uptrint_t h = 0xda1ada1a;
+        // has_typevars always returns 0 on name->primary, so that type
+        // can exist in the cache. however, interpreter.c mutates its
+        // typevars' `bound` fields to 0, corrupting the cache. this is
+        // avoided simply by hashing name->primary specially here.
+        if (dtv->name->primary == v)
+            return bitmix(bitmix(h, dtv->name->uid), 0xaa5566aa);
         return bitmix(bitmix(h, dtv->name->uid),
                       jl_object_id((jl_value_t*)dtv->parameters));
     }
