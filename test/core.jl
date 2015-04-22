@@ -518,6 +518,17 @@ begin
     @test firstlast(Val{false}) == "Last"
 end
 
+# x::Vararg{Any} declarations
+begin
+    local f1, f2, f3
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    @test f1(1,2,3) == [1,2,3]
+    @test f2(1,2,3) == [1,2,3]
+    @test f3(1,2,3) == [1,2,3]
+end
+
 # try/finally
 begin
     after = 0
@@ -578,6 +589,10 @@ let
     gc(); gc()
     @test x == 1
 end
+
+# Module() constructor
+@test names(Module(:anonymous), true, true) != [:anonymous]
+@test names(Module(:anonymous, false), true, true) == [:anonymous]
 
 # issue #7307
 function test7307(a, ret)
