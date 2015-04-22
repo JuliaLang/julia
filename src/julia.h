@@ -1279,6 +1279,22 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr((jl_value_t*)f, args, nargs);
 }
 
+STATIC_INLINE
+jl_value_t *jl_apply_unspecialized(jl_function_t *meth, jl_value_t **args, uint32_t nargs)
+{
+    jl_function_t *unspecialized = meth->linfo->unspecialized;
+    if (meth->env == (jl_value_t*)jl_emptysvec) {
+        return jl_apply(unspecialized, args, nargs);
+    }
+    else {
+        jl_function_t *closuremeth = jl_new_closure(unspecialized->fptr, meth->env, unspecialized->linfo);
+        JL_GC_PUSH1(&closuremeth);
+        jl_value_t *v = jl_apply(closuremeth, args, nargs);
+        JL_GC_POP();
+        return v;
+    }
+}
+
 DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
