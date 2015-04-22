@@ -1075,7 +1075,8 @@ function::
         sub2ind_gen_impl(dims, I...)
     end
 
-    function sub2ind_gen_impl{N}(dims::NTuple{N}, I...)
+    function sub2ind_gen_impl{N}(dims::Type{NTuple{N}}, I...)
+        length(I) == N || return :(error("partial indexing is unsupported"))
         ex = :(I[$N] - 1)
         for i = N-1:-1:1
             ex = :(I[$i] - 1 + dims[$i]*$ex)
@@ -1086,8 +1087,8 @@ function::
 We can now execute ``sub2ind_gen_impl`` and examine the expression it
 returns::
 
-    julia> sub2ind_gen_impl((Int,Int), Int, Int)
-    :(((I[1] - 1) + dims[1] * ex) + 1)
+    julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
+    :(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)
 
 So, the method body that will be used here doesn't include a loop at all
 - just indexing into the two tuples, multiplication and addition/subtraction.
