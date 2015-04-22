@@ -1611,7 +1611,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
 
 DLLEXPORT void jl_restore_system_image(const char *fname)
 {
-    char *dot = strrchr(fname, '.');
+    char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
     jl_load_sysimg_so();
@@ -1886,8 +1886,8 @@ jl_module_t *jl_restore_new_module(const char *fname)
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
         jl_array_t *cache_arg1 = mt->cache_arg1;
-        mt->cache_targ = (void*)jl_nothing;
-        mt->cache_arg1 = (void*)jl_nothing;
+        mt->cache_targ = (jl_array_t*)jl_nothing;
+        mt->cache_arg1 = (jl_array_t*)jl_nothing;
         if (cache_targ != (void*)jl_nothing) {
             size_t j, l = jl_array_len(cache_targ);
             for (j = 0; j < l; j++) {

@@ -280,7 +280,7 @@ static region_t *find_region(void *ptr)
 static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data);
-    int pg_idx = PAGE_INDEX(r, data);
+    int pg_idx = PAGE_INDEX(r, (char*)data);
     return &r->meta[pg_idx];
 }
 
