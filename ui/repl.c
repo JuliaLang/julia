@@ -447,7 +447,7 @@ static int true_main(int argc, char *argv[])
             ios_puts("\njulia> ", ios_stdout);
             ios_flush(ios_stdout);
             line = ios_readline(ios_stdin);
-            jl_value_t *val = jl_eval_string(line);
+            jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
                 jl_static_show(JL_STDERR, jl_exception_in_transit);
