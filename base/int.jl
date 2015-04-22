@@ -18,7 +18,7 @@ end
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
 
-isodd(n::Integer) = Bool(rem(n,2))
+isodd(n::Integer) = rem(n,2) != 0
 iseven(n::Integer) = !isodd(n)
 
 signbit(x::Integer) = x < 0

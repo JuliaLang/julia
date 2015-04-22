@@ -205,15 +205,15 @@ end
 
 @windows_only begin
 function munmap(viewhandle::Ptr, mmaphandle::Ptr)
-    status = Bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
-    status |= Bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
+    status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
+    status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle)!=0
     if !status
         error("could not unmap view: $(FormatMessage())")
     end
 end
 
 function msync(p::Ptr, len::Integer)
-    status = Bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
+    status = ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len)!=0
     if !status
         error("could not msync: $(FormatMessage())")
     end

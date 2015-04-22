@@ -27,15 +27,15 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-isopen(s::IOStream) = Bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
+isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios)!=0
 function flush(s::IOStream)
     sigatomic_begin()
     systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
     sigatomic_end()
     s
 end
-iswritable(s::IOStream) = Bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
-isreadable(s::IOStream) = Bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
+iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
+isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)

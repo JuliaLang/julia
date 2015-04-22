@@ -1,7 +1,7 @@
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
-convert(::Type{Bool}, x::Real) = (x!=0)
+convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T

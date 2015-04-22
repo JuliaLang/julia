@@ -139,7 +139,7 @@ debug && println("Reorder Schur")
         S = schurfact(ordschura)
         select = bitrand(n)
         O = ordschur(S, select)
-        Bool(sum(select)) && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
+        sum(select) != 0 && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
         @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
     end
 

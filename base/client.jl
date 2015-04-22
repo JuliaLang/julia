@@ -139,7 +139,7 @@ end
 _repl_start = Condition()
 
 syntax_deprecation_warnings(warn::Bool) =
-    Bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
+    ccall(:jl_parse_depwarn, Cint, (Cint,), warn)!=0
 
 function syntax_deprecation_warnings(f::Function, warn::Bool)
     prev = syntax_deprecation_warnings(warn)
@@ -255,17 +255,17 @@ let reqarg = Set(UTF8String["--home",          "-H",
         end
         repl                  = true
         startup               = (opts.startupfile != 2)
-        history_file          = Bool(opts.historyfile)
-        quiet                 = Bool(opts.quiet)
+        history_file          = (opts.historyfile != 0)
+        quiet                 = (opts.quiet != 0)
         color_set             = (opts.color != 0)
         global have_color     = (opts.color == 1)
-        global is_interactive = Bool(opts.isinteractive)
+        global is_interactive = (opts.isinteractive != 0)
         while true
             # load ~/.juliarc file
             startup && load_juliarc()
 
             # startup worker
-            if Bool(opts.worker)
+            if opts.worker != 0
                 start_worker() # does not return
             end
             # add processors
