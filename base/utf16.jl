@@ -55,9 +55,11 @@ function encode16(s::AbstractString)
         c = reinterpret(UInt32, ch)
         if c < 0x10000
             push!(buf, UInt16(c))
+        elseif c <= 0x10ffff
+            push!(buf, UInt16(0xd7c0 + (c>>10)))
+            push!(buf, UInt16(0xdc00 + (c & 0x3ff)))
         else
-            push!(buf, UInt16(0xd7c0 + (c>>10) & 0x3ff))
-            push!(buf, UInt16(0xdc00 + c & 0x3ff))
+            throw(ArgumentError("invalid Unicode character (0x$(hex(c)) > 0x10ffff)"))
         end
     end
     push!(buf, 0) # NULL termination
