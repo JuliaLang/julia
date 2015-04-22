@@ -78,7 +78,7 @@ function writepos{T}(t::TextTerminal, x, y, b::Array{T})
         writepos(t, x, y, reinterpret(UInt8, b))
     else
         cmove(t, x, y)
-        invoke(write, (IO, Array), s, a)
+        invoke(write, Tuple{IO, Array}, s, a)
     end
 end
 function writepos(t::TextTerminal, x, y, args...)

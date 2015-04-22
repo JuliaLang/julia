@@ -166,7 +166,7 @@ end
 
 function serialize{T<:AbstractString}(s, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
-    invoke(serialize, (Any,Any), s, convert(SubString{T}, convert(T,ss)))
+    invoke(serialize, Tuple{Any, Any}, s, convert(SubString{T}, convert(T,ss)))
 end
 
 # Don't serialize the pointers
