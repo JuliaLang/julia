@@ -122,7 +122,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
+    Box, Function, FieldRef, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -273,6 +273,9 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
 
 Expr(args::ANY...) = _expr(args...)
+
+# needs TypeVar
+immutable FieldRef{S} end
 
 _new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LineNumberNode, :Int)

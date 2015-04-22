@@ -32,6 +32,7 @@ call(T::Type{Task}, f::ANY) = Core.call(T, f)
 call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
+call{S}(T::Type{FieldRef{S}}, args...) = Core.call(T, args...)
 
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
