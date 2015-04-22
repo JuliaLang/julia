@@ -296,7 +296,9 @@ function getindex(v::SimpleVector, i::Int)
     if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
-    unsafe_load(convert(Ptr{Any},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    x == C_NULL && throw(UndefRefError())
+    return unsafe_pointer_to_objref(x)
 end
 
 length(v::SimpleVector) = v.length
