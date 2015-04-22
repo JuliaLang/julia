@@ -711,6 +711,13 @@ JL_CALLABLE(jl_f_get_field)
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    jl_value_t *rt = args[1];
+
+    if (jl_is_type(rt) &&
+        ((jl_datatype_t*)(rt))->name == jl_fieldref_type->name) {
+        printf("Hello FieldRef!\n");
+    }
+
     if (vt == (jl_value_t*)jl_module_type) {
         JL_TYPECHK(getfield, symbol, args[1]);
         return jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)args[1]);

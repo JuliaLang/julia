@@ -62,6 +62,7 @@ jl_datatype_t *jl_ref_type;
 jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
+jl_datatype_t *jl_fieldref_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 #ifdef SEGV_EXCEPTION
@@ -100,6 +101,7 @@ jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
+jl_sym_t *fieldref_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;

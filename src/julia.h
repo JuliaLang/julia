@@ -566,6 +566,7 @@ extern JL_DLLEXPORT jl_value_t *jl_array_any_type;
 extern JL_DLLEXPORT jl_value_t *jl_array_symbol_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_expr_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_symbolnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_fieldref_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type;
