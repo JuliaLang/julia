@@ -64,11 +64,11 @@ The following example illustrates good working style::
     f (generic function with 1 method)
 
     julia> @time f(1)
-    elapsed time: 0.008217942 seconds (93784 bytes allocated)
+    elapsed time: 0.004710563 seconds (93504 bytes allocated)
     0.5
-
+    
     julia> @time f(10^6)
-    elapsed time: 0.063418472 seconds (32002136 bytes allocated)
+    elapsed time: 0.04123202 seconds (32002136 bytes allocated)
     2.5000025e11
 
 On the first call (``@time f(1)``), ``f`` gets compiled.  (If you've
@@ -87,10 +87,14 @@ seriously and follow the advice below.
 
 As a teaser, note that an improved version of this function allocates
 no memory (except to pass back the result back to the REPL) and has
-thirty-fold faster execution::
+an order of magnitude faster execution after the first call::
 
+    julia> @time f_improved(1)   # first call
+    elapsed time: 0.003702172 seconds (78944 bytes allocated)
+    0.5
+    
     julia> @time f_improved(10^6)
-    elapsed time: 0.00253829 seconds (112 bytes allocated)
+    elapsed time: 0.004313644 seconds (112 bytes allocated)
     2.5000025e11
 
 Below you'll learn how to spot the problem with ``f`` and how to fix it.
