@@ -120,8 +120,8 @@ exp10(x::Integer) = exp10(float(x))
 @vectorize_1arg Number exp10
 
 # functions that return NaN on non-NaN argument for domain error
-for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log2, :log10,
-          :lgamma)
+for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
+          :lgamma, :log1p)
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
@@ -369,10 +369,13 @@ function mod2pi(x::Int64)
 end
 
 # More special functions
-include("special/log.jl")
 include("special/trig.jl")
 include("special/bessel.jl")
 include("special/erf.jl")
 include("special/gamma.jl")
+
+module JuliaLibm
+include("special/log.jl")
+end
 
 end # module
