@@ -252,7 +252,7 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
-function collect(T::Type, itr)
+function collect{T}(::Type{T}, itr)
     if applicable(length, itr)
         # when length() isn't defined this branch might pollute the
         # type of the other.
