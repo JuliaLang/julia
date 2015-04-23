@@ -86,11 +86,10 @@ generated for your function is far from optimal. Take such indications
 seriously and follow the advice below.
 
 As a teaser, note that an improved version of this function allocates
-no memory (except to pass back the result back to the REPL) and has
-thirty-fold faster execution::
+no additional memory and has thirty-fold faster execution::
 
     julia> @time f_improved(10^6)
-    elapsed time: 0.00253829 seconds (112 bytes allocated)
+    elapsed time: 0.00253829 seconds (75344 bytes allocated)
     2.5000025e11
 
 Below you'll learn how to spot the problem with ``f`` and how to fix it.
