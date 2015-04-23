@@ -1907,7 +1907,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int64, nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
 @test rationalize(Int128,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
 @test rationalize(BigInt,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=1.5eps(big(0.1))) == 1//10
+@test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=1.5eps(big(0.1))) == 1//10
 @test rationalize(Int64, nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
 @test rationalize(Int128,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
 @test rationalize(BigInt,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
@@ -1916,12 +1916,12 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int64, prevfloat(0.1)) == 1//10
 @test rationalize(Int128,prevfloat(0.1)) == 1//10
 @test rationalize(BigInt,prevfloat(0.1)) == 1//10
-@test rationalize(BigInt,prevfloat(BigFloat("0.1"))) == 1//10
+@test rationalize(BigInt,prevfloat(parse(BigFloat,"0.1"))) == 1//10
 @test rationalize(Int64, prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 @test rationalize(Int128,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 @test rationalize(BigInt,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 
-@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
+@test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
 
 
 @test rationalize(Int8, 200f0) == 1//0

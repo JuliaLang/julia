@@ -529,3 +529,6 @@ export float32_isvalid, float64_isvalid
 @deprecate parseint(T::Type, s, base) parse(T, s, base)
 
 @deprecate linrange linspace
+
+@deprecate BigFloat(s::AbstractString) parse(BigFloat,s)
+@deprecate BigInt(s::AbstractString) parse(BigInt,s)
