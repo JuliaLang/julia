@@ -7,6 +7,7 @@
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
 import Base.unsafe_trunc
+import Base.Math.@horner
 
 # Float64 lookup table.
 # to generate values:

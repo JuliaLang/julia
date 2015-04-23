@@ -413,16 +413,16 @@ for x in X
         for T in (Float32,Float64)
             xt = T(x)
 
-            y = log(xt)
+            y = Base.Math.JuliaLibm.log(xt)
             yb = log(big(xt))
             @test abs(y-yb) <= 0.56*eps(T(yb))
 
-            y = log1p(xt)
+            y = Base.Math.JuliaLibm.log1p(xt)
             yb = log1p(big(xt))
             @test abs(y-yb) <= 0.56*eps(T(yb))
 
             if n <= 0
-                y = log1p(-xt)
+                y = Base.Math.JuliaLibm.log1p(-xt)
                 yb = log1p(big(-xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
             end
