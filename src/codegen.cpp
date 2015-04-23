@@ -581,6 +581,10 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static bool might_need_root(jl_value_t *ex);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
+static Value *emit_call_function_object(jl_function_t *f, Value *theF,
+                                        Value *theFptr, bool specialized,
+                                        jl_value_t **args, size_t nargs,
+                                        jl_codectx_t *ctx);
 static void emit_gcpop(jl_codectx_t *ctx);
 static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx);
 static void finalize_gc_frame(jl_codectx_t *ctx);
@@ -2441,6 +2445,52 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return literal_pointer_val(ty);
             }
         }
+    }
+    else if (f->fptr == &jl_f_invoke && nargs >= 2 &&
+             expr_type(args[1], ctx) == (jl_value_t*)jl_function_type) {
+        // Get function
+        rt1 = static_eval(args[1], ctx);
+        f = (jl_function_t*)rt1;
+        if (!f || !jl_is_gf(f)) {
+            JL_GC_POP();
+            return NULL;
+        }
+        // Get types
+        jl_value_t *type_types = expr_type(args[2], ctx);
+        rt2 = type_types;
+        // Only accept Type{Tuple{...}}
+        if (!jl_is_type_type(type_types) ||
+            !jl_is_tuple_type(jl_tparam0(type_types))) {
+            JL_GC_POP();
+            return NULL;
+        }
+        rt2 = jl_tparam0(type_types);
+        // Get types of real arguments
+        jl_svec_t *aty = call_arg_types(&args[3], nargs - 2, ctx);
+        if (!aty) {
+            JL_GC_POP();
+            return NULL;
+        }
+        rt3 = (jl_value_t*)aty;
+        rt3 = (jl_value_t*)jl_apply_tuple_type(aty);
+        jl_function_t *mfunc =
+            jl_gf_invoke_get_specialization(f, (jl_tupletype_t*)rt2,
+                                            (jl_tupletype_t*)rt3);
+        JL_GC_POP();
+        if (mfunc == NULL) {
+            return NULL;
+        }
+        JL_GC_PUSH1(&mfunc);
+        if (!is_constant(args[2], ctx))
+            emit_expr(args[2], ctx);
+        assert(mfunc->linfo->functionObject != NULL);
+        // NOTE: This function object can be garbage collected after codegen
+        Value *_theF = literal_pointer_val((jl_value_t*)mfunc);
+        Value *_theFptr = (Value*)mfunc->linfo->functionObject;
+        Value *res = emit_call_function_object(mfunc, _theF, _theFptr, true,
+                                               args + 2, nargs - 2, ctx);
+        JL_GC_POP();
+        return res;
     }
     // TODO: other known builtins
     JL_GC_POP();
