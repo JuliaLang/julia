@@ -66,7 +66,7 @@ The following example illustrates good working style::
     julia> @time f(1)
     elapsed time: 0.004710563 seconds (93504 bytes allocated)
     0.5
-    
+
     julia> @time f(10^6)
     elapsed time: 0.04123202 seconds (32002136 bytes allocated)
     2.5000025e11
@@ -92,7 +92,7 @@ an order of magnitude faster execution after the first call::
     julia> @time f_improved(1)   # first call
     elapsed time: 0.003702172 seconds (78944 bytes allocated)
     0.5
-    
+
     julia> @time f_improved(10^6)
     elapsed time: 0.004313644 seconds (112 bytes allocated)
     2.5000025e11
