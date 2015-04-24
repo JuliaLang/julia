@@ -42,3 +42,36 @@ Crouton, you can do so by following these tutorials.
 # Building LLVM on ARM
 
 - If you run in to issues building LLVM, see these notes: [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
+
+# For the Raspberry Pi version 2 (RPi2)
+
+Success in building Julia has been reported using the following procedure:
+
+1.  Download the [LLVM 3.6.0 binaries for ARMv7a] (http://llvm.org/releases/3.6.0/clang+llvm-3.6.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
+2.  For each file in the extracted `bin`, `include`, and `lib` subdirectories, create symlinks from the corresponding directory under `/usr/local`.
+3.  Using the `Make.arm` configuration below, build Julia using `make -j 2`
+
+Note that the resulting Julia binary may fail various tests but will run code and provide the REPL.
+
+`Make.arm` for RPi2:
+
+```
+override LLVM_ASSERTIONS=1
+LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --with-fpu=neon --enable-targets=arm --enable-optimized --enable-assertions"
+
+override OPENBLAS_DYNAMIC_ARCH=0
+override OPENBLAS_TARGET_ARCH=ARMV7
+override USE_BLAS64=0
+
+override USE_SYSTEM_LIBM=1
+override USE_SYSTEM_FFTW=1
+override USE_SYSTEM_GMP=1
+override USE_SYSTEM_MPFR=1
+override USE_SYSTEM_LAPACK=1
+
+JCFLAGS += -fsigned-char
+
+override USE_SYSTEM_LLVM=1
+override USE_SYSTEM_BLAS=1
+```
+
