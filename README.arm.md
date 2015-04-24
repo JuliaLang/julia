@@ -47,9 +47,11 @@ Crouton, you can do so by following these tutorials.
 
 Success in building Julia has been reported using the following procedure:
 
-1.  Download the [LLVM 3.6.0 binaries for ARMv7a] (http://llvm.org/releases/3.6.0/clang+llvm-3.6.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
-2.  For each file in the extracted `bin`, `include`, and `lib` subdirectories, create symlinks from the corresponding directory under `/usr/local`.
-3.  Using the `Make.arm` configuration below, build Julia using `make -j 2`
+1.  Follow the steps above to install the `build-essentals` and other packages required for ARM
+2.  Install FFTW and libedit using `sudo apt-get install libfftw3-3 libedit-dev`
+3.  Download the [LLVM 3.6.0 binaries for ARMv7a] (http://llvm.org/releases/3.6.0/clang+llvm-3.6.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
+4.  For each file in the extracted `bin`, `include`, and `lib` subdirectories, create symlinks from the corresponding directory under `/usr/local`.
+5.  Using the `Make.arm` configuration below, build Julia using `make -j 2`
 
 Note that the resulting Julia binary may fail various tests but will run code and provide the REPL.
 
