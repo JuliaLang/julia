@@ -9,18 +9,12 @@
 #include <llvm/DebugInfo/DIContext.h>
 #endif
 #include <llvm/Support/MemoryBuffer.h>
-#ifdef LLVM33
 #include <llvm/IR/Function.h>
 #include <llvm/ADT/StringRef.h>
-#else
-#include <llvm/Function.h>
-#endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
-#elif defined(LLVM32)
-#include <llvm/DebugInfo.h>
 #else
-#include <llvm/Analysis/DebugInfo.h>
+#include <llvm/DebugInfo.h>
 #endif
 #ifdef USE_MCJIT
 #ifndef LLVM36
