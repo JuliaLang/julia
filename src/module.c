@@ -152,20 +152,34 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
     }
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND || b->owner == NULL) {
+        jl_module_t *owner = NULL;
         for(int i=(int)m->usings.len-1; i >= 0; --i) {
             jl_module_t *imp = (jl_module_t*)m->usings.items[i];
-            b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
-            if (b != HT_NOTFOUND && b->exportp) {
-                b = jl_get_binding_(imp, var, &top);
-                if (b == NULL || b->owner == NULL)
+            jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+            if (tempb != HT_NOTFOUND && tempb->exportp) {
+                tempb = jl_get_binding_(imp, var, &top);
+                if (tempb == NULL || tempb->owner == NULL)
                     // couldn't resolve; try next using (see issue #6105)
                     continue;
-                // do a full import to prevent the result of this lookup
-                // from changing, for example if this var is assigned to
-                // later.
-                module_import_(m, b->owner, var, 0);
-                return b;
+                if (owner != NULL && tempb->owner != b->owner &&
+                    !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
+                    jl_printf(JL_STDERR,
+                              "Warning: both %s and %s export %s; uses of it in module %s must be qualified\n",
+                              owner->name->name, imp->name->name, var->name, m->name->name);
+                    // mark this binding resolved, to avoid repeating the warning
+                    (void)jl_get_binding_wr(m, var);
+                    return NULL;
+                }
+                owner = imp;
+                b = tempb;
             }
+        }
+        if (owner != NULL) {
+            // do a full import to prevent the result of this lookup
+            // from changing, for example if this var is assigned to
+            // later.
+            module_import_(m, b->owner, var, 0);
+            return b;
         }
         return NULL;
     }
@@ -185,6 +199,14 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
     if (a->name == b->name && a->owner == b->owner) return 1;
     if (a->constp && a->value && b->constp && b->value == a->value) return 1;
     return 0;
+}
+
+// does module m explicitly import s?
+int jl_is_imported(jl_module_t *m, jl_sym_t *s)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
+    jl_binding_t *bto = *bp;
+    return (bto != HT_NOTFOUND && bto->imported);
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
