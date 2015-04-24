@@ -2795,3 +2795,11 @@ invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 typealias TupleType10978{T<:Tuple} Type{T}
 f10978(T::TupleType10978) = isa(T, TupleType10978)
 @test f10978(Tuple{Int})
+
+# issue #10995
+#typealias TupleType{T<:Tuple} Type{T};
+f10995(::Any) = (while false; end; nothing)
+f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
+g10995(x) = f10995(typeof(x))
+g10995((1, 2))
+@test g10995(UInt8) === nothing
