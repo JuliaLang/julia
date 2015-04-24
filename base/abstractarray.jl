@@ -665,7 +665,7 @@ function cat(catdims, X...)
     cat_t(catdims, T, X...)
 end
 
-function cat_t(catdims, typeC::Type, X...)
+function cat_t{typeC}(catdims, ::Type{typeC}, X...)
     catdims = collect(catdims)
     nargs = length(X)
     ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
@@ -711,8 +711,8 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-typed_vcat(T::Type, X...) = cat_t(1, T, X...)
-typed_hcat(T::Type, X...) = cat_t(2, T, X...)
+typed_vcat{T}(::Type{T}, X...) = cat_t(1, T, X...)
+typed_hcat{T}(::Type{T}, X...) = cat_t(2, T, X...)
 
 cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
@@ -721,8 +721,8 @@ cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 vcat(A::AbstractArray...) = cat(1, A...)
 hcat(A::AbstractArray...) = cat(2, A...)
 
-typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
-typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
+typed_vcat{T}(::Type{T}, A::AbstractArray...) = cat_t(1, T, A...)
+typed_hcat{T}(::Type{T}, A::AbstractArray...) = cat_t(2, T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -814,7 +814,7 @@ function hvcat_fill(a, xs)
     a
 end
 
-function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
+function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...)
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
@@ -846,7 +846,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, as...)
     vcat(rs...)
 end
 
-function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as...)
+function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
     rs = cell(nbr)
     a = 1

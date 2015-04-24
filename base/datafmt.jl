@@ -38,16 +38,16 @@ function countlines(io::IO, eol::Char)
     nl
 end
 
-readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm, T, '\n'; opts...)
-readdlm(input, dlm::Char, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts...)
+readdlm{T}(input, ::Type{T}; opts...) = readdlm(input, invalid_dlm, T, '\n'; opts...)
+readdlm{T}(input, dlm::Char, ::Type{T}; opts...) = readdlm(input, dlm, T, '\n'; opts...)
 
 readdlm(input; opts...) = readdlm(input, invalid_dlm, '\n'; opts...)
 readdlm(input, dlm::Char; opts...) = readdlm(input, dlm, '\n'; opts...)
 
 readdlm(input, dlm::Char, eol::Char; opts...) = readdlm_auto(input, dlm, Float64, eol, true; opts...)
-readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm, T, eol, false; opts...)
+readdlm{T}(input, dlm::Char, ::Type{T}, eol::Char; opts...) = readdlm_auto(input, dlm, T, eol, false; opts...)
 
-function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
+function readdlm_auto{T}(input, dlm::Char, ::Type{T}, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, @windows ? false : true)
     isa(input, AbstractString) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
@@ -241,7 +241,7 @@ function result{T}(dlmstore::DLMStore{T})
 end
 
 
-function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
+function readdlm_string{T}(sbuff::ByteString, dlm::Char, ::Type{T}, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm)
     quotes = get(optsd, :quotes, true)
     comments = get(optsd, :comments, true)
@@ -298,7 +298,7 @@ function val_opts(opts)
     d
 end
 
-function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::ByteString, auto::Bool, eol::Char)
+function dlm_fill{T}(::Type{T}, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::ByteString, auto::Bool, eol::Char)
     idx = 1
     offidx = 1
     offsets = offarr[1]
@@ -530,7 +530,7 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
 end
 
 readcsv(io; opts...)          = readdlm(io, ','; opts...)
-readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
+readcsv{T}(io, ::Type{T}; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint, dlm, quotes) = print_shortest(io, elt)
