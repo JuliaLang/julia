@@ -622,7 +622,8 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     tt->super = (jl_datatype_t*)super;
     gc_wb(tt, tt->super);
     if (jl_svec_len(tt->parameters) > 0) {
-        tt->name->cache = (jl_value_t*)jl_emptysvec;
+        tt->name->cache = jl_emptysvec;
+        tt->name->linearcache = jl_emptysvec;
         jl_reinstantiate_inner_types(tt);
     }
 }
