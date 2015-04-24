@@ -42,25 +42,32 @@ static long system_page_size;
 
 // malloc wrappers, aligned allocation
 
-#ifdef _P64
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#if defined(_P64) || defined(__APPLE__)
+#define malloc_a16(sz) malloc(sz)
+#define realloc_a16(p, sz, oldsz) realloc((p), (sz))
 #define free_a16(p) free(p)
 
 #elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
-#define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
+#define malloc_a16(sz) _aligned_malloc((sz)?(sz):1, 16)
+#define realloc_a16(p, sz, oldsz) _aligned_realloc((sz)?(sz):1, 16)
 #define free_a16(p) _aligned_free(p)
-
-#elif defined(__APPLE__)
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
-#define free_a16(p) free(p)
 
 #else
 static inline void *malloc_a16(size_t sz)
 {
     void *ptr;
-    if (posix_memalign(&ptr, 16, (sz+15)&-16))
+    if (posix_memalign(&ptr, 16, sz))
         return NULL;
     return ptr;
+}
+static inline void *realloc_a16(void *d, size_t sz, size_t oldsz)
+{
+    void *b = malloc_a16(sz);
+    if (b != NULL) {
+        memcpy(b, d, oldsz);
+        free(d);
+    }
+    return b;
 }
 #define free_a16(p) free(p)
 #endif
@@ -266,21 +273,26 @@ static uint8_t *page_age(gcpage_t *pg)
 typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t **prev; // pointer to the next field of the prev entry
-    size_t sz;
     union {
-        uptrint_t _pad0;
+        size_t sz;
         uptrint_t age : 2;
     };
-    // must be 16-aligned here, in 32 & 64b
     union {
+        //jl_value_t *type;
+        uptrint_t header;
         uptrint_t flags;
         uptrint_t gc_bits:2;
-        char _data[1];
     };
+    // Work around a bug affecting gcc up to (at least) version 4.4.7
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
+#if !defined(_COMPILER_MICROSOFT_)
+    int _dummy[0];
+#endif
+    // must be 16-aligned here, in 32 & 64b
+    char data[];
 } bigval_t;
 
-#define BVOFFS (offsetof(bigval_t, _data)/sizeof(void*))
-#define bigval_header(data) ((bigval_t*)((char*)(data) - BVOFFS*sizeof(void*)))
+#define bigval_header(data) container_of((data), bigval_t, header)
 
 // data structure for tracking malloc'd arrays.
 
@@ -551,11 +563,11 @@ static inline int gc_setmark_big(void *o, int mark_mode)
     }
     if (!(bits & GC_MARKED)) {
         if (mark_mode == GC_MARKED)
-            perm_scanned_bytes += hdr->sz;
+            perm_scanned_bytes += hdr->sz&~3;
         else
-            scanned_bytes += hdr->sz;
+            scanned_bytes += hdr->sz&~3;
 #ifdef OBJPROFILE
-        objprofile_count(jl_typeof(o), mark_mode == GC_MARKED, hdr->sz);
+        objprofile_count(jl_typeof(o), mark_mode == GC_MARKED, hdr->sz&~3);
 #endif
     }
     _gc_setmark(o, mark_mode);
@@ -815,10 +827,10 @@ static void sweep_weak_refs(void)
 static NOINLINE void *alloc_big(size_t sz)
 {
     maybe_collect();
-    size_t offs = BVOFFS*sizeof(void*);
-    if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
+    size_t offs = offsetof(bigval_t, header);
+    size_t allocsz = LLT_ALIGN(sz + offs, 16);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-    size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
     allocd_bytes += allocsz;
     if (v == NULL)
@@ -836,8 +848,7 @@ static NOINLINE void *alloc_big(size_t sz)
             v->next->prev = &v->next;
         big_objects = v;
     END
-    void* ptr = &v->_data[0];
-    return ptr;
+    return (void*)&v->header;
 }
 
 static int big_total;
@@ -851,10 +862,10 @@ static bigval_t** sweep_big_list(int sweep_mask, bigval_t** pv)
     bigval_t *v = *pv;
     while (v != NULL) {
         bigval_t *nxt = v->next;
-        if (gc_marked(&v->_data)) {
+        if (gc_marked(&v->header)) {
             pv = &v->next;
             int age = v->age;
-            int bits = gc_bits(&v->_data);
+            int bits = gc_bits(&v->header);
             if (age >= PROMOTE_AGE) {
                 if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
                     bits = GC_QUEUED;
@@ -868,16 +879,16 @@ static bigval_t** sweep_big_list(int sweep_mask, bigval_t** pv)
                     big_reset++;
                 }
             }
-            gc_bits(&v->_data) = bits;
+            gc_bits(&v->header) = bits;
         }
         else {
             // Remove v from list and free it
             *pv = nxt;
             if (nxt)
                 nxt->prev = pv;
-            freed_bytes += v->sz;
+            freed_bytes += v->sz&~3;
 #ifdef MEMDEBUG
-            memset(v, 0xbb, v->sz);
+            memset(v, 0xbb, v->sz&~3);
 #endif
             free_a16(v);
             big_freed++;
@@ -2328,26 +2339,30 @@ void jl_gc_collect(int full)
 void *allocb(size_t sz)
 {
     buff_t *b;
-    sz += sizeof(void*);
+    size_t allocsz = sz + sizeof(buff_t);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
 #ifdef MEMDEBUG
-    b = (buff_t*)alloc_big(sz);
+    b = (buff_t*)alloc_big(allocsz);
     b->header = 0x4EADE800;
     b->pooled = 0;
 #else
-    if (sz > 2048) {
-        b = (buff_t*)alloc_big(sz);
+    if (allocsz > 2048) {
+        b = (buff_t*)alloc_big(allocsz);
         b->header = 0x4EADE800;
         b->pooled = 0;
     }
     else {
-        b = (buff_t*)pool_alloc(&pools[szclass(sz)]);
+        b = (buff_t*)pool_alloc(&pools[szclass(allocsz)]);
         b->header = 0x4EADE800;
         b->pooled = 1;
     }
 #endif
-    return &b->data;
+    return &b->data[0];
 }
 
+/* this function is horribly broken in that it is unable to fix the bigval_t pointer chain after the realloc
+ * so it is basically just completely invalid in the bigval_t case
 void *reallocb(void *b, size_t sz)
 {
     buff_t *buff = gc_val_buf(b);
@@ -2357,21 +2372,30 @@ void *reallocb(void *b, size_t sz)
         return b2;
     }
     else {
-        bigval_t* bv = (bigval_t*)realloc(bigval_header(buff), sz + (BVOFFS + 1)*sizeof(void*));
-        return (char*)bv + (BVOFFS + 1)*sizeof(void*);
+        size_t allocsz = LLT_ALIGN(sz + sizeof(bigval_t), 16);
+        if (allocsz < sz)  // overflow in adding offs, size was "negative"
+            jl_throw(jl_memory_exception);
+        bigval_t *bv = bigval_header(buff);
+        bv = (bigval_t*)realloc_a16(bv, allocsz, bv->sz&~3);
+        if (bv == NULL)
+            jl_throw(jl_memory_exception);
+        return &bv->data[0];
     }
 }
+*/
 
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
-    sz += sizeof(jl_taggedvalue_t);
+    size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (allocsz < sz) // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
 #ifdef MEMDEBUG
-    return jl_valueof(alloc_big(sz));
+    return jl_valueof(alloc_big(allocsz));
 #endif
-    if (sz <= 2048)
-        return jl_valueof(pool_alloc(&pools[szclass(sz)]));
+    if (allocsz <= 2048)
+        return jl_valueof(pool_alloc(&pools[szclass(allocsz)]));
     else
-        return jl_valueof(alloc_big(sz));
+        return jl_valueof(alloc_big(allocsz));
 }
 
 DLLEXPORT jl_value_t *alloc_1w(void)
@@ -2566,7 +2590,7 @@ static void big_obj_stats(void)
     while (v != NULL) {
         if (gc_marked(&v->_data)) {
             nused++;
-            nbytes += v->sz;
+            nbytes += v->sz&~3;
         }
         v = v->next;
     }
@@ -2575,7 +2599,7 @@ static void big_obj_stats(void)
     while (v != NULL) {
         if (gc_marked(&v->_data)) {
             nused_old++;
-            nbytes_old += v->sz;
+            nbytes_old += v->sz&~3;
         }
         v = v->next;
     }
@@ -2596,9 +2620,11 @@ static void big_obj_stats(void)
 #else //JL_GC_MARKSWEEP
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
-    sz += sizeof(jl_taggedvalue_t);
-    allocd_bytes += sz;
-    return jl_valueof(malloc(sz));
+    size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+    allocd_bytes += allocsz;
+    return jl_valueof(malloc(allocsz));
 }
 int64_t diff_gc_total_bytes(void)
 {
@@ -2647,8 +2673,10 @@ DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     maybe_collect();
     allocd_bytes += sz;
-    sz = (sz+15) & -16;
-    void *b = malloc_a16(sz);
+    size_t allocsz = LLT_ALIGN(sz, 16);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+    void *b = malloc_a16(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     return b;
@@ -2658,34 +2686,24 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
 {
     maybe_collect();
 
+    size_t allocsz = LLT_ALIGN(sz, 16);
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+
 #ifdef JL_GC_MARKSWEEP
     if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
-        perm_scanned_bytes += sz - oldsz;
-        live_bytes += sz - oldsz;
+        perm_scanned_bytes += allocsz - oldsz;
+        live_bytes += allocsz - oldsz;
     }
     else
 #endif
-    allocd_bytes += sz - oldsz;
+    allocd_bytes += allocsz - oldsz;
 
-    sz = (sz+15) & -16;
     void *b;
-#ifdef _P64
-    b = realloc(d, sz);
-#elif defined(_OS_WINDOWS_)
     if (isaligned)
-        b = _aligned_realloc(d, sz, 16);
+        b = realloc_a16(d, allocsz, oldsz);
     else
-        b = realloc(d, sz);
-#elif defined(__APPLE__)
-    b = realloc(d, sz);
-#else
-    // TODO better aligned realloc here
-    b = malloc_a16(sz);
-    if (b != NULL) {
-        memcpy(b, d, oldsz);
-        if (isaligned) free_a16(d); else free(d);
-    }
-#endif
+        b = realloc(d, allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
 
