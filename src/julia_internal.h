@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+extern size_t jl_page_size;
+
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
     jl_value_t *jv = NULL;
@@ -78,7 +80,8 @@ int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
-jl_datatype_t *jl_inst_concrete_tupletype(jl_value_t **p, size_t np);
+jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
+jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);

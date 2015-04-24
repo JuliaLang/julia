@@ -375,7 +375,6 @@ JL_CALLABLE(jl_f_typeassert)
 }
 
 static jl_function_t *jl_append_any_func;
-extern size_t jl_page_size;
 
 JL_CALLABLE(jl_f_apply)
 {
@@ -616,11 +615,21 @@ JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
     if (nargs == 0) return (jl_value_t*)jl_emptytuple;
-    jl_value_t **types = alloca(nargs*sizeof(jl_value_t*));
-    for(i=0; i < nargs; i++) {
-        types[i] = jl_typeof(args[i]);
+    jl_datatype_t *tt;
+    if (nargs < jl_page_size/sizeof(jl_value_t*)) {
+        jl_value_t **types = alloca(nargs*sizeof(jl_value_t*));
+        for(i=0; i < nargs; i++)
+            types[i] = jl_typeof(args[i]);
+        tt = jl_inst_concrete_tupletype_v(types, nargs);
     }
-    jl_datatype_t *tt = jl_inst_concrete_tupletype(types, nargs);
+    else {
+        jl_svec_t *types = jl_alloc_svec_uninit(nargs);
+        JL_GC_PUSH1(&types);
+        for(i=0; i < nargs; i++)
+            jl_svecset(types, i, jl_typeof(args[i]));
+        tt = jl_inst_concrete_tupletype(types);
+        JL_GC_POP();
+    }
     return jl_new_structv(tt, args, nargs);
 }
 
