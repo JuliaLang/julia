@@ -163,9 +163,12 @@ void jl_finalize(jl_value_t *o)
 
 #ifdef JL_GC_MARKSWEEP
 
-typedef struct {
+typedef struct _buff_t {
     union {
         uintptr_t header;
+        struct _buff_t *next;
+        uptrint_t flags;
+        jl_value_t *type;
         struct {
             uintptr_t gc_bits:2;
             uintptr_t pooled:1;
@@ -178,14 +181,7 @@ typedef struct {
 #endif
     char data[];
 } buff_t;
-
-typedef struct _gcval_t {
-    union {
-        struct _gcval_t *next;
-        uptrint_t flags;
-        uptrint_t gc_bits:2;
-    };
-} gcval_t;
+typedef buff_t gcval_t;
 
 // layout for small (<2k) objects
 
@@ -277,8 +273,8 @@ typedef struct _bigval_t {
         size_t sz;
         uptrint_t age : 2;
     };
+    //struct buff_t <>;
     union {
-        //jl_value_t *type;
         uptrint_t header;
         uptrint_t flags;
         uptrint_t gc_bits:2;
@@ -338,7 +334,11 @@ HEAP_DECL arraylist_t *remset;
 HEAP_DECL arraylist_t *last_remset;
 
 // variables for allocating objects from pools
-#define N_POOLS 42
+#ifdef _P64
+#define N_POOLS 41
+#else
+#define N_POOLS 43
+#endif
 HEAP_DECL pool_t norm_pools[N_POOLS];
 
 // End of Variables that become fields of a thread-local struct in the thread-safe version.
@@ -611,7 +611,7 @@ static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 #ifdef MEMDEBUG
     return gc_setmark_big(o, mark_mode);
 #endif
-    if (sz <= 2048)
+    if (sz <= GC_MAX_SZCLASS + sizeof(buff_t))
         return gc_setmark_pool(o, mark_mode);
     else
         return gc_setmark_big(o, mark_mode);
@@ -1072,6 +1072,7 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 }
 
 // use this variant when osize is statically known
+// and is definitely in sizeclasses
 // GC_POOL_END_OFS uses an integer division
 static inline void *_pool_alloc(pool_t *p, int osize)
 {
@@ -1083,32 +1084,57 @@ static inline void *pool_alloc(pool_t *p)
     return __pool_alloc(p, p->osize, p->end_offset);
 }
 
+// pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int sizeclasses[N_POOLS] = {
-    8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56,
-    64, 72, 80, 88, 96, //#=18
-
-    112, 128, 144, 160, 176, 192, 208, 224, 240, 256,
-
-    288, 320, 352, 384, 416, 448, 480, 512,
-
-    640, 768, 896, 1024,
-
-    1536, 2048 };
-
-static int szclass(size_t sz)
-{
-#ifndef _P64
-    if     (sz <=    8) return 0;
+#ifdef _P64
+    8,
+#else
+    4, 8, 12,
 #endif
-    if     (sz <=   56) return ((sz+3)/4) - 2;
-    if     (sz <=   96) return ((sz+7)/8) + 5;
-    if     (sz <=  512) {
-        if (sz <=  256) return ((sz+15)-112)/16 + 18;
-        else            return ((sz+31)-288)/32 + 28;
-    }
-    if     (sz <= 1024) return ((sz+127)-640)/128 + 36;
-    if     (sz <= 1536) return 40;
-    return 41;
+
+    // 16 pools at 16-byte spacing
+    16, 32, 48, 64, 80, 96, 112, 128,
+    144, 160, 176, 192, 208, 224, 240, 256,
+
+    // the following tables are computed for maximum packing efficiency via the formula:
+    // sz=(div(2^14-8,rng)÷16)*16; hcat(sz, (2^14-8)÷sz, 2^14-(2^14-8)÷sz.*sz)'
+
+    // rng = 60:-4:32 (8 pools)
+    272, 288, 304, 336, 368, 400, 448, 496,
+//   60,  56,  53,  48,  44,  40,  36,  33, /pool
+//   64, 256, 272, 256, 192, 384, 256,  16, bytes lost
+
+    // rng = 30:-2:16 (8 pools)
+    544, 576, 624, 672, 736, 816, 896, 1008,
+//   30,  28,  26,  24,  22,  20,  18,  16, /pool
+//   64, 256, 160, 256, 192,  64, 256, 256, bytes lost
+
+    // rng = 15:-1:8 (8 pools)
+    1088, 1168, 1248, 1360, 1488, 1632, 1808, 2032
+//    15,   14,   13,   12,   11,   10,    9,    8, /pool
+//    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
+};
+
+
+static inline int szclass(size_t sz)
+{
+#ifdef _P64
+    if (sz <=    8)
+        return 0;
+    const int N = 0;
+#else
+    if (sz <=   12)
+        return (sz + 3) / 4 - 1;
+    const int N = 2;
+#endif
+    if (sz <=  256)
+        return (sz + 15) / 16 + N;
+    if (sz <=  496)
+        return 16 - 16376 / 4 / LLT_ALIGN(sz, 16 * 4) + 16 + N;
+    if (sz <= 1008)
+        return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
+    assert(sz <= GC_MAX_SZCLASS + sizeof(buff_t) && sizeclasses[N_POOLS-1] == GC_MAX_SZCLASS + sizeof(buff_t));
+    return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
 }
 
 static int check_timeout = 0;
@@ -2347,7 +2373,7 @@ void *allocb(size_t sz)
     b->header = 0x4EADE800;
     b->pooled = 0;
 #else
-    if (allocsz > 2048) {
+    if (allocsz > GC_MAX_SZCLASS + sizeof(buff_t)) {
         b = (buff_t*)alloc_big(allocsz);
         b->header = 0x4EADE800;
         b->pooled = 0;
@@ -2392,15 +2418,24 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(allocsz));
 #endif
-    if (allocsz <= 2048)
+    if (allocsz <= GC_MAX_SZCLASS + sizeof(buff_t))
         return jl_valueof(pool_alloc(&pools[szclass(allocsz)]));
     else
         return jl_valueof(alloc_big(allocsz));
 }
 
+DLLEXPORT jl_value_t *alloc_0w(void)
+{
+    const int sz = sizeof(jl_taggedvalue_t);
+#ifdef MEMDEBUG
+    return jl_valueof(alloc_big(sz));
+#endif
+    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+}
+
 DLLEXPORT jl_value_t *alloc_1w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*);
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*), 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2409,7 +2444,7 @@ DLLEXPORT jl_value_t *alloc_1w(void)
 
 DLLEXPORT jl_value_t *alloc_2w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 2;
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 2, 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2418,7 +2453,7 @@ DLLEXPORT jl_value_t *alloc_2w(void)
 
 DLLEXPORT jl_value_t *alloc_3w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 3;
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 3, 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2460,7 +2495,8 @@ static void jl_mk_thread_heap(void) {
         const int* szc = sizeclasses;
         pool_t *p = HEAP(norm_pools);
         for(int i=0; i < N_POOLS; i++) {
-            assert(szc[i] % 4 == 0);
+            assert((szc[i] < 16 && szc[i] % sizeof(void*) == 0) ||
+                   (szc[i] % 16 == 0));
             p[i].osize = szc[i];
             p[i].freelist = NULL;
             p[i].newpages = NULL;
