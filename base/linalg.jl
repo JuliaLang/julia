@@ -69,6 +69,7 @@ export
     gradient,
     hessfact,
     hessfact!,
+    isdiag,
     ishermitian,
     isposdef,
     isposdef!,

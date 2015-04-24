@@ -78,8 +78,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     end
 end
 
-#Issue 10742
+# Issue 10742 and similar
 let A = Bidiagonal([1,2,3], [0,0], true)
     @test istril(A)
+    @test isdiag(A)
 end
-
