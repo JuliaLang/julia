@@ -2052,7 +2052,12 @@ DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np)
     return jl_apply_tuple_type_v_(p, np, NULL);
 }
 
-jl_datatype_t *jl_inst_concrete_tupletype(jl_value_t **p, size_t np)
+jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p)
+{
+    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 1, 0, NULL, NULL, 0);
+}
+
+jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np)
 {
     return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, 0, NULL, NULL, 0);
 }
@@ -2069,6 +2074,41 @@ static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
     }
     JL_GC_POP();
     return np;
+}
+
+static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
+                                 jl_typestack_t *stack, int check)
+{
+    jl_datatype_t *tt = (jl_datatype_t*)t;
+    jl_svec_t *tp = tt->parameters;
+    size_t ntp = jl_svec_len(tp);
+    jl_value_t **iparams;
+    int onstack = ntp < jl_page_size/sizeof(jl_value_t*);
+    JL_GC_PUSHARGS(iparams, onstack ? ntp : 1);
+    jl_svec_t *ip_heap=NULL;
+    if (!onstack) {
+        ip_heap = jl_alloc_svec(ntp);
+        iparams[0] = (jl_value_t*)ip_heap;
+        iparams = jl_svec_data(ip_heap);
+    }
+    int cacheable = 1, isabstract = 0;
+    if (jl_is_va_tuple(tt)) {
+        cacheable = 0; isabstract = 1;
+    }
+    int i;
+    for(i=0; i < ntp; i++) {
+        jl_value_t *elt = jl_svecref(tp, i);
+        iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
+        if (!isabstract && !jl_is_leaf_type(iparams[i])) {
+            cacheable = 0; isabstract = 1;
+        }
+        if (cacheable && jl_has_typevars_(iparams[i],0))
+            cacheable = 0;
+    }
+    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, isabstract,
+                                       stack, env, n);
+    JL_GC_POP();
+    return result;
 }
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
@@ -2109,47 +2149,37 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
     if (t == tc && stack!=NULL)
         return (jl_value_t*)t;
     assert(jl_is_datatype(tc));
+    if (tn == jl_tuple_typename)
+        return inst_tuple_w_(t, env, n, stack, check);
     size_t ntp = jl_svec_len(tp);
-    assert(tn==jl_tuple_typename || ntp == jl_svec_len(((jl_datatype_t*)tc)->parameters));
+    assert(ntp == jl_svec_len(((jl_datatype_t*)tc)->parameters));
     jl_value_t **iparams;
     JL_GC_PUSHARGS(iparams, ntp);
     int cacheable = 1, isabstract = 0, bound = 0;
-    if (tn == jl_tuple_typename && jl_is_va_tuple(tt)) {
-        cacheable = 0; isabstract = 1;
-    }
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         if (elt == t) {
             iparams[i] = t;
         }
         else {
-            if (tn == jl_tuple_typename) {
-                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
-                if (!jl_is_leaf_type(iparams[i])) {
-                    isabstract = 1;
-                    cacheable = 0;
+            jl_value_t *tv = jl_svecref(((jl_datatype_t*)tc)->parameters, i);
+            iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, elt != tv);
+            if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
+                if (!jl_subtype(iparams[i], tv, 0)) {
+                    jl_type_error_rt(tt->name->name->name,
+                                     ((jl_tvar_t*)tv)->name->name,
+                                     tv, iparams[i]);
                 }
             }
-            else {
-                jl_value_t *tv = jl_svecref(((jl_datatype_t*)tc)->parameters, i);
-                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, elt != tv);
-                if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
-                    if (!jl_subtype(iparams[i], tv, 0)) {
-                        jl_type_error_rt(tt->name->name->name,
-                                         ((jl_tvar_t*)tv)->name->name,
-                                         tv, iparams[i]);
+            if (!bound) {
+                for(j=0; j < n; j++) {
+                    if (env[j*2] == tv) {
+                        bound = 1; break;
                     }
                 }
-                if (!bound) {
-                    for(j=0; j < n; j++) {
-                        if (env[j*2] == tv) {
-                            bound = 1; break;
-                        }
-                    }
-                }
-                if (jl_is_typevar(iparams[i]))
-                    isabstract = 1;
             }
+            if (jl_is_typevar(iparams[i]))
+                isabstract = 1;
         }
         if (jl_has_typevars_(iparams[i],0))
             cacheable = 0;
