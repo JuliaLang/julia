@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JL_ARRAY_ALIGN(jl_value, nbytes) (LLT_ALIGN((jl_value)+sizeof(jl_taggedvalue_t), nbytes)-sizeof(jl_taggedvalue_t))
+#define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
 
 
 // array constructors ---------------------------------------------------------

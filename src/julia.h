@@ -101,9 +101,6 @@ typedef struct {
 #endif
         };
     };
-#ifdef _P64
-    uintptr_t realign16;
-#endif
     jl_value_t value;
 } jl_taggedvalue_t;
 
@@ -115,9 +112,6 @@ typedef struct {
 static inline void jl_set_typeof(void *v, void *t)
 {
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
-#ifdef _P64
-    tag->realign16 = 0xA1164A1164A11640ull;
-#endif
     tag->type = (jl_value_t*)t;
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))

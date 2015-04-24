@@ -184,6 +184,7 @@ typedef struct _gcval_t {
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+#define GC_PAGE_OFFSET (16 - (sizeof(jl_taggedvalue_t) % 16))
 
 // pool page metadata
 typedef struct _gcpage_t {
@@ -219,7 +220,7 @@ typedef struct {
     char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
-} region_t;
+} region_t __attribute__((aligned(GC_PAGE_SZ)));
 static region_t *regions[REGION_COUNT] = {NULL};
 // store a lower bound of the first free page in each region
 static int regions_lb[REGION_COUNT] = {0};
@@ -234,12 +235,12 @@ typedef struct _pool_t {
     uint16_t nfree;      // number of free objects in page pointed into by free_list
 } pool_t;
 
-#define PAGE_INDEX(region, data) ((GC_PAGE_DATA(data) - &(region)->pages[0][0])/GC_PAGE_SZ)
+#define PAGE_INDEX(region, data) ((GC_PAGE_DATA((data) - GC_PAGE_OFFSET) - &(region)->pages[0][0])/GC_PAGE_SZ)
 static region_t *find_region(void *ptr)
 {
     // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        if (regions[i] && (char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
+        if ((char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
             return regions[i];
     }
     assert(0 && "find_region failed");
@@ -257,7 +258,7 @@ static uint8_t *page_age(gcpage_t *pg)
     return pg->ages;
 }
 
-#define GC_POOL_END_OFS(osize) (((GC_PAGE_SZ/osize) - 1)*osize)
+#define GC_POOL_END_OFS(osize) ((((GC_PAGE_SZ - GC_PAGE_OFFSET)/(osize)) - 1)*(osize) + GC_PAGE_OFFSET)
 
 
 // layout for big (>2k) objects
@@ -701,7 +702,7 @@ static void free_page(void *p)
     int pg_idx = -1;
     int i;
     for(i = 0; i < REGION_COUNT && regions[i] != NULL; i++) {
-        pg_idx = PAGE_INDEX(regions[i], p);
+        pg_idx = PAGE_INDEX(regions[i], (char*)p+GC_PAGE_OFFSET);
         if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
     }
     assert(i < REGION_COUNT && regions[i] != NULL);
@@ -717,7 +718,7 @@ static void free_page(void *p)
         size_t n_pages = (GC_PAGE_SZ + system_page_size - 1) / GC_PAGE_SZ;
         decommit_size = system_page_size;
         p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(system_page_size - 1)); // round down to the nearest page
-        pg_idx = PAGE_INDEX(region, p);
+        pg_idx = PAGE_INDEX(region, (char*)p+GC_PAGE_OFFSET);
         if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
         for (; n_pages--; pg_idx++) {
             msk = (uint32_t)(1 << ((pg_idx % 32)));
@@ -985,15 +986,15 @@ static void sweep_malloced_arrays(void)
 static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
 {
     pg->gc_bits = 0;
-    pg->nfree = GC_PAGE_SZ/p->osize;
+    pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     pg->pool_n = p - norm_pools;
-    memset(page_age(pg), 0, (GC_PAGE_SZ/p->osize + 7)/8);
-    gcval_t *beg = (gcval_t*)pg->data;
+    memset(page_age(pg), 0, LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
+    gcval_t *beg = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
     gcval_t *end = (gcval_t*)((char*)beg + (pg->nfree - 1)*p->osize);
     end->next = fl;
     pg->allocd = 0;
-    pg->fl_begin_offset = 0;
-    pg->fl_end_offset = (char*)end - (char*)beg;
+    pg->fl_begin_offset = GC_PAGE_OFFSET;
+    pg->fl_end_offset = (char*)end - (char*)beg + GC_PAGE_OFFSET;
     return beg;
 }
 
@@ -1002,10 +1003,10 @@ static NOINLINE void add_page(pool_t *p)
     char *data = (char*)malloc_page();
     if (data == NULL)
         jl_throw(jl_memory_exception);
-    gcpage_t *pg = page_metadata(data);
+    gcpage_t *pg = page_metadata(data + GC_PAGE_OFFSET);
     pg->data = data;
     pg->osize = p->osize;
-    pg->ages = (uint8_t*)malloc((GC_PAGE_SZ/p->osize + 7)/8);
+    pg->ages = (uint8_t*)malloc(LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
     gcval_t *fl = reset_page(p, pg, p->newpages);
     p->newpages = fl;
 }
@@ -1132,7 +1133,7 @@ static void sweep_pool_region(int region_i, int sweep_mask)
             last = p->newpages;
             if (last) {
                 gcpage_t* pg = page_metadata(last);
-                pg->nfree = (GC_PAGE_SZ - ((char*)last - GC_PAGE_DATA(last)))/p->osize;
+                pg->nfree = (GC_PAGE_SZ - ((char*)last - GC_PAGE_DATA(last))) / p->osize;
                 pg->allocd = 1;
             }
             p->newpages = NULL;
@@ -1187,11 +1188,11 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     gcval_t *v;
     size_t old_nfree = 0, nfree = 0;
     int pg_freedall = 0, pg_total = 0, pg_skpd = 0;
-    int obj_per_page = GC_PAGE_SZ/osize;
+    int obj_per_page = (GC_PAGE_SZ - GC_PAGE_OFFSET)/osize;
     char *data = pg->data;
     uint8_t *ages = page_age(pg);
-    v = (gcval_t*)data;
-    char *lim = (char*)v + GC_PAGE_SZ - osize;
+    v = (gcval_t*)(data + GC_PAGE_OFFSET);
+    char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     freedall = 1;
     old_nfree += pg->nfree;
 
@@ -1909,10 +1910,10 @@ static void clear_mark(int bits)
             if (!!~line) {
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
-                        gcpage_t *pg = page_metadata(region->pages[pg_i*32 + j]);
+                        gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
                         pool_t *pool = &norm_pools[pg->pool_n];
-                        pv = (gcval_t*)pg->data;
-                        char *lim = (char*)pv + GC_PAGE_SZ - pool->osize;
+                        pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
+                        char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
                             if (!verifying) arraylist_push(&bits_save[gc_bits(pv)], pv);
                             gc_bits(pv) = bits;
@@ -2439,7 +2440,7 @@ static void jl_mk_thread_heap(void) {
             p[i].osize = szc[i];
             p[i].freelist = NULL;
             p[i].newpages = NULL;
-            p[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
+            p[i].end_offset = GC_POOL_END_OFS(szc[i]);
         }
         arraylist_new(&preserved_values, 0);
         arraylist_new(&weak_refs, 0);
@@ -2504,8 +2505,8 @@ static size_t pool_stats(pool_t *p, size_t *pwaste, size_t *np, size_t *pnold)
 
     while (pg != NULL) {
         npgs++;
-        v = (gcval_t*)pg->data;
-        char *lim = (char*)v + GC_PAGE_SZ - osize;
+        v = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
+        char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
         int i = 0;
         while ((char*)v <= lim) {
             if (!gc_marked(v)) {
@@ -2523,7 +2524,7 @@ static size_t pool_stats(pool_t *p, size_t *pwaste, size_t *np, size_t *pnold)
         gcpage_t *nextpg = NULL;
         pg = nextpg;
     }
-    *pwaste = npgs*GC_PAGE_SZ - (nused*p->osize);
+    *pwaste = npgs * GC_PAGE_SZ - (nused * p->osize);
     *np = npgs;
     *pnold = nold;
     if (npgs != 0) {
