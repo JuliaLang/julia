@@ -129,3 +129,8 @@ end
 
 # up-to-date character widths (#3721, #6939)
 @test charwidth('\U1f355') == strwidth("\U1f355") == strwidth(utf16("\U1f355")) == strwidth("\U1f355\u0302") == strwidth(utf16("\U1f355\u0302")) == 2
+
+# handling of embedded NUL chars (#10958)
+@test length("\0w") == length("\0α") == 2
+@test strwidth("\0w") == strwidth("\0α") == 1
+@test normalize_string("\0W", casefold=true) == "\0w"

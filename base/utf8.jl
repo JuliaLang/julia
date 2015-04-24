@@ -37,7 +37,8 @@ function endof(s::UTF8String)
     end
     i
 end
-length(s::UTF8String) = Int(ccall(:u8_strlen, Csize_t, (Ptr{UInt8},), s.data))
+length(s::UTF8String) = Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
+                                  s.data, length(s.data)))
 
 function next(s::UTF8String, i::Int)
     # potentially faster version
