@@ -308,8 +308,11 @@ function istril(A::AbstractMatrix)
     return true
 end
 
+isdiag(A::AbstractMatrix) = istril(A) && istriu(A)
+
 istriu(x::Number) = true
 istril(x::Number) = true
+isdiag(x::Number) = true
 
 linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T}) = [ones(T, size(X,1)) X] \ y
 

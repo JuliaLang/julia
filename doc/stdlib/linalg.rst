@@ -630,6 +630,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Test whether a matrix is upper triangular.
 
+.. function:: isdiag(A) -> Bool
+
+   Test whether a matrix is diagonal.
+
 .. function:: ishermitian(A) -> Bool
 
    Test whether a matrix is Hermitian.
