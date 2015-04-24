@@ -2790,3 +2790,8 @@ gc()
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 @code_typed invoke_g10878()
+
+# issue #10978
+typealias TupleType10978{T<:Tuple} Type{T}
+f10978(T::TupleType10978) = isa(T, TupleType10978)
+@test f10978(Tuple{Int})
