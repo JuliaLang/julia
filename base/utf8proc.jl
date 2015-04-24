@@ -46,7 +46,6 @@ const UTF8PROC_CATEGORY_CF = 27
 const UTF8PROC_CATEGORY_CS = 28
 const UTF8PROC_CATEGORY_CO = 29
 
-const UTF8PROC_NULLTERM  = (1<<0)
 const UTF8PROC_STABLE    = (1<<1)
 const UTF8PROC_COMPAT    = (1<<2)
 const UTF8PROC_COMPOSE   = (1<<3)
@@ -64,21 +63,20 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 ############################################################################
 
-let
-    const p = Array(Ptr{UInt8}, 1)
-    global utf8proc_map
-    function utf8proc_map(s::AbstractString, flags::Integer)
-        result = ccall(:utf8proc_map, Cssize_t,
-                       (Ptr{UInt8}, Cssize_t, Ptr{Ptr{UInt8}}, Cint),
-                       s, 0, p, flags | UTF8PROC_NULLTERM)
-        result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{UInt8},
-                                             (Cssize_t,), result)))
-        a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
-                  (Any, Ptr{UInt8}, Csize_t, Cint),
-                  Vector{UInt8}, p[1], result, true)
-        ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
-    end
+function utf8proc_map(s::ByteString, flags::Integer)
+    p = Ref{Ptr{UInt8}}()
+    result = ccall(:utf8proc_map, Cssize_t,
+                   (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
+                   s, sizeof(s), p, flags)
+    result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{UInt8},
+                                         (Cssize_t,), result)))
+    a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
+              (Any, Ptr{UInt8}, Csize_t, Cint),
+              Vector{UInt8}, p[], result, true)
+    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
 end
+
+utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(bytestring(s), flags)
 
 function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
