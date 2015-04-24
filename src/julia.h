@@ -552,6 +552,7 @@ void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(void);
+DLLEXPORT jl_value_t *alloc_0w(void);
 DLLEXPORT jl_value_t *alloc_1w(void);
 DLLEXPORT jl_value_t *alloc_2w(void);
 DLLEXPORT jl_value_t *alloc_3w(void);
