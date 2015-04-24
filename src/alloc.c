@@ -498,7 +498,8 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     tn->name = name;
     tn->module = jl_current_module;
     tn->primary = NULL;
-    tn->cache = (jl_value_t*)jl_emptysvec;
+    tn->cache = jl_emptysvec;
+    tn->linearcache = jl_emptysvec;
     tn->names = NULL;
     tn->uid = jl_assign_type_uid();
     return tn;

@@ -250,7 +250,8 @@ typedef struct {
     // a type alias, for example, might make a type constructor that is
     // not the original.
     jl_value_t *primary;
-    jl_value_t *cache;
+    jl_svec_t *cache;        // sorted array
+    jl_svec_t *linearcache;  // unsorted array
     ptrint_t uid;
 } jl_typename_t;
 
