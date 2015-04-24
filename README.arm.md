@@ -51,7 +51,7 @@ Success in building Julia has been reported using the following procedure:
 2.  Install FFTW and libedit using `sudo apt-get install libfftw3-3 libedit-dev`
 3.  Download the [LLVM 3.6.0 binaries for ARMv7a] (http://llvm.org/releases/3.6.0/clang+llvm-3.6.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
 4.  For each file in the extracted `bin`, `include`, and `lib` subdirectories, create symlinks from the corresponding directory under `/usr/local`.
-5.  Using the `Make.arm` configuration below, build Julia using `make -j 2`
+5.  Using the `Make.arm` configuration below, build Julia using `make -j 2`. (Limiting `make` to 2 simultaneous jobs will reduce the possibility of running out of memory/swap space during the build process.)
 
 Note that the resulting Julia binary may fail various tests but will run code and provide the REPL.
 
