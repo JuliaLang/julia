@@ -995,9 +995,10 @@
               (cond ((eqv? (peek-token s) #\()
                      `(|.| ,ex ,(parse-atom s)))
                     ((eq? (peek-token s) '$)
-                     (let ((dollarex (parse-unary s)))
+		     (take-token s)
+                     (let ((dollarex (parse-atom s)))
                        `(|.| ,ex ($ (call (top Expr) (quote quote)
-                                          ,(cadr dollarex))))))
+                                          ,dollarex)))))
                     (else
                      (let ((name (parse-atom s)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))

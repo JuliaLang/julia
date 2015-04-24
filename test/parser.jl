@@ -69,3 +69,12 @@ macro test999_str(args...); args; end
 
 # issue #10901
 @test parse("/([1], 1)[1]") == :(([1] / 1)[1])
+
+# issue #10997
+@test parse(":(x.\$f[i])") == Expr(:quote,
+                                   Expr(:ref,
+                                        Expr(symbol("."), :x,
+                                             Expr(:$, Expr(:call, TopNode(:Expr),
+                                                           QuoteNode(:quote),
+                                                           :f))),
+                                        :i))
