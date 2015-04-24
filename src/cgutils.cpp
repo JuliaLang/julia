@@ -99,14 +99,10 @@ static GlobalVariable *stringConst(const std::string &txt)
                                 ArrayType::get(T_int8, txt.length()+1),
                                 true,
                                 imaging_mode ? GlobalVariable::PrivateLinkage : GlobalVariable::ExternalLinkage,
-#ifndef LLVM_VERSION_MAJOR
-                                ConstantArray::get(getGlobalContext(), txt.c_str()),
-#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
                                 ConstantDataArray::get(getGlobalContext(),
                                                        ArrayRef<unsigned char>(
                                                        (const unsigned char*)txt.c_str(),
                                                        txt.length()+1)),
-#endif
                                 vname);
         gv->setUnnamedAddr(true);
         stringConstants[txt] = gv;

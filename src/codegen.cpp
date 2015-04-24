@@ -49,7 +49,6 @@
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
 #endif
-#ifdef LLVM33
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -58,34 +57,15 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Value.h>
-#else
-#include <llvm/DerivedTypes.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Module.h>
-#include <llvm/Intrinsics.h>
-#include <llvm/Attributes.h>
-#endif
-#ifdef LLVM32
 #ifndef LLVM35
 #include <llvm/DebugInfo.h>
 #include <llvm/DIBuilder.h>
-#endif
-#ifndef LLVM33
-#include <llvm/IRBuilder.h>
-#endif
-#else // LLVM31 and before
-#include <llvm/Analysis/DebugInfo.h>
-#include <llvm/Analysis/DIBuilder.h>
-#include <llvm/Target/TargetData.h>
-#include <llvm/Support/IRBuilder.h>
 #endif
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
-#ifdef LLVM31
 #include <llvm/Transforms/Vectorize.h>
-#endif
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
@@ -183,10 +163,8 @@ static FunctionPassManager *FPM;
 // No DataLayout pass needed anymore.
 #elif LLVM35
 static DataLayoutPass *jl_data_layout;
-#elif defined(LLVM32)
-static DataLayout *jl_data_layout;
 #else
-static TargetData *jl_data_layout;
+static DataLayout *jl_data_layout;
 #endif
 
 // for image reloading
@@ -3903,14 +3881,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
     // i686 Windows (which uses a 4-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
     attr->addStackAlignmentAttr(16);
-#if LLVM32 && !LLVM33
-    f->addAttribute(Attributes::FunctionIndex,
-        Attributes::get(f->getContext(),*attr));
-#else
     f->addAttributes(AttributeSet::FunctionIndex,
         AttributeSet::get(f->getContext(),
             AttributeSet::FunctionIndex,*attr));
-#endif
 #endif
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && LLVM35
@@ -3918,11 +3891,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
 
 #ifdef JL_DEBUG_BUILD
-#if LLVM32 && !LLVM33
-    f->addFnAttr(Attributes::StackProtectReq);
-#else
     f->addFnAttr(Attribute::StackProtectReq);
-#endif
 #endif
     ctx.f = f;
 
@@ -4943,11 +4912,7 @@ static void init_julia_llvm_env(Module *m)
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, jl_setjmp_name, m);
-#if LLVM32 && !LLVM33
-    setjmp_func->addFnAttr(Attributes::ReturnsTwice);
-#else
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
-#endif
     add_named_global(setjmp_func, (void*)&jl_setjmp_f);
 
     std::vector<Type*> te_args(0);
@@ -5233,10 +5198,8 @@ static void init_julia_llvm_env(Module *m)
     jl_data_layout = new llvm::DataLayoutPass();
 #elif LLVM35
     jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
-#elif defined(LLVM32)
-    jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #else
-    jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
+    jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #endif
 
 #ifndef LLVM37
@@ -5251,10 +5214,8 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(llvm::createMemorySanitizerPass(true));
 #   endif
 #endif
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #ifndef LLVM37
     jl_TargetMachine->addAnalysisPasses(*FPM);
-#endif
 #endif
     FPM->add(createTypeBasedAliasAnalysisPass());
     if (jl_options.opt_level>=1)
@@ -5281,10 +5242,9 @@ static void init_julia_llvm_env(Module *m)
     //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
 
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
     // this has the potential to make some things a bit slower
     //FPM->add(createBBVectorizePass());
-#endif
+
     FPM->add(createEarlyCSEPass()); //// ****
 
     FPM->add(createLoopIdiomPass()); //// ****
@@ -5304,7 +5264,7 @@ static void init_julia_llvm_env(Module *m)
 #else
     FPM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
-#if LLVM33 && !LLVM35 && !defined(INSTCOMBINE_BUG)
+#if !LLVM35 && !defined(INSTCOMBINE_BUG)
     FPM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
@@ -5325,13 +5285,13 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(createJumpThreadingPass());         // Thread jumps
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
-#if LLVM33 && !defined(INSTCOMBINE_BUG)
+#if !defined(INSTCOMBINE_BUG)
     if (jl_options.opt_level>=1)
         FPM->add(createSLPVectorizerPass());     // Vectorize straight-line code
 #endif
 
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
-#if LLVM33 && !defined(INSTCOMBINE_BUG)
+#if !defined(INSTCOMBINE_BUG)
     if (jl_options.opt_level>=1)
         FPM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
 #endif
@@ -5385,18 +5345,6 @@ extern "C" void jl_init_codegen(void)
     jl_setup_module(engine_module,false);
 #endif
 
-#if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
-    jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
-#ifdef JL_DEBUG_BUILD
-    llvm::JITEmitDebugInfo = true;
-#endif
-    //llvm::JITEmitDebugInfoToDisk = true;
-    llvm::NoFramePointerElim = true;
-    llvm::NoFramePointerElimNonLeaf = true;
-#ifdef __MINGW32__
-#error "only maintaining support for LLVM 3.1 on Windows"
-#endif
-#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
 #ifdef JL_DEBUG_BUILD
@@ -5495,7 +5443,6 @@ extern "C" void jl_init_codegen(void)
 #ifdef LLVM35
     jl_ExecutionEngine->setProcessAllSections(true);
 #endif
-#endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
     mbuilder = new MDBuilder(getGlobalContext());
 
