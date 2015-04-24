@@ -806,6 +806,17 @@ end
 @test_throws ArgumentError flipdim(1:10, -1)
 @test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
 
+# isdiag, istril, istriu
+@test isdiag(3)
+@test istril(4)
+@test istriu(5)
+@test !isdiag([1 2; 3 4])
+@test !istril([1 2; 3 4])
+@test !istriu([1 2; 3 4])
+@test isdiag([1 0; 0 4])
+@test istril([1 0; 3 4])
+@test istriu([1 2; 0 4])
+
 # issue 4228
 A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
