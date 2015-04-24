@@ -538,8 +538,6 @@ beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
 
 charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Uint32,), c)))
 strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
-# TODO: implement and use u8_strnwidth that takes a length argument
 
 ## libc character class predicates ##
 

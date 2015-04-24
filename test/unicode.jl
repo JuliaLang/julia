@@ -99,3 +99,8 @@ let c_ll = 'β', c_cn = '\u038B'
     # check codepoint with category code CN
     @test Base.UTF8proc.category_code(c_cn) == Base.UTF8proc.UTF8PROC_CATEGORY_CN
 end
+
+# handling of embedded NUL chars (#10958)
+@test length("\0w") == length("\0α") == 2
+@test strwidth("\0w") == strwidth("\0α") == 1
+@test normalize_string("\0W", casefold=true) == "\0w"
