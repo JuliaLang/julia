@@ -1,7 +1,7 @@
 JULIAHOME = $(abspath ..)
 include ../Make.inc
 
-TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(subst .jl,,$(wildcard *.jl)))
+TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(subst .jl,,$(wildcard *.jl linalg/*.jl)))
 
 default: all
 
