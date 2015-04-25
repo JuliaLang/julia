@@ -64,11 +64,7 @@
 #include <llvm/Support/system_error.h>
 #endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
-#ifdef LLVM33
 #include <llvm/IR/LLVMContext.h>
-#else
-#include <llvm/LLVMContext.h>
-#endif
 #ifdef LLVM37
 #include <llvm/DebugInfo/DWARF/DIContext.h>
 #else
@@ -76,10 +72,8 @@
 #endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
-#elif defined(LLVM32)
-#include <llvm/DebugInfo.h>
 #else
-#include <llvm/Analysis/DebugInfo.h>
+#include <llvm/DebugInfo.h>
 #endif
 #ifndef LLVM37
 #define format_hex(v, d) format("%#0" #d "x", v)

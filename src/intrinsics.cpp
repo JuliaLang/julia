@@ -125,11 +125,7 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
-#ifdef LLVM33
-    #define LLVM_FP(a,b) APFloat(a,b)
-#else
-    #define LLVM_FP(a,b) APFloat(b,true)
-#endif
+#define LLVM_FP(a,b) APFloat(a,b)
 static Constant *julia_const_to_llvm(jl_value_t *e)
 {
     jl_value_t *jt = jl_typeof(e);
@@ -1140,18 +1136,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
                                       ArrayRef<Type*>(x->getType())), x);
-#if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
-    HANDLE(ctlz_int,1)
-        x = JL_INT(x);
-        return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
-                                      ArrayRef<Type*>(x->getType())), x);
-    HANDLE(cttz_int,1)
-        x = JL_INT(x);
-        return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz,
-                                      ArrayRef<Type*>(x->getType())), x);
-#elif LLVM_VERSION_MAJOR==3 && LLVM_VERSION_MINOR >= 1
     HANDLE(ctlz_int,1) {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
@@ -1165,7 +1149,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateCall2(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types)), x, ConstantInt::get(T_int1, 0));
     }
-#endif
 
     HANDLE(nan_dom_err,2) {
         // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)

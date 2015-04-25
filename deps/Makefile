@@ -473,12 +473,7 @@ llvm-$(LLVM_VER)/python2_path:
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python" && \
 	ln -sf /usr/bin/python2-config "llvm-$(LLVM_VER)/python2_path/python-config"
-ifeq ($(LLVM_VER), 3.2)
-## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
-llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
-else
-  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
-endif
+LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 ifeq ($(BUILD_LLDB),1)
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
