@@ -3315,7 +3315,7 @@ void jl_init_types(void)
                                 jl_symbol("inferred")),
                         jl_svec(14, jl_any_type, jl_simplevector_type,
                                 jl_any_type, jl_sym_type,
-                                jl_any_type, jl_simplevector_type,
+                                jl_any_type, jl_any_type,
                                 jl_any_type, jl_array_any_type,
                                 jl_module_type, jl_any_type,
                                 jl_any_type,
