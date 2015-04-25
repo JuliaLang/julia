@@ -1152,6 +1152,7 @@ export
     getaddrinfo,
     gethostname,
     getipaddr,
+    getsockname,
     htol,
     hton,
     ismarked,

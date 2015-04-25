@@ -7463,9 +7463,10 @@ true
 all(p, itr)
 
 doc"""
-    bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
+    bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
 
 Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
+`ipv6only` parameter disables dual stack mode. If it's `true`, only IPv6 stack is created.
 """
 bind
 
@@ -8474,9 +8475,9 @@ Get the current working directory.
 pwd
 
 doc"""
-    getipaddr() -> AbstractString
+    getipaddr() -> IPAddr
 
-Get the IP address of the local machine, as a string of the form "x.x.x.x".
+Get the IP address of the local machine.
 """
 getipaddr
 
@@ -12031,3 +12032,11 @@ Bitwise exclusive or
 ```
 """
 Base.(:$)(x, y)
+
+doc"""
+    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
+
+Get the IP address and the port of the TCP server socket, to which it is bound,
+or the peer connected to the TCP server socket.
+"""
+getsockname
