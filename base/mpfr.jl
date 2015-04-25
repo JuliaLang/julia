@@ -93,18 +93,6 @@ function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     err == 0 ? Nullable(z) : Nullable{BigFloat}()
 end
 
-macro bigfloat_str(s)
-    parse(BigFloat,s)
-end
-
-macro big_str(s)
-    n = tryparse(BigInt,s)
-    !isnull(n) && return get(n)
-    n = tryparse(BigFloat,s)
-    !isnull(n) && return get(n)
-    throw(ArgumentError("invalid number format $(repr(s)) for BigInt or BigFloat"))
-end
-
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
