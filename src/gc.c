@@ -251,7 +251,11 @@ typedef struct {
     char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
-} region_t __attribute__((aligned(GC_PAGE_SZ)));
+} region_t
+#ifndef _COMPILER_MICROSOFT_
+__attribute__((aligned(GC_PAGE_SZ)))
+#endif
+;
 static region_t *regions[REGION_COUNT] = {NULL};
 // store a lower bound of the first free page in each region
 static int regions_lb[REGION_COUNT] = {0};
