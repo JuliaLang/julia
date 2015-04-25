@@ -507,6 +507,50 @@ DLLEXPORT int jl_tcp_bind6(uv_tcp_t *handle, uint16_t port, void *host, unsigned
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
+DLLEXPORT int jl_tcp_getsockname(uv_tcp_t *handle, uint16_t* port, void* host, uint32_t* family)
+{
+    int namelen;
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    namelen = sizeof addr;
+    int res = uv_tcp_getsockname(handle, (struct sockaddr*)&addr, &namelen);
+    *family = addr.ss_family;
+    if (addr.ss_family == AF_INET) {
+        struct sockaddr_in* addr4 = (struct sockaddr_in*)&addr;
+        *port = addr4->sin_port;
+        memcpy(host, &(addr4->sin_addr), 4);
+    } else if (addr.ss_family == AF_INET6) {
+        struct sockaddr_in6* addr6 = (struct sockaddr_in6*)&addr;
+        *port = addr6->sin6_port;
+        memcpy(host, &(addr6->sin6_addr), 16);
+    } else {
+        return -1;
+    }
+    return res;
+}
+
+DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t* port, void* host, uint32_t* family)
+{
+    int namelen;
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(struct sockaddr_storage));
+    namelen = sizeof addr;
+    int res = uv_tcp_getpeername(handle, (struct sockaddr*)&addr, &namelen);
+    *family = addr.ss_family;
+    if (addr.ss_family == AF_INET) {
+        struct sockaddr_in* addr4 = (struct sockaddr_in*)&addr;
+        *port = addr4->sin_port;
+        memcpy(host, &(addr4->sin_addr), 4);
+    } else if (addr.ss_family == AF_INET6) {
+        struct sockaddr_in6* addr6 = (struct sockaddr_in6*)&addr;
+        *port = addr6->sin6_port;
+        memcpy(host, &(addr6->sin6_addr), 16);
+    } else {
+        return -1;
+    }
+    return res;
+}
+
 DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, uint32_t host, uint32_t flags)
 {
     struct sockaddr_in addr;
@@ -697,19 +741,6 @@ DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
 #else
     return 1;
 #endif
-}
-
-DLLEXPORT int jl_tcp_getsockname_v4(uv_tcp_t *handle, uint32_t * ip, uint16_t * port)
-{
-    struct sockaddr_in name;
-    int len = sizeof(name);
-    if (uv_tcp_getsockname(handle, (struct sockaddr *)&name, &len)) {
-        return -1;
-    }
-
-    *ip = ntohl(name.sin_addr.s_addr);
-    *port = ntohs(name.sin_port);
-    return 0;
 }
 
 #ifndef _OS_WINDOWS_
