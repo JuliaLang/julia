@@ -235,13 +235,14 @@ size_t u8_offset(const char *s, size_t charnum)
 /* byte offset => charnum */
 size_t u8_charnum(const char *s, size_t offset)
 {
-    size_t charnum = 0, i=0;
-
-    while (i < offset) {
-        if (s[i++] & 0x80) {
-            (void)(isutf(s[++i]) || isutf(s[++i]) || ++i);
-        }
-        charnum++;
+    size_t charnum = 0;
+    if (offset) {
+       do {
+          // Simply not count continuation bytes
+          // Since we are not doing validation anyway, we can just
+          // assume this is a valid UTF-8 string
+          charnum += ((*(unsigned char *)s++ & 0xc0) != 0x80);
+       } while (--offset);
     }
     return charnum;
 }
