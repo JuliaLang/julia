@@ -164,7 +164,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                 if (owner != NULL && tempb->owner != b->owner &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
-                              "Warning: both `%s` and `%s` export `%s`; uses of it in module `%s` must be qualified\n",
+                              "Warning: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
                               owner->name->name, imp->name->name, var->name, m->name->name);
                     // mark this binding resolved, to avoid repeating the warning
                     (void)jl_get_binding_wr(m, var);
