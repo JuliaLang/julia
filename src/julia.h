@@ -1197,6 +1197,8 @@ DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 #endif
 
+DLLEXPORT jl_value_t* jl_toggle_fieldref();
+
 // compiler
 void jl_compile(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
