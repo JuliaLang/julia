@@ -254,8 +254,12 @@ macro uint128_str(s)
     parse(UInt128,s)
 end
 
-macro bigint_str(s)
-    parse(BigInt,s)
+macro big_str(s)
+    n = tryparse(BigInt,s)
+    !isnull(n) && return get(n)
+    n = tryparse(BigFloat,s)
+    !isnull(n) && return get(n)
+    throw(ArgumentError("invalid number format $(repr(s)) for BigInt or BigFloat"))
 end
 
 ## system word size ##
