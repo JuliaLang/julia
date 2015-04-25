@@ -3224,7 +3224,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
 static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
 {
     jl_value_t *jt = ctx->vars[s].declType;
-    if (jl_is_array_type(jt) && jl_is_leaf_type(jt) &&
+    if (jl_is_array_type(jt) && jl_is_leaf_type(jt) && jl_is_long(jl_tparam1(jt)) &&
         jl_unbox_long(jl_tparam1(jt)) != 1) {
         // TODO: this optimization does not yet work with 1-d arrays, since the
         // length and data pointer can change at any time via push!
