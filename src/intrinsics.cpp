@@ -636,15 +636,14 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         uint64_t size = jl_datatype_size(ety);
         Value *strct =
             builder.CreateCall(prepare_call(jlallocobj_func),
-                               ConstantInt::get(T_size,
-                                    sizeof(void*)+size));
+                               ConstantInt::get(T_size, sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
         builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
-                            thePtr, size, 1);
+                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
     // TODO: alignment?
