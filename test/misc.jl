@@ -119,7 +119,8 @@ immutable NoMethodHasThisType end
 @test !isempty(methodswith(Int))
 
 # PR #10984
-let
+# Disable on windows because of issue (missing flush) when redirecting STDERR.
+@unix_only let
     redir_err = "redirect_stderr(STDOUT)"
     exename = joinpath(JULIA_HOME, Base.julia_exename())
     script = "$redir_err; f(a::Number, b...) = 1;f(a, b::Number) = 1"
