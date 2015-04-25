@@ -48,6 +48,7 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 #define JL_CALLABLE(name) \
