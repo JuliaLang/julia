@@ -313,13 +313,13 @@ All Objects
 
    .. doctest::
 
-	   julia> widen(Int32)
-	   Int64
+      julia> widen(Int32)
+      Int64
 
    .. doctest::
 
-	   julia> widen(1.5f0)
-	   1.5
+      julia> widen(1.5f0)
+      1.5
 
 .. function:: identity(x)
 
