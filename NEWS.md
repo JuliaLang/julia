@@ -243,6 +243,12 @@ Library improvements
 
     * The `randexp` and `randexp!` functions are exported ([#9144])
 
+  * File
+
+    * Added function `readlink` which returns the value of a symbolic link "path" ([#10714]).
+
+    * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
+
   * Other improvements
 
     * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
@@ -1374,9 +1380,11 @@ Too numerous to mention.
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10679]: https://github.com/JuliaLang/julia/issues/10679
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
+[#10714]: https://github.com/JuliaLang/julia/pull/10714
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
 [#10885]: https://github.com/JuliaLang/julia/issues/10885
+[#10888]: https://github.com/JuliaLang/julia/pull/10888
 [#10893]: https://github.com/JuliaLang/julia/pull/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914

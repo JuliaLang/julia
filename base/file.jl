@@ -70,18 +70,47 @@ end
 
 # The following use Unix command line facilites
 
-function cp(src::AbstractString, dst::AbstractString; recursive::Bool=false)
-    if islink(src) || !isdir(src)
-        FS.sendfile(src, dst)
-    elseif recursive
-        mkdir(dst)
-        for p in readdir(src)
-            cp(joinpath(src, p), joinpath(dst, p), recursive=recursive)
+function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
+                                                             follow_symlinks::Bool=false)
+    isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
+    if ispath(dst)
+        if remove_destination
+            rm(dst; recursive=true)
+        else
+            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+                                       "is required to remove '$dst' before copying.")))
         end
+    end
+    mkdir(dst)
+    for name in readdir(src)
+        srcname = joinpath(src, name)
+        if !follow_symlinks && islink(srcname)
+            symlink(readlink(srcname), joinpath(dst, name))
+        elseif isdir(srcname)
+            cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
+                                                 follow_symlinks=follow_symlinks)
+        else
+            FS.sendfile(srcname, joinpath(dst, name))
+        end
+    end
+end
+
+function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
+                                                         follow_symlinks::Bool=false)
+    if ispath(dst)
+        if remove_destination
+            rm(dst; recursive=true)
+        else
+            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+                                       "is required to remove '$dst' before copying.")))
+        end
+    end
+    if !follow_symlinks && islink(src)
+        symlink(readlink(src), dst)
+    elseif isdir(src)
+        cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
     else
-        throw(ArgumentError(string("'$src' is a directory. ",
-            "Use `cp(src, dst, recursive=true)` ",
-            "to copy directories recursively.")))
+        FS.sendfile(src, dst)
     end
 end
 mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
