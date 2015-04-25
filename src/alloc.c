@@ -672,13 +672,13 @@ jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x)        \
     *(int##nb##_t*)jl_data_ptr(v) = x;                         \
     return v;                                                  \
 }
-BOXN_FUNC(8,  2)
-BOXN_FUNC(16, 2)
-BOXN_FUNC(32, 2)
+BOXN_FUNC(8,  1)
+BOXN_FUNC(16, 1)
+BOXN_FUNC(32, 1)
 #ifdef _P64
-BOXN_FUNC(64, 2)
+BOXN_FUNC(64, 1)
 #else
-BOXN_FUNC(64, 3)
+BOXN_FUNC(64, 2)
 #endif
 
 #define UNBOX_FUNC(j_type,c_type)                                       \
@@ -710,12 +710,12 @@ jl_value_t *pfx##_##typ(c_type x)                 \
     *(c_type*)jl_data_ptr(v) = x;                 \
     return v;                                     \
 }
-BOX_FUNC(float32, float,  jl_box, 2)
-BOX_FUNC(voidpointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
+BOX_FUNC(float32, float,  jl_box, 1)
+BOX_FUNC(voidpointer, void*,  jl_box, 1)
 #ifdef _P64
-BOX_FUNC(float64, double, jl_box, 2)
+BOX_FUNC(float64, double, jl_box, 1)
 #else
-BOX_FUNC(float64, double, jl_box, 3)
+BOX_FUNC(float64, double, jl_box, 2)
 #endif
 
 #define NBOX_C 1024
@@ -743,18 +743,18 @@ jl_value_t *jl_box_##typ(c_type x)                 \
     *(c_type*)jl_data_ptr(v) = x;                  \
     return v;                                      \
 }
-SIBOX_FUNC(int16,  int16_t, 2)
-SIBOX_FUNC(int32,  int32_t, 2)
-UIBOX_FUNC(uint16, uint16_t, 2)
-UIBOX_FUNC(uint32, uint32_t, 2)
-UIBOX_FUNC(char,   uint32_t, 2)
-UIBOX_FUNC(gensym, size_t, 2)
+SIBOX_FUNC(int16,  int16_t, 1)
+SIBOX_FUNC(int32,  int32_t, 1)
+UIBOX_FUNC(uint16, uint16_t, 1)
+UIBOX_FUNC(uint32, uint32_t, 1)
+UIBOX_FUNC(char,   uint32_t, 1)
+UIBOX_FUNC(gensym, size_t, 1)
 #ifdef _P64
+SIBOX_FUNC(int64,  int64_t, 1)
+UIBOX_FUNC(uint64, uint64_t, 1)
+#else
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
-#else
-SIBOX_FUNC(int64,  int64_t, 3)
-UIBOX_FUNC(uint64, uint64_t, 3)
 #endif
 
 static jl_value_t *boxed_int8_cache[256];
