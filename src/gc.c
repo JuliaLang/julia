@@ -49,7 +49,7 @@ static long system_page_size;
 
 #elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
 #define malloc_a16(sz) _aligned_malloc((sz)?(sz):1, 16)
-#define realloc_a16(p, sz, oldsz) _aligned_realloc((sz)?(sz):1, 16)
+#define realloc_a16(p, sz, oldsz) _aligned_realloc((p), (sz)?(sz):1, 16)
 #define free_a16(p) _aligned_free(p)
 
 #else
