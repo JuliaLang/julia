@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JL_ARRAY_ALIGN(jl_value, nbytes) (LLT_ALIGN((jl_value)+sizeof(jl_taggedvalue_t), nbytes)-sizeof(jl_taggedvalue_t))
+#define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
 
 
 // array constructors ---------------------------------------------------------
@@ -101,7 +101,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
             memset(data, 0, tot);
         JL_GC_POP();
     }
-    a->pooled = tsz + sizeof(jl_taggedvalue_t) <= 2048;
+    a->pooled = tsz <= GC_MAX_SZCLASS;
 
     a->data = data;
     if (elsz == 1) ((char*)data)[tot-1] = '\0';
@@ -153,7 +153,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *di
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), 16);
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
-    a->pooled = tsz + sizeof(jl_taggedvalue_t) <= 2048;
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->ndims = ndims;
     a->offset = 0;
     a->data = NULL;
@@ -221,7 +221,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
-    a->pooled = tsz + sizeof(jl_taggedvalue_t) <= 2048;
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -272,7 +272,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
-    a->pooled = tsz + sizeof(jl_taggedvalue_t) <= 2048;
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
