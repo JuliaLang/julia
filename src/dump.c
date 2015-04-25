@@ -1323,7 +1323,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)Singleton_tag) {
         assert(mode != MODE_MODULE_LAMBDAS);
-        jl_value_t *v = (jl_value_t*)allocobj(0);
+        jl_value_t *v = (jl_value_t*)alloc_0w();
         if (usetable) {
             uptrint_t pos = backref_list.len;
             arraylist_push(&backref_list, (void*)v);
