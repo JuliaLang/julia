@@ -1759,7 +1759,13 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
                 if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
                     m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,sp,ast,sparams,allow_alloc);
-                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
+                    if (jl_is_datatype(jl_exprarg(e,2)) &&
+                        ((jl_datatype_t*)jl_exprarg(e,2))->name == jl_fieldref_type->name) {
+                        jl_value_t *frv = jl_svecref(((jl_datatype_t*)jl_exprarg(e,2))->parameters, 0);
+                        s = (jl_sym_t*)jl_static_eval(frv,ctx,mod,sp,ast,sparams,allow_alloc);
+                    } else {
+                        s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
+                    }
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {

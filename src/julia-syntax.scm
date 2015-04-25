@@ -1394,7 +1394,11 @@
 
    '|.|
    (lambda (e)
-     `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+    (cond
+     ((eq? *fieldref* #f)
+      `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+     (else
+      `(call (top getfield) ,(expand-forms (cadr e)) (call (top apply_type) (top FieldRef) ,(expand-forms (caddr e)))))))
 
    'in
    (lambda (e)

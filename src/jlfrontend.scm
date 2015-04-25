@@ -200,6 +200,10 @@
     (set! *deperror* (eq? e #t))
     prev))
 
+(define *fieldref* #f)
+(define (jl-toggle-fieldref)
+    (set! *fieldref* (eq? *fieldref* #f)))
+
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
