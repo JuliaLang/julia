@@ -1177,7 +1177,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         // can exist in the cache. however, interpreter.c mutates its
         // typevars' `bound` fields to 0, corrupting the cache. this is
         // avoided simply by hashing name->primary specially here.
-        if (dtv->name->primary == v)
+        if (jl_egal(dtv->name->primary, v))
             return bitmix(bitmix(h, dtv->name->uid), 0xaa5566aa);
         return bitmix(bitmix(h, dtv->name->uid),
                       jl_object_id((jl_value_t*)dtv->parameters));
