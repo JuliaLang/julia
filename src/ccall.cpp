@@ -484,11 +484,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 }
 
 
-#ifdef LLVM33
-    typedef AttributeSet attr_type;
-#else
-    typedef AttrListPtr attr_type;
-#endif
+typedef AttributeSet attr_type;
 
 // --- code generator for cglobal ---
 
@@ -780,11 +776,7 @@ static Value *mark_or_box_ccall_result(Value *result, jl_value_t *rt_expr, jl_va
     return mark_julia_type(result, rt);
 }
 
-#ifdef LLVM33
-    typedef AttributeSet attr_type;
-#else
-    typedef AttrListPtr attr_type;
-#endif
+typedef AttributeSet attr_type;
 
 static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         std::vector<Type *> &fargt, std::vector<Type *> &fargt_sig,
@@ -798,14 +790,8 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
     }
     assert(rt && !jl_is_abstract_ref_type(rt));
 
-#if LLVM33
     AttrBuilder retattrs;
     std::vector<AttrBuilder> paramattrs;
-#else
-    AttrBuilder retattrs;
-    std::vector<AttrBuilder> paramattrs;
-    std::vector<AttributeWithIndex> attrs;
-#endif
     AbiState abi = default_abi_state;
     sret = 0;
 
@@ -818,18 +804,10 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
             *prt = *lrt;
 
         if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) && use_sret(&abi, rt)) {
-#if LLVM33
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
 #if !defined(_OS_WINDOWS_) || defined(LLVM35)
             paramattrs[0].addAttribute(Attribute::StructRet);
-#endif
-#elif LLVM32
-            paramattrs.push_back(AttrBuilder());
-            paramattrs[0].clear();
-            paramattrs[0].addAttribute(Attributes::StructRet);
-#else
-            attrs.push_back(AttributeWithIndex::get(1, Attribute::StructRet));
 #endif
             fargt.push_back(PointerType::get(*prt, 0));
             fargt_sig.push_back(PointerType::get(*prt, 0));
@@ -840,9 +818,7 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
     size_t i;
     bool current_isVa = false;
     for(i = 0; i < nargt; i++) {
-#ifdef LLVM32
         paramattrs.push_back(AttrBuilder());
-#endif
         jl_value_t *tti = jl_svecref(tt,i);
         if (jl_is_vararg_type(tti)) {
             current_isVa = true;
@@ -863,29 +839,12 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
                 if (bt->size < 4) {
-#ifdef LLVM33
                     Attribute::AttrKind av;
-#elif defined(LLVM32)
-                    Attributes::AttrVal av;
-#else
-                    Attribute::AttrConst av;
-#endif
-#if defined(LLVM32) && !defined(LLVM33)
-                    if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0))
-                        av = Attributes::SExt;
-                    else
-                        av = Attributes::ZExt;
-#else
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0))
                         av = Attribute::SExt;
                     else
                         av = Attribute::ZExt;
-#endif
-#ifdef LLVM32
                     paramattrs[i+sret].addAttribute(av);
-#else
-                    attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
-#endif
                 }
             }
 
@@ -917,22 +876,10 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         // Note that even though the LLVM argument is called ByVal
         // this really means that the thing we're passing is pointing to
         // the thing we want to pass by value
-#if LLVM33
         if (byRefAttr)
             paramattrs[i+sret].addAttribute(Attribute::ByVal);
         if (inReg)
             paramattrs[i+sret].addAttribute(Attribute::InReg);
-#elif LLVM32
-        if (byRefAttr)
-            paramattrs[i+sret].addAttribute(Attributes::ByVal);
-        if (inReg)
-            paramattrs[i+sret].addAttribute(Attributes::InReg);
-#else
-        if (byRefAttr)
-            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::ByVal));
-        if (inReg)
-            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::InReg));
-#endif
 
         byRefList.push_back(byRef);
         inRegList.push_back(inReg);
@@ -950,23 +897,12 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         }
     }
 
-#ifdef LLVM33
     if (retattrs.hasAttributes())
         attributes = AttributeSet::get(jl_LLVMContext, AttributeSet::ReturnIndex, retattrs);
     for (i = 0; i < nargt+sret; ++i)
         if (paramattrs[i].hasAttributes())
             attributes = attributes.addAttributes(jl_LLVMContext, i+1,
                                                   AttributeSet::get(jl_LLVMContext, i+1, paramattrs[i]));
-#elif LLVM32
-    if (retattrs.hasAttributes())
-        attrs.push_back(AttributeWithIndex::get(0, Attributes::get(jl_LLVMContext, retattrs)));
-    for (i = 0; i < nargt+sret; ++i)
-        if (paramattrs[i].hasAttributes())
-            attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext, paramattrs[i])));
-    attributes = AttrListPtr::get(jl_LLVMContext, ArrayRef<AttributeWithIndex>(attrs));
-#else
-    attributes = AttrListPtr::get(attrs.data(), attrs.size());
-#endif
     return "";
 }
 
@@ -1368,14 +1304,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
-#if LLVM33
     ((CallInst*)ret)->setAttributes(attrs);
-#elif LLVM32
-    ((CallInst*)ret)->setAttributes(AttrListPtr::get(jl_LLVMContext, ArrayRef<AttributeWithIndex>(attrs)));
-#else
-    attributes = AttrListPtr::get(attrs.data(),attrs.size());
-    ((CallInst*)ret)->setAttributes(attributes);
-#endif
 
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
@@ -1389,11 +1318,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
-#if LLVM32 && !LLVM33
-        ctx->f->addFnAttr(Attributes::StackProtectReq);
-#else
         ctx->f->addFnAttr(Attribute::StackProtectReq);
-#endif
     }
 
     JL_GC_POP();
