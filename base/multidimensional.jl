@@ -4,6 +4,7 @@ module IteratorsMD
 import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
+import Base: NTuple
 
 export CartesianIndex, CartesianRange
 

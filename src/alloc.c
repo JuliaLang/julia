@@ -106,6 +106,7 @@ typedef struct {
 // Note that this function updates len
 static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
 {
+    /*
     if (jl_is_ntuple_type(dt)) {
         jl_value_t *lenvar = jl_tparam0(dt);
         jl_value_t *elty = jl_tparam1(dt);
@@ -119,6 +120,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
         memcpy(jl_data_ptr(v), data, nb);
         return v;
     }
+    */
 
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;

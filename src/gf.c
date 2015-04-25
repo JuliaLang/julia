@@ -743,8 +743,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
     if (!isstaged && jl_nparams(type) > mt->max_args
-        && jl_is_va_tuple(decl)
-        && !jl_is_vararg_fixedlen(jl_tparam(decl, jl_svec_len(decl->parameters)-1))) {
+        && jl_is_va_tuple_varlen(decl)) {
         size_t nspec = mt->max_args + 2;
         limited = jl_alloc_svec(nspec);
         for(i=0; i < nspec-1; i++) {
@@ -1062,7 +1061,6 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt,
         }
         m = m->next;
     }
-
     if (ti == (jl_value_t*)jl_bottom_type) {
         if (m != (void*)jl_nothing) {
             func = m->func;
@@ -1178,8 +1176,8 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
     size_t sl = jl_nparams(sig);
     // we know !jl_args_morespecific(type, sig)
     if ((tl==sl ||
-         (tl==sl+1 && jl_is_va_tuple(type)) ||
-         (tl+1==sl && jl_is_va_tuple(sig))) &&
+         (tl==sl+1 && jl_is_va_tuple_varlen(type)) ||
+         (tl+1==sl && jl_is_va_tuple_varlen(sig))) &&
         !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
@@ -1263,7 +1261,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             gc_wb(l, l->sig);
             l->tvars = tvars;
             gc_wb(l, l->tvars);
-            l->va = jl_is_va_tuple(type);
+            l->va = jl_is_va_tuple_varlen(type);
             l->isstaged = isstaged;
             l->invokes = (struct _jl_methtable_t *)jl_nothing;
             l->func = method;
@@ -1292,7 +1290,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
     jl_set_typeof(newrec, jl_method_type);
     newrec->sig = type;
     newrec->tvars = tvars;
-    newrec->va = jl_is_va_tuple(type);
+    newrec->va = jl_is_va_tuple_varlen(type);
     newrec->isstaged = isstaged;
     newrec->func = method;
     newrec->invokes = (struct _jl_methtable_t*)jl_nothing;
@@ -1389,7 +1387,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     }
     // update max_args
     size_t na = jl_nparams(type);
-    if (jl_is_va_tuple(type))
+    if (jl_is_va_tuple_varlen(type))
         na--;
     if (na > mt->max_args)
         mt->max_args = na;

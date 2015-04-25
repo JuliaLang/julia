@@ -241,8 +241,8 @@ const getfield_tfunc = function (A, s0, name)
     if !isa(s,DataType)
         return Any
     end
-    if is(s.name,NTuple.name)
-        return s.parameters[2]
+    if s <: Tuple && s.types.length == 1 && isvatuple(s)
+        return s.types[1].parameters[1]
     end
     if s.abstract
         return Any

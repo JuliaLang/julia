@@ -4,6 +4,7 @@ module DataFmt
 
 importall Base
 import Base: _default_delims, tryparse_internal
+import Base: NTuple
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 

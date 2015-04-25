@@ -27,8 +27,8 @@ jl_datatype_t *jl_gensym_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
-jl_datatype_t *jl_ntuple_type;
-jl_typename_t *jl_ntuple_typename;
+    //jl_datatype_t *jl_ntuple_type;
+    //jl_typename_t *jl_ntuple_typename;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
@@ -503,6 +503,8 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
     JL_GC_PUSH1(&p);
     jl_value_t *ti;
     size_t i;
+    if (0) {}
+    /*
     if (a->name == jl_ntuple_typename) {
         assert(jl_svec_len(p) == 2);
         // NOTE: tuples are covariant, so NTuple element type is too
@@ -516,6 +518,7 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
         }
         jl_svecset(p, 1, ti);
     }
+    */
     else {
         for(i=0; i < jl_svec_len(p); i++) {
             jl_value_t *ap = jl_svecref(a->parameters,i);
@@ -851,6 +854,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         long alen = (long)jl_nparams(a);
         jl_value_t *temp=NULL;
         JL_GC_PUSH2(&b, &temp);
+        /*
         if (jl_is_ntuple_type(b)) {
             has_ntuple_intersect_tuple = 1;
             jl_value_t *lenvar = jl_tparam0(b);
@@ -912,6 +916,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                 }
             }
         }
+        */
         if (jl_is_type_type(b)) {
             jl_value_t *btp0v = jl_tparam0(b);
             if (jl_is_typevar(btp0v)) {
@@ -932,11 +937,13 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_tuple_type(b)) {
         return jl_type_intersect(b, a, penv,eqc,var);
     }
+    /*
     if (jl_is_ntuple_type(a) && jl_is_type_type(b)) {
         jl_value_t *temp = a;
         a = b;
         b = temp;
     }
+    */
     // tag
     if (!jl_is_datatype(a) || !jl_is_datatype(b))
         return (jl_value_t*)jl_bottom_type;
@@ -1689,12 +1696,14 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                              pi);
         }
     }
+    /*
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
         jl_is_long(params[0])) {
         size_t nt = jl_unbox_long(params[0]);
         return (jl_value_t*)jl_tupletype_fill(nt, (n==2) ? params[1] :
                                               (jl_value_t*)jl_any_type);
     }
+    */
     size_t ntp = jl_svec_len(tp);
     if (n > ntp)
         jl_errorf("too many parameters for type %s", tname);
@@ -2409,6 +2418,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
 
     if (jl_is_tuple_type(a)) {
         if (jl_is_datatype(b)) {
+            /*
             if (((jl_datatype_t*)b)->name == jl_ntuple_typename) {
                 jl_value_t *tp = jl_tparam1(b);
                 if (tuple_all_subtype((jl_datatype_t*)a, tp, 0, invariant)) {
@@ -2420,6 +2430,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                 }
                 return 0;
             }
+            */
         }
         if (jl_is_tuple_type(b)) {
             return jl_tuple_subtype_(jl_svec_data(((jl_datatype_t*)a)->parameters), jl_nparams(a),
@@ -2431,6 +2442,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     if (!invariant && (jl_datatype_t*)b == jl_any_type) return 1;
 
     if (jl_is_tuple_type(b)) {
+        /*
         if (jl_is_datatype(a) &&
             ((jl_datatype_t*)a)->name == jl_ntuple_typename) {
             // only ((T>:S)...,) can be a supertype of NTuple{N,S}
@@ -2439,6 +2451,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                 return jl_subtype_le(ntp, jl_tparam0(jl_tparam0(b)), 0, invariant);
             }
         }
+        */
         return 0;
     }
 
@@ -2449,10 +2462,12 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         int super=0;
         while (tta != (jl_datatype_t*)jl_any_type) {
             if (tta->name == ttb->name) {
+                /*
                 if (tta->name == jl_ntuple_typename) {
                     // NTuple must be covariant
                     return jl_subtype_le(jl_tparam(tta,1), jl_tparam(ttb,1), 0, invariant);
                 }
+                */
                 if (super && ttb->name == jl_type_type->name && jl_is_typevar(jl_tparam0(b))) {
                     if (jl_subtype_le(a, jl_tparam0(b), 0, 1))
                         return 1;
@@ -2613,10 +2628,12 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
     }
     size_t i;
     if (jl_is_tuple_type(a)) {
+        /*
         if (jl_is_datatype(b) &&
             ((jl_datatype_t*)b)->name == jl_ntuple_typename) {
             return tuple_all_morespecific((jl_datatype_t*)a, jl_tparam(b,1), invariant);
         }
+        */
         if (jl_is_tuple_type(b)) {
             return jl_tuple_morespecific_((jl_datatype_t*)a, (jl_datatype_t*)b, invariant);
         }
@@ -2677,6 +2694,7 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
     if (!invariant && (jl_datatype_t*)b == jl_any_type) return 1;
 
     if (jl_is_tuple_type(b)) {
+        /*
         if (jl_is_datatype(a) &&
             ((jl_datatype_t*)a)->name == jl_ntuple_typename) {
             // only ((T>:S)...,) can be a supertype of NTuple[N,S]
@@ -2685,6 +2703,7 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
                 return jl_type_morespecific_(ntp, jl_tparam0(jl_tparam0(b)), invariant);
             }
         }
+        */
         return 0;
     }
 
@@ -2699,10 +2718,12 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
                     if (tta->name != jl_type_type->name)
                         return 1;
                 }
+                /*
                 if (tta->name == jl_ntuple_typename) {
                     // NTuple must be covariant
                     return jl_type_morespecific_(jl_tparam(tta,1), jl_tparam(ttb,1), invariant);
                 }
+                */
                 if (super && ttb->name == jl_type_type->name && jl_is_typevar(jl_tparam0(b))) {
                     if (jl_type_morespecific_(a, jl_tparam0(b), 1))
                         return 1;
@@ -2948,7 +2969,18 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         return jl_false;
     }
 
+    if (jl_is_tuple_type(child) && jl_nparams(child) == 1 &&
+        jl_is_vararg_type(jl_tparam(child,0)) &&
+        jl_is_tuple_type(parent) && jl_nparams(parent) == 1 &&
+        jl_is_vararg_type(jl_tparam(parent,0))) {
+        // We're matching Tuple{Vararg{S,M}} against Tuple{Vararg{T,N}}
+        // Use the DataType rules rather than the tuple rules
+        child  = jl_tparam(child, 0);
+        parent = jl_tparam(parent,0);
+    }
+
     if (jl_is_tuple_type(child)) {
+        /*
         if (jl_is_datatype(parent) &&
             ((jl_datatype_t*)parent)->name == jl_ntuple_typename) {
             jl_svec_t *tp = ((jl_datatype_t*)parent)->parameters;
@@ -2976,6 +3008,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             JL_GC_POP();
             return tmp;
         }
+        */
 
         if (jl_is_tuple_type(parent)) {
             return tuple_match((jl_datatype_t*)child, (jl_datatype_t*)parent, env,
@@ -2984,6 +3017,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         return jl_false;
     }
     if (jl_is_tuple_type(parent)) {
+        /*
         if (jl_is_datatype(child) &&
             ((jl_datatype_t*)child)->name == jl_ntuple_typename) {
             // only ((T>:S)...,) can be a supertype of NTuple[N,S]
@@ -2992,6 +3026,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 return type_match_(ntp, jl_tparam0(jl_tparam0(parent)), env, morespecific, invariant);
             }
         }
+        */
         return jl_false;
     }
 
@@ -3223,10 +3258,12 @@ void jl_init_types(void)
                                        (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_any_type);
     jl_type_type->parameters = jl_svec(1, tttvar);
 
+    /*
     tv = jl_svec2(tvar("N"), tvar("T"));
     jl_ntuple_type = jl_new_abstracttype((jl_value_t*)jl_symbol("NTuple"),
                                          jl_any_type, tv);
     jl_ntuple_typename = jl_ntuple_type->name;
+    */
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
     jl_emptytuple = ((jl_datatype_t*)empty_tuple_type)->instance;

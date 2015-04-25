@@ -35,6 +35,8 @@ call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
+typealias NTuple{N,T} Tuple{Vararg{T,N}}
+
 convert{T}(::Type{T}, x::T) = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()

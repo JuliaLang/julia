@@ -368,8 +368,8 @@ extern DLLEXPORT jl_datatype_t *jl_simplevector_type;
 extern DLLEXPORT jl_typename_t *jl_tuple_typename;
 extern DLLEXPORT jl_datatype_t *jl_anytuple_type;
 #define jl_tuple_type jl_anytuple_type
-extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
-extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
+    //extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
+    //extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
@@ -869,11 +869,13 @@ STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
     return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
 }
 
+    /*
 STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)v)->name == jl_ntuple_typename);
 }
+    */
 
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
@@ -1006,6 +1008,15 @@ STATIC_INLINE int jl_is_vararg_fixedlen(jl_value_t *v)
     if (jl_is_typevar(lenv))
         return ((jl_tvar_t*)lenv)->bound != 0;
     return jl_is_long(lenv);
+}
+
+STATIC_INLINE int jl_is_va_tuple_varlen(jl_datatype_t *t)
+{
+    size_t l = jl_svec_len(t->parameters);
+    if (l == 0)
+        return 0;
+    jl_value_t *last = jl_tparam(t,l-1);
+    return jl_is_vararg_type(last) && !jl_is_vararg_fixedlen(last);
 }
 
 // structs

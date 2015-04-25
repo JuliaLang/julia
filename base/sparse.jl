@@ -9,6 +9,7 @@ importall Base.LinAlg
 import Base.promote_eltype
 import Base.@get!
 import Base.Broadcast.eltype_plus, Base.Broadcast.broadcast_shape
+import Base.NTuple
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, SparseMatrixCSC,
        blkdiag, dense, droptol!, dropzeros!, etree, issparse, nnz, nonzeros, nzrange,
