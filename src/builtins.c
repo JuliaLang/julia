@@ -1617,6 +1617,171 @@ DLLEXPORT void jl_(void *jl_value)
     in_jl_--;
 }
 
+// Useful because the jl_typeof macro isn't available from debugger
+void jl_static_show_typeof(JL_STREAM *out, jl_value_t *v)
+{
+    if (v == NULL) {
+        jl_printf(out, "#<null>");
+    }
+    else if (jl_typeof(v) == NULL) {
+        jl_printf(out, "<?::#null>");
+    }
+    else if (jl_astaggedvalue(v)->type_bits < 4096U) {
+        jl_printf(out, "<?::#%d>", (int)jl_astaggedvalue(v)->type_bits);
+    }
+    else if (jl_is_lambda_info(v)) {
+        jl_printf(out, "lambda_info");
+    }
+    else if (jl_is_svec(v)) {
+        jl_printf(out, "svec");
+    }
+    else if (jl_is_datatype(v)) {
+        jl_printf(out, "DataType");
+    }
+    else if (jl_is_func(v)) {
+        jl_printf(out, "#<function>");
+    }
+    else if (jl_typeis(v, jl_intrinsic_type)) {
+        jl_printf(out, "#<intrinsic function>");
+    }
+    else if (jl_is_int64(v)) {
+        jl_printf(out, "Int64");
+    }
+    else if (jl_is_int32(v)) {
+        jl_printf(out, "Int32");
+    }
+    else if (jl_typeis(v,jl_int16_type)) {
+        jl_printf(out, "Int16");
+    }
+    else if (jl_typeis(v,jl_int8_type)) {
+        jl_printf(out, "Int8");
+    }
+    else if (jl_is_uint64(v)) {
+        jl_printf(out, "UInt64");
+    }
+    else if (jl_is_uint32(v)) {
+        jl_printf(out, "UInt32");
+    }
+    else if (jl_typeis(v,jl_uint16_type)) {
+        jl_printf(out, "UInt16");
+    }
+    else if (jl_typeis(v,jl_uint8_type)) {
+        jl_printf(out, "UInt8");
+    }
+    else if (jl_is_cpointer(v)) {
+        jl_printf(out, "cpointer");
+    }
+    else if (jl_is_float32(v)) {
+        jl_printf(out, "Float32");
+    }
+    else if (jl_is_float64(v)) {
+        jl_printf(out, "Float64");
+    }
+    else if (v == jl_true || v == jl_false) {
+        jl_printf(out, "jl_boolean");
+    }
+    else if (v == jl_nothing) {
+        jl_printf(out, "nothing");
+    }
+    else if (jl_is_byte_string(v)) {
+        jl_printf(out, "ByteString");
+    }
+    else if (jl_is_uniontype(v)) {
+        jl_printf(out, "Union");
+    }
+    else if (jl_is_typector(v)) {
+        jl_printf(out, "TypeConstructor");
+    }
+    else if (jl_is_typevar(v)) {
+        jl_printf(out, "TypeVar");
+    }
+    else if (jl_is_module(v)) {
+        jl_printf(out, "Module");
+    }
+    else if (jl_is_symbol(v)) {
+        jl_printf(out, "Symbol");
+    }
+    else if (jl_is_gensym(v)) {
+        jl_printf(out, "GenSym");
+    }
+    else if (jl_is_symbolnode(v)) {
+        jl_printf(out, "SymbolNode");
+    }
+    else if (jl_is_globalref(v)) {
+        jl_printf(out, "GlobalRef");
+    }
+    else if (jl_is_labelnode(v)) {
+        jl_printf(out, "LabelNode");
+    }
+    else if (jl_is_gotonode(v)) {
+        jl_printf(out, "GotoNode");
+    }
+    else if (jl_is_quotenode(v)) {
+        jl_printf(out, "QuoteNode");
+    }
+    else if (jl_is_newvarnode(v)) {
+        jl_printf(out, "NewVarNode");
+    }
+    else if (jl_is_topnode(v)) {
+        jl_printf(out, "topnode");
+    }
+    else if (jl_is_linenode(v)) {
+        jl_printf(out, "LineNode");
+    }
+    else if (jl_is_expr(v)) {
+        jl_printf(out, "Expr");
+    }
+    else if (jl_is_array(v)) {
+        jl_printf(out, "Array");
+    }
+    else if (jl_typeis(v,jl_loaderror_type)) {
+        jl_printf(out, "LoadError");
+    }
+    else if (jl_typeis(v,jl_errorexception_type)) {
+        jl_printf(out, "ErrorException");
+    }
+    else if (jl_is_datatype(jl_typeof(v))) {
+        jl_datatype_t *dv = (jl_datatype_t*)jl_typeof(v);
+        if (dv->name->module != jl_core_module) {
+            jl_static_show_x(out, (jl_value_t*)dv->name->module, 0);
+            jl_printf(out, ".");
+        }
+        jl_printf(out, "%s", dv->name->name->name);
+        if (dv->parameters && (jl_value_t*)dv != dv->name->primary) {
+            size_t j, tlen = jl_nparams(dv);
+            if (tlen > 0) {
+                jl_printf(out, "{");
+                for (j = 0; j < tlen; j++) {
+                    jl_value_t *p = jl_tparam(dv,j);
+                    jl_static_show_x(out, p, 0);
+                    if (j != tlen-1)
+                        jl_printf(out, ", ");
+                }
+                jl_printf(out, "}");
+            }
+            else if (jl_is_tuple_type(dv)) {
+                jl_printf(out, "{}");
+            }
+        }
+    }
+    else {
+        jl_printf(out, "<?Unknown?>");
+    }
+}
+
+DLLEXPORT void jlt_(void *jl_value)
+{
+    in_jl_++;
+    JL_TRY {
+        (void)jl_static_show_typeof(JL_STDOUT, (jl_value_t*)jl_value);
+        jl_printf(JL_STDOUT,"\n");
+    }
+    JL_CATCH {
+        jl_printf(JL_STDOUT, "\n!!! ERROR in jlt_ -- ABORTING !!!\n");
+    }
+    in_jl_--;
+}
+
 DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in you debugger here
