@@ -239,6 +239,7 @@ innermost array being indexed.
 
 Alternatively, single elements of a multidimensional array can be indexed as
 ::
+
     x = A[I]
 
 where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
