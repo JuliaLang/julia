@@ -7,14 +7,13 @@ testnames = [
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
-    "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
+    "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show", "unicode",
     "lineedit", "replcompletions", "repl", "test", "goto", "parser"
 ]
 
 if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
     push!(testnames, "examples")
 end
-@unix_only push!(testnames, "unicode")
 
 # parallel tests depend on other workers - do them last
 push!(testnames, "parallel")

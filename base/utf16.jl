@@ -34,9 +34,11 @@ function encode16(s::String)
     for c in s
         if c < 0x10000
             push!(buf, uint16(c))
+        elseif c <= 0x10ffff
+            push!(buf, uint16(0xd7c0 + (c>>10)))
+            push!(buf, uint16(0xdc00 + (c & 0x3ff)))
         else
-            push!(buf, uint16(0xd7c0 + (c>>10) & 0x3ff))
-            push!(buf, uint16(0xdc00 + c & 0x3ff))
+            throw(ArgumentError("invalid Unicode character (0x$(hex(c)) > 0x10ffff)"))
         end
     end
     push!(buf, 0) # NULL termination
