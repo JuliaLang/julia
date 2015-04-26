@@ -25,7 +25,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-begin
+@non_windowsxp_only begin
 stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -235,7 +235,7 @@ end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-let exename = joinpath(JULIA_HOME, Base.julia_exename())
+@non_windowsxp_only let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
