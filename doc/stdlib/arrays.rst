@@ -65,7 +65,7 @@ Basic functions
 
    An abstract array subtype ``MyArray`` that wishes to opt into fast linear indexing behaviors should define ``linearindexing`` in the type-domain::
 
-   Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+       Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 
 .. function:: countnz(A)
 

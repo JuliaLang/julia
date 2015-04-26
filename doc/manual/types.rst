@@ -917,7 +917,7 @@ function itself. The salient aspects of a function's arguments are their
 order and their types. Therefore a tuple type is similar to a
 parameterized immutable type where each parameter is the type
 of one field. For example, a 2-element tuple type resembles the following
-immutable type:
+immutable type::
 
     immutable Tuple2{A,B}
       a::A
