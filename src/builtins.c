@@ -1608,7 +1608,7 @@ DLLEXPORT void jl_(void *jl_value)
 {
     in_jl_++;
     JL_TRY {
-        (void)jl_static_show(JL_STDOUT, (jl_value_t*)jl_value);
+        (void)jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
         jl_printf(JL_STDOUT,"\n");
     }
     JL_CATCH {
