@@ -799,7 +799,7 @@ clean-openlibm:
 	-rm $(OPENLIBM_OBJ_TARGET)
 	-rm $(build_libdir)/libopenlibm.a
 
-get-openlibm: openlibm/Makefile
+get-openlibm: $(OPENLIBM_SRC_DIR)/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
