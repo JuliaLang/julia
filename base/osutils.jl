@@ -55,14 +55,10 @@ end
 
 WINDOWS_XP_VER = (5,1)
 
-macro windowsxp(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end
-
 macro windowsxp_only(ex)
-    @windowsxp? esc(ex) : nothing
+    _os_test(:?, Expr(:(:), ex, nothing), OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
 end
 
 macro non_windowsxp_only(ex)
-    @windowsxp? nothing : esc(ex)
+    _os_test(:?, Expr(:(:), nothing, ex), OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
 end
