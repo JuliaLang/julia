@@ -1343,12 +1343,12 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         n += jl_static_show_x(out, (jl_value_t*)li->module, depth);
-        n += jl_printf(out, ".%s", li->name->name);
         if (li->specTypes) {
-            n += jl_static_show_x(out, (jl_value_t*)li->specTypes, depth);
+            n += jl_printf(out, ".");
+            n += jl_show_svec(out, li->specTypes->parameters, li->name->name);
         }
         else {
-            n += jl_printf(out, "(?)");
+            n += jl_printf(out, ".%s(?)", li->name->name);
         }
         // The following is nice for debugging, but allocates memory and generates a lot of output
         // so it may not be a good idea to to have it active
