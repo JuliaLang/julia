@@ -18,7 +18,7 @@ function choosetests(choices = [])
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
         "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall",
+        "operators", "path", "ccall", "unicode",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
@@ -38,7 +38,6 @@ function choosetests(choices = [])
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
-    @unix_only push!(testnames, "unicode")
 
     # parallel tests depend on other workers - do them last
     push!(testnames, "parallel")
