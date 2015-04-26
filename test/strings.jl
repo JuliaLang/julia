@@ -220,6 +220,10 @@ parsehex(s) = parse(Int,s,16)
 @test_throws ArgumentError parse(Int,"2x")
 @test_throws ArgumentError parse(Int,"-")
 
+# multibyte spaces
+@test parse(Int, "3\u2003\u202F") == 3
+@test_throws ArgumentError parse(Int, "3\u2003\u202F,")
+
 @test parse(Int,'a') == 10
 @test_throws ArgumentError parse(Int,typemax(Char))
 

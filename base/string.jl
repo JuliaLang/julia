@@ -1605,7 +1605,7 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     return Nullable{T}(n)
 end
 tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
-    tryparse_internal(T,s,start(s),length(s),base,raise)
+    tryparse_internal(T,s,start(s),endof(s),base,raise)
 tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool) =
     tryparse_internal(T, s, startpos, endpos, base, base <= 36 ? 10 : 36, raise)
 tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
