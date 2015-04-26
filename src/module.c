@@ -36,7 +36,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
-DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, int std_imports)
+DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 {
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
