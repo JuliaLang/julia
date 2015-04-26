@@ -159,7 +159,7 @@ begin
     close(a)
     close(b)
 end
-begin
+@non_windowsxp_only begin
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
