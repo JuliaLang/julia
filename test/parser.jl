@@ -78,3 +78,6 @@ macro test999_str(args...); args; end
                                                            QuoteNode(:quote),
                                                            :f))),
                                         :i))
+
+# issue #10994
+@test parse("1 + #= \0 =# 2") == :(1 + 2)

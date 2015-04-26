@@ -150,18 +150,18 @@ function syntax_deprecation_warnings(f::Function, warn::Bool)
     end
 end
 
-function parse_input_line(s::AbstractString)
-    # s = bytestring(s)
+function parse_input_line(s::ByteString)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{UInt8},Int32,Int32),
-    #                   s, pos-1, 1)
+    #                   (Ptr{UInt8},Csize_t,Int32,Int32),
+    #                   s, sizeof(s), pos-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t), s, sizeof(s))
 end
+parse_input_line(s::AbstractString) = parse_input_line(bytestring(s))
 
 function parse_input_line(io::IO)
     s = ""

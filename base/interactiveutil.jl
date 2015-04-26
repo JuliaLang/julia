@@ -107,6 +107,9 @@ end
 
 @windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
+        if containsnul(x)
+            throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
+        end
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = utf16(x)
@@ -355,7 +358,7 @@ end
 
 @windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{UInt16},Ptr{UInt16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
+                (Ptr{Void},Cwstring,Cwstring,Cint,Ptr{Void}),C_NULL,url,filename,0,0)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end

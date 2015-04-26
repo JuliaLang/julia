@@ -821,3 +821,6 @@ err(z, x) = abs(z - x) / abs(x)
 # check exponent range is set to max possible
 @test MPFR.get_emin() == MPFR.get_emin_min()
 @test MPFR.get_emax() == MPFR.get_emax_max()
+
+# issue #10994: handle embedded NUL chars for string parsing
+@test_throws ArgumentError BigFloat("1\0")

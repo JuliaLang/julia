@@ -95,6 +95,7 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
 
 # test invalid port

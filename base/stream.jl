@@ -890,7 +890,7 @@ end
 
 function bind(server::PipeServer, name::AbstractString)
     @assert server.status == StatusInit
-    err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{UInt8}),
+    err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Cstring),
                 server.handle, name)
     if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
@@ -916,7 +916,7 @@ function connect!(sock::Pipe, path::AbstractString)
     @assert sock.status == StatusInit
     req = Libc.malloc(_sizeof_uv_connect)
     uv_req_set_data(req,C_NULL)
-    ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
+    ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
     sock
 end

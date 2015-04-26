@@ -72,7 +72,7 @@ _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer,mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
-    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{UInt8},Int32,Int32,Ptr{Void}),
+    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Cstring,Int32,Int32,Ptr{Void}),
                 eventloop(), req, f.path, flags,mode, C_NULL)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
@@ -96,7 +96,7 @@ function close(f::File)
 end
 
 function unlink(p::AbstractString)
-    err = ccall(:jl_fs_unlink, Int32, (Ptr{UInt8},), p)
+    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
     uv_error("unlink",err)
 end
 function unlink(f::File)
@@ -112,7 +112,7 @@ end
 
 # For move command
 function rename(src::AbstractString, dst::AbstractString)
-    err = ccall(:jl_fs_rename, Int32, (Ptr{UInt8}, Ptr{UInt8}), src, dst)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
 
     # on error, default to cp && rm
     if err < 0
@@ -159,7 +159,7 @@ end
 @non_windowsxp_only function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
-    err = ccall(:jl_fs_symlink, Int32, (Ptr{UInt8}, Ptr{UInt8}, Cint), p, np, flags)
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @windows_only if err < 0
         Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
     end
@@ -171,7 +171,7 @@ end
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     ret = ccall(:uv_fs_readlink, Int32,
-        (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}),
+        (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
         eventloop(), req, path, C_NULL)
     uv_error("readlink", ret)
     tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
@@ -181,7 +181,7 @@ function readlink(path::AbstractString)
 end
 
 function chmod(p::AbstractString, mode::Integer)
-    err = ccall(:jl_fs_chmod, Int32, (Ptr{UInt8}, Cint), p, mode)
+    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), p, mode)
     uv_error("chmod",err)
 end
 

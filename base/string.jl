@@ -40,6 +40,7 @@ function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{UInt8},), p)
 end
+bytestring(s::Cstring) = bytestring(box(Ptr{Cchar}, unbox(Cstring,s)))
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
@@ -527,7 +528,7 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
 # faster comparisons for byte strings and symbols
 
 cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
-cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
+cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
 
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
@@ -644,13 +645,6 @@ function getindex(s::AbstractString, r::UnitRange{Int})
         throw(BoundsError(s, r))
     end
     SubString(s, first(r), last(r))
-end
-
-function unsafe_convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
-    if s.offset+s.endof < endof(s.string)
-        throw(ArgumentError("a SubString must coincide with the end of the original string to be convertible to pointer"))
-    end
-    convert(Ptr{P}, s.string.data) + s.offset
 end
 
 isascii(s::SubString{ASCIIString}) = true
@@ -1248,9 +1242,10 @@ shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
 
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
+    bstr = bytestring(str)
     ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{UInt8}, Int32, Int32),
-                    str, pos-1, greedy ? 1:0)
+                    (Ptr{UInt8}, Csize_t, Int32, Int32),
+                    bstr, sizeof(bstr), pos-1, greedy ? 1:0)
     if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
@@ -1624,11 +1619,13 @@ string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 
-tryparse(::Type{Float64}, s::AbstractString) = ccall(:jl_try_strtod, Nullable{Float64}, (Ptr{UInt8},), s)
-tryparse(::Type{Float64}, s::SubString) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
+tryparse(::Type{Float64}, s::ByteString) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+tryparse{T<:ByteString}(::Type{Float64}, s::SubString{T}) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
 
-tryparse(::Type{Float32}, s::AbstractString) = ccall(:jl_try_strtof, Nullable{Float32}, (Ptr{UInt8},), s)
-tryparse(::Type{Float32}, s::SubString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
+tryparse(::Type{Float32}, s::ByteString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+tryparse{T<:ByteString}(::Type{Float32}, s::SubString{T}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
+
+tryparse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
 
 function parse{T<:FloatingPoint}(::Type{T}, s::AbstractString)
     nf = tryparse(T, s)
@@ -1715,12 +1712,26 @@ function repr(x)
     takebuf_string(s)
 end
 
+containsnul(s::AbstractString) = '\0' in s
+containsnul(s::ByteString) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::Union(UTF16String,UTF32String)) = findfirst(s.data, 0) != length(s.data)
+
 if sizeof(Cwchar_t) == 2
-    const WString = UTF16String # const, not typealias, to get constructor
+    const WString = UTF16String
     const wstring = utf16
 elseif sizeof(Cwchar_t) == 4
-    const WString = UTF32String # const, not typealias, to get constructor
+    const WString = UTF32String
     const wstring = utf32
+end
+wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
+
+# Cwstring is defined in c.jl, but conversion needs to be defined here
+# to have WString
+function unsafe_convert(::Type{Cwstring}, s::WString)
+    if containsnul(s)
+        throw(ArgumentError("embedded NUL chars are not allowed in C strings"))
+    end
+    return Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
 end
 
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:

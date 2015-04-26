@@ -48,8 +48,8 @@ end
 
 stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
-stat(path::AbstractString)  = @stat_call jl_stat  Ptr{UInt8} path
-lstat(path::AbstractString) = @stat_call jl_lstat Ptr{UInt8} path
+stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
+lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))

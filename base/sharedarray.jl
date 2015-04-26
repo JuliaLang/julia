@@ -390,8 +390,8 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     mmap_array(T, dims, s, zero(FileOffset), grow=false)
 end
 
-shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{UInt8},), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{UInt8}, Int, Int), shm_seg_name, oflags, permissions)
+shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Cstring, Int, Int), shm_seg_name, oflags, permissions)
 
 end # @unix_only
 

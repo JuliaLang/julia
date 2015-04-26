@@ -195,3 +195,11 @@ close(f)
 @test "Hello World\n" == readall(fname)
 @test is(OLD_STDOUT,STDOUT)
 rm(fname)
+
+# issue #10994: libuv can't handle strings containing NUL
+let bad = "bad\0name"
+    @test_throws ArgumentError run(`$bad`)
+    @test_throws ArgumentError run(`echo $bad`)
+    @test_throws ArgumentError run(setenv(`echo hello`, bad=>"good"))
+    @test_throws ArgumentError run(setenv(`echo hello`, "good"=>bad))
+end
