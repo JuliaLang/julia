@@ -145,6 +145,16 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
 {
+    // if the user killed a stdio handle,
+    // revert back to direct stdio FILE* writes
+    // so that errors can still be reported
+    if (handle == (uv_handle_t*)JL_STDIN)
+        JL_STDIN = (JL_STREAM*)STDIN_FILENO;
+    if (handle == (uv_handle_t*)JL_STDOUT)
+        JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+    if (handle == (uv_handle_t*)JL_STDERR)
+        JL_STDERR = (JL_STREAM*)STDERR_FILENO;
+    // also let the client app do its own cleanup
     if (handle->data) {
         JULIA_CB(close,handle->data,0);
     }
@@ -539,7 +549,7 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
 
     // Fallback for output during early initialisation...
     if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
-        jl_io_loop = uv_default_loop();
+        if (!jl_io_loop) jl_io_loop = uv_default_loop();
         fd = (uv_file)(size_t)stream;
     }
     else if (stream->type == UV_FILE) {
