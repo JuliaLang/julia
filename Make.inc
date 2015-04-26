@@ -511,6 +511,8 @@ ifeq ($(ISX86),1)
 CC += -m$(BINARY)
 CXX += -m$(BINARY)
 FC += -m$(BINARY)
+CC_ARG += -m$(BINARY)
+CXX_ARG += -m$(BINARY)
 endif
 endif
 
