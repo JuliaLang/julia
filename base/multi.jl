@@ -981,6 +981,10 @@ function start_worker(out::IO)
 
     disable_nagle(sock)
 
+    if ccall(:jl_running_on_valgrind,Cint,()) != 0
+        println(out, "PID = $(getpid())")
+    end
+
     try
         # To prevent hanging processes on remote machines, newly launched workers exit if the
         # master process does not connect in time.
