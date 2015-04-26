@@ -211,6 +211,8 @@ end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
+## from general iterable to any array
+
 function copy!(dest::AbstractArray, src)
     i = 1
     for x in src
@@ -220,7 +222,6 @@ function copy!(dest::AbstractArray, src)
     return dest
 end
 
-# copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
 function copy!(dest::AbstractArray, doffs::Integer, src)
     doffs < 1 && throw(BoundsError())
@@ -247,7 +248,7 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
     dn = done(src, st)
     dn && throw(BoundsError())
     i, dmax = doffs, length(dest)
-   @inbounds while !dn
+    @inbounds while !dn
         i > dmax && throw(BoundsError())
         val, st = next(src, st)
         dest[i] = val
@@ -280,7 +281,20 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Inte
     return dest
 end
 
-# if src is an AbstractArray and a source offset is passed, use indexing
+## copy between abstract arrays - generally more efficient
+## since a single index variable can be used.
+
+function copy!(dest::AbstractArray, src::AbstractArray)
+    n = length(src)
+    if n > length(dest)
+        throw(BoundsError())
+    end
+    @inbounds for i = 1:n
+        dest[i] = src[i]
+    end
+    return dest
+end
+
 function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray)
     copy!(dest, doffs, src, 1, length(src))
 end
