@@ -1269,6 +1269,9 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     if (v == NULL) {
         n += jl_printf(out, "#<null>");
     }
+    else if ((uintptr_t)v < 4096U) {
+        n += jl_printf(out, "#<%d>", (int)(uintptr_t)v);
+    }
     else if (jl_typeof(v) == NULL) {
         n += jl_printf(out, "<?::#null>");
     }
@@ -1544,10 +1547,10 @@ DLLEXPORT void jl_(void *jl_value)
     in_jl_++;
     JL_TRY {
         (void)jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
-        jl_printf(JL_STDOUT,"\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
     }
     JL_CATCH {
-        jl_printf(JL_STDOUT, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
     }
     in_jl_--;
 }
