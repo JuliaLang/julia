@@ -2319,8 +2319,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
                 push!(newcall.args, argtype===Any ? name : SymbolNode(name, argtype))
             end
             body.args = Any[Expr(:return, newcall)]
-            ast = Expr(:lambda, newnames, Any[[], locals, []], body)
+            ast = Expr(:lambda, newnames, Any[[], locals, [], 0], body)
             need_mod_annotate = false
+            needcopy = false
         else
             return NF
         end
@@ -2435,7 +2436,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         argexprs2 = t.args
         icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
-        thrw = Expr(:call, :throw, Expr(:call, Main.Base.MethodError, (f, :inline), t))
+        thrw = Expr(:call, :throw, Expr(:call, TopNode(:MethodError), Expr(:call, top_tuple, e.args[1], QuoteNode(:inline)), t))
         thrw.typ = Bottom
     end
 

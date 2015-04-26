@@ -123,9 +123,15 @@ showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
     print(io, "MethodError: ")
-    name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
-    if isa(ex.f, DataType)
-        print(io, "`$(ex.f)` has no method matching $(ex.f)(")
+    if isa(ex.f, Tuple)
+        f = ex.f[1]
+        print(io, "<inline> ")
+    else
+        f = ex.f
+    end
+    name = isgeneric(f) ? f.env.name : :anonymous
+    if isa(f, DataType)
+        print(io, "`$(f)` has no method matching $(f)(")
     else
         print(io, "`$(name)` has no method matching $(name)(")
     end
@@ -138,10 +144,10 @@ function showerror(io::IO, ex::MethodError)
         i == length(ex.args) || print(io, ", ")
     end
     print(io, ")")
-    # Check for local functions that shaddow methods in Base
+    # Check for local functions that shadow methods in Base
     if isdefined(Base, name)
-        f = eval(Base, name)
-        if f !== ex.f && isgeneric(f) && applicable(f, ex.args...)
+        basef = eval(Base, name)
+        if basef !== f && isgeneric(basef) && applicable(basef, ex.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
@@ -154,14 +160,14 @@ function showerror(io::IO, ex::MethodError)
         hasrows |= isrow
         push!(vec_args, isrow ? vec(arg) : arg)
     end
-    if hasrows && applicable(ex.f, vec_args...)
+    if hasrows && applicable(f, vec_args...)
         print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
         print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
         print(io, "\nYou can convert to a column vector with the vec() function.")
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if ex.f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
+    if f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
         println(io)
         print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...),")
         print(io, "\nsince type constructors fall back to convert methods.")
@@ -175,16 +181,21 @@ const UNSHOWN_METHODS = ObjectIdDict(
 function show_method_candidates(io::IO, ex::MethodError)
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
+    if isa(ex.f, Tuple)
+        f = ex.f[1]
+    else
+        f = ex.f
+    end
 
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = ex.f in [convert, getindex, setindex!]
-    funcs = [ex.f]
+    special = f in [convert, getindex, setindex!]
+    funcs = [f]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
-    ex.f === convert && push!(funcs, call)
+    f === convert && push!(funcs, call)
 
     for func in funcs
         name = isgeneric(func) ? func.env.name : :anonymous
