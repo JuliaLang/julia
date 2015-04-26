@@ -232,45 +232,45 @@ const getfield_tfunc = function (A, s0, name)
     if isType(s)
         s = typeof(s.parameters[1])
         if s === TypeVar
-            return Any
+            return Any, false
         end
     end
     if isa(s,UnionType)
-        return reduce(tmerge, Bottom, map(t->getfield_tfunc(A, t, name), s.types))
+        return reduce(tmerge, Bottom, map(t->getfield_tfunc(A, t, name)[1], s.types)), false
     end
     if !isa(s,DataType)
-        return Any
+        return Any, false
     end
     if is(s.name,NTuple.name)
-        return s.parameters[2]
+        return (name == Symbol ? Bottom : s.parameters[2]), true
     end
     if s.abstract
-        return Any
+        return Any, false
     end
     if s <: Tuple && name === Symbol
-        return Bottom
+        return Bottom, true
     end
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
         A1 = A[1]
         if isa(A1,Module) && isdefined(A1,fld) && isconst(A1, fld)
-            return abstract_eval_constant(eval(A1,fld))
+            return abstract_eval_constant(eval(A1,fld)), true
         end
         if s === Module
-            return Any
+            return Any, false
         end
         if isType(s0)
             sp = s0.parameters[1]
             if isa(sp,DataType) && !any(x->isa(x,TypeVar), sp.parameters)
                 # TODO
                 #if fld === :parameters
-                #    return Type{sp.parameters}
+                #    return Type{sp.parameters}, true
                 #end
                 #if fld === :types
-                #    return Type{sp.types}
+                #    return Type{sp.types}, true
                 #end
                 if fld === :super
-                    return Type{sp.super}
+                    return Type{sp.super}, isleaftype(s)
                 end
             end
         end
@@ -279,32 +279,33 @@ const getfield_tfunc = function (A, s0, name)
             if is(snames[i],fld)
                 R = s.types[i]
                 if length(s.parameters) == 0
-                    return R
+                    return R, true
                 else
-                    return limit_type_depth(R, 0, true,
+                    typ = limit_type_depth(R, 0, true,
                                             filter!(x->isa(x,TypeVar), Any[s.parameters...]))
+                    return typ, isleaftype(s) && typeseq(typ, R)
                 end
             end
         end
-        return Bottom
+        return Bottom, true
     elseif isa(A[2],Int)
         if isa(A[1],Module) || s === Module
-            return Bottom
+            return Bottom, true
         end
         i::Int = A[2]
         nf = s.types.length
         if isvatuple(s) && i >= nf
-            return s.types[nf].parameters[1]
+            return s.types[nf].parameters[1], false
         end
         if i < 1 || i > nf
-            return Bottom
+            return Bottom, true
         end
-        return s.types[i]
+        return s.types[i], false
     else
-        return reduce(tmerge, Bottom, map(unwrapva,s.types))#Union(s.types...)
+        return reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union(s.types...)=#, false
     end
 end
-t_func[getfield] = (2, 2, getfield_tfunc)
+t_func[getfield] = (2, 2, (A,s,name)->getfield_tfunc(A,s,name)[1])
 t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
     if isType(s)
@@ -312,11 +313,11 @@ const fieldtype_tfunc = function (A, s, name)
     else
         return Type
     end
-    t = getfield_tfunc(A, s, name)
+    t, exact = getfield_tfunc(A, s, name)
     if is(t,Bottom)
         return t
     end
-    Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
+    Type{exact || isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
@@ -585,13 +586,13 @@ function abstract_call_gf(f, fargs, argtype, e)
         # index arguments.
         if f === Main.Base.getindex
             isa(e,Expr) && (e.head = :call1)
-            return getfield_tfunc(fargs, argtypes[1], argtypes[2])
+            return getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
         elseif f === Main.Base.next
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2]), Int}
+            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
         elseif f === Main.Base.indexed_next
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2]), Int}
+            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
         end
     end
     if (isdefined(Main.Base,:promote_type) && f === Main.Base.promote_type) ||
