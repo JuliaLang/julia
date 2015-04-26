@@ -67,7 +67,7 @@ uvhandle(file::File) = file.handle
 
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
-function open(f::File,flags::Integer,mode::Integer)
+function open(f::File,flags::Integer,mode::Integer=0)
     req = c_malloc(_sizeof_uv_fs)
     ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
                 eventloop(), req, f.path, flags,mode, C_NULL)
@@ -124,27 +124,31 @@ end
 
 # For copy command
 function sendfile(src::String, dst::String)
-    src_file = open(src, JL_O_RDONLY)
-    if !src_file.open
-        error("Src file is not open")
-    end
+    src_file = File(src)
+    dst_file = File(dst)
+    try
+        open(src_file, JL_O_RDONLY)
+        if !src_file.open
+            error("source file \"$(src.path)\" is not open")
+        end
 
-    dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
-    if !dst_file.open
-        error("Dst file is not open")
-    end
+        open(dst_file, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
+             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
+        if !dst_file.open
+            error("destination file \"$(dst.path)\" is not open")
+        end
 
-    src_stat = stat(src_file)
-    err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
-                fd(src_file), fd(dst_file), 0, src_stat.size)
-    uv_error("sendfile", err)
-
-    if src_file.open
-        close(src_file)
-    end
-    if dst_file.open
-        close(dst_file)
+        src_stat = stat(src_file)
+        err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
+                    fd(src_file), fd(dst_file), 0, src_stat.size)
+        uv_error("sendfile", err)
+    finally
+        if src_file.open
+            close(src_file)
+        end
+        if dst_file.open
+            close(dst_file)
+        end
     end
 end
 
