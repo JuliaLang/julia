@@ -86,7 +86,7 @@ function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff:
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Void},
-                      (Ptr{UInt8}, Ptr{UInt8}, Int32, Int32, Int32, Int32),
+                      (Ptr{UInt8}, Cstring, Int32, Int32, Int32, Int32),
                       s.ios, fname, rd, wr, cr, tr) == C_NULL)
     if ff
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)

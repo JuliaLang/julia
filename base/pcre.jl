@@ -87,7 +87,7 @@ function compile(pattern::AbstractString, options::Integer)
     errstr[1] = C_NULL
     erroff = zeros(Int32,1)
     re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},
-                    (Ptr{UInt8}, Int32, Ptr{Ptr{UInt8}}, Ptr{Int32}, Ptr{UInt8}),
+                    (Cstring, Int32, Ptr{Ptr{UInt8}}, Ptr{Int32}, Ptr{UInt8}),
                     pattern, options, errstr, erroff, C_NULL)
     if re_ptr == C_NULL
         error("$(bytestring(errstr[1]))",

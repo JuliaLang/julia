@@ -148,15 +148,19 @@ Library improvements
 
     * `Givens` type doesn't have a size anymore and is no longer a subtype of `AbstractMatrix` ([#8660]).
 
-    * Large speedup in sparse ``\`` and splitting of Cholesky and LDLᵀ factorizations into ``cholfact`` and ``ldltfact`` ([#10117]).
+    * Large speedup in sparse `\` and splitting of Cholesky and LDLᵀ factorizations into `cholfact` and `ldltfact` ([#10117]).
 
-    * Add sparse least squares to ``\`` by adding ``qrfact`` for sparse matrices based on the SPQR library. ([#10180])
+    * Add sparse least squares to `\` by adding `qrfact` for sparse matrices based on the SPQR library. ([#10180])
 
     * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
     * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * Strings
+
+    * NUL-terminated strings should now be passed to C via the new `Cstring` type, not `Ptr{UInt8}` or `Ptr{Cchar}`,
+      in order to check whether the string is free of NUL characters (which would cause silent truncation in C).
+      The analogous type `Cwstring` should be used for NUL-terminated `wchar_t*` strings ([#10994]).
 
     * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
 
@@ -1380,11 +1384,12 @@ Too numerous to mention.
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10679]: https://github.com/JuliaLang/julia/issues/10679
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
-[#10714]: https://github.com/JuliaLang/julia/pull/10714
+[#10714]: https://github.com/JuliaLang/julia/issues/10714
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
 [#10885]: https://github.com/JuliaLang/julia/issues/10885
-[#10888]: https://github.com/JuliaLang/julia/pull/10888
-[#10893]: https://github.com/JuliaLang/julia/pull/10893
+[#10888]: https://github.com/JuliaLang/julia/issues/10888
+[#10893]: https://github.com/JuliaLang/julia/issues/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
+[#10994]: https://github.com/JuliaLang/julia/issues/10994

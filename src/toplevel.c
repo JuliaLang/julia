@@ -529,7 +529,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 }
 
 // repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(const char *fname)
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
@@ -589,7 +589,7 @@ jl_value_t *jl_load(const char *fname)
     if (jl_start_parsing_file(fpath) != 0) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_value_t *result = jl_parse_eval_all(fpath);
+    jl_value_t *result = jl_parse_eval_all(fpath, strlen(fpath));
     if (fpath != fname) free(fpath);
     return result;
 }

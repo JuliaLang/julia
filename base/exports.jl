@@ -144,6 +144,8 @@ export
     Culonglong,
     Cushort,
     Cwchar_t,
+    Cstring,
+    Cwstring,
 
 # Exceptions
     ArgumentError,

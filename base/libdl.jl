@@ -20,21 +20,21 @@ const RTLD_FIRST     = 0x00000040
 
 function dlsym(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{UInt8}), hnd, s)
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
 function dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
-    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{UInt8}), hnd, s)
+    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen(string(s), flags)
 
 dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{UInt8},UInt32), s, flags)
+    ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
 
 dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{UInt8},UInt32), s, flags)
+    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
 
 dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen_e(string(s), flags)
 
