@@ -275,6 +275,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     end
 end
 
-# Issue 10742
+# Issue 10742 and similar
 @test istril(UpperTriangular(diagm([1,2,3,4])))
 @test istriu(LowerTriangular(diagm([1,2,3,4])))
+@test isdiag(UpperTriangular(diagm([1,2,3,4])))
+@test isdiag(LowerTriangular(diagm([1,2,3,4])))
+@test !isdiag(UpperTriangular(rand(4, 4)))
+@test !isdiag(LowerTriangular(rand(4, 4)))

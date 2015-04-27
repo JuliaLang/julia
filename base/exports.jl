@@ -634,6 +634,7 @@ export
     givens,
     hessfact!,
     hessfact,
+    isdiag,
     ishermitian,
     isposdef!,
     isposdef,
