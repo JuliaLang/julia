@@ -255,22 +255,33 @@ public:
 };
 #endif
 
+#ifdef LLVM37
+static MDType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
+#else
 static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
+#endif
 {
     if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || !jl_isbits(jt) || isboxed)
         return jl_pvalue_dillvmt;
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
-    if (jdt->ditype != NULL)
+    if (jdt->ditype != NULL) {
 #ifdef LLVM37
-        return DIType((llvm::MDType*)jdt->ditype);
+        return (llvm::MDType*)jdt->ditype;
 #else
         return DIType((llvm::MDNode*)jdt->ditype);
 #endif
+    }
     if (jl_is_bitstype(jt)) {
+    #ifdef LLVM37
+        llvm::MDType *t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        jdt->ditype = t;
+        return t;
+    #else
         DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
         jdt->ditype = M;
         return t;
+    #endif
     }
     // TODO: Fixme
     return jl_pvalue_dillvmt;

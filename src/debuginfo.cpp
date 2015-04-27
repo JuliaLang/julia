@@ -3,10 +3,9 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
-#ifdef LLVM37
-#include <llvm/DebugInfo/DWARF/DIContext.h>
-#else
 #include <llvm/DebugInfo/DIContext.h>
+#ifdef LLVM37
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #endif
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/IR/Function.h>
@@ -640,7 +639,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #ifdef _OS_DARWIN_
                 if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0) {
 #endif
-#ifdef LLVM36
+#ifdef LLVM37
+                    context = new DWARFContextInMemory(*obj);
+#elif LLVM36
                     context = DIContext::getDWARFContext(*obj);
 #else
                     context = DIContext::getDWARFContext(obj);
@@ -710,7 +711,11 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
         DIContext *context = NULL; // current versions of MCJIT can't handle MachO relocations
 #else
 #ifdef LLVM36
+#ifdef LLVM37
+        DIContext *context = new DWARFContextInMemory(*it->second.object);
+#else
         DIContext *context = DIContext::getDWARFContext(*it->second.object);
+#endif
         pointer -= (*it).second.slide;
 #else
         DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
