@@ -65,10 +65,9 @@
 #endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/LLVMContext.h>
-#ifdef LLVM37
-#include <llvm/DebugInfo/DWARF/DIContext.h>
-#else
 #include <llvm/DebugInfo/DIContext.h>
+#ifdef LLVM37
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
@@ -387,7 +386,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 
 #ifdef USE_MCJIT
     if (!objectfile) return;
-#ifdef LLVM36
+#ifdef LLVM37
+    DIContext *di_ctx = new DWARFContextInMemory(*objectfile);
+#elif LLVM36
     DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
 #else
     DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
