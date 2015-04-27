@@ -2232,8 +2232,8 @@ end
 
 function vcat(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) for x in X ]
-    nX = [ size(x, 2) for x in X ]
+    mX = Int[ size(x, 1) for x in X ]
+    nX = Int[ size(x, 2) for x in X ]
     m = sum(mX)
     n = nX[1]
 
@@ -2250,7 +2250,7 @@ function vcat(X::SparseMatrixCSC...)
         Ti = promote_type(Ti, eltype(X[i].rowval))
     end
 
-    nnzX = [ nnz(x) for x in X ]
+    nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     colptr = Array(Ti, n + 1)
     rowval = Array(Ti, nnz_res)
@@ -2292,8 +2292,8 @@ end
 
 function hcat(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) for x in X ]
-    nX = [ size(x, 2) for x in X ]
+    mX = Int[ size(x, 1) for x in X ]
+    nX = Int[ size(x, 2) for x in X ]
     m = mX[1]
     for i = 2 : num
         if mX[i] != m; throw(DimensionMismatch("")); end
@@ -2304,7 +2304,7 @@ function hcat(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nnz(x) for x in X ]
+    nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -2342,8 +2342,8 @@ end
 
 function blkdiag(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) for x in X ]
-    nX = [ size(x, 2) for x in X ]
+    mX = Int[ size(x, 1) for x in X ]
+    nX = Int[ size(x, 2) for x in X ]
     m = sum(mX)
     n = sum(nX)
 
@@ -2351,7 +2351,7 @@ function blkdiag(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nnz(x) for x in X ]
+    nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -2519,7 +2519,7 @@ function trace{Tv}(A::SparseMatrixCSC{Tv})
     s
 end
 
-diag(A::SparseMatrixCSC) = [d for d in SpDiagIterator(A)]
+diag{Tv}(A::SparseMatrixCSC{Tv}) = Tv[d for d in SpDiagIterator(A)]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)

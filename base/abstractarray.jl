@@ -1345,14 +1345,20 @@ function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     return dest
 end
 
+freeze!{T}(A::Array{T,1}) = ccall(:jl_array_freeze, Void, (Any,), A)
+freeze!(::AbstractArray) = nothing
+
 function map(f, A::AbstractArray)
     if isempty(A)
-        return isa(f,Type) ? similar(A,f) : similar(A)
+        dest = isa(f,Type) ? similar(A,f) : similar(A,Union())
+    else
+        first = f(A[1])
+        dest = similar(A, typeof(first))
+        dest[1] = first
+        dest = map_to!(f, 2, dest, A)
     end
-    first = f(A[1])
-    dest = similar(A, typeof(first))
-    dest[1] = first
-    return map_to!(f, 2, dest, A)
+    freeze!(dest)
+    dest
 end
 
 ## 2 argument
@@ -1382,12 +1388,15 @@ end
 function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
-        return similar(A, promote_type(eltype(A),eltype(B)), shp)
+        dest = similar(A, Union(), shp)
+    else
+        first = f(A[1], B[1])
+        dest = similar(A, typeof(first), shp)
+        dest[1] = first
+        dest = map_to!(f, 2, dest, A, B)
     end
-    first = f(A[1], B[1])
-    dest = similar(A, typeof(first), shp)
-    dest[1] = first
-    return map_to!(f, 2, dest, A, B)
+    freeze!(dest)
+    dest
 end
 
 ## N argument
@@ -1422,12 +1431,15 @@ end
 function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], promote_eltype(As...), shape)
+        dest = similar(As[1], Union(), shape)
+    else
+        first = f(map(a->a[1], As)...)
+        dest = similar(As[1], typeof(first), shape)
+        dest[1] = first
+        dest = map_to!(f, 2, dest, As...)
     end
-    first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first), shape)
-    dest[1] = first
-    return map_to!(f, 2, dest, As...)
+    freeze!(dest)
+    dest
 end
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)

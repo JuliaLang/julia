@@ -144,7 +144,7 @@ typedef struct {
     size_t length;
 #endif
 
-    unsigned short ndims:10;
+    unsigned short ndims:9;
     unsigned short pooled:1;
     unsigned short ptrarray:1;  // representation is pointer array
     /*
@@ -157,6 +157,7 @@ typedef struct {
     unsigned short how:2;
     unsigned short isshared:1;  // data is shared by multiple Arrays
     unsigned short isaligned:1; // data allocated with memalign
+    unsigned short fixed_len:1; // data cannot be resized (1d only)
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -1040,6 +1041,7 @@ DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
+DLLEXPORT void jl_array_freeze(jl_array_t*);
 // property access
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void *jl_array_eltype(jl_value_t *a);

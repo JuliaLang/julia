@@ -102,7 +102,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         JL_GC_POP();
     }
     a->pooled = tsz <= GC_MAX_SZCLASS;
-
+    a->fixed_len = 0;
     a->data = data;
     if (elsz == 1) ((char*)data)[tot-1] = '\0';
 #ifdef STORE_ARRAY_LEN
@@ -154,6 +154,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *di
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
+    a->fixed_len = 0;
     a->ndims = ndims;
     a->offset = 0;
     a->data = NULL;
@@ -222,6 +223,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
+    a->fixed_len = 0;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -273,6 +275,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
     a = (jl_array_t*)allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
+    a->fixed_len = 0;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -526,6 +529,11 @@ void jl_arrayunset(jl_array_t *a, size_t i)
         memset(ptail, 0, a->elsize);
 }
 
+void jl_array_freeze(jl_array_t *a)
+{
+    a->fixed_len = 1;
+}
+
 // at this size and bigger, allocate resized array data with malloc
 #define MALLOC_THRESH 1048576
 
@@ -540,6 +548,10 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     size_t offsnb = offs * es;
     size_t oldnbytes = oldlen * es;
     size_t oldoffsnb = a->offset * es;
+
+    if (a->fixed_len) {
+        jl_error("cannot resize array of fixed length");
+    }
     if (es == 1)
         nbytes++;
     assert(!a->isshared || a->how==3);
