@@ -34,11 +34,7 @@
 #include <llvm/Assembly/Parser.h>
 #include <llvm/Analysis/Verifier.h>
 #endif
-#ifdef LLVM37
-#include <llvm/DebugInfo/DWARF/DIContext.h>
-#else
 #include <llvm/DebugInfo/DIContext.h>
-#endif
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
@@ -218,6 +214,12 @@ namespace llvm {
 }
 
 // Basic DITypes
+#ifdef LLVM37
+static MDCompositeType *jl_value_dillvmt;
+static MDDerivedType *jl_pvalue_dillvmt;
+static MDDerivedType *jl_ppvalue_dillvmt;
+static MDSubroutineType *jl_di_func_sig;
+#else
 static DICompositeType jl_value_dillvmt;
 static DIDerivedType jl_pvalue_dillvmt;
 static DIDerivedType jl_ppvalue_dillvmt;
@@ -225,6 +227,7 @@ static DIDerivedType jl_ppvalue_dillvmt;
 DISubroutineType jl_di_func_sig;
 #else
 DICompositeType jl_di_func_sig;
+#endif
 #endif
 
 // constants
@@ -340,7 +343,11 @@ struct jl_varinfo_t {
     Value *memvalue;  // an address, if the var is alloca'd
     Value *SAvalue;   // register, if the var is SSA
     Value *passedAs;  // if an argument, the original passed value
+#ifdef LLVM37
+    MDLocalVariable *dinfo;
+#else
     DIVariable dinfo;
+#endif
     int closureidx;   // index in closure env, or -1
     bool isAssigned;
     bool isCaptured;
@@ -355,7 +362,12 @@ struct jl_varinfo_t {
     jl_value_t *declType;
     jl_value_t *initExpr;  // initializing expression for SSA variables
 
-    jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL), dinfo(DIVariable()),
+    jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL),
+#ifdef LLVM37
+                     dinfo(NULL),
+#else
+                     dinfo(DIVariable()),
+#endif
                      closureidx(-1), isAssigned(true), isCaptured(false), isSA(false),
                      isVolatile(false), isArgument(false), isGhost(false), hasGCRoot(false),
                      escapes(true), usedUndef(false), used(false),
@@ -1514,8 +1526,13 @@ static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
                 addr.push_back(llvm::dwarf::DW_OP_plus);
                 addr.push_back(slot * sizeof(void*));
                 addr.push_back(llvm::dwarf::DW_OP_deref);
+#ifdef LLVM37
                 ctx->dbuilder->insertDeclare(ctx->argTemp, it->second.dinfo,
-                    ctx->dbuilder->createExpression(addr), builder.GetInsertBlock());
+                    ctx->dbuilder->createExpression(addr),builder.getCurrentDebugLocation().get(),builder.GetInsertBlock());
+#else
+                ctx->dbuilder->insertDeclare(ctx->argTemp, it->second.dinfo,
+                    ctx->dbuilder->createExpression(addr),builder.GetInsertBlock());
+#endif
             }
         }
     }
@@ -3215,8 +3232,14 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     }
     vi.memvalue = lv;
 #ifdef LLVM36
-    if (!vi.isGhost && ctx->debug_enabled)
+    if (!vi.isGhost && ctx->debug_enabled) {
+#ifdef LLVM37
+        ctx->dbuilder->insertDeclare(lv,vi.dinfo,ctx->dbuilder->createExpression(),
+            builder.getCurrentDebugLocation().get(),builder.GetInsertBlock());
+#else
         ctx->dbuilder->insertDeclare(lv,vi.dinfo,ctx->dbuilder->createExpression(),builder.GetInsertBlock());
+#endif
+    }
 #endif
     return lv;
 }
@@ -3927,8 +3950,13 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     DIBuilder dbuilder(*m);
     ctx.dbuilder = &dbuilder;
+#ifdef LLVM37
+    MDFile *fil = NULL;
+    MDSubprogram *SP;
+#else
     DIFile fil;
     DISubprogram SP;
+#endif
 
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
@@ -3949,15 +3977,16 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // TODO: Fix when moving to new LLVM version
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #elif LLVM37
+        MDCompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
-        #ifndef LLVM37
         assert(CU.Verify());
         #endif
-        #endif
 
-
-#ifdef LLVM36
+#ifdef LLVM37
+        MDSubroutineType *subrty;
+#elif LLVM36
         DISubroutineType subrty;
 #else
         DICompositeType subrty;
@@ -3967,7 +3996,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
             subrty = jl_di_func_sig;
         }
         else {
-            llvm::DIArray EltTypeArray;
 #ifdef LLVM36
             std::vector<Metadata*> ditypes(0);
 #else
@@ -4099,8 +4127,14 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 addr.push_back(llvm::dwarf::DW_OP_plus);
                 addr.push_back(argIdx * sizeof(void*));
                 //addr.push_back(llvm::dwarf::DW_OP_deref);
+#ifdef LLVM37
+                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
+                ctx.dbuilder->createExpression(addr),
+                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+#else
                 ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
                 ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
+#endif
             }
             argIdx++;
         }
@@ -4455,8 +4489,13 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 MDNode *scope;
                 if (dfil == NULL)
                     scope = SP;
-                else
+                else {
+#ifdef LLVM37
+                    scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,dfil);
+#else
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
+#endif
+                }
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, scope, NULL));
             }
             if (do_coverage)
@@ -4691,22 +4730,30 @@ static void init_julia_llvm_env(Module *m)
     jl_value_llvmt = valueSt;
 
     DIBuilder dbuilder(*m);
+#ifdef LLVM37
+    MDFile *julia_h = dbuilder.createFile("julia.h","");
+    jl_value_dillvmt = dbuilder.createStructType(nullptr,
+#else
     DIFile julia_h = dbuilder.createFile("julia.h","");
-
     jl_value_dillvmt = dbuilder.createStructType(DIDescriptor(),
+#endif
         "jl_value_t",
         julia_h,
         71, // At the time of this writing. Not sure if it's worth it to keep this in sync
         sizeof(jl_value_t)*8,
         __alignof__(jl_value_t)*8,
         0, // Flags
+#ifdef LLVM37
+        nullptr,    // Derived from
+        nullptr);  // Elements - will be corrected later
+#else
         DIType(), // Derived from
         DIArray()); // Elements - will be corrected later
+#endif
 
     jl_pvalue_dillvmt = dbuilder.createPointerType(jl_value_dillvmt,sizeof(jl_value_t*)*8,
                                                    __alignof__(jl_value_t*)*8);
 
-    DIArray types;
 #ifdef LLVM36
     SmallVector<llvm::Metadata *, 1> Elts;
     std::vector<Metadata*> diargs(0);
