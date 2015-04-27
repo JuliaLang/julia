@@ -10,8 +10,9 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: dir() -> AbstractString
 
    Returns the absolute path of the package directory.
-   This defaults to ``joinpath(homedir(),".julia")`` on all platforms (i.e. ``~/.julia`` in UNIX shell syntax).
-   If the ``JULIA_PKGDIR`` environment variable is set, that path is used instead.
+   This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms
+   (i.e. ``~/.julia/v0.4`` in UNIX shell syntax).  If the ``JULIA_PKGDIR`` environment variable is set, then
+   that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``.
    If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
 .. function:: dir(names...) -> AbstractString
