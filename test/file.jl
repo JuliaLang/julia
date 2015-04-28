@@ -442,8 +442,12 @@ rm(cfile)
 @non_windowsxp_only begin
     function setup_dirs(tmpdir)
         srcdir = joinpath(tmpdir, "src")
+        hidden_srcdir = joinpath(tmpdir, ".hidden_srcdir")
+        hidden_srcsubdir = joinpath(hidden_srcdir, ".hidden_srcsubdir")
         srcdir_cp = joinpath(tmpdir, "srcdir_cp")
         mkdir(srcdir)
+        mkdir(hidden_srcdir)
+        mkdir(hidden_srcsubdir)
         abs_dirlink = joinpath(tmpdir, "abs_dirlink")
         symlink(abspath(srcdir), abs_dirlink)
         cd(tmpdir)
@@ -452,16 +456,22 @@ rm(cfile)
         cd(pwd_)
 
         cfile = joinpath(srcdir, "c.txt")
+        file_txt = "This is some text with unicode - 这是一个文件"
         open(cfile, "w") do cf
-            write(cf, "This is c.txt with unicode - 这是一个文件")
+            write(cf, file_txt)
+        end
+        hidden_cfile = joinpath(hidden_srcsubdir, "c.txt")
+        open(hidden_cfile, "w") do cf
+            write(cf, file_txt)
         end
 
         abs_dirlink_cp = joinpath(tmpdir, "abs_dirlink_cp")
+        hidden_srcsubdir_cp = joinpath(tmpdir, ".hidden_srcsubdir_cp")
         path_rel_dirlink = joinpath(tmpdir, rel_dirlink)
         path_rel_dirlink_cp = joinpath(tmpdir, "rel_dirlink_cp")
 
-        test_src_paths = [srcdir, abs_dirlink, path_rel_dirlink]
-        test_cp_paths = [srcdir_cp, abs_dirlink_cp, path_rel_dirlink_cp]
+        test_src_paths = [srcdir, hidden_srcsubdir, abs_dirlink, path_rel_dirlink]
+        test_cp_paths = [srcdir_cp, hidden_srcsubdir_cp, abs_dirlink_cp, path_rel_dirlink_cp]
         return test_src_paths, test_cp_paths
     end
 
@@ -545,11 +555,16 @@ end
 @unix_only begin
     function setup_files(tmpdir)
         srcfile = joinpath(tmpdir, "srcfile.txt")
+        hidden_srcfile = joinpath(tmpdir, ".hidden_srcfile.txt")
         srcfile_cp = joinpath(tmpdir, "srcfile_cp.txt")
+        hidden_srcfile_cp = joinpath(tmpdir, ".hidden_srcfile_cp.txt")
+        file_txt = "This is some text with unicode - 这是一个文件"
         open(srcfile, "w") do f
-            write(f, "This is srcfile.txt with unicode - 这是一个文件")
+            write(f, file_txt)
         end
-        srcfile_content = readall(srcfile)
+        open(hidden_srcfile, "w") do f
+            write(f, file_txt)
+        end
         abs_filelink = joinpath(tmpdir, "abs_filelink")
         symlink(abspath(srcfile), abs_filelink)
         cd(tmpdir)
@@ -561,28 +576,28 @@ end
         path_rel_filelink = joinpath(tmpdir, rel_filelink)
         path_rel_filelink_cp = joinpath(tmpdir, "rel_filelink_cp")
 
-        test_src_paths = [srcfile, abs_filelink, path_rel_filelink]
-        test_cp_paths = [srcfile_cp, abs_filelink_cp, path_rel_filelink_cp]
-        return test_src_paths, test_cp_paths, srcfile_content
+        test_src_paths = [srcfile, hidden_srcfile, abs_filelink, path_rel_filelink]
+        test_cp_paths = [srcfile_cp, hidden_srcfile_cp, abs_filelink_cp, path_rel_filelink_cp]
+        return test_src_paths, test_cp_paths, file_txt
     end
 
-    function cp_follow_symlinks_false_check(s, d, srcfile_content; remove_destination=false)
+    function cp_follow_symlinks_false_check(s, d, file_txt; remove_destination=false)
         cp(s, d; remove_destination=remove_destination, follow_symlinks=false)
         @test isfile(s) == isfile(d)
         @test islink(s) == islink(d)
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
-        @test readall(s) == readall(d) == srcfile_content
+        @test readall(s) == readall(d) == file_txt
     end
 
     ## Test require `remove_destination=true` (remove destination first) for existing
     #  files and existing links to files
     mktempdir() do tmpdir
         # Setup new copies for the test
-        test_src_paths, test_cp_paths, srcfile_content = setup_files(tmpdir)
+        test_src_paths, test_cp_paths, file_txt = setup_files(tmpdir)
         for (s, d) in zip(test_src_paths, test_cp_paths)
-            cp_follow_symlinks_false_check(s, d, srcfile_content)
+            cp_follow_symlinks_false_check(s, d, file_txt)
         end
         # Test require `remove_destination=true`
         for s in test_src_paths
@@ -593,7 +608,7 @@ end
         end
         # Test remove the existing path first and copy: follow_symlinks=false
         for (s, d) in zip(test_src_paths, test_cp_paths)
-            cp_follow_symlinks_false_check(s, d, srcfile_content; remove_destination=true)
+            cp_follow_symlinks_false_check(s, d, file_txt; remove_destination=true)
         end
         # Test remove the existing path first and copy an other file
         otherfile = joinpath(tmpdir, "otherfile.txt")
