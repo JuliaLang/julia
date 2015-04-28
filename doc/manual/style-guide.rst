@@ -165,7 +165,7 @@ Use naming conventions consistent with Julia's ``base/``
   When necessary, use underscores as word separators.
   Underscores are also used to indicate a combination of
   concepts (:func:`remotecall_fetch` as a more efficient implementation
-  of ``remotecall(fetch(...))``) or as modifiers (:func:`sum_kbn`).
+  of ``fetch(remotecall(...))``) or as modifiers (:func:`sum_kbn`).
 - conciseness is valued, but avoid abbreviation
   (:func:`indexin` rather than ``indxin()``) as it becomes difficult to
   remember whether and how particular words are abbreviated.
