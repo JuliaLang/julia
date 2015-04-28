@@ -64,10 +64,10 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    minabs = abs(v)
+    minabs = norm(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        minabs = Base.scalarmin(minabs, abs(v))
+        minabs = Base.scalarmin(minabs, norm(v))
     end
     return float(minabs)
 end
@@ -75,10 +75,10 @@ end
 function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    maxabs = abs(v)
+    maxabs = norm(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        maxabs = Base.scalarmax(maxabs, abs(v))
+        maxabs = Base.scalarmax(maxabs, norm(v))
     end
     return float(maxabs)
 end
@@ -86,12 +86,12 @@ end
 function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
-    av = float(abs(v))
+    av = float(norm(v))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while !done(x, s)
         (v, s) = next(x, s)
-        sum += abs(v)
+        sum += norm(v)
     end
     return convert(T, sum)
 end
@@ -103,11 +103,11 @@ function generic_vecnorm2(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
     scale::promote_type(Float64, T) = 1/maxabs
-    y = abs(v)*scale
+    y = norm(v)*scale
     sum::promote_type(Float64, T) = y*y
     while !done(x, s)
         (v, s) = next(x, s)
-        y = abs(v)*scale
+        y = norm(v)*scale
         sum += y*y
     end
     return convert(T, maxabs * sqrt(sum))
@@ -124,22 +124,22 @@ function generic_vecnormp(x, p)
         T = typeof(maxabs)
         spp::promote_type(Float64, T) = p
         scale::promote_type(Float64, T) = 1/maxabs
-        ssum::promote_type(Float64, T) = (abs(v)*scale)^spp
+        ssum::promote_type(Float64, T) = (norm(v)*scale)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            ssum += (abs(v)*scale)^spp
+            ssum += (norm(v)*scale)^spp
         end
         return convert(T, maxabs * ssum^inv(spp))
     else # -1 ≤ p ≤ 1, no need for rescaling
         s = start(x)
         (v, s) = next(x, s)
-        av = float(abs(v))
+        av = float(norm(v))
         T = typeof(av)
         pp::promote_type(Float64, T) = p
         sum::promote_type(Float64, T) = av^pp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += abs(v)^pp
+            sum += norm(v)^pp
         end
         return convert(T, sum^inv(pp))
     end
@@ -174,7 +174,7 @@ function norm1{T}(A::AbstractMatrix{T})
         for j = 1:n
             nrmj::Tsum = 0
             for i = 1:m
-                nrmj += abs(A[i,j])
+                nrmj += norm(A[i,j])
             end
             nrm = max(nrm,nrmj)
         end
@@ -196,7 +196,7 @@ function normInf{T}(A::AbstractMatrix{T})
         for i = 1:m
             nrmi::Tsum = 0
             for j = 1:n
-                nrmi += abs(A[i,j])
+                nrmi += norm(A[i,j])
             end
             nrm = max(nrm,nrmi)
         end
