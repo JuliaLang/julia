@@ -335,4 +335,10 @@ if VERSION < v"0.4.0-dev+2418"
     export findprev, findlast
 end
 
+if VERSION < v"0.4.0-dev+4524"
+    isdiag(A::AbstractMatrix) = istril(A) && istriu(A)
+    isdiag(x::Number) = true
+    export isdiag
+end
+
 end # module

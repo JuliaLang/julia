@@ -255,3 +255,8 @@ let a = [0,1,2,3,0,1,2,3]
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 end
+
+# isdiag
+@test isdiag(diagm([1,2,3,4]))
+@test !isdiag([1 2; 3 4])
+@test isdiag(5)
