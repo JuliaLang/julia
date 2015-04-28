@@ -3457,6 +3457,7 @@ void jl_init_types(void)
     meta_sym = jl_symbol("meta");
     arrow_sym = jl_symbol("->");
     dots_sym = jl_symbol("...");
+    fieldref_sym = jl_symbol("FieldRef");
 }
 
 #ifdef __cplusplus
