@@ -215,8 +215,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
                 JL_GC_POP();
                 return NULL;
             }
-            if (val->getType() != NoopType)
-                fields[llvm_nf++] = val;
+            fields[llvm_nf++] = val;
         }
         JL_GC_POP();
         Type *t = julia_struct_to_llvm(jt);
