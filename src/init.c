@@ -1250,6 +1250,11 @@ DLLEXPORT void jl_enable_inference(void)
                                                     jl_symbol("typeinf_ext"));
 }
 
+DLLEXPORT void jl_disable_inference(void)
+{
+    jl_typeinf_func = NULL;
+}
+
 static jl_value_t *core(char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
