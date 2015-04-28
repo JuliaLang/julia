@@ -1759,10 +1759,11 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
                 if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
                     m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,sp,ast,sparams,allow_alloc);
-                    if (jl_is_datatype(jl_exprarg(e,2)) &&
-                        ((jl_datatype_t*)jl_exprarg(e,2))->name == jl_fieldref_type->name) {
-                        jl_value_t *frv = jl_svecref(((jl_datatype_t*)jl_exprarg(e,2))->parameters, 0);
-                        s = (jl_sym_t*)jl_static_eval(frv,ctx,mod,sp,ast,sparams,allow_alloc);
+                    // FieldRef
+                    if (jl_is_expr(jl_exprarg(e,2)) &&
+                        (jl_sym_t*)jl_fieldref(jl_exprarg(jl_exprarg(e,2),1),0) == fieldref_sym) {
+                        jl_value_t *frs = (jl_value_t*)jl_exprarg(jl_exprarg(e,2),2);
+                        s = (jl_sym_t*)jl_static_eval(frs,ctx,mod,sp,ast,sparams,allow_alloc);
                     } else {
                         s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
                     }
@@ -2790,6 +2791,13 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             JL_GC_POP();
             return true;
         }
+        if (jl_is_datatype(args[2]) && ((jl_datatype_t*)args[2])->name == jl_fieldref_type->name) {
+            jl_sym_t *frs = (jl_sym_t*)jl_svecref(((jl_datatype_t*)args[2])->parameters,0);
+            *ret = emit_getfield(args[1], frs, ctx);
+            JL_GC_POP();
+            return true;
+        }
+
         jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
         jl_value_t *fldt   = expr_type(args[2], ctx);
 
