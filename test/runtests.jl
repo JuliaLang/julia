@@ -191,6 +191,7 @@ end
 @test parse(Int16, "1101", 2) == convert(Int16, 13)
 @test parse(Float64, "222") == 222.0
 @test parse(Float32, "1.1") == convert(Float32, 1.1)
+@test parse(BigFloat, "1.125") == convert(BigFloat, 1.125)
 
 # Make sure exports from Libc and Libdl are defined
 for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:MS_SYNC,:munmap,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:MS_INVALIDATE,:MS_ASYNC,:time,:strerror,:gethostname,:free,:mmap]
