@@ -773,6 +773,11 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
     jl_typeinf_func = (jl_function_t*)f;
 }
 
+DLLEXPORT void jl_disable_inference(void)
+{
+    jl_typeinf_func = NULL;
+}
+
 static jl_value_t *core(char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
