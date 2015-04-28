@@ -591,6 +591,7 @@ extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_incomplete_sym;
+extern jl_sym_t *fieldref_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
