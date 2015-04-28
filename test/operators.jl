@@ -3,12 +3,12 @@
 
 s = Set()
 ifelse(true, push!(s, 1), push!(s, 2))
-@test s == Set(1, 2)
+@test s == Set([1, 2])
 
 s = Set()
 true ? push!(s, 1) : push!(s, 2)
 false ? push!(s, 3) : push!(s, 4)
-@test s == Set(1, 4)
+@test s == Set([1, 4])
 
 B = [true true false]
 @test ifelse(B, 1, 2) == [1 1 2]

@@ -230,7 +230,7 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 @test_throws DimensionMismatch scale!(Array(Float64, 3, 2), a, ones(3))
 
 # scale real matrix by complex type
-@test_throws ErrorException scale!([1.0], 2.0im)
+@test_throws InexactError scale!([1.0], 2.0im)
 @test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
 @test isequal(scale(2.0im, [1.0]),             Complex{Float64}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
