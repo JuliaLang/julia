@@ -369,10 +369,13 @@ function mod2pi(x::Int64)
 end
 
 # More special functions
-
 include("special/trig.jl")
 include("special/bessel.jl")
 include("special/erf.jl")
 include("special/gamma.jl")
+
+module JuliaLibm
+include("special/log.jl")
+end
 
 end # module
