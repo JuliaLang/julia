@@ -1630,7 +1630,7 @@ tryparse(::Type{Float64}, s::SubString) = ccall(:jl_try_substrtod, Nullable{Floa
 tryparse(::Type{Float32}, s::AbstractString) = ccall(:jl_try_strtof, Nullable{Float32}, (Ptr{UInt8},), s)
 tryparse(::Type{Float32}, s::SubString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
 
-function parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString)
+function parse{T<:FloatingPoint}(::Type{T}, s::AbstractString)
     nf = tryparse(T, s)
     isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
