@@ -5394,7 +5394,7 @@ extern "C" void jl_init_codegen(void)
 
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#ifdef JL_DEBUG_BUILD
+#if defined(JL_DEBUG_BUILD) && !defined(LLVM37)
     options.JITEmitDebugInfo = true;
 #endif
     options.NoFramePointerElim = true;
