@@ -394,17 +394,20 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     ar = abs(A.factors[1])
     if ar == 0 return zeros(T, nr, nrhs), 0 end
     rnk = 1
-    xmin = ones(T, nr)
-    xmax = ones(T, nr)
+    xmin = ones(T, 1)
+    xmax = ones(T, 1)
     tmin = tmax = ar
     while rnk < nr
         tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
         tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
         tmax*rcond > tmin && break
-        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
-        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
+        for i = 1:rnk
+            xmin[i] *= smin
+            xmax[i] *= smax
+        end
+        push!(xmin, cmin)
+        push!(xmax, cmax)
         rnk += 1
-        # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
     A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U),sub(Ac_mul_B!(A[:Q],sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))

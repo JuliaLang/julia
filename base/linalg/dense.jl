@@ -429,7 +429,7 @@ function pinv{T}(A::StridedMatrix{T})
     return SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
-pinv(x::Number) = one(x)/x
+pinv(x::Number) = x == 0 ? zero(x/x) : one(x)/x
 
 ## Basis for null space
 function null{T}(A::StridedMatrix{T})
