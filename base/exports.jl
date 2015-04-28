@@ -1324,7 +1324,7 @@ export
     @__FILE__,
     @int128_str,
     @uint128_str,
-    @bigint_str,
+    @big_str,
     @mstr,   # triple-quoted strings
     @cmd,    # `commands`
 

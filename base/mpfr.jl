@@ -4,7 +4,9 @@ export
     BigFloat,
     get_bigfloat_precision,
     set_bigfloat_precision,
-    with_bigfloat_precision
+    with_bigfloat_precision,
+    bigfloat_str,
+    big_str
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
@@ -18,7 +20,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, cbrt, typemax, typemin, unsafe_trunc,
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
-        significand, frexp
+        significand, frexp, tryparse
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
@@ -77,14 +79,6 @@ function BigFloat(x::BigInt)
     return z
 end
 
-function BigFloat(x::AbstractString, base::Int)
-    z = BigFloat()
-    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    err == 0 || throw("incorrectly formatted number \"$x\"")
-    return z
-end
-BigFloat(x::AbstractString) = BigFloat(x, 10)
-
 BigFloat(x::Integer) = BigFloat(BigInt(x))
 
 BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
@@ -92,6 +86,12 @@ BigFloat(x::Union(UInt8,UInt16,UInt32)) = BigFloat(convert(Culong,x))
 
 BigFloat(x::Union(Float16,Float32)) = BigFloat(Float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
+
+function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
+    z = BigFloat()
+    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, s, base, ROUNDING_MODE[end])
+    err == 0 ? Nullable(z) : Nullable{BigFloat}()
+end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguity

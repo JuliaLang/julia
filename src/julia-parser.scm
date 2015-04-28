@@ -325,7 +325,7 @@
                    `(macrocall @int128_str ,s)
                    n))
             ((within-int128? s) `(macrocall @int128_str ,s))
-            (else `(macrocall @bigint_str ,s))))))
+            (else `(macrocall @big_str ,s))))))
 
 (define (fix-uint-neg neg n)
   (if neg
@@ -342,7 +342,7 @@
           ((<= l 32)  (uint32 n))
           ((<= l 64)  (uint64 n))
           ((<= l 128) `(macrocall @uint128_str ,s))
-          (else       `(macrocall @bigint_str  ,s)))))
+          (else       `(macrocall @big_str  ,s)))))
 
 (define (sized-uint-oct-literal n s)
   (if (string.find s "o0")
@@ -354,7 +354,7 @@
                 (else             (uint64 n)))
           (if (oct-within-uint128? s)
               `(macrocall @uint128_str ,s)
-              `(macrocall @bigint_str ,s)))))
+              `(macrocall @big_str ,s)))))
 
 (define (strip-leading-0s s)
   (define (loop i)
@@ -386,7 +386,7 @@
 (define (large-number? t)
   (and (pair? t)
        (eq? (car t) 'macrocall)
-       (memq (cadr t) '(@int128_str @uint128_str @bigint_str))))
+       (memq (cadr t) '(@int128_str @uint128_str @big_str))))
 
 ; skip to end of comment, starting at #:  either #...<eol> or #= .... =#.
 (define (skip-comment port)
@@ -797,7 +797,7 @@
   (if (eq? op '-)
       (if (large-number? num)
           (if (eqv? (caddr num) "-170141183460469231731687303715884105728")
-              `(macrocall @bigint_str "170141183460469231731687303715884105728")
+              `(macrocall @big_str "170141183460469231731687303715884105728")
               `(,(car num) ,(cadr num) ,(string.tail (caddr num) 1)))
           (if (= num -9223372036854775808)
               `(macrocall @int128_str "9223372036854775808")
