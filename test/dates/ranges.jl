@@ -5,7 +5,7 @@ function test_all_combos()
         f3 = T(-2000); l3 = T(2000)
         f4 = typemin(T); l4 = typemax(T)
 
-        for P in subtypes(Dates.DatePeriod)
+        for P in subtypes(Dates.CalendarPeriod)
             for pos_step in (P(1),P(2),P(50),P(2048),P(10000))
                 # empty range
                 dr = f1:pos_step:l1

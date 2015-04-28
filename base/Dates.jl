@@ -10,7 +10,7 @@ include("dates/ranges.jl")
 include("dates/adjusters.jl")
 include("dates/io.jl")
 
-export Period, DatePeriod, TimePeriod,
+export Period, CalendarPeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        TimeZone, UTC, TimeType, DateTime, Date,
        # accessors.jl

@@ -286,3 +286,7 @@ emptyperiod = ((y + d) - d) - y
 @test 8d - s == 1w + 23h + 59mi + 59s
 @test h + 3mi == 63mi
 @test y - m == 11m
+
+
+#Gadfly issue with date_bar
+@test Dates.Day(40)/39 == Dates.Day(40/39)

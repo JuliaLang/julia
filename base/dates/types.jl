@@ -1,20 +1,25 @@
+
 abstract AbstractTime
 
 abstract Period     <: AbstractTime
-abstract DatePeriod <: Period
+abstract CalendarPeriod <: Period
 abstract TimePeriod <: Period
 
-for T in (:Year,:Month,:Week,:Day)
-    @eval immutable $T <: DatePeriod
+for T in (:Year,:Month)
+    @eval immutable $T <: CalendarPeriod
         value::Int64
         $T(v::Number) = new(v)
     end
 end
-for T in (:Hour,:Minute,:Second,:Millisecond)
+for T in (:Week,:Day,:Hour,:Minute,:Second)
     @eval immutable $T <: TimePeriod
-        value::Int64
-        $T(v::Number) = new(v)
+        value::Real
+	 $T(v::Real) = new(v)
     end
+end
+immutable Millisecond <: TimePeriod
+	value::Int64
+	Millisecond(v::Number) = new(v)
 end
 
 # Instant types represent different monotonically increasing timelines
@@ -63,7 +68,9 @@ function totaldays(y,m,d)
     z = m < 3 ? y - 1 : y
     mdays = SHIFTEDMONTHDAYS[m]
     # days + month_days + year_days
-    return d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
+    return with_rounding(Float64,RoundDown) do
+	d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
+    end
 end
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
@@ -83,13 +90,15 @@ function DateTime(y::Int64,m::Int64=1,d::Int64=1,
     -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (1:59)"))
     -1 < s < 60 || throw(ArgumentError("Second: $s out of range (1:59)"))
     -1 < ms < 1000 || throw(ArgumentError("Millisecond: $ms out of range (1:999)"))
-    rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
+    rata = with_rounding(Float64,RoundDown) do
+	(ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d)))
+    end
     return DateTime(UTM(rata))
 end
 function Date(y::Int64,m::Int64=1,d::Int64=1)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$daysinmonth(y,m))"))
-    return Date(UTD(totaldays(y,m,d)))
+    return Date(UTD(trunc(totaldays(y,m,d))))
 end
 
 # Convenience constructors from Periods
