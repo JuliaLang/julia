@@ -364,38 +364,90 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     return tu;
 }
 
+static jl_value_t *solve_tuple_fixedlen(jl_svec_t *a, cenv_t *eqc)
+{
+    int i;
+    size_t l = jl_svec_len(a);
+    assert(l > 0);
+    jl_value_t *last = jl_svecref(a,l-1);
+    assert(jl_is_vararg_type(last));
+    jl_value_t *N = jl_tparam1(last);
+    if (jl_is_typevar(N) && ((jl_tvar_t*)N)->bound) {
+        // set N from eqc parameters
+        for (i = 0; i < eqc->n; i+=2)
+            if (eqc->data[i] == N && jl_is_long(eqc->data[i+1])) {
+                N = eqc->data[i+1];
+                break;
+            }
+    }
+    return N;
+}
+
 // if returns with *bot!=0, then intersection is Union()
-static size_t tuple_intersect_size(jl_svec_t *a, jl_svec_t *b, int *bot)
+static size_t tuple_intersect_size(jl_svec_t *a, jl_svec_t *b, cenv_t *eqc, int *bot)
 {
     size_t al = jl_svec_len(a);
     size_t bl = jl_svec_len(b);
     *bot = 0;
-    if (al == bl) return al;
-    if (al > bl) return tuple_intersect_size(b, a, bot);
-    assert(al < bl);
-    if (jl_is_vararg_type(jl_svecref(b,bl-1))) {
-        if (al > 0 && jl_is_vararg_type(jl_svecref(a,al-1))) {
-            return bl;
+    long an=0, bn=0;
+    int aknown=1, bknown=1;
+    jl_value_t *N;
+    if (al > bl) return tuple_intersect_size(b, a, eqc, bot);
+    if (al > 0 && jl_is_vararg_type(jl_svecref(a, al-1))) {
+        N = solve_tuple_fixedlen(a, eqc);
+        if (jl_is_long(N))
+            an = jl_unbox_long(N)-1;
+        else
+            aknown = 0;
+    }
+    if (bl > 0 && jl_is_vararg_type(jl_svecref(b, bl-1))) {
+        N = solve_tuple_fixedlen(b, eqc);
+        if (jl_is_long(N))
+            bn = jl_unbox_long(N)-1;
+        else
+            bknown = 0;
+    }
+    if (al+an == bl+bn) return al+an;
+    if (al == bl) {
+        if (aknown && bknown) {
+            // Same number of slots but different when including Vararg{T,N}
+            *bot = 1;
+            return 0;
         }
+        else
+            return an > bn ? al+an : bl+bn;
+    }
+    assert(al < bl);
+    if (!bknown) {
+        if (!aknown)
+            return bl;
         else {
-            if (bl == al+1)
-                return al;
+            if (bl == al+an+1)
+                return al+an;
             *bot=1;
             return 0;
         }
     }
-    if (al > 0 && jl_is_vararg_type(jl_svecref(a,al-1)))
-        return bl;
+    if (!aknown)
+        return bl+bn;
     *bot=1;
     return 0;
 }
 
-jl_datatype_t *jl_wrap_vararg(jl_value_t *t)
+jl_datatype_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
-    jl_value_t *env[2];
+    if (n == NULL) {
+        jl_value_t *env[2];
+        env[0] = jl_tparam0(jl_vararg_type);
+        env[1] = t;
+        return (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)jl_vararg_type, env, 1);
+    }
+    jl_value_t *env[4];
     env[0] = jl_tparam0(jl_vararg_type);
     env[1] = t;
-    return (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)jl_vararg_type, env, 1);
+    env[2] = jl_tparam1(jl_vararg_type);
+    env[3] = n;
+    return (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)jl_vararg_type, env, 2);
 }
 
 static int intersect_vararg_tuple(jl_value_t *cn, cenv_t *eqc, int len)
@@ -405,7 +457,7 @@ static int intersect_vararg_tuple(jl_value_t *cn, cenv_t *eqc, int len)
     if (!jl_is_long(cn)) {
         // set cn from eqc parameters
         for (i = 0; i < eqc->n; i+=2)
-            if (eqc->data[i] == cn) {
+            if (eqc->data[i] == cn && jl_is_long(eqc->data[i+1])) {
                 cn = eqc->data[i+1];
                 break;
             }
@@ -422,13 +474,16 @@ static int intersect_vararg_tuple(jl_value_t *cn, cenv_t *eqc, int len)
     return 1;
 }
 
+static int has_ntuple_intersect_tuple = 0;
+
 static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
                                    cenv_t *penv, cenv_t *eqc, variance_t var)
 {
     jl_svec_t *ap = a->parameters, *bp = b->parameters;
     size_t al = jl_svec_len(ap), bl = jl_svec_len(bp);
+    size_t alext = al, blext = bl;
     int bot=0;
-    size_t n = tuple_intersect_size(ap, bp, &bot);
+    size_t n = tuple_intersect_size(ap, bp, eqc, &bot);
     if (bot) return (jl_value_t*)jl_bottom_type;
     if (n == 0) return jl_typeof(jl_emptytuple);
     jl_svec_t *tc = jl_alloc_svec(n);
@@ -438,12 +493,30 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
     size_t ai=0, bi=0, ci;
     jl_value_t *ae=NULL, *be=NULL, *an=NULL, *bn=NULL;
     int aseq=0, bseq=0;
+    JL_VARARG_KIND avakind=jl_va_tuple_kind(a), bvakind=jl_va_tuple_kind(b);
+    jl_value_t *N=NULL;
+    if (avakind == JL_VARARG_BOUND) {
+        N = solve_tuple_fixedlen(ap, eqc);
+        if (jl_is_long(N)) {
+            avakind = JL_VARARG_INT;
+            alext += jl_unbox_long(N);
+        }
+    }
+    if (bvakind == JL_VARARG_BOUND) {
+        N = solve_tuple_fixedlen(bp, eqc);
+        if (jl_is_long(N)) {
+            bvakind = JL_VARARG_INT;
+            blext += jl_unbox_long(N);
+        }
+    }
     for(ci=0; ci < n; ci++) {
         if (ai < al) {
             ae = jl_svecref(ap,ai);
             if (jl_is_vararg_type(ae)) {
-                aseq=1;
-                an = jl_tparam1(ae);
+                if (avakind != JL_VARARG_INT) {
+                    aseq=1;
+                    an = jl_tparam1(ae);
+                }
                 ae = jl_tparam0(ae);
             }
             ai++;
@@ -451,8 +524,10 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
         if (bi < bl) {
             be = jl_svecref(bp,bi);
             if (jl_is_vararg_type(be)) {
-                bseq=1;
-                bn = jl_tparam1(be);
+                if (bvakind != JL_VARARG_INT) {
+                    bseq=1;
+                    bn = jl_tparam1(be);
+                }
                 be = jl_tparam0(be);
             }
             bi++;
@@ -460,8 +535,15 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
         assert(ae!=NULL && be!=NULL);
         ce = jl_type_intersect(ae,be,penv,eqc,var);
         if (ce == (jl_value_t*)jl_bottom_type) {
-            if (var!=invariant && aseq && bseq) {
+            if (var!=invariant &&
+                (aseq || (jl_is_vararg_type(jl_svecref(ap,al-1)) && ai==alext)) &&
+                (bseq || (jl_is_vararg_type(jl_svecref(bp,bl-1)) && bi==blext))) {
+                //if (var!=invariant && aseq && bseq) {
                 // (X∩Y)==∅ → (X...)∩(Y...) == ()
+                if (avakind == JL_VARARG_BOUND)
+                    extend(an, jl_box_long(bi-ai), eqc);
+                if (bvakind == JL_VARARG_BOUND)
+                    extend(bn, jl_box_long(ai-bi), eqc);
                 if (n == 1) {
                     JL_GC_POP();
                     return (jl_value_t*)jl_typeof(jl_emptytuple);
@@ -473,22 +555,24 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
             return (jl_value_t*)jl_bottom_type;
         }
         if (aseq && bseq)
-            ce = (jl_value_t*)jl_wrap_vararg(ce);
+            ce = (jl_value_t*)jl_wrap_vararg(ce, avakind==JL_VARARG_BOUND ? bn : an);
         jl_svecset(tc, ci, ce);
     }
-    if (aseq) {
+    if (aseq && !bseq) {
         if (!intersect_vararg_tuple(an, eqc, bi-ai+1)) {
             JL_GC_POP();
             return (jl_value_t*)jl_bottom_type;
         }
     }
-    if (bseq) {
+    if (bseq && !aseq) {
         if (!intersect_vararg_tuple(bn, eqc, ai-bi+1)) {
             JL_GC_POP();
             return (jl_value_t*)jl_bottom_type;
         }
     }
  done_intersect_tuple:
+    if (aseq && bseq && (avakind != bvakind))
+        has_ntuple_intersect_tuple = 1;
     result = (jl_value_t*)jl_apply_tuple_type(tc);
     JL_GC_POP();
     return result;
@@ -811,8 +895,6 @@ static jl_value_t *approxify_type(jl_datatype_t *dt, jl_svec_t *pp)
     JL_GC_POP();
     return nt;
 }
-
-static int has_ntuple_intersect_tuple = 0;
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
@@ -2301,28 +2383,34 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
 {
     size_t pl = jl_nparams(pdt);
     jl_value_t **parent = jl_svec_data(pdt->parameters);
-    size_t ci=0, pi=0, pseqci=0;
-    int pseq=0;
+    size_t ci=0, pi=0, cseqpi=0, pseqci=0;
+    int cseq=0, pseq=0;
     while (1) {
+        if (!cseq)
+            cseqpi = pi;
         if (!pseq)
             pseqci = ci;
-        int cseq = !ta && (ci<cl) && jl_is_vararg_type(child[ci]);
+        cseq = !ta && (ci<cl) && jl_is_vararg_type(child[ci]);
         pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
-        if (cseq && !pseq)
+        //if (cseq && !pseq)
+        if (cseq && !pseq && jl_vararg_kind(child[ci])==JL_VARARG_UNBOUND)
             return 0;
         if (ci >= cl) {
             if (pi >= pl)
                 return 1;
             if (!(pseq && !invariant))
                 return 0;
-            jl_value_t *lastarg = parent[pl-1];
-            if (!jl_is_vararg_fixedlen(lastarg))
+            JL_VARARG_KIND vakind = jl_vararg_kind(parent[pi]);
+            if (vakind == JL_VARARG_UNBOUND)
                 return 1;
-            return (jl_is_long(jl_tparam1(lastarg)) &&
-                    ci-pseqci == jl_unbox_long(jl_tparam1(lastarg)));
+            return (vakind == JL_VARARG_INT &&
+                    ci-pseqci == jl_unbox_long(jl_tparam1(parent[pi])));
         }
-        if (pi >= pl)
+        if (pi >= pl) {
+            if (cseq && jl_vararg_kind(child[ci])==JL_VARARG_INT)
+                return pi-pseqci == jl_unbox_long(jl_tparam1(child[ci]));
             return 0;
+        }
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
@@ -2331,8 +2419,23 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (!jl_subtype_le(ce, pe, ta, invariant))
             return 0;
 
-        if (cseq && pseq)
-            return !jl_is_vararg_fixedlen(parent[pi]);
+        if (cseq && pseq) {
+            ce = child[ci];
+            pe = parent[pi];
+            JL_VARARG_KIND cvakind = jl_vararg_kind(ce);
+            JL_VARARG_KIND pvakind = jl_vararg_kind(pe);
+            return ((cvakind == JL_VARARG_UNBOUND &&
+                     pvakind == JL_VARARG_UNBOUND) ||
+                    (cvakind == JL_VARARG_INT &&
+                     pvakind == JL_VARARG_UNBOUND &&
+                     cseqpi+jl_unbox_long(jl_tparam1(ce)) == pi) ||
+                    (cvakind == JL_VARARG_INT &&
+                     pvakind == JL_VARARG_INT &&
+                     ci-cseqpi+jl_unbox_long(jl_tparam1(ce)) == pi-pseqci+jl_unbox_long(jl_tparam1(pe))) ||
+                    (cvakind == JL_VARARG_BOUND &&
+                     pvakind == JL_VARARG_BOUND &&
+                     pi == pseqci && jl_tparam1(ce) == jl_tparam1(pe)));
+        }
         if (!cseq) ci++;
         if (!pseq) pi++;
     }
@@ -3250,7 +3353,7 @@ void jl_init_types(void)
                                        jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_tuple_typename = jl_anytuple_type->name;
     jl_anytuple_type->uid = 0;
-    jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type));
+    jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
     jl_anytuple_type->types = jl_anytuple_type->parameters;
     jl_anytuple_type->nfields = 1;
 
