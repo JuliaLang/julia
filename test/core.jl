@@ -66,6 +66,7 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{Array{T}}, Type{AbstractArray{T}}) === Bottom
 
+    @test typeintersect(Tuple{Vararg{T}},Tuple{Float64,Int}) === Bottom
     @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}) === Bottom
     @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}) === Bottom
 
@@ -123,6 +124,8 @@ let N = TypeVar(:N,true)
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Vararg{Int,N}})
     @test Tuple{Int,Vararg{Int,N}} == Tuple{Int,Vararg{Int,N}}
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Vararg{Int}})
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}},Tuple{Array{Int,0}}) == Tuple{Array{Int,0}}
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}},Tuple{Array{Int,2}}) == Bottom
 
     @test typeintersect(Tuple{Int,Vararg{Int,N}}, Tuple{Int,Int,Int,Vararg{Float64}}) == Tuple{Int,Int,Int}
     @test typeintersect(Tuple{Int,Vararg{Int,N}}, Tuple{Int,Vararg{Float64}}) == Tuple{Int}
@@ -149,7 +152,6 @@ end
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
-@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
 @test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
