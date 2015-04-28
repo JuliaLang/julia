@@ -25,6 +25,9 @@
 // (Experimental) codegen support for thread-local storage
 // #define CODEGEN_TLS
 
+// (Experimental) Use MCJIT ELF, even where it's not the native format
+// #define FORCE_ELF
+
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
 
