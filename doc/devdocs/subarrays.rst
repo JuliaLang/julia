@@ -17,7 +17,7 @@ Broadly speaking, there are two main ways to access data in an array.
 The first, often called cartesian indexing, uses ``N`` indexes for an
 ``N`` -dimensional ``AbstractArray``.  For example, a matrix ``A``
 (2-dimensional) can be indexed in cartesian style as ``A[i,j]``.  The
-second indexing method, refered to as linear indexing, uses a single
+second indexing method, referred to as linear indexing, uses a single
 index even for higher-dimensional objects.  For example, if ``A =
 reshape(1:12, 3, 4)``, then the expression ``A[5]`` returns the
 value 5.  Julia allows you to combine these styles of indexing: for
@@ -225,7 +225,7 @@ An example might help clarify what this means:
 - The last dimension is a ``Range``.  This would by itself break
   linear indexing (even though it is a ``UnitRange``, the fact that it
   might not start at 1 means that there might be gaps).  Additionally,
-  given the preceeding indexes any choice other than ``Int`` would
+  given the preceding indexes any choice other than ``Int`` would
   also have truncated ``LD`` at 2.
 
 Consequently, as a whole ``S1`` does not have efficient linear
@@ -241,7 +241,7 @@ indexing.
 The main reason ``LD`` cannot always be inferred from the ``indexes`` tuple
 is because ``sub`` converts internal ``Int`` indexes into
 ``UnitRange``\s.  Consequently it is important to encode "safe"
-dimensions of size 1 prior to conversion.  Up to the ``LDth`` entry,
+dimensions of size 1 prior to conversion.  Up to the ``LD``\ th entry,
 we can be sure that any ``UnitRange`` was, in fact, an ``Integer``
 prior to conversion.
 
