@@ -402,3 +402,30 @@ for elty in (Float32, Float64)
     @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
     @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
 end
+
+# log/log1p
+# if using Tang's algorithm, should be accurate to within 0.56 ulps
+X = rand(100)
+for x in X
+    for n = -5:5
+        xn = ldexp(x,n)
+
+        for T in (Float32,Float64)
+            xt = T(x)
+
+            y = Base.Math.JuliaLibm.log(xt)
+            yb = log(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            y = Base.Math.JuliaLibm.log1p(xt)
+            yb = log1p(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            if n <= 0
+                y = Base.Math.JuliaLibm.log1p(-xt)
+                yb = log1p(big(-xt))
+                @test abs(y-yb) <= 0.56*eps(T(yb))
+            end
+        end
+    end
+end
