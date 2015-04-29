@@ -928,6 +928,10 @@ Reflection
    Get an array of the names exported by a module, with optionally more module
    globals according to the additional parameters.
 
+.. function:: nfields(x::DataType) -> Int
+
+   Get the number of fields of a data type.
+
 .. function:: fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
