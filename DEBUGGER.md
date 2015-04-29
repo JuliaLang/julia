@@ -1,7 +1,7 @@
 The Julia Debugger
 ------------------
 
-In order to have a Julia debugger, we first need a `version of LLDB
+In order to have a Julia debugger, we first need a version of LLDB
 that understands Julia's JITed stack frames. To do so, build Julia
 with instructions from https://github.com/Keno/Cxx.jl. Just the julia
 parts are required. The Cxx part won't be necessary until the debugger
