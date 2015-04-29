@@ -243,11 +243,10 @@ endif
 endif
 
 ifeq ($(USEIFC), 1)
-FC_BASE = ifort
+FC = ifort
 else
-FC_BASE = $(CROSS_COMPILE)gfortran
+FC = $(CROSS_COMPILE)gfortran
 endif
-FC = $(FC_BASE)
 
 STDLIBCPP_FLAG =
 
@@ -280,10 +279,8 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC_BASE = $(CROSS_COMPILE)gcc
-CXX_BASE = $(CROSS_COMPILE)g++
-CC = $(CC_BASE)
-CXX = $(CXX_BASE)
+CC = $(CROSS_COMPILE)gcc
+CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -292,10 +289,8 @@ SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
-CC_BASE = $(CROSS_COMPILE)clang
-CXX_BASE = $(CROSS_COMPILE)clang++
-CC = $(CC_BASE)
-CXX = $(CXX_BASE)
+CC = $(CROSS_COMPILE)clang
+CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -321,10 +316,8 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC_BASE  = icc
-CXX_BASE = icpc
-CC = $(CC_BASE)
-CXX = $(CXX_BASE)
+CC  = icc
+CXX = icpc
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -350,6 +343,9 @@ CXX += -Qunused-arguments -fcolor-diagnostics
 # http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
+else #USECCACHE
+CC_BASE = $(shell echo $(CC) | cut -d' ' -f1)
+CXX_BASE = $(shell echo $(CXX) | cut -d' ' -f1)
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -515,6 +511,8 @@ ifeq ($(ISX86),1)
 CC += -m$(BINARY)
 CXX += -m$(BINARY)
 FC += -m$(BINARY)
+CC_ARG += -m$(BINARY)
+CXX_ARG += -m$(BINARY)
 endif
 endif
 
