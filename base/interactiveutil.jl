@@ -304,7 +304,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
-            f = eval(m, nm)
+            f = getfield(m, nm)
             if isa(f, Function)
                 methodswith(t, f, showparents, meths)
             end
@@ -319,7 +319,7 @@ function methodswith(t::Type, showparents::Bool=false)
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
-            mod = eval(mainmod, nm)
+            mod = getfield(mainmod, nm)
             if isa(mod, Module)
                 append!(meths, methodswith(t, mod, showparents))
             end
