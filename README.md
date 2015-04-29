@@ -72,7 +72,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `names(::DataType)` is now renamed to `fieldnames` [#10332](https://github.com/JuliaLang/julia/pull/10332)
 
-* `parseint` and `parsefloat` are now `parse(T, ...)` [#10543](https://github.com/JuliaLang/julia/pull/10543)
+* `parseint` and `parsefloat` are now `parse(T, ...)` [#10543](https://github.com/JuliaLang/julia/pull/10543); along the same line `BigFloat(s::String)` is now `parse(BigFloat,s)` [#10955](https://github.com/JuliaLang/julia/pull/10955).
 
 * `convert(::Ptr{T}, x)` is now `Base.unsafe_convert` [#9986](https://github.com/JuliaLang/julia/pull/9986).
   Compat provides an unexported `Compat.unsafe_convert` method that is aliased to `Base.convert` on Julia 0.3 and
