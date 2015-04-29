@@ -74,6 +74,23 @@ Calling a particular method
 
 Since this function is used for every call, you will make everything 1000x slower if you do this.
 
+Debugging during julia's build process (bootstrap)
+--------------------------------------------------
+
+Errors that occur during ``make`` need special handling. Julia is built in two stages, constructing
+``sys0`` and ``sys.ji``. To see what commands are running at the time of failure, use ``make VERBOSE=1``.
+
+At the time of this writing, you can debug build errors during the ``sys0`` phase from the ``base``
+directory using::
+
+    julia/base$ gdb --args ../usr/bin/julia-debug -C native --build ../usr/lib/julia/sys0 sysimg.jl
+
+You might need to delete all the files in ``usr/lib/julia/`` to get this to work.
+
+You can debug the ``sys.ji`` phase using::
+
+    julia/base$ gdb --args .../usr/bin/julia-debug -C native --build ../usr/lib/julia/sys -J ../usr/lib/julia/sys0.ji sysimg.jl
+
 Mozilla's Record and Replay Framework (rr)
 ---------------------------------------------
 
