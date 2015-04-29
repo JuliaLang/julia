@@ -53,6 +53,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 ## New functions
 
 * `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator. 
+ 
+* `isdiag`, which tests whether a matrix is diagonal, can be used in julia 0.3.
 
 ## Renamed functions
 
