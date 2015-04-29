@@ -24,6 +24,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->parent = NULL;
     m->constant_table = NULL;
     m->call_func = NULL;
+    m->parent = NULL;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {

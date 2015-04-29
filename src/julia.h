@@ -1056,6 +1056,7 @@ extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
+DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name);
 // get binding for reading
 DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
