@@ -112,3 +112,8 @@ end
 @test gc_disable() == false
 @test gc_enable() == false
 @test gc_enable()
+
+# test methodswith
+immutable NoMethodHasThisType end
+@test isempty(methodswith(NoMethodHasThisType))
+@test !isempty(methodswith(Int))
