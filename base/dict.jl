@@ -404,26 +404,6 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
 end
 convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
-function serialize(s, t::Dict)
-    serialize_type(s, typeof(t))
-    write(s, Int32(length(t)))
-    for (k,v) in t
-        serialize(s, k)
-        serialize(s, v)
-    end
-end
-
-function deserialize{K,V}(s, T::Type{Dict{K,V}})
-    n = read(s, Int32)
-    t = T(); sizehint!(t, n)
-    for i = 1:n
-        k = deserialize(s)
-        v = deserialize(s)
-        t[k] = v
-    end
-    return t
-end
-
 hashindex(key, sz) = ((hash(key)%Int) & (sz-1)) + 1
 
 isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0

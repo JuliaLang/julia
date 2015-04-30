@@ -18,9 +18,8 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, cbrt, typemax, typemin, unsafe_trunc,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
-        significand, frexp, tryparse
+        cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, get_rounding,
+        set_rounding, maxintfloat, widen, significand, frexp, tryparse
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
@@ -196,15 +195,6 @@ function convert(::Type{Rational{BigInt}}, x::FloatingPoint)
     s = max(precision(x) - exponent(x), 0)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
 end
-
-# serialization
-
-function serialize(s, n::BigFloat)
-    Base.serialize_type(s, BigFloat)
-    serialize(s, string(n))
-end
-
-deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 # Basic arithmetic without promotion
 for (fJ, fC) in ((:+,:add), (:*,:mul))
