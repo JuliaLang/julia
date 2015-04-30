@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 immutable Rational{T<:Integer} <: Real
     num::T
     den::T

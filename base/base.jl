@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 typealias Callable Union(Function,DataType)
 
 const Bottom = Union()

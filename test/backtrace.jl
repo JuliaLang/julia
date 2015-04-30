@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 bt = backtrace()
 have_backtrace = false
 for l in bt

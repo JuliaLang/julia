@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## indexing ##
 @test length(()) === 0
 @test length((1,)) === 1

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifndef OPCODES_H
 #define OPCODES_H
 

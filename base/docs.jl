@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Docs
 
 import Base.Markdown: @doc_str, MD

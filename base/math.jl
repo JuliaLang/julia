@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,

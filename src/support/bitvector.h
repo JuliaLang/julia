@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifndef BITVECTOR_H
 #define BITVECTOR_H
 

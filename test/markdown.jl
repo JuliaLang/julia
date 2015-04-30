@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Markdown
 import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code
 import Base: writemime

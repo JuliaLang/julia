@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import Base.LinAlg
 ## BLAS tests - testing the interface code to BLAS routines
 for elty in [Float32, Float64, Complex64, Complex128]

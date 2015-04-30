@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @unix_only @test expanduser("~")[1] != ENV["HOME"]
 
 @unix_only @test isabspath("/") == true

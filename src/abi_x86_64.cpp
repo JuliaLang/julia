@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 //===-- abi_x86_64.cpp - x86_64 ABI description -----------------*- C++ -*-===//
 //
 //                         LDC – the LLVM D compiler

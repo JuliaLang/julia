@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
     length(x) == length(y) || throw(DimensionMismatch())

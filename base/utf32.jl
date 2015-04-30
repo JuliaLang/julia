@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## UTF-32 in the native byte order, i.e. plain old character arrays ##
 
 immutable UTF32String <: DirectIndexString

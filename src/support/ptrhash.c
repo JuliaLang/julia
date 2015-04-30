@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /*
   pointer hash table
   optimized for storing info about particular values

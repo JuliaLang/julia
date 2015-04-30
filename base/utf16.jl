@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 immutable UTF16String <: AbstractString
     data::Array{UInt16,1} # includes 16-bit NULL termination after string chars
     function UTF16String(data::Vector{UInt16})

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Rectangular Full Packed Matrices
 
 type SymmetricRFP{T<:BlasFloat} <: AbstractMatrix{T}

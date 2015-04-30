@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Test
 
 export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred

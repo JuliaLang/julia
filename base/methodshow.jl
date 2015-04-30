@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Method and method-table pretty-printing
 
 function argtype_decl(n, t) # -> (argname, argtype)

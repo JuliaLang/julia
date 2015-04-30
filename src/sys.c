@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /*
   sys.c
   I/O and operating system utility functions

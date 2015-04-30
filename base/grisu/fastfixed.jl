@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 const kDoubleSignificandSize = 53
 
 function filldigits32fixedlength(n1,requested_len,buffer,len)

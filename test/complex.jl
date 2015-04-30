@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @test reim(2 + 3im) == (2, 3)
 
 # sqrt:

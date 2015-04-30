@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## FEM benchmark from https://github.com/JuliaLang/julia/issues/9668
 
 # assemble the finite-difference laplacian

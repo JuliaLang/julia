@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Project Euler
 #
 #  problems: http://projecteuler.net/problems

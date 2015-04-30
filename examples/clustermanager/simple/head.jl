@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 include("UnixDomainCM.jl")
 
 addprocs(UnixDomainCM(parse(Int,ARGS[1])))

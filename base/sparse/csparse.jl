@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # These functions are based on C functions in the CSparse library by Tim Davis.
 # These are pure Julia implementations, and do not link to the CSparse library.
 # CSparse can be downloaded from http://www.cise.ufl.edu/research/sparse/CSparse/CSparse.tar.gz

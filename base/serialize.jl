@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## serializing values ##
 
 # dummy types to tell number of bytes used to store length (4 or 1)

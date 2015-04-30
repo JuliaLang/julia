@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function add1!(x,y)
     x[y] .+= 1
 end

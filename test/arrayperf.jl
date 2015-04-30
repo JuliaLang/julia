@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 n_evals = 1e7
 run_ref = true
 run_assign = true

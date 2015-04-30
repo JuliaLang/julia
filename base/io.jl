@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## core stream types ##
 
 # the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption

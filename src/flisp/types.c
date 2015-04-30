@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "equalhash.h"
 
 fltype_t *get_type(value_t t)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, show, size

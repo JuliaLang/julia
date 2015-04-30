@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #define _GNU_SOURCE
 #include "libsupport.h"
 #include <stdlib.h>

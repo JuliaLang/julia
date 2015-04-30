@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## linalg.jl: Some generic Linear Algebra definitions
 
 scale(X::AbstractArray, s::Number) = scale!(copy(X), s)

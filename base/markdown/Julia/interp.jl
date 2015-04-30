@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function Base.parse(stream::IOBuffer; greedy::Bool = true, raise::Bool = true)
     pos = position(stream)
     ex, Δ = Base.parse(readall(stream), 1, greedy = greedy, raise = raise)

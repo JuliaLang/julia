@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 //===------------- Disassembler for in-memory function --------------------===//
 //
 // Modified for use in The Julia Language from code in the  llvm-mc project:

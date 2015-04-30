@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function busywait(t, n_tries)
     iter = 0
     while iter < n_tries && Profile.len_data() == 0

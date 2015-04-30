@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifdef _P64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else

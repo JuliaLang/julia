@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Instant arithmetic
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods

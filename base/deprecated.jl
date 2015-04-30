@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 macro deprecate(old,new)
     meta = Expr(:meta, :noinline)
     if isa(old,Symbol)

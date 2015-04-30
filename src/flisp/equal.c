@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #define BOUNDED_COMPARE_BOUND 4096
 #define BOUNDED_HASH_BOUND    16384
 

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /**
  * @file dirname.c
  * Copyright 2012, 2013 MinGW.org project

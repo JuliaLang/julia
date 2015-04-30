@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Build a system image binary at sysimg_path.dlext.  By default, put the system image
 # next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)

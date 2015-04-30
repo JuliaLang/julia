@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @doc """
 
 `tests, net_on = choosetests(choices)` selects a set of tests to be

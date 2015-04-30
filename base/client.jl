@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 

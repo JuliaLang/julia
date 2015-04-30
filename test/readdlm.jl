@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 

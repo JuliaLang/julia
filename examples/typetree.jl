@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module TypeTrees
 ##
 # Generate a text graphic of Julia modules type tree

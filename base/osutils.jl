@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function is_unix(os::Symbol)
     if (os==:Windows) return false;
     elseif (os==:Linux) return true;

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## work with Vector{UInt8} via I/O primitives ##
 
 # Stateful string

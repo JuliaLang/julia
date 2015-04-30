@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
  * All rights reserved.

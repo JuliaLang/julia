@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## array.jl: Dense arrays
 
 typealias Vector{T} Array{T,1}

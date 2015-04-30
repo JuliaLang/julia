@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 

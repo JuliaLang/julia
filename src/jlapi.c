@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /*
   jlapi.c
   miscellaneous functions for users of libjulia.so, to handle initialization

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Date/DateTime Ranges
 
 # Override default step; otherwise it would be Millisecond(1)

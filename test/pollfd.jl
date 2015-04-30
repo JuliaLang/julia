@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @unix_only begin
 
 pipe_fds = Array(Cint,2)

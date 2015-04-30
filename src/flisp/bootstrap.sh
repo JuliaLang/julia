@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 cp flisp.boot flisp.boot.bak
 

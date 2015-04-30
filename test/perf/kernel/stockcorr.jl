@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Test case from Issue #445
 
 #STOCKCORR - The original, unoptimised code that simulates two correlated assets

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // utility procedures used in code generation
 
 #if defined(USE_MCJIT) && defined(_OS_WINDOWS_)

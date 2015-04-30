@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version

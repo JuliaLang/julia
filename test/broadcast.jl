@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function as_sub(x::AbstractVector)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = sub(y, 2:2:length(y))

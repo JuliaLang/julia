@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function convert(::Type{Float32}, val::Float16)
     ival::UInt32 = reinterpret(UInt16, val)
     sign::UInt32 = (ival & 0x8000) >> 15

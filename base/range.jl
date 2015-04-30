@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## 1-dimensional ranges ##
 
 typealias Dims Tuple{Vararg{Int}}

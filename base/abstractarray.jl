@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Type aliases for convenience ##
 
 typealias AbstractVector{T} AbstractArray{T,1}

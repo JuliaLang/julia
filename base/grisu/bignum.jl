@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function normalizedexponent(significand, exponent::Int32)
     significand = UInt64(significand)
     while (significand & HiddenBit(Float64)) == 0

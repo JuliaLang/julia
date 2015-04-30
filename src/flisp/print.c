@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 extern void *memrchr(const void *s, int c, size_t n);
 
 static htable_t printconses;

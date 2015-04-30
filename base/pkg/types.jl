@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies

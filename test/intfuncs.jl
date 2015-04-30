@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @test gcd(3, 5) == 1
 @test gcd(3, 15) == 3
 @test gcd(0, 15) == 15

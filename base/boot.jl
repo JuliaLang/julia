@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # commented-out definitions are implemented in C
 
 #abstract Any <: Any

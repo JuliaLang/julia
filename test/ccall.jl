@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import Base.copy, Base.==
 const verbose  = false
 ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)

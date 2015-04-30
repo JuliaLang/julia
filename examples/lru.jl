@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module LRUExample
 # An LRU (Least Recently Used) cache is an associative data structure which
 # maintains its contents in an order such that the most recently used item

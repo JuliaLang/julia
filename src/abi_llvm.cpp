@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 //===-- abi_llvm.cpp - LLVM Target ABI description --------------*- C++ -*-===//
 //
 //                         LDC – the LLVM D compiler

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import Base.Sort
 immutable BubbleSortAlg <: Sort.Algorithm end
 const BubbleSort = BubbleSortAlg()

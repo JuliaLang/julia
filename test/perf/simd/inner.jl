@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Inner produce of x and y
 function inner( x, y )
     s = zero(eltype(x))

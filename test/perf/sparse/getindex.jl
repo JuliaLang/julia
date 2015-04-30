@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## getindex
 const rep = 20
 const reps = rep^2
