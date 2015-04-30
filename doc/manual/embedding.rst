@@ -33,9 +33,9 @@ We start with a simple C program that initializes Julia and calls some Julia cod
       return 0;
   }
 
-In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_DIR``, one can compile the above test program ``test.c`` with gcc using::
+In order to build this program, you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_PREFIX/bin`` (where you are responsible for defining the ``JULIA_PREFIX`` variable appropriately), its header file ``julia.h`` is installed in ``$JULIA_PREFIX/include`` and its library ``libjulia`` is installed in ``$JULIA_PREFIX/lib`` (by default). In this case, you can compile the above ``test.c`` program with gcc using::
 
-    gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
+    gcc -o test -I$JULIA_PREFIX/include/julia -L$JULIA_PREFIX/lib -ljulia test.c
 
 Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_compileropts`` options while linking against libjulia.
 
