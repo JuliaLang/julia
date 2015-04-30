@@ -33,8 +33,8 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 # Dot products
 
-dot{T<:BlasReal}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dot(x, y)
-dot{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dotc(x, y)
+vecdot{T<:BlasReal}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dot(x, y)
+vecdot{T<:BlasComplex}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dotc(x, y)
 function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
@@ -49,19 +49,7 @@ function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},
     end
     BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot(x::AbstractVector, y::AbstractVector)
-    lx = length(x)
-    lx==length(y) || throw(DimensionMismatch())
-    if lx == 0
-        return zero(eltype(x))*zero(eltype(y))
-    end
-    s = conj(x[1])*y[1]
-    @inbounds for i = 2:lx
-        s += conj(x[i])*y[i]
-    end
-    s
-end
-dot(x::Number, y::Number) = conj(x) * y
+
 Ac_mul_B(x::AbstractVector, y::AbstractVector) = [dot(x, y)]
 At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = [dot(x, y)]
 At_mul_B{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = [BLAS.dotu(x, y)]
