@@ -62,6 +62,9 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
+###########################################################################################
+# Inner products and norms
+
 # special cases of vecnorm; note that they don't need to handle isempty(x)
 function generic_vecnormMinusInf(x)
     s = start(x)
@@ -214,6 +217,47 @@ end
 
 norm(x::Number, p::Real=2) =
     p == 0 ? convert(typeof(real(x)), ifelse(x != 0, 1, 0)) : abs(x)
+
+function vecdot(x::AbstractVector, y::AbstractVector)
+    lx = length(x)
+    lx==length(y) || throw(DimensionMismatch())
+    if lx == 0
+        return dot(zero(eltype(x)), zero(eltype(y)))
+    end
+    s = dot(x[1], y[1])
+    @inbounds for i = 2:lx
+        s += dot(x[i], y[i])
+    end
+    s
+end
+
+function vecdot(x, y) # arbitrary iterables
+    ix = start(x)
+    if done(x, ix)
+        isempty(y) || throw(DimensionMismatch())
+        return dot(zero(eltype(x)), zero(eltype(y)))
+    end
+    iy = start(y)
+    done(y, iy) && throw(DimensionMismatch())
+    (vx, ix) = next(x, ix)
+    (vy, iy) = next(y, iy)
+    s = dot(vx, vy)
+    while !done(x, ix)
+        done(y, iy) && throw(DimensionMismatch())
+        (vx, ix) = next(x, ix)
+        (vy, iy) = next(y, iy)
+        s += dot(vx, vy)
+    end
+    !done(y, iy) && throw(DimensionMismatch())
+    return s
+end
+
+vecdot(x::Number, y::Number) = conj(x) * y
+
+dot(x::Number, y::Number) = vecdot(x, y)
+dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
+
+###########################################################################################
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)

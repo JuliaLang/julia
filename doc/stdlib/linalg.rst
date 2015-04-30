@@ -30,6 +30,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
 
+.. function:: vecdot(x, y)
+
+   For any iterable containers ``x`` and ``y`` (including arrays of
+   any dimension) of numbers (or any element type for which ``dot`` is
+   defined), compute the Euclidean dot product (the sum of
+   ``dot(x[i],y[i])``) as if they were vectors.
+
 .. function:: cross(x, y)
               ×(x,y)
 
@@ -493,9 +500,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: vecnorm(A, [p])
 
-   For any iterable container ``A`` (including arrays of any dimension)
-   of numbers, compute the ``p``-norm (defaulting to ``p=2``) as if ``A``
-   were a vector of the corresponding length.
+   For any iterable container ``A`` (including arrays of any
+   dimension) of numbers (or any element type for which ``norm`` is
+   defined), compute the ``p``-norm (defaulting to ``p=2``) as if
+   ``A`` were a vector of the corresponding length.
 
    For example, if ``A`` is a matrix and ``p=2``, then this is equivalent
    to the Frobenius norm.

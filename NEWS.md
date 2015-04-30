@@ -156,6 +156,8 @@ Library improvements
 
     * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
+    * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
+
   * Strings
 
     * NUL-terminated strings should now be passed to C via the new `Cstring` type, not `Ptr{UInt8}` or `Ptr{Cchar}`,
@@ -1393,3 +1395,4 @@ Too numerous to mention.
 [#10893]: https://github.com/JuliaLang/julia/issues/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
 [#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11067]: https://github.com/JuliaLang/julia/issues/11067
