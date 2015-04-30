@@ -103,6 +103,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         # inversion
         @test_approx_eq inv(A1) inv(lufact(full(A1)))
+        @test isa(inv(A1), t1)
 
         # Determinant
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
