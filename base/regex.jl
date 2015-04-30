@@ -244,16 +244,3 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
 end
 
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
-
-# Don't serialize the pointers
-function serialize(s, r::Regex)
-    serialize_type(s, typeof(r))
-    serialize(s, r.pattern)
-    serialize(s, r.options)
-end
-
-function deserialize(s, t::Type{Regex})
-    pattern = deserialize(s)
-    options = deserialize(s)
-    Regex(pattern, options)
-end

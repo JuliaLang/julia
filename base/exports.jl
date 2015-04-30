@@ -14,6 +14,7 @@ export
     LinAlg,
     BLAS,
     LAPACK,
+    Serializer,
     SparseMatrix,
     Docs,
     Markdown,
