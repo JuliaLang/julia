@@ -1007,17 +1007,32 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-sub2ind(dims::Tuple{}) = 1
-sub2ind(dims::Tuple{},I::Integer...) = sum(I) - length(I) + 1
-sub2ind(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer) = i1
-sub2ind(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer, I::Integer...) = i1 + dims[1]*(sub2ind(tail(dims),I...)-1)
+sub2ind(dims::Tuple{Vararg{Integer}}) = 1
+sub2ind(dims::Tuple{Vararg{Integer}}, I::Integer...) = _sub2ind(dims,I)
+@generated function _sub2ind{N,M}(dims::NTuple{N,Integer}, I::NTuple{M,Integer})
+    meta = Expr(:meta,:inline)
+    ex = :(I[$M] - 1)
+    for i = M-1:-1:1
+        if i > N
+            ex = :(I[$i] - 1 + $ex)
+        else
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        end
+    end
+    Expr(:block, meta,:($ex + 1))
+end
 
-ind2sub(dims::Tuple{}, ind::Integer) = ind==1 ? () : throw(BoundsError())
-ind2sub(dims::Tuple{Integer}, ind::Integer) = (ind,)
-function ind2sub(dims::Tuple{Integer,Vararg{Integer}}, ind::Integer)
-    @_inline_meta()
-    ind2 = div(ind-1,dims[1])+1
-    tuple(ind-dims[1]*(ind2-1), ind2sub(tail(dims),ind2)...)
+@generated function ind2sub{N}(dims::NTuple{N,Integer}, ind::Integer)
+    meta = Expr(:meta,:inline)
+    N==0 && return :($meta; ind==1 ? () : throw(BoundsError()))
+    exprs = Expr[:(ind = ind-1)]
+    for i = 1:N-1
+        push!(exprs,:(ind2 = div(ind,dims[$i])))
+        push!(exprs,Expr(:(=),symbol(:s,i),:(ind-dims[$i]*ind2+1)))
+        push!(exprs,:(ind=ind2))
+    end
+    push!(exprs,Expr(:(=),symbol(:s,N),:(ind+1)))
+    Expr(:block,meta,exprs...,Expr(:tuple,[symbol(:s,i) for i=1:N]...))
 end
 
 # TODO in v0.5: either deprecate line 1 or add line 2
