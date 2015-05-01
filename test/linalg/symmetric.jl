@@ -32,10 +32,11 @@ let n=10
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
         @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
         eig(Hermitian(asym), 1:2) # same result, but checks that method works
-        @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
-        eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
+        eltya == Float64 && @show d[1:2]
+        @test_approx_eq abs(eigfact(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
-        @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
+        @test_approx_eq eigvals(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) d[1:2]
         @test_approx_eq full(eigfact(asym)) asym
 
         # relation to svdvals
