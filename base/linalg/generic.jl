@@ -433,8 +433,11 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     conj(ξ1/ν)
 end
 
-function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
+function det{T}(A::AbstractMatrix{T})
+    if istriu(A) || istril(A)
+        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        return convert(S, det(UpperTriangular(A)))
+    end
     return det(lufact(A))
 end
 det(x::Number) = x
