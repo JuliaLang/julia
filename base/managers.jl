@@ -107,11 +107,12 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     wconfig.io = io
     wconfig.host = host
+    wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
     wconfig.count = cnt
-    wconfig.max_parallel = get(params, :max_parallel, Nullable{Integer}())
+    wconfig.max_parallel = params[:max_parallel]
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -125,7 +126,7 @@ function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symb
             host = get(config.host)
             sshflags = get(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
-                println("Error sending a Ctrl-C to julia worker $id on $machine")
+                println("Error sending a Ctrl-C to julia worker $id on $host")
             end
         else
             # This state can happen immediately after an addprocs
@@ -216,6 +217,8 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.io)
         (bind_addr, port) = read_worker_host_port(get(config.io))
         pubhost=get(config.host, bind_addr)
+        config.host = pubhost
+        config.port = port
     else
         pubhost=get(config.host)
         port=get(config.port)
@@ -244,8 +247,6 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
 
-    config.host = pubhost
-    config.port = port
     config.bind_addr = bind_addr
 
     # write out a subset of the connect_at required for further worker-worker connection setups
