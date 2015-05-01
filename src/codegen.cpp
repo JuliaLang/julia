@@ -2281,6 +2281,23 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             return ConstantInt::get(T_size, jl_datatype_nfields(aty));
         }
     }
+    else if (f->fptr == &jl_f_field_type && nargs==2) {
+        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
+        rt1 = (jl_value_t*)sty;
+        if (jl_is_type_type((jl_value_t*)sty) || sty == jl_datatype_type) {
+            rt2 = expr_type(args[2], ctx); // index argument type
+            if (rt2 == (jl_value_t*)jl_long_type) {
+                Value *ty = emit_expr(args[1], ctx);
+                Value *types_svec = emit_datatype_types(ty);
+                Value *types_len = emit_datatype_nfields(ty);
+                Value *idx = emit_unboxed(args[2], ctx);
+                emit_bounds_check(ty, NULL, idx, types_len, ctx);
+                Value *fieldtyp = builder.CreateLoad(builder.CreateGEP(builder.CreateBitCast(types_svec, jl_ppvalue_llvmt), idx));
+                JL_GC_POP();
+                return fieldtyp;
+            }
+        }
+    }
     else if (f->fptr == &jl_f_sizeof && nargs == 1) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;

@@ -844,6 +844,16 @@ static Value *emit_typeof(Value *p)
     return literal_pointer_val(julia_type_of(p));
 }
 
+static Value *emit_datatype_types(Value *dt)
+{
+    return builder.
+        CreateLoad(builder.
+                   CreateBitCast(builder.
+                                 CreateGEP(builder.CreateBitCast(dt, T_pint8),
+                                           ConstantInt::get(T_size, offsetof(jl_datatype_t, types))),
+                                 jl_ppvalue_llvmt));
+}
+
 static Value *emit_datatype_nfields(Value *dt)
 {
     Value *nf = builder.
