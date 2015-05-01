@@ -1117,7 +1117,7 @@ b2 = bitrand(v1)
 @check_bit_operation dot(b1, b2) Int
 
 b1 = bitrand(n1, n2)
-for k = -max(n1,n2) : max(n1,n2)
+for k = -n1 : n2
     @check_bit_operation tril(b1, k) BitMatrix
     @check_bit_operation triu(b1, k) BitMatrix
 end
