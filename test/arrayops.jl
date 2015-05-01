@@ -1092,3 +1092,8 @@ end
 # PR #10164
 @test eltype(Array{Int}) == Int
 @test eltype(Array{Int,1}) == Int
+
+# PR #11080
+let x = fill(0.9, 1000)
+    @test_approx_eq prod(x) cumprod(x)[end]
+end
