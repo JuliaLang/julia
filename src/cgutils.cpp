@@ -256,7 +256,7 @@ public:
 #endif
 
 #ifdef LLVM37
-static MDType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
+static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #else
 static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #endif
@@ -266,14 +266,14 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL) {
 #ifdef LLVM37
-        return (llvm::MDType*)jdt->ditype;
+        return (llvm::DIType*)jdt->ditype;
 #else
         return DIType((llvm::MDNode*)jdt->ditype);
 #endif
     }
     if (jl_is_bitstype(jt)) {
     #ifdef LLVM37
-        llvm::MDType *t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        llvm::DIType *t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
     #else
