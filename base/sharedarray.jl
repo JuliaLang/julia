@@ -188,10 +188,10 @@ end
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
 function serialize(s, S::SharedArray)
-    serialize_type(s, typeof(S))
+    Serializer.serialize_type(s, typeof(S))
     for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
-            writetag(s, UndefRefTag)
+            Serializer.writetag(s, Serializer.UndefRefTag)
         else
             serialize(s, getfield(S, n))
         end
