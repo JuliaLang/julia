@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ###### Functors ######
 
 # Note that functors are merely used as internal machinery to enhance code

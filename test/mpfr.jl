@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Base.MPFR
 # constructors
 with_bigfloat_precision(53) do

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @generated function staged_t1(a,b)
     if a == Int
         return :(a+b)

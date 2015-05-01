@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   allocation and garbage collection
   . non-moving, precise mark and sweep collector

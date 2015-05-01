@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type Node
     name::UTF8String
     n::Set{Node}

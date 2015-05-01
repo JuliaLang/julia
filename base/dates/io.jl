@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # TODO: optimize this
 function Base.string(dt::DateTime)
     y,m,d = yearmonthday(days(dt))

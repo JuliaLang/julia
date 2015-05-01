@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #trunc
 dt = Dates.Date(2012,12,21)
 @test trunc(dt,Dates.Year) == Dates.Date(2012)

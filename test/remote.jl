@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.ser_tag[Symbol] == 2
 @test Serializer.ser_tag[()] == 47

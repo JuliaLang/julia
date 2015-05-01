@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #
 # The Computer Language Benchmarks Game
 # nbody benchmark

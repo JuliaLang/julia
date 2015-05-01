@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Small sanity tests to ensure changing the rounding of float functions work
 using Base.Test
 

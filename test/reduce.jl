@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(-, 1:5) == -13

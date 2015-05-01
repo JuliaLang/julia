@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function collect_eachmatch(re, str, overlap=false)
     [m.match for m in collect(eachmatch(re, str, overlap))]

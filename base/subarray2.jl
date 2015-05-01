@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Scalar indexing
 # Low dimensions: avoid splatting
 newsym = (:i_1, :i_2, :i_3, :i_4)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Serializer
 
 import Base: GMP, Bottom, svec, unsafe_convert, uncompressed_ast

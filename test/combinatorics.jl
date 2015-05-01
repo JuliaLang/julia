@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @test binomial(5,-1) == 0
 @test binomial(5,10) == 0
 @test binomial(5,3) == 10

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Pair
 p = Pair(1,2)
 @test p == (1=>2)

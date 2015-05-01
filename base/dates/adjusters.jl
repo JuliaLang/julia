@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### truncation
 Base.trunc(dt::Date,p::Type{Year}) = Date(UTD(totaldays(year(dt),1,1)))
 Base.trunc(dt::Date,p::Type{Month}) = firstdayofmonth(dt)

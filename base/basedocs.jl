@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import .Docs: keywords
 
 keywords[:hello] = keywords[:hi] = doc"Hello, Human."

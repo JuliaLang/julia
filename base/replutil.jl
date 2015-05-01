@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # fallback text/plain representation of any type:
 writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
 

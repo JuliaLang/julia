@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## IOStream
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Int32, ()))

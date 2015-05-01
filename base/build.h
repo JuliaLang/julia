@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef OS_DETECT_H
 #define OS_DETECT_H
 #include "platform.h"

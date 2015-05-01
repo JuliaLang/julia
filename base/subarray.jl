@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 typealias NonSliceIndex Union(Colon, Range{Int}, UnitRange{Int}, Array{Int,1})
 typealias ViewIndex Union(Int, NonSliceIndex)
 typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int}, Colon)
