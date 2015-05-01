@@ -66,6 +66,9 @@ vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) =
 
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j+1-k), m)
@@ -81,6 +84,9 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j-k), m)
