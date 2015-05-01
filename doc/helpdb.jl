@@ -2388,7 +2388,7 @@ Any[
 
 ("Base","error","error(message::AbstractString)
 
-   Raise an error with the given message
+   Raise an \"ErrorException\" with the given message
 
 "),
 
@@ -2433,46 +2433,77 @@ Any[
 
 "),
 
-("Base","AssertionError","AssertionError
+("Base","ArgumentError","ArgumentError(msg)
+
+   The parameters to a function call do not match a valid signature.
+
+"),
+
+("Base","AssertionError","AssertionError([msg])
 
    The asserted condition did not evalutate to \"true\".
 
 "),
 
-("Base","ArgumentError","ArgumentError
+("Base","BoundsError","BoundsError([a][, i])
 
-   The parameters given to a function call are not valid.
-
-"),
-
-("Base","BoundsError","BoundsError
-
-   An indexing operation into an array tried to access an out-of-
-   bounds element.
+   An indexing operation into an array, \"a\", tried to access an out-
+   of-bounds element, \"i\".
 
 "),
 
-("Base","EOFError","EOFError
+("Base","DimensionMismatch","DimensionMismatch([msg])
+
+   The objects called do not have matching dimensionality.
+
+"),
+
+("Base","DivideError","DivideError()
+
+   Integer division was attempted with a denominator value of 0.
+
+"),
+
+("Base","DomainError","DomainError()
+
+   The arguments to a function or constructor are outside the valid
+   domain.
+
+"),
+
+("Base","EOFError","EOFError()
 
    No more data was available to read from a file or stream.
 
 "),
 
-("Base","ErrorException","ErrorException
+("Base","ErrorException","ErrorException(msg)
 
    Generic error type. The error message, in the *.msg* field, may
    provide more specific details.
 
 "),
 
-("Base","KeyError","KeyError
+("Base","InexactError","InexactError()
+
+   Type conversion cannot be done exactly.
+
+"),
+
+("Base","InterruptException","InterruptException()
+
+   The process was stopped by a terminal interrupt (CTRL+C).
+
+"),
+
+("Base","KeyError","KeyError(key)
 
    An indexing operation into an \"Associative\" (\"Dict\") or \"Set\"
    like object tried to access or delete a non-existent element.
 
 "),
 
-("Base","LoadError","LoadError
+("Base","LoadError","LoadError(file::AbstractString, line::Int, error)
 
    An error occurred while *including*, *requiring*, or *using* a
    file. The error specifics should be available in the *.error*
@@ -2480,38 +2511,77 @@ Any[
 
 "),
 
-("Base","MethodError","MethodError
+("Base","MethodError","MethodError(f, args)
 
    A method with the required type signature does not exist in the
    given generic function.
 
 "),
 
-("Base","ParseError","ParseError
+("Base","NullException","NullException()
+
+   An attempted access to a \"Nullable\" with no defined value.
+
+"),
+
+("Base","OutOfMemoryError","OutOfMemoryError()
+
+   An operation allocated too much memory for either the system or the
+   garbage collector to handle properly.
+
+"),
+
+("Base","OverflowError","OverflowError()
+
+   The result of an expression is too large for the specified type and
+   will cause a wraparound.
+
+"),
+
+("Base","ParseError","ParseError(msg)
 
    The expression passed to the *parse* function could not be
    interpreted as a valid Julia expression.
 
 "),
 
-("Base","ProcessExitedException","ProcessExitedException
+("Base","ProcessExitedException","ProcessExitedException()
 
    After a client Julia process has exited, further attempts to
    reference the dead child will throw this exception.
 
 "),
 
-("Base","SystemError","SystemError
+("Base","StackOverflowError","StackOverflowError()
+
+   The function call grew beyond the size of the call stack. This
+   usually happens when a call recurses infinitely.
+
+"),
+
+("Base","SystemError","SystemError(prefix::AbstractString[, errnum::Int32])
 
    A system call failed with an error code (in the \"errno\" global
    variable).
 
 "),
 
-("Base","TypeError","TypeError
+("Base","TypeError","TypeError(func::Symbol, context::AbstractString, expected::Type, got)
 
    A type assertion failure, or calling an intrinsic function with an
    incorrect argument type.
+
+"),
+
+("Base","UndefRefError","UndefRefError()
+
+   The item or field is not defined for the given object.
+
+"),
+
+("Base","UndefVarError","UndefVarError(var::Symbol)
+
+   A symbol in the current scope is not defined.
 
 "),
 
@@ -2570,6 +2640,12 @@ Any[
 
    Get an array of the names exported by a module, with optionally
    more module globals according to the additional parameters.
+
+"),
+
+("Base","nfields","nfields(x::DataType) -> Int
+
+   Get the number of fields of a data type.
 
 "),
 
@@ -6945,8 +7021,10 @@ popdisplay(d::Display)
 ("Base","chol","chol(A[, LU]) -> F
 
    Compute the Cholesky factorization of a symmetric positive definite
-   matrix \"A\" and return the matrix \"F\". If \"LU\" is \":L\"
-   (Lower), \"A = L*L'\". If \"LU\" is \":U\" (Upper), \"A = R'*R\".
+   matrix \"A\" and return the matrix \"F\". If \"LU\" is \"Val{:U}\"
+   (Upper), \"F\" is of type \"UpperTriangular\" and \"A = F'*F\". If
+   \"LU\" is \"Val{:L}\" (Lower), \"F\" is of type \"LowerTriangular\"
+   and \"A = F*F'\". \"LU\" defaults to \"Val{:U}\".
 
 "),
 
@@ -7865,6 +7943,12 @@ popdisplay(d::Display)
 ("Base","istriu","istriu(A) -> Bool
 
    Test whether a matrix is upper triangular.
+
+"),
+
+("Base","isdiag","isdiag(A) -> Bool
+
+   Test whether a matrix is diagonal.
 
 "),
 
@@ -11898,9 +11982,11 @@ golden
 ("Base.Pkg","dir","dir() -> AbstractString
 
    Returns the absolute path of the package directory. This defaults
-   to \"joinpath(homedir(),\".julia\")\" on all platforms (i.e.
-   \"~/.julia\" in UNIX shell syntax). If the \"JULIA_PKGDIR\"
-   environment variable is set, that path is used instead. If
+   to \"joinpath(homedir(),\".julia\",\"v\$(VERSION.major).\$(VERSION
+   .minor)\")\" on all platforms (i.e. \"~/.julia/v0.4\" in UNIX shell
+   syntax).  If the \"JULIA_PKGDIR\" environment variable is set, then
+   that path is used in the returned value as \"joinpath(ENV[\"JULIA_
+   PKGDIR\"],\"v\$(VERSION.major).\$(VERSION.minor)\")\". If
    \"JULIA_PKGDIR\" is a relative path, it is interpreted relative to
    whatever the current working directory is.
 

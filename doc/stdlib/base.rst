@@ -313,13 +313,13 @@ All Objects
 
    .. doctest::
 
-	   julia> widen(Int32)
-	   Int64
+      julia> widen(Int32)
+      Int64
 
    .. doctest::
 
-	   julia> widen(1.5f0)
-	   1.5
+      julia> widen(1.5f0)
+      1.5
 
 .. function:: identity(x)
 
@@ -804,7 +804,7 @@ Errors
 
 .. function:: error(message::AbstractString)
 
-   Raise an error with the given message
+   Raise an ``ErrorException`` with the given message
 
 .. function:: throw(e)
 
@@ -833,54 +833,97 @@ Errors
 
    Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
 
-.. data:: AssertionError
+.. function:: ArgumentError(msg)
+
+   The parameters to a function call do not match a valid signature.
+
+.. function:: AssertionError([msg])
 
    The asserted condition did not evalutate to ``true``.
 
-.. data:: ArgumentError
+.. function:: BoundsError([a],[i])
 
-   The parameters given to a function call are not valid.
+   An indexing operation into an array, ``a``, tried to access an out-of-bounds element, ``i``.
 
-.. data:: BoundsError
+.. function:: DimensionMismatch([msg])
 
-   An indexing operation into an array tried to access an out-of-bounds element.
+   The objects called do not have matching dimensionality.
 
-.. data:: EOFError
+.. function:: DivideError()
+
+   Integer division was attempted with a denominator value of 0.
+
+.. function:: DomainError()
+
+   The arguments to a function or constructor are outside the valid domain.
+
+.. function:: EOFError()
 
    No more data was available to read from a file or stream.
 
-.. data:: ErrorException
+.. function:: ErrorException(msg)
 
    Generic error type. The error message, in the `.msg` field, may provide more specific details.
 
-.. data:: KeyError
+.. function:: InexactError()
+
+   Type conversion cannot be done exactly.
+
+.. function:: InterruptException()
+
+   The process was stopped by a terminal interrupt (CTRL+C).
+
+.. function:: KeyError(key)
 
    An indexing operation into an ``Associative`` (``Dict``) or ``Set`` like object tried to access or delete a non-existent element.
 
-.. data:: LoadError
+.. function:: LoadError(file::AbstractString, line::Int, error)
 
    An error occurred while `including`, `requiring`, or `using` a file. The error specifics should be available in the `.error` field.
 
-.. data:: MethodError
+.. function:: MethodError(f, args)
 
    A method with the required type signature does not exist in the given generic function.
 
-.. data:: ParseError
+.. function:: NullException()
+
+   An attempted access to a ``Nullable`` with no defined value.
+
+.. function:: OutOfMemoryError()
+
+   An operation allocated too much memory for either the system or the garbage collector to handle properly.
+
+.. function:: OverflowError()
+
+   The result of an expression is too large for the specified type and will cause a wraparound.
+
+.. function:: ParseError(msg)
 
    The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
 
-.. data:: ProcessExitedException
+.. function:: ProcessExitedException()
 
    After a client Julia process has exited, further attempts to reference the dead child will throw this exception.
 
-.. data:: SystemError
+.. function:: StackOverflowError()
+
+   The function call grew beyond the size of the call stack. This usually happens when a call recurses infinitely.
+
+.. function:: SystemError(prefix::AbstractString, [errnum::Int32])
 
    A system call failed with an error code (in the ``errno`` global variable).
 
-.. data:: TypeError
+.. function:: TypeError(func::Symbol, context::AbstractString, expected::Type, got)
 
    A type assertion failure, or calling an intrinsic function with an incorrect argument type.
 
+.. function:: UndefRefError()
+
+   The item or field is not defined for the given object.
+
+.. function:: UndefVarError(var::Symbol)
+
+   A symbol in the current scope is not defined.
 
 Events
 ------
