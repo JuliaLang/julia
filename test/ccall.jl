@@ -34,7 +34,7 @@ end
 ci = 20+51im
 b = ccall((:ctest, "./libccalltest"), Complex{Int}, (Complex{Int},), ci)
 @test b == ci + 1 - 2im
-b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &ci))
+b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), [ci]))
 @test b == ci + 1 - 2im
 @test ci == 20+51im
 
@@ -42,14 +42,14 @@ b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{Complex{Int}}, (Ptr{Compl
 cf64 = 2.84+5.2im
 b = ccall((:cgtest, "./libccalltest"), Complex128, (Complex128,), cf64)
 @test b == cf64 + 1 - 2im
-b = unsafe_load(ccall((:cgptest, "./libccalltest"), Ptr{Complex128}, (Ptr{Complex128},), &cf64))
+b = unsafe_load(ccall((:cgptest, "./libccalltest"), Ptr{Complex128}, (Ptr{Complex128},), [cf64]))
 @test b == cf64 + 1 - 2im
 @test cf64 == 2.84+5.2im
 
 cf32 = 3.34f0+53.2f0im
 b = ccall((:cftest, "./libccalltest"), Complex64, (Complex64,), cf32)
 @test b == cf32 + 1 - 2im
-b = unsafe_load(ccall((:cfptest, "./libccalltest"), Ptr{Complex64}, (Ptr{Complex64},), &cf32))
+b = unsafe_load(ccall((:cfptest, "./libccalltest"), Ptr{Complex64}, (Ptr{Complex64},), [cf32]))
 @test b == cf32 + 1 - 2im
 @test cf32 == 3.34f0+53.2f0im
 
