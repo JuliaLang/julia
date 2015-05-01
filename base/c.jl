@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # definitions related to C interface
 
 import Core.Intrinsics.cglobal

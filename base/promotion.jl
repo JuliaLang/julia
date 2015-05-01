@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## type join (closest common ancestor, or least upper bound) ##
 
 typejoin() = Bottom

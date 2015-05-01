@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # wordcount.jl
 #
 # Implementation of parallelized "word-count" of a text, inspired by the

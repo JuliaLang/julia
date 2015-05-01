@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 

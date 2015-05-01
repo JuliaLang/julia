@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Filter
 b = [1., 2., 3., 4.]
 x = [1., 1., 0., 1., 1., 0., 0., 0.]

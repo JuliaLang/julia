@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 convert(::Type{Char}, x::Float16) = Char(convert(UInt32, x))
 convert(::Type{Char}, x::Float32) = Char(convert(UInt32, x))
 convert(::Type{Char}, x::Float64) = Char(convert(UInt32, x))

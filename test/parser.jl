@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # issue #9684
 let
     for (ex1, ex2) in [("5.≠x", "5.!=x"),

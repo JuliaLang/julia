@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
 cd(dirname(@__FILE__)) do

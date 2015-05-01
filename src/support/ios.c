@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>

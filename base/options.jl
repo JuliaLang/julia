@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 immutable JLOptions
     quiet::Int8

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Base64
 import Base: read, write, close, eof, empty!
 export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode

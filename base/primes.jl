@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Sieve of Atkin for generating primes:
 #     http://en.wikipedia.org/wiki/Sieve_of_Atkin
 # Code very loosely based on this:

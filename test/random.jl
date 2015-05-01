@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Issue #6573
 srand(0); rand(); x = rand(384);
 @test find(x .== rand()) == []

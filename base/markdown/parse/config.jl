@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 typealias InnerConfig Dict{Char, Vector{Function}}
 
 type Config

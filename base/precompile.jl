@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # prime method cache with some things we know we'll need right after startup
 precompile(!=, (Bool, Bool))
 precompile(!=, (SubString{ASCIIString}, ASCIIString))

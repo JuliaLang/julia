@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Linear algebra functions for dense matrices in column major format
 
 ## BLAS cutoff threshold constants
