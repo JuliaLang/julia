@@ -57,7 +57,7 @@ l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
 @test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(Array{Float64}(a))
+@test_approx_eq @inferred(det(a)) det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
