@@ -6,47 +6,124 @@
  Performance Tips
 ******************
 
-In the following sections, we briefly go through a few techniques that
-can help make your Julia code run as fast as possible.
+Some users reported that their Julia programs did not run as fast as expected, maybe even slower than their Python counterparts, contrast to the high performance claimed of Julia project. However, this inefficiency is largely due to the failure of conformity with the Julia programming norm. To help users better benefit from the high performance of Julia, this page presents some tips, by following which, users may see a significant speed-up (around 100x ~ 1000x) in their programs.
 
-Avoid global variables
-----------------------
+Why Julia *can* be fast
+-----------------
 
-A global variable might have its value, and therefore its type, change
-at any point. This makes it difficult for the compiler to optimize code
-using global variables. Variables should be local, or passed as
-arguments to functions, whenever possible.
+The first thing is to understand why Julia *can* be fast. This is the basic to understand all following sections. The speed of a language depends on whether its corresponding compiler is able to generate efficient binary (machine code). The advantage of Julia compiler over its competitors lies on its capacity of inferring, during the *compile time*, the *runtime* type of a variable. By employing this technique, Julia is able to achieve nearly static language (C/Fortran) speed.
 
-Any code that is performance critical or being benchmarked should be
-inside a function.
+In other words, Julia is fast when the compiler can infer the runtime type of a variable, and it loses its efficiency when it fails to do so. Julia can infer the type of lots of variables automatically. But there are cases where it cannot. Therefore, whenever you help the compiler infer the runtime type of a variable which it cannot infer otherwise, you improve the speed of your program. By reading through the following sections, readers are invited to discover how the proposed code-writing skills help the compiler to infer the type.
 
-We find that global names are frequently constants, and declaring them
-as such greatly improves performance::
 
-    const DEFAULT_VAL = 0
+Be cautious to the use of global variables, especially in a loop
+----------------------------------------------------------------
 
-Uses of non-constant globals can be optimized by annotating their types
-at the point of use::
+The most significant trap in Julia is to use global variable everywhere, whose consequence is that its speed is even worse than the Python equivalent. A global variable is one defined in the global scope. Typically, the following are examples of global scopes:
 
-    global x
-    y = f(x::Int + 1)
+* The top level of a script (Note: the begin-end, if-else block do not introduce a scope, and something directly inside these blocks are still in the global scope);
 
-Writing functions is better style. It leads to more reusable code and
-clarifies what steps are being done, and what their inputs and outputs
-are.
+* The top level of a module (Note: module scope is global scope, and different modules have separted global scopes);
 
-**NOTE:**  All code in the REPL is evaluated in global scope, so a variable
-defined and assigned at toplevel will be a **global** variable.
+* REPL (also known as prompt);
 
-In the following REPL session::
+* The top level of a cell in IJulia interactive environment.
 
-    julia> x = 1.0
+In contrast to the local variables, whose types can mostly be inferred by the compiler automatically during the compile time, global variables cannot get their types inferred in the compile time, because their types can change at any point during the runtime. Every time a global variable is referred directly, the program has to do some extra work to determine its runtime type. If a single use of global variable is not much an issue, **involving a global variable in a loop** can significantly degrade the performance. The following are some examples.
 
-is equivalent to::
+Example 1 (bad code)::
 
-    julia> global x = 1.0
+	x = zeros(100000)
+	for i = 1:length(x)
+	    x[i] = 1
+	end
 
-so all the performance issues discussed previously apply.
+This is bad, because the global variable ``x`` are referred 100000 times, and thus has its type checked 100000 times during the runtime, which takes a lot of time.
+
+Example 2 (good code)::
+
+	function main()
+	    x = zeros(100000)
+	    for i = 1:length(x)
+	        x[i] = 1
+	    end
+	end
+	main()
+
+By simply putting all code in a function, ``x`` becomes local, and thus has its type inferred automatically during the compile time. So there will be no type-check cost during the runtime. The ``for`` loop in this example is 200x faster than the one in Example 1.
+
+If some user does not like the idea of putting everything in a function, he has still another option: passing global variables as parameters to a function. Consider the following code:
+
+Example 3 (good code)::
+
+    function assign1!(a)
+        for i = 1:length(a)
+            a[i] = 1
+        end
+    end
+    x = zeros(100000)
+    assign1!(x)
+
+The objective of this code is to assign ``1`` to each component of ``x``. This is not done in a loop in the global scope. On the contrary, a function named ``assign1!`` assumes the responsiblity, accepts a variable as parameter, and gets the heavy work done. With this technique, the ``for`` loop enjoys exactly the same speed as in Example 2, despite of the use of global variables.
+
+To understand this, let us have a careful analysis on the type inference mechanism in this code. During the runtime, the global variable ``x`` is initialized as an array of type ``Float64``. Then, the program calls the function ``assign1!`` with the parameter ``x``. Here, ``x``, as a global variable, has its type checked, but only once. Then, the program runs a specific version of ``assign1!``: ``assign1!(a::Array{Float64})``. Therefore, in the function and thus in the ``for`` loop, the type of ``a`` is actually known, so without any type-check cost.
+
+To better understand this: although ``assign1!`` modifies the global variable ``x`` with the local representative ``a``, ``a`` and ``x`` is not the same thing -- ``a`` is a *simplified* view of ``x``. Consider the following example:
+
+Example 4 (some explanation)::
+
+    change_x() = global x = "string"
+    function assign1!(a)
+        change_x()
+        for i = 1:length(a)
+            a[i] = 1
+        end
+    end
+    x = zeros(100000)
+    assign1!(x)
+
+In the beginning of the function ``assign1!``, there is a function ``change_x``, which modifies the global variable ``x``. So, before the ``for`` loop, the definition of ``x`` has changed. ``x`` is now associated with a new address in the main memory, while ``a`` keeps associated with the original address. Therefore, during the ``for`` loop, the original address is assigned, while the new address remains untouched. Needless to say, the final value of ``x`` is "string". So, in this example, we did not "involve a global variable in a loop".
+
+Sometimes, "involve a global variable in a loop" may happen in a less obvious way. Consider the following example:
+
+Example 5 (bad code)::
+
+    N = 100000
+    function f()
+        for i = 1:N
+        end
+    end
+    f()
+
+Here, ``N`` in ``f()`` refers to a global variable and has its type, as well as value, checked during each iteration. Although it does not appear in the loop body, it is still involved in the loop. The consequent cost is very high. To improve this code, while we can again adopt the technique in Example 3, here we will introduce another technique: ``const`` keyword.
+
+``const`` is a modifier, which defines a "constant-value variable". A constant-value variable is a variable that cannot have its value, thus its type, changed during the runtime. Its type is determined when it is initialized. Of course, the compiler can use this type information to generate efficient binary. Consider the following example:
+
+Example 6 (good code)::
+
+    const N = 100000
+    function f()
+        for i = 1:N
+        end
+    end
+    f()
+
+It is 1000x faster than Example 5.
+
+With the same logic, we can rewrite the Example 1 with the ``const`` keyword:
+
+Example 7 (good code)::
+
+	const x = zeros(100000)
+	for i = 1:length(x)
+	    x[i] = 1
+	end
+
+Though a constant-value variable may be a bit restricted -- all we need here is a "constant-type variable", this "constant-type variable", however, is not available currently. Though in the local scope, it is allowed to write ``x::Int = 1`` to restrict the type of a local variable, in the global scope, it is not allowed. The good news is that "constant-type variable" is a planned feature in future Julia version. Needless to say, it will be a powerful tool to improve the speed when using global variables.
+
+Currently, all we have is the "constant-value variable". But the users can use it to imitate the behavior of "constant-type variable". In fact, the modification of the value of "constant-value variable" is actually allowed except that a warning will be produced. And the modification of the type of "constant-value variable" is allowed in no case.
+
+
 
 Measure performance with :obj:`@time` and pay attention to memory allocation
 ----------------------------------------------------------------------------
