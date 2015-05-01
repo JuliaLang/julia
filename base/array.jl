@@ -1509,7 +1509,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
         else
             n2 = n >> 1
             s_ = ($fp)(v, c, s, i1, n2)
-            s_ = $(op)(s_, ($fp)(v, c, s + s_, i1+n2, n-n2))
+            s_ = $(op)(s_, ($fp)(v, c, ($op)(s, s_), i1+n2, n-n2))
         end
         return s_
     end
