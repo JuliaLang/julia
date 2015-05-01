@@ -117,9 +117,9 @@ bswap(x::UInt128) = box(UInt128,bswap_int(unbox(UInt128,x)))
 
 for T in IntTypes
     @eval begin
-        count_ones(x::$T)     = Int(box($T,ctpop_int(unbox($T,x))))
-        leading_zeros(x::$T)  = Int(box($T,ctlz_int(unbox($T,x))))
-        trailing_zeros(x::$T) = Int(box($T,cttz_int(unbox($T,x))))
+        count_ones(x::$T)     = signed($T(box($T,ctpop_int(unbox($T,x)))))
+        leading_zeros(x::$T)  = signed($T(box($T,ctlz_int(unbox($T,x)))))
+        trailing_zeros(x::$T) = signed($T(box($T,cttz_int(unbox($T,x)))))
     end
 end
 count_zeros  (x::Integer) = count_ones(~x)
