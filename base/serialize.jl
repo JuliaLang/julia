@@ -1,3 +1,9 @@
+module Serializer
+
+import Base: GMP, Bottom, svec, unsafe_convert, uncompressed_ast
+
+export serialize, deserialize
+
 ## serializing values ##
 
 # dummy types to tell number of bytes used to store length (4 or 1)
@@ -158,6 +164,29 @@ function serialize{T,N,A<:Array}(s, a::SubArray{T,N,A})
     serialize_array_data(s, a)
 end
 
+function serialize{T<:AbstractString}(s, ss::SubString{T})
+    # avoid saving a copy of the parent string, keeping the type of ss
+    invoke(serialize, (Any,Any), s, convert(SubString{T}, convert(T,ss)))
+end
+
+# Don't serialize the pointers
+function serialize(s, r::Regex)
+    Serializer.serialize_type(s, typeof(r))
+    serialize(s, r.pattern)
+    serialize(s, r.options)
+end
+
+function serialize(s, n::BigInt)
+    Serializer.serialize_type(s, BigInt)
+    serialize(s, base(62,n))
+end
+
+
+function serialize(s, n::BigFloat)
+    Serializer.serialize_type(s, BigFloat)
+    serialize(s, string(n))
+end
+
 function serialize(s, e::Expr)
     l = length(e.args)
     if l <= 255
@@ -172,6 +201,26 @@ function serialize(s, e::Expr)
     for a = e.args
         serialize(s, a)
     end
+end
+
+function serialize(s, t::Dict)
+    serialize_type(s, typeof(t))
+    write(s, Int32(length(t)))
+    for (k,v) in t
+        serialize(s, k)
+        serialize(s, v)
+    end
+end
+
+function deserialize{K,V}(s, T::Type{Dict{K,V}})
+    n = read(s, Int32)
+    t = T(); sizehint!(t, n)
+    for i = 1:n
+        k = deserialize(s)
+        v = deserialize(s)
+        t[k] = v
+    end
+    return t
 end
 
 function serialize_mod_names(s, m::Module)
@@ -571,4 +620,19 @@ function deserialize(s, t::DataType)
         end
         return x
     end
+end
+
+deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
+
+deserialize(s, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
+
+deserialize(s, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
+
+function deserialize(s, t::Type{Regex})
+    pattern = deserialize(s)
+    options = deserialize(s)
+    Regex(pattern, options)
+end
+
+
 end
