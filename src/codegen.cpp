@@ -215,10 +215,10 @@ namespace llvm {
 
 // Basic DITypes
 #ifdef LLVM37
-static MDCompositeType *jl_value_dillvmt;
-static MDDerivedType *jl_pvalue_dillvmt;
-static MDDerivedType *jl_ppvalue_dillvmt;
-static MDSubroutineType *jl_di_func_sig;
+static DICompositeType *jl_value_dillvmt;
+static DIDerivedType *jl_pvalue_dillvmt;
+static DIDerivedType *jl_ppvalue_dillvmt;
+static DISubroutineType *jl_di_func_sig;
 #else
 static DICompositeType jl_value_dillvmt;
 static DIDerivedType jl_pvalue_dillvmt;
@@ -344,7 +344,7 @@ struct jl_varinfo_t {
     Value *SAvalue;   // register, if the var is SSA
     Value *passedAs;  // if an argument, the original passed value
 #ifdef LLVM37
-    MDLocalVariable *dinfo;
+    DILocalVariable *dinfo;
 #else
     DIVariable dinfo;
 #endif
@@ -898,6 +898,9 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
     if (llvmf) {
         #ifndef LLVM35
         new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+        #elif defined(LLVM37)
+        GlobalAlias::create(cast<PointerType>(llvmf->getType()),
+                            GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
         #else
         GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
                             GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
@@ -3968,8 +3971,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
     DIBuilder dbuilder(*m);
     ctx.dbuilder = &dbuilder;
 #ifdef LLVM37
-    MDFile *fil = NULL;
-    MDSubprogram *SP;
+    DIFile *fil = NULL;
+    DISubprogram *SP;
 #else
     DIFile fil;
     DISubprogram SP;
@@ -3995,14 +3998,14 @@ static Function *emit_function(jl_lambda_info_t *lam)
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #elif LLVM37
-        MDCompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         assert(CU.Verify());
         #endif
 
 #ifdef LLVM37
-        MDSubroutineType *subrty;
+        DISubroutineType *subrty;
 #elif LLVM36
         DISubroutineType subrty;
 #else
@@ -4119,7 +4122,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
 
 #ifdef LLVM37
-    std::map<jl_sym_t *, MDFile *> filescopes;
+    std::map<jl_sym_t *, DIFile *> filescopes;
 #else
     std::map<jl_sym_t *, MDNode *> filescopes;
 #endif
@@ -4474,7 +4477,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             lno = jl_unbox_long(jl_exprarg(stmt, 0));
             #ifdef LLVM37
-            MDFile *dfil = NULL;
+            DIFile *dfil = NULL;
             #else
             MDNode *dfil = NULL;
             #endif
@@ -4485,7 +4488,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                     // If the string is not empty
                     if (*file->name != '\0') {
                         #ifdef LLVM37
-                        std::map<jl_sym_t *, MDFile *>::iterator it = filescopes.find(file);
+                        std::map<jl_sym_t *, DIFile *>::iterator it = filescopes.find(file);
                         #else
                         std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
                         #endif
@@ -4494,7 +4497,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                         }
                         else {
                             #ifdef LLVM37
-                            dfil = filescopes[file] = (MDFile*)dbuilder.createFile(file->name, ".");
+                            dfil = filescopes[file] = (DIFile*)dbuilder.createFile(file->name, ".");
                             #else
                             dfil = filescopes[file] = (MDNode*)dbuilder.createFile(file->name, ".");
                             #endif
@@ -4748,7 +4751,7 @@ static void init_julia_llvm_env(Module *m)
 
     DIBuilder dbuilder(*m);
 #ifdef LLVM37
-    MDFile *julia_h = dbuilder.createFile("julia.h","");
+    DIFile *julia_h = dbuilder.createFile("julia.h","");
     jl_value_dillvmt = dbuilder.createStructType(nullptr,
 #else
     DIFile julia_h = dbuilder.createFile("julia.h","");
