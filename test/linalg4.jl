@@ -72,3 +72,10 @@ let A = eye(4)
     @test diag(A) == ones(4)
     @test diag(sub(A, 1:3, 1:3)) == ones(3)
 end
+
+# test triu/tril bounds checking
+A = rand(5,7)
+@test_throws(BoundsError,triu(A,8))
+@test_throws(BoundsError,triu(A,-6))
+@test_throws(BoundsError,tril(A,8))
+@test_throws(BoundsError,tril(A,-6))
