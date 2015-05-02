@@ -184,7 +184,7 @@ noteworthy differences:
   but is a specialized :obj:`Range` that is used for iteration without high
   memory overhead. To convert a range into a vector, you need to wrap the range
   with brackets ``[a:b]``.
-- Julia's :func:`max`` and :func:`min` are the equivalent of ``pmax`` and
+- Julia's :func:`max` and :func:`min` are the equivalent of ``pmax`` and
   ``pmin`` respectively in R, but both arguments need to have the same
   dimensions.  While :func:`maximum` and :func:`minimum` replace ``max`` and
   ``min`` in R, there are important differences.
@@ -273,18 +273,19 @@ Noteworthy differences from C/C++
   are unsigned (except if they are >128 bits, in which case they become signed BigInt type).
   Hexadecimal literals also, unlike C/C++/Java and unlike decimal literals in Julia,
   have a type based on the *length* of the literal, including leading 0s.  For example,
-  ``0x0`` and ``0x00` have type UInt8, ``0x000`` and ``0x0000`` have type UInt16, then
+  ``0x0`` and ``0x00`` have type UInt8, ``0x000`` and ``0x0000`` have type UInt16, then
   literals with 5 to 8 hex digits have type UInt32, 9 to 16 hex digits type UInt64, and more than
   16 hex digits end up a signed BigInt type.  This needs to be taken into account when defining
-  hexadecimal masks, for example ~0xf is very different from ~0x000f.
+  hexadecimal masks, for example `~0xf` is very different from `~0x000f`.
   Unlike either decimal integer or hexadecimal literals, floating point literals are always
   64-bits, Float64, and don't get promoted to the BigFloat type.  This is closer in
   behavior to C/C++.
-- String literals can be delimited with either " or """
-  They can also have string interpolation, indicated by $variablename or $(exprssion),
+- String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain `"` characters without
+  quoting it like `"\\\""`
+  They can also have string interpolation, indicated by $variablename or $(expression),
   which evaluates the variable name or the expression in the context of the function.
-- `//` indicates a Ration number, and not a single-line comment (which is # in Julia)
-- `#=` indicates the start of a multiline comment, and =# ends it.
+- `//` indicates a Rational number, and not a single-line comment (which is # in Julia)
+- `#=` indicates the start of a multiline comment, and `=#` ends it.
 - Functions in Julia return values from their last expression(s) or the ``return``
   keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
   ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
@@ -299,6 +300,7 @@ Noteworthy differences from C/C++
   combine logical arrays, but note the difference in order of operations:
   parentheses may be required (e.g., to select elements of ``A`` equal to 1 or
   2 use ``(A .== 1) | (A .== 2)``).
+- Julia's :obj:`^` is exponentiation, not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
 - Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
 - Julia does not require parentheses when writing ``if`` statements or
   ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
@@ -312,11 +314,12 @@ Noteworthy differences from C/C++
   ``if ( cond ) statement``, Julia allows statements of the form
   ``if cond; statement; end``, ``cond && statement`` and
   ``!cond || statement``. Assignment statements in the latter two syntaxes must
-  be explicitly wrapped in parentheses, e.g. ``cond && (x = value)``.
+  be explicitly wrapped in parentheses, e.g. ``cond && (x = value)``, because
+  of the operator precedence.
 - Julia has no line continuation syntax: if, at the end of a line, the input so
   far is a complete expression, it is considered done; otherwise the input
   continues. One way to force an expression to continue is to wrap it in
   parentheses.
 - By convention, functions that modify their arguments have a ! at the end of the name,
-  for example push!.
+  for example `push!`.
 
