@@ -8,6 +8,15 @@ extern "C" {
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
 
+//! Return if a 16-bit or 32-bit character is a surrogate character
+#define	is_surrogate_char(ch)  (((ch) & ~0x7ff) == 0xd800)
+//! Return if a 16-bit or 32-bit character is a leading surrogate character
+#define	is_surrogate_lead(ch)  (((ch) & ~0x3ff) == 0xd800)
+//! Return if a 16-bit or 32-bit character is a trailing surrogate character
+#define	is_surrogate_trail(ch) (((ch) & ~0x3ff) == 0xdc00)
+//! Return if a byte is a valid UTF-8 continuation character
+#define	is_valid_continuation(ch) ((ch & 0xc0) == 0x80)
+
 #define UEOF ((uint32_t)-1)
 
 /* convert UTF-8 data to wide character */
@@ -22,8 +31,25 @@ size_t u8_wc_toutf8(char *dest, uint32_t ch);
 /* character number to byte offset */
 DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 
-/* byte offset to character number */
-DLLEXPORT size_t u8_charnum(const char *s, size_t offset);
+/**
+ * @brief      Calculates number of characters in UTF-8 encoded string
+ * 
+ * @param[in]  iStr UTF-8 encoded string
+ * @param[in]  iLen Length of string (or substring) in bytes
+ *
+ * @return     Number of logical characters in string (or substring)
+ */
+DLLEXPORT size_t u8_charnum(const char *iStr, size_t iOffset);
+
+/**
+ * @brief      Calculates number of characters in UTF-16 encoded string
+ * 
+ * @param[in]  iStr UTF-16 encoded string
+ * @param[in]  iLen Length of the string (or substring) in 16-bit words
+ *
+ * @return     Number of logical characters in string (or substring)
+ */
+DLLEXPORT size_t u16_charnum(const uint16_t *iStr, size_t iLen);
 
 /* return next character, updating an index variable */
 uint32_t u8_nextchar(const char *s, size_t *i);

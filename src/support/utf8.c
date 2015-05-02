@@ -232,7 +232,14 @@ size_t u8_offset(const char *s, size_t charnum)
     return i;
 }
 
-/* byte offset => charnum */
+/**
+ * @brief      Calculates number of characters in a UTF-8 string
+ * 
+ * @param[in]  iStr UTF-8 encoded string
+ * @param[in]  iLen Length of the string in bytes
+ *
+ * @return number of logical characters
+ */
 size_t u8_charnum(const char *s, size_t offset)
 {
     size_t charnum = 0;
@@ -245,6 +252,29 @@ size_t u8_charnum(const char *s, size_t offset)
        } while (--offset);
     }
     return charnum;
+}
+
+/**
+ * @brief      Calculates number of characters in a UTF-16 string
+ * 
+ * @param[in]  iStr UTF-16 encoded string
+ * @param[in]  iLen Length of the string in 16-bit words
+ *
+ * @return number of logical characters
+ */
+DLLEXPORT size_t u16_charnum(const uint16_t *iStr, size_t iLen)
+{
+    size_t logChar = 0;	// # of logical characters
+    if (iLen) {
+	do {
+	    // Simply don't count trailing surrogate characters
+	    // Since we are not doing validation anyway, we can just
+	    // assume this is a valid UTF-16 string
+	    logChar += !is_surrogate_trail(*iStr);
+	    iStr++;
+	} while (--iLen);
+    }
+    return logChar;
 }
 
 /* number of characters in NUL-terminated string */
