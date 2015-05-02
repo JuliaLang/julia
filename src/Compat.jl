@@ -377,4 +377,9 @@ if VERSION < v"0.4.0-dev+4502"
     export keytype, valtype
 end
 
+if VERSION < v"0.4.0-dev+2254"
+    immutable Val{T} end
+    export Val
+end
+
 end # module
