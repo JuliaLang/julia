@@ -708,6 +708,18 @@ close(f)
 @windows_only f = RawFD(ccall(:_open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
 test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
+# issue #10994: pathnames cannot contain embedded NUL chars
+for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isexecutable, isfifo, isfile, islink, ispath, isreadable, issetgid, issetuid, issocket, issticky, iswritable, realpath, watch_file)
+    @test_throws ArgumentError f("adir\0bad")
+end
+@test_throws ArgumentError chmod("ba\0d", 0o222)
+@test_throws ArgumentError open("ba\0d", "w")
+for f in (cp, mv, symlink)
+    @test_throws ArgumentError f(file, "ba\0d")
+end
+@test_throws ArgumentError download("good", "ba\0d")
+@test_throws ArgumentError download("ba\0d", "good")
+
 ############
 # Clean up #
 ############

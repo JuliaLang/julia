@@ -334,13 +334,13 @@ function colval{T<:Integer, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int,
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
@@ -358,7 +358,7 @@ function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Arra
         isnull(nb) || (cells[row,col] = get(nb); return false)
 
         # check float64
-        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
         isnull(nf64) || (cells[row,col] = get(nf64); return false)
     end
     cells[row,col] = SubString(sbuff, startpos, endpos)

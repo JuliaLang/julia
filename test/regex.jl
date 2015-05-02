@@ -29,3 +29,6 @@ match(pat, target)
 buf = PipeBuffer()
 show(buf, r"")
 @test readall(buf) == "r\"\""
+
+# issue #10994: PCRE does not allow NUL chars in the pattern
+@test_throws ArgumentError Regex("a\0b")

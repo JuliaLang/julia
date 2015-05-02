@@ -220,6 +220,10 @@ parsehex(s) = parse(Int,s,16)
 @test_throws ArgumentError parse(Int,"2x")
 @test_throws ArgumentError parse(Int,"-")
 
+# multibyte spaces
+@test parse(Int, "3\u2003\u202F") == 3
+@test_throws ArgumentError parse(Int, "3\u2003\u202F,")
+
 @test parse(Int,'a') == 10
 @test_throws ArgumentError parse(Int,typemax(Char))
 
@@ -1424,3 +1428,20 @@ end
 @test isnull(tryparse(Float64, "64o"))
 @test get(tryparse(Float32, "32")) == 32.0f0
 @test isnull(tryparse(Float32, "32o"))
+
+# issue #10994: handle embedded NUL chars for string parsing
+for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
+    @test_throws ArgumentError parse(T, "1\0")
+end
+for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
+    @test isnull(tryparse(T, "1\0"))
+end
+let s = normalize_string("tést",:NFKC)
+    @test bytestring(Base.unsafe_convert(Cstring, s)) == s
+    @test bytestring(convert(Cstring, symbol(s))) == s
+    @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
+end
+let s = "ba\0d"
+    @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
+    @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
+end

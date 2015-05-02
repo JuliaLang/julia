@@ -32,8 +32,8 @@ modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function FILE(fd, mode)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
@@ -98,7 +98,7 @@ strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
     timestr = Array(UInt8, 128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{TmStruct}),
+    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
@@ -109,7 +109,7 @@ end
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{TmStruct}),
+    r = ccall(:strptime, Ptr{UInt8}, (Cstring, Cstring, Ptr{TmStruct}),
               timestr, fmt, &tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be

@@ -5,7 +5,7 @@ type FileMonitor
     notify::Condition
     function FileMonitor(cb, file)
         handle = Libc.malloc(_sizeof_uv_fs_event)
-        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32), eventloop(),handle,file,0)
+        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Cstring, Int32), eventloop(),handle,file,0)
         if err < 0
             ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
             disassociate_julia_struct(handle)
@@ -253,7 +253,7 @@ start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_wa
 function start_watching(t::PollingFileWatcher, interval=2.0)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
-             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{UInt8},UInt32),
+             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Cstring,UInt32),
                    t.handle, t.file, round(UInt32,interval*1000)))
 end
 start_watching(f::Function, t::PollingFileWatcher, interval=2.0) = (t.cb = f;start_watching(t,interval))
