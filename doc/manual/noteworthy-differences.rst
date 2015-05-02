@@ -251,3 +251,72 @@ Noteworthy differences from Python
   returns a new random number every time it is invoked without argument. On the
   other hand, the function ``g(x=[1,2]) = push!(x,3)`` returns ``[1,2,3]`` every
   time it is called as ``g()``.
+
+
+Noteworthy differences from C/C++
+----------------------------------
+
+- Julia arrays are indexed with square brackets, and can have more than one
+  dimension ``A[i,j]``.
+- In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
+- Julia arrays are assigned by reference. After ``A=B``, changing elements of
+  ``B`` will modify ``A`` as well.
+- Julia values are passed and assigned by reference. If a function modifies an
+  array, the changes will be visible in the caller.
+- In Julia, literal numbers without a decimal point (such as ``42``) create signed
+  integers, of type Int, but literals too large to fit in the machine word size
+  will automatically be promoted to a larger size type, such as Int64 (if Int is Int32),
+  Int128, or the arbitrarily large BigInt type.
+  There are no numeric literal suffixes, such as L, LL, U, UL, ULL to indicate unsigned
+  and/or signed vs. unsigned.
+  Decimal literals are always signed, and hexadecimal literals (which start with 0x like C/C++),
+  are unsigned (except if they are >128 bits, in which case they become signed BigInt type).
+  Hexadecimal literals also, unlike C/C++/Java and unlike decimal literals in Julia,
+  have a type based on the *length* of the literal, including leading 0s.  For example,
+  ``0x0`` and ``0x00` have type UInt8, ``0x000`` and ``0x0000`` have type UInt16, then
+  literals with 5 to 8 hex digits have type UInt32, 9 to 16 hex digits type UInt64, and more than
+  16 hex digits end up a signed BigInt type.  This needs to be taken into account when defining
+  hexadecimal masks, for example ~0xf is very different from ~0x000f.
+  Unlike either decimal integer or hexadecimal literals, floating point literals are always
+  64-bits, Float64, and don't get promoted to the BigFloat type.  This is closer in
+  behavior to C/C++.
+- String literals can be delimited with either " or """
+  They can also have string interpolation, indicated by $variablename or $(exprssion),
+  which evaluates the variable name or the expression in the context of the function.
+- `//` indicates a Ration number, and not a single-line comment (which is # in Julia)
+- `#=` indicates the start of a multiline comment, and =# ends it.
+- Functions in Julia return values from their last expression(s) or the ``return``
+  keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
+  ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
+  to values as one would have to do in C/C++ (i.e. ``a = myfunction(&b)``.
+- Julia discourages the used of semicolons to end statements. The results of
+  statements are not automatically printed (except at the interactive prompt),
+  and lines of code do not need to end with semicolons. :func:`println` or
+  :func:`@printf` can be used to print specific output.
+- In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
+  in C/C++.  Also, these the bitwise operators do not have the same precedence as C/++.
+  They can operate on scalars or element-wise across arrays and can be used to
+  combine logical arrays, but note the difference in order of operations:
+  parentheses may be required (e.g., to select elements of ``A`` equal to 1 or
+  2 use ``(A .== 1) | (A .== 2)``).
+- Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
+- Julia does not require parentheses when writing ``if`` statements or
+  ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
+  ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
+- Julia does not treat the numbers ``0`` and ``1`` as Booleans.
+  You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
+  booleans. Instead, you can write ``if true``, ``if Bool(1)``, or ``if 1==1``.
+- In Julia, ``return`` does not require parentheses.
+- Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
+  loop blocks, like ``while``/``for``, and functions. In lieu of the one-line
+  ``if ( cond ) statement``, Julia allows statements of the form
+  ``if cond; statement; end``, ``cond && statement`` and
+  ``!cond || statement``. Assignment statements in the latter two syntaxes must
+  be explicitly wrapped in parentheses, e.g. ``cond && (x = value)``.
+- Julia has no line continuation syntax: if, at the end of a line, the input so
+  far is a complete expression, it is considered done; otherwise the input
+  continues. One way to force an expression to continue is to wrap it in
+  parentheses.
+- By convention, functions that modify their arguments have a ! at the end of the name,
+  for example push!.
+
