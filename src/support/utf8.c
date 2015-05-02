@@ -234,11 +234,11 @@ size_t u8_offset(const char *s, size_t charnum)
 
 /**
  * @brief      Calculates number of characters in a UTF-8 string
- * 
- * @param[in]  iStr UTF-8 encoded string
- * @param[in]  iLen Length of the string in bytes
  *
- * @return number of logical characters
+ * @param[in]  s      UTF-8 encoded string
+ * @param[in]  offset Length of the string (or substring) in bytes
+ *
+ * @return     Number of logical characters (or codepoints)
  */
 size_t u8_charnum(const char *s, size_t offset)
 {
@@ -256,23 +256,23 @@ size_t u8_charnum(const char *s, size_t offset)
 
 /**
  * @brief      Calculates number of characters in a UTF-16 string
- * 
+ *
  * @param[in]  iStr UTF-16 encoded string
  * @param[in]  iLen Length of the string in 16-bit words
  *
- * @return number of logical characters
+ * @return     number of logical characters (or codepoints)
  */
 DLLEXPORT size_t u16_charnum(const uint16_t *iStr, size_t iLen)
 {
-    size_t logChar = 0;	// # of logical characters
+    size_t logChar = 0; // # of logical characters
     if (iLen) {
-	do {
-	    // Simply don't count trailing surrogate characters
-	    // Since we are not doing validation anyway, we can just
-	    // assume this is a valid UTF-16 string
-	    logChar += !is_surrogate_trail(*iStr);
-	    iStr++;
-	} while (--iLen);
+        do {
+            // Simply don't count trailing surrogate characters
+            // Since we are not doing validation anyway, we can just
+            // assume this is a valid UTF-16 string
+            logChar += !is_surrogate_trail(*iStr);
+            iStr++;
+        } while (--iLen);
     }
     return logChar;
 }
