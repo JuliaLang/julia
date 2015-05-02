@@ -33,21 +33,21 @@ DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 
 /**
  * @brief      Calculates number of characters in UTF-8 encoded string
- * 
- * @param[in]  iStr UTF-8 encoded string
+ *
+ * @param[in]  iStr UTF-8 encoded string (or substring)
  * @param[in]  iLen Length of string (or substring) in bytes
  *
- * @return     Number of logical characters in string (or substring)
+ * @return     Number of logical characters (or codepoints) in string (or substring)
  */
-DLLEXPORT size_t u8_charnum(const char *iStr, size_t iOffset);
+DLLEXPORT size_t u8_charnum(const char *iStr, size_t iLen);
 
 /**
  * @brief      Calculates number of characters in UTF-16 encoded string
- * 
+ *
  * @param[in]  iStr UTF-16 encoded string
  * @param[in]  iLen Length of the string (or substring) in 16-bit words
  *
- * @return     Number of logical characters in string (or substring)
+ * @return     Number of logical characters (or codepoints) in string (or substring)
  */
 DLLEXPORT size_t u16_charnum(const uint16_t *iStr, size_t iLen);
 
