@@ -263,5 +263,7 @@ end
 @test isdiag(5)
 
 # keytype & valtype
-@test keytype(@compat(Dict(1 => 1.))) == Int
-@test valtype(@compat(Dict(1 => 1.))) == Float64
+if VERSION < v"0.4.0-dev+4502"
+    @test keytype(@compat(Dict(1 => 1.))) == Int
+    @test valtype(@compat(Dict(1 => 1.))) == Float64
+end

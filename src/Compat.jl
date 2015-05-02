@@ -345,7 +345,7 @@ if VERSION < v"0.4.0-dev+4524"
     export isdiag
 end
 
-if VERSION < v"0.4.0-dev+4319"
+if VERSION < v"0.4.0-dev+4502"
     keytype{K,V}(::Associative{K,V}) = K
     valtype{K,V}(::Associative{K,V}) = V
     export keytype, valtype
