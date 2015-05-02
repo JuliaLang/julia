@@ -13,6 +13,13 @@ utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
 utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
 utf16_get_supplementary(lead::UInt16, trail::UInt16) = Char(UInt32(lead-0xd7f7)<<10 + trail)
 
+function length(s::UTF16String)
+    d = s.data
+    len = length(d) - 1
+    len == 0 && return 0
+    ccall(:u16_charnum, Int, (Ptr{Void}, Csize_t), d, len)
+end
+
 function endof(s::UTF16String)
     d = s.data
     i = length(d) - 1
