@@ -1,6 +1,6 @@
 # definitions related to C interface
 
-import Core.Intrinsics.cglobal
+import Core.Intrinsics: cglobal, box, unbox
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
@@ -43,6 +43,34 @@ end
 
 typealias Coff_t FileOffset
 
+# C NUL-terminated string pointers; these can be used in ccall
+# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
+# a check for embedded NUL chars in the string (to avoid silent truncation).
+if Int === Int64
+    bitstype 64 Cstring
+    bitstype 64 Cwstring
+else
+    bitstype 32 Cstring
+    bitstype 32 Cwstring
+end
+
+convert{T<:Union(Int8,UInt8)}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, unbox(Ptr{Cwchar_t}, p))
+
+containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
+function unsafe_convert(::Type{Cstring}, s::ByteString)
+    p = unsafe_convert(Ptr{Cchar}, s)
+    if containsnul(p, sizeof(s))
+        throw(ArgumentError("embedded NUL chars are not allowed in C strings"))
+    end
+    return Cstring(p)
+end
+
+# symbols are guaranteed not to contain embedded NUL
+convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+
+# in string.jl: unsafe_convert(::Type{Cwstring}, s::WString)
+
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
 # functions should always be called in matched pairs, ideally via:
@@ -56,11 +84,11 @@ disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union(AbstractString,Symbol)=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{UInt8}), f, rt, argt, name)
+    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
 function ccallable(f::Function, argt::Type, name::Union(AbstractString,Symbol)=string(f))
-    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{UInt8}), f, C_NULL, argt, name)
+    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Cstring), f, C_NULL, argt, name)
 end
 
 macro ccallable(def)

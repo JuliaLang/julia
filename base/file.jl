@@ -8,7 +8,7 @@ function pwd()
 end
 
 function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{UInt8},), dir))
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
 end
 cd() = cd(homedir())
 
@@ -35,8 +35,8 @@ end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Ptr{UInt8},UInt32), path, mode)
-    @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(path))
+    @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
+    @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     systemerror(:mkdir, ret != 0)
 end
 
@@ -61,8 +61,8 @@ function rm(path::AbstractString; recursive::Bool=false)
                 rm(joinpath(path, p), recursive=true)
             end
         end
-        @unix_only ret = ccall(:rmdir, Int32, (Ptr{UInt8},), path)
-        @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{UInt16},), utf16(path))
+        @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
+        @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
         systemerror(:rmdir, ret != 0)
     end
 end
@@ -168,8 +168,7 @@ end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 function tempname(temppath::AbstractString,uunique::UInt32)
     tname = Array(UInt16,32767)
-    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}),
-        utf16(temppath),utf16("jul"),uunique,tname)
+    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32,Ptr{UInt16}), temppath,utf16("jul"),uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(FormatMessage())")
@@ -223,7 +222,7 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    file_count = ccall(:jl_readdir, Int32, (Ptr{UInt8}, Ptr{UInt8}),
+    file_count = ccall(:jl_readdir, Int32, (Cstring, Ptr{UInt8}),
                         path, uv_readdir_req)
     systemerror("unable to read directory $path", file_count < 0)
 

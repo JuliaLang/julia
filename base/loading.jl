@@ -95,8 +95,11 @@ end
 
 # remote/parallel load
 
-include_string(txt::AbstractString, fname::AbstractString) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Ptr{UInt8}), txt, fname)
+include_string(txt::ByteString, fname::ByteString) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
+          txt, sizeof(txt), fname, sizeof(fname))
+
+include_string(txt::AbstractString, fname::AbstractString) = include_string(bytestring(txt), bytestring(fname))
 
 include_string(txt::AbstractString) = include_string(txt, "string")
 

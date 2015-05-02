@@ -490,9 +490,9 @@ static value_t julia_to_scm_(jl_value_t *v)
 }
 
 // this is used to parse a line of repl input
-DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
+DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
 {
-    value_t s = cvalue_static_cstring(str);
+    value_t s = cvalue_static_cstrn(str, len);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
@@ -502,9 +502,10 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 
 // this is for parsing one expression out of a string, keeping track of
 // the current position.
-DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
+DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
+                                      int pos0, int greedy)
 {
-    value_t s = cvalue_static_cstring(str);
+    value_t s = cvalue_static_cstrn(str, len);
     value_t p = fl_applyn(3, symbol_value(symbol("jl-parse-one-string")),
                           s, fixnum(pos0), greedy?FL_T:FL_F);
     jl_value_t *expr=NULL, *pos1=NULL;
@@ -566,16 +567,17 @@ jl_value_t *jl_parse_next(void)
     return scm_to_julia(c,0);
 }
 
-jl_value_t *jl_load_file_string(const char *text, char *filename)
+jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                char *filename, size_t namelen)
 {
     value_t t, f;
-    t = cvalue_static_cstring(text);
+    t = cvalue_static_cstrn(text, len);
     fl_gc_handle(&t);
-    f = cvalue_static_cstring(filename);
+    f = cvalue_static_cstrn(filename, namelen);
     fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
               t, f);
     fl_free_gc_handles(1);
-    return jl_parse_eval_all(filename);
+    return jl_parse_eval_all(filename, namelen);
 }
 
 // returns either an expression or a thunk

@@ -76,17 +76,25 @@ BigInt(x::BigInt) = x
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
-    sgn, base, i = Base.parseint_preamble(true,base,s,startpos,endpos)
+
+    # don't make a copy in the common case where we are parsing a whole bytestring
+    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,i,endpos))
+
+    sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
         return _n
     end
     z = BigInt()
-    err = ccall((:__gmpz_set_str, :libgmp),
-               Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
-               &z, SubString(s,i,endpos), base)
+    if Base.containsnul(bstr)
+        err = -1 # embedded NUL char (not handled correctly by GMP)
+    else
+        err = ccall((:__gmpz_set_str, :libgmp),
+                    Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
+                    &z, pointer(bstr)+(i-start(bstr)), base)
+    end
     if err != 0
-        raise && throw(ArgumentError("invalid BigInt: $(repr(s))"))
+        raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
         return _n
     end
     Nullable(sgn < 0 ? -z : z)
