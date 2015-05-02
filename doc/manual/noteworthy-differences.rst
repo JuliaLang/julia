@@ -295,7 +295,7 @@ Noteworthy differences from C/C++
   and lines of code do not need to end with semicolons. :func:`println` or
   :func:`@printf` can be used to print specific output.
 - In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
-  in C/C++.  Also, these the bitwise operators do not have the same precedence as C/++.
+  in C/C++.  Also, the bitwise operators do not have the same precedence as C/++.
   They can operate on scalars or element-wise across arrays and can be used to
   combine logical arrays, but note the difference in order of operations:
   parentheses may be required (e.g., to select elements of ``A`` equal to 1 or
