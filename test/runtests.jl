@@ -1,3 +1,5 @@
+Libc.free(Ptr{Void}(1))
+
 include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
 cd(dirname(@__FILE__)) do
