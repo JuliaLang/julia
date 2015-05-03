@@ -308,6 +308,111 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_svec_t *types)
     return jl_type_union_v(jl_svec_data(types), jl_svec_len(types));
 }
 
+// On-the-fly translation of NTuple{N,T} into Tuple{Vararg{T,N}}
+// In terms of GC behavior, these are defensive---
+// who knows where these will be called from?
+static jl_datatype_t *ntuple_translate_tuple(jl_datatype_t *tt);
+static int needs_translation_tuple(jl_datatype_t *tt);
+
+static int needs_translation(jl_value_t *v)
+{
+    if (jl_is_tuple_type(v)) return needs_translation_tuple((jl_datatype_t*)v);
+    if (jl_is_typevar(v)) return needs_translation(((jl_tvar_t*)v)->ub) || needs_translation(((jl_tvar_t*)v)->lb);
+    return jl_is_ntuple_type(v);
+}
+
+static int needs_translation_data(jl_value_t **data, int n)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (needs_translation(data[i]))
+            return 1;
+    return 0;
+}
+
+static int needs_translation_svec(jl_svec_t *sv)
+{
+    return needs_translation_data(jl_svec_data(sv), jl_svec_len(sv));
+}
+
+static int needs_translation_tuple(jl_datatype_t *tt)
+{
+    return needs_translation_svec(tt->parameters);
+}
+
+static jl_value_t *ntuple_translate(jl_value_t *v)
+{
+    jl_value_t *tva = NULL, *result = NULL, *temp = NULL;
+    JL_GC_PUSH4(&v, &tva, &result, &temp);
+    if (jl_is_tuple_type(v)) {
+        result = (jl_value_t*)ntuple_translate_tuple((jl_datatype_t*)v);
+        JL_GC_POP();
+        return result;
+    }
+    if (jl_is_typevar(v)) {
+        jl_tvar_t *tv = (jl_tvar_t*) v;
+        tva = (jl_value_t*)ntuple_translate(tv->lb);
+        temp = (jl_value_t*)ntuple_translate(tv->ub);
+        result = (jl_value_t*)jl_new_typevar(tv->name, tva, temp);
+        ((jl_tvar_t*)result)->bound = tv->bound;
+        JL_GC_POP();
+        return result;
+    }
+    if (!jl_is_ntuple_type(v)) {
+        JL_GC_POP();
+        return v;
+    }
+    tva = (jl_value_t*) jl_wrap_vararg(jl_tparam1(v), jl_tparam0(v));
+    result = (jl_value_t*)jl_tupletype_fill(1, tva);
+    JL_GC_POP();
+    return result;
+}
+
+static jl_svec_t *ntuple_translate_data(jl_value_t **data, int n)
+{
+    int i;
+    jl_value_t **gcprotected;
+    JL_GC_PUSHARGS(gcprotected, 2*n+1);
+    for (i = 0; i < n; i++) {
+        gcprotected[i] = data[i];
+        gcprotected[i+n] = NULL;    // just in case
+    }
+    gcprotected[2*n] = NULL;
+    jl_svec_t *snew = jl_alloc_svec(n);
+    gcprotected[2*n] = (jl_value_t*) snew;
+    for (i = 0; i < n; i++)
+        gcprotected[i+n] = jl_svecref(snew, i);
+    assert(jl_is_svec(snew));
+    for (i = 0; i < n; i++) {
+        assert(jl_is_svec(snew));
+        jl_value_t *translated = ntuple_translate(data[i]);
+        assert(jl_is_svec(snew));
+        jl_svecset(snew, i, translated);
+    }
+    JL_GC_POP();
+    return snew;
+}
+
+static jl_svec_t *ntuple_translate_svec(jl_svec_t *sv)
+{
+    jl_svec_t *result=NULL;
+    JL_GC_PUSH2(&sv, &result);
+    result = ntuple_translate_data(jl_svec_data(sv), jl_svec_len(sv));
+    JL_GC_POP();
+    return result;
+}
+
+static jl_datatype_t *ntuple_translate_tuple(jl_datatype_t *tt)
+{
+    assert(jl_is_tuple_type(tt));
+    jl_svec_t *snew = NULL;
+    JL_GC_PUSH2(&tt, &snew);
+    snew = ntuple_translate_svec(tt->parameters);
+    jl_datatype_t *result = jl_apply_tuple_type(snew);
+    JL_GC_POP();
+    return result;
+}
+
 // --- type intersection ---
 
 typedef enum {invariant, covariant} variance_t;
