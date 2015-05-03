@@ -194,7 +194,7 @@ Don't overuse ...
 -----------------
 
 Splicing function arguments can be addictive. Instead of ``[a..., b...]``,
-use simply ``[a, b]``, which already concatenates arrays.
+use simply ``[a; b]``, which already concatenates arrays.
 :func:`collect(a) <collect>` is better than ``[a...]``, but since ``a`` is already iterable
 it is often even better to leave it alone, and not convert it to an array.
 
