@@ -293,6 +293,8 @@ convert{T}(::Type{T}, x::T) = x
 cconvert{T}(::Type{T}, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
 
+typealias NTuple{N,T} Tuple{Vararg{T,N}}
+
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
