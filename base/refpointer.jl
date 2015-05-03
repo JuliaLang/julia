@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### General Methods for Ref{T} type
 
 Base.eltype{T}(x::Type{Ref{T}}) = T

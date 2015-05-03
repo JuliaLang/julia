@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## hashing a single value ##
 
 hash(x::Any) = hash(x, zero(UInt))

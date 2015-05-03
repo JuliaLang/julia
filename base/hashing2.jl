@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## efficient value-based hashing of integers ##
 
 function hash_integer(n::Integer, h::UInt)

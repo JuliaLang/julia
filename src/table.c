@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size

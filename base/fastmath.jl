@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Support for @fastmath
 
 # This module provides versions of math functions that may violate

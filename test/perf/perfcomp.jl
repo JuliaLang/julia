@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # usage: perfcomp.jl <baseline file> [<suite>]
 # This will run the specified suite (default "all") and compare it to stored
 # results in the baseline file. Only test names present in both will be

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## CHOLMOD
 const TRUE  = Int32(1)
 const FALSE = Int32(0)

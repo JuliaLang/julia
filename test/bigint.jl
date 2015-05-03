@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
 

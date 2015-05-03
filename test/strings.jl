@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # string escaping & unescaping
 cx = Any[
     0x00000000      '\0'        "\\0"

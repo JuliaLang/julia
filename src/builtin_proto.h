@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef BUILTIN_PROTO_H
 #define BUILTIN_PROTO_H
 

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## general machinery for mathematical constants
 
 immutable MathConst{sym} <: Real end

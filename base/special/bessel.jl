@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 for jy in ("j","y"), nu in (0,1)
     jynu = Expr(:quote, symbol(jy,nu))
     jynuf = Expr(:quote, symbol(jy,nu,"f"))

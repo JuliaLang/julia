@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function svdtest(n, iter)
     A = rand(n,n)
     B = svdfact(A)

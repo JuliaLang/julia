@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # test meta-expressions that annotate blocks of code
 
 module MetaTest

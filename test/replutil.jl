@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function test_have_color(buf, color, no_color)
     if Base.have_color
         @test takebuf_string(buf) == color

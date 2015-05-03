@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Usage: very similar to `install`
 #   install.sh 755 src1 src2 ... dest

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # fft
 a = rand(8) + im*rand(8)
 @test norm(ifft(fft(a)) - a) < 1e-8

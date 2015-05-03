@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include "uv.h"
 #define XX(uc,lc) :UV_##uc,
 #define YY(uc,lc) (:UV_##uc,UV__##uc),

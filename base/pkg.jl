@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Pkg
 
 export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry

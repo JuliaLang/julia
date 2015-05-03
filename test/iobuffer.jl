@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()

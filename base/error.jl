@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # pseudo-definitions to show how everything behaves
 #
 # throw(label, val) = # throw a value to a dynamically enclosing block

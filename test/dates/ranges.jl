@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function test_all_combos()
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)

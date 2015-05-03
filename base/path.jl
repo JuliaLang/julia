@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @unix_only begin
     const path_separator    = "/"
     const path_separator_re = r"/+"

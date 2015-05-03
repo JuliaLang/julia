@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # generic operations on associative collections
 
 abstract Associative{K,V}

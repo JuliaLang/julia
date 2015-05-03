@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ndgrid(v::AbstractVector) = copy(v)
 
 function ndgrid{T}(v1::AbstractVector{T}, v2::AbstractVector{T})

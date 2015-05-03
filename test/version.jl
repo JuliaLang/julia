@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # parsing tests
 
 @test v"1" == VersionNumber(1)

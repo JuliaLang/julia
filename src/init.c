@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   init.c
   system initialization and global state

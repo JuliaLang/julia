@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)
