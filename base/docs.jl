@@ -114,7 +114,7 @@ catdoc(xs...) = vcat(xs...)
 # Modules
 
 function doc(m::Module)
-    md = invoke(doc, (Any,), m)
+    md = invoke(doc, Tuple{Any}, m)
     md == nothing || return md
     readme = Pkg.dir(string(m), "README.md")
     if isfile(readme)

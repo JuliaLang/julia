@@ -28,7 +28,7 @@ end
 
 for T=types[2:end], x=vals
     a = coerce(T,x)
-    @test hash(a,zero(UInt)) == invoke(hash,(Real,UInt),a,zero(UInt))
+    @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
 end
 
 for T=types, S=types, x=vals
@@ -50,7 +50,7 @@ end
 @test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
 # issue #9264
-@test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))
+@test hash(1//6,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, 1//6, zero(UInt))
 @test hash(1//6) == hash(big(1)//big(6))
 @test hash(1//6) == hash(0x01//0x06)
 

@@ -201,7 +201,7 @@ function write{T}(f::File, a::Array{T})
     if isbits(T)
         write(f,pointer(a),length(a)*sizeof(eltype(a)))
     else
-        invoke(write, (IO, Array), f, a)
+        invoke(write, Tuple{IO, Array}, f, a)
     end
 end
 
@@ -242,7 +242,7 @@ function read!{T}(f::File, a::Array{T}, nel=length(a))
                     f.handle, a, nb)
         uv_error("read",ret)
     else
-        invoke(read, (IO, Array), s, a)
+        invoke(read, Tuple{IO, Array}, s, a)
     end
     a
 end
