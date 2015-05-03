@@ -202,7 +202,7 @@ function istopfunction(topmod, f::ANY, sym)
     return false
 end
 
-isknownlength(t::DataType) = !isvatuple(t) && !(t.name===NTuple.name && !isa(t.parameters[1],Int))
+isknownlength(t::DataType) = !isvatuple(t) || (length(t.parameters) == 1 && isa(t.parameters[1].parameters[2],Int))
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
@@ -303,7 +303,7 @@ function typeof_tfunc(t::ANY)
             Type{typeof(t)}
         end
     elseif isa(t,DataType)
-        if isleaftype(t)
+        if isleaftype(t) || isvarargtype(t)
             Type{t}
         elseif t === Any
             DataType
@@ -397,7 +397,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     else
         return t
     end
-    if inexact
+    if inexact && !isvarargtype(R)
         R = TypeVar(:_,R)
         push!(vars, R)
     end
@@ -428,9 +428,6 @@ function getfield_tfunc(s0::ANY, name)
         return reduce(tmerge, Bottom, map(t->getfield_tfunc(t, name)[1], s.types)), false
     end
     if isa(s,DataType)
-        if is(s.name,NTuple.name)
-            return (name ⊑ Symbol ? Bottom : s.parameters[2]), true
-        end
         if s.abstract
             return Any, false
         end
@@ -501,7 +498,7 @@ function fieldtype_tfunc(s::ANY, name)
     if is(t,Bottom)
         return t
     end
-    Type{exact || isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
+    Type{exact || isleaftype(t) || isa(t,TypeVar) || isvarargtype(t) ? t : TypeVar(:_, t)}
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -581,7 +578,7 @@ function apply_type_tfunc(args...)
     if type_too_complex(appl,0)
         return Type{TypeVar(:_,headtype)}
     end
-    !isa(appl,TypeVar) ? Type{TypeVar(:_,appl)} : Type{appl}
+    !(isa(appl,TypeVar) || isvarargtype(appl)) ? Type{TypeVar(:_,appl)} : Type{appl}
 end
 add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
@@ -861,7 +858,9 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
     assert(n == length(types))
     result = cell(n)
     for i = 1:n
-        ai = args[i]; ti = types[i]; tti = widenconst(ti)
+        ai = args[i]
+        ti = types[i]
+        tti = widenconst(ti)
         if isa(ai,Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
                                                  abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
             aa = ai.args
@@ -873,8 +872,8 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
             return nothing
         elseif ti ⊑ Tuple
             if i == n
-                if tti.name === NTuple.name
-                    result[i] = Any[Vararg{tti.parameters[2]}]
+                if isvatuple(tti) && length(tti.parameters) == 1
+                    result[i] = Any[Vararg{tti.parameters[1].parameters[1]}]
                 else
                     result[i] = tti.parameters
                 end
@@ -1121,7 +1120,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
             # abstract types yield Type{<:T} instead of Type{T}.
             # this doesn't really model the situation perfectly, but
             # "isleaftype(inference_stack.types)" should be good enough.
-            if isa(t,TypeVar)
+            if isa(t,TypeVar) || isvarargtype(t)
                 t = Type{t}
             else
                 t = Type{TypeVar(:_,t)}
