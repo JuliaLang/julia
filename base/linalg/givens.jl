@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+# givensAlgorithm functions are derived from LAPACK, see below
 
 abstract AbstractRotation{T}
 
