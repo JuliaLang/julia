@@ -552,6 +552,8 @@ reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
 it is short, self-contained, and implements an entire basic Julia type.
 
+.. _constructors-call-and-conversion:
+
 Constructors, Call, and Conversion
 ----------------------------------
 

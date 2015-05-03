@@ -99,4 +99,4 @@ deterministic debugging framework from Mozilla. This allows you to replay the tr
 deterministically.  The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.
 
-A recent build of ``rr`` (from after 4 Feb 2015) is required.
+A recent version of ``rr`` (3.1.0 or higher) is required.

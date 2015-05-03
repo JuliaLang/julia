@@ -581,7 +581,7 @@ at which point you can do::
 to get ``70``.
 
 ``call`` overloading is also used extensively for type constructors in
-Julia, discussed later in the manual.
+Julia, discussed :ref:`later in the manual <constructors-call-and-conversion>`.
 
 
 .. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
