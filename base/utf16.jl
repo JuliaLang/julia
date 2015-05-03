@@ -8,16 +8,20 @@ immutable UTF16String <: AbstractString
     end
 end
 
-utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
-utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
-utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
+@inline utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
+@inline utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
+@inline utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
 utf16_get_supplementary(lead::UInt16, trail::UInt16) = Char(UInt32(lead-0xd7f7)<<10 + trail)
 
 function length(s::UTF16String)
     d = s.data
     len = length(d) - 1
     len == 0 && return 0
-    ccall(:u16_charnum, Int, (Ptr{Void}, Csize_t), d, len)
+    cnum = 0
+    for i = 1:len
+        @inbounds cnum += !utf16_is_trail(d[i])
+    end
+    cnum
 end
 
 function endof(s::UTF16String)
@@ -26,6 +30,7 @@ function endof(s::UTF16String)
     i == 0 && return i
     utf16_is_surrogate(d[i]) ? i-1 : i
 end
+
 function next(s::UTF16String, i::Int)
     if !utf16_is_surrogate(s.data[i])
         return Char(s.data[i]), i+1
@@ -39,6 +44,7 @@ function reverseind(s::UTF16String, i::Integer)
     j = length(s.data) - i
     return Base.utf16_is_trail(s.data[j]) ? j-1 : j
 end
+
 lastidx(s::UTF16String) = length(s.data) - 1 # s.data includes NULL terminator
 
 function reverse(s::UTF16String)
@@ -55,7 +61,7 @@ function reverse(s::UTF16String)
     return UTF16String(out)
 end
 
-# TODO: optmize this
+# TODO: optimize this
 function encode16(s::AbstractString)
     buf = UInt16[]
     for ch in s

@@ -37,8 +37,17 @@ function endof(s::UTF8String)
     end
     i
 end
-length(s::UTF8String) = Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
-                                  s.data, length(s.data)))
+
+@inline is_utf8_continuation(byte::UInt8) = ((byte&0xc0)==0x80)
+
+function length(s::UTF8String)
+    d = s.data
+    cnum = 0
+    for i = 1:length(d)
+        @inbounds cnum += !is_utf8_continuation(d[i])
+    end
+    cnum
+end
 
 function next(s::UTF8String, i::Int)
     # potentially faster version
