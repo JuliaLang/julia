@@ -190,7 +190,7 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_datatype_t *jl_wrap_vararg(jl_value_t *t);
+jl_datatype_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);

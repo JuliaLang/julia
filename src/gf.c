@@ -487,7 +487,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!isstaged && jl_nparams(type) > mt->max_args && jl_is_va_tuple(decl)) {
+    if (!isstaged && jl_nparams(type) > mt->max_args
+        && jl_va_tuple_kind(decl) == JL_VARARG_UNBOUND) {
         size_t nspec = mt->max_args + 2;
         limited = jl_alloc_svec(nspec);
         temp3 = (jl_value_t*)limited;
@@ -519,7 +520,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
             // avoid Type{Type{...}}...
             if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
                 lasttype = (jl_value_t*)jl_type_type;
-            jl_svecset(limited, i, jl_wrap_vararg(lasttype));
+            jl_svecset(limited, i, jl_wrap_vararg(lasttype, (jl_value_t*)NULL));
         }
         else {
             jl_value_t *lastdeclt = jl_tparam(decl,jl_nparams(decl)-1);
@@ -868,7 +869,7 @@ static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl
 static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
 {
     size_t na = jl_nparams(type);
-    if (jl_is_va_tuple(type))
+    if (jl_va_tuple_kind(type) == JL_VARARG_UNBOUND)
         na--;
     if (na > mt->max_args)
         mt->max_args = na;

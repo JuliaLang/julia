@@ -10,6 +10,9 @@ function get_lambda(m::TypeMapEntry)
 end
 
 function argtype_decl(env, n, t) # -> (argname, argtype)
+    if isvarargtype(t)
+        return argtype_decl_vararg(env, n, t)
+    end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -21,7 +24,13 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    if isvarargtype(t)
+    return s, string(t)
+end
+
+function argtype_decl_vararg(env, n, t)
+    s = string(n.args[1])
+    if n.args[2].head == :...
+        # x... or x::T... declaration
         if t.parameters[1] === Any
             return string(s, "..."), ""
         else
@@ -30,7 +39,10 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     elseif t == ByteString
         return s, "ByteString"
     end
-    return s, string_with_env(env, t)
+    # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
+    s, length(n.args[2].args) < 4 ?
+       string_with_env(env, "Vararg{", t.parameters[1], "}") :
+       string_with_env(env, "Vararg{", t.parameters[1], ",", t.parameters[2], "}")
 end
 
 function arg_decl_parts(m::TypeMapEntry)

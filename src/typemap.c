@@ -841,7 +841,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         jl_gc_wb(ml, ml->simplesig);
         ml->tvars = tvars;
         jl_gc_wb(ml, ml->tvars);
-        ml->va = jl_is_va_tuple(type);
+        ml->va = jl_va_tuple_kind(type) == JL_VARARG_UNBOUND;
         // TODO: `l->func` or `l->func->roots` might need to be rooted
         ml->func.value = newvalue;
         if (newvalue)
@@ -861,7 +861,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     newrec->guardsigs = guardsigs;
     newrec->next = (jl_typemap_entry_t*)jl_nothing;
     // compute the complexity of this type signature
-    newrec->va = jl_is_va_tuple(type);
+    newrec->va = jl_va_tuple_kind(type) == JL_VARARG_UNBOUND;
     newrec->issimplesig = (tvars == jl_emptysvec); // a TypeVar environment needs an complex matching test
     newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
