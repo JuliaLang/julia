@@ -825,4 +825,4 @@ err(z, x) = abs(z - x) / abs(x)
 @test MPFR.get_emax() == MPFR.get_emax_max()
 
 # issue #10994: handle embedded NUL chars for string parsing
-@test_throws ArgumentError BigFloat("1\0")
+@test_throws ArgumentError parse(BigFloat, "1\0")
