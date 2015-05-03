@@ -392,6 +392,31 @@ A = reshape(1:16,4,4)
 @test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
 @test replstr(LowerTriangular(copy(A))) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
 
+# Vararg methods in method tables
+function test_mt(f, str)
+    mt = methods(f)
+    @test length(mt) == 1
+    defs = first(mt)
+    io = IOBuffer()
+    show(io, defs)
+    strio = takebuf_string(io)
+    @test strio[1:length(str)] == str
+end
+begin
+    local f1, f2, f3, f4, f5
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    f4(x::Vararg{Any,3}) = [x...]
+    f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+    test_mt(f1, "f1(x...)")
+    test_mt(f2, "f2(x::Vararg{Any})")
+    test_mt(f3, "f3(x::Vararg{T<:Any})")   # FIXME? better as x::Vararg?
+    test_mt(f4, "f4(x::Vararg{Any,3})")
+    intstr = string(Int)
+    test_mt(f5, "f5{T,N}(A::AbstractArray{T,N},indexes::Vararg{$intstr,N})")
+end
+
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"
 @test sprint(show, :([a;b])) == ":([a;b])"
