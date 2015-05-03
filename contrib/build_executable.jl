@@ -53,7 +53,7 @@ function SysFile(exename)
     SysFile(buildpath, buildfile, buildfile0)
 end
 
-function build_executable(exename, script_file, cpu_target="native", targetdir=nothing; force=false)
+function build_executable(exename, script_file, targetdir=nothing, cpu_target="native"; force=false)
     julia = abspath(joinpath(JULIA_HOME, "julia"))
     build_sysimg = abspath(joinpath(dirname(@__FILE__), "build_sysimg.jl"))
 
@@ -257,17 +257,17 @@ end
 
 if !isinteractive()
     if length(ARGS) < 2 || ("--help" in ARGS || "-h" in ARGS)
-        println("Usage: build_executable.jl <exename> <script_file> [targetdir] [--help]")
+        println("Usage: build_executable.jl <exename> <script_file> [targetdir] <cpu_target> [--help]")
         println("   <exename>        is the filename of the resulting executable and the resulting sysimg")
         println("   <script_file>    is the path to a jl file containing a main() function.")
-        println("   <cpu_target>     is an LLVM cpu target to build the system image against")
         println("   [targetdir]     (optional) is the path to a directory to put the executable and other")
+        println("   <cpu_target>     is an LLVM cpu target to build the system image against")
         println("                    needed files into (default: julia directory structure)")
         println("   --force          Set if you wish to overwrite existing files")
         println("   --help           Print out this help text and exit")
         println()
         println(" Example:")
-        println("   julia build_executable.jl standalone_test hello_world.jl core2")
+        println("   julia build_executable.jl standalone_test hello_world.jl targetdir core2")
         return 0
     end
 
