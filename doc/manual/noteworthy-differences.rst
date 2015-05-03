@@ -280,10 +280,10 @@ Noteworthy differences from C/C++
   Unlike either decimal integer or hexadecimal literals, floating point literals are always
   64-bits, Float64, and don't get promoted to the BigFloat type.  This is closer in
   behavior to C/C++.
-- String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain `"` characters without
-  quoting it like `"\\\""`
-  They can also have string interpolation, indicated by $variablename or $(expression),
-  which evaluates the variable name or the expression in the context of the function.
+- String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain `"`
+  characters without quoting it like `"\\\""`
+  String literals can have values of other variables or expressions interpolated into them,
+  indicated by `$variablename` or `$(expression)`, which evaluates the variable name or the expression in the context of the function.
 - `//` indicates a Rational number, and not a single-line comment (which is # in Julia)
 - `#=` indicates the start of a multiline comment, and `=#` ends it.
 - Functions in Julia return values from their last expression(s) or the ``return``
@@ -295,11 +295,8 @@ Noteworthy differences from C/C++
   and lines of code do not need to end with semicolons. :func:`println` or
   :func:`@printf` can be used to print specific output.
 - In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
-  in C/C++.  Also, the bitwise operators do not have the same precedence as C/++.
-  They can operate on scalars or element-wise across arrays and can be used to
-  combine logical arrays, but note the difference in order of operations:
-  parentheses may be required (e.g., to select elements of ``A`` equal to 1 or
-  2 use ``(A .== 1) | (A .== 2)``).
+  in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
+  so parenthesis may be required.
 - Julia's :obj:`^` is exponentiation, not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
 - Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
 - Julia does not require parentheses when writing ``if`` statements or
@@ -320,6 +317,15 @@ Noteworthy differences from C/C++
   far is a complete expression, it is considered done; otherwise the input
   continues. One way to force an expression to continue is to wrap it in
   parentheses.
+- Julia has an incredibly powerful macro facility, and macros are always indicated by the `@`
+  character.  Unlike C/C++, macros operate on parsed expressions, not on the text of the program.
+  There are two forms for using a macro, `@mymacro(arg1, arg2, arg3)` or `@mymacro arg1 arg2 arg3`
+  The first form is useful if you need to have a macro call that spreads multiple lines (`@Enum` is a good
+  case), and the second form allows handling calls like: `@parallel for i=1:1000`.
+  Note: the second form can continue onto multiple lines, if the last expression on a line goes over to another line...
+  This can be a bit tricky to determine sometimes just where the macro ends.
+- Julia now has an enumeration type, expressed using the macro `@Enum(name, value1, value2, ...)`
+  For example: `@Enum(Fruit, Banana=1, Apple, Pear)`
 - By convention, functions that modify their arguments have a ! at the end of the name,
   for example `push!`.
 
