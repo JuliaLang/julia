@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Builds an executable that doesn't require any julia source code.
 # The user needs to provide a julia script that contains a function main(),

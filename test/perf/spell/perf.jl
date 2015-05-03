@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Peter Norvig's Spelling Corrector
 # based off of the python implementation at http://norvig.com/spell-correct.html
 

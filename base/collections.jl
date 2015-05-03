@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Collections
 
 import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start

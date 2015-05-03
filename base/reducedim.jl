@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1

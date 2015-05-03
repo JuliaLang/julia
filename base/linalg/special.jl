@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Methods operating on different special matrix types
 
 #Interconversion between special matrix types

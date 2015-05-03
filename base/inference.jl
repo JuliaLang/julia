@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 4

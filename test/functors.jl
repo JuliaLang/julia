@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Testing functors and specialization-by-value
 
 for op in (identity, abs, abs2, exp, log)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 addqueen(queens::Array{Vector{Int}}, queen::Vector{Int}) = push!(copy(queens), queen)
 
 hitsany(queen::Vector{Int}, queens::Array{Vector{Int}}) = any(map(x->hits(queen, x), queens))

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # --version
     let v = split(readall(`$exename -v`), "julia version ")[end]

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type IntSet
     bits::Array{UInt32,1}
     limit::Int

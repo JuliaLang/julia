@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x

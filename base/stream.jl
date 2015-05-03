@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
 include("uv_constants.jl")
 

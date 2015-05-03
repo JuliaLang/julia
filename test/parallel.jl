@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 

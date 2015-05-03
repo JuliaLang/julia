@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Conversion/Promotion
 Date(dt::TimeType) = convert(Date,dt)
 DateTime(dt::TimeType) = convert(DateTime,dt)

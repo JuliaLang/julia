@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef UTF8_H
 #define UTF8_H
 

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 namespace JL_I {
     enum intrinsic {
         // wrap and unwrap

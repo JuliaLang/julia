@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Name functions
 jan = Dates.DateTime(2013,1,1) #Tuesday
 feb = Dates.DateTime(2013,2,2) #Saturday

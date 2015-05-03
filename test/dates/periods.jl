@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Period testing
 @test -Dates.Year(1) == Dates.Year(-1)
 @test Dates.Year(1) > Dates.Year(0)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # frexp,ldexp,significand,exponent
 for T in (Float16,Float32,Float64)
     for z in (zero(T),-zero(T))

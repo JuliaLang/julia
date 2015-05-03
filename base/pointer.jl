@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## converting pointers to an appropriate unsigned ##
 
 const C_NULL = box(Ptr{Void}, 0)

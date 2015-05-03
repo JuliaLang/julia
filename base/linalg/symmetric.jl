@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Symmetric and Hermitian matrices
 immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S

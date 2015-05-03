@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Dir
 
 import ..Pkg: DEFAULT_META, META_BRANCH

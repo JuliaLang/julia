@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## multi.jl - multiprocessing
 ##
 ## julia starts with one process, and processors can be added using:

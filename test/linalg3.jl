@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)

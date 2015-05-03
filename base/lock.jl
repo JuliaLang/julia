@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Advisory reentrant lock
 type ReentrantLock
     locked_by::Nullable{Task}

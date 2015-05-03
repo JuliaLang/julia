@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # tests related to functional programming functions and styles
 
 # map -- array.jl
