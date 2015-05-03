@@ -8,15 +8,6 @@ extern "C" {
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
 
-//! Return if a 16-bit or 32-bit character is a surrogate character
-#define	is_surrogate_char(ch)  (((ch) & ~0x7ff) == 0xd800)
-//! Return if a 16-bit or 32-bit character is a leading surrogate character
-#define	is_surrogate_lead(ch)  (((ch) & ~0x3ff) == 0xd800)
-//! Return if a 16-bit or 32-bit character is a trailing surrogate character
-#define	is_surrogate_trail(ch) (((ch) & ~0x3ff) == 0xdc00)
-//! Return if a byte is a valid UTF-8 continuation character
-#define	is_valid_continuation(ch) ((ch & 0xc0) == 0x80)
-
 #define UEOF ((uint32_t)-1)
 
 /* convert UTF-8 data to wide character */
