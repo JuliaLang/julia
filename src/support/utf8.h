@@ -41,16 +41,6 @@ DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
  */
 DLLEXPORT size_t u8_charnum(const char *iStr, size_t iLen);
 
-/**
- * @brief      Calculates number of characters in UTF-16 encoded string
- *
- * @param[in]  iStr UTF-16 encoded string
- * @param[in]  iLen Length of the string (or substring) in 16-bit words
- *
- * @return     Number of logical characters (or codepoints) in string (or substring)
- */
-DLLEXPORT size_t u16_charnum(const uint16_t *iStr, size_t iLen);
-
 /* return next character, updating an index variable */
 uint32_t u8_nextchar(const char *s, size_t *i);
 
@@ -118,9 +108,6 @@ char *u8_strchr(const char *s, uint32_t ch, size_t *charn);
 char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn);
 
 char *u8_memrchr(const char *s, uint32_t ch, size_t sz);
-
-/* count the number of characters in a UTF-8 string */
-DLLEXPORT size_t u8_strlen(const char *s);
 
 /* number of columns occupied by a string */
 DLLEXPORT size_t u8_strwidth(const char *s);
