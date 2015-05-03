@@ -75,7 +75,7 @@ example:
 
     @doc doc"""
       When applied to strings, concatenates them.
-      """
+      """ ->
     function *(x::String, y::String)
       # ... [insert secret sauce here] ...
     end
