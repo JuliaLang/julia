@@ -16,7 +16,7 @@ function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
     if isa(x.env, Union(MethodTable, Symbol)) || x.env === ()
         return x
     end
-    invoke(deepcopy_internal, (Any, ObjectIdDict), x, stackdict)
+    invoke(deepcopy_internal, Tuple{Any, ObjectIdDict}, x, stackdict)
 end
 
 function deepcopy_internal(x, stackdict::ObjectIdDict)

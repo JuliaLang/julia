@@ -29,7 +29,7 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
     A * B
 end
 
-(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, Tuple{SparseMatrixCSC, AbstractVector}, A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
     A.n == length(x) || throw(DimensionMismatch())
@@ -113,7 +113,7 @@ function At_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     At_mul_B!(one(T), A, x, zero(T), Array(T, A.n))
 end
 
-*(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
+*(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, Tuple{AbstractVector, SparseMatrixCSC}, X, A)
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
 function *{T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
@@ -127,7 +127,7 @@ function *{T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
     Y
 end
 
-*{TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, (SparseMatrixCSC, AbstractMatrix), A, X)
+*{TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, Tuple{SparseMatrixCSC, AbstractMatrix}, A, X)
 function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
     A.n==mX || throw(DimensionMismatch())
@@ -144,9 +144,9 @@ function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     Y
 end
 
-*{TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
+*{TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, Tuple{AbstractMatrix, SparseMatrixCSC}, X, A)
 # TODO: Tridiagonal * Sparse should be implemented more efficiently
-*{TX,TvA,TiA}(X::Tridiagonal{TX}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (Tridiagonal, AbstractMatrix), X, A)
+*{TX,TvA,TiA}(X::Tridiagonal{TX}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, Tuple{Tridiagonal, AbstractMatrix}, X, A)
 *{TvA,TiA}(X::AbstractTriangular, A::SparseMatrixCSC{TvA,TiA}) = full(X)*A
 function *{TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)

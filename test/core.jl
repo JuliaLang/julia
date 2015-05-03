@@ -951,7 +951,7 @@ end
 # issue #2169
 let
     i2169{T}(a::Array{T}) = typemin(T)
-    @test invoke(i2169,(Array,),Int8[1]) === Int8(-128)
+    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
 end
 
 # issue #2365
@@ -2046,6 +2046,13 @@ end
 f9520a(::Any, ::Any, args...) = 15
 f9520b(::Any, ::Any, ::Any, args...) = 23
 f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+@test invoke(f9520a, Tuple{Any, Any}, 1, 2) == 15
+@test invoke(f9520a, Tuple{Any, Any, Any}, 1, 2, 3) == 15
+@test invoke(f9520b, Tuple{Any, Any, Any}, 1, 2, 3) == 23
+@test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
+# Keep until the old signature of invoke is dropped.
 @test invoke(f9520a, (Any, Any), 1, 2) == 15
 @test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
 @test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
