@@ -342,7 +342,7 @@
           ((<= l 32)  (uint32 n))
           ((<= l 64)  (uint64 n))
           ((<= l 128) `(macrocall @uint128_str ,s))
-          (else       `(macrocall @big_str  ,s)))))
+          (else       (error "Hex or binary literal too large for UInt128")))))
 
 (define (sized-uint-oct-literal n s)
   (if (string.find s "o0")
@@ -354,7 +354,7 @@
                 (else             (uint64 n)))
           (if (oct-within-uint128? s)
               `(macrocall @uint128_str ,s)
-              `(macrocall @big_str ,s)))))
+              (error "Octal literal too large for UInt128")))))
 
 (define (strip-leading-0s s)
   (define (loop i)
