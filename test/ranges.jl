@@ -496,3 +496,27 @@ end
 @test eltype(0:1//3:10) <: Rational
 @test (0:1//3:10)[1] == 0
 @test (0:1//3:10)[2] == 1//3
+
+# converting ranges (issue #10965)
+@test promote(0:1, UInt8(2):UInt8(5)) === (0:1, 2:5)
+@test convert(UnitRange{Int}, 0:5) === 0:5
+@test convert(UnitRange{Int128}, 0:5) === Int128(0):Int128(5)
+
+@test promote(0:1:1, UInt8(2):UInt8(1):UInt8(5)) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int,Int}, 0:1:1) === 0:1:1
+@test convert(StepRange{Int128,Int128}, 0:1:1) === Int128(0):Int128(1):Int128(1)
+
+@test promote(0:1:1, 2:5) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int128,Int128}, 0:5) === Int128(0):Int128(1):Int128(5)
+@test convert(StepRange, 0:5) === 0:1:5
+@test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
+
+@test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
+@test convert(FloatRange{Float64}, 0:1/3:1) === 0:1/3:1
+@test convert(FloatRange{Float64}, 0f0:inv(3f0):1f0) === 0:1/3:1
+
+@test promote(0:1/3:1, 0:5) === (0:1/3:1, 0.:1.:5.)
+@test convert(FloatRange{Float64}, 0:5) === 0.:1.:5.
+@test convert(FloatRange{Float64}, 0:1:5) === 0.:1.:5.
+@test convert(FloatRange, 0:5) === 0.:1.:5.
+@test convert(FloatRange, 0:1:5) === 0.:1.:5.
