@@ -26,8 +26,6 @@ OS X
 * Comment out `if (arch.GetTriple().getVendor() != llvm::Triple::Apple)`
 in deps/llvm-svn/tools/lldb/source/Plugins/JITLoader/GDB/JITLoaderGDB.cpp
 
-* Apply http://reviews.llvm.org/D6185 if it hasn't been merged.
-
 * export `LLDB_DEBUGSERVER_PATH=/Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Resources/debugserver`
 
 References
