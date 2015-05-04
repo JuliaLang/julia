@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Check that serializer hasn't gone out-of-frame
-@test Serializer.ser_tag[Symbol] == 2
-@test Serializer.ser_tag[()] == 47
-@test Serializer.ser_tag[false] == 123
+@test Serializer.sertag(Symbol) == 2
+@test Serializer.sertag(()) == 47
+@test Serializer.sertag(false) == 123
 
 # issue #1770
 let
