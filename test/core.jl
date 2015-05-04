@@ -136,6 +136,17 @@ end
 
 @test () != Type{Tuple{}}
 
+let N = TypeVar(:N,true), V = TypeVar(:V, NTuple{N,Int}), T = TypeVar(:T,true)
+    @test Tuple{} <: NTuple{N,Int}
+    @test Tuple{} <: NTuple{N,T}
+    @test Array{Tuple{}} <: Array{NTuple{N,Int}}
+    @test Array{Tuple{}} <: Array{NTuple{N,T}}
+    @test Tuple{Type{Int8}, Tuple{}} <: Tuple{Type{Int8}, NTuple{N,Int}}
+    @test Tuple{Type{Int8}, Tuple{Int,Int}} <: Tuple{Type{Int8}, NTuple{N,Int}}
+    @test V <: NTuple
+    # @test !(V <: Tuple{Vararg})   # current behavior, but this conflicts with the above
+end
+
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
