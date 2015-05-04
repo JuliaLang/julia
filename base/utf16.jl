@@ -8,9 +8,9 @@ immutable UTF16String <: AbstractString
     end
 end
 
-@inline utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
-@inline utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
-@inline utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
+utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
+utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
+utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
 utf16_get_supplementary(lead::UInt16, trail::UInt16) = Char(UInt32(lead-0xd7f7)<<10 + trail)
 
 function length(s::UTF16String)

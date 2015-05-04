@@ -38,7 +38,7 @@ function endof(s::UTF8String)
     i
 end
 
-@inline is_utf8_continuation(byte::UInt8) = ((byte&0xc0)==0x80)
+is_utf8_continuation(byte::UInt8) = ((byte&0xc0) == 0x80)
 
 function length(s::UTF8String)
     d = s.data
