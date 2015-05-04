@@ -25,7 +25,32 @@ let n=10
         asym = a'+a                 # symmetric indefinite
         ε = εa = eps(abs(float(one(eltya))))
 
+        x = randn(n)
+        y = randn(n)
+        b = randn(n,n)/2
+        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(x, zeros(n)) : x)
+        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(y, zeros(n)) : y)
+        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(b, zeros(n,n)) : b)
+
         debug && println("\ntype of a: ", eltya, "\n")
+
+        # full
+        @test asym == full(Hermitian(asym))
+
+        # issym, ishermitian
+        if eltya <: Real
+            @test issym(Symmetric(asym))
+            @test ishermitian(Symmetric(asym))
+        end
+        if eltya <: Complex
+            @test ishermitian(Symmetric(b + b'))
+        end
+
+        #transpose, ctranspose
+        if eltya <: Real
+            @test transpose(Symmetric(asym)) == asym
+        end
+        @test ctranspose(Hermitian(asym)) == asym
 
         eltya == BigFloat && continue # Revisit when implemented in julia
         d, v = eig(asym)
@@ -49,6 +74,34 @@ let n=10
         # rank
         let A = a[:,1:5]*a[:,1:5]'
             @test rank(A) == rank(Hermitian(A))
+        end
+
+        # mat * vec
+        if eltya <: Complex
+            @test_approx_eq Hermitian(asym)*x+y asym*x+y
+        end
+        if eltya <: Real && eltya != Int
+            @test_approx_eq Symmetric(asym)*x+y asym*x+y
+        end
+
+        # mat * mat
+        if eltya <: Complex
+            @test_approx_eq Hermitian(asym) * Hermitian(asym) asym*asym
+        end
+        if eltya <: Real && eltya != Int
+            @test_approx_eq Symmetric(asym) * Symmetric(asym) asym*asym
+        end
+
+        # solver
+        @test_approx_eq Hermitian(asym)\x asym\x
+        if eltya <: Real
+            @test_approx_eq Symmetric(asym)\x asym\x
+        end
+
+        #inversion
+        @test_approx_eq inv(Hermitian(asym)) inv(asym)
+        if eltya <: Real && eltya != Int
+            @test_approx_eq inv(Symmetric(asym)) inv(asym)
         end
     end
 end
