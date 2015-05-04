@@ -52,6 +52,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * For all unsigned integer types to their equivalents with uppercase `I`. [#8907](https://github.com/JuliaLang/julia/pull/8907)
 
+* `Cstring` and `Cwstring` for `Ptr{Cchar}` and `Ptr{Cwchar_t}`, respectively:
+  these should be used for passing NUL-terminated strings to `ccall`.  (In
+  Julia 0.4, using these types also checks whether the string has embedded
+  NUL characters [#10994](https://github.com/JuliaLang/julia/pull/10994).)
+
 ## New functions
 
 * `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator. 

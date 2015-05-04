@@ -289,3 +289,9 @@ begin
     @test firstlast(Val{true}) == "First"
     @test firstlast(Val{false}) == "Last"
 end
+
+# Cstring
+let s = "foo", w = wstring("foo")
+    @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, s)) == pointer(s)
+    @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
+end
