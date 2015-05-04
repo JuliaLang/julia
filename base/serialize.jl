@@ -214,16 +214,6 @@ function serialize(s, t::Dict)
     end
 end
 
-function deserialize{K,V}(s, T::Type{Dict{K,V}})
-    n = read(s, Int32)
-    t = T(); sizehint!(t, n)
-    for i = 1:n
-        k = deserialize(s)
-        v = deserialize(s)
-        t[k] = v
-    end
-    return t
-end
 
 function serialize_mod_names(s, m::Module)
     p = module_parent(m)
@@ -624,6 +614,17 @@ function deserialize(s, t::DataType)
     end
 end
 
+function deserialize{K,V}(s, T::Type{Dict{K,V}})
+    n = read(s, Int32)
+    t = T(); sizehint!(t, n)
+    for i = 1:n
+        k = deserialize(s)
+        v = deserialize(s)
+        t[k] = v
+    end
+    return t
+end
+
 deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 deserialize(s, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
@@ -635,6 +636,5 @@ function deserialize(s, t::Type{Regex})
     options = deserialize(s)
     Regex(pattern, options)
 end
-
 
 end
