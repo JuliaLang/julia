@@ -560,15 +560,35 @@ end
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 
+promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
+    UnitRange{promote_type(T1,T2)}
+convert{T}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
+convert{T}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
+
+promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
+    StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) = r
+
+promote_rule{T1a,T1b,T2}(::Type{StepRange{T1a,T1b}},::Type{UnitRange{T2}}) =
+    StepRange{promote_type(T1a,T2),promote_type(T1b,T2)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::Range) =
+    StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
+convert{T}(::Type{StepRange}, r::UnitRange{T}) =
+    StepRange{T,T}(first(r), step(r), last(r))
+
 promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
     FloatRange{promote_type(T1,T2)}
+convert{T}(::Type{FloatRange{T}}, r::FloatRange{T}) = r
 convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
     FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
     FloatRange{promote_type(F,eltype(OR))}
 convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
-    FloatRange{T}(start(r), step(r), length(r), one(T))
+    FloatRange{T}(first(r), step(r), length(r), one(T))
+convert{T}(::Type{FloatRange}, r::OrdinalRange{T}) =
+    FloatRange{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
