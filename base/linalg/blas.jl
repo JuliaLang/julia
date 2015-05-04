@@ -44,6 +44,8 @@ export
     gemm,
     symm!,
     symm,
+    hemm!,
+    hemm,
     syrk!,
     syrk,
     syr2k!,
@@ -610,6 +612,39 @@ for (mfname, elty) in ((:dsymm_,:Float64),
         end
         function symm(side::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             symm(side, uplo, one($elty), A, B)
+        end
+    end
+end
+
+## (HE) Hermitian matrix-matrix and matrix-vector multiplication
+for (mfname, elty) in ((:zhemm_,:Complex128),
+                       (:chemm_,:Complex64))
+    @eval begin
+             #     SUBROUTINE DHEMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+             #     .. Scalar Arguments ..
+             #     DOUBLE PRECISION ALPHA,BETA
+             #     INTEGER LDA,LDB,LDC,M,N
+             #     CHARACTER SIDE,UPLO
+             #     .. Array Arguments ..
+             #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
+        function hemm!(side::Char, uplo::Char, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, beta::($elty), C::StridedMatrix{$elty})
+            m, n = size(C)
+            j = chksquare(A)
+            if j != (side == 'L' ? m : n) || size(B,2) != n throw(DimensionMismatch()) end
+            ccall(($(blasfunc(mfname)), libblas), Void,
+                (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
+                 &side, &uplo, &m, &n,
+                 &alpha, A, &max(1,stride(A,2)), B,
+                 &max(1,stride(B,2)), &beta, C, &max(1,stride(C,2)))
+            C
+        end
+        function hemm(side::Char, uplo::Char, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            hemm!(side, uplo, alpha, A, B, zero($elty), similar(B))
+        end
+        function hemm(side::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            hemm(side, uplo, one($elty), A, B)
         end
     end
 end
