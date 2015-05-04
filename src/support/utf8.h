@@ -22,15 +22,8 @@ size_t u8_wc_toutf8(char *dest, uint32_t ch);
 /* character number to byte offset */
 DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 
-/**
- * @brief      Calculates number of characters in UTF-8 encoded string
- *
- * @param[in]  iStr UTF-8 encoded string (or substring)
- * @param[in]  iLen Length of string (or substring) in bytes
- *
- * @return     Number of logical characters (or codepoints) in string (or substring)
- */
-DLLEXPORT size_t u8_charnum(const char *iStr, size_t iLen);
+/* byte offset to character number */
+DLLEXPORT size_t u8_charnum(const char *str, size_t offset);
 
 /* return next character, updating an index variable */
 uint32_t u8_nextchar(const char *s, size_t *i);

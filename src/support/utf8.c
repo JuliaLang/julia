@@ -232,14 +232,7 @@ size_t u8_offset(const char *s, size_t charnum)
     return i;
 }
 
-/**
- * @brief      Calculates number of characters in a UTF-8 string
- *
- * @param[in]  s      UTF-8 encoded string
- * @param[in]  offset Length of the string (or substring) in bytes
- *
- * @return     Number of logical characters (or codepoints)
- */
+/* byte offset => charnum */
 size_t u8_charnum(const char *s, size_t offset)
 {
     size_t charnum = 0;
