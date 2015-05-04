@@ -1,4 +1,3 @@
-# This module is basically a direct port of NetBSD's sha2.c
 module SHA
 
 using Compat
