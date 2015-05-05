@@ -435,3 +435,8 @@ export float32_isvalid, float64_isvalid
 
 @deprecate BigFloat(s::AbstractString) parse(BigFloat,s)
 @deprecate BigInt(s::AbstractString) parse(BigInt,s)
+
+@deprecate (~)(x::Char)           Char(~UInt32(x))
+@deprecate (&)(x::Char, y::Char)  Char(UInt32(x) & UInt32(y))
+@deprecate (|)(x::Char, y::Char)  Char(UInt32(x) | UInt32(y))
+@deprecate ($)(x::Char, y::Char)  Char(UInt32(x) $ UInt32(y))
