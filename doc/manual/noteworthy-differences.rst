@@ -344,4 +344,7 @@ Noteworthy differences from C/C++
   For example: ``@enum(Fruit, Banana=1, Apple, Pear)``
 - By convention, functions that modify their arguments have a ``!`` at the end of the name,
   for example ``push!``.
-
+- In C++, by default, you have static dispatch, i.e. you need to annotate a function as virtual,
+  in order to have dynamic dispatch.
+  On the other hand, in Julia every method is "virtual" (although it's more general than that
+  since methods are dispatched on every argument type, not only ``this``, using the most-specific-declaration rule).
