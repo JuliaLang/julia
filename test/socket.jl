@@ -162,7 +162,7 @@ begin
     close(a)
     close(b)
 end
-if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))

@@ -159,8 +159,8 @@ end
 
 @windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
 function symlink(p::AbstractString, np::AbstractString)
-    @windows_only if Base.windows_version() <= Base.WINDOWS_XP_VER
-        error("WindowsXP does not support soft symlinks")
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
+        error("Windows XP does not support soft symlinks")
     end
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
