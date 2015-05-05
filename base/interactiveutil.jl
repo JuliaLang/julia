@@ -204,9 +204,10 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 function code_warntype(io::IO, f, t::ANY)
     global show_expr_type_emphasize
+    global may_show_expr_type_emphasize
     state = show_expr_type_emphasize::Bool
     ct = code_typed(f, t)
-    show_expr_type_emphasize::Bool = true
+    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = true
     for ast in ct
         println(io, "Variables:")
         vars = ast.args[2][2]
@@ -219,7 +220,7 @@ function code_warntype(io::IO, f, t::ANY)
         show_unquoted(io, ast.args[3], 2)
         print(io, '\n')
     end
-    show_expr_type_emphasize::Bool = false
+    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = false
     nothing
 end
 code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
