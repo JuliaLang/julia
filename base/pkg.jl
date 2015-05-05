@@ -10,7 +10,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-for file in split("git dir github types reqs cache read query resolve write generate entry")
+for file in split("git dir github types reqs cache read query resolve write generate installed entry")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
