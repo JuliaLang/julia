@@ -347,57 +347,44 @@ done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 ## indexing
 
-getindex(r::Range, i::Real) = getindex(r, to_index(i))
+getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
 
-function getindex{T}(r::Range{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, first(r) + (i-1)*step(r))
-end
-function getindex{T}(r::FloatRange{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, (r.start + (i-1)*r.step)/r.divisor)
-end
-function getindex{T}(r::LinSpace{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
-end
+getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
+
+getindex{T}(r::LinSpace{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 
 getindex(r::Range, ::Colon) = copy(r)
 unsafe_getindex(r::Range, ::Colon) = copy(r)
 
-function check_indexingrange(s, r)
-    sl = length(s)
-    rl = length(r)
-    sl == 0 || 1 <= first(s) <= rl &&
-               1 <=  last(s) <= rl || throw(BoundsError())
-    sl
-end
-
-function getindex(r::UnitRange, s::UnitRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::UnitRange, s::UnitRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::UnitRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, sl)
+    range(st, length(s))
 end
 
-function getindex(r::UnitRange, s::StepRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::UnitRange, s::StepRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::StepRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, step(s), sl)
+    range(st, step(s), length(s))
 end
 
-function getindex(r::StepRange, s::Range{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::StepRange, s::Range{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::StepRange, s::Range{Int})
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    range(st, step(r)*step(s), sl)
+    range(st, step(r)*step(s), length(s))
 end
 
-function getindex(r::FloatRange, s::OrdinalRange)
-    sl = check_indexingrange(s, r)
-    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, sl, r.divisor)
+getindex(r::FloatRange, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::FloatRange, s::OrdinalRange)
+    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
 end
 
-function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
-    sl::T = check_indexingrange(s, r)
+getindex(r::LinSpace, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    sl::T = length(s)
     ifirst = first(s)
     ilast = last(s)
     vfirst::T = ((r.len - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
