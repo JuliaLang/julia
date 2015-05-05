@@ -13,7 +13,7 @@ function mkcachedir()
         return
     end
 
-    @windows_only if Base.windows_version() <= Base.WINDOWS_XP_VER
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
         mkdir(cache)
         return
     end

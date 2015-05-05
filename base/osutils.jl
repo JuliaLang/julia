@@ -55,4 +55,4 @@ end
 end
 @unix_only windows_version() = (0,0)
 
-WINDOWS_XP_VER = (5,1)
+WINDOWS_VISTA_VER = (6,0)
