@@ -105,9 +105,9 @@ isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-tt_cons(t::ANY, tup::ANY) = Tuple{t, tup.parameters...}
+tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
 
-code_lowered(f::Function, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f,t))
+code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
 methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
 methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
@@ -189,13 +189,19 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
     return str
 end
 
-code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata = true) =
+code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata=true) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata))
-code_llvm(f::Function, types::ANY) = code_llvm(STDOUT, f, types)
-code_llvm_raw(f::Function, types::ANY) = code_llvm(STDOUT, f, types, false)
+code_llvm(f::ANY, types::ANY) = code_llvm(STDOUT, f, types)
+code_llvm_raw(f::ANY, types::ANY) = code_llvm(STDOUT, f, types, false)
+code_llvm(io::IO, f::ANY, t::ANY, args...) =
+    code_llvm(io, call,
+              tt_cons(isa(f, Type) ? Type{f} : typeof(f), t), args...)
 
-code_native(io::IO, f::Function, types::ANY) = print(io, _dump_function(f, types, true, false, false))
-code_native(f::Function, types::ANY) = code_native(STDOUT, f, types)
+code_native(io::IO, f::Function, types::ANY) =
+    print(io, _dump_function(f, types, true, false, false))
+code_native(f::ANY, types::ANY) = code_native(STDOUT, f, types)
+code_native(io::IO, f::ANY, t::ANY) =
+    code_native(io, call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
 
 which(f::ANY, t::Tuple{Vararg{Type}}) = which(f, Tuple{t...})
 function which(f::ANY, t::ANY)
