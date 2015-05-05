@@ -30,7 +30,7 @@ type Obj
     end
 end
 
-function Repo(path::String)
+function Repo(path::AbstractString)
     repo_ptr = Ptr{Void}[0]
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Uint8}), repo_ptr, path)
@@ -66,7 +66,7 @@ function need_update(repo::Repo)
     ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1 && "git update-index -q --really-refresh"
 end
 
-function iscommit(id::String, repo::Repo)
+function iscommit(id::AbstractString, repo::Repo)
     need_update(repo)
 
     oid = hex2bytes(id)
@@ -122,7 +122,7 @@ function isattached(repo::Repo)
     ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
 end
 
-function merge_base(one::String, two::String, repo::Repo)
+function merge_base(one::AbstractString, two::AbstractString, repo::Repo)
     oid1 = hex2bytes(one)
     oid2 = hex2bytes(two)
     moid = zeros(UInt8 ,20)
