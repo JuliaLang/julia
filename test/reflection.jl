@@ -4,21 +4,37 @@
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
 
-function test_code_reflection(freflect, f, types)
+function test_ast_reflection(freflect, f, types)
+    @test !isempty(freflect(f, types))
+end
+
+function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
     str = takebuf_string(iob)
     @test !isempty(str)
 end
 
-println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
-test_code_reflection(code_native, ismatch, Tuple{Regex, AbstractString})
-test_code_reflection(code_native, +, Tuple{Int, Int})
-test_code_reflection(code_native, +, Tuple{Array{Float32}, Array{Float32}})
+function test_code_reflection(freflect, f, types, tester)
+    tester(freflect, f, types)
+    tester(freflect, f, (types.parameters...))
+end
 
-test_code_reflection(code_llvm, ismatch, Tuple{Regex, AbstractString})
-test_code_reflection(code_llvm, +, Tuple{Int, Int})
-test_code_reflection(code_llvm, +, Tuple{Array{Float32}, Array{Float32}})
+function test_code_reflections(tester, freflect)
+    test_code_reflection(freflect, ismatch,
+                         Tuple{Regex, AbstractString}, tester)
+    test_code_reflection(freflect, +, Tuple{Int, Int}, tester)
+    test_code_reflection(freflect, +,
+                         Tuple{Array{Float32}, Array{Float32}}, tester)
+    test_code_reflection(freflect, Module, Tuple{}, tester)
+    test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester)
+end
+
+println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
+test_code_reflections(test_ast_reflection, code_lowered)
+test_code_reflections(test_ast_reflection, code_typed)
+test_code_reflections(test_bin_reflection, code_llvm)
+test_code_reflections(test_bin_reflection, code_native)
 
 @test_throws Exception code_native(+, Int, Int)
 @test_throws Exception code_native(+, Array{Float32}, Array{Float32})
