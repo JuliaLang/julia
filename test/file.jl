@@ -14,7 +14,7 @@ mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
 
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     # relative link
@@ -70,7 +70,7 @@ end
 @unix_only @test islink(link) == true
 @unix_only @test readlink(link) == file
 
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
     @test islink(dirlink) == true
     @test isdir(dirlink) == true
     @test readlink(dirlink) == subdir * @windows? "\\" : ""
@@ -441,7 +441,7 @@ rm(cfile)
 
 # issue #10506 #10434
 ## Tests for directories and links to directories
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
     function setup_dirs(tmpdir)
         srcdir = joinpath(tmpdir, "src")
         hidden_srcdir = joinpath(tmpdir, ".hidden_srcdir")
@@ -729,7 +729,7 @@ end
     rm(link)
     rm(rellink)
 end
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end

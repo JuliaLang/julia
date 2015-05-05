@@ -56,11 +56,3 @@ end
 @unix_only windows_version() = (0,0)
 
 WINDOWS_XP_VER = (5,1)
-
-macro windowsxp_only(ex)
-    _os_test(:?, Expr(:(:), ex, nothing), OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end
-
-macro non_windowsxp_only(ex)
-    _os_test(:?, Expr(:(:), nothing, ex), OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end

@@ -162,7 +162,7 @@ begin
     close(a)
     close(b)
 end
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))

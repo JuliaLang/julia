@@ -18,8 +18,10 @@ end
 dlls = Libdl.dllist()
 @test !isempty(dlls)
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
-@non_windowsxp_only @test Base.samefile(Libdl.dlpath(dlls[1]), dlls[1])
-@non_windowsxp_only @test Base.samefile(Libdl.dlpath(dlls[end]), dlls[end])
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
+    @test Base.samefile(Libdl.dlpath(dlls[1]), dlls[1])
+    @test Base.samefile(Libdl.dlpath(dlls[end]), dlls[end])
+end
 @test length(filter(dlls) do dl
         return ismatch(Regex("^libjulia(?:.*)\.$(Libdl.dlext)(?:\..+)?\$"), basename(dl))
     end) == 1 # look for something libjulia-like (but only one)
