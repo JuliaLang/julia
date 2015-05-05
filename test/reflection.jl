@@ -79,6 +79,25 @@ code_warntype(iob, getindex, Tuple{Stable{Float64},Int})
 str = takebuf_string(iob)
 @test !isempty(search(str, tag))
 
+function funfun(x)
+    function internal(y)
+        return 2y
+    end
+    z = internal(3)
+    x
+end
+
+tag = Base.have_color ? string("2y",Base.text_colors[:red],"::Any") : "2y::ANY"
+code_warntype(iob, funfun, Tuple{Float64})
+str = takebuf_string(iob)
+@test !isempty(search(str, tag))
+
+# Make sure emphasis is not used for other functions
+tag = Base.have_color ? Base.text_colors[:red] : "ANY"
+show(iob, expand(:(x->x^2)))
+str = takebuf_string(iob)
+@test isempty(search(str, tag))
+
 end
 
 # isbits
