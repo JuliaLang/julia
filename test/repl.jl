@@ -27,7 +27,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-@non_windowsxp_only begin
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
 stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -237,7 +237,7 @@ end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-@non_windowsxp_only let exename = joinpath(JULIA_HOME, Base.julia_exename())
+let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
@@ -277,7 +277,9 @@ close(master)
 end
 
 # Test stream mode
-outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
-write(ins,"1\nquit()\n")
-@test readall(outs) == "1\n"
+if @unix? true : (Base.windows_version() > Base.WINDOWS_XP_VER)
+    outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
+    write(ins,"1\nquit()\n")
+    @test readall(outs) == "1\n"
+end
 end

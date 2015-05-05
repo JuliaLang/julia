@@ -158,7 +158,10 @@ function sendfile(src::AbstractString, dst::AbstractString)
 end
 
 @windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
-@non_windowsxp_only function symlink(p::AbstractString, np::AbstractString)
+function symlink(p::AbstractString, np::AbstractString)
+    @windows_only if Base.windows_version() <= Base.WINDOWS_XP_VER
+        error("WindowsXP does not support soft symlinks")
+    end
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
@@ -167,8 +170,6 @@ end
     end
     uv_error("symlink",err)
 end
-@windowsxp_only symlink(p::AbstractString, np::AbstractString) =
-    error("WindowsXP does not support soft symlinks")
 
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)

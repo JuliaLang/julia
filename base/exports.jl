@@ -1375,8 +1375,6 @@ export
     @unix_only,
     @osx_only,
     @linux_only,
-    @windowsxp_only,
-    @non_windowsxp_only,
 
     # tasks
     @schedule,
