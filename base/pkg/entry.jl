@@ -1,7 +1,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
+import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir, ..Read2
 using ..Types
 
 macro recover(ex)
@@ -89,7 +89,7 @@ end
 
 function installed()
     pkgs = Dict{ASCIIString,VersionNumber}()
-    for (pkg,(ver,fix)) in Read.installed()
+    for (pkg,(ver,fix)) in Read2.installed()
         pkgs[pkg] = ver
     end
     return pkgs
@@ -105,7 +105,7 @@ end
 function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
-    instd = Read.installed()
+    instd = Read2.installed()
     required = sort!(collect(keys(reqs)))
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
