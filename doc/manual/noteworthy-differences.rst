@@ -258,34 +258,40 @@ Noteworthy differences from C/C++
 
 - Julia arrays are indexed with square brackets, and can have more than one
   dimension ``A[i,j]``.
+  This syntax is not just syntactic sugar for a reference to a pointer or address as in C/C++.
+  See the Julia documentation for the syntax for array construction (it has changed between versions).
 - In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
 - Julia arrays are assigned by reference. After ``A=B``, changing elements of
   ``B`` will modify ``A`` as well.
 - Julia values are passed and assigned by reference. If a function modifies an
   array, the changes will be visible in the caller.
+- In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
+  whitespace from a Julia program.
 - In Julia, literal numbers without a decimal point (such as ``42``) create signed
-  integers, of type Int, but literals too large to fit in the machine word size
-  will automatically be promoted to a larger size type, such as Int64 (if Int is Int32),
-  Int128, or the arbitrarily large BigInt type.
-  There are no numeric literal suffixes, such as L, LL, U, UL, ULL to indicate unsigned
+  integers, of type ``Int``, but literals too large to fit in the machine word size
+  will automatically be promoted to a larger size type, such as ``Int64`` (if ``Int`` is ``Int32``),
+  ``Int128``, or the arbitrarily large ``BigInt`` type.
+  There are no numeric literal suffixes, such as ``L``, ``LL``, ``U``, ``UL``, ``ULL`` to indicate unsigned
   and/or signed vs. unsigned.
-  Decimal literals are always signed, and hexadecimal literals (which start with 0x like C/C++),
-  are unsigned (except if they are >128 bits, in which case they become signed BigInt type).
+  Decimal literals are always signed, and hexadecimal literals (which start with ``0x`` like C/C++),
+  are unsigned (except if they are >128 bits, in which case they become signed ``BigInt`` type).
   Hexadecimal literals also, unlike C/C++/Java and unlike decimal literals in Julia,
   have a type based on the *length* of the literal, including leading 0s.  For example,
-  ``0x0`` and ``0x00`` have type UInt8, ``0x000`` and ``0x0000`` have type UInt16, then
-  literals with 5 to 8 hex digits have type UInt32, 9 to 16 hex digits type UInt64, and more than
-  16 hex digits end up a signed BigInt type.  This needs to be taken into account when defining
-  hexadecimal masks, for example `~0xf` is very different from `~0x000f`.
+  ``0x0`` and ``0x00`` have type UInt8, ``0x000`` and ``0x0000`` have type ``UInt16``, then
+  literals with 5 to 8 hex digits have type ``UInt32``, 9 to 16 hex digits type ``UInt64``, and more than
+  16 hex digits end up a signed ``BigInt`` type.  This needs to be taken into account when defining
+  hexadecimal masks, for example ``~0xf`` is very different from ``~0x000f``.
   Unlike either decimal integer or hexadecimal literals, floating point literals are always
-  64-bits, Float64, and don't get promoted to the BigFloat type.  This is closer in
+  64-bits, ``Float64``, and don't get promoted to the ``BigFloat`` type.  This is closer in
   behavior to C/C++.
-- String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain `"`
-  characters without quoting it like `"\\\""`
+  Octal (prefixed with ``0o``) and binary (prefixed with ``0b``) literals are also treated as unsigned
+  (with the same current exception that they become signed ``BigInt`` type if they can't fit in a ``UInt128``).
+- String literals can be delimited with either ``"``  or ``"""``, ``"""`` delimited literals can contain ``"``
+  characters without quoting it like ``"\\\""``
   String literals can have values of other variables or expressions interpolated into them,
-  indicated by `$variablename` or `$(expression)`, which evaluates the variable name or the expression in the context of the function.
-- `//` indicates a Rational number, and not a single-line comment (which is # in Julia)
-- `#=` indicates the start of a multiline comment, and `=#` ends it.
+  indicated by ``$variablename`` or ``$(expression)``, which evaluates the variable name or the expression in the context of the function.
+- ``//`` indicates a ``Rational`` number, and not a single-line comment (which is # in Julia)
+- ``#=`` indicates the start of a multiline comment, and ``=#`` ends it.
 - Functions in Julia return values from their last expression(s) or the ``return``
   keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
   ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
@@ -317,15 +323,15 @@ Noteworthy differences from C/C++
   far is a complete expression, it is considered done; otherwise the input
   continues. One way to force an expression to continue is to wrap it in
   parentheses.
-- Julia has an incredibly powerful macro facility, and macros are always indicated by the `@`
+- Julia has an incredibly powerful macro facility, and macros are always indicated by the ``@``
   character.  Unlike C/C++, macros operate on parsed expressions, not on the text of the program.
-  There are two forms for using a macro, `@mymacro(arg1, arg2, arg3)` or `@mymacro arg1 arg2 arg3`
-  The first form is useful if you need to have a macro call that spreads multiple lines (`@Enum` is a good
-  case), and the second form allows handling calls like: `@parallel for i=1:1000`.
+  There are two forms for using a macro, ``@mymacro(arg1, arg2, arg3)`` or ``@mymacro arg1 arg2 arg3``
+  The first form is useful if you need to have a macro call that spreads multiple lines (``@Enum`` is a good
+  case), and the second form allows handling calls like: ``@parallel for i=1:1000``.
   Note: the second form can continue onto multiple lines, if the last expression on a line goes over to another line...
   This can be a bit tricky to determine sometimes just where the macro ends.
-- Julia now has an enumeration type, expressed using the macro `@Enum(name, value1, value2, ...)`
-  For example: `@Enum(Fruit, Banana=1, Apple, Pear)`
-- By convention, functions that modify their arguments have a ! at the end of the name,
-  for example `push!`.
+- Julia now has an enumeration type, expressed using the macro ``@Enum(name, value1, value2, ...)``
+  For example: ``@Enum(Fruit, Banana=1, Apple, Pear)``
+- By convention, functions that modify their arguments have a ``!`` at the end of the name,
+  for example ``push!``.
 
