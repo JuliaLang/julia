@@ -263,6 +263,10 @@ Noteworthy differences from C/C++
 - In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
 - Julia arrays are assigned by reference. After ``A=B``, changing elements of
   ``B`` will modify ``A`` as well.
+- Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row
+  major ordered by default. To get optimal performance when looping over
+  arrays, the order of the loops should be reversed in Julia relative to C/C++
+  (see relevant section of :ref:`man-performance-tips`).
 - Julia values are passed and assigned by reference. If a function modifies an
   array, the changes will be visible in the caller.
 - In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
@@ -318,7 +322,6 @@ Noteworthy differences from C/C++
 - Julia does not treat the numbers ``0`` and ``1`` as Booleans.
   You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
   booleans. Instead, you can write ``if true``, ``if Bool(1)``, or ``if 1==1``.
-- In Julia, ``return`` does not require parentheses.
 - Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
   loop blocks, like ``while``/``for``, and functions. In lieu of the one-line
   ``if ( cond ) statement``, Julia allows statements of the form
@@ -333,12 +336,12 @@ Noteworthy differences from C/C++
 - Julia has an incredibly powerful macro facility, and macros are always indicated by the ``@``
   character.  Unlike C/C++, macros operate on parsed expressions, not on the text of the program.
   There are two forms for using a macro, ``@mymacro(arg1, arg2, arg3)`` or ``@mymacro arg1 arg2 arg3``
-  The first form is useful if you need to have a macro call that spreads multiple lines (``@Enum`` is a good
+  The first form is useful if you need to have a macro call that spreads multiple lines (``@enum`` is a good
   case), and the second form allows handling calls like: ``@parallel for i=1:1000``.
   Note: the second form can continue onto multiple lines, if the last expression on a line goes over to another line...
   This can be a bit tricky to determine sometimes just where the macro ends.
-- Julia now has an enumeration type, expressed using the macro ``@Enum(name, value1, value2, ...)``
-  For example: ``@Enum(Fruit, Banana=1, Apple, Pear)``
+- Julia now has an enumeration type, expressed using the macro ``@enum(name, value1, value2, ...)``
+  For example: ``@enum(Fruit, Banana=1, Apple, Pear)``
 - By convention, functions that modify their arguments have a ``!`` at the end of the name,
   for example ``push!``.
 
