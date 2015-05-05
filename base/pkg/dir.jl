@@ -37,6 +37,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     end
     dir = path()
     info("Initializing package repository $dir")
+    temp_dir = mktempdir()
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
@@ -44,8 +45,8 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         return
     end
     try
-        mkpath(dir)
-        Base.cd(dir) do
+        mkpath(temp_dir)
+        Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
             run(`git clone -q -b $branch $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
@@ -56,8 +57,15 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
                 close(io)
             end
         end
+        #Move TEMP to METADATA
+        mkpath(dir)
+        Base.mv(joinpath(temp_dir,"METADATA"), metadata_dir)
+        Base.mv(joinpath(temp_dir,"REQUIRE"), joinpath(dir,"REQUIRE"))
+        Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
+        rm(temp_dir)
     catch e
         ispath(metadata_dir) && rm(metadata_dir, recursive=true)
+        ispath(temp_dir) && rm(temp_dir, recursive=true)
         rethrow(e)
     end
 end

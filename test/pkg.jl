@@ -15,8 +15,11 @@ function temp_pkg_dir(fn::Function)
   end
 end
 
-# Test adding a removing a package
+# Test adding or removing a package
+#Also test for the existence of REUIRE and META_Branch
 temp_pkg_dir() do
+  @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
+  @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
   @test isempty(Pkg.installed())
   Pkg.add("Example")
   @test [keys(Pkg.installed())...] == ["Example"]
