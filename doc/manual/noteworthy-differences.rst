@@ -297,13 +297,20 @@ Noteworthy differences from C/C++
   ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
   to values as one would have to do in C/C++ (i.e. ``a = myfunction(&b)``.
 - Julia discourages the used of semicolons to end statements. The results of
-  statements are not automatically printed (except at the interactive prompt),
+  statements are not automatically printed (except at the interactive prompt, i.e. the REPL),
   and lines of code do not need to end with semicolons. :func:`println` or
   :func:`@printf` can be used to print specific output.
+  In the REPL, ``;`` can be used to suppress output.
+  ``;`` also has a different meaning within ``[ ]``, something to watch out for.
+  ``;`` can be used to separate 'statements' on a line, but are not strictly necessary in many cases,
+  and are more an aid to readability.
 - In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
   in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
   so parenthesis may be required.
-- Julia's :obj:`^` is exponentiation, not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
+- Julia's :obj:`^` is exponentiation (pow), not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
+- Julia has two right-shift operators, ``>>`` and ``>>>``.  ``>>>`` performs an arithmetic shift,
+  ``>>`` always performs a logical shift, unlike C/C++,
+  where the meaning of ``>>`` depends on the type of the value being shifted.
 - Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
 - Julia does not require parentheses when writing ``if`` statements or
   ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
