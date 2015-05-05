@@ -3,7 +3,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir, ..Read2
+import ..LibGit, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
 using ..Types
 
 macro recover(ex)
@@ -98,7 +98,7 @@ end
 
 function installed()
     pkgs = Dict{ASCIIString,VersionNumber}()
-    for (pkg,(ver,fix)) in Read2.installed()
+    for (pkg,(ver,fix)) in Read.installed()
         pkgs[pkg] = ver
     end
     return pkgs
@@ -106,7 +106,12 @@ end
 
 function installed(pkg::AbstractString)
     avail = Read.available(pkg)
-    Read.isinstalled(pkg) && return Read.installed_version(pkg,avail)
+    if Read.isinstalled(pkg)
+        prepo = LibGit.repo(pkg)
+        res = Read.installed_version(pkg, prepo, avail)
+        LibGit.close(prepo)
+        return res
+    end
     isempty(avail) && error("$pkg is not a package (not registered or installed)")
     return nothing # registered but not installed
 end
@@ -114,7 +119,7 @@ end
 function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
-    instd = Read2.installed()
+    instd = Read.installed()
     required = sort!(collect(keys(reqs)))
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
