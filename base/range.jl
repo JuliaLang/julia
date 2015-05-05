@@ -362,6 +362,9 @@ function getindex{T}(r::LinSpace{T}, i::Integer)
     convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 end
 
+getindex(r::Range, ::Colon) = copy(r)
+unsafe_getindex(r::Range, ::Colon) = copy(r)
+
 function check_indexingrange(s, r)
     sl = length(s)
     rl = length(r)
