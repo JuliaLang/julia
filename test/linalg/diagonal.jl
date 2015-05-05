@@ -51,6 +51,55 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     for op in (+, -, *)
         @test_approx_eq full(op(D, D2)) op(DM, DM2)
     end
+    # binary ops with plain numbers
+    a = rand()
+    @test_approx_eq full(a*D) a*DM
+    @test_approx_eq full(D*a) DM*a
+    @test_approx_eq full(D/a) DM/a
+
+    #division of two Diagonals
+    @test_approx_eq D/D2 Diagonal(D.diag./D2.diag)
+
+    # test triu/tril
+    @test triu!(copy(D),1) == zeros(D)
+    @test triu!(copy(D),0) == D
+    @test tril!(copy(D),1) == zeros(D)
+    @test tril!(copy(D),0) == D
+
+    # factorize
+    @test factorize(D) == D
+
+    debug && println("Eigensystem")
+    eigD = eigfact(D)
+    @test_approx_eq Diagonal(eigD[:values]) D
+    @test eigD[:vectors] == eye(D)
+
+    debug && println("ldiv")
+    v = rand(n + 1)
+    @test_throws DimensionMismatch D\v
+    v = rand(n)
+    @test_approx_eq D\v DM\v
+    V = rand(n + 1, n)
+    @test_throws DimensionMismatch D\V
+    V = rand(n, n)
+    @test_approx_eq D\V DM\V
+
+    debug && println("conj and transpose")
+    @test transpose(D) == D
+    if elty <: BlasComplex
+        @test_approx_eq full(conj(D)) conj(DM)
+        @test ctranspose(D) == conj(D)
+    end
+
+    #logdet
+    if relty <: Real
+        ld=convert(Vector{relty},rand(n))
+        @test_approx_eq logdet(Diagonal(ld)) logdet(diagm(ld))
+    end
+
+    #similar
+    @test_throws ArgumentError similar(D, eltype(D), (n,n+1))
+    @test length(diag(similar(D, eltype(D), (n,n)))) == n
 
     #10036
     @test issym(D2)
@@ -62,3 +111,6 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test !ishermitian(D3)
     end
 end
+
+#isposdef
+@test !isposdef(Diagonal(-1.0 * rand(n)))
