@@ -175,26 +175,32 @@ static Type *jl_ppvalue_llvmt;
 static Type* jl_parray_llvmt;
 static FunctionType *jl_func_sig;
 static Type *jl_pfptr_llvmt;
-static Type *T_int1;
-static Type *T_int8;
-static Type *T_pint8;
-static Type *T_uint8;
-static Type *T_int16;
-static Type *T_pint16;
-static Type *T_uint16;
-static Type *T_int32;
-static Type *T_pint32;
-static Type *T_uint32;
-static Type *T_int64;
-static Type *T_pint64;
-static Type *T_uint64;
-static Type *T_char;
-static Type *T_size;
-static Type *T_psize;
+
+static IntegerType *T_int1;
+static IntegerType *T_int8;
+static IntegerType *T_int16;
+static IntegerType *T_int32;
+static IntegerType *T_int64;
+
+static IntegerType *T_uint8;
+static IntegerType *T_uint16;
+static IntegerType *T_uint32;
+static IntegerType *T_uint64;
+
+static IntegerType *T_char;
+static IntegerType *T_size;
+
 static Type *T_float32;
-static Type *T_pfloat32;
 static Type *T_float64;
+
+static Type *T_pint8;
+static Type *T_pint16;
+static Type *T_pint32;
+static Type *T_pint64;
+static Type *T_psize;
+static Type *T_pfloat32;
 static Type *T_pfloat64;
+
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
