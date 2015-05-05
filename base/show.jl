@@ -298,6 +298,7 @@ unquoted(ex::Expr)       = ex.args[1]
 ## AST printing helpers ##
 
 const indent_width = 4
+may_show_expr_type_emphasize = false
 show_expr_type_emphasize = false
 
 function show_expr_type(io::IO, ty)
@@ -694,7 +695,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # print anything else as "Expr(head, args...)"
     else
         show_type = false
-        show_expr_type_emphasize::Bool = in(ex.head, (:lambda, :method))
+        show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool && in(ex.head, (:lambda, :method))
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
