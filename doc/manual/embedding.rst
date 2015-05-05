@@ -45,6 +45,13 @@ The second statement in the test program evaluates a Julia statement using a cal
 
 Before the program terminates, it is strongly recommended to call ``jl_atexit_hook``.  The above example program calls this before returning from ``main``.
 
+*Note: Currently, dynamically linking with the ``libjulia`` shared library requires passing the ``RTLD_GLOBAL`` option, in Python, this looks like::
+
+ >>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)
+ >>> julia.jl_init.argtypes = [c_char_p]
+ >>> julia.jl_init('.')
+ 250593296
+
 Using julia-config to automatically determine build parameters
 --------------------------------------------------------------
 
