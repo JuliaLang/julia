@@ -128,14 +128,13 @@ macro _noinline_meta()
 end
 
 ## Bounds checking ##
-_checkbounds(sz::Int, i::Int) = 1 <= i <= sz
-_checkbounds(sz::Int, i::Real) = (@_inline_meta; _checkbounds(sz, to_index(i)))
-_checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz
-_checkbounds(sz::Int, I::AbstractArray{Bool}) = length(I) == sz # setindex! allows this
-_checkbounds(sz::Int, r::Range{Int}) = (@_inline_meta; isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz))
-_checkbounds{T<:Real}(sz::Int, r::Range{T}) = (@_inline_meta; _checkbounds(sz, to_index(r)))
-_checkbounds(sz::Int, ::Colon) = true
-function _checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
+_checkbounds(sz, i::Integer) = 1 <= i <= sz
+_checkbounds(sz, i::Real) = 1 <= to_index(i) <= sz
+_checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
+_checkbounds(sz, r::Range{Int}) = (@_inline_meta; isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz))
+_checkbounds{T<:Real}(sz, r::Range{T}) = (@_inline_meta; _checkbounds(sz, to_index(r)))
+_checkbounds(sz, ::Colon) = true
+function _checkbounds{T <: Real}(sz, I::AbstractArray{T})
     @_inline_meta
     b = true
     for i in I

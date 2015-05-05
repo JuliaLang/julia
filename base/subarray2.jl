@@ -1,109 +1,49 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## Scalar indexing
-# Low dimensions: avoid splatting
-newsym = (:i_1, :i_2, :i_3, :i_4)
-vars = Array(Expr, 0)
-varsInt = Array(Expr, 0)
-varsOther = Array(Expr, 0)
-vars_toindex = Array(Expr, 0)
-for i = 1:4
-    sym = newsym[i]
-    push!(vars, Expr(:quote, sym))
-    push!(varsInt, :($sym::Int))
-    push!(varsOther, :($sym::Union(Real, AbstractVector)))
-    push!(vars_toindex, :(to_index($sym)))
-    ex = i == 1 ? quote
-         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::Real) = getindex(V, to_index($sym))
-        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::Real) = setindex!(V, v, to_index($sym))
-         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::AbstractVector{Bool}) = getindex(V, to_index($sym))
-        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::AbstractVector{Bool}) = setindex!(V, v, to_index($sym))
-    end : quote
-         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $(varsOther...)) = getindex(V, $(vars_toindex...))
-        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $(varsOther...)) = setindex!(V, v, $(vars_toindex...))
-    end
-    @eval begin
-        @generated function getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
-            if $i == 1 && length(IV.parameters) == LD  # linear indexing
-                meta = Expr(:meta, :inline)
-                if iscontiguous(V)
-                    return :($meta; V.parent[V.first_index + i_1 - 1])
-                end
-                return :($meta; V.parent[V.first_index + V.stride1*(i_1-1)])
-            end
-            exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
-            quote
-                $exhead
-                $ex
-            end
+@inline getindex(V::SubArray, I::Int...) = (checkbounds(V, I...); unsafe_getindex(V, I...))
+@generated function unsafe_getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; V.parent[V.first_index + I[1] - 1])
         end
-        @generated function setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
-            if $i == 1 && length(IV.parameters) == LD  # linear indexing
-                meta = Expr(:meta, :inline)
-                if iscontiguous(V)
-                    return :($meta; V.parent[V.first_index + i_1 - 1] = v)
-                end
-                return :($meta; V.parent[V.first_index + V.stride1*(i_1-1)] = v)
-            end
-            exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
-            quote
-                $exhead
-                $ex = v
-            end
+        return :($meta; V.parent[V.first_index + V.stride1*(I[1]-1)])
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        unsafe_getindex(V.parent, $(idxs...))
+    end
+end
+@inline setindex!(V::SubArray, v, I::Int...) = (checkbounds(V, I...); unsafe_setindex!(V, v, I...))
+@generated function unsafe_setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; V.parent[V.first_index + I[1] - 1] = v)
         end
-        $ex
+        return :($meta; V.parent[V.first_index + V.stride1*(I[1]-1)] = v)
     end
-end
-# V[] notation (extracts the first element)
-@generated function getindex{T,N,P,IV}(V::SubArray{T,N,P,IV})
-    Isyms = ones(Int, N)
-    exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
     quote
         $exhead
-        $ex
-    end
-end
-# Splatting variants
-@generated function getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Int...)
-    Isyms = [:(I[$d]) for d = 1:length(I)]
-    exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
-    quote
-        $exhead
-        $ex
-    end
-end
-@generated function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Int...)
-    Isyms = [:(I[$d]) for d = 1:length(I)]
-    exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
-    quote
-        $exhead
-        $ex = v
+        unsafe_setindex!(V.parent, v, $(idxs...))
     end
 end
 
 # Indexing with non-scalars. For now, this returns a copy, but changing that
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
-getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::AbstractArray{Bool,N}) = copy(sub(V, find(I)))   # this could be much better optimized
-getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractVector, Colon)...) = getindex(V, to_index(I)...)
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractArray, Colon)...) = getindex(V, to_index(I)...)
+unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
+unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractArray, Colon)...) = unsafe_getindex(V, to_index(I)...)
 
-function setindex!{T,P,IV}(V::SubArray{T,1,P,IV}, v, I::AbstractArray{Bool,1})
-    length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
-    setindex!(V, v, to_index(I))
-end
-function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,1})
-    length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
-    setindex!(V, v, to_index(I))
-end
-function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,N})
-    size(I) == size(V) || throw(DimensionMismatch("size of Boolean mask must match array size"))
-    _setindex!(V, v, find(I))  # this could be better optimized
-end
-setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Union(Real,AbstractVector,Colon)...) = setindex!(V, v, to_index(I)...)
-setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, x, J::Union(Int,AbstractVector,Colon)...) = _setindex!(V, x, J...)
-@generated function _setindex!(V::SubArray, x, J::Union(Real,AbstractVector,Colon)...)
-    gen_setindex_body(length(J))
-end
+# Nonscalar setindex! falls back to the AbstractArray versions
 
 # NP is parent dimensionality, Itypes is the tuple typeof(V.indexes)
 # NP may not be equal to length(Itypes), because a view of a 2d matrix A
@@ -153,26 +93,13 @@ function index_generate(NP, Itypes, Vsym, Isyms)
             indexexprs[i] = :($Vsym.indexes[$i])
         else
             j += 1
-            indexexprs[i] = :(unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))  # TODO: make Range bounds-checking respect @inbounds
+            indexexprs[i] = :(unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))
         end
     end
-    # Append any extra indexes. Must be trailing 1s or it will cause a BoundsError.
-    if L < NP && j < length(Isyms)
-        # This view was created as V = A[5:13], so appending them would generate interpretive confusion.
-        # Instead, use double-indexing, i.e., A[indexes1...][indexes2...], where indexes2 contains the leftovers.
-        return exhead, :($Vsym.parent[$(indexexprs...)][$(Isyms[j+1:end]...)])
-    end
-    for k = j+1:length(Isyms)
-        push!(indexexprs, Isyms[k])
-    end
+    # Note that we drop any extra indices. We're trusting that the indices are
+    # already checked to be in-bounds, so any extra indices must be 1 (and no-op)
     if exhead == :nothing
         exhead = Expr(:meta, :inline)
     end
-    exhead, :($Vsym.parent[$(indexexprs...)])
+    exhead, indexexprs
 end
-
-unsafe_getindex(v::Real, ind::Int) = v
-unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
-@inline unsafe_getindex(v::Array, ind::Int) = (@inbounds x = v[ind]; x)
-unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
-unsafe_getindex(v::Colon, ind::Int) = ind

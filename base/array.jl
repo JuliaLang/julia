@@ -293,111 +293,47 @@ done(a::Array,i) = (i > length(a))
 
 ## Indexing: getindex ##
 
-getindex(a::Array) = arrayref(a,1)
+getindex(A::Array, i1::Int) = arrayref(A, i1)
+unsafe_getindex(A::Array, i1::Int) = @inbounds return arrayref(A, i1)
 
-getindex(A::Array, i0::Real) = arrayref(A,to_index(i0))
-getindex(A::Array, i0::Real, i1::Real) = arrayref(A,to_index(i0),to_index(i1))
-getindex(A::Array, i0::Real, i1::Real, i2::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5))
-
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
-
-# Fast copy using copy! for UnitRange
-function getindex(A::Array, I::UnitRange{Int})
+# Faster contiguous indexing using copy! for UnitRange and Colon
+getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
+function unsafe_getindex(A::Array, I::UnitRange{Int})
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
-        copy!(X, 1, A, first(I), lI)
+        unsafe_copy!(X, 1, A, first(I), lI)
+    end
+    return X
+end
+getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
+function unsafe_getindex(A::Array, ::Colon)
+    lI = length(A)
+    X = similar(A, lI)
+    if lI > 0
+        unsafe_copy!(X, 1, A, 1, lI)
     end
     return X
 end
 
-function getindex{T<:Real}(A::Array, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
+# This is redundant with the abstract fallbacks, but needed for bootstrap
+function getindex{T<:Real}(A::Array, I::Range{T})
+    return [ A[to_index(i)] for i in I ]
 end
-function getindex{T<:Real}(A::Range, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
-end
-function getindex(A::Range, I::AbstractVector{Bool})
-    checkbounds(A, I)
-    return [ A[i] for i in to_index(I) ]
-end
-
-function getindex(A::Array, ::Colon)
-    return [ a for a in A ]
-end
-
-# logical indexing
-# (when the indexing is provided as an Array{Bool} or a BitArray we can be
-# sure about the behaviour and use unsafe_getindex; in the general case
-# we can't and must use getindex, otherwise silent corruption can happen)
-
-@generated function getindex_bool_1d(A::Array, I::AbstractArray{Bool})
-    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
-    quote
-        checkbounds(A, I)
-        n = sum(I)
-        out = similar(A, n)
-        c = 1
-        for i = 1:length(I)
-            if $idxop(I, i)
-                @inbounds out[c] = A[i]
-                c += 1
-            end
-        end
-        out
-    end
-end
-
-getindex(A::Vector, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
-getindex(A::Vector, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
-getindex(A::Array, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
-getindex(A::Array, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
-
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
-
 setindex!{T}(A::Array{T}, x, i0::Real) = arrayset(A, convert(T,x), to_index(i0))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, I::Real...) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), to_index(I)...)
 
-function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
+# These are redundant with the abstract fallbacks but needed for bootstrap
+function setindex!(A::Array, x, I::AbstractVector{Int})
+    is(A, I) && (I = copy(I))
     for i in I
         A[i] = x
     end
     return A
 end
-
-function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
-    if length(X) != length(I)
-        throw_setindex_mismatch(X, (I,))
-    end
-    copy!(A, first(I), X, 1, length(I))
-    return A
-end
-
-function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    if length(X) != length(I)
-        throw_setindex_mismatch(X, (I,))
-    end
+function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
+    setindex_shape_check(X, length(I))
     count = 1
     if is(X,A)
         X = copy(X)
@@ -412,49 +348,26 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     return A
 end
 
-setindex!(A::Array, x, I::Colon) = setindex!(A, x, 1:length(A))
-
-# logical indexing
-# (when the indexing is provided as an Array{Bool} or a BitArray we can be
-# sure about the behaviour and use unsafe_getindex; in the general case
-# we can't and must use getindex, otherwise silent corruption can happen)
-
-@generated function assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
-    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
-    quote
-        checkbounds(A, I)
-        for i = 1:length(I)
-            if $idxop(I, i)
-                @inbounds A[i] = x
-            end
-        end
-        A
+# Faster contiguous setindex! with copy!
+setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_setindex!(A, X, I))
+function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+    lI = length(I)
+    setindex_shape_check(X, lI)
+    if lI > 0
+        unsafe_copy!(A, first(I), X, 1, lI)
     end
+    return A
+end
+setindex!{T}(A::Array{T}, X::Array{T}, c::Colon) = unsafe_setindex!(A, X, c)
+function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
+    lI = length(A)
+    setindex_shape_check(X, lI)
+    if lI > 0
+        unsafe_copy!(A, 1, X, 1, lI)
+    end
+    return A
 end
 
-@generated function assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
-    quote
-        checkbounds(A, I)
-        c = 1
-        for i = 1:length(I)
-            if $idxop(I, i)
-                x = X[c]
-                @inbounds A[i] = x
-                c += 1
-            end
-        end
-        if length(X) != c-1
-            throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
-        end
-        A
-    end
-end
-
-setindex!(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d!(A, X, I)
-setindex!(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vector_1d!(A, X, I)
-setindex!(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d!(A, x, I)
-setindex!(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d!(A, x, I)
 
 # efficiently grow an array
 
