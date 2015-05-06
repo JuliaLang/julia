@@ -40,12 +40,14 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
         end
     end
     Git.set_remote_url(url, dir=cache)
-    if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
+    in_cache = Git.iscommit(sha1s, dir=cache)
+    if !all(in_cache)
         info("Updating cache of $pkg...")
         Git.success(`remote update`, dir=cache) ||
         error("couldn't update $cache using `git remote update`")
+        in_cache = Git.iscommit(sha1s, dir=cache)
     end
-    filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
+    sha1s[!in_cache]
 end
 prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) = prefetch(pkg, url, AbstractString[sha1...])
 
