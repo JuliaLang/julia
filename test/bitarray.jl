@@ -1199,3 +1199,39 @@ resize!(a, 5)
 a = trues(5,5)
 flipbits!(a)
 @test a == falses(5,5)
+
+# findmax, findmin
+a = trues(0)
+@test_throws ArgumentError findmax(a)
+@test_throws ArgumentError findmin(a)
+
+a = falses(6)
+@test findmax(a) == (false,1)
+a = trues(6)
+@test findmin(a) == (true,1)
+a = bitpack([1,0,1,1,0])
+@test findmin(a) == (false,2)
+@test findmax(a) == (true,1)
+a = bitpack([0,0,1,1,0])
+@test findmin(a) == (false,1)
+@test findmax(a) == (true,3)
+
+#qr and svd
+
+A = bitrand(10,10)
+uA = bitunpack(A)
+@test svd(A) == svd(uA)
+@test qr(A) == qr(uA)
+
+#diag and diagm
+
+v = bitrand(10)
+uv = bitunpack(v)
+@test bitunpack(diagm(v)) == diagm(uv)
+v = bitrand(10,2)
+uv = bitunpack(v)
+@test_throws DimensionMismatch diagm(v)
+
+B = bitrand(10,10)
+uB = bitunpack(B)
+@test diag(uB) == bitunpack(diag(B))
