@@ -46,10 +46,12 @@ isless(x::Integer, y::Char) = isless(x, UInt32(y))
 -(x::Char   , y::Integer) = reinterpret(Char, Int32(x) - Int32(y))
 
 # bitwise operations
-(~)(x::Char) = Char(~UInt32(x))
-(&)(x::Char, y::Char) = Char(UInt32(x) & UInt32(y))
-(|)(x::Char, y::Char) = Char(UInt32(x) | UInt32(y))
-($)(x::Char, y::Char) = Char(UInt32(x) $ UInt32(y))
+(&)(x::Char, y::Integer) = Char(UInt32(x) & UInt32(y & 0xffffffff))
+(|)(x::Char, y::Integer) = Char(UInt32(x) | UInt32(y & 0xffffffff))
+($)(x::Char, y::Integer) = Char(UInt32(x) $ UInt32(y & 0xffffffff))
+(&)(x::Integer, y::Char) = y & x
+(|)(x::Integer, y::Char) = y | x
+($)(x::Integer, y::Char) = y $ x
 
 bswap(x::Char) = Char(bswap(UInt32(x)))
 
