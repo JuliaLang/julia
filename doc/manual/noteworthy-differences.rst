@@ -284,10 +284,10 @@ Noteworthy differences from C/C++
   ``0x0`` and ``0x00`` have type UInt8, ``0x000`` and ``0x0000`` have type ``UInt16``, then
   literals with 5 to 8 hex digits have type ``UInt32``, 9 to 16 hex digits type ``UInt64``, and more than
   16 hex digits end up a signed ``BigInt`` type.  This needs to be taken into account when defining
-  hexadecimal masks, for example ``~0xf`` is very different from ``~0x000f``.
-  Unlike either decimal integer or hexadecimal literals, floating point literals are always
-  64-bits, ``Float64``, and don't get promoted to the ``BigFloat`` type.  This is closer in
-  behavior to C/C++.
+  hexadecimal masks, for example ``~0xf == 0xf0`` is very different from ``~0x000f == 0xfff0``.
+  64 bit ``Float64`` and 32 bit ``Float32`` bit literals are expressed as ``1.0`` and ``1.0f0`` respectively.
+  Floating point literals are rounded (and not promoted to the ``BigFloat`` type) if they can not be exactly
+  represented.  Floating point literals are closer in behavior to C/C++.
   Octal (prefixed with ``0o``) and binary (prefixed with ``0b``) literals are also treated as unsigned
   (with the same current exception that they become signed ``BigInt`` type if they can't fit in a ``UInt128``).
 - String literals can be delimited with either ``"``  or ``"""``, ``"""`` delimited literals can contain ``"``
@@ -300,13 +300,13 @@ Noteworthy differences from C/C++
   keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
   ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
   to values as one would have to do in C/C++ (i.e. ``a = myfunction(&b)``.
-- Julia discourages the used of semicolons to end statements. The results of
-  statements are not automatically printed (except at the interactive prompt, i.e. the REPL),
+- Julia does not require the use of semicolons to end statements. The results of
+  expressions are not automatically printed (except at the interactive prompt, i.e. the REPL),
   and lines of code do not need to end with semicolons. :func:`println` or
   :func:`@printf` can be used to print specific output.
   In the REPL, ``;`` can be used to suppress output.
   ``;`` also has a different meaning within ``[ ]``, something to watch out for.
-  ``;`` can be used to separate 'statements' on a line, but are not strictly necessary in many cases,
+  ``;`` can be used to separate expressions on a single line, but are not strictly necessary in many cases,
   and are more an aid to readability.
 - In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
   in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
@@ -318,7 +318,7 @@ Noteworthy differences from C/C++
 - Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
 - Julia does not require parentheses when writing ``if`` statements or
   ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
-  ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
+  ``for (int i=1; i <= 3; i++)`` and ``if i == 1`` instead of ``if (i == 1)``.
 - Julia does not treat the numbers ``0`` and ``1`` as Booleans.
   You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
   booleans. Instead, you can write ``if true``, ``if Bool(1)``, or ``if 1==1``.
@@ -333,7 +333,7 @@ Noteworthy differences from C/C++
   far is a complete expression, it is considered done; otherwise the input
   continues. One way to force an expression to continue is to wrap it in
   parentheses.
-- Julia has an incredibly powerful macro facility, and macros are always indicated by the ``@``
+- Julia has a powerful macro facility, and macros are indicated by the ``@``
   character.  Unlike C/C++, macros operate on parsed expressions, not on the text of the program.
   There are two forms for using a macro, ``@mymacro(arg1, arg2, arg3)`` or ``@mymacro arg1 arg2 arg3``
   The first form is useful if you need to have a macro call that spreads multiple lines (``@enum`` is a good

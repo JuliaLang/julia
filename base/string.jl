@@ -969,7 +969,7 @@ byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 2: valid UTF-8
 
 is_valid_ascii(s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) == 1
-is_valid_utf8 (s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) != 0
+is_valid_utf8(s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 
