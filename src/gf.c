@@ -1383,6 +1383,15 @@ static void remove_conflicting(jl_methlist_t **pl, jl_value_t *type)
     }
 }
 
+static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
+{
+    size_t na = jl_nparams(type);
+    if (jl_is_va_tuple(type))
+        na--;
+    if (na > mt->max_args)
+        mt->max_args = na;
+}
+
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_function_t *method, jl_svec_t *tvars,
                                       int8_t isstaged)
@@ -1412,12 +1421,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
             }
         }
     }
-    // update max_args
-    size_t na = jl_nparams(type);
-    if (jl_is_va_tuple(type))
-        na--;
-    if (na > mt->max_args)
-        mt->max_args = na;
+    update_max_args(mt, type);
     JL_SIGATOMIC_END();
     return ml;
 }
@@ -1825,15 +1829,14 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
         jl_tupletype_t *newsig=NULL;
         jl_tupletype_t *tt=NULL;
         JL_GC_PUSH3(&tpenv, &newsig, &tt);
-
+        tt = arg_type_tuple(args, nargs);
         if (m->invokes == (void*)jl_nothing) {
             m->invokes = new_method_table(mt->name);
             gc_wb(m, m->invokes);
+            update_max_args(m->invokes, tt);
             // this private method table has just this one definition
             jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0,(jl_value_t*)m->invokes);
         }
-
-        tt = arg_type_tuple(args, nargs);
 
         newsig = m->sig;
 
