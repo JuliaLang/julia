@@ -254,18 +254,18 @@ function update(branch::AbstractString)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    @sync for pkg in filter!(Read.isinstalled,collect(keys(avail)))
-        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    for pkg in filter!(Read.isinstalled,collect(keys(avail)))
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
     free = Read.free(instd)
-    @sync for (pkg,ver) in free
-        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    for (pkg,ver) in free
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
-    @sync for (pkg,ver) in fixed
+    for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        @async begin
+        begin
             if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
                 info("Updating $pkg...")
                 @recover begin
