@@ -196,9 +196,9 @@ if !Base._oldstyle_array_vcat_
     @test_throws MethodError UInt8[1:3]
     @test_throws MethodError UInt8[1:3,]
     @test_throws MethodError UInt8[1:3,4:6]
-    a = Array(Range1{Int},1); a[1] = 1:3
+    a = Array(UnitRange{Int},1); a[1] = 1:3
     @test _array_equiv([1:3,], a)
-    a = Array(Range1{Int},2); a[1] = 1:3; a[2] = 4:6
+    a = Array(UnitRange{Int},2); a[1] = 1:3; a[2] = 4:6
     @test _array_equiv([1:3,4:6], a)
 end
 
