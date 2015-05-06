@@ -734,10 +734,18 @@ cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
 cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 
+vcat(A::AbstractArray) = cat(1, A)
+vcat(A::AbstractArray, B::AbstractArray) = cat(1, A, B)
 vcat(A::AbstractArray...) = cat(1, A...)
+hcat(A::AbstractArray) = cat(2, A)
+hcat(A::AbstractArray, B::AbstractArray) = cat(2, A, B)
 hcat(A::AbstractArray...) = cat(2, A...)
 
+typed_vcat(T::Type, A::AbstractArray) = cat_t(1, T, A)
+typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(1, T, A, B)
 typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
+typed_hcat(T::Type, A::AbstractArray) = cat_t(2, T, A)
+typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(2, T, A, B)
 typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
 
 # 2d horizontal and vertical concatenation

@@ -35,6 +35,7 @@ call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 
+call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
 convert{T}(::Type{T}, x::T) = x
