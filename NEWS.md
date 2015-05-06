@@ -192,11 +192,22 @@ Library improvements
 
     * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints. ([#11171])
 
-  * Data-structure processing
+  * Array and AbstractArray improvements
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end`.  ([#8432])
 
     * New implementation of SubArrays with substantial performance and functionality improvements ([#8501]).
+
+    * AbstractArray subtypes only need to implement `size` and `getindex`
+      for scalar indices to support indexing; all other indexing behaviors
+      (including logical idexing, ranges of indices, vectors, colons, etc.) are
+      implemented in default fallbacks. Similarly, they only need to implement
+      scalar `setindex!` to support all forms of indexed assingment ([#10525]).
+
+    * AbstractArrays that do not extend `similar` now return an `Array` by
+      default ([#10525]).
+
+  * Data-structure processing
 
     * New `sortperm!` function for pre-allocated index arrays ([#8792]).
 
@@ -1417,6 +1428,7 @@ Too numerous to mention.
 [#10400]: https://github.com/JuliaLang/julia/issues/10400
 [#10446]: https://github.com/JuliaLang/julia/issues/10446
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
+[#10525]: https://github.com/JuliaLang/julia/issues/10525
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10679]: https://github.com/JuliaLang/julia/issues/10679
