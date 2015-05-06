@@ -10,8 +10,8 @@ srand(0); rand(); x = rand(384);
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
-@test(typeof(rand(false:true)) == Bool)
-
+@test(typeof(rand(false:true)) === Bool)
+@test(typeof(rand(Char)) === Char)
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
@@ -292,7 +292,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
-    for T in [Base.IntTypes..., Bool, Float16, Float32, Float64]
+    for T in [Base.IntTypes..., Bool, Char, Float16, Float32, Float64]
         a0 = rand(rng..., T)       ::T
         a1 = rand(rng..., T, 5)    ::Vector{T}
         a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
