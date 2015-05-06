@@ -122,6 +122,25 @@ ind = findin(a, b)
 rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
+# construction
+@test typeof(Vector{Int}(3)) == Vector{Int}
+@test typeof(Vector{Int}()) == Vector{Int}
+@test typeof(Vector(3)) == Vector{Any}
+@test typeof(Vector()) == Vector{Any}
+@test typeof(Matrix{Int}(2,3)) == Matrix{Int}
+@test typeof(Matrix{Int}()) == Matrix{Int}
+@test typeof(Matrix(2,3)) == Matrix{Any}
+@test typeof(Matrix()) == Matrix{Any}
+
+@test size(Vector{Int}(3)) == (3,)
+@test size(Vector{Int}()) == (0,)
+@test size(Vector(3)) == (3,)
+@test size(Vector()) == (0,)
+@test size(Matrix{Int}(2,3)) == (2,3)
+@test size(Matrix{Int}()) == (0,0)
+@test size(Matrix(2,3)) == (2,3)
+@test size(Matrix()) == (0,0)
+
 # get
 let
     A = reshape(1:24, 3, 8)
