@@ -32,6 +32,9 @@ New language features
 Language changes
 ----------------
 
+  * Unsigned `BigInt` literal syntax has been removed ([#11105]).
+    Unsigned literals larger than `UInt128` now throw a syntax error.
+
   * Tuple types are now written as `Tuple{A, B}` instead of as `(A, B)`.
     Tuples of bits types are inlined into structs and arrays, like other
     immutable types.
