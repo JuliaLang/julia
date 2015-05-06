@@ -15,11 +15,7 @@ ifeq ($(JULIA_BINARYDIST_TARNAME),)
 	JULIA_BINARYDIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
 endif
 
-ifeq ($(JULIA_DEBUG), 1)
-default: debug
-else
-default: release
-endif
+default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
@@ -481,17 +477,17 @@ distcleanall: cleanall
 	install binary-dist light-source-dist.tmp light-source-dist \
 	dist full-source-dist source-dist
 
-test: check-whitespace release
+test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C test default
 
-testall: check-whitespace release
+testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(build_prefix)/lib/julia/sys.ji local.ji && $(JULIA_EXECUTABLE) -J local.ji -e 'true' && rm local.ji
 	@$(MAKE) $(QUIET_MAKE) -C test all
 
-testall1: check-whitespace release
+testall1: check-whitespace $(JULIA_BUILD_MODE)
 	@env JULIA_CPU_CORES=1 $(MAKE) $(QUIET_MAKE) -C test all
 
-test-%: check-whitespace release
+test-%: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 perf: release
