@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
+import Base.LinAlg: BlasReal, BlasFloat
 
 debug = false
 n = 10 #Size of test matrix
@@ -12,12 +13,16 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dv = convert(Vector{elty}, randn(n))
     ev = convert(Vector{elty}, randn(n-1))
     b = convert(Matrix{elty}, randn(n, 2))
+    c = convert(Matrix{elty}, randn(n, n))
     if (elty <: Complex)
         dv += im*convert(Vector{elty}, randn(n))
         ev += im*convert(Vector{elty}, randn(n-1))
         b += im*convert(Matrix{elty}, randn(n, 2))
     end
 
+    debug && println("Test constructors")
+    @test Bidiagonal(dv,ev,'U') == Bidiagonal(dv,ev,true)
+    @test_throws ArgumentError Bidiagonal(dv,ev,'R')
     debug && println("Test upper and lower bidiagonal matrices")
     for isupper in (true, false)
         debug && println("isupper is: $(isupper)")
@@ -40,6 +45,32 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         x = T \ b
         tx = Tfull \ b
         @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+        @test_throws DimensionMismatch T \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+        if relty != BigFloat
+            x = T.'\c.'
+            tx = Tfull.' \ c.'
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test_throws DimensionMismatch T.'\b.'
+            x = T'\c.'
+            tx = Tfull' \ c.'
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test_throws DimensionMismatch T'\b.'
+            x = T\c.'
+            tx = Tfull\c.'
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test_throws DimensionMismatch T\b.'
+        end
+
+        debug && println("Generic Mat-vec ops")
+        @test_approx_eq T*dv Tfull*dv
+        @test_approx_eq T'*dv Tfull'*dv
+        @test_approx_eq T/dv' Tfull/dv'
+
+        debug && println("Diagonals")
+        @test diag(T,2) == zeros(elty, n-2)
+        @test_throws BoundsError diag(T,n+1)
 
         debug && println("Eigensystems")
         d1, v1 = eig(T)
@@ -50,7 +81,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Singular systems")
-        if (elty <: Base.LinAlg.BlasReal)
+        if (elty <: BlasReal)
+            @test_approx_eq full(svdfact!(copy(T))) full(svdfact!(copy(Tfull)))
             @test_approx_eq svdvals(Tfull) svdvals(T)
             u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
@@ -76,7 +108,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Inverse")
-        @test_approx_eq inv(T)*Tfull eye(n)
+        @test_approx_eq inv(T)*Tfull eye(elty,n)
     end
 end
 
