@@ -247,24 +247,6 @@ size_t u8_charnum(const char *s, size_t offset)
     return charnum;
 }
 
-/* number of characters in NUL-terminated string */
-size_t u8_strlen(const char *s)
-{
-    size_t count = 0;
-    size_t i = 0, lasti;
-
-    while (1) {
-        lasti = i;
-        while (s[i] > 0)
-            i++;
-        count += (i-lasti);
-        if (s[i++]==0) break;
-        (void)(isutf(s[++i]) || isutf(s[++i]) || ++i);
-        count++;
-    }
-    return count;
-}
-
 size_t u8_strwidth(const char *s)
 {
     uint32_t ch;
