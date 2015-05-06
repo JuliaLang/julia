@@ -257,7 +257,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
             gf = eval((jl_value_t*)fname, locals, nl);
             assert(jl_is_function(gf));
-            assert(jl_is_gf(gf));
+            if (!jl_is_gf(gf)) jl_error("cannot redefine non-generic function");
             if (jl_is_expr(fname))
                 fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
             if (!kw)
