@@ -115,7 +115,18 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
         FS.sendfile(src, dst)
     end
 end
-mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
+
+function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
+    if ispath(dst)
+        if remove_destination
+            rm(dst; recursive=true)
+        else
+            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+                                       "is required to remove '$dst' before moving.")))
+        end
+    end
+    FS.rename(src, dst)
+end
 
 function touch(path::AbstractString)
     f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
