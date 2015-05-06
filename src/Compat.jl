@@ -273,7 +273,15 @@ function _compat(ex::Expr)
     elseif ex.head == :curly
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+4319" && f == :Tuple
-            ex = Expr(:tuple, ex.args[2:end]...)
+            args = ex.args[2:end]
+            has_ellipsis = any(args) do arg
+                isa(arg, Expr) && (arg.head == :...)
+            end
+            ex = if has_ellipsis
+                Expr(:call, TopNode(:tuple), args...)
+            else
+                Expr(:tuple, args...)
+            end
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
