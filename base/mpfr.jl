@@ -80,7 +80,7 @@ end
 function BigFloat(x::AbstractString, base::Int)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    err == 0 || throw("incorrectly formatted number \"$x\"")
+    err == 0 || error("incorrectly formatted number \"$x\"")
     return z
 end
 BigFloat(x::AbstractString) = BigFloat(x, 10)
