@@ -3291,4 +3291,4 @@ end
 
 #tfunc(f,t) = methods(f,t)[1].func.code.tfunc
 
-ccall(:jl_enable_inference, Void, ())
+ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
