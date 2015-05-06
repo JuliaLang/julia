@@ -19,37 +19,37 @@ function umferror(status::Integer)
      if status==UMFPACK_OK
          return
      elseif status==UMFPACK_WARNING_singular_matrix
-         throw(MatrixIllConditionedException("Singular matrix"))
+         throw(MatrixIllConditionedException("singular matrix"))
      elseif status==UMFPACK_WARNING_determinant_underflow
-         throw(MatrixIllConditionedException("The determinant is nonzero but underflowed"))
+         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
      elseif status==UMFPACK_WARNING_determinant_overflow
-         throw(MatrixIllConditionedException("The determinant overflowed"))
+         throw(MatrixIllConditionedException("the determinant overflowed"))
      elseif status==UMFPACK_ERROR_out_of_memory
          throw(OutOfMemoryError())
      elseif status==UMFPACK_ERROR_invalid_Numeric_object
-         throw(ArgumentError("Invalid UMFPack numeric object"))
+         throw(ArgumentError("invalid UMFPack numeric object"))
      elseif status==UMFPACK_ERROR_invalid_Symbolic_object
-         throw(ArgumentError("Invalid UMFPack symbolic object"))
+         throw(ArgumentError("invalid UMFPack symbolic object"))
      elseif status==UMFPACK_ERROR_argument_missing
-         throw(ArgumentError("A required argument to UMFPack is missing"))
+         throw(ArgumentError("a required argument to UMFPack is missing"))
      elseif status==UMFPACK_ERROR_n_nonpositive
-         throw(BoundsError("The number of rows or columns of the matrix must be greater than zero"))
+         throw(BoundsError("the number of rows or columns of the matrix must be greater than zero"))
      elseif status==UMFPACK_ERROR_invalid_matrix
-         throw(ArgumentError("Invalid matrix"))
+         throw(ArgumentError("invalid matrix"))
      elseif status==UMFPACK_ERROR_different_pattern
-         throw(ArgumentError("Pattern of the matrix changed"))
+         throw(ArgumentError("pattern of the matrix changed"))
      elseif status==UMFPACK_ERROR_invalid_system
-         throw(ArgumentError("Invalid sys argument provided to UMFPack solver"))
+         throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
      elseif status==UMFPACK_ERROR_invalid_permutation
-         throw(ArgumentError("Invalid permutation"))
+         throw(ArgumentError("invalid permutation"))
      elseif status==UMFPACK_ERROR_file_IO
-         throw(IOError())
+         throw(ErrorException("error saving / loading UMFPack decomposition"))
      elseif status==UMFPACK_ERROR_ordering_failed
-         error("The ordering method failed")
+         throw(ErrorException("the ordering method failed"))
      elseif status==UMFPACK_ERROR_internal_error
-         error("An internal error has occurred, of unknown cause")
+         throw(ErrorException("an internal error has occurred, of unknown cause"))
      else
-         error("Unknown error code: $status")
+         throw(ErrorException("unknown UMFPack error code: $status"))
      end
 end
 
