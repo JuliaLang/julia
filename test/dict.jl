@@ -313,3 +313,15 @@ let
     @test d['f'] == 6
     @test length(d) == 6
 end
+
+# issue #10647
+let
+    a = ObjectIdDict()
+    a[1] = a
+    a[a] = 2
+    type T10647{T}; x::T; end
+    a[3] = T10647(a)
+    show(IOBuffer(), a)
+    Base.showdict(IOBuffer(), a)
+    Base.showdict(IOBuffer(), a; limit=true)
+end
