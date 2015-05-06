@@ -333,13 +333,15 @@ Noteworthy differences from C/C++
   far is a complete expression, it is considered done; otherwise the input
   continues. One way to force an expression to continue is to wrap it in
   parentheses.
-- Julia has a powerful macro facility, and macros are indicated by the ``@``
-  character.  Unlike C/C++, macros operate on parsed expressions, not on the text of the program.
-  There are two forms for using a macro, ``@mymacro(arg1, arg2, arg3)`` or ``@mymacro arg1 arg2 arg3``
-  The first form is useful if you need to have a macro call that spreads multiple lines (``@enum`` is a good
-  case), and the second form allows handling calls like: ``@parallel for i=1:1000``.
-  Note: the second form can continue onto multiple lines, if the last expression on a line goes over to another line...
-  This can be a bit tricky to determine sometimes just where the macro ends.
+- Julia macros operate on parsed expressions, rather than the text of the program,
+  which allows them to perform sophisticated transformations of Julia code. Macro
+  names start with the ``@`` character, and have both a function-like syntax,
+  ``@mymacro(arg1, arg2, arg3)``, and a statement-like syntax,
+  ``@mymacro arg1 arg2 arg3``. The forms are interchangable; the function-like form
+  is particularly useful if the macro appears within another expression, and is often clearest.
+  The statement-like form is often used to annotate blocks, as in the parallel ``for``
+  construct: ``@parallel for i in 1:n; #= body =#; end``. Where the end of the macro
+  construct may be unclear, use the function-like form.
 - Julia now has an enumeration type, expressed using the macro ``@enum(name, value1, value2, ...)``
   For example: ``@enum(Fruit, Banana=1, Apple, Pear)``
 - By convention, functions that modify their arguments have a ``!`` at the end of the name,
