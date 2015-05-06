@@ -16,7 +16,14 @@ typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union(Den
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
+call{T}(::Type{Vector{T}}) = Array{T}(0)
+call(::Type{Vector}, m::Integer) = Array{Any}(m)
+call(::Type{Vector}) = Array{Any}(0)
+
 call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
+call{T}(::Type{Matrix{T}}) = Array{T}(0, 0)
+call(::Type{Matrix}, m::Integer, n::Integer) = Array{Any}(m, n)
+call(::Type{Matrix}) = Array{Any}(0, 0)
 
 ## Basic functions ##
 
