@@ -1066,10 +1066,13 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt,
             func = m->func;
             if (m->isstaged)
                 func = jl_instantiate_staged(m,tt,env);
-            JL_GC_POP();
-            if (!cache)
+            if (!cache) {
+                JL_GC_POP();
                 return func;
-            return cache_method(mt, tt, func, m->sig, jl_emptysvec, m->isstaged);
+            }
+            jl_function_t *res = cache_method(mt, tt, func, m->sig, jl_emptysvec, m->isstaged);
+            JL_GC_POP();
+            return res;
         }
         JL_GC_POP();
         return jl_bottom_func;
