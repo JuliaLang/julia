@@ -1246,10 +1246,11 @@ DLLEXPORT void julia_save()
 
 jl_function_t *jl_typeinf_func=NULL;
 
-DLLEXPORT void jl_enable_inference(void)
+DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
 {
-    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                    jl_symbol("typeinf_ext"));
+    if (!jl_is_function(f))
+        jl_error("jl_set_typeinf_func must set a jl_function_t*");
+    jl_typeinf_func = (jl_function_t*)f;
 }
 
 static jl_value_t *core(char *name)
