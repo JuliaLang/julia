@@ -16,6 +16,16 @@ end
 s = "ccall(:f,Int,(Ptr{Void},),&x)"
 @test replstr(parse(s)) == ":($s)"
 
+# recursive array printing
+# issue #10353
+let
+    a = Any[]
+    push!(a,a)
+    show(IOBuffer(), a)
+    push!(a,a)
+    show(IOBuffer(), a)
+end
+
 # expression printing
 
 macro test_repr(x)

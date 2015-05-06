@@ -155,7 +155,13 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 x = itr[i]
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 newline && multiline && println(io)
-                compact ? showcompact_lim(io, x) : show(io, x)
+                if is(x, itr)
+                    print(io, "#= circular reference =#")
+                elseif compact
+                    showcompact_lim(io, x)
+                else
+                    show(io, x)
+                end
             end
             i += 1
             if i > i1+l-1
@@ -189,7 +195,11 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, 
             x, state = next(itr,state)
             multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
             newline && multiline && println(io)
-            show(io, x)
+            if is(x, itr)
+                print(io, "#= circular reference =#")
+            else
+                show(io, x)
+            end
             i1 += 1
             if done(itr,state) || i1 > n
                 delim_one && first && print(io, delim)
