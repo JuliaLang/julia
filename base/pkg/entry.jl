@@ -3,7 +3,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..LibGit, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
+import ..LibGit2, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
 using ..Types
 
 macro recover(ex)
@@ -107,9 +107,9 @@ end
 function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
-        prepo = LibGit.repo(pkg)
+        prepo = LibGit2.GitRepo(pkg)
         res = Read.installed_version(pkg, prepo, avail)
-        LibGit.close(prepo)
+        LibGit2.free!(prepo)
         return res
     end
     isempty(avail) && error("$pkg is not a package (not registered or installed)")
@@ -148,11 +148,18 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     fix || return println(io,ver)
     @printf io "%-19s" ver
     if ispath(pkg,".git")
-        print(io, Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
+        prepo = LibGit2.GitRepo(pkg)
+        phead = LibGit2.head(prepo)
+        if LibGit2.isattached(prepo)
+            print(io, LibGit2.ref_name(phead))
+        else
+            print(io, LibGit2.ref_id(phead)[1:8])
+        end
         attrs = AbstractString[]
         isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
-        Git.dirty(dir=pkg) && push!(attrs,"dirty")
+        LibGit2.isdirty(prepo) && push!(attrs,"dirty")
         isempty(attrs) || print(io, " (",join(attrs,", "),")")
+        LibGit2.free!(prepo)
     else
         print(io, "non-repo (unregistered)")
     end
