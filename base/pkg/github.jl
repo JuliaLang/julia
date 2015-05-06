@@ -2,7 +2,7 @@
 
 module GitHub
 
-import Main, ..Git, ..Dir
+import Main, ..LibGit2, ..Dir
 
 const AUTH_NOTE = "Julia Package Manager"
 const AUTH_DATA = Dict{Any,Any}(
@@ -12,7 +12,8 @@ const AUTH_DATA = Dict{Any,Any}(
 )
 
 function user()
-    if !success(`git config --global github.user`)
+    usr = LibGit2.lookup(String, LibGit2.GitConfig(), "github.user")
+    if usr == nothing
         error("""
         no GitHub user name configured; please configure it with:
 
@@ -21,7 +22,7 @@ function user()
         where USERNAME is replaced with your GitHub user name.
         """)
     end
-    readchomp(`git config --global github.user`)
+    return usr
 end
 
 function json()

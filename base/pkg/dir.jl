@@ -3,7 +3,7 @@
 module Dir
 
 import ..Pkg: DEFAULT_META, META_BRANCH
-import ..Git
+import ..LibGit2
 
 const DIR_NAME = ".julia"
 
@@ -32,15 +32,12 @@ function cd(f::Function, args...; kws...)
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
-    if Git.version() < v"1.7.3"
-        warn("Pkg only works with git versions greater than v1.7.3")
-    end
     dir = path()
     info("Initializing package repository $dir")
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        Git.set_remote_url(meta, dir=metadata_dir)
+        LibGit2.set_remote_url(metadata_dir, meta)
         return
     end
     local temp_dir
@@ -49,8 +46,8 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         temp_dir = mktempdir(dir)
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b $branch $meta METADATA`)
-            Git.set_remote_url(meta, dir="METADATA")
+            run(`git clone -q -b $branch $meta METADATA`) #TODO: LibGit2.clone
+            LibGit2.set_remote_url("METADATA", meta)
             touch("REQUIRE")
             touch("META_BRANCH")
             open("META_BRANCH", "w") do io
