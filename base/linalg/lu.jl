@@ -253,7 +253,7 @@ end
 
 function At_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimentionsMismatch(""))
+    n == size(B,1) || throw(DimensionMismatch(""))
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
@@ -286,7 +286,7 @@ end
 # Ac_ldiv_B!{T<:Real}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) = At_ldiv_B!(A,B)
 function Ac_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimentionsMismatch(""))
+    n == size(B,1) || throw(DimensionMismatch(""))
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
