@@ -18,27 +18,7 @@ function summary(t::Associative)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-function show{K,V}(io::IO, t::Associative{K,V})
-    if isempty(t)
-        print(io, typeof(t), "()")
-    else
-        if isleaftype(K) && isleaftype(V)
-            print(io, typeof(t).name)
-        else
-            print(io, typeof(t))
-        end
-        print(io, '(')
-        first = true
-        for (k, v) in t
-            first || print(io, ',')
-            first = false
-            show(io, k)
-            print(io, "=>")
-            show(io, v)
-        end
-        print(io, ')')
-    end
-end
+show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t; compact = true)
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     truncwidth = strwidth(truncmark)
@@ -64,48 +44,87 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
 end
 
 showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
-function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
+function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false, compact = false,
                        sz=(s = tty_size(); (s[1]-3, s[2])))
-    rows, cols = sz
-    print(io, summary(t))
-    isempty(t) && return
-    print(io, ":")
-
-    if limit
-        rows < 2   && (print(io, " …"); return)
-        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
-        cols -= 6 # Subtract the widths of prefix "  " separator " => "
-        rows -= 2 # Subtract the summary and final ⋮ continuation lines
-
-        # determine max key width to align the output, caching the strings
-        ks = Array(AbstractString, min(rows, length(t)))
-        keylen = 0
-        for (i, k) in enumerate(keys(t))
-            i > rows && break
-            ks[i] = sprint(show, k)
-            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
-        end
+    shown_set = get(task_local_storage(), :SHOWNSET, nothing)
+    if shown_set == nothing
+        shown_set = ObjectIdDict()
+        task_local_storage(:SHOWNSET, shown_set)
     end
+    t in keys(shown_set) && (print(io, "#= circular reference =#"); return)
 
-    for (i, (k, v)) in enumerate(t)
-        print(io, "\n  ")
-        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
-
-        if limit
-            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
-        else
-            key = sprint(show, k)
+    try
+        shown_set[t] = true
+        if compact
+            # show in a Julia-syntax-like form: Dict(k=>v, ...)
+            if isempty(t)
+                print(io, typeof(t), "()")
+            else
+                if isleaftype(K) && isleaftype(V)
+                    print(io, typeof(t).name)
+                else
+                    print(io, typeof(t))
+                end
+                print(io, '(')
+                first = true
+                n = 0
+                for (k, v) in t
+                    first || print(io, ',')
+                    first = false
+                    show(io, k)
+                    print(io, "=>")
+                    show(io, v)
+                    n+=1
+                    limit && n >= 10 && (print(io, "…"); break)
+                end
+                print(io, ')')
+            end
+            return
         end
-        print(io, key)
-        print(io, " => ")
 
+        # Otherwise show more descriptively, with one line per key/value pair
+        rows, cols = sz
+        print(io, summary(t))
+        isempty(t) && return
+        print(io, ":")
         if limit
-            val = with_output_limit(()->sprint(show, v))
-            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
-            print(io, val)
-        else
-            show(io, v)
+            rows < 2   && (print(io, " …"); return)
+            cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+            cols -= 6 # Subtract the widths of prefix "  " separator " => "
+            rows -= 2 # Subtract the summary and final ⋮ continuation lines
+
+            # determine max key width to align the output, caching the strings
+            ks = Array(AbstractString, min(rows, length(t)))
+            keylen = 0
+            for (i, k) in enumerate(keys(t))
+                i > rows && break
+                ks[i] = sprint(show, k)
+                keylen = clamp(length(ks[i]), keylen, div(cols, 3))
+            end
         end
+
+        for (i, (k, v)) in enumerate(t)
+            print(io, "\n  ")
+            limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
+            if limit
+                key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+            else
+                key = sprint(show, k)
+            end
+            print(io, key)
+            print(io, " => ")
+
+            if limit
+                val = with_output_limit(()->sprint(show, v))
+                val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+                print(io, val)
+            else
+                show(io, v)
+            end
+        end
+    finally
+        delete!(shown_set, t)
     end
 end
 
