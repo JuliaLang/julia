@@ -12,7 +12,7 @@ const AUTH_DATA = Dict{Any,Any}(
 )
 
 function user()
-    usr = LibGit2.lookup(String, LibGit2.GitConfig(), "github.user")
+    usr = LibGit2.lookup(AbstractString, LibGit2.GitConfig(), "github.user")
     if usr == nothing
         error("""
         no GitHub user name configured; please configure it with:
