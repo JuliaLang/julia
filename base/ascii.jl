@@ -98,6 +98,7 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
+convert(::Type{ASCIIString}, b::ByteVec) = ASCIIString(b)
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
     is_valid_ascii(a) || throw(ArgumentError("invalid ASCII sequence"))
