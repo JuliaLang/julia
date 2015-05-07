@@ -24,8 +24,6 @@ function lock(rl::ReentrantLock)
     end
 end
 
-unlock(o::Any) = unlock(o.lock)
-
 function unlock(rl::ReentrantLock)
     rl.reentrancy_cnt = rl.reentrancy_cnt - 1
     if rl.reentrancy_cnt < 0
