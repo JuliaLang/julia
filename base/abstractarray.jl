@@ -734,6 +734,8 @@ cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
 cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 
+# The specializations for 1 and 2 inputs are important
+# especially when running with --inline=no, see #11158
 vcat(A::AbstractArray) = cat(1, A)
 vcat(A::AbstractArray, B::AbstractArray) = cat(1, A, B)
 vcat(A::AbstractArray...) = cat(1, A...)
