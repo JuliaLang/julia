@@ -22,77 +22,77 @@ getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
 search(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
 rsearch(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? rsearch(s.data,c%UInt8,i) : 0
 
-function string(c::ASCIIString...)
-    if length(c) == 1
-        return c[1]
-    end
-    n = 0
-    for s in c
-        n += length(s.data)
-    end
-    v = Array(UInt8,n)
-    o = 1
-    for s in c
-        ls = length(s.data)
-        unsafe_copy!(v, o, s.data, 1, ls)
-        o += ls
-    end
-    ASCIIString(v)
-end
+# function string(c::ASCIIString...)
+#     if length(c) == 1
+#         return c[1]
+#     end
+#     n = 0
+#     for s in c
+#         n += length(s.data)
+#     end
+#     v = Array(UInt8,n)
+#     o = 1
+#     for s in c
+#         ls = length(s.data)
+#         unsafe_copy!(v, o, s.data, 1, ls)
+#         o += ls
+#     end
+#     ASCIIString(v)
+# end
 
-function ucfirst(s::ASCIIString)
-    if length(s) > 0 && 'a' <= s[1] <= 'z'
-        t = ASCIIString(copy(s.data))
-        t.data[1] -= 32
-        return t
-    end
-    return s
-end
-function lcfirst(s::ASCIIString)
-    if length(s) > 0 && 'A' <= s[1] <= 'Z'
-        t = ASCIIString(copy(s.data))
-        t.data[1] += 32
-        return t
-    end
-    return s
-end
+# function ucfirst(s::ASCIIString)
+#     if length(s) > 0 && 'a' <= s[1] <= 'z'
+#         t = ASCIIString(copy(s.data))
+#         t.data[1] -= 32
+#         return t
+#     end
+#     return s
+# end
+# function lcfirst(s::ASCIIString)
+#     if length(s) > 0 && 'A' <= s[1] <= 'Z'
+#         t = ASCIIString(copy(s.data))
+#         t.data[1] += 32
+#         return t
+#     end
+#     return s
+# end
 
-function uppercase(s::ASCIIString)
-    d = s.data
-    for i = 1:length(d)
-        if 'a' <= Char(d[i]) <= 'z'
-            td = copy(d)
-            for j = i:length(td)
-                if 'a' <= Char(td[j]) <= 'z'
-                    td[j] -= 32
-                end
-            end
-            return ASCIIString(td)
-        end
-    end
-    return s
-end
-function lowercase(s::ASCIIString)
-    d = s.data
-    for i = 1:length(d)
-        if 'A' <= Char(d[i]) <= 'Z'
-            td = copy(d)
-            for j = i:length(td)
-                if 'A' <= Char(td[j]) <= 'Z'
-                    td[j] += 32
-                end
-            end
-            return ASCIIString(td)
-        end
-    end
-    return s
-end
+# function uppercase(s::ASCIIString)
+#     d = s.data
+#     for i = 1:length(d)
+#         if 'a' <= Char(d[i]) <= 'z'
+#             td = copy(d)
+#             for j = i:length(td)
+#                 if 'a' <= Char(td[j]) <= 'z'
+#                     td[j] -= 32
+#                 end
+#             end
+#             return ASCIIString(td)
+#         end
+#     end
+#     return s
+# end
+# function lowercase(s::ASCIIString)
+#     d = s.data
+#     for i = 1:length(d)
+#         if 'A' <= Char(d[i]) <= 'Z'
+#             td = copy(d)
+#             for j = i:length(td)
+#                 if 'A' <= Char(td[j]) <= 'Z'
+#                     td[j] += 32
+#                 end
+#             end
+#             return ASCIIString(td)
+#         end
+#     end
+#     return s
+# end
 
-reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
+# reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
 
-## outputing ASCII strings ##
+# ## outputing ASCII strings ##
 
-write(io::IO, s::ASCIIString) = write(io, s.data)
+# write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
 

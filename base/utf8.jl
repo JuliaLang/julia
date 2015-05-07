@@ -143,47 +143,47 @@ function rsearch(s::UTF8String, c::Char, i::Integer)
     end
 end
 
-function string(a::ByteString...)
-    if length(a) == 1
-        return a[1]::UTF8String
-    end
-    # ^^ at least one must be UTF-8 or the ASCII-only method would get called
-    data = Array(UInt8,0)
-    for d in a
-        append!(data,d.data)
-    end
-    UTF8String(data)
-end
+# function string(a::ByteString...)
+#     if length(a) == 1
+#         return a[1]::UTF8String
+#     end
+#     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
+#     data = Array(UInt8,0)
+#     for d in a
+#         append!(data,d.data)
+#     end
+#     UTF8String(data)
+# end
 
-function string(a::Union(ByteString,Char)...)
-    s = Array(UInt8,0)
-    for d in a
-        if isa(d,Char)
-            c = reinterpret(UInt32, d::Char)
-            if c < 0x80
-                push!(s, c%UInt8)
-            elseif c < 0x800
-                push!(s, (( c >> 6          ) | 0xC0)%UInt8)
-                push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
-            elseif c < 0x10000
-                push!(s, (( c >> 12         ) | 0xE0)%UInt8)
-                push!(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-                push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
-            elseif c < 0x110000
-                push!(s, (( c >> 18         ) | 0xF0)%UInt8)
-                push!(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
-                push!(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-                push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
-            else
-                # '\ufffd'
-                push!(s, 0xef); push!(s, 0xbf); push!(s, 0xbd)
-            end
-        else
-            append!(s,d.data)
-        end
-    end
-    UTF8String(s)
-end
+# function string(a::Union(ByteString,Char)...)
+#     s = Array(UInt8,0)
+#     for d in a
+#         if isa(d,Char)
+#             c = reinterpret(UInt32, d::Char)
+#             if c < 0x80
+#                 push!(s, c%UInt8)
+#             elseif c < 0x800
+#                 push!(s, (( c >> 6          ) | 0xC0)%UInt8)
+#                 push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
+#             elseif c < 0x10000
+#                 push!(s, (( c >> 12         ) | 0xE0)%UInt8)
+#                 push!(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+#                 push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
+#             elseif c < 0x110000
+#                 push!(s, (( c >> 18         ) | 0xF0)%UInt8)
+#                 push!(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
+#                 push!(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+#                 push!(s, (( c        & 0x3F ) | 0x80)%UInt8)
+#             else
+#                 # '\ufffd'
+#                 push!(s, 0xef); push!(s, 0xbf); push!(s, 0xbd)
+#             end
+#         else
+#             append!(s,d.data)
+#         end
+#     end
+#     UTF8String(s)
+# end
 
 function reverse(s::UTF8String)
     out = similar(s.data)
