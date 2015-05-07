@@ -12,7 +12,7 @@ Types and sets (and ``Any`` and ``Union()``/``Bottom``)
 -------------------------------------------------------
 
 It's perhaps easiest to conceive of Julia's type system in terms of
-sets.  A concerete type corresponds to a single entity in the space of
+sets.  A concrete type corresponds to a single entity in the space of
 all possible types; an abstract type refers to a collection (set) of
 concrete types.  ``Any`` is a type that describes the entire universe
 of possible types; ``Integer`` is a subset of ``Any`` that includes
@@ -22,17 +22,24 @@ makes heavy use of another type known as ``Bottom``, or equivalently,
 
 Julia's types support the standard operations of set theory: you can
 ask whether ``T1`` is a "subset" (subtype) of ``T2`` with ``T1 <:
-T2``.  Likewise, you intersect two types using ``typeintersect`` and
-take their union with ``typejoin``::
+T2``.  Likewise, you intersect two types using ``typeintersect``, take
+their union with ``Union``, and compute a type that contains their
+union with ``typejoin``::
 
-    julia> typeintersect(Int,Float64)
+    julia> typeintersect(Int, Float64)
     Union()
 
-    julia> typejoin(Int,Float64)
+    julia> Union(Int, Float64)
+    Union(Int64,Float64)
+
+    julia> typejoin(Int, Float64)
     Real
 
     julia> typeintersect(Signed, Union(UInt8, Int8))
     Int8
+
+    julia> Union(Signed, Union(UInt8, Int8))
+    Union(Signed,UInt8)
 
     julia> typejoin(Signed, Union(UInt8, Int8))
     Integer
@@ -40,11 +47,14 @@ take their union with ``typejoin``::
     julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
     Tuple{Int64,Float64}
 
+    julia> Union(Tuple{Integer,Float64}, Tuple{Int,Real})
+    Union(Tuple{Integer,Float64},Tuple{Int64,Real})
+
     julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
     Tuple{Integer,Real}
 
 While these operations may seem abstract, they lie at the heart of
-julia.  For example, method dispatch is implemented by stepping
+Julia.  For example, method dispatch is implemented by stepping
 through the items in a method list until reaching one for which
 ``typeintersect(args, sig)`` is not ``Union()``.  (Here, ``args`` is a
 tuple-type describing the types of the arguments, and ``sig`` is a
@@ -206,20 +216,51 @@ These therefore print identically, but they have very different behavior::
 
 To see what's happening, it's helpful to use julia's internal ``jl_``
 function (defined in ``builtins.c``) for display, because it prints
-bound ``TypeVar`` objects with a hash (``#T`` instead of ``T``)::
+bound ``TypeVar`` objects with a hash (``＃T`` instead of ``T``)::
 
    julia> jl_(x) = ccall(:jl_, Void, (Any,), x)
    jl_ (generic function with 1 method)
 
    julia> jl_(start(methods(candid)))
-   Method(sig=Tuple{Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
+   Method(sig=Tuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
 
    julia> jl_(start(methods(sneaky)))
-   Method(sig=Tuple{Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
+   Method(sig=Tuple{Array{＃T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
 element type of the ``Array``.
+
+Some ``TypeVar`` interactions depend on the ``bound`` state, even when there are not two or more uses of the same ``TypeVar``. For example::
+
+   julia> S = TypeVar(:S, false), T = TypeVar(:T, true)
+   S
+
+   # These would be the same no matter whether we used S or T
+   julia> Array{Array{S}} <: Array{Array}
+   false
+
+   julia> Array{Array{S}} <: Array{Array{S}}
+   true
+
+   julia> Array{Array} <: Array{Array{S}}
+   true
+
+   # For these cases, it matters
+   julia> Array{Array{Int}} <: Array{Array}
+   false
+
+   julia> Array{Array{Int}} <: Array{Array{S}}
+   false
+
+   julia> Array{Array{Int}} <: Array{Array{T}}
+   true
+
+It's this latter construction that allows function declarations like
+::
+   foo{T,N}(A::Array{Array{T,N}}) = T,N
+
+to match despite the invariance of Julia's type parameters.
 
 TypeNames
 ---------
@@ -429,7 +470,7 @@ We can make it more interesting by trying a more complex case::
    Breakpoint 3, intersect_tuple (a=0x7ffdf74d7a90, b=0x7ffdf74d7af0, penv=0x7fffffffcc90, eqc=0x7fffffffcc70, var=covariant) at jltypes.c:405
    405     {
    (gdb) call jl_(a)
-   Tuple{Array{#T<:Any, N<:Any}, #T<:Any}
+   Tuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}
    (gdb) call jl_(b)
    Tuple{Array{Int64, 2}, Int8}
 
@@ -451,7 +492,7 @@ value::
    (gdb) p eqc->n
    $4 = 2
    (gdb) call jl_(eqc->data[0])
-   #T<:Any
+   ＃T<:Any
    (gdb) call jl_(eqc->data[1])
    Int64
 
