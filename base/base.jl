@@ -310,6 +310,14 @@ next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (i > v.length)
 isempty(v::SimpleVector) = (v.length == 0)
 
+function ==(v1::SimpleVector, v2::SimpleVector)
+    length(v1)==length(v2) || return false
+    for i = 1:length(v1)
+        v1[i] == v2[i] || return false
+    end
+    return true
+end
+
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
 getindex(v::SimpleVector, I::AbstractArray) = svec(Any[ v[i] for i in I ]...)
