@@ -250,11 +250,11 @@ immutable GlobalRef
 end
 
 immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
+    data::ByteVec
 end
 
 immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
+    data::ByteVec
 end
 
 typealias ByteString Union(ASCIIString,UTF8String)

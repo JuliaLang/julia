@@ -90,7 +90,7 @@ extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
 // map from user-specified lib names to handles
 static std::map<std::string, uv_lib_t*> libMap;
 
-static uv_lib_t *get_library(char *lib)
+static uv_lib_t *get_library(const char *lib)
 {
     uv_lib_t *hnd;
 #ifdef _OS_WINDOWS_
@@ -124,7 +124,7 @@ void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
-static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_name, jl_codectx_t *ctx)
+static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
 {
     // in pseudo-code, this function emits the following:
     //   global uv_lib_t **libptrgv
@@ -410,8 +410,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
 typedef struct {
     Value *jl_ptr;  // if the argument is a run-time computed pointer
     void *fptr;     // if the argument is a constant pointer
-    char *f_name;   // if the symbol name is known
-    char *f_lib;    // if a library name is specified
+    const char *f_name;   // if the symbol name is known
+    const char *f_lib;    // if a library name is specified
 } native_sym_arg_t;
 
 // --- parse :sym or (:sym, :lib) argument into address info ---
@@ -435,7 +435,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
     }
 
     void *fptr=NULL;
-    char *f_name=NULL, *f_lib=NULL;
+    const char *f_name=NULL, *f_lib=NULL;
     jl_value_t *t0 = NULL, *t1 = NULL;
     JL_GC_PUSH3(&ptr, &t0, &t1);
     if (ptr != NULL) {
@@ -445,7 +445,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         if (jl_is_symbol(ptr))
             f_name = ((jl_sym_t*)ptr)->name;
         else if (jl_is_byte_string(ptr))
-            f_name = jl_string_data(ptr);
+            f_name = jl_bytestring_ptr(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
             // will look in process symbol table
@@ -462,13 +462,13 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             if (jl_is_symbol(t0))
                 f_name = ((jl_sym_t*)t0)->name;
             else if (jl_is_byte_string(t0))
-                f_name = jl_string_data(t0);
+                f_name = jl_bytestring_ptr(t0);
             else
                 JL_TYPECHKS(fname, symbol, t0);
             if (jl_is_symbol(t1))
                 f_lib = ((jl_sym_t*)t1)->name;
             else if (jl_is_byte_string(t1))
-                f_lib = jl_string_data(t1);
+                f_lib = jl_bytestring_ptr(t1);
             else
                 JL_TYPECHKS(fname, symbol, t1);
         }
@@ -689,7 +689,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         ir_stream << "; Number of arguments: " << nargt << "\n"
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
-        << jl_string_data(ir) << "\n}";
+        << jl_bytestring_ptr(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
@@ -919,7 +919,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
     Value *jl_ptr=NULL;
     void *fptr = NULL;
-    char *f_name = NULL, *f_lib = NULL;
+    const char *f_name = NULL, *f_lib = NULL;
     jl_ptr = symarg.jl_ptr;
     fptr = symarg.fptr;
     f_name = symarg.f_name;

@@ -182,11 +182,11 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 typedef struct {
     union {
         struct {
-            uint8_t data[2*sizeof(void*)-1];
+            char data[2*sizeof(void*)-1];
             uint8_t length;
         } here;
         struct {
-            uint8_t *data;
+            char *data;
             intptr_t neglen;
         } there;
     };
@@ -629,8 +629,7 @@ static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
 
-#define allocb(nb)    malloc(nb)
-DLLEXPORT jl_value_t *allocobj(size_t sz);
+#define allocb(nb) malloc(nb)
 STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
@@ -726,8 +725,6 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_tparam(t,i) jl_svecref(((jl_datatype_t*)(t))->parameters, i)
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)

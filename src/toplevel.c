@@ -546,7 +546,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
                 break;
             if (jl_is_expr(form)) {
                 if (((jl_expr_t*)form)->head == jl_incomplete_sym) {
-                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
+                    jl_errorf("syntax: %s", jl_bytestring_ptr(jl_exprarg(form,0)));
                 }
                 if (((jl_expr_t*)form)->head == error_sym) {
                     jl_interpret_toplevel_expr(form);
@@ -599,7 +599,7 @@ jl_value_t *jl_load(const char *fname)
 // load from filename given as a ByteString object
 DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    return jl_load(jl_string_data(str));
+    return jl_load(jl_bytestring_ptr(str));
 }
 
 // type definition ------------------------------------------------------------

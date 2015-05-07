@@ -3,7 +3,7 @@
 ## from base/boot.jl:
 #
 # immutable ASCIIString <: DirectIndexString
-#     data::Array{UInt8,1}
+#     data::ByteVec
 # end
 #
 

@@ -3,7 +3,7 @@
 ## from base/boot.jl:
 #
 # immutable UTF8String <: AbstractString
-#     data::Array{UInt8,1}
+#     data::ByteVec
 # end
 #
 

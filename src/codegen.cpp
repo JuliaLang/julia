@@ -596,7 +596,7 @@ static void emit_write_barrier(jl_codectx_t*,Value*,Value*);
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
     if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
-        char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+        const char *str = jl_bytestring_ptr(jl_fieldref(jl_exception_in_transit,0));
         char buf[1024];
         va_list args;
         va_start(args, fmt);
