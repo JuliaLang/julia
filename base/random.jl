@@ -255,7 +255,7 @@ rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, 
 # random Char values
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
 function rand(r::AbstractRNG, ::Type{Char})
-    c = rand(0x00000000:0x0010f7ff)
+    c = rand(r, 0x00000000:0x0010f7ff)
     (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
