@@ -12,9 +12,10 @@ export normalize_string, graphemes, is_valid_char, is_assigned_char, charwidth,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
-# whether codepoints are valid Unicode
-is_valid_char(c::Union(UInt8,UInt16,UInt32,Char)) = ccall(:utf8proc_codepoint_valid, Cuchar, (UInt32,), c)!=0
-is_valid_char(c::Integer) = (0x0 <= c <= 0x110000) && is_valid_char(UInt32(c))
+# whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
+is_valid_char(ch::Unsigned) = !Bool((ch-0xd800<0x800)|(ch>0x10ffff))
+is_valid_char(ch::Integer) = is_valid_char(Unsigned(ch))
+is_valid_char(ch::Char) = is_valid_char(UInt32(ch))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
