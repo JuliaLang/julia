@@ -2812,3 +2812,7 @@ f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
 g10995(x) = f10995(typeof(x))
 g10995((1, 2))
 @test g10995(UInt8) === nothing
+
+# issue #11149
+@noinline f11149(a,b,args...) = (a,b,args...)
+@test f11149(1,2,3) == invoke(f11149, Tuple{Int,Int,Int}, 1,2,3)
