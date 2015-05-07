@@ -135,3 +135,10 @@ immutable NoMethodHasThisType end
     warning_str = readall(`$exename -f -e $script`)
     @test contains(warning_str, "f()")
 end
+
+# lock / unlock
+let l = ReentrantLock()
+    lock(l)
+    unlock(l)
+    @test_throws ErrorException unlock(l)
+end
