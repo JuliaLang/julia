@@ -28,12 +28,12 @@ unlock(o::Any) = unlock(o.lock)
 
 function unlock(rl::ReentrantLock)
     rl.reentrancy_cnt = rl.reentrancy_cnt - 1
+    if rl.reentrancy_cnt < 0
+        error("unlock count must match lock count")
+    end
     if rl.reentrancy_cnt == 0
         rl.locked_by = nothing
         notify(rl.cond_wait)
-    elseif rl.reentrancy_cnt < 0
-        AssertionError("unlock count must match lock count")
     end
-    rl
+    return rl
 end
-
