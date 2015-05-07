@@ -13,6 +13,7 @@ gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
+gensym(b::ByteVec) = gensym(convert(Vector{UInt8}, b))
 gensym(a::Array{UInt8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
 gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
@@ -22,7 +23,7 @@ gensym(s::Symbol) =
 macro gensym(names...)
     blk = Expr(:block)
     for name in names
-        push!(blk.args, :($(esc(name)) = gensym($(string(name)))))
+        push!(blk.args, :($(esc(name)) = gensym($(Expr(:quote, name)))))
     end
     push!(blk.args, :nothing)
     return blk

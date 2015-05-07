@@ -70,6 +70,7 @@ include("dict.jl")
 include("set.jl")
 include("hashing.jl")
 include("iterator.jl")
+include("bytevec.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -85,7 +86,6 @@ include("osutils.jl")
 
 # strings & printing
 include("char.jl")
-include("bytevec.jl")
 include("ascii.jl")
 include("utf8.jl")
 include("utf16.jl")

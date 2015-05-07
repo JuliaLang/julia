@@ -1,8 +1,7 @@
-import Core.ByteVec
-export ByteVec, Str
-
 ByteVec(a::Vector{UInt8}) = ccall(:jl_bytevec, ByteVec, (Ptr{UInt8}, Csize_t), a, length(a))
 ByteVec(s::AbstractString) = ByteVec(bytestring(s).data)
+
+convert(::Type{Vector{UInt8}}, b::ByteVec) = [b[i] for i=1:length(b)]
 
 size(b::ByteVec) = (length(b),)
 

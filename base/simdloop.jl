@@ -56,10 +56,7 @@ function compile(x)
     check_body!(x)
 
     var,range = parse_iteration_space(x.args[1])
-    r = gensym("r") # Range value
-    j = gensym("i") # Iteration variable for outer loop
-    n = gensym("n") # Trip count for inner loop
-    i = gensym("i") # Trip index for inner loop
+    @gensym r j n i # range value, iteration var, outer trip count, inner trip count
     quote
         # Evaluate range value once, to enhance type and data flow analysis by optimizers.
         let $r = $range
