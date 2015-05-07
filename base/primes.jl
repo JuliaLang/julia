@@ -37,7 +37,7 @@ const PRIMES = primes(2^16)
 # Small precomputed primes + Miller-Rabin for primality testing:
 #     http://en.wikipedia.org/wiki/Miller–Rabin_primality_test
 #
-function isprime{T<:Integer}(n::T)
+function isprime(n::Integer)
     (n < 3 || iseven(n)) && return n == 2
     n <= 2^16 && return length(searchsorted(PRIMES,n)) == 1
     s = trailing_zeros(n-1)
