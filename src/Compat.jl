@@ -28,6 +28,11 @@ if VERSION < v"0.4.0-dev+1387"
     export AbstractString
 end
 
+if VERSION < v"0.4.0-dev+3324"
+    typealias AssertionError ErrorException
+    export AssertionError
+end
+
 if VERSION < v"0.4.0-dev+412"
     eval(Base, :(const IPAddr = IpAddr))
 end

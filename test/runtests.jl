@@ -2,6 +2,7 @@ using Compat
 using Base.Test
 
 v = 1
+@test_throws AssertionError @assert(v < 1)
 
 d = Dict{Int,Int}()
 d[1] = 1
