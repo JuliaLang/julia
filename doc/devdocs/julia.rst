@@ -11,6 +11,7 @@
 
    init
    eval
+   types
    object
    cartesian
    meta
