@@ -263,7 +263,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
    Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
-   (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
+   (The ``k`` th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
    For :class:`SymTridiagonal` matrices, if the optional vector of eigenvalues
@@ -273,8 +273,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
    factorization object ``F`` which contains the eigenvalues in ``F[:values]``
-   and the eigenvectors in the columns of the matrix ``F[:vectors]``. (The
-   ``k``th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
+   and the eigenvectors in the columns of the matrix ``F[:vectors]``.
+   (The ``k`` th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
 
    The following functions are available for ``Eigen`` objects: ``inv``,
    ``det``.
@@ -296,7 +296,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
    returning a ``GeneralizedEigen`` factorization object ``F`` which contains
    the generalized eigenvalues in ``F[:values]`` and the generalized
-   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k``th
+   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k`` th
    generalized eigenvector can be obtained from the slice ``F[:vectors][:,
    k]``.)
 
