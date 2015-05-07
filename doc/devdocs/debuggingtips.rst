@@ -1,3 +1,5 @@
+.. _devdocs-gdb:
+
 ******************
 gdb debugging tips
 ******************
