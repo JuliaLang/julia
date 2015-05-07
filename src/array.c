@@ -313,7 +313,10 @@ jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
     size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)
-        adims[i] = jl_unbox_long(jl_fieldref(dims,i));
+        if (jl_is_svec(dims))
+           adims[i] = jl_unbox_long(jl_svecref(dims,i));
+        else
+           adims[i] = jl_unbox_long(jl_fieldref(dims,i));
     return _new_array(atype, ndims, adims);
 }
 
