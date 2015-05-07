@@ -253,14 +253,10 @@ rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128)
 rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
 
 # random Char values
-# use simple rejection sampling over valid Char codepoint range
+# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
 function rand(r::AbstractRNG, ::Type{Char})
-    while true
-        c = rand(0x00000000:0x0010fffd)
-        if is_valid_char(c)
-            return reinterpret(Char,c)
-        end
-    end
+    c = rand(0x00000000:0x0010f7ff)
+    (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
 ## Arrays of random numbers
