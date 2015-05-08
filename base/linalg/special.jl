@@ -7,12 +7,20 @@ convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 convert(::Type{UpperTriangular}, A::Diagonal) = UpperTriangular(full(A), :L)
-convert(::Type{UnitUpperTriangular}, A::Diagonal) = UnitUpperTriangular(full(A), :L)
 convert(::Type{LowerTriangular}, A::Diagonal) = LowerTriangular(full(A), :L)
-convert(::Type{UnitLowerTriangular}, A::Diagonal) = UnitLowerTriangular(full(A), :L)
 convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
 convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+
+function convert(::Type{UnitUpperTriangular}, A::Diagonal)
+    all(A.diag .== one(eltype(A))) || throw(ArgumentError("Matrix cannot be represented as UnitUpperTriangular"))
+    UnitUpperTriangular(full(A))
+end
+
+function convert(::Type{UnitLowerTriangular}, A::Diagonal)
+    all(A.diag .== one(eltype(A))) || throw(ArgumentError("Matrix cannot be represented as UnitLowerTriangular"))
+    UnitLowerTriangular(full(A))
+end
 
 function convert(::Type{Diagonal}, A::Union(Bidiagonal, SymTridiagonal))
     all(A.ev .== 0) || throw(ArgumentError("Matrix cannot be represented as Diagonal"))
