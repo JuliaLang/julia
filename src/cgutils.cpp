@@ -1791,12 +1791,15 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
             return mark_julia_type(strct,ty);
         }
         Value *f1 = NULL;
-        size_t j = 0;
         int fieldStart = ctx->argDepth;
         bool needroots = false;
-        for(size_t i=1; i < nargs; i++) {
-            needroots |= might_need_root(args[i]);
+        for (size_t i = 1;i < nargs;i++) {
+            if (might_need_root(args[i])) {
+                needroots = true;
+                break;
+            }
         }
+        size_t j = 0;
         if (nf > 0 && sty->fields[0].isptr && nargs>1) {
             // emit first field before allocating struct to save
             // a couple store instructions. avoids initializing
@@ -1827,20 +1830,25 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
                 emit_setfield(sty, strct, i, V_null, ctx, false, false);
             }
         }
+        bool need_wb = false;
         for(size_t i=j+1; i < nargs; i++) {
             Value *rhs = emit_expr(args[i],ctx);
-            if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt &&
-                !needroots) {
-                // if this struct element needs boxing and we haven't rooted
-                // the struct, root it now.
-                make_gcroot(strct, ctx);
-                needroots = true;
+            if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt) {
+                if (!needroots) {
+                    // if this struct element needs boxing and we haven't rooted
+                    // the struct, root it now.
+                    make_gcroot(strct, ctx);
+                    needroots = true;
+                }
+                need_wb = true;
             }
             if (rhs->getType() == jl_pvalue_llvmt) {
                 if (!jl_subtype(expr_type(args[i],ctx), jl_svecref(sty->types,i-1), 0))
                     emit_typecheck(rhs, jl_svecref(sty->types,i-1), "new", ctx);
             }
-            emit_setfield(sty, strct, i-1, rhs, ctx, false, false);
+            if (!need_wb && might_need_root(args[i]))
+                need_wb = true;
+            emit_setfield(sty, strct, i-1, rhs, ctx, false, need_wb);
         }
         ctx->argDepth = fieldStart;
         return strct;
