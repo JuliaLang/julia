@@ -1290,6 +1290,11 @@ end
 @test is_valid_utf16(utf16("\ud800")) == false
 # TODO is_valid_utf8
 
+# Issue #11140
+@test is_valid_utf32(utf32("a")) == true
+@test is_valid_utf32(utf32("\x00")) == true
+@test is_valid_utf32(UInt32[0xd800,0]) == false
+
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
