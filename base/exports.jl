@@ -824,6 +824,7 @@ export
     is_valid_char,
     is_valid_utf8,
     is_valid_utf16,
+    is_valid_utf32,
     isalnum,
     isalpha,
     isascii,
