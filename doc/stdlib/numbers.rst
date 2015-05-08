@@ -362,6 +362,18 @@ Integers
    	julia> isprime(3)
    	true
 
+.. function:: isprime(x::BigInt, [reps = 25]) -> Bool
+
+   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
+   ``false`` if ``x`` is not prime with high probability. The false positive
+   rate is about ``0.25^reps``. ``reps = 25`` is considered safe for
+   cryptographic applications (Knuth, Seminumerical Algorithms).
+
+   .. doctest::
+
+   	julia> isprime(big(3))
+   	true
+
 .. function:: primes(n)
 
    Returns a collection of the prime numbers <= ``n``.
@@ -458,7 +470,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    ``S`` defaults to ``Float64``.
 
-.. function:: rand!([rng], A ,[coll])
+.. function:: rand!([rng], A, [coll])
 
    Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``. This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
 
