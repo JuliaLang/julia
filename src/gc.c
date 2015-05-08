@@ -1930,12 +1930,14 @@ static void clear_mark(int bits)
     for(int i = 0; i < 4; i++)
         bits_save[i].len = 0;
     }
-
-    bigval_t *bigs[] = { big_objects, big_objects_marked };
+    void *current_heap = NULL;
+    bigval_t *bigs[2];
+    bigs[0] = big_objects;
+    bigs[1] = big_objects_marked;
     for (int i = 0; i < 2; i++) {
         bigval_t *v = bigs[i];
         while (v != NULL) {
-            void* gcv = &v->_data;
+            void* gcv = &v->data;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
