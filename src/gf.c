@@ -1520,24 +1520,31 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
 
     jl_methtable_t *mt = jl_gf_mtable(f);
     jl_function_t *sf = NULL;
+    // most of the time sf is rooted in mt, but if the method is staged it may
+    // not be the case
+    JL_GC_PUSH1(&sf);
     JL_TRY {
         sf = jl_method_lookup_by_type(mt, types, 1, 1);
     } JL_CATCH {
-        return NULL;
+        goto not_found;
     }
     if (sf == jl_bottom_func) {
-        return NULL;
+        goto not_found;
     }
     if (sf->linfo == NULL || sf->linfo->ast == NULL) {
-        return NULL;
+        goto not_found;
     }
-    if (sf->linfo->inInference) return NULL;
+    if (sf->linfo->inInference) goto not_found;
     if (sf->linfo->functionObject == NULL) {
         if (sf->fptr != &jl_trampoline)
-            return NULL;
+            goto not_found;
         jl_compile(sf);
     }
+    JL_GC_POP();
     return sf;
+ not_found:
+    JL_GC_POP();
+    return NULL;
 }
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);
@@ -1587,6 +1594,7 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
 static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, jl_svec_t *tvars)
 {
     func->linfo->specTypes = sig;
+    gc_wb(func->linfo, sig);
     if (tvars != jl_emptysvec) {
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
@@ -1603,12 +1611,14 @@ void jl_compile_all_defs(jl_function_t *gf)
     if (mt->kwsorter != NULL)
         jl_compile_all_defs(mt->kwsorter);
     jl_methlist_t *m = mt->defs;
+    jl_function_t *func = NULL;
+    JL_GC_PUSH1(&func);
     while (m != (void*)jl_nothing) {
         if (jl_is_leaf_type((jl_value_t*)m->sig)) {
             jl_get_specialization(gf, m->sig);
         }
         else if (m->func->linfo->unspecialized == NULL) {
-            jl_function_t *func = jl_instantiate_method(m->func, jl_emptysvec);
+            func = jl_instantiate_method(m->func, jl_emptysvec);
             if (func->env != (jl_value_t*)jl_emptysvec)
                 func->env = NULL;
             m->func->linfo->unspecialized = func;
@@ -1617,6 +1627,7 @@ void jl_compile_all_defs(jl_function_t *gf)
         }
         m = m->next;
     }
+    JL_GC_POP();
 }
 
 static void _compile_all(jl_module_t *m, htable_t *h)
