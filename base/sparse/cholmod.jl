@@ -67,14 +67,13 @@ function __init__()
 
             CHOLMOD version incompatibility
 
-            Julia was compiled with CHOLMOD version $version, but is currently linked with a
+            Julia was compiled with CHOLMOD version $version. It is currently linked with a
             version older than 2.1.0. This might cause Julia to terminate when working with
-            sparse matrices for operations involving factorization of a matrix, e.g. solving
-            systems of equations with \\.
+            sparse matrix factorizations, e.g. solving systems of equations with \\.
 
-            It is recommended that you either upgrade the package that provides CHOLMOD or
-            download the OS X or generic Linux binary from www.julialang.org, which is
-            shipped with the correct versions of all dependencies.
+            It is recommended that you use Julia with a recent version of CHOLMOD or
+            download the OS X or generic Linux binaries from www.julialang.org, which
+            ship with the correct versions of all dependencies.
         """)
     else
         tmp = Array(Cint, 3)
