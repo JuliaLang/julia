@@ -16,7 +16,7 @@ sets.  A concrete type corresponds to a single entity in the space of
 all possible types; an abstract type refers to a collection (set) of
 concrete types.  ``Any`` is a type that describes the entire universe
 of possible types; ``Integer`` is a subset of ``Any`` that includes
-``Int``, ``Int8``, and other concrete types.  Internally, julia also
+``Int``, ``Int8``, and other concrete types.  Internally, Julia also
 makes heavy use of another type known as ``Bottom``, or equivalently,
 ``Union()``.  This corresponds to the empty set.
 
@@ -24,7 +24,9 @@ Julia's types support the standard operations of set theory: you can
 ask whether ``T1`` is a "subset" (subtype) of ``T2`` with ``T1 <:
 T2``.  Likewise, you intersect two types using ``typeintersect``, take
 their union with ``Union``, and compute a type that contains their
-union with ``typejoin``::
+union with ``typejoin``:
+
+.. doctest::
 
     julia> typeintersect(Int, Float64)
     Union()
@@ -81,7 +83,9 @@ following methods::
 All but ``f4`` can be called with ``a = [1,2]``; all but ``f2`` can be
 called with ``b = Any[1,2]``.
 
-Let's look at these types a little more closely::
+Let's look at these types a little more closely:
+
+.. doctest::
 
    julia> Array
    Array{T,N}
@@ -93,7 +97,9 @@ This indicates that ``Array`` is a shorthand for ``Array{T,N}``.  If
 you type this at the REPL prompt---on its own, not while defining
 a function or type---you get an error ``T not defined``. So what,
 exactly, are ``T`` and ``N``? You can learn more by extracting these
-parameters::
+parameters:
+
+.. doctest::
 
    julia> T,N = Array.parameters
    svec(T,N)
@@ -110,22 +116,30 @@ A ``TypeVar`` is one of Julia's built-in types---it's defined in
 ``boot.jl``.  The ``name`` field is straightforward: it's what's
 printed when showing the object.  ``lb`` and ``ub`` stand for "lower
 bound" and "upper bound," respectively: these are the sets that
-constrain what types the TypeVar may represent.  In this case, ``T``'s
+constrain what types the TypeVar may represent.  In this case, ``T``\ 's
 lower bound is ``Union()`` (i.e., ``Bottom`` or the empty set); in
 other words, this ``TypeVar`` is not constrained from below.  The
 upper bound is ``Any``, so neither is it constrained from above.
 
-In a method definition like
-::
+In a method definition like::
 
    g{S<:Integer}(x::S) = 0
 
 one can extract the underlying ``TypeVar``::
 
+.. testsetup:: s
+
+   g{S<:Integer}(x::S) = 0
+
+.. testcode:: s
+
    m = start(methods(g))
    p = m.sig.parameters
    tv = p[1]
-   julia> xdump(tv)
+   xdump(tv)
+
+.. testoutput:: s
+
    TypeVar
      name: Symbol S
      lb: Union()
@@ -136,7 +150,9 @@ Here ``ub`` is ``Integer``, as specified in the function definition.
 
 The last field of a ``TypeVar`` is ``bound``.  This boolean value
 specifies whether the ``TypeVar`` is defined as one of the function
-parameters.  For example::
+parameters. For example:
+
+.. doctest::
 
    julia> h1(A::Array, b::Real) = 1
    h1 (generic function with 1 method)
@@ -176,7 +192,9 @@ bounded.  This is because in ``h3``, the same type ``T`` is used in
 both places, whereas for ``h2`` the ``T`` inside the array is simply
 the default symbol used for the first parameter of ``Array``.
 
-One can construct ``TypeVar``\s manually::
+One can construct ``TypeVar``\s manually:
+
+.. doctest::
 
    julia> TypeVar(:V, Signed, Real, false)
    Signed<:V<:Real
@@ -185,7 +203,9 @@ There are convenience versions that allow you to omit any of these
 arguments except the ``name`` symbol.
 
 Armed with this information, we can do some sneaky things that reveal
-a lot about how julia does dispatch::
+a lot about how Julia does dispatch:
+
+.. doctest::
 
    julia> TV = TypeVar(:T, false)   # bound = false
    T
@@ -202,21 +222,23 @@ a lot about how julia does dispatch::
 
    julia> methods(sneaky)
    # 1 method for generic function "sneaky":
-   sneaky{T}(A::Array{T,N},x::T) at none:2
+   sneaky{T}(A::Array{T,N},x::T) at none:1
 
-These therefore print identically, but they have very different behavior::
+These therefore print identically, but they have very different behavior:
+
+.. doctest::
 
    julia> candid([1],3.2)
    ERROR: MethodError: `candid` has no method matching candid(::Array{Int64,1}, ::Float64)
    Closest candidates are:
-     candid{T}(::Array{T,N}, ::T)
+     candid{T}(::Array{T,N}, !Matched::T)
 
    julia> sneaky([1],3.2)
    1
 
-To see what's happening, it's helpful to use julia's internal ``jl_``
+To see what's happening, it's helpful to use Julia's internal ``jl_``
 function (defined in ``builtins.c``) for display, because it prints
-bound ``TypeVar`` objects with a hash (``＃T`` instead of ``T``)::
+bound ``TypeVar`` objects with a hash (``#T`` instead of ``T``)::
 
    julia> jl_(x) = ccall(:jl_, Void, (Any,), x)
    jl_ (generic function with 1 method)
@@ -231,7 +253,9 @@ Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
 element type of the ``Array``.
 
-Some ``TypeVar`` interactions depend on the ``bound`` state, even when there are not two or more uses of the same ``TypeVar``. For example::
+Some ``TypeVar`` interactions depend on the ``bound`` state, even when there are not two or more uses of the same ``TypeVar``. For example:
+
+.. doctest::
 
    julia> S = TypeVar(:S, false), T = TypeVar(:T, true)
    S
@@ -258,6 +282,7 @@ Some ``TypeVar`` interactions depend on the ``bound`` state, even when there are
 
 It's this latter construction that allows function declarations like
 ::
+
    foo{T,N}(A::Array{Array{T,N}}) = T,N
 
 to match despite the invariance of Julia's type parameters.
@@ -266,7 +291,9 @@ TypeNames
 ---------
 
 The following two ``Array`` types are functionally equivalent, yet
-print differently via ``jl_``::
+print differently via ``jl_``:
+
+.. doctest::
 
    julia> TV, NV = TypeVar(:T), TypeVar(:N)
    (T,N)
@@ -278,7 +305,9 @@ print differently via ``jl_``::
    Array{T<:Any, N<:Any}
 
 These can be distinguished by examining the ``name`` field of
-the type, which is an object of type ``TypeName``::
+the type, which is an object of type ``TypeName``:
+
+.. doctest::
 
    julia> xdump(Array.name)
    TypeName
@@ -314,7 +343,9 @@ The ``primary`` field of ``Array`` points to itself, but for
 What about the other fields? ``uid`` assigns a unique integer to each
 type.  To examine the ``cache`` field, it's helpful to pick a type
 that is less heavily used than Array. Let's first create our own
-type::
+type:
+
+.. doctest::
 
    julia> type MyType{T,N} end
 
@@ -338,7 +369,9 @@ Tuple-types
 
 Tuple-types constitute an interesting special case.  For dispatch to
 work on declarations like ``x::Tuple``, the type has to be able to be
-able to accomodate any tuple.  Let's check the parameters::
+able to accommodate any tuple.  Let's check the parameters:
+
+.. doctest::
 
    julia> Tuple
    Tuple
@@ -348,7 +381,8 @@ able to accomodate any tuple.  Let's check the parameters::
 
 It's worth noting that the parameter is a type, ``Any``, rather than a
 ``TypeVar T<:Any``: compare
-::
+
+.. doctest::
 
    julia> jl_(Tuple.parameters)
    svec(Vararg{Any})
@@ -359,7 +393,9 @@ It's worth noting that the parameter is a type, ``Any``, rather than a
 Unlike other types, tuple-types are covariant in their parameters, so
 this definition permits ``Tuple`` to match any type of tuple.  This is
 therefore equivalent to having an unbound ``TypeVar`` but distinct
-from a bound ``TypeVar``::
+from a bound ``TypeVar``
+
+.. doctest::
 
    julia> typeintersect(Tuple, Tuple{Int,Float64})
    Tuple{Int64,Float64}
@@ -379,7 +415,9 @@ from a bound ``TypeVar``::
    julia> typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})
    Union()
 
-Finally, it's worth noting that ``Tuple{}`` is distinct::
+Finally, it's worth noting that ``Tuple{}`` is distinct
+
+.. doctest::
 
    julia> Tuple{}
    Tuple{}
@@ -412,8 +450,8 @@ Introduction to the internal machinery: ``jltypes.c``
 
 Many operations for dealing with types are found in the file
 ``jltypes.c``. A good way to start is to watch type intersection in
-action.  Build julia with ``make debug`` and fire up julia within a
-debugger.  :ref:`devdocs-gdb` has some tips which may be useful.
+action.  Build Julia with ``make debug`` and fire up Julia within a
+debugger. :ref:`devdocs-gdb` has some tips which may be useful.
 
 Because the type intersection and matching code is used heavily in the
 REPL itself---and hence breakpoints in this code get triggered
@@ -427,7 +465,7 @@ often---it will be easiest if you make the following definition::
 and then set a breakpoint in ``jl_breakpoint``.  Once this breakpoint
 gets triggered, you can set breakpoints in other functions.
 
-As a warmup, try the following::
+As a warm-up, try the following::
 
   myintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
 
@@ -509,7 +547,9 @@ in ``solve_tvar_constraints`` and the resulting return is
 Subtyping and method sorting
 ----------------------------
 
-Armed with this knowledge, you may find yourself surprised by the following::
+Armed with this knowledge, you may find yourself surprised by the following:
+
+.. doctest::
 
    julia> typeintersect(Tuple{Array{Int},Float64}, Tuple{Array{T},T})
    Union()
@@ -522,8 +562,8 @@ not imply that ``typeintersect(A, B) == A``.  A little bit of digging
 reveals the reason why: ``jl_subtype_le`` does not use the ``cenv_t``
 constraints that we just saw in ``typeintersect``.
 
-``jltypes.c`` contains three closely-related collections of functions
-for testing how types a and b are ordered:
+``jltypes.c`` contains three closely related collections of functions
+for testing how types ``a`` and ``b`` are ordered:
 
   - The ``subtype`` functions implement ``a <: b``. Among other uses, they
     serve in matching function arguments against method signatures in
@@ -538,20 +578,20 @@ for testing how types a and b are ordered:
   - The ``type_match`` functions are similar to ``type_morespecific``, but
     additionally accept (and employ) an environment to constrain
     typevars. The related ``type_match_morespecific`` functions call
-    type_match_ with an argument ``morespecific=1``
+    ``type_match`` with an argument ``morespecific=1``
 
 All three of these take an argument, ``invariant``, which is set to 1 when
 comparing type parameters and otherwise is 0.
 
 The rules for these are somewhat different. ``subtype`` is sensitive
 to the number arguments, but ``type_morespecific`` may not be. In
-particular, ``Tuple{Int,FloatingPoint}`` is morespecific than
+particular, ``Tuple{Int,FloatingPoint}`` is more specific than
 ``Tuple{Integer}``, even though it is not a subtype.  (Of
 ``Tuple{Int,FloatingPoint}`` and ``Tuple{Integer,Float64}``, neither
-is morespecific than the other.)  Likewise, ``Tuple{Int,Vararg{Int}}``
+is more specific than the other.)  Likewise, ``Tuple{Int,Vararg{Int}}``
 is not a subtype of ``Tuple{Integer}``, but it is considered
-morespecific. However, ``morespecific`` does get a bonus for length:
-in particular, ``Tuple{Int,Int}`` is morespecific than
+more specific. However, ``morespecific`` does get a bonus for length:
+in particular, ``Tuple{Int,Int}`` is more specific than
 ``Tuple{Int,Vararg{Int}}``.
 
 If you're debugging how methods get sorted, it can be convenient to
