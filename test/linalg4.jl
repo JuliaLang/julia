@@ -330,6 +330,7 @@ for isupper in (true, false)
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
     end
+    @test_throws ArgumentError convert(SymTridiagonal, A)
     A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
         debug && println("newtype is $(newtype)")
@@ -341,15 +342,62 @@ A=SymTridiagonal(a, [1.0:n-1])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
+for newtype in [Diagonal, Bidiagonal]
+    @test_throws ArgumentError convert(newtype,A)
+end
 
 A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
+A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+for newtype in [SymTridiagonal, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+for newtype in [Diagonal, Bidiagonal]
+    @test_throws ArgumentError convert(newtype,A)
+end
+A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+@test full(convert(Bidiagonal, A)) == full(A)
+A = Triangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)), :U)
+@test full(convert(Bidiagonal, A)) == full(A)
+A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+@test full(convert(Bidiagonal, A)) == full(A)
+A = Triangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)), :L)
+@test full(convert(Bidiagonal, A)) == full(A)
 
 A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
+end
+A = Triangular(full(Diagonal(a)), :U) #morally Diagonal
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+A = Triangular(triu(rand(n,n)), :U)
+for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
+    @test_throws ArgumentError convert(newtype,A)
+end
+
+# Binary ops among special types
+let a=[1.0:n;]
+    A=Diagonal(a)
+    Spectypes = [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+    for (idx, type1) in enumerate(Spectypes)
+        for type2 in Spectypes
+            B = convert(type1,A)
+            C = convert(type2,A)
+            @test_approx_eq full(B + C) full(A + A)
+            @test_approx_eq full(B - C) full(A - A)
+        end
+    end
+    B = SymTridiagonal(a, ones(n-1))
+    for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+        @test_approx_eq full(B + convert(Spectype,A)) full(B + A)
+        @test_approx_eq full(convert(Spectype,A) + B) full(B + A)
+        @test_approx_eq full(B - convert(Spectype,A)) full(B - A)
+        @test_approx_eq full(convert(Spectype,A) - B) full(A - B)
+    end
 end
 
 # Issue #7886
