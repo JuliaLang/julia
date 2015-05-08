@@ -104,6 +104,9 @@ convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
     return ASCIIString(a)
 end
 
+ascii(p::Ptr{UInt8}) = ASCIIString(bytestring(p))
+ascii(p::Ptr{UInt8}, len::Integer) = ascii(pointer_to_array(p, len))
+
 function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
     idx = 1
