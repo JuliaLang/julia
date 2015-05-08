@@ -236,5 +236,8 @@ function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractStr
 end
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
+utf8(p::Ptr{UInt8}) = UTF8String(bytestring(p))
+utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))
+
 # The last case is the replacement character 0xfffd (3 bytes)
 utf8sizeof(c::Char) = c < Char(0x80) ? 1 : c < Char(0x800) ? 2 : c < Char(0x10000) ? 3 : c < Char(0x110000) ? 4 : 3
