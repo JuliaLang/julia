@@ -2009,8 +2009,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             else {
                 jl_compute_field_offsets(ndt);
             }
-            if (jl_is_datatype_singleton(ndt))
+            if (jl_is_datatype_singleton(ndt)) {
                 ndt->instance = newstruct(ndt);
+                gc_wb(ndt, ndt->instance);
+            }
         }
         else {
             ndt->size = 0;
