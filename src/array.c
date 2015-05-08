@@ -257,7 +257,10 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
     wideint_t prod;
 
     for(i=0; i < ndims; i++) {
-        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_fieldref(dims, i));
+        if (jl_is_svec(dims))
+            prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_svecref(dims,i));
+        else
+            prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_fieldref(dims, i));
         if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
@@ -301,7 +304,10 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
     else {
         size_t *adims = &a->nrows;
         for(i=0; i < ndims; i++) {
-            adims[i] = jl_unbox_long(jl_fieldref(dims, i));
+            if (jl_is_svec(dims))
+                adims[i] = jl_unbox_long(jl_svecref(dims,i));
+            else
+                adims[i] = jl_unbox_long(jl_fieldref(dims, i));
         }
     }
     return a;
@@ -313,7 +319,10 @@ jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
     size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)
-        adims[i] = jl_unbox_long(jl_fieldref(dims,i));
+        if (jl_is_svec(dims))
+            adims[i] = jl_unbox_long(jl_svecref(dims,i));
+        else
+            adims[i] = jl_unbox_long(jl_fieldref(dims,i));
     return _new_array(atype, ndims, adims);
 }
 
