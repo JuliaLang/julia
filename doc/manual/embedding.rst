@@ -1,6 +1,6 @@
-.. _man-embedding:
-
 .. highlight:: c
+
+.. _man-embedding:
 
 **************************
  Embedding Julia
