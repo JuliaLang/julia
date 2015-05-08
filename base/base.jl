@@ -35,6 +35,9 @@ call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 
+# The specialization for 1 arg is important
+# when running with --inline=no, see #11158
+call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
 convert{T}(::Type{T}, x::T) = x
@@ -309,6 +312,14 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (i > v.length)
 isempty(v::SimpleVector) = (v.length == 0)
+
+function ==(v1::SimpleVector, v2::SimpleVector)
+    length(v1)==length(v2) || return false
+    for i = 1:length(v1)
+        v1[i] == v2[i] || return false
+    end
+    return true
+end
 
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 

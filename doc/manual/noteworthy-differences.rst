@@ -1,3 +1,5 @@
+.. currentmodule:: Base
+
 .. _man-noteworthy-differences:
 
 *******************************************
