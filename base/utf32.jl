@@ -92,6 +92,14 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     UTF32String(d)
 end
 
+function is_valid_utf32(s::Union(Vector{Char}, Vector{UInt32}))
+    for i=1:length(s)
+        @inbounds if !is_valid_char(reinterpret(UInt32, s[i])) ; return false ; end
+    end
+    return true
+end
+is_valid_utf32(s::UTF32String) = is_valid_utf32(s.data)
+
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
 function utf32(p::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32}))
