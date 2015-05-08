@@ -1030,9 +1030,10 @@ end
 let
     # make symbol with invalid char
     sym = symbol(Char(0xdcdb))
-    @test string(sym) == "\udcdb"
+    @test string(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
-    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
+    res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
 
 @test symbol("asdf") === :asdf
@@ -1284,10 +1285,10 @@ end
 @test is_valid_ascii("Σ_not_valid_ascii") == false
 @test is_valid_char('a') == true
 @test is_valid_char('\x00') == true
-@test is_valid_char('\ud800') == false
+@test is_valid_char(0xd800) == false
 
 @test is_valid_utf16(utf16("a")) == true
-@test is_valid_utf16(utf16("\ud800")) == false
+@test is_valid_utf16(UInt16[0xd800,0]) == false
 # TODO is_valid_utf8
 
 # Issue #11140
