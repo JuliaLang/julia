@@ -47,7 +47,7 @@ module GitConst
     const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1) << Cint(16)
     const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1) << Cint(17)
 
-    const CHECKOUT_NOTIFY_NONE      = Cint(0)
+    const CHECKOUT_NOTIFY_NONE      = Cuint(0)
     const CHECKOUT_NOTIFY_CONFLICT  = Cuint(1) << Cint(0)
     const CHECKOUT_NOTIFY_DIRTY     = Cuint(1) << Cint(1)
     const CHECKOUT_NOTIFY_UPDATED   = Cuint(1) << Cint(2)
@@ -207,23 +207,4 @@ module GitConst
     const GIT_REPOSITORY_STATE_REBASE_MERGE = Cint(7)
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX = Cint(8)
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE = Cint(9)
-end
-
-module GitErrorConst
-    const GIT_OK          = Cint(0)
-    const ERROR           = Cint(-01)
-    const ENOTFOUND       = Cint(-03)
-    const EEXISTS         = Cint(-04)
-    const EAMBIGUOUS      = Cint(-05)
-    const EBUFS           = Cint(-06)
-    const EUSER           = Cint(-07)
-    const EBAREREPO       = Cint(-08)
-    const EUNBORNBRANCH   = Cint(-09)
-    const EUNMERGED       = Cint(-10)
-    const ENONFASTFORWARD = Cint(-11)
-    const EINVALIDSPEC    = Cint(-12)
-    const EMERGECONFLICT  = Cint(-13)
-    const ELOCKED         = Cint(-14)
-    const PASSTHROUGH     = Cint(-30)
-    const ITEROVER        = Cint(-31)
 end
