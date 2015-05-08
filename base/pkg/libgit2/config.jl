@@ -16,34 +16,35 @@ function free!(cfg::GitConfig)
     end
 end
 
-GitConfig(path::AbstractString) = begin
-    cfg_ptr = Ptr{Void}[C_NULL]
+function GitConfig(path::AbstractString)
+    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_config_open_ondisk, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Uint8}), cfg_ptr, path)
+                 (Ptr{Ptr{Void}}, Ptr{Uint8}), cfg_ptr_ptr, path)
     err !=0 && return nothing
-    return GitConfig(cfg_ptr[1])
+    return GitConfig(cfg_ptr_ptr[])
 end
 
-GitConfig(r::GitRepo) = begin
-    cfg_ptr = Ptr{Void}[C_NULL]
+function GitConfig(r::GitRepo)
+    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_config, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr, r.ptr)
+                 (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
     err !=0 && return nothing
-    return GitConfig(cfg_ptr[1])
+    return GitConfig(cfg_ptr_ptr[])
 end
 
-GitConfig() = begin
-    cfg_ptr = Ptr{Void}[C_NULL]
-    ccall((:git_config_open_default, :libgit2), Cint, (Ptr{Ptr{Void}}, ), cfg_ptr)
-    return GitConfig(cfg_ptr[1])
+function GitConfig()
+    cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    ccall((:git_config_open_default, :libgit2), Cint,
+          (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+    return GitConfig(cfg_ptr_ptr[])
 end
 
 function lookup{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
-    out = Ptr{Uint8}[0]
+    str_ptr = Ref{Ptr{Uint8}}(C_NULL)
     err = ccall((:git_config_get_string, :libgit2), Cint,
-                (Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Uint8}), out, c.ptr, name)
+                (Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Uint8}), str_ptr, c.ptr, name)
     if err == GitErrorConst.GIT_OK
-        return bytestring(out[1])
+        return bytestring(str_ptr[])
     else
         return nothing
     end
