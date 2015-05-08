@@ -810,9 +810,15 @@ OPENSPECFUN_GIT_URL = git://github.com/JuliaLang/openspecfun.git
 OPENSPECFUN_TAR_URL = https://api.github.com/repos/JuliaLang/openspecfun/tarball/$1
 $(eval $(call git-external,openspecfun,OPENSPECFUN,Makefile,libopenspecfun.$(SHLIB_EXT)))
 
+# issue 8799
+OPENSPECFUN_CFLAGS = -O3 -std=c99
+ifeq ($(USEICC),1)
+  OPENSPECFUN_CFLAGS += -fp-model precise
+endif
+
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = $(OPENSPECFUN_SRC_DIR)/libopenspecfun.$(SHLIB_EXT)
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)"
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(OPENSPECFUN_CFLAGS)"
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
