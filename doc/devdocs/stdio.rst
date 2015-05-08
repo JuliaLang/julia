@@ -1,5 +1,7 @@
 .. currentmodule:: Base
 
+.. highlight:: c
+
 ***************************************
 printf() and stdio in the Julia runtime
 ***************************************
@@ -40,15 +42,17 @@ Interface between JL_STD* and Julia code
 bound to the :code:`JL_STD*` `libuv <http://docs.libuv.org>`_ streams
 defined in the runtime.
 
-Julia's :func:`__init__` function (inbase/sysimg.jl) calls
-:func:`reinit_stdio` (in base/stream.jl) to create Julia objects
+Julia's :c:func:`__init__` function (in ``base/sysimg.jl``) calls
+c:func:`reinit_stdio` (in ``base/stream.jl``) to create Julia objects
 for :data:`Base.STDIN`, :data:`Base.STDOUT` and :data:`Base.STDERR`.
 
-:func:`reinit_stdio` uses :func:`ccall` to retrieve pointers to
-:code:`JL_STD*` and calls :func:`jl_uv_handle_type()` to inspect
-the type of each stream.  It then creates a Julia :code:`Base.File`,
-:code:`Base.TTY` or :code:`Base.Pipe` object to represent each
-stream, e.g.::
+c:func:`reinit_stdio` uses :func:`ccall` to retrieve pointers to
+:code:`JL_STD*` and calls :c:func:`jl_uv_handle_type` to inspect
+the type of each stream.  It then creates a Julia :obj:`Base.File`,
+:obj:`Base.TTY` or :obj:`Base.Pipe` object to represent each
+stream, e.g.:
+
+.. code-block:: sh
 
     $ julia -e 'typeof((STDIN, STDOUT, STDERR))'
     (TTY,TTY,TTY)
@@ -70,19 +74,19 @@ streams use :func:`ccall` to call ``libuv`` wrappers in :code:`src/jl_uv.c`, e.g
 printf() during initialisation
 ------------------------------
 
-The ``libuv`` streams relied upon by :func:`jl_printf` etc., are not
+The ``libuv`` streams relied upon by :c:func:`jl_printf` etc., are not
 available until midway through initialisation of the runtime (see
-``init.c``, :func:`init_stdio`).  Error messages or warnings that need
+``init.c``, :c:func:`init_stdio`).  Error messages or warnings that need
 to be printed before this are routed to the standard C library
-:func:`fwrite` function by the following mechanism:
+c:func:`fwrite` function by the following mechanism:
 
 In ``sys.c``, the :code:`JL_STD*` stream pointers are statically initialised
 to integer constants: ``STD*_FILENO (0, 1 and 2)``. In ``jl_uv.c`` the
-:func:`jl_write` function checks its :code:`uv_stream_t* stream`
-argument and calls :func:`fwrite` if stream is set to STDOUT_FILENO
-or STDERR_FILENO.
+:c:func:`jl_write` function checks its :code:`uv_stream_t* stream`
+argument and calls :c:func:`fwrite` if stream is set to :c:macro:`STDOUT_FILENO`
+or :c:macro:`STDERR_FILENO`.
 
-This allows for uniform use of :func:`jl_printf()` throughout the
+This allows for uniform use of :c:func:`jl_printf` throughout the
 runtime regardless of whether or not any particular piece of code
 is reachable before initialisation is complete.
 
@@ -102,19 +106,19 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
     - :code:`base/iostream.jl` -- for file IO (see :code:`base/fs.jl` for ``libuv`` equivalent).
 
 Use of :code:`ios.c` in these modules is mostly self-contained and
-separated from the ``libuv`` io system. However, there is `one place
+separated from the ``libuv`` I/O system. However, there is `one place
 <http://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654>`_
-where femtolisp calls though to :func:`jl_printf` with a legacy :code:`ios_t` stream.
+where femtolisp calls through to :c:func:`jl_printf` with a legacy :c:type:`ios_t` stream.
 
-There is a hack in :code:`ios.h` that makes the :code:`ios_t.bm`
+There is a hack in :code:`ios.h` that makes the :c:member:`ios_t.bm`
 field line up with the :code:`uv_stream_t.type` and ensures that
 the values used for :code:`ios_t.bm` to not overlap with valid
-UV_HANDLE_TYPE values.  This allows :code:`uv_stream_t` pointers
-to point to :code:`ios_t` streams.
+UV_HANDLE_TYPE values.  This allows :c:type:`uv_stream_t` pointers
+to point to :c:type:`ios_t` streams.
 
-This is needed because :func:`jl_printf` caller :func:`jl_static_show`
-is passed an :code:`ios_t` stream by femtolisp's :func:`fl_print` function.
-Julia's :func:`jl_write` function has special handling for this::
+This is needed because :c:func:`jl_printf` caller :c:func:`jl_static_show`
+is passed an :code:`ios_t` stream by femtolisp's :c:func:`fl_print` function.
+Julia's :c:func:`jl_write` function has special handling for this::
 
     if (stream->type > UV_HANDLE_TYPE_MAX) {
         return ios_write((ios_t*)stream, str, n);

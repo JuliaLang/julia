@@ -514,7 +514,9 @@ We can make it more interesting by trying a more complex case::
 
 Let's watch how this bound ``TypeVar`` gets handled.  To follow this,
 you'll need to examine the variables ``penv`` and ``eqc``, which are
-defined as::
+defined as:
+
+.. code-block:: c
 
    typedef struct {
        jl_value_t **data;

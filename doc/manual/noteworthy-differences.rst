@@ -1,6 +1,6 @@
-.. _man-noteworthy-differences:
-
 .. currentmodule:: Base
+
+.. _man-noteworthy-differences:
 
 *******************************************
 Noteworthy Differences from other Languages
