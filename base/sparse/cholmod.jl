@@ -67,13 +67,16 @@ function __init__()
 
             CHOLMOD version incompatibility
 
-            Julia was compiled with CHOLMOD version $version. It is currently linked with a
-            version older than 2.1.0. This might cause Julia to terminate when working with
-            sparse matrix factorizations, e.g. solving systems of equations with \\.
+            Julia was compiled with CHOLMOD version $version. It is
+            currently linked with a version older than 2.1.0. This
+            might cause Julia to terminate when working with sparse
+            matrix factorizations, e.g. solving systems of equations
+            with \\.
 
-            It is recommended that you use Julia with a recent version of CHOLMOD or
-            download the OS X or generic Linux binaries from www.julialang.org, which
-            ship with the correct versions of all dependencies.
+            It is recommended that you use Julia with a recent version
+            of CHOLMOD, or download the OS X or generic Linux binaries
+            from www.julialang.org, which ship with the correct
+            versions of all dependencies.
         """)
     else
         tmp = Array(Cint, 3)
@@ -82,16 +85,19 @@ function __init__()
         if tmp != version_array
             warn("""
 
-                CHOLMOD version incompatibility
+                 CHOLMOD version incompatibility
 
-                Julia was compiled with CHOLMOD version $version, but is currently linked
-                with version $(VersionNumber(tmp...)). This might cause Julia to terminate when working
-                with sparse matrices for operations involving factorization of a matrix,
-                e.g. solving systems of equations with \\.
+                 Julia was compiled with CHOLMOD version $version. It
+                 is currently linked with a version older than
+                 $(VersionNumber(tmp...)). This might cause Julia to
+                 terminate when working with sparse matrix
+                 factorizations, e.g. solving systems of equations
+                 with \\.
 
-                It is recommended that you either upgrade the package that provides CHOLMOD
-                or download the OS X or generic Linux binary from www.julialang.org, which
-                is shipped with the correct versions of all dependencies.
+                 It is recommended that you use Julia with a recent
+                 version of CHOLMOD, or download the OS X or generic
+                 Linux binary from www.julialang.org, which ship with
+                 the correct versions of all dependencies.
             """)
         end
     end
@@ -100,16 +106,20 @@ function __init__()
     if intsize != 4length(IndexTypes)
         warn("""
 
-            CHOLMOD integer size incompatibility
+             CHOLMOD integer size incompatibility
 
-            Julia was compiled with a version of CHOLMOD that supported $(32length(IndexTypes)) bit integers,
-            but is currently linked with version that supports $(8intsize) integers. This might
-            cause Julia to terminate when working with sparse matrices for operations
-            involving factorization of a matrix, e.g. solving systems of equations with \\.
+             Julia was compiled with a version of CHOLMOD that
+             supported $(32length(IndexTypes)) bit integers. It is
+             currently linked with version that supports $(8intsize)
+             integers. This might cause Julia to terminate when
+             working with sparse matrix factorizations, e.g. solving
+             systems of equations with \\.
 
-            This problem can be fixed by downloading the OS X or generic Linux binary from
-            www.julialang.org, which are shipped with the correct versions of all dependencies.
-        """)
+             This problem can be fixed by fixing the Julia build or by
+             downloading the OS X or generic Linux binary from
+             www.julialang.org, which ship with the correct versions
+             of all dependencies.
+         """)
     end
 end
 
