@@ -175,7 +175,7 @@ and its left and right neighbor along a 1-d grid. :
 
 .. testsetup:: *
 
-    srand(314)
+    srand(314);
 
 .. doctest:: array-rand
 
