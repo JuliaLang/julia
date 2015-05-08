@@ -24,7 +24,7 @@ only deals with options that affect code generation or early initialisation. Oth
 options are handled later by `process_options() in base/client.jl
 <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L214>`_.
 
-parse_opts() stores command line options in the `global jl_compileropts
+:func:`parse_opts` stores command line options in the `global jl_compileropts
 struct
 <https://github.com/JuliaLang/julia/blob/master/src/julia.h#L1320>`_.
 
@@ -38,7 +38,7 @@ julia_init()
 called by main() and calls `_julia_init() in init.c
 <https://github.com/JuliaLang/julia/blob/master/src/init.c#L875>`_.
 
-_julia_init() begins by calling libsupport_init() again (it does
+:func:`_julia_init` begins by calling :func:`libsupport_init` again (it does
 nothing the second time).
 
 `restore_signals()
@@ -61,9 +61,11 @@ the scanner/parser;
 
 `jl_init_types()
 <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2887>`_
-creates jl_datatype_t type description objects for the `built-in
+creates ``jl_datatype_t`` type description objects for the `built-in
 types defined in julia.h
-<https://github.com/JuliaLang/julia/blob/master/src/julia.h#L295>`_. e.g.::
+<https://github.com/JuliaLang/julia/blob/master/src/julia.h#L295>`_. e.g.
+
+.. doctest::
 
     jl_any_type = jl_new_abstracttype(jl_symbol("Any"), NULL, jl_null);
     jl_any_type->super = jl_any_type;
@@ -75,10 +77,10 @@ types defined in julia.h
 
 `jl_init_tasks()
 <https://github.com/JuliaLang/julia/blob/master/src/task.c#L870>`_ creates
-the jl_datatype_t* jl_task_type object; initialises the global
+the ``jl_datatype_t* jl_task_type`` object; initialises the global
 `jl_root_task struct
 <https://github.com/JuliaLang/julia/blob/master/src/julia.h#L1159>`_; and
-sets jl_current_task to the root task.
+sets ``jl_current_task`` to the root task.
 
 `jl_init_codegen()
 <https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp#L4830>`_
@@ -87,7 +89,7 @@ initialises the `LLVM library <http://llvm.org>`_.
 `jl_init_serializer()
 <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1732>`_
 initialises 8-bit serialisation tags for 256 frequently used
-jl_value_t values. The serialisation mechanism uses these tags as
+``jl_value_t`` values. The serialisation mechanism uses these tags as
 shorthand (in lieu of storing whole objects) to save storage space.
 
 .. sidebar:: sysimg
