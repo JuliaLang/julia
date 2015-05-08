@@ -46,8 +46,9 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         temp_dir = mktempdir(dir)
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b $branch $meta METADATA`) #TODO: LibGit2.clone
-            LibGit2.set_remote_url("METADATA", meta)
+            metadata_repo = LibGit2.clone(meta, "METADATA", branch = branch)
+            LibGit2.set_remote_url(metadata_repo, meta)
+            LibGit2.free!(metadata_repo)
             touch("REQUIRE")
             touch("META_BRANCH")
             open("META_BRANCH", "w") do io
