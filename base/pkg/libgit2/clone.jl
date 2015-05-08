@@ -1,8 +1,8 @@
 immutable StrArrayStruct
-   strings::Ptr{Ptr{Uint8}}
+   strings::Ptr{Ptr{UInt8}}
    count::Csize_t
 end
-StrArrayStruct() = StrArrayStruct(Ptr{Uint8}(0), zero(Csize_t))
+StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
 
 immutable CheckoutOptionsStruct
     version::Cuint
@@ -18,10 +18,10 @@ immutable CheckoutOptionsStruct
     progress_payload::Ptr{Void}
     paths::StrArrayStruct
     baseline::Ptr{Void}
-    target_directory::Ptr{Uint8}
-    ancestor_label::Ptr{Uint8}
-    our_label::Ptr{Uint8}
-    their_label::Ptr{Uint8}
+    target_directory::Ptr{UInt8}
+    ancestor_label::Ptr{UInt8}
+    our_label::Ptr{UInt8}
+    their_label::Ptr{UInt8}
 end
 CheckoutOptionsStruct() = CheckoutOptionsStruct(one(Cuint),
                                                 GitConst.CHECKOUT_SAFE_CREATE,
@@ -34,10 +34,10 @@ CheckoutOptionsStruct() = CheckoutOptionsStruct(one(Cuint),
                                                 Ptr{Void}(0), Ptr{Void}(0),
                                                 StrArrayStruct(),
                                                 Ptr{Void}(0),
-                                                Ptr{Uint8}(0),
-                                                Ptr{Uint8}(0),
-                                                Ptr{Uint8}(0),
-                                                Ptr{Uint8}(0))
+                                                Ptr{UInt8}(0),
+                                                Ptr{UInt8}(0),
+                                                Ptr{UInt8}(0),
+                                                Ptr{UInt8}(0))
 
 immutable RemoteCallbacksStruct
     version::Cuint
@@ -70,7 +70,7 @@ type CloneOptionsStruct
     remote_callbacks::RemoteCallbacksStruct
     bare::Cint
     localclone::Cint
-    checkout_branch::Ptr{Uint8}
+    checkout_branch::Ptr{UInt8}
     signature::Ptr{Void}
     repository_cb::Ptr{Void}
     repository_cb_payload::Ptr{Void}

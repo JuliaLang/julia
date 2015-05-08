@@ -68,12 +68,12 @@ const git_error_class = Dict{Int,Symbol}(
 )
 
 immutable ErrorStruct
-    message::Ptr{Uint8}
+    message::Ptr{UInt8}
     class::Cint
 end
 
 immutable GitError{Class, Code}
-    msg::UTF8String
+    msg::AbstractString
 end
 
 function last_error()
@@ -89,7 +89,7 @@ function last_error()
     return (err_class, err_msg)
 end
 
-GitError(code::Integer) = begin
+function GitError(code::Integer)
     err_code = git_error_code[Int(code)]
     err_class, err_msg = last_error()
     return GitError{err_class, err_code}(err_msg)

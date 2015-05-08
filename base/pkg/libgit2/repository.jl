@@ -9,7 +9,7 @@ type GitRepo
     end
 end
 
-GitRepo(path::String) = begin
+function GitRepo(path::AbstractString)
     repo_ptr = Ptr{Void}[0]
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Uint8}), repo_ptr, path)
@@ -22,13 +22,13 @@ GitRepo(path::String) = begin
     return GitRepo(repo_ptr[1])
 end
 
-close(r::GitRepo) = begin
+function close(r::GitRepo)
     if r.ptr != C_NULL
         ccall((:git_repository__cleanup, :libgit2), Void, (Ptr{Void},), r.ptr)
     end
 end
 
-free!(r::GitRepo) = begin
+function free!(r::GitRepo)
     if r.ptr != C_NULL
         ccall((:git_repository_free, :libgit2), Void, (Ptr{Void},), r.ptr)
         r.ptr = C_NULL
