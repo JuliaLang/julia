@@ -30,8 +30,16 @@ let n = 12 #Size of matrix problem to test
             b += im*convert(Vector{elty}, randn(n-1))
         end
 
+        @test_throws DimensionMismatch SymTridiagonal(a, ones(n+1))
+
         A = SymTridiagonal(a, b)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+
+        debug && println("Diagonal extraction")
+        @test diag(A,1) == b
+        @test diag(A,-1) == b
+        @test diag(A,0) == a
+        @test_throws BoundsError diag(A,n+1)
 
         debug && println("Idempotent tests")
         for func in (conj, transpose, ctranspose)
@@ -80,6 +88,10 @@ let n = 12 #Size of matrix problem to test
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)
         end
+        α = rand(elty)
+        @test_approx_eq full(α*A) α*full(A)
+        @test_approx_eq full(A*α) full(A)*α
+        @test_approx_eq full(A/α) full(A)/α
     end
 
     debug && println("Tridiagonal matrices")
@@ -94,8 +106,15 @@ let n = 12 #Size of matrix problem to test
             c += im*convert(Vector{elty}, randn(n - 1))
         end
 
+        @test_throws ArgumentError Tridiagonal(a,a,a)
         A = Tridiagonal(a, b, c)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+
+        debug && println("Diagonal extraction")
+        @test diag(A,-1) == a
+        @test diag(A,0) == b
+        @test diag(A,1) == c
+        @test_throws BoundsError diag(A,n+1)
 
         debug && println("Simple unary functions")
         for func in (det, inv)
@@ -125,5 +144,9 @@ let n = 12 #Size of matrix problem to test
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)
         end
+        α = rand(elty)
+        @test_approx_eq full(α*A) α*full(A)
+        @test_approx_eq full(A*α) full(A)*α
+        @test_approx_eq full(A/α) full(A)/α
     end
 end
