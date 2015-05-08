@@ -13,12 +13,14 @@ function __init__()
 end
 
 include("libgit2/const.jl")
+include("libgit2/error.jl")
 include("libgit2/repository.jl")
 include("libgit2/config.jl")
+include("libgit2/clone.jl")
 
-type Ref
+type GitRef
     ptr::Ptr{Void}
-    function Ref(ptr::Ptr{Void})
+    function GitRef(ptr::Ptr{Void})
         r = new(ptr)
         finalizer(r, r -> ccall((:git_reference_free, :libgit2), Void, (Ptr{Void},), r.ptr))
         return r
@@ -40,10 +42,10 @@ function head(repo::GitRepo)
                 (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr, repo.ptr)
 
     (err != 0) && return nothing
-    return Ref(head_ptr[1])
+    return GitRef(head_ptr[1])
 end
 
-function ref_id(ref::Ref)
+function ref_id(ref::GitRef)
     ref == nothing && return ""
 
     typ = ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
@@ -60,7 +62,7 @@ end
 
 head_oid(repo::GitRepo) = head(repo) |> ref_id
 
-function ref_name(ref::Ref)
+function ref_name(ref::GitRef)
     ref == nothing && return ""
 
     name_ptr = ccall((:git_reference_shorthand, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
@@ -153,14 +155,14 @@ end
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     cfg = GitConfig(repo)
 
-    err = set_config_string(cfg_ptr[1], "remote.$remote.url", url)
+    err = set!(AbstractString, cfg, "remote.$remote.url", url)
     err !=0 && return
 
     m = match(GITHUB_REGEX,url)
     m == nothing && return
     push = "git@github.com:$(m.captures[1]).git"
     if push != url
-        err = set_config_string(cfg_ptr[1], "remote.$remote.pushurl", push)
+        err = set!(AbstractString, cfg, "remote.$remote.pushurl", push)
     end
 end
 
@@ -168,6 +170,38 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     repo = GitRepo(path)
     set_remote_url(repo, url, remote=remote)
     LibGit2.free!(prepo)
+end
+
+function mirror_callback(remote::Ptr{Ptr{Void}}, repo::Ptr{Void}, name::Ptr{UInt8}, url::Ptr{UInt8}, payload::Ptr{Void})
+    # Create the remote with a mirroring url
+    fetch_spec = "+refs/*:refs/*"
+    err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}),
+                remote, repo, name, url, fetch_spec)
+    err != 0 && return Cint(err)
+
+    # And set the configuration option to true for the push command
+    config = GitConfig(GitRepo(repo, false))
+    name_str = bytestring(name)
+    err = set!(config, "remote.$name_str.mirror", true)
+    free!(config)
+    err != 0 && return Cint(err)
+
+    return Cint(0)
+end
+const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
+
+function fetch(repo::GitRepo, remote::AbstractString="origin")
+    remote_ptr = [C_NULL]
+    err = ccall((:git_remote_lookup, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}),
+                remote_ptr, repo.ptr, remote)
+    err != 0 && return GitError(err)
+
+    err = ccall((:git_remote_fetch, :libgit2), Cint,
+                (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
+                remote_ptr[1], C_NULL, C_NULL)
+    err != 0 && return GitError(err)
 end
 
 function normalize_url(url::AbstractString)
