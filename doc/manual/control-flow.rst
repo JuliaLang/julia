@@ -398,7 +398,7 @@ It will be evaluated and returned depending on the preceding conditionals:
 
 .. testsetup::
 
-    srand(123)
+    srand(123);
 
 .. doctest::
 
