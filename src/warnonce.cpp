@@ -5,6 +5,7 @@
 #include <vector>
 
 std::set<std::vector<size_t> > wo_subtype;
+std::set<std::vector<size_t> > wo_morespecific;
 
 extern "C" {
 
@@ -19,6 +20,21 @@ int warnonce_subtype(int ta, int invariant, uintptr_t ha, uintptr_t hb)
     it = wo_subtype.find(v);
     if (it == wo_subtype.end()) {
         wo_subtype.insert(v);
+        return 1;
+    }
+    return 0;
+}
+
+int warnonce_morespecific(int invariant, uintptr_t ha, uintptr_t hb)
+{
+    std::vector<size_t> v(3);
+    v[0] = (size_t) invariant;
+    v[1] = (size_t) ha;
+    v[2] = (size_t) hb;
+    std::set<std::vector<size_t> >::iterator it;
+    it = wo_morespecific.find(v);
+    if (it == wo_morespecific.end()) {
+        wo_morespecific.insert(v);
         return 1;
     }
     return 0;
