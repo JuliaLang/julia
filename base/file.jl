@@ -71,18 +71,32 @@ end
 
 
 # The following use Unix command line facilites
+# check for https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
+                                                          remove_destination::Bool=false)
+    if ispath(dst)
+        if remove_destination
+            # check for https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+            if Base.samefile(src, dst)
+                abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
+                abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                                           "This is not supported.\n  ",
+                                           "`src` referce to: $(abs_src)\n  ",
+                                           "`dst` referce to: $(abs_dst)\n")))
+            end
+            rm(dst; recursive=true)
+        else
+            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+                                       "is required to remove '$dst' before $(txt).")))
+        end
+    end
+end
 
 function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
                                                              follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
-    if ispath(dst)
-        if remove_destination
-            rm(dst; recursive=true)
-        else
-            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
-                                       "is required to remove '$dst' before copying.")))
-        end
-    end
+    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
@@ -99,14 +113,7 @@ end
 
 function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
                                                          follow_symlinks::Bool=false)
-    if ispath(dst)
-        if remove_destination
-            rm(dst; recursive=true)
-        else
-            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
-                                       "is required to remove '$dst' before copying.")))
-        end
-    end
+    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
     elseif isdir(src)
@@ -117,14 +124,7 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
 end
 
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
-    if ispath(dst)
-        if remove_destination
-            rm(dst; recursive=true)
-        else
-            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
-                                       "is required to remove '$dst' before moving.")))
-        end
-    end
+    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
     FS.rename(src, dst)
 end
 
