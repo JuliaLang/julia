@@ -767,7 +767,7 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 .^(X::AbstractArray, y::Number      ) =
     reshape([ x ^ y for x in X ], size(X))
 
-for f in (:+, :-, :div, :mod, :&, :|, :$)
+for f in (:div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::Range{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
@@ -778,6 +778,11 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
+    end
+end
+
+for f in (:+, :-, :div, :mod, :&, :|, :$)
+    @eval begin
         function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
