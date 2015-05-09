@@ -151,9 +151,9 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
         prepo = LibGit2.GitRepo(pkg)
         phead = LibGit2.head(prepo)
         if LibGit2.isattached(prepo)
-            print(io, LibGit2.ref_name(phead))
+            print(io, LibGit2.shortname(phead))
         else
-            print(io, LibGit2.ref_id(phead)[1:8])
+            print(io, string(LibGit2.Oid(phead))[1:8])
         end
         attrs = AbstractString[]
         isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
