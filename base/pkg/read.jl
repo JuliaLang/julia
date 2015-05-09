@@ -64,7 +64,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isattached(prepo) && return true
     LibGit2.revparse(prepo, "HEAD:REQUIRE") == nothing && isfile(pkg,"REQUIRE") && return true
 
-    head = LibGit2.ref_id(LibGit2.head(prepo))
+    head = string(LibGit2.head_oid(prepo))
     for (ver,info) in avail
         head == info.sha1 && return false
     end
@@ -100,7 +100,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     ispath(pkg,".git") || return typemin(VersionNumber)
 
     # get package repo head hash
-    head = LibGit2.ref_id(LibGit2.head(prepo))
+    head = string(LibGit2.head_oid(prepo))
 
     vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
@@ -148,7 +148,7 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     repo = LibGit2.GitRepo(pkg)
     LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
     LibGit2.revparse(prepo, "HEAD:REQUIRE") == nothing && isfile(pkgreq) && return pkgreq
-    head = LibGit2.ref_id(LibGit2.head(repo))
+    head = string(LibGit2.head_oid(prepo))
     LibGit2.free!(repo)
     for (ver,info) in avail
         if head == info.sha1

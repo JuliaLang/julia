@@ -13,87 +13,29 @@ function __init__()
 end
 
 include("libgit2/const.jl")
+include("libgit2/types.jl")
 include("libgit2/error.jl")
+include("libgit2/signature.jl")
+include("libgit2/oid.jl")
+include("libgit2/reference.jl")
+include("libgit2/commit.jl")
 include("libgit2/repository.jl")
 include("libgit2/config.jl")
-include("libgit2/clone.jl")
-
-type GitRef
-    ptr::Ptr{Void}
-    function GitRef(ptr::Ptr{Void})
-        r = new(ptr)
-        finalizer(r, r -> ccall((:git_reference_free, :libgit2), Void, (Ptr{Void},), r.ptr))
-        return r
-    end
-end
-
-type Obj
-    ptr::Ptr{Void}
-    function Obj(ptr::Ptr{Void})
-        r = new(ptr)
-        finalizer(r, r -> ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), r.ptr))
-        return r
-    end
-end
-
-function head(repo::GitRepo)
-    head_ptr = Ptr{Void}[0]
-    err = ccall((:git_repository_head, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr, repo.ptr)
-
-    (err != 0) && return nothing
-    return GitRef(head_ptr[1])
-end
-
-function ref_id(ref::GitRef)
-    ref == nothing && return ""
-
-    typ = ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
-    if typ == 1
-        oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-        oid_ptr == C_NULL && return ""
-        return bytes2hex(pointer_to_array(oid_ptr, 20))
-    else
-        oid_ptr = ccall((:git_reference_symbolic_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-        oid_ptr == C_NULL && return ""
-        return bytestring(oid_ptr)
-    end
-end
-
-head_oid(repo::GitRepo) = head(repo) |> ref_id
-
-function ref_name(ref::GitRef)
-    ref == nothing && return ""
-
-    name_ptr = ccall((:git_reference_shorthand, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-    name_ptr == C_NULL && return ""
-    return bytestring(name_ptr)
-end
+include("libgit2/walker.jl")
 
 function need_update(repo::GitRepo)
-    ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1 && "git update-index -q --really-refresh"
+    if !isbare(repo)
+        "git update-index -q --really-refresh" #TODO: update-index
+    end
+end
+
+function isattached(repo::GitRepo)
+    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
 end
 
 function iscommit(id::AbstractString, repo::GitRepo)
     need_update(repo)
-
-    oid = hex2bytes(id)
-    cmt_ptr = Ptr{Void}[0]
-    err = ccall((:git_commit_lookup, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Uint8}), cmt_ptr, repo.ptr, oid)
-    if err != 0
-        return false
-    else
-        ccall((:git_commit_free, :libgit2), Void, (Ptr{Void},), cmt_ptr[1])
-        return true
-    end
-end
-
-function obj_id(ref::Obj)
-    ref == nothing && return ""
-    oid_ptr = ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-    oid_ptr == C_NULL && return ""
-    return bytes2hex(pointer_to_array(oid_ptr, 20))
+    return !isa(get(GitCommit, repo, id), GitError)
 end
 
 function isdirty(repo::GitRepo, paths::AbstractString="")
@@ -102,7 +44,7 @@ function isdirty(repo::GitRepo, paths::AbstractString="")
 
     tree_ptr = Ptr{Void}[0]
     err = ccall((:git_tree_lookup, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Uint8}), tree_ptr, repo.ptr, tree_oid)
+               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), tree_ptr, repo.ptr, tree_oid)
     err != 0 && return true
 
     diff_ptr = Ptr{Void}[0]
@@ -122,29 +64,15 @@ function isdirty(repo::GitRepo, paths::AbstractString="")
     return false
 end
 
-function isattached(repo::GitRepo)
-    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
-end
-
 function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
-    oid1 = hex2bytes(one)
-    oid2 = hex2bytes(two)
-    moid = zeros(UInt8 ,20)
+    oid1_ptr = Ref(Oid(one))
+    oid2_ptr = Ref(Oid(two))
+    moid_ptr = Ref(Oid())
     err = ccall((:git_merge_base, :libgit2), Cint,
-        (Ptr{UInt8}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}), moid, repo.ptr, oid1, oid2)
-    if err != 0
-        return ""
-    else
-        bytes2hex(moid)
-    end
-end
-
-function revparse(repo::GitRepo, obj::AbstractString)
-    obj_ptr = Ptr{Void}[0]
-    err = ccall((:git_revparse_single, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Uint8}), obj_ptr, repo.ptr, obj)
+                (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
+                moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
     err != 0 && return nothing
-    return hex2bytes(obj_id(Obj(obj_ptr[1])))
+    return moid[]
 end
 
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
@@ -202,6 +130,37 @@ function fetch(repo::GitRepo, remote::AbstractString="origin")
                 (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
                 remote_ptr[1], C_NULL, C_NULL)
     err != 0 && return GitError(err)
+end
+
+function clone(url::AbstractString, path::AbstractString;
+               branch::AbstractString="",
+               bare::Bool = false,
+               remote_cb::Ptr{Void} = C_NULL)
+    # start cloning
+    clone_opts = CloneOptionsStruct()
+    clone_opts.bare = Int32(bare)
+    if !isempty(branch)
+        clone_opts.checkout_branch = pointer(branch)
+    end
+    if remote_cb != C_NULL
+        clone_opts.remote_cb = remote_cb
+    end
+
+    clone_opts_ref = Ref(clone_opts)
+    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    err = ccall((:git_clone, :libgit2), Cint,
+            (Ptr{Ptr{Void}}, Ptr{UInt8}, Ptr{UInt8}, Ref{CloneOptionsStruct}),
+            repo_ptr_ptr, url, path, clone_opts_ref)
+    err != 0 && return nothing
+
+    return GitRepo(repo_ptr_ptr[])
+end
+
+function authors(repo::GitRepo)
+    athrs = Pkg.LibGit2.map(
+        (oid,repo)->author(get(GitCommit, repo, oid)),
+        repo) #, by = Pkg.LibGit2.GitConst.SORT_TIME)
+    return athrs
 end
 
 function normalize_url(url::AbstractString)
