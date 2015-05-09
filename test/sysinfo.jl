@@ -11,3 +11,11 @@ Base.Sys.loadavg()
 @test_throws ArgumentError ENV["bad\0name"] = "ok"
 @test_throws ArgumentError ENV["okname"] = "bad\0val"
 @test_throws ArgumentError Sys.set_process_title("bad\0title")
+
+# issue #11170
+withenv("TEST"=>"nonempty") do
+    @test ENV["TEST"] == "nonempty"
+end
+withenv("TEST"=>"") do
+    @test ENV["TEST"] == ""
+end
