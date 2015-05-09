@@ -178,7 +178,7 @@ Library improvements
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
-    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints.
+    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints. ([#11171])
 
   * Data-structure processing
 
