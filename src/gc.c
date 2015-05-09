@@ -2032,9 +2032,9 @@ static void gc_verify(void)
         gcval_t* v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
             jl_printf(JL_STDERR, "Error. Early free of 0x%lx type :", (uptrint_t)v);
-            jl_(jl_typeof(v));
+            jl_(jl_typeof(jl_valueof(v)));
             jl_printf(JL_STDERR, "val : ");
-            jl_(v);
+            jl_(jl_valueof(v));
             jl_printf(JL_STDERR, "Let's try to backtrack the missing write barrier :\n");
             lostval = v;
             break;
