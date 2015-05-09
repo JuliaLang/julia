@@ -115,7 +115,7 @@ filesize(path...) = stat(path...).size
    mtime(path...) = stat(path...).mtime
    ctime(path...) = stat(path...).ctime
 
-# samefile can be used for files and directories: 11145#issuecomment-99511194
+# samefile can be used for files and directories: #11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
 function samefile(a::AbstractString, b::AbstractString)
     if ispath(a) && ispath(b)

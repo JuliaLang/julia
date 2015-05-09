@@ -71,19 +71,19 @@ end
 
 
 # The following use Unix command line facilites
-# check for https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           remove_destination::Bool=false)
     if ispath(dst)
         if remove_destination
-            # check for https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+            # Check for issue when: (src == dst) or when one is a link to the other
+            # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
             if Base.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
                 throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
                                            "This is not supported.\n  ",
-                                           "`src` referce to: $(abs_src)\n  ",
-                                           "`dst` referce to: $(abs_dst)\n")))
+                                           "`src` refers to: $(abs_src)\n  ",
+                                           "`dst` refers to: $(abs_dst)\n")))
             end
             rm(dst; recursive=true)
         else
@@ -124,7 +124,7 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
 end
 
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
+    checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
     FS.rename(src, dst)
 end
 
