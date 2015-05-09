@@ -13,6 +13,10 @@ let a=[1.0:n;]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
     end
+    for newtype in [Base.LinAlg.UnitUpperTriangular, Base.LinAlg.UnitLowerTriangular]
+        @test_throws ArgumentError convert(newtype, A)
+        @test full(convert(newtype, Diagonal(ones(n)))) == eye(n)
+    end
 
     for isupper in (true, false)
         debug && println("isupper is $(isupper)")
@@ -38,6 +42,8 @@ let a=[1.0:n;]
     for newtype in [Diagonal, Bidiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
+    A = SymTridiagonal(a, zeros(n-1))
+    @test full(convert(Bidiagonal,A)) == full(A)
 
     A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
