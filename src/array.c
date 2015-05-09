@@ -463,6 +463,13 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
+{
+    if (a->ptrarray)
+        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    return 1;
+}
+
 int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
     assert(jl_is_array(args0[0]));

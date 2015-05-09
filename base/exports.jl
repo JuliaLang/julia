@@ -523,6 +523,7 @@ export
     invperm,
     ipermute!,
     ipermutedims,
+    isassigned,
     isperm,
     issorted,
     last,

@@ -453,6 +453,18 @@ begin
     @test_throws TypeError isdefined(2)
 end
 
+begin
+    local a
+    a = cell(2)
+    @test !isassigned(a,1) && !isassigned(a,2)
+    a[1] = 1
+    @test isassigned(a,1) && !isassigned(a,2)
+    a = Array(Float64,1)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,2)
+end
+
 # dispatch
 begin
     local foo, bar, baz
