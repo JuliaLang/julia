@@ -529,25 +529,35 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     # cp ----------------------------------------------------
     mktempdir() do tmpdir
         # Setup new copies for the test
-        test_src_paths, test_new_paths = setup_dirs(tmpdir)
-        for (s, d) in zip(test_src_paths, test_new_paths)
+        maindir1 = joinpath(tmpdir, "maindir1")
+        maindir2 = joinpath(tmpdir, "maindir2")
+        mkdir(maindir1)
+        mkdir(maindir2)
+        test_src_paths1, test_new_paths1 = setup_dirs(maindir1)
+        test_src_paths2, test_new_paths2 = setup_dirs(maindir2)
+        for (s, d) in zip(test_src_paths1, test_new_paths1)
+            cp_follow_symlinks_false_check(s, d)
+        end
+        for (s, d) in zip(test_src_paths2, test_new_paths2)
             cp_follow_symlinks_false_check(s, d)
         end
         # Test require `remove_destination=true`
-        for s in test_src_paths
-            for d in test_new_paths
+        for s in test_src_paths1
+            for d in test_new_paths2
                 @test_throws ArgumentError cp(s, d; remove_destination=false)
                 @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
             end
         end
         # Test remove the existing path first and copy
-        for (s, d) in zip(test_src_paths, test_new_paths)
+        # need to use here the test_src_paths2:
+        # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.
+        for (s, d) in zip(test_src_paths2, test_new_paths1)
             cp_follow_symlinks_false_check(s, d; remove_destination=true)
         end
         # Test remove the existing path first and copy an empty dir
-        emptydir = joinpath(tmpdir, "emptydir")
+        emptydir = joinpath(maindir1, "emptydir")
         mkdir(emptydir)
-        for d in test_new_paths
+        for d in test_new_paths1
             cp(emptydir, d; remove_destination=true, follow_symlinks=false)
             # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
             @test isdir(d) && !islink(d)
@@ -558,18 +568,29 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     # mv ----------------------------------------------------
     mktempdir() do tmpdir
         # Setup new copies for the test
-        test_src_paths, test_new_paths = setup_dirs(tmpdir)
-        for (s, d) in zip(test_src_paths, test_new_paths)
+        maindir1 = joinpath(tmpdir, "maindir1")
+        maindir2 = joinpath(tmpdir, "maindir2")
+        mkdir(maindir1)
+        mkdir(maindir2)
+        test_src_paths1, test_new_paths1 = setup_dirs(maindir1)
+        test_src_paths2, test_new_paths2 = setup_dirs(maindir2)
+        for (s, d) in zip(test_src_paths1, test_new_paths1)
             cp_follow_symlinks_false_check(s, d; remove_destination=true)
         end
+        for (s, d) in zip(test_src_paths2, test_new_paths2)
+            cp_follow_symlinks_false_check(s, d; remove_destination=true)
+        end
+
         # Test require `remove_destination=true`
-        for s in test_src_paths
-            for d in test_new_paths
+        for s in test_src_paths1
+            for d in test_new_paths2
                 @test_throws ArgumentError mv(s, d; remove_destination=false)
             end
         end
         # Test remove the existing path first and move
-        for (s, d) in zip(test_src_paths, test_new_paths)
+        # need to use here the test_src_paths2:
+        # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
+        for (s, d) in zip(test_src_paths2, test_new_paths1)
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
             mv_check(s, d, d_mv; remove_destination=true)
         end
@@ -613,6 +634,40 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
             mv(d, d_mv; remove_destination=true)
         end
+    end
+
+    # issue  ----------------------------------------------------
+    # Check for issue when: (src == dst) or when one is a link to the other
+    # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+    mktempdir() do tmpdir
+        test_src_paths1, test_new_paths1 = setup_dirs(tmpdir)
+        dirs = [joinpath(tmpdir, "src"), joinpath(tmpdir, "abs_dirlink"), joinpath(tmpdir, "rel_dirlink")]
+        for src in dirs
+            for dst in dirs
+                # cptree
+                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=true)
+                # cp
+                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=true)
+                # mv
+                @test_throws ArgumentError mv(src,dst; remove_destination=true)
+            end
+        end
+    end
+    # None existing src
+    mktempdir() do tmpdir
+        none_existing_src = joinpath(tmpdir, "none_existing_src")
+        dst = joinpath(tmpdir, "dst")
+        @test !ispath(none_existing_src)
+        # cptree
+        @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
+        @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
+        # cp
+        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
+        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
+        # mv
+        @test_throws Base.UVError mv(none_existing_src,dst; remove_destination=true)
     end
 end
 
@@ -682,20 +737,30 @@ end
     # cp ----------------------------------------------------
     mktempdir() do tmpdir
         # Setup new copies for the test
-        test_src_paths, test_new_paths, file_txt = setup_files(tmpdir)
-        for (s, d) in zip(test_src_paths, test_new_paths)
-            cp_follow_symlinks_false_check(s, d, file_txt)
+        maindir1 = joinpath(tmpdir, "maindir1")
+        maindir2 = joinpath(tmpdir, "maindir2")
+        mkdir(maindir1)
+        mkdir(maindir2)
+        test_src_paths1, test_new_paths1, file_txt1 = setup_files(maindir1)
+        test_src_paths2, test_new_paths2, file_txt2 = setup_files(maindir2)
+        for (s, d) in zip(test_src_paths1, test_new_paths1)
+            cp_follow_symlinks_false_check(s, d, file_txt1)
+        end
+        for (s, d) in zip(test_src_paths2, test_new_paths2)
+            cp_follow_symlinks_false_check(s, d, file_txt2)
         end
         # Test require `remove_destination=true`
-        for s in test_src_paths
-            for d in test_new_paths
+        for s in test_src_paths1
+            for d in test_new_paths2
                 @test_throws ArgumentError cp(s, d; remove_destination=false)
                 @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
             end
         end
-        # Test remove the existing path first and copy: follow_symlinks=false
-        for (s, d) in zip(test_src_paths, test_new_paths)
-            cp_follow_symlinks_false_check(s, d, file_txt; remove_destination=true)
+        # Test remove the existing path first and copy
+        # need to use here the test_src_paths2:
+        # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
+        for (s, d) in zip(test_src_paths2, test_new_paths1)
+            cp_follow_symlinks_false_check(s, d, file_txt2; remove_destination=true)
         end
         # Test remove the existing path first and copy an other file
         otherfile = joinpath(tmpdir, "otherfile.txt")
@@ -703,7 +768,7 @@ end
         open(otherfile, "w") do f
             write(f, otherfile_content)
         end
-        for d in test_new_paths
+        for d in test_new_paths1
             cp(otherfile, d; remove_destination=true, follow_symlinks=false)
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
             @test isfile(d) && !islink(d)
@@ -714,20 +779,30 @@ end
     # mv ----------------------------------------------------
     mktempdir() do tmpdir
         # Setup new copies for the test
-        test_src_paths, test_new_paths, file_txt = setup_files(tmpdir)
-        for (s, d) in zip(test_src_paths, test_new_paths)
-            cp_follow_symlinks_false_check(s, d, file_txt; remove_destination=true)
+        maindir1 = joinpath(tmpdir, "maindir1")
+        maindir2 = joinpath(tmpdir, "maindir2")
+        mkdir(maindir1)
+        mkdir(maindir2)
+        test_src_paths1, test_new_paths1, file_txt1 = setup_files(maindir1)
+        test_src_paths2, test_new_paths2, file_txt2 = setup_files(maindir2)
+        for (s, d) in zip(test_src_paths1, test_new_paths1)
+            cp_follow_symlinks_false_check(s, d, file_txt1)
+        end
+        for (s, d) in zip(test_src_paths2, test_new_paths2)
+            cp_follow_symlinks_false_check(s, d, file_txt2)
         end
         # Test require `remove_destination=true`
-        for s in test_src_paths
-            for d in test_new_paths
+        for s in test_src_paths1
+            for d in test_new_paths2
                 @test_throws ArgumentError mv(s, d; remove_destination=false)
             end
         end
         # Test remove the existing path first and move
-        for (s, d) in zip(test_src_paths, test_new_paths)
+        # need to use here the test_src_paths2:
+        # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
+        for (s, d) in zip(test_src_paths2, test_new_paths1)
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
-            mv_check(s, d, d_mv, file_txt; remove_destination=true)
+            mv_check(s, d, d_mv, file_txt2; remove_destination=true)
         end
     end
 
@@ -796,7 +871,28 @@ end
             mv(d, d_mv; remove_destination=true)
         end
     end
+    # issue  ----------------------------------------------------
+    # Check for issue when: (src == dst) or when one is a link to the other
+    # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+    mktempdir() do tmpdir
+        test_src_paths, test_new_paths, file_txt = setup_files(tmpdir)
+        files = [joinpath(tmpdir, "srcfile.txt"), joinpath(tmpdir, "abs_filelink"), joinpath(tmpdir, "rel_filelink")]
+        for src in files
+            for dst in files
+                # cptree
+                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=true)
+                # cp
+                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=true)
+                # mv
+                @test_throws ArgumentError mv(src,dst; remove_destination=true)
+            end
+        end
+    end
+    # None existing src: not needed here as it is done above with the directories.
 end
+
 
 ###################
 # FILE* interface #
