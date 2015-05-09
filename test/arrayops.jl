@@ -54,6 +54,15 @@ b = reshape(a, (32,))
 @test b[1]  == 10
 @test b[19] == 20
 @test b[13] == 30
+@test_throws DimensionMismatch reshape(b,(5,7))
+@test_throws DimensionMismatch reshape(b,(35,))
+@test_throws DimensionMismatch reinterpret(Int, b, (35,))
+@test_throws ArgumentError reinterpret(Any, b, (32,))
+@test_throws DimensionMismatch reinterpret(Complex128, b, (32,))
+c = ["hello", "world"]
+@test_throws ArgumentError reinterpret(Float32, c, (2,))
+a = Vector(ones(5))
+@test_throws ArgumentError resize!(a, -2)
 
 b = rand(32)
 a = reshape(b, (2, 2, 2, 2, 2))
@@ -785,6 +794,7 @@ a = [1:10;]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
 @test_throws ArgumentError deleteat!(a, [5,3])
+@test_throws BoundsError deleteat!(a, 5:20)
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -1118,3 +1128,47 @@ end
 let x = fill(0.9, 1000)
     @test_approx_eq prod(x) cumprod(x)[end]
 end
+
+#binary ops on bool arrays
+A = bitunpack(trues(5))
+@test A + true == [2,2,2,2,2]
+A = bitunpack(trues(5))
+@test A + false == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test true + A == [2,2,2,2,2]
+A = bitunpack(trues(5))
+@test false + A == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test A - true == [0,0,0,0,0]
+A = bitunpack(trues(5))
+@test A - false == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test true - A == [0,0,0,0,0]
+A = bitunpack(trues(5))
+@test false - A == [-1,-1,-1,-1,-1]
+
+# simple transposes
+a = ones(Complex,1,5)
+b = zeros(Complex,5)
+c = ones(Complex,2,5)
+d = ones(Complex,6)
+@test_throws DimensionMismatch transpose!(a,d)
+@test_throws DimensionMismatch transpose!(d,a)
+@test_throws DimensionMismatch ctranspose!(a,d)
+@test_throws DimensionMismatch ctranspose!(d,a)
+@test_throws DimensionMismatch transpose!(b,c)
+@test_throws DimensionMismatch ctranspose!(b,c)
+@test_throws DimensionMismatch transpose!(c,b)
+@test_throws DimensionMismatch ctranspose!(c,b)
+transpose!(b,a)
+@test b == ones(Complex,5)
+b = ones(Complex,5)
+a = zeros(Complex,1,5)
+transpose!(a,b)
+@test a == ones(Complex,1,5)
+b = zeros(Complex,5)
+ctranspose!(b,a)
+@test b == ones(Complex,5)
+a = zeros(Complex,1,5)
+ctranspose!(a,b)
+@test a == ones(Complex,1,5)
