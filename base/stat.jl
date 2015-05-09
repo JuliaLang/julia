@@ -117,4 +117,10 @@ filesize(path...) = stat(path...).size
 
 # samefile can be used for files and directories: 11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
-samefile(a::AbstractString, b::AbstractString) = samefile(stat(a),stat(b))
+function samefile(a::AbstractString, b::AbstractString)
+    if ispath(a) && ispath(b)
+        samefile(stat(a),stat(b))
+    else
+        return false
+    end
+end
