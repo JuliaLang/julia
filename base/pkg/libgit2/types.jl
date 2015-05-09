@@ -105,25 +105,26 @@ CloneOptionsStruct() = CloneOptionsStruct(one(Cuint),
                                         )
 
 # Common types
-for (typ, fnc) in ((:GitRemote,    :(:git_remote_free)),
-                   (:GitRevWalker, :(:git_revwalk_free)),
-                   (:GitConfig,    :(:git_config_free)),
-                   (:GitReference, :(:git_reference_free)),
-                   (:GitDiff,      :(:git_diff_free)),
-                   (:GitRepo,      :(:git_repository_free)))
+for (typ, ref, fnc) in ((:GitRemote,     :Void, :(:git_remote_free)),
+                        (:GitRevWalker,  :Void, :(:git_revwalk_free)),
+                        (:GitConfig,     :Void, :(:git_config_free)),
+                        (:GitReference,  :Void, :(:git_reference_free)),
+                        (:GitDiff,       :Void, :(:git_diff_free)),
+                        (:GitIndex,      :Void, :(:git_index_free)),
+                        (:GitSignature,  :SignatureStruct, :(:git_signature_free)),
+                        (:GitRepo,       :Void, :(:git_repository_free)))
     @eval type $typ
-        ptr::Ptr{Void}
-        function $typ(ptr::Ptr{Void})
+        ptr::Ptr{$ref}
+        function $typ(ptr::Ptr{$ref})
             @assert ptr != C_NULL
             obj = new(ptr)
             return obj
         end
-        $typ() = new(C_NULL)
     end
 
-    @eval function free!(obj::$typ)
+    @eval function finalize(obj::$typ)
         if obj.ptr != C_NULL
-            ccall(($fnc, :libgit2), Void, (Ptr{Void},), obj.ptr)
+            ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
             obj.ptr = C_NULL
         end
     end
@@ -134,7 +135,7 @@ end
 # Object types
 abstract GitObject
 
-function free!(o::GitObject)
+function finalize(o::GitObject)
     if o.ptr != C_NULL
         ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), o.ptr)
         o.ptr = C_NULL
@@ -150,14 +151,34 @@ for typ in [:GitCommit, :GitTree]
             obj = new(ptr)
             return obj
         end
-        $typ() = new(C_NULL)
     end
 end
 
-# Misc types
+# Structure has the same layout as SignatureStruct
 type Signature
-    name::UTF8String
-    email::UTF8String
-    time::Int32
+    name::AbstractString
+    email::AbstractString
+    time::Int64
     time_offset::Int32
+end
+
+""" Resource management helper function
+"""
+function with_libgit2(f::Function, obj)
+    try
+        f(obj)
+    catch err
+        rethrow(err)
+    finally
+        finalize(obj)
+    end
+end
+
+function with_libgit2{T}(f::Function, ::Type{T}, args...; warn_on_exception::Bool=true)
+    obj = T(args...)
+    try
+        with_libgit2(f, obj)
+    catch err
+        warn_on_exception ? warn("$(string(T)) thrown exception: $err") : rethrow(err)
+    end
 end

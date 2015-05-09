@@ -107,9 +107,13 @@ end
 function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
+        res = typemin(VersionNumber)
         prepo = LibGit2.GitRepo(pkg)
-        res = Read.installed_version(pkg, prepo, avail)
-        LibGit2.free!(prepo)
+        try
+            res = Read.installed_version(pkg, prepo, avail)
+        finally
+            LibGit2.finalize(prepo)
+        end
         return res
     end
     isempty(avail) && error("$pkg is not a package (not registered or installed)")
@@ -163,7 +167,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
         catch
             print(io, "broken-repo (unregistered)")
         finally
-            LibGit2.free!(prepo)
+            LibGit2.finalize(prepo)
         end
     else
         print(io, "non-repo (unregistered)")

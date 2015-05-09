@@ -20,42 +20,68 @@ function committer(c::GitCommit)
     return Signature(ptr)
 end
 
+""" Wrapper around `git_commit_create` """
 function commit(repo::GitRepo,
                 refname::AbstractString,
                 msg::AbstractString,
-                author::Signature,
-                committer::Signature,
+                author::GitSignature,
+                committer::GitSignature,
                 tree::GitTree,
                 parents::GitCommit...)
-    id_ptr = Ref(Oid())
+    commit_id_ptr = Ref(Oid())
     nparents = length(parents)
     parentptrs = Ptr{Void}[c.ptr for c in parents]
-    err = ccall((:git_commit_create, :libgit2), Cint,
+    @check ccall((:git_commit_create, :libgit2), Cint,
                  (Ptr{Oid}, Ptr{Void}, Ptr{Uint8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
                   Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
                   Csize_t, Ptr{Ptr{Void}}),
-                 id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
-                 author, committer,
-                 C_NULL, msg, tree,
+                 commit_id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
+                 author.ptr, committer.ptr,
+                 C_NULL, msg, tree.ptr,
                  nparents, nparents > 0 ? parentptrs : C_NULL)
-    err !=0 && return GitError(err)
-    return id_ptr[]
+    return commit_id_ptr[]
 end
 
+"""Commit changes to repository"""
 function commit(repo::GitRepo, msg::AbstractString,
-                refname::AbstractString="",
+                refname::AbstractString="HEAD",
                 author::Signature = Signature(repo),
                 committer::Signature = Signature(repo),
                 tree_id::Oid = Oid(),
                 parent_ids::Vector{Oid}=Oid[])
-    tree = if isempty(tree_id)
-        get(GitTree, repo)
-    else
-        get(GitTree, repo, tree_id)
+    # Retrieve tree identifier
+    if iszero(tree_id)
+        idx = GitIndex(repo)
+        try
+            tree_id = write_tree!(idx)
+        catch err
+            rethrow(err)
+        finally
+            finalize(idx)
+        end
     end
-    isa(err, GitError)&& return err
 
-    parents = [get(GitCommit, repo, parent) for parent in parents]
-    return commit(repo, refname, msg, author, committer, tree, parents)
+    # return commit id
+    commit_id  = Oid()
+
+    # get necessary objects
+    tree = get(GitTree, repo, tree_id)
+    auth_sig = convert(GitSignature, author)
+    comm_sig = convert(GitSignature, committer)
+    parents = GitCommit[]
+    try
+        for parent in parents
+            push!(parents, get(GitCommit, repo, parent))
+        end
+        commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
+    finally
+        for parent in parents
+            finalize(parent)
+        end
+        finalize(tree)
+        finalize(auth_sig)
+        finalize(auth_sig)
+    end
+    return commit_id
 end

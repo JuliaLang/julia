@@ -4,7 +4,7 @@ function GitRepo(path::AbstractString)
                 (Ptr{Ptr{Void}}, Ptr{UInt8}), repo_ptr_ptr, path)
     if err != GitErrorConst.GIT_OK
         if repo_ptr_ptr[] != C_NULL
-            free!(GitRepo(repo_ptr_ptr[]))
+            finalize(GitRepo(repo_ptr_ptr[]))
         end
         throw(GitError(err))
     end

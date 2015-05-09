@@ -92,7 +92,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
             Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
     end
-    cache_has_head && LibGit2.free!(crepo)
+    cache_has_head && LibGit2.finalize(crepo)
     return res
 end
 
@@ -128,7 +128,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
         base == sha1 && push!(ancestors,ver)
         base == head && push!(descendants,ver)
     end
-    cache_has_head && LibGit2.free!(crepo)
+    cache_has_head && LibGit2.finalize(crepo)
 
     both = sort!(intersect(ancestors,descendants))
     isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
@@ -147,10 +147,14 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
     ispath(pkg,".git") || return pkgreq
     repo = LibGit2.GitRepo(pkg)
-    LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
-    LibGit2.revparse(prepo, "HEAD:REQUIRE") == nothing && isfile(pkgreq) && return pkgreq
-    head = string(LibGit2.head_oid(prepo))
-    LibGit2.free!(repo)
+    head = ""
+    try
+        LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
+        LibGit2.revparse(repo, "HEAD:REQUIRE") == nothing && isfile(pkgreq) && return pkgreq
+        head = string(LibGit2.head_oid(repo))
+    finally
+        LibGit2.finalize(repo)
+    end
     for (ver,info) in avail
         if head == info.sha1
             return joinpath("METADATA", pkg, "versions", string(ver), "requires")
@@ -179,7 +183,7 @@ function installed(avail::Dict=available())
             catch e
                 pkgs[pkg] = (typemin(VersionNumber), true)
             finally
-                LibGit2.free!(prepo)
+                LibGit2.finalize(prepo)
             end
         catch
             pkgs[pkg] = (typemin(VersionNumber), true)
