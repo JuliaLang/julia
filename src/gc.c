@@ -573,7 +573,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
 #endif
     }
     _gc_setmark(o, mark_mode);
-    verify_val(o);
+    verify_val(jl_valueof(o));
     return mark_mode;
 }
 
@@ -601,7 +601,7 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
     }
     _gc_setmark(o, mark_mode);
     page->gc_bits |= mark_mode;
-    verify_val(o);
+    verify_val(jl_valueof(o));
     return mark_mode;
 }
 
@@ -1460,7 +1460,7 @@ static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 #endif
     assert(v != NULL);
     jl_taggedvalue_t* o = jl_astaggedvalue(v);
-    verify_val(o);
+    verify_val(v);
     int bits = gc_bits(o);
     if (!gc_marked(o)) {
         return push_root((jl_value_t*)v, d, bits);
@@ -1994,7 +1994,8 @@ static void gc_verify_track(void)
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
             int clean_len = bits_save[GC_CLEAN].len;
             for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
-                if (bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j] == lostval_parent) {
+                void* p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+                if (jl_valueof(p) == lostval_parent) {
                     lostval = lostval_parent;
                     lostval_parent = NULL;
                     break;
