@@ -1,5 +1,7 @@
 module LibGit2
 
+export with_libgit2
+
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
@@ -66,11 +68,11 @@ function isdirty(repo::GitRepo, paths::AbstractString="")
             c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
             result = c > 0
         end
-        free!(diff)
+        finalize(diff)
     catch
         result = true
     finally
-        free!(tree)
+        finalize(tree)
     end
     return result
 end
@@ -97,8 +99,7 @@ function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
 end
 
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
-    cfg = GitConfig(repo)
-    try
+    with_libgit2(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
 
         m = match(GITHUB_REGEX,url)
@@ -108,17 +109,13 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
                 set!(cfg, "remote.$remote.pushurl", push)
             end
         end
-    catch e
-        warn("set_remote_url: ", e.msg)
-    finally
-        free!(cfg)
     end
 end
 
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    repo = GitRepo(path)
-    set_remote_url(repo, url, remote=remote)
-    free!(prepo)
+    with_libgit2(GitRepo, path) do repo
+        set_remote_url(repo, url, remote=remote)
+    end
 end
 
 function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{UInt8}, url::Ptr{UInt8}, payload::Ptr{Void})
@@ -134,7 +131,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{
     name_str = bytestring(name)
     err= try set!(config, "remote.$name_str.mirror", true)
          catch -1
-         finally free!(config)
+         finally finalize(config)
          end
     err != 0 && return Cint(err)
     return Cint(0)
@@ -144,14 +141,10 @@ const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, P
 function fetch(repo::GitRepo, remote::AbstractString="origin")
     rmt = get(GitRemote, repo, remote)
 
-    try
+    with_libgit2(rmt, warn_on_exception=true) do rmt
         @check ccall((:git_remote_fetch, :libgit2), Cint,
                 (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
                 rmt.ptr, C_NULL, C_NULL)
-    catch err
-        rethrow(err)
-    finally
-        free!(rmt)
     end
 end
 
