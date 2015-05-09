@@ -94,3 +94,14 @@ function GitError(code::Integer)
     err_class, err_msg = last_error()
     return GitError{err_class, err_code}(err_msg)
 end
+
+macro check(git_func)
+    quote
+        local err::Cint
+        err = $(esc(git_func::Expr))
+        if err < 0
+            throw(GitError(err))
+        end
+        err
+    end
+end

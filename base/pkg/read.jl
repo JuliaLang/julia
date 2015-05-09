@@ -101,6 +101,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
 
     # get package repo head hash
     head = string(LibGit2.head_oid(prepo))
+    isempty(head) && return typemin(VersionNumber)
 
     vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
@@ -169,11 +170,20 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        prepo = LibGit2.GitRepo(pkg)
-        ver = installed_version(pkg, prepo, ap)
-        fixed = isfixed(pkg, prepo, ap)
-        pkgs[pkg] = (ver, fixed)
-        LibGit2.free!(prepo)
+        try
+            prepo = LibGit2.GitRepo(pkg)
+            try
+                ver = installed_version(pkg, prepo, ap)
+                fixed = isfixed(pkg, prepo, ap)
+                pkgs[pkg] = (ver, fixed)
+            catch e
+                pkgs[pkg] = (typemin(VersionNumber), true)
+            finally
+                LibGit2.free!(prepo)
+            end
+        catch
+            pkgs[pkg] = (typemin(VersionNumber), true)
+        end
     end
     return pkgs
 end

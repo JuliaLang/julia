@@ -149,17 +149,22 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     @printf io "%-19s" ver
     if ispath(pkg,".git")
         prepo = LibGit2.GitRepo(pkg)
-        phead = LibGit2.head(prepo)
-        if LibGit2.isattached(prepo)
-            print(io, LibGit2.shortname(phead))
-        else
-            print(io, string(LibGit2.Oid(phead))[1:8])
+        try
+            phead = LibGit2.head(prepo)
+            if LibGit2.isattached(prepo)
+                print(io, LibGit2.shortname(phead))
+            else
+                print(io, string(LibGit2.Oid(phead))[1:8])
+            end
+            attrs = AbstractString[]
+            isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
+            LibGit2.isdirty(prepo) && push!(attrs,"dirty")
+            isempty(attrs) || print(io, " (",join(attrs,", "),")")
+        catch
+            print(io, "broken-repo (unregistered)")
+        finally
+            LibGit2.free!(prepo)
         end
-        attrs = AbstractString[]
-        isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
-        LibGit2.isdirty(prepo) && push!(attrs,"dirty")
-        isempty(attrs) || print(io, " (",join(attrs,", "),")")
-        LibGit2.free!(prepo)
     else
         print(io, "non-repo (unregistered)")
     end

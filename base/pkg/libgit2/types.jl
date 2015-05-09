@@ -104,24 +104,34 @@ CloneOptionsStruct() = CloneOptionsStruct(one(Cuint),
                                           Ptr{Void}(0), Ptr{Void}(0)
                                         )
 
-type GitRepo
-    ptr::Ptr{Void}
-
-    function GitRepo(ptr::Ptr{Void}, own::Bool=true)
-        @assert ptr != C_NULL
-        r = new(ptr)
-        own && finalizer(r, free!)
-        return r
+# Common types
+for (typ, fnc) in ((:GitRemote,    :(:git_remote_free)),
+                   (:GitRevWalker, :(:git_revwalk_free)),
+                   (:GitConfig,    :(:git_config_free)),
+                   (:GitReference, :(:git_reference_free)),
+                   (:GitDiff,      :(:git_diff_free)),
+                   (:GitRepo,      :(:git_repository_free)))
+    @eval type $typ
+        ptr::Ptr{Void}
+        function $typ(ptr::Ptr{Void})
+            @assert ptr != C_NULL
+            obj = new(ptr)
+            return obj
+        end
+        $typ() = new(C_NULL)
     end
+
+    @eval function free!(obj::$typ)
+        if obj.ptr != C_NULL
+            ccall(($fnc, :libgit2), Void, (Ptr{Void},), obj.ptr)
+            obj.ptr = C_NULL
+        end
+    end
+
+    @eval Base.isempty(obj::$typ) = (obj.ptr == C_NULL)
 end
 
-function free!(r::GitRepo)
-    if r.ptr != C_NULL
-        ccall((:git_repository_free, :libgit2), Void, (Ptr{Void},), r.ptr)
-        r.ptr = C_NULL
-    end
-end
-
+# Object types
 abstract GitObject
 
 function free!(o::GitObject)
@@ -130,82 +140,21 @@ function free!(o::GitObject)
         o.ptr = C_NULL
     end
 end
+Base.isempty(obj::GitObject) = (obj.ptr == C_NULL)
 
-type GitCommit <: GitObject
-    ptr::Ptr{Void}
-
-    function GitCommit(ptr::Ptr{Void})
-        @assert ptr != C_NULL
-        this = new(ptr)
-        finalizer(this, free!)
-        return this
+for typ in [:GitCommit, :GitTree]
+    @eval type $typ <: GitObject
+        ptr::Ptr{Void}
+        function $typ(ptr::Ptr{Void})
+            @assert ptr != C_NULL
+            obj = new(ptr)
+            return obj
+        end
+        $typ() = new(C_NULL)
     end
 end
 
-type GitTree <: GitObject
-    ptr::Ptr{Void}
-
-    function GitTree(ptr::Ptr{Void})
-        @assert ptr != C_NULL
-        this = new(ptr)
-        finalizer(this, free!)
-        return this
-    end
-end
-
-type GitReference
-    ptr::Ptr{Void}
-
-    function GitReference(ptr::Ptr{Void})
-        r = new(ptr)
-        finalizer(r, free!)
-        return r
-    end
-end
-
-function free!(r::GitReference)
-    if r.ptr != C_NULL
-        ccall((:git_reference_free, :libgit2), Void, (Ptr{Void},), r.ptr)
-        r.ptr = C_NULL
-    end
-end
-
-type GitConfig
-    ptr::Ptr{Void}
-
-    function GitConfig(ptr::Ptr{Void})
-        @assert ptr != C_NULL
-        cfg = new(ptr)
-        finalizer(cfg, free!)
-        return cfg
-    end
-end
-
-function free!(cfg::GitConfig)
-    if cfg.ptr != C_NULL
-        ccall((:git_config_free, :libgit2), Void, (Ptr{Void},), cfg.ptr)
-        cfg.ptr = C_NULL
-    end
-end
-
-type GitRevWalker
-    ptr::Ptr{Void}
-
-    function GitRevWalker(ptr::Ptr{Void})
-        @assert ptr != C_NULL
-        w = new(ptr)
-        finalizer(w, free!)
-        return w
-    end
-end
-
-function free!(w::GitRevWalker)
-    if w.ptr != C_NULL
-        ccall((:git_revwalk_free, :libgit2), Void, (Ptr{Void},), w.ptr)
-        w.ptr = C_NULL
-    end
-end
-
+# Misc types
 type Signature
     name::UTF8String
     email::UTF8String
