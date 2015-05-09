@@ -362,8 +362,12 @@ static jl_value_t *ntuple_translate(jl_value_t *v)
         JL_GC_POP();
         return v;
     }
-    tva = (jl_value_t*) jl_wrap_vararg(jl_tparam1(v), jl_tparam0(v));
-    result = (jl_value_t*)jl_tupletype_fill(1, tva);
+    if (v == (jl_value_t*)jl_ntuple_type)
+        result = (jl_value_t*)jl_anytuple_type;
+    else {
+        tva = (jl_value_t*) jl_wrap_vararg(jl_tparam1(v), jl_tparam0(v));
+        result = (jl_value_t*)jl_tupletype_fill(1, tva);
+    }
     JL_GC_POP();
     return result;
 }
@@ -592,6 +596,8 @@ static size_t tuple_intersect_size(jl_svec_t *a, jl_svec_t *b, int *bot)
 jl_datatype_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n == NULL) {
+        if (t == NULL)
+            return (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)jl_vararg_type, NULL, 0);
         jl_value_t *env[2];
         env[0] = jl_tparam0(jl_vararg_type);
         env[1] = t;
@@ -2535,6 +2541,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
 // subtype comparison
 
 static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant);
+static int jl_subtype_le_old(jl_value_t *a, jl_value_t *b, int ta, int invariant);
+static int jl_subtype_le_new_(jl_value_t *a, jl_value_t *b, int ta, int invariant);
 
 static int jl_tuple_subtype_old(jl_value_t **child, size_t cl,
                              jl_datatype_t *pdt, int ta, int invariant)
@@ -2556,7 +2564,7 @@ static int jl_tuple_subtype_old(jl_value_t **child, size_t cl,
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (!jl_subtype_le(ce, pe, ta, invariant))
+        if (!jl_subtype_le_old(ce, pe, ta, invariant))
             return 0;
 
         if (cseq && pseq) return 1;
@@ -2592,33 +2600,57 @@ static int jl_tuple_subtype_new(jl_value_t **child, size_t clenr,
     jl_value_t *ce=NULL, *pe=NULL;
     int cseq=0, pseq=0;
     // Stage 3
+    int result = 0;//, recheck = 0;
     while (1) {
         if (!cseq)
             cseq = !ta && ci<clenr && clenkind != JL_TUPLE_FIXED && jl_is_vararg_type(child[ci]);
         if (!pseq)
             pseq = pi<plenr && plenkind != JL_TUPLE_FIXED && jl_is_vararg_type(parent[pi]);
         if (cseq && !pseq)
-            return 0;
-        if (ci >= clenf)
-            return pi>=plenf || (pseq && (!invariant || parent[plenr-1] != (jl_value_t*)jl_vararg_type));   // Note: may need equivalent of || jl_subtype_le_((jl_value_t*)jl_anytuple_type, a, 0, 1), but tests pass without it
+            break;
+        if (ci >= clenf) {
+            result = pi >= plenf || (pseq && !invariant);
+            break;
+        }
         if (pi >= plenf && !pseq)
-            return 0;
+            break;
         if (ci < clenr) {
             ce = child[ci];
             if (jl_is_vararg_type(ce)) ce = jl_tparam0(ce);
         }
         if (pi < plenr) {
             pe = parent[pi];
-            if (jl_is_vararg_type(pe)) pe = jl_tparam0(pe);
+            if (jl_is_vararg_type(pe)) {
+                /*
+                if (invariant && pe == (jl_value_t*)jl_vararg_type) {
+                    pe = jl_bottom_type;
+                    recheck = 1;
+                }
+                else
+                    pe = jl_tparam0(pe);
+                if (invariant)
+                    recheck = 1;
+                */
+                pe = jl_tparam0(pe);
+            }
         }
 
-        if (!jl_subtype_le(ce, pe, ta, invariant))
-            return 0;
+        if (!jl_subtype_le_new_(ce, pe, ta, invariant))
+            break;
 
-        if (cseq && pseq) return 1;
+        if (cseq && pseq) {
+            result = 1;
+            break;
+        }
         ci++;
         pi++;
     }
+    /*
+    // The following is needed for Array{Tuple{Vararg}} <: Array{Tuple{Vararg}}
+    if (!result && recheck && clenr == plenr)
+        return jl_subtype_le_new_(child[clenr-1], parent[plenr-1], ta, invariant);
+    */
+    return result;
 }
 
 static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
@@ -2654,7 +2686,7 @@ static int tuple_all_subtype(jl_datatype_t *t, jl_value_t *super, int ta, int in
         jl_value_t *ce = jl_tparam(t,ci);
         if (!ta && jl_is_vararg_type(ce))
             ce = jl_tparam0(ce);
-        if (!jl_subtype_le(ce, super, ta, invariant))
+        if (!jl_subtype_le_old(ce, super, ta, invariant))
             return 0;
     }
     return 1;
@@ -2824,7 +2856,7 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (ta) {
         if (jl_is_type_type(b)) {
-            return jl_is_type(a) && jl_subtype_le_new(a, jl_tparam0(b), 0, 1);
+            return jl_is_type(a) && jl_subtype_le_new_(a, jl_tparam0(b), 0, 1);
         }
     }
     else if (a == b) {
@@ -2840,7 +2872,7 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             return jl_subtype_le_new(a,b,0,0) && jl_subtype_le_new(b,a,0,0);
         }
         for(i=0; i < l_ap; i++) {
-            if (!jl_subtype_le_new(jl_svecref(ap,i), b, 0, invariant))
+            if (!jl_subtype_le_new_(jl_svecref(ap,i), b, 0, invariant))
                 return 0;
         }
         return 1;
@@ -2851,14 +2883,14 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         if (jl_is_typevar(tp0a)) {
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
             jl_value_t *lb = ((jl_tvar_t*)tp0a)->lb;
-            if (jl_subtype_le_new(ub, b, 1, 0) &&
-                !jl_subtype_le_new((jl_value_t*)jl_any_type, ub, 0, 0)) {
-                if (jl_subtype_le_new(lb, b, 1, 0))
+            if (jl_subtype_le_new_(ub, b, 1, 0) &&
+                !jl_subtype_le_new_((jl_value_t*)jl_any_type, ub, 0, 0)) {
+                if (jl_subtype_le_new_(lb, b, 1, 0))
                     return 1;
             }
         }
         else {
-            if (jl_subtype_le_new(tp0a, b, 1, 0))
+            if (jl_subtype_le_new_(tp0a, b, 1, 0))
                 return 1;
         }
     }
@@ -2868,7 +2900,7 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             return 0;
         jl_svec_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < jl_svec_len(bp); i++) {
-            if (jl_subtype_le_new(a, jl_svecref(bp,i), ta, invariant))
+            if (jl_subtype_le_new_(a, jl_svecref(bp,i), ta, invariant))
                 return 1;
         }
         return 0;
@@ -2894,7 +2926,7 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         while (tta != (jl_datatype_t*)jl_any_type) {
             if (tta->name == ttb->name) {
                 if (super && ttb->name == jl_type_type->name && jl_is_typevar(jl_tparam0(b))) {
-                    if (jl_subtype_le_new(a, jl_tparam0(b), 0, 1))
+                    if (jl_subtype_le_new_(a, jl_tparam0(b), 0, 1))
                         return 1;
                 }
                 if (invariant && ttb == (jl_datatype_t*)ttb->name->primary)
@@ -2909,7 +2941,7 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                         if (!jl_is_typevar(apara))
                             return 0;
                     }
-                    if (!jl_subtype_le_new(apara, bpara, 0, 1))
+                    if (!jl_subtype_le_new_(apara, bpara, 0, 1))
                         return 0;
                 }
                 return 1;
@@ -2926,30 +2958,47 @@ int jl_subtype_le_new(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return
-                jl_subtype_le_new((jl_value_t*)((jl_tvar_t*)a)->ub,
+                jl_subtype_le_new_((jl_value_t*)((jl_tvar_t*)a)->ub,
                               (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
-                jl_subtype_le_new((jl_value_t*)((jl_tvar_t*)b)->lb,
+                jl_subtype_le_new_((jl_value_t*)((jl_tvar_t*)b)->lb,
                               (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
         }
         if (invariant) {
             return 0;
         }
-        return jl_subtype_le_new((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0);
+        return jl_subtype_le_new_((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0);
     }
     if (jl_is_typevar(b)) {
-        return jl_subtype_le_new(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
-            jl_subtype_le_new((jl_value_t*)((jl_tvar_t*)b)->lb, a, 0, 0);
+        return jl_subtype_le_new_(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
+            jl_subtype_le_new_((jl_value_t*)((jl_tvar_t*)b)->lb, a, 0, 0);
     }
     if ((jl_datatype_t*)a == jl_any_type) return 0;
 
     return jl_egal(a, b);
 }
 
+static int jl_subtype_le_new_(jl_value_t *a, jl_value_t *b, int ta, int invariant)
+{
+    jl_value_t *newa=NULL, *newb=NULL;
+    JL_GC_PUSH2(&newa, &newb);
+    if (needs_translation(a))
+        newa = ntuple_translate(a);
+    else
+        newa = a;
+    if (needs_translation(b))
+        newb = ntuple_translate(b);
+    else
+        newb = b;
+    int result = jl_subtype_le_new(newa, newb, ta, invariant);
+    JL_GC_POP();
+    return result;
+}
+
+int warnonce_subtype(int ta, int invariant, uintptr_t a, uintptr_t b);
+
 static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
 {
     int retold = jl_subtype_le_old(a, b, ta, invariant);
-    if (!needs_translation(a) && !needs_translation(b))
-        return retold;
     jl_value_t *newa=NULL, *newb=NULL;
     JL_GC_PUSH2(&newa, &newb);
     if (needs_translation(a))
@@ -2962,12 +3011,15 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         newb = b;
     int retnew = jl_subtype_le_new(newa, newb, ta, invariant);
     if (retnew != retold) {
-        jl_printf(JL_STDOUT, "Disagree jl_subtype_le with retnew = %d, retold = %d (ta = %d, invariant = %d):\n", retnew, retold, ta, invariant);
-        jl_(a);
-        jl_(b);
+        if (warnonce_subtype(ta, invariant, jl_object_id(a), jl_object_id(b))) {
+            jl_printf(JL_STDOUT, "Disagree jl_subtype_le with retnew = %d, retold = %d (ta = %d, invariant = %d):\n", retnew, retold, ta, invariant);
+            jl_(a);
+            jl_(b);
+        }
     }
     JL_GC_POP();
     return retnew;
+    //return retold;
 }
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta)
@@ -3719,6 +3771,7 @@ void jl_init_types(void)
     jl_tuple_typename = jl_anytuple_type->name;
     jl_anytuple_type->uid = 0;
     jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
+    //jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)NULL, (jl_value_t*)NULL));
     jl_anytuple_type->types = jl_anytuple_type->parameters;
     jl_anytuple_type->nfields = 1;
 
