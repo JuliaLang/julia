@@ -22,6 +22,7 @@ include("libgit2/commit.jl")
 include("libgit2/repository.jl")
 include("libgit2/config.jl")
 include("libgit2/walker.jl")
+include("libgit2/remote.jl")
 
 function need_update(repo::GitRepo)
     if !isbare(repo)
@@ -35,46 +36,59 @@ end
 
 function iscommit(id::AbstractString, repo::GitRepo)
     need_update(repo)
-    return !isa(get(GitCommit, repo, id), GitError)
+    res = true
+    try
+        get(GitCommit, repo, id)
+    catch
+        res = false
+    end
+    return res
 end
 
 function isdirty(repo::GitRepo, paths::AbstractString="")
     tree_oid = revparse(repo, "HEAD^{tree}")
     tree_oid == nothing && return true
 
-    tree_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    tree_oid_ptr = Ref(tree_oid)
-    err = ccall((:git_tree_lookup, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}),
-               tree_ptr_ptr, repo.ptr, tree_oid_ptr)
-    err != 0 && return true
+    result = false
+    tree = get(GitTree, repo, tree_oid)
+    try
+        diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+        @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
+                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                   diff_ptr_ptr, repo.ptr, tree.ptr, C_NULL, C_NULL)
+        diff = GitDiff(diff_ptr_ptr[])
 
-    diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-               diff_ptr_ptr, repo.ptr, tree_ptr_ptr[], C_NULL, C_NULL)
-    err != 0 && return true
-
-    if isempty(paths)
-        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr_ptr[])
-        c > 0 && return true
-    else
-        # TODO look for specified path
-        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr_ptr[])
-        c > 0 && return true
+        if isempty(paths)
+            c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
+            result = c > 0
+        else
+            # TODO look for specified path
+            c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
+            result = c > 0
+        end
+        free!(diff)
+    catch
+        result = true
+    finally
+        free!(tree)
     end
-    return false
+    return result
 end
 
 function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
     oid1_ptr = Ref(Oid(one))
     oid2_ptr = Ref(Oid(two))
     moid_ptr = Ref(Oid())
-    err = ccall((:git_merge_base, :libgit2), Cint,
+    moid = try
+        @check ccall((:git_merge_base, :libgit2), Cint,
                 (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
-    err != 0 && return nothing
-    return moid_ptr[]
+        moid_ptr[]
+    catch e
+        warn("merge_base: ", e.msg)
+        Oid()
+    end
+    return moid
 end
 
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
@@ -84,54 +98,61 @@ end
 
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     cfg = GitConfig(repo)
+    try
+        set!(cfg, "remote.$remote.url", url)
 
-    err = set!(cfg, "remote.$remote.url", url)
-    err !=0 && return
-
-    m = match(GITHUB_REGEX,url)
-    m == nothing && return
-    push = "git@github.com:$(m.captures[1]).git"
-    if push != url
-        err = set!(cfg, "remote.$remote.pushurl", push)
+        m = match(GITHUB_REGEX,url)
+        if m != nothing
+            push = "git@github.com:$(m.captures[1]).git"
+            if push != url
+                set!(cfg, "remote.$remote.pushurl", push)
+            end
+        end
+    catch e
+        warn("set_remote_url: ", e.msg)
+    finally
+        free!(cfg)
     end
 end
 
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
     repo = GitRepo(path)
     set_remote_url(repo, url, remote=remote)
-    LibGit2.free!(prepo)
+    free!(prepo)
 end
 
-function mirror_callback(remote::Ptr{Ptr{Void}}, repo::Ptr{Void}, name::Ptr{UInt8}, url::Ptr{UInt8}, payload::Ptr{Void})
+function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{UInt8}, url::Ptr{UInt8}, payload::Ptr{Void})
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
     err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}),
-                remote, repo, name, url, fetch_spec)
+                remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
 
     # And set the configuration option to true for the push command
-    config = GitConfig(GitRepo(repo, false))
+    config = GitConfig(GitRepo(repo_ptr))
     name_str = bytestring(name)
-    err = set!(config, "remote.$name_str.mirror", true)
-    free!(config)
+    err= try set!(config, "remote.$name_str.mirror", true)
+         catch -1
+         finally free!(config)
+         end
     err != 0 && return Cint(err)
-
     return Cint(0)
 end
 const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
 
 function fetch(repo::GitRepo, remote::AbstractString="origin")
-    remote_ptr = [C_NULL]
-    err = ccall((:git_remote_lookup, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}),
-                remote_ptr, repo.ptr, remote)
-    err != 0 && return GitError(err)
+    rmt = get(GitRemote, repo, remote)
 
-    err = ccall((:git_remote_fetch, :libgit2), Cint,
+    try
+        @check ccall((:git_remote_fetch, :libgit2), Cint,
                 (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
-                remote_ptr[1], C_NULL, C_NULL)
-    err != 0 && return GitError(err)
+                rmt.ptr, C_NULL, C_NULL)
+    catch err
+        rethrow(err)
+    finally
+        free!(rmt)
+    end
 end
 
 function clone(url::AbstractString, path::AbstractString;
@@ -150,17 +171,15 @@ function clone(url::AbstractString, path::AbstractString;
 
     clone_opts_ref = Ref(clone_opts)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_clone, :libgit2), Cint,
+    @check ccall((:git_clone, :libgit2), Cint,
             (Ptr{Ptr{Void}}, Ptr{UInt8}, Ptr{UInt8}, Ref{CloneOptionsStruct}),
             repo_ptr_ptr, url, path, clone_opts_ref)
-    err != 0 && return nothing
-
     return GitRepo(repo_ptr_ptr[])
 end
 
 function authors(repo::GitRepo)
-    athrs = Pkg.LibGit2.map(
-        (oid,repo)->author(get(GitCommit, repo, oid)),
+    athrs = map(
+        (oid,repo)->author(get(GitCommit, repo, oid))::Signature,
         repo) #, by = Pkg.LibGit2.GitConst.SORT_TIME)
     return athrs
 end

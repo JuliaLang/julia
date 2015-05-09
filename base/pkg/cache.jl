@@ -31,21 +31,33 @@ end
 function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     isdir(".cache") || mkcachedir()
     cache = path(pkg)
-    if !isdir(cache)
-        info("Cloning cache of $pkg from $url")
-        repo = LibGit2.clone(url, path, bare = true, remote_cb = Pkg.LibGit2.mirror_cb)
-        if repo == noting
-            rm(cache, recursive=true)
-            error("Cannot clone $pkg from $url")
+    repo = if isdir(cache)
+        try
+            LibGit2.GitRepo(cache)
+        catch err
+            rethrow(err)
         end
     else
-        repo = LibGit2.GitRepo(cache)
+        info("Cloning cache of $pkg from $url")
+        try
+            LibGit2.clone(url, cache, bare = true, remote_cb = LibGit2.mirror_cb)
+        catch err
+            rm(cache, recursive=true)
+            error("Cannot clone $pkg from $url\nError in LibGit2.clone: ", err)
+        end
     end
-    LibGit2.set_remote_url(repo, url)
-    if !all(sha1->LibGit2.iscommit(sha1, repo), sha1s)
-        info("Updating cache of $pkg...")
-        isa(LibGit2.fetch(repo), LibGit2.GitError) &&
-            error("couldn't update $cache using `git remote update`")
+    try
+        LibGit2.set_remote_url(repo, url)
+        if !all(sha1->LibGit2.iscommit(sha1, repo), sha1s)
+            info("Updating cache of $pkg...")
+            try
+                LibGit2.fetch(repo)
+            catch
+                error("couldn't update $cache using `git remote update`")
+            end
+        end
+    catch err
+        rethrow(err)
     end
     filter(sha1->!LibGit2.iscommit(sha1, repo), sha1s)
 end

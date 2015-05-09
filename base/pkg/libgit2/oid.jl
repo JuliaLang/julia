@@ -48,7 +48,7 @@ function Oid(id::AbstractString)
         ccall((:git_oid_fromstrp, :libgit2), Cint,
               (Ptr{Oid}, Ptr{Cchar}), oid_ptr, bstr)
     end
-    err != 0 && return nothing
+    err != 0 && return Oid()
     return oid_ptr[]
 end
 
@@ -58,13 +58,13 @@ function Oid(ref::GitReference)
     typ = ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
     typ != 1 && return Oid()
     oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-    oid_ptr == C_NULL && return ""
+    oid_ptr == C_NULL && return Oid()
     return Oid(oid_ptr)
 end
 
 function Oid(obj::Ptr{Void})
     oid_ptr = ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), obj)
-    oid_ptr == C_NULL && return ""
+    oid_ptr == C_NULL && return Oid()
     return Oid(oid_ptr)
 end
 
