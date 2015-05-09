@@ -145,7 +145,7 @@ let # svds test
     S2 = svd(full(A))
 
     ## singular values match:
-    @test_approx_eq S1[2] S2[2][1:2]
+    @test_approx_eq S1[2] S2[2].diag[1:2]
 
     ## 1st left singular vector
     s1_left = sign(S1[1][3,1]) * S1[1][:,1]
@@ -173,7 +173,7 @@ let # complex svds test
     S2 = svd(full(A))
 
     ## singular values match:
-    @test_approx_eq S1[2] S2[2][1:2]
+    @test_approx_eq S1[2] S2[2].diag[1:2]
 
     ## left singular vectors
     s1_left = abs(S1[1][:,1:2])

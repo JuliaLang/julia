@@ -65,7 +65,7 @@ let n = 12 #Size of matrix problem to test
             evecs = LAPACK.stein!(a, b, w)
 
             (e, v) = eig(SymTridiagonal(a, b))
-            @test_approx_eq e w
+            @test_approx_eq diag(e) w
             test_approx_eq_vecs(v, evecs)
 
             debug && println("stein! call using iblock and isplit")

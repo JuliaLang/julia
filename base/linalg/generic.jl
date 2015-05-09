@@ -445,3 +445,4 @@ end
 det(x::Number) = x
 
 logdet(A::AbstractMatrix) = logdet(lufact(A))
+logdet(x::Number) = log(x)

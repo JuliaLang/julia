@@ -49,21 +49,6 @@ function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal{T})
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
 
-###################
-# LAPACK routines #
-###################
-
-#Singular values
-svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
-function svd{T<:BlasReal}(M::Bidiagonal{T})
-    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', copy(M.dv), copy(M.ev))
-    return U, d, Vt'
-end
-function svdfact!(M::Bidiagonal, thin::Bool=true)
-    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
-    SVD(U, d, Vt)
-end
-
 ####################
 # Generic routines #
 ####################
@@ -203,33 +188,3 @@ function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
 end
 
 factorize(A::Bidiagonal) = A
-
-# Eigensystems
-eigvals(M::Bidiagonal) = M.dv
-function eigvecs{T}(M::Bidiagonal{T})
-    n = length(M.dv)
-    Q = Array(T, n, n)
-    blks = [0; find(x -> x == 0, M.ev); n]
-    if M.isupper
-        for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
-            v=zeros(T, n)
-            v[blks[idx_block] + 1] = one(T)
-            for j = blks[idx_block] + 1:i - 1 #Starting from j=i, eigenvector elements will be 0
-                v[j+1] = (M.dv[i] - M.dv[j])/M.ev[j] * v[j]
-            end
-            Q[:, i] = v/norm(v)
-        end
-    else
-        for idx_block = 1:length(blks) - 1, i = blks[idx_block + 1]:-1:blks[idx_block] + 1 #index of eigenvector
-            v = zeros(T, n)
-            v[blks[idx_block+1]] = one(T)
-            for j = (blks[idx_block+1] - 1):-1:max(1, (i - 1)) #Starting from j=i, eigenvector elements will be 0
-                v[j] = (M.dv[i] - M.dv[j+1])/M.ev[j] * v[j+1]
-            end
-            Q[:,i] = v/norm(v)
-        end
-    end
-    Q #Actually Triangular
-end
-eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
-

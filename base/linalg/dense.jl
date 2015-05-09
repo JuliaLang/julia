@@ -420,13 +420,14 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
             return B;
         end
     end
-    SVD         = svdfact(A, thin=true)
-    Stype       = eltype(SVD.S)
-    Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> tol*maximum(SVD.S)
-    Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[find(!isfinite(Sinv))] = zero(Stype)
-    return SVD.Vt'scale(Sinv, SVD.U')
+    F           = svdfact(A, thin=true)
+    vals        = F.S.diag
+    Stype       = eltype(vals)
+    valsInv     = zeros(Stype, length(vals))
+    index       = vals .> tol*maximum(vals)
+    valsInv[index] = one(Stype) ./ vals[index]
+    valsInv[find(!isfinite(valsInv))] = zero(Stype)
+    return F.Vt'*(Diagonal(valsInv)*F.U')
 end
 function pinv{T}(A::StridedMatrix{T})
     tol = eps(real(float(one(T))))*maximum(size(A))
