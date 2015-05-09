@@ -39,26 +39,28 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 function isdirty(repo::GitRepo, paths::AbstractString="")
-    tree_oid =revparse(repo, "HEAD^{tree}")
+    tree_oid = revparse(repo, "HEAD^{tree}")
     tree_oid == nothing && return true
 
-    tree_ptr = Ptr{Void}[0]
+    tree_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    tree_oid_ptr = Ref(tree_oid)
     err = ccall((:git_tree_lookup, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), tree_ptr, repo.ptr, tree_oid)
+               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}),
+               tree_ptr_ptr, repo.ptr, tree_oid_ptr)
     err != 0 && return true
 
-    diff_ptr = Ptr{Void}[0]
+    diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-               diff_ptr, repo.ptr, tree_ptr[1], C_NULL, C_NULL)
+               diff_ptr_ptr, repo.ptr, tree_ptr_ptr[], C_NULL, C_NULL)
     err != 0 && return true
 
     if isempty(paths)
-        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr[1])
+        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr_ptr[])
         c > 0 && return true
     else
         # TODO look for specified path
-        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr[1])
+        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff_ptr_ptr[])
         c > 0 && return true
     end
     return false
@@ -72,7 +74,7 @@ function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
                 (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
     err != 0 && return nothing
-    return moid[]
+    return moid_ptr[]
 end
 
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
@@ -83,14 +85,14 @@ end
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     cfg = GitConfig(repo)
 
-    err = set!(AbstractString, cfg, "remote.$remote.url", url)
+    err = set!(cfg, "remote.$remote.url", url)
     err !=0 && return
 
     m = match(GITHUB_REGEX,url)
     m == nothing && return
     push = "git@github.com:$(m.captures[1]).git"
     if push != url
-        err = set!(AbstractString, cfg, "remote.$remote.pushurl", push)
+        err = set!(cfg, "remote.$remote.pushurl", push)
     end
 end
 
