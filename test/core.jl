@@ -465,6 +465,16 @@ begin
     @test !isassigned(a,2)
 end
 
+# isassigned, issue #11167
+type Type11167{T,N} end
+Type11167{Int,2}
+@test !isassigned(Type11167.name.cache, 0)
+@test isassigned(Type11167.name.cache, 1)
+@test !isassigned(Type11167.name.cache, 2)
+Type11167{Float32,5}
+@test isassigned(Type11167.name.cache, 2)
+@test !isassigned(Type11167.name.cache, 3)
+
 # dispatch
 begin
     local foo, bar, baz
