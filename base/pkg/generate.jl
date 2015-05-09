@@ -2,25 +2,24 @@
 
 module Generate
 
-import ..Git, ..Read
+import ..Git, ..LibGit2, ..Read
 
-copyright_year() = readchomp(`date +%Y`)
-copyright_name(dir::AbstractString) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
-github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
+copyright_year() =  Dates.year(Dates.today())
+copyright_name(dir::AbstractString) = LibGit2.get(AbstractString, LibGit2.GitConfig(LibGit2.GitRepo(dir)), "user.name")
+github_user() = LibGit2.get(AbstractString, LibGit2.GitConfig(), "github.user")
 
 function git_contributors(dir::AbstractString, n::Int=typemax(Int))
     contrib = Dict()
-    tty = @windows? "CON:" : "/dev/tty"
-    for line in eachline(pipeline(tty, Git.cmd(`shortlog -nes`, dir=dir)))
-        m = match(r"\s*(\d+)\s+(.+?)\s+\<(.+?)\>\s*$", line)
-        m === nothing && continue
-        commits, name, email = m.captures
-        if haskey(contrib,email)
-            contrib[email][1] += parse(Int,commits)
+    repo = LibGit2.GitRepo(dir)
+    for sig in LibGit2.authors(repo)
+        if haskey(contrib, sig.email)
+            contrib[sig.email][1] += 1
         else
-            contrib[email] = [parse(Int,commits), name]
+            contrib[sig.email] = [1, sig.name]
         end
     end
+    LibGit2.free!(repo)
+
     names = Dict()
     for (commits,name) in values(contrib)
         names[name] = get(names,name,0) + commits

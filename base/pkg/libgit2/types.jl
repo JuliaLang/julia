@@ -1,3 +1,18 @@
+immutable TimeStruct
+    time::Int64     # time in seconds from epoch
+    offset::Cint    # timezone offset in minutes
+end
+TimeStruct() = TimeStruct(zero(Int64), zero(Cint))
+
+immutable SignatureStruct
+    name::Ptr{UInt8}  # full name of the author
+    email::Ptr{UInt8} # email of the author
+    when::TimeStruct  # time when the action happened
+end
+SignatureStruct() = SignatureStruct(Ptr{UInt8}(0),
+                                    Ptr{UInt8}(0),
+                                    TimeStruct())
+
 immutable StrArrayStruct
    strings::Ptr{Ptr{UInt8}}
    count::Csize_t
@@ -89,26 +104,111 @@ CloneOptionsStruct() = CloneOptionsStruct(one(Cuint),
                                           Ptr{Void}(0), Ptr{Void}(0)
                                         )
 
-function clone(url::AbstractString, path::AbstractString;
-               branch::AbstractString="",
-               bare::Bool = false,
-               remote_cb::Ptr{Void} = C_NULL)
-    # start cloning
-    clone_opts = CloneOptionsStruct()
-    clone_opts.bare = Int32(bare)
-    if !isempty(branch)
-        clone_opts.checkout_branch = pointer(branch)
-    end
-    if remote_cb != C_NULL
-        clone_opts.remote_cb = remote_cb
-    end
+type GitRepo
+    ptr::Ptr{Void}
 
-    clone_opts_ref = Ref(clone_opts)
-    repo_ptr = Ptr{Void}[C_NULL]
-    err = ccall((:git_clone, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{UInt8}, Ptr{UInt8}, Ref{CloneOptionsStruct}),
-            repo_ptr, url, path, clone_opts_ref)
-    err != 0 && return nothing
+    function GitRepo(ptr::Ptr{Void}, own::Bool=true)
+        @assert ptr != C_NULL
+        r = new(ptr)
+        own && finalizer(r, free!)
+        return r
+    end
+end
 
-    return GitRepo(repo_ptr[1])
+function free!(r::GitRepo)
+    if r.ptr != C_NULL
+        ccall((:git_repository_free, :libgit2), Void, (Ptr{Void},), r.ptr)
+        r.ptr = C_NULL
+    end
+end
+
+abstract GitObject
+
+function free!(o::GitObject)
+    if o.ptr != C_NULL
+        ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), o.ptr)
+        o.ptr = C_NULL
+    end
+end
+
+type GitCommit <: GitObject
+    ptr::Ptr{Void}
+
+    function GitCommit(ptr::Ptr{Void})
+        @assert ptr != C_NULL
+        this = new(ptr)
+        finalizer(this, free!)
+        return this
+    end
+end
+
+type GitTree <: GitObject
+    ptr::Ptr{Void}
+
+    function GitTree(ptr::Ptr{Void})
+        @assert ptr != C_NULL
+        this = new(ptr)
+        finalizer(this, free!)
+        return this
+    end
+end
+
+type GitReference
+    ptr::Ptr{Void}
+
+    function GitReference(ptr::Ptr{Void})
+        r = new(ptr)
+        finalizer(r, free!)
+        return r
+    end
+end
+
+function free!(r::GitReference)
+    if r.ptr != C_NULL
+        ccall((:git_reference_free, :libgit2), Void, (Ptr{Void},), r.ptr)
+        r.ptr = C_NULL
+    end
+end
+
+type GitConfig
+    ptr::Ptr{Void}
+
+    function GitConfig(ptr::Ptr{Void})
+        @assert ptr != C_NULL
+        cfg = new(ptr)
+        finalizer(cfg, free!)
+        return cfg
+    end
+end
+
+function free!(cfg::GitConfig)
+    if cfg.ptr != C_NULL
+        ccall((:git_config_free, :libgit2), Void, (Ptr{Void},), cfg.ptr)
+        cfg.ptr = C_NULL
+    end
+end
+
+type GitRevWalker
+    ptr::Ptr{Void}
+
+    function GitRevWalker(ptr::Ptr{Void})
+        @assert ptr != C_NULL
+        w = new(ptr)
+        finalizer(w, free!)
+        return w
+    end
+end
+
+function free!(w::GitRevWalker)
+    if w.ptr != C_NULL
+        ccall((:git_revwalk_free, :libgit2), Void, (Ptr{Void},), w.ptr)
+        w.ptr = C_NULL
+    end
+end
+
+type Signature
+    name::UTF8String
+    email::UTF8String
+    time::Int32
+    time_offset::Int32
 end
