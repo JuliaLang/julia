@@ -178,6 +178,8 @@ Library improvements
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
+    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints.
+
   * Data-structure processing
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end`.  ([#8432])
