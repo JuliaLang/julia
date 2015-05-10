@@ -1,6 +1,7 @@
 module LibGit2
 
-export with_libgit2
+export with_libgit2, with, with_warn
+export GitRepo, GitConfig, GitIndex
 
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
@@ -25,6 +26,8 @@ include("libgit2/repository.jl")
 include("libgit2/config.jl")
 include("libgit2/walker.jl")
 include("libgit2/remote.jl")
+include("libgit2/strarray.jl")
+include("libgit2/index.jl")
 
 function need_update(repo::GitRepo)
     if !isbare(repo)
@@ -99,7 +102,7 @@ function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
 end
 
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
-    with_libgit2(GitConfig, repo) do cfg
+    with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
 
         m = match(GITHUB_REGEX,url)
@@ -113,7 +116,7 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
 end
 
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    with_libgit2(GitRepo, path) do repo
+    with(GitRepo, path) do repo
         set_remote_url(repo, url, remote=remote)
     end
 end
@@ -141,7 +144,7 @@ const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, P
 function fetch(repo::GitRepo, remote::AbstractString="origin")
     rmt = get(GitRemote, repo, remote)
 
-    with_libgit2(rmt, warn_on_exception=true) do rmt
+    with_warn(rmt) do rmt
         @check ccall((:git_remote_fetch, :libgit2), Cint,
                 (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
                 rmt.ptr, C_NULL, C_NULL)
@@ -182,4 +185,60 @@ function normalize_url(url::AbstractString)
     m == nothing ? url : "git://github.com/$(m.captures[1]).git"
 end
 
+immutable State
+    head::Oid
+    index::Oid
+    work::Oid
 end
+
+function snapshot(repo::GitRepo; dir="")
+    head = Oid(repo, "HEAD")
+    index = with(GitIndex, repo) do idx; write_tree!(idx) end
+    work = try
+        with(GitIndex, repo) do idx
+            content = readdir(abspath(dir))
+            if length(content) > 1
+                files = [utf8(bytestring(c))::UTF8String for c in content]
+                push!(files, utf8("."))
+
+                add!(idx, files..., flags = GitConst.INDEX_ADD_CHECK_PATHSPEC)
+                write!(idx)
+            end
+            write_tree!(idx)
+        end
+    finally
+        # restore index
+        with(GitIndex, repo) do idx
+            read_tree!(idx, index)
+            write!(idx)
+        end
+    end
+    State(head, index, work)
+end
+
+function restore(s::State, repo::GitRepo; dir="")
+    run(`reset -q --`, dir=dir)               # unstage everything
+    run(`read-tree $(s.work)`, dir=dir)       # move work tree to index
+    run(`checkout-index -fa`, dir=dir)        # check the index out to work
+    run(`clean -qdf`, dir=dir)                # remove everything else
+    run(`read-tree $(s.index)`, dir=dir)      # restore index
+    run(`reset -q --soft $(s.head)`, dir=dir) # restore head
+end
+
+function transact(f::Function, repo::GitRepo; dir="")
+    #state = snapshot(repo, dir=dir)
+    try f(repo) catch
+        #restore(state, repo, dir=dir)
+        rethrow()
+    finally
+        finalize(repo)
+    end
+end
+
+function gitdir(d, repo::GitRepo)
+    g = joinpath(d,".git")
+    isdir(g) && return g
+    path(repo)
+end
+
+end # module

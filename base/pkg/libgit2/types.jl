@@ -174,11 +174,20 @@ function with_libgit2(f::Function, obj)
     end
 end
 
-function with_libgit2{T}(f::Function, ::Type{T}, args...; warn_on_exception::Bool=true)
+function with{T}(f::Function, ::Type{T}, args...; warn_on_exception::Bool=true)
     obj = T(args...)
     try
         with_libgit2(f, obj)
     catch err
-        warn_on_exception ? warn("$(string(T)) thrown exception: $err") : rethrow(err)
+        rethrow(err)
+    end
+end
+
+function with_warn{T}(f::Function, ::Type{T}, args...)
+    obj = T(args...)
+    try
+        with_libgit2(f, obj)
+    catch err
+        warn("$(string(T)) thrown exception: $err")
     end
 end
