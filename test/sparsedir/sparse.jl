@@ -766,7 +766,7 @@ S = sparse(B)
 @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 
 #Test broadcasting of sparse matrixes
-let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), AF = full(A), BF = full(B)
+let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A), BF = full(B), C = sparse(CF)
     @test A .* B == AF .* BF
     @test A[1,:] .* B == AF[1,:] .* BF
     @test A[:,1] .* B == AF[:,1] .* BF
@@ -801,13 +801,85 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), AF = full(A), BF = full(B)
     #      while the right side is a Vector
 
 
+    @test A .- 3 == AF .- 3
+    @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]
     @test A .- B[:,1] == AF .-  BF[:,1]
 
+    @test A .+ 3 == AF .+ 3
+    @test 3 .+ A == 3 .+ AF
     @test A .+ B == AF .+ BF
     @test (A .< B) == (AF .< BF)
     @test (A .!= B) == (AF .!= BF)
+
+    @test A ./ 3 == AF ./ 3
+    @test A .\ 3 == AF .\ 3
+    @test 3 ./ A == 3 ./ AF
+    @test 3 .\ A == 3 .\ AF
+    @test A .\ C == AF .\ CF
+    @test A ./ C == AF ./ CF
+    @test A ./ CF[:,1] == AF ./ CF[:,1]
+    @test A .\ CF[:,1] == AF .\ CF[:,1]
+    @test BF ./ C == BF ./ CF
+    @test BF .\ C == BF .\ CF
+
+    @test A .^ 3 == AF .^ 3
+    @test A .^ BF[:,1] == AF .^ BF[:,1]
+    @test BF[:,1] .^ A == BF[:,1] .^ AF
 end
+
+# test throws
+A = sprandbool(5,5,0.2)
+@test_throws ArgumentError reinterpret(Complex128,A,(5,5))
+@test_throws DimensionMismatch reinterpret(Int8,A,(20,))
+@test_throws DimensionMismatch reshape(A,(20,2))
+
+# test similar with type conversion
+A = speye(5)
+@test size(similar(A,Complex128,Int)) == (5,5)
+@test typeof(similar(A,Complex128,Int)) == SparseMatrixCSC{Complex128,Int}
+@test size(similar(A,Complex128,Int8)) == (5,5)
+@test typeof(similar(A,Complex128,Int8)) == SparseMatrixCSC{Complex128,Int8}
+@test similar(A,Complex128,(6,6)) == spzeros(Complex128,6,6)
+@test convert(Matrix,A) == full(A)
+
+# test float
+A = sprandbool(5,5,0.2)
+@test float(A) == float(full(A))
+
+# test sparsevec
+A = sparse(ones(5,5))
+@test all(full(sparsevec(A)) .== ones(25))
+
+#test sparse
+@test sparse(A) == A
+@test sparse([1:5],[1:5],1) == speye(5)
+
+#test speye and one
+@test speye(A) == speye(5)
+@test eye(A) == speye(5)
+@test one(A) == speye(5)
+@test_throws DimensionMismatch one(sprand(5,6,0.2))
+
+#istriu/istril
+
+A = sparse(triu(rand(5,5)))
+@test istriu(A)
+@test !istriu(sparse(ones(5,5)))
+A = sparse(tril(rand(5,5)))
+@test istril(A)
+@test !istril(sparse(ones(5,5)))
+
+#trace
+
+@test_throws DimensionMismatch trace(sparse(ones(5,6)))
+@test trace(speye(5)) == 5
+
+#diagm on a matrix
+
+@test_throws DimensionMismatch diagm(sparse(ones(5,2)))
+@test_throws DimensionMismatch diagm(sparse(ones(2,5)))
+@test diagm(sparse(ones(1,5))) == speye(5)
