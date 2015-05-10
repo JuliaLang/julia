@@ -28,7 +28,7 @@ SRCS := \
 	jltypes gf typemap ast builtins module interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc warnonce
+	threadgroup threading stackwalk gc
 
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen disasm debuginfo llvm-simdloop llvm-gcroot
