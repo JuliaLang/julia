@@ -641,6 +641,21 @@ let
     @test is(g(a),a)
 end
 
+# Method specificity
+begin
+    local f
+    f{T}(dims::Tuple{}, A::AbstractArray{T,0}) = 1
+    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 2
+    f{T,M,N}(dims::NTuple{M,Int}, A::AbstractArray{T,N}) = 3
+    A = zeros(2,2)
+    @test f((1,2,3), A) == 3
+    @test f((1,2), A) == 2
+    @test f((), reshape([1])) == 1
+    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 4
+    @test f((1,2), A) == 4
+    @test f((1,2,3), A) == 3
+end
+
 # dispatch using Val{T}. See discussion in #9452 for instances vs types
 let
     local firstlast

@@ -2671,7 +2671,7 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         jl_(newpdt);
     }
     JL_GC_POP();
-    return retold;
+    return retnew;
 }
 
 int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta)
@@ -3010,15 +3010,15 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     else
         newb = b;
     int retnew = jl_subtype_le_new(newa, newb, ta, invariant);
+    /*
     if (retnew != retold) {
-        /*
         if (warnonce_subtype(ta, invariant, jl_object_id(a), jl_object_id(b))) {
             jl_printf(JL_STDOUT, "Disagree jl_subtype_le with retnew = %d, retold = %d (ta = %d, invariant = %d):\n", retnew, retold, ta, invariant);
             jl_(a);
             jl_(b);
         }
-        */
     }
+    */
     JL_GC_POP();
     return retnew;
     //return retold;
@@ -3500,8 +3500,11 @@ int type_match_invariance_mask = 1;
 
 static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant);
+static jl_value_t *type_match_old(jl_value_t *child, jl_value_t *parent,
+                                  cenv_t *env, int morespecific, int invariant);
+static jl_value_t *type_match_new_(jl_value_t *child, jl_value_t *parent, cenv_t *env, int morespecific, int invariant);
 
-static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
+static jl_value_t *tuple_match_old(jl_datatype_t *child, jl_datatype_t *parent,
                                cenv_t *env, int morespecific, int invariant)
 {
     size_t ci=0, pi=0;
@@ -3524,7 +3527,7 @@ static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
         if (pseq) pe = jl_tparam0(pe);
 
         int n = env->n;
-        if (type_match_(ce, pe, env, morespecific, invariant) == jl_false) {
+        if (type_match_old(ce, pe, env, morespecific, invariant) == jl_false) {
             env->n = n;
             if (jl_types_equal_generic(ce,pe,1)) {
                 if (ci==cl-1 && pi==pl-1 && !cseq && pseq) {
@@ -3555,7 +3558,87 @@ static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
     return jl_false;
 }
 
-static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
+static jl_value_t *tuple_match_new(jl_datatype_t *child, jl_datatype_t *parent,
+                               cenv_t *env, int morespecific, int invariant)
+{
+    size_t ci=0, pi=0;
+    size_t clenr = jl_nparams(child);
+    size_t plenr = jl_nparams(parent);
+    size_t plenf, clenf;
+    JL_VARARG_KIND ckind, pkind;
+    JL_TUPLE_LENKIND clenkind, plenkind;
+    clenf = tuple_vararg_params(child->parameters, NULL, &ckind, &clenkind);
+    plenf = tuple_vararg_params(parent->parameters, NULL, &pkind, &plenkind);
+    int cseq=0, pseq=0;
+    jl_value_t *ce=NULL, *pe=NULL, *cn=NULL, *pn=NULL;
+    int mode = 0;
+    while(1) {
+        if (!cseq)
+            cseq = (ci<clenr) && clenkind != JL_TUPLE_FIXED && jl_is_vararg_type(jl_tparam(child,ci));
+        if (!pseq)
+            pseq = (pi<plenr) && plenkind != JL_TUPLE_FIXED && jl_is_vararg_type(jl_tparam(parent,pi));
+        if (!morespecific && cseq && !pseq)
+            return jl_false;
+        if (ci >= clenf && !cseq)
+            return (mode || pi>=plenf || (pseq && !invariant)) ? jl_true : jl_false;
+        if (pi >= plenf && !pseq)
+            return mode ? jl_true : jl_false;
+        if (ci < clenr) {
+            ce = jl_tparam(child,ci);
+            if (jl_is_vararg_type(ce)) {
+                cn = jl_tparam1(ce);
+                ce = jl_tparam0(ce);
+            }
+        }
+        if (pi < plenr) {
+            pe = jl_tparam(parent,pi);
+            if (jl_is_vararg_type(pe)) {
+                pn = jl_tparam1(pe);
+                pe = jl_tparam0(pe);
+            }
+        }
+
+        int n = env->n;
+        if (type_match_new_(ce, pe, env, morespecific, invariant) == jl_false) {
+            env->n = n;
+            if (jl_types_equal_generic(ce,pe,1)) {
+                if (ci==clenf-1 && pi==plenf-1 && !cseq && pseq) {
+                    return jl_true;
+                }
+                if (!mode) return jl_false;
+            }
+            else {
+                return jl_false;
+            }
+        }
+        // Match the number parameter in Vararg, too
+        if (cseq && pseq) {
+            n = env->n;
+            if (type_match_new_(cn, pn, env, morespecific, invariant) == jl_false) {
+                env->n = n;
+                return jl_false;
+            }
+        }
+
+        if (mode && cseq && !pseq)
+            return jl_true;
+
+        if (morespecific) {
+            if (!(jl_types_equal_generic(ce,pe,1) ||
+                  (jl_is_typevar(pe) &&
+                   jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
+                mode = 1;
+            }
+        }
+
+        if (cseq && pseq) return jl_true;
+        ci++;
+        pi++;
+    }
+    return jl_false;
+}
+
+static jl_value_t *type_match_old(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant)
 {
     jl_value_t *tmp, *tmp2;
@@ -3641,18 +3724,18 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             cenv_t tenv; tenv.data = rts;
             for(i=0; i < jl_svec_len(t); i++) {
                 int n = env->n;
-                tmp = type_match_(jl_svecref(t,i), parent, env, 1, invariant);
+                tmp = type_match_old(jl_svecref(t,i), parent, env, 1, invariant);
                 if (tmp != jl_false) {
                     tenv.n = 0;
-                    tmp2 = type_match_(parent, jl_svecref(t,i), &tenv, 1, invariant);
+                    tmp2 = type_match_old(parent, jl_svecref(t,i), &tenv, 1, invariant);
                     if (tmp2 == jl_false) {
                         n = env->n;
                         for(j=0; j < jl_svec_len(t); j++) {
                             tenv.n = 0;
                             env->n = n;
-                            if (type_match_(parent, jl_svecref(t,j),
+                            if (type_match_old(parent, jl_svecref(t,j),
                                             &tenv, 1, invariant) != jl_false &&
-                                type_match_(jl_svecref(t,j), parent,
+                                type_match_old(jl_svecref(t,j), parent,
                                             env, 1, invariant) == jl_false) {
                                 env->n = n;
                                 JL_GC_POP();
@@ -3673,7 +3756,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         else {
             for(i=0; i < jl_svec_len(t); i++) {
                 int n = env->n;
-                if (type_match_(jl_svecref(t,i), parent, env, morespecific,
+                if (type_match_old(jl_svecref(t,i), parent, env, morespecific,
                                 invariant) == jl_false)
                     { env->n = n; return jl_false; }
             }
@@ -3688,7 +3771,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         int n = env->n;
         for(i=0; i < jl_svec_len(t); i++) {
             env->n = n;
-            if (type_match_(child, jl_svecref(t,i), env,
+            if (type_match_old(child, jl_svecref(t,i), env,
                             morespecific, invariant) != jl_false)
                 return jl_true;
         }
@@ -3707,7 +3790,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             jl_value_t *childlen = jl_box_long(jl_nparams(child));
             if (jl_is_typevar(nt_len)) {
                 int n = env->n;
-                if (type_match_(childlen, nt_len, env, morespecific,
+                if (type_match_old(childlen, nt_len, env, morespecific,
                                 invariant) == jl_false)
                     { env->n = n; return jl_false; }
             }
@@ -3718,14 +3801,14 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             JL_GC_PUSH1(&p_seq);
             p_seq = (jl_value_t*)jl_svec1(p_seq);
             p_seq = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)p_seq);
-            tmp = tuple_match((jl_tupletype_t*)child, (jl_tupletype_t*)p_seq,
+            tmp = tuple_match_old((jl_tupletype_t*)child, (jl_tupletype_t*)p_seq,
                               env, morespecific, invariant);
             JL_GC_POP();
             return tmp;
         }
 
         if (jl_is_tuple_type(parent)) {
-            return tuple_match((jl_datatype_t*)child, (jl_datatype_t*)parent, env,
+            return tuple_match_old((jl_datatype_t*)child, (jl_datatype_t*)parent, env,
                                morespecific, invariant);
         }
         return jl_false;
@@ -3736,7 +3819,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             // only ((T>:S)...,) can be a supertype of NTuple[N,S]
             jl_value_t *ntp = jl_tparam(child, 1);
             if (jl_nparams(parent) == 1 && jl_is_va_tuple((jl_datatype_t*)parent)) {
-                return type_match_(ntp, jl_tparam0(jl_tparam0(parent)), env, morespecific, invariant);
+                return type_match_old(ntp, jl_tparam0(jl_tparam0(parent)), env, morespecific, invariant);
             }
         }
         return jl_false;
@@ -3757,7 +3840,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             assert(jl_nparams(tta) == jl_nparams(ttb));
             for(i=0; i < jl_nparams(tta); i++) {
                 int n = env->n;
-                if (type_match_(jl_tparam(tta,i), jl_tparam(ttb,i),
+                if (type_match_old(jl_tparam(tta,i), jl_tparam(ttb,i),
                                 env, morespecific, 1) == jl_false)
                     { env->n = n; return jl_false; }
             }
@@ -3772,10 +3855,243 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (((jl_datatype_t*)child)->name == jl_type_type->name &&
         ttb->name != jl_type_type->name) {
         // Type{T} also matches >:typeof(T)
-        return type_match_(jl_typeof(jl_tparam0(child)),
+        return type_match_old(jl_typeof(jl_tparam0(child)),
                            parent, env, morespecific, 0);
     }
     return jl_false;
+}
+
+static jl_value_t *type_match_new(jl_value_t *child, jl_value_t *parent,
+                               cenv_t *env, int morespecific, int invariant)
+{
+    jl_value_t *tmp, *tmp2;
+    if (jl_is_typector(child))
+        child = (jl_value_t*)((jl_typector_t*)child)->body;
+    if (jl_is_typector(parent))
+        parent = (jl_value_t*)((jl_typector_t*)parent)->body;
+    size_t i, j;
+    if (match_intersection_mode && jl_is_typevar(child) && !jl_is_typevar(parent)) {
+        tmp = child;
+        child = parent;
+        parent = tmp;
+    }
+    if (jl_is_typevar(parent)) {
+        // make sure type is within this typevar's bounds
+        if (morespecific) {
+            if (!jl_type_morespecific_(child, parent, 0))
+                return jl_false;
+        }
+        else {
+            if (!jl_subtype_le(child, parent, 0, 0))
+                return jl_false;
+        }
+        if (!match_intersection_mode) {
+            if (!((jl_tvar_t*)parent)->bound) return jl_true;
+        }
+        for(int i=0; i < env->n; i+=2) {
+            if (env->data[i] == (jl_value_t*)parent) {
+                jl_value_t *pv = env->data[i+1];
+                if (jl_is_typevar(pv) && jl_is_typevar(child)) {
+                    if (pv == (jl_value_t*)child)
+                        return jl_true;
+                    return jl_false;
+                }
+                if (morespecific) {
+                    if (jl_type_morespecific_(child, pv, 0)) {
+                        return jl_true;
+                    }
+                    else if (!jl_is_typevar(child) && !jl_type_morespecific_(pv, child, 0)) {
+                        return jl_true;
+                    }
+                    else if (jl_subtype(pv, child, 0)) {
+                        env->data[i+1] = (jl_value_t*)child;
+                        return jl_true;
+                    }
+                }
+                else {
+                    if (type_eqv_(child, pv))
+                        return jl_true;
+                }
+                return jl_false;
+            }
+        }
+        extend(parent, child, env);
+        return jl_true;
+    }
+
+    if (child == parent) return jl_true;
+
+    if (jl_is_typevar(child)) {
+        if (!invariant || morespecific) {
+            if (morespecific) {
+                if (jl_type_morespecific_(child, parent, 0))
+                    return jl_true;
+            }
+            else {
+                if (jl_subtype_le(child, parent, 0, 0))
+                    return jl_true;
+            }
+        }
+        return jl_false;
+    }
+    if (!invariant && parent == (jl_value_t*)jl_any_type)
+        return jl_true;
+    if (child  == (jl_value_t*)jl_any_type) return jl_false;
+
+    if (jl_is_uniontype(child)) {
+        jl_svec_t *t = ((jl_uniontype_t*)child)->types;
+        if (morespecific) {
+            jl_value_t **rts;
+            JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
+            cenv_t tenv; tenv.data = rts;
+            for(i=0; i < jl_svec_len(t); i++) {
+                int n = env->n;
+                tmp = type_match_new_(jl_svecref(t,i), parent, env, 1, invariant);
+                if (tmp != jl_false) {
+                    tenv.n = 0;
+                    tmp2 = type_match_new_(parent, jl_svecref(t,i), &tenv, 1, invariant);
+                    if (tmp2 == jl_false) {
+                        n = env->n;
+                        for(j=0; j < jl_svec_len(t); j++) {
+                            tenv.n = 0;
+                            env->n = n;
+                            if (type_match_new_(parent, jl_svecref(t,j),
+                                            &tenv, 1, invariant) != jl_false &&
+                                type_match_new_(jl_svecref(t,j), parent,
+                                            env, 1, invariant) == jl_false) {
+                                env->n = n;
+                                JL_GC_POP();
+                                return jl_false;
+                            }
+                        }
+                        JL_GC_POP();
+                        return jl_true;
+                    }
+                }
+                else {
+                    env->n = n;
+                }
+            }
+            JL_GC_POP();
+            return jl_false;
+        }
+        else {
+            for(i=0; i < jl_svec_len(t); i++) {
+                int n = env->n;
+                if (type_match_new_(jl_svecref(t,i), parent, env, morespecific,
+                                invariant) == jl_false)
+                    { env->n = n; return jl_false; }
+            }
+            if (invariant && child == (jl_value_t*)jl_bottom_type &&
+                !jl_is_typevar(parent))
+                return jl_false;
+        }
+        return jl_true;
+    }
+    if (jl_is_uniontype(parent)) {
+        jl_svec_t *t = ((jl_uniontype_t*)parent)->types;
+        int n = env->n;
+        for(i=0; i < jl_svec_len(t); i++) {
+            env->n = n;
+            if (type_match_new_(child, jl_svecref(t,i), env,
+                            morespecific, invariant) != jl_false)
+                return jl_true;
+        }
+        return jl_false;
+    }
+
+    if (jl_is_tuple_type(child)) {
+        if (jl_is_tuple_type(parent)) {
+            return tuple_match_new((jl_datatype_t*)child, (jl_datatype_t*)parent, env,
+                               morespecific, invariant);
+        }
+        return jl_false;
+    }
+    if (jl_is_tuple_type(parent)) {
+        return jl_false;
+    }
+
+    if (!jl_is_datatype(child) || !jl_is_datatype(parent)) {
+        return jl_egal(child,parent) ? jl_true : jl_false;
+    }
+    jl_datatype_t *tta = (jl_datatype_t*)child;
+    jl_datatype_t *ttb = (jl_datatype_t*)parent;
+    int super = 0;
+    while (tta != (jl_datatype_t*)jl_any_type) {
+        if (tta->name == ttb->name) {
+            // note: DataType <: Type, but Type{T} <: DataType
+            // for any specific T.
+            if (super && morespecific && tta->name != jl_type_type->name)
+                return jl_true;
+            assert(jl_nparams(tta) == jl_nparams(ttb));
+            for(i=0; i < jl_nparams(tta); i++) {
+                int n = env->n;
+                if (type_match_new_(jl_tparam(tta,i), jl_tparam(ttb,i),
+                                env, morespecific, 1) == jl_false)
+                    { env->n = n; return jl_false; }
+            }
+            return jl_true;
+        }
+        else if (invariant) {
+            return jl_false;
+        }
+        tta = tta->super; super = 1;
+    }
+    assert(!invariant);
+    if (((jl_datatype_t*)child)->name == jl_type_type->name &&
+        ttb->name != jl_type_type->name) {
+        // Type{T} also matches >:typeof(T)
+        return type_match_new_(jl_typeof(jl_tparam0(child)),
+                           parent, env, morespecific, 0);
+    }
+    return jl_false;
+}
+
+static jl_value_t *type_match_new_(jl_value_t *child, jl_value_t *parent, cenv_t *env, int morespecific, int invariant)
+{
+    jl_value_t *newc=NULL, *newp=NULL;
+    JL_GC_PUSH2(&newc, &newp);
+    if (needs_translation(child))
+        newc = ntuple_translate(child);
+    else
+        newc = child;
+    if (needs_translation(parent))
+        newp = ntuple_translate(parent);
+    else
+        newp = parent;
+    jl_value_t *retnew = type_match_new(newc, newp, env, morespecific, invariant);
+    JL_GC_POP();
+    return retnew;
+}
+
+int warnonce_typematch(int morespecific, int invariant, uintptr_t a, uintptr_t b);
+
+static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
+                               cenv_t *env, int morespecific, int invariant)
+{
+    int n = env->n;
+    jl_value_t *retold = type_match_old(child, parent, env, morespecific, invariant);
+    env->n = n;
+    jl_value_t *retnew = type_match_new_(child, parent, env, morespecific, invariant);
+    if (retnew != retold) {
+        if (warnonce_typematch(morespecific, invariant, jl_object_id(child), jl_object_id(parent))) {
+            jl_printf(JL_STDOUT, "Disagree type_match_ with retnew = %d, retold = %d (morespecific = %d, invariant = %d):\n", retnew==jl_true, retold==jl_true, morespecific, invariant);
+            jl_(child);
+            jl_(parent);
+        }
+    }
+    return retnew;
+}
+
+JL_DLLEXPORT jl_value_t *jl_my_type_match(jl_value_t *child, jl_value_t *parent,
+                                    int morespecific, int invariant)
+{
+    jl_value_t **rts;
+    JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
+    cenv_t env; env.n = 0; env.data = rts;
+    jl_value_t *m = type_match_(child, parent, &env, morespecific, invariant);
+    JL_GC_POP();
+    return m;
 }
 
 /*
