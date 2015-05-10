@@ -15,3 +15,11 @@ function fullname(ref::GitReference)
     rname == C_NULL && return ""
     return bytestring(rname)
 end
+
+function GitReference(repo::GitRepo, ref_name::AbstractString)
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_reference_lookup, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}),
+                     ref_ptr_ptr, repo.ptr, ref_name)
+    return GitReference(ref_ptr_ptr[])
+end

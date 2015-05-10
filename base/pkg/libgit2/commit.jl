@@ -44,7 +44,7 @@ function commit(repo::GitRepo,
 end
 
 """Commit changes to repository"""
-function commit(repo::GitRepo, msg::AbstractString,
+function commit(repo::GitRepo, msg::AbstractString;
                 refname::AbstractString="HEAD",
                 author::Signature = Signature(repo),
                 committer::Signature = Signature(repo),
@@ -52,13 +52,13 @@ function commit(repo::GitRepo, msg::AbstractString,
                 parent_ids::Vector{Oid}=Oid[])
     # Retrieve tree identifier
     if iszero(tree_id)
-        idx = GitIndex(repo)
-        try
-            tree_id = write_tree!(idx)
-        catch err
-            rethrow(err)
-        finally
-            finalize(idx)
+        tree_id = with(GitIndex, repo) do idx; write_tree!(idx) end
+    end
+
+    # Retrieve parents from HEAD
+    if length(parent_ids) == 0
+        try # if throws then HEAD not found -> empty repo
+            push!(parent_ids, Oid(repo, refname))
         end
     end
 
@@ -71,7 +71,7 @@ function commit(repo::GitRepo, msg::AbstractString,
     comm_sig = convert(GitSignature, committer)
     parents = GitCommit[]
     try
-        for parent in parents
+        for parent in parent_ids
             push!(parents, get(GitCommit, repo, parent))
         end
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
@@ -81,7 +81,7 @@ function commit(repo::GitRepo, msg::AbstractString,
         end
         finalize(tree)
         finalize(auth_sig)
-        finalize(auth_sig)
+        finalize(comm_sig)
     end
     return commit_id
 end

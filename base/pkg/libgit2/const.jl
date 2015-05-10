@@ -160,7 +160,7 @@ module GitConst
     const INDEXCAP_NO_SYMLINKS = Cuint(4)
     const INDEXCAP_FROM_OWNER  = ~(Cuint(0))
 
-    const INDEX_ADD_DEFAULT = Cint(0)
+    const INDEX_ADD_DEFAULT = Cuint(0)
     const INDEX_ADD_FORCE   = Cuint(1) << Cint(0)
     const INDEX_ADD_DISABLE_PATHSPEC_MATCH = Cuint(1) << Cint(1)
     const INDEX_ADD_CHECK_PATHSPEC = Cuint(1) << Cint(2)
