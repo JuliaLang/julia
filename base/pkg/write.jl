@@ -2,7 +2,8 @@
 
 module Write
 
-import ..Git, ..Cache, ..Read
+import ..LibGit2, ..Cache, ..Read
+importall ..LibGit2
 
 function prefetch(pkg::AbstractString, sha1::AbstractString)
     isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) && return
@@ -11,9 +12,14 @@ end
 
 function fetch(pkg::AbstractString, sha1::AbstractString)
     refspec = "+refs/*:refs/remotes/cache/*"
-    Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
-    Git.iscommit(sha1, dir=pkg) && return
-    f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
+    cache = Cache.path(pkg)
+    with(GitRepo, pkg) do repo
+        LibGit2.fetch(repo, cache, refspec)
+        LibGit2.iscommit(sha1, repo)
+    end && return
+    f = with(GitRepo, cache) do repo
+         LibGit2.iscommit(sha1, repo)
+    end ? "fetch" : "prefetch"
     url = Read.issue_url(pkg)
     if isempty(url)
         error("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug report with the package author.")
@@ -23,8 +29,10 @@ function fetch(pkg::AbstractString, sha1::AbstractString)
 end
 
 function checkout(pkg::AbstractString, sha1::AbstractString)
-    Git.set_remote_url(Read.url(pkg), dir=pkg)
-    Git.run(`checkout -q $sha1`, dir=pkg)
+    with(GitRepo, pkg) do repo
+        LibGit2.set_remote_url(Read.url(pkg))
+        LibGit2.checkout(repo, sha1)
+    end
 end
 
 function install(pkg::AbstractString, sha1::AbstractString)
@@ -32,7 +40,9 @@ function install(pkg::AbstractString, sha1::AbstractString)
     if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
     else
-        Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        with(GitRepo, pkg) do repo
+            LibGit2.clone(repo, Cache.path(pkg), pkg)
+        end
     end
     fetch(pkg, sha1)
     checkout(pkg, sha1)

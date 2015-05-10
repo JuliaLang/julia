@@ -6,6 +6,14 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     return GitRemote(rmt_ptr_ptr[])
 end
 
+function GitRemoteAnon(repo::GitRepo, url::AbstractString, refspec::AbstractString)
+    rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}),
+                rmt_ptr_ptr, repo.ptr, url, refspec)
+    return GitRemote(rmt_ptr_ptr[])
+end
+
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_lookup, :libgit2), Cint,
