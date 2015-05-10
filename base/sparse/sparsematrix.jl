@@ -902,7 +902,7 @@ end # macro
 (./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
 
 (.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
-(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), B.nzval .\ A)
+(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval )
 (.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
 (.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
 (.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
