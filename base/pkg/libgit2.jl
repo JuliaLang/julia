@@ -141,13 +141,31 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{
 end
 const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
 
+function fetch(rmt::GitRemote)
+    @check ccall((:git_remote_fetch, :libgit2), Cint,
+            (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
+            rmt.ptr, C_NULL, C_NULL)
+end
+
 function fetch(repo::GitRepo, remote::AbstractString="origin")
     rmt = get(GitRemote, repo, remote)
+    try
+        fetch(rmt)
+    catch err
+        warn("'fetch' thrown exception: $err")
+    finally
+        finalize(rmt)
+    end
+end
 
-    with_warn(rmt) do rmt
-        @check ccall((:git_remote_fetch, :libgit2), Cint,
-                (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
-                rmt.ptr, C_NULL, C_NULL)
+function fetch(repo::GitRepo, remote_path::AbstractString, refspecs::AbstractString)
+    rmt = GitRemoteAnon(repo, remote_path, refspecs)
+    try
+        fetch(rmt)
+    catch err
+        warn("'fetch' thrown exception: $err")
+    finally
+        finalize(rmt)
     end
 end
 
@@ -217,14 +235,23 @@ function snapshot(repo::GitRepo; dir="")
 end
 
 function restore(s::State, repo::GitRepo; dir="")
-    run(`reset -q --`, dir=dir)               # unstage everything
-    run(`read-tree $(s.work)`, dir=dir)       # move work tree to index
-    run(`checkout-index -fa`, dir=dir)        # check the index out to work
-    run(`clean -qdf`, dir=dir)                # remove everything else
-    run(`read-tree $(s.index)`, dir=dir)      # restore index
-    run(`reset -q --soft $(s.head)`, dir=dir) # restore head
+    with(GitIndex, repo) do idx
+        #TODO: reset -q --                  # unstage everything
+
+        read_tree!(idx, s.work)             # move work tree to index
+        write!(idx)
+
+        #TODO: checkout-index -fa           # check the index out to work
+        #TODO: clean -qdf                   # remove everything else
+
+        read_tree!(idx, s.index)            # restore index
+        write!(idx)
+
+        #TODO: reset -q --soft $(s.head)    # restore head
+    end
 end
 
+# TODO: restore required
 function transact(f::Function, repo::GitRepo; dir="")
     #state = snapshot(repo, dir=dir)
     try f(repo) catch
