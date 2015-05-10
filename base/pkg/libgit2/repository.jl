@@ -40,7 +40,9 @@ function revparse(repo::GitRepo, obj::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, obj)
-    return Oid(obj_ptr_ptr[])
+    oid = Oid(obj_ptr_ptr[])
+    finalize(GitAnyObject(obj_ptr_ptr[]))
+    return oid
 end
 
 function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, prefix::Bool=false)
@@ -51,6 +53,8 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, prefix::Bool=false
         GitConst.OBJ_COMMIT
     elseif T == GitTree
         GitConst.OBJ_TREE
+    elseif T == GitAnyObject
+        GitConst.OBJ_ANY
     else
         error("Type $T is not supported")
     end
@@ -74,4 +78,35 @@ end
 function path(repo::GitRepo)
     return bytestring(ccall((:git_repository_path, :libgit2), Ptr{UInt8},
                             (Ptr{Void},), repo.ptr))
+end
+
+function checkout(repo::GitRepo, spec::AbstractString)
+    try
+        obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+        @check ccall((:git_revparse_single, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}),
+                      obj_ptr_ptr, repo.ptr, spec)
+        obj = GitAnyObject(obj_ptr_ptr[])
+        try
+            checkout_tree(repo, obj)
+        catch err
+            rethrow(err)
+        finally
+            finalize(obj)
+        end
+    catch err
+        warn("'checkout' thrown exception: $err")
+    end
+end
+
+function checkout_tree(repo::GitRepo, obj::GitAnyObject)
+    @check ccall((:git_checkout_tree, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                 repo.ptr, obj.ptr, C_NULL)
+end
+
+function checkout_index(repo::GitRepo, idx::GitIndex)
+    @check ccall((:git_checkout_index, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                 repo.ptr, obj.ptr, C_NULL)
 end
