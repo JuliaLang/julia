@@ -143,7 +143,7 @@ function finalize(o::GitObject)
 end
 Base.isempty(obj::GitObject) = (obj.ptr == C_NULL)
 
-for typ in [:GitCommit, :GitTree]
+for typ in [:GitAnyObject, :GitCommit, :GitTree]
     @eval type $typ <: GitObject
         ptr::Ptr{Void}
         function $typ(ptr::Ptr{Void})
