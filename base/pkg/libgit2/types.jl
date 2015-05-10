@@ -136,16 +136,34 @@ DiffOptionsStruct() = DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
                                         Ptr{UInt8}(0),
                                         Ptr{UInt8}(0))
 
+# Abstract object types
+abstract AbstractGitObject
+Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
+
+abstract GitObject <: AbstractGitObject
+function finalize(obj::GitObject)
+    if obj.ptr != C_NULL
+        ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), obj.ptr)
+        obj.ptr = C_NULL
+    end
+end
+
 # Common types
-for (typ, ref, fnc) in ((:GitRemote,     :Void, :(:git_remote_free)),
-                        (:GitRevWalker,  :Void, :(:git_revwalk_free)),
-                        (:GitConfig,     :Void, :(:git_config_free)),
-                        (:GitReference,  :Void, :(:git_reference_free)),
-                        (:GitDiff,       :Void, :(:git_diff_free)),
-                        (:GitIndex,      :Void, :(:git_index_free)),
-                        (:GitSignature,  :SignatureStruct, :(:git_signature_free)),
-                        (:GitRepo,       :Void, :(:git_repository_free)))
-    @eval type $typ
+for (typ, ref, sup, fnc) in (
+            (:GitRemote,     :Void, :AbstractGitObject, :(:git_remote_free)),
+            (:GitRevWalker,  :Void, :AbstractGitObject, :(:git_revwalk_free)),
+            (:GitConfig,     :Void, :AbstractGitObject, :(:git_config_free)),
+            (:GitReference,  :Void, :AbstractGitObject, :(:git_reference_free)),
+            (:GitDiff,       :Void, :AbstractGitObject, :(:git_diff_free)),
+            (:GitIndex,      :Void, :AbstractGitObject, :(:git_index_free)),
+            (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
+            (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
+            (:GitAnyObject,  :Void, :GitObject, nothing),
+            (:GitCommit,     :Void, :GitObject, nothing),
+            (:GitTree,       :Void, :GitObject, nothing)
+        )
+
+    @eval type $typ <: $sup
         ptr::Ptr{$ref}
         function $typ(ptr::Ptr{$ref})
             @assert ptr != C_NULL
@@ -154,36 +172,15 @@ for (typ, ref, fnc) in ((:GitRemote,     :Void, :(:git_remote_free)),
         end
     end
 
-    @eval function finalize(obj::$typ)
-        if obj.ptr != C_NULL
-            ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
-            obj.ptr = C_NULL
+    if fnc != nothing
+        @eval function finalize(obj::$typ)
+            if obj.ptr != C_NULL
+                ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
+                obj.ptr = C_NULL
+            end
         end
     end
 
-    @eval Base.isempty(obj::$typ) = (obj.ptr == C_NULL)
-end
-
-# Object types
-abstract GitObject
-
-function finalize(o::GitObject)
-    if o.ptr != C_NULL
-        ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), o.ptr)
-        o.ptr = C_NULL
-    end
-end
-Base.isempty(obj::GitObject) = (obj.ptr == C_NULL)
-
-for typ in [:GitAnyObject, :GitCommit, :GitTree]
-    @eval type $typ <: GitObject
-        ptr::Ptr{Void}
-        function $typ(ptr::Ptr{Void})
-            @assert ptr != C_NULL
-            obj = new(ptr)
-            return obj
-        end
-    end
 end
 
 # Structure has the same layout as SignatureStruct
