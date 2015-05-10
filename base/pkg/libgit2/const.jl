@@ -75,9 +75,9 @@ module GitConst
 
     const GIT_PATH_MAX = Cint(4096)
 
-    const DIFF_OPTIONS_VERSION = Cint(1)
+    const DIFF_OPTIONS_VERSION = Cuint(1)
 
-    const DIFF_NORMAL  = Cint(0)
+    const DIFF_NORMAL  = Cuint(0)
     const DIFF_REVERSE = Cuint(1) << Cint(0)
     const DIFF_INCLUDE_IGNORED = Cuint(1) << Cint(1)
     const DIFF_RECURSE_IGNORED_DIRS = Cuint(1) << Cint(2)

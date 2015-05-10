@@ -38,8 +38,9 @@ end
 
 function revparse(repo::GitRepo, obj::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_revparse_single, :libgit2), Cint,
-               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, obj)
+    err = ccall((:git_revparse_single, :libgit2), Cint,
+            (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, obj)
+    err != 0 && return Oid()
     oid = Oid(obj_ptr_ptr[])
     finalize(GitAnyObject(obj_ptr_ptr[]))
     return oid

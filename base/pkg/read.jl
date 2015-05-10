@@ -150,7 +150,7 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = ""
     try
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
-        LibGit2.revparse(repo, "HEAD:REQUIRE") == nothing && isfile(pkgreq) && return pkgreq
+        LibGit2.iszero(LibGit2.revparse(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
         head = string(LibGit2.head_oid(repo))
     finally
         LibGit2.finalize(repo)
