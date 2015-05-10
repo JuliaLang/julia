@@ -53,28 +53,30 @@ end
 function isdirty(repo::GitRepo, paths::AbstractString="")
     tree_oid = revparse(repo, "HEAD^{tree}")
     tree_oid == nothing && return true
+    emptypathspec = isempty(paths)
 
     result = false
     tree = get(GitTree, repo, tree_oid)
+    if !emptypathspec
+        sa = StrArrayStruct(paths)
+        diff_opts = DiffOptionsStruct()
+        diff_opts.pathspec = sa
+    end
     try
         diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
         @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
-                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                   diff_ptr_ptr, repo.ptr, tree.ptr, C_NULL, C_NULL)
+                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
+                   diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
         diff = GitDiff(diff_ptr_ptr[])
 
-        if isempty(paths)
-            c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
-            result = c > 0
-        else
-            # TODO look for specified path
-            c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
-            result = c > 0
-        end
+        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
+        result = c > 0
         finalize(diff)
-    catch
+    catch err
+        warn(err)
         result = true
     finally
+        !emptypathspec && finalize(sa)
         finalize(tree)
     end
     return result

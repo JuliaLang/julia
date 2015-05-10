@@ -30,7 +30,7 @@ end
 
 function checkout(pkg::AbstractString, sha1::AbstractString)
     with(GitRepo, pkg) do repo
-        LibGit2.set_remote_url(Read.url(pkg))
+        LibGit2.set_remote_url(repo, Read.url(pkg))
         LibGit2.checkout(repo, sha1)
     end
 end
@@ -40,9 +40,7 @@ function install(pkg::AbstractString, sha1::AbstractString)
     if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
     else
-        with(GitRepo, pkg) do repo
-            LibGit2.clone(repo, Cache.path(pkg), pkg)
-        end
+        LibGit2.clone(Cache.path(pkg), pkg)
     end
     fetch(pkg, sha1)
     checkout(pkg, sha1)

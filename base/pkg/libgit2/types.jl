@@ -104,6 +104,38 @@ CloneOptionsStruct() = CloneOptionsStruct(one(Cuint),
                                           Ptr{Void}(0), Ptr{Void}(0)
                                         )
 
+# git diff option struct
+type DiffOptionsStruct
+    version::Cuint
+    flags::UInt32
+
+    # options controlling which files are in the diff
+    ignore_submodules::Cint
+    pathspec::StrArrayStruct
+    notify_cb::Ptr{Void}
+    notify_payload::Ptr{Void}
+
+    # options controlling how the diff text is generated
+    context_lines::UInt32
+    interhunk_lines::UInt32
+    id_abbrev::UInt16
+    max_size::Coff_t
+    old_prefix::Ptr{UInt8}
+    new_prefix::Ptr{UInt8}
+end
+DiffOptionsStruct() = DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
+                                        GitConst.DIFF_NORMAL,
+                                        GitConst.SUBMODULE_IGNORE_DEFAULT,
+                                        StrArrayStruct(),
+                                        Ptr{Void}(0),
+                                        Ptr{Void}(0),
+                                        UInt32(3),
+                                        zero(UInt32),
+                                        UInt16(7),
+                                        Coff_t(512*1024*1024), #zero(Coff_t),
+                                        Ptr{UInt8}(0),
+                                        Ptr{UInt8}(0))
+
 # Common types
 for (typ, ref, fnc) in ((:GitRemote,     :Void, :(:git_remote_free)),
                         (:GitRevWalker,  :Void, :(:git_revwalk_free)),
