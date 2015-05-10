@@ -32,38 +32,40 @@ function typejoin(a::ANY, b::ANY)
             return Any
         end
         ap, bp = a.parameters, b.parameters
-        la = length(ap)::Int; lb = length(bp)::Int
-        if la==0 || lb==0
+        lar = length(ap)::Int; lbr = length(bp)::Int
+        laf, afixed = full_va_len(ap)
+        lbf, bfixed = full_va_len(bp)
+        if lar==0 || lbr==0
             return Tuple
         end
-        if la < lb
-            if isvarargtype(ap[la])
-                c = cell(la)
-                c[la] = Vararg{typejoin(ap[la].parameters[1], tailjoin(bp,la))}
-                n = la-1
+        if laf < lbf
+            if isvarargtype(ap[lar]) && !afixed
+                c = cell(laf)
+                c[laf] = Vararg{typejoin(ap[lar].parameters[1], tailjoin(bp,laf))}
+                n = laf-1
             else
-                c = cell(la+1)
-                c[la+1] = Vararg{tailjoin(bp,la+1)}
-                n = la
+                c = cell(laf+1)
+                c[laf+1] = Vararg{tailjoin(bp,laf+1)}
+                n = laf
             end
-        elseif lb < la
-            if isvarargtype(bp[lb])
-                c = cell(lb)
-                c[lb] = Vararg{typejoin(bp[lb].parameters[1], tailjoin(ap,lb))}
-                n = lb-1
+        elseif lbf < laf
+            if isvarargtype(bp[lbr]) && !bfixed
+                c = cell(lbf)
+                c[lbf] = Vararg{typejoin(bp[lbr].parameters[1], tailjoin(ap,lbf))}
+                n = lbf-1
             else
-                c = cell(lb+1)
-                c[lb+1] = Vararg{tailjoin(ap,lb+1)}
-                n = lb
+                c = cell(lbf+1)
+                c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
+                n = lbf
             end
         else
-            c = cell(la)
-            n = la
+            c = cell(laf)
+            n = laf
         end
         for i = 1:n
-            ai = ap[i]; bi = bp[i]
+            ai = ap[min(i,lar)]; bi = bp[min(i,lbr)]
             ci = typejoin(unwrapva(ai),unwrapva(bi))
-            c[i] = isvarargtype(ai) || isvarargtype(bi) ? Vararg{ci} : ci
+            c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
     elseif b <: Tuple
@@ -92,8 +94,24 @@ function typejoin(a::ANY, b::ANY)
     return Any
 end
 
+# Returns length, isfixed
+function full_va_len(p)
+    isempty(p) && return 0, true
+    if isvarargtype(p[end])
+        N = p[end].parameters[2]
+        if isa(N, Integer)
+            return (length(p) + N - 1)::Int, true
+        end
+        return length(p)::Int, false
+    end
+    return length(p)::Int, true
+end
+
 # reduce typejoin over A[i:end]
 function tailjoin(A, i)
+    if i > length(A)
+        return unwrapva(A[end])
+    end
     t = Bottom
     for j = i:length(A)
         t = typejoin(t, unwrapva(A[j]))

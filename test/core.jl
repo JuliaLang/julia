@@ -255,6 +255,10 @@ let
     @test typejoin(typejoin(b,c), a) == typejoin(typejoin(b,a), c) == Foo____{Int64}
 end
 
+# typejoin with Vararg{T,N}
+@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}), Tuple{Int,Int,Vararg{Int}})
+@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}), Tuple{Vararg{Int}})
+
 @test promote_type(Bool,Bottom) === Bool
 
 # ntuples
