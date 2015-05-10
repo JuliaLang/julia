@@ -2,16 +2,16 @@
 
 module Generate
 
-import ..Git, ..Read, ..LibGit2
+import ..LibGit2, ..Read
 importall ..LibGit2
 
 copyright_year() =  Dates.year(Dates.today())
 copyright_name(repo::GitRepo) =
     with(GitConfig, repo) do cfg
-        LibGit2.get(AbstractString, cfg, "user.name")
+        LibGit2.get(cfg, "user.name", "")
     end
 github_user() = with(GitConfig) do cfg
-        LibGit2.get(AbstractString, cfg, "github.user")
+        LibGit2.get(cfg, "github.user", "")
     end
 
 function git_contributors(repo::GitRepo, n::Int=typemax(Int))

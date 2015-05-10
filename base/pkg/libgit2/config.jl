@@ -47,6 +47,10 @@ function get{T}(::Type{T}, c::GitConfig, name::AbstractString)
     end
 end
 
+function get{T}(c::GitConfig, name::AbstractString, default::T)
+    return try get(T,c,name) catch default end
+end
+
 function set!{T}(c::GitConfig, name::AbstractString, value::T)
     err = if T<:AbstractString
         @check ccall((:git_config_set_string, :libgit2), Cint,
