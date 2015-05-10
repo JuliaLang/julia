@@ -161,8 +161,8 @@ A_ldiv_Bc (a,b) = a\ctranspose(b)
 Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
 At_ldiv_B (a,b) = transpose(a)\b
 A_ldiv_Bt (a,b) = a\transpose(b)
-At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
-
+At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
+Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
