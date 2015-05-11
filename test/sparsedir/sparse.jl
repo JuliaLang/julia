@@ -75,16 +75,34 @@ for i = 1:5
     @test maximum(abs(a*b - full(a)*b)) < 100*eps()
 end
 
+# sparse matrix * BitArray
+A = sprand(5,5,0.2)
+B = trues(5)
+@test_approx_eq A*B full(A)*B
+B = trues(5,5)
+@test_approx_eq A*B full(A)*B
+@test_approx_eq B*A B*full(A)
+
 # complex matrix-vector multiplication and left-division
 if Base.USE_GPL_LIBS
 for i = 1:5
     a = speye(5) + 0.1*sprandn(5, 5, 0.2)
     b = randn(5,3) + im*randn(5,3)
+    c = randn(5) + im*randn(5)
+    d = randn(5) + im*randn(5)
+    α = rand(Complex128)
+    β = rand(Complex128)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs((a'*c + d) - (full(a)'*c + d))) < 1000*eps())
+    @test (maximum(abs((α*a.'*c + β*d) - (α*full(a).'*c + β*d))) < 1000*eps())
+    @test (maximum(abs((a.'*c + d) - (full(a).'*c + d))) < 1000*eps())
+    c = randn(6) + im*randn(6)
+    @test_throws DimensionMismatch α*a.'*c + β*c
+    @test_throws DimensionMismatch α*a.'*ones(5) + β*c
 
     a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
     b = randn(5,3)
@@ -101,6 +119,7 @@ for i = 1:5
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs(A_ldiv_B!(a,copy(b)) - full(a)\b)) < 1000*eps())
 
     a = speye(5) + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
     b = randn(5,3)
@@ -117,6 +136,7 @@ for i = 1:5
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs(A_ldiv_B!(a,copy(b)) - full(a)\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
     b = randn(5,3)
@@ -133,6 +153,7 @@ for i = 1:5
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs(A_ldiv_B!(a,copy(b)) - full(a)\b)) < 1000*eps())
 
     a = spdiagm(randn(5)) + im*spdiagm(randn(5))
     b = randn(5,3)
