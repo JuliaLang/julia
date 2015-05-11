@@ -244,6 +244,10 @@ end
 @test all(([1:5;] - (1:5)) .== 0)
 @test all(((1:5) - [1:5;]) .== 0)
 
+# exercise fallback addition of ranges
+@test ((linspace(1.,5.,5) - linspace(1.,5.,5)) == zeros(5))
+@test_throws DimensionMismatch (linspace(1.,5.,5) - linspace(1.,5.,6))
+
 # tricky floating-point ranges
 
 @test [0.1:0.1:0.3;]   == [linspace(0.1,0.3,3);]     == [1:3;]./10
