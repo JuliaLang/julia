@@ -62,7 +62,8 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
 
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
-    LibGit2.revparse(prepo, "HEAD:REQUIRE") == nothing && isfile(pkg,"REQUIRE") && return true
+    LibGit2.need_update(prepo)
+    LibGit2.iszero(LibGit2.revparseid(prepo, "HEAD:REQUIRE")) && isfile(pkg,"REQUIRE") && return true
 
     head = string(LibGit2.head_oid(prepo))
     for (ver,info) in avail
@@ -150,7 +151,8 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = ""
     try
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
-        LibGit2.iszero(LibGit2.revparse(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
+        LibGit2.need_update(repo)
+        LibGit2.iszero(LibGit2.revparseid(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
         head = string(LibGit2.head_oid(repo))
     finally
         LibGit2.finalize(repo)

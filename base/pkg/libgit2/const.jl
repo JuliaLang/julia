@@ -27,7 +27,7 @@ module GitConst
     const FILEMODE_LINK            = Cint(40960)
     const FILEMODE_COMMIT          = Cint(57344)
 
-    const CHECKOUT_NONE                    = Cint(0)
+    const CHECKOUT_NONE                    = Cuint(0)
     const CHECKOUT_SAFE                    = Cuint(1) << Cint(0)
     const CHECKOUT_SAFE_CREATE             = Cuint(1) << Cint(1)
     const CHECKOUT_FORCE                   = Cuint(1) << Cint(2)
