@@ -1,4 +1,4 @@
-module GitErrorConst
+module GitErrorConst #TODO: use @enum & rid of git_error_code
     const GIT_OK          = Cint(0)
     const ERROR           = Cint(-01)
     const ENOTFOUND       = Cint(-03)
@@ -72,7 +72,7 @@ immutable ErrorStruct
     class::Cint
 end
 
-immutable GitError{Class, Code}
+immutable GitError{Class, Code} <: Exception
     msg::AbstractString
 end
 
