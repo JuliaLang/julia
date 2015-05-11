@@ -15,7 +15,21 @@ type Regex
 
 
     function Regex(pattern::AbstractString, options::Integer)
+        println("B")
+        println(typeof(pattern))
+        println(pattern.data.x)
+        if pattern.data.x < 0
+            p = reinterpret(Ptr{Int128}, pattern.data.x % UInt)
+            println(unsafe_load(p))
+        end
         pattern = bytestring(pattern)
+        println("C")
+        println(typeof(pattern))
+        println(pattern.data.x)
+        if pattern.data.x < 0
+            p = reinterpret(Ptr{Int128}, pattern.data.x % UInt)
+            println(unsafe_load(p))
+        end
         options = Int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
             throw(ArgumentError("invalid regex options: $options"))
@@ -29,6 +43,7 @@ type Regex
         re
     end
 end
+Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_OPTS)
 
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_OPTS
@@ -41,7 +56,6 @@ function Regex(pattern::AbstractString, flags::AbstractString)
     end
     Regex(pattern, options)
 end
-Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_OPTS)
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
@@ -54,7 +68,17 @@ function compile(regex::Regex)
     regex
 end
 
-macro r_str(pattern, flags...) Regex(pattern, flags...) end
+macro r_str(pattern, flags...)
+    println("A")
+    println(typeof(pattern))
+    println(pattern.data.x)
+    if pattern.data.x < 0
+        p = reinterpret(Ptr{Int128}, pattern.data.x % UInt)
+        println(unsafe_load(p))
+    end
+    println(flags)
+    Regex(pattern, flags...)
+end
 
 copy(r::Regex) = r
 

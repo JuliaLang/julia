@@ -320,6 +320,7 @@ DLLEXPORT jl_bytevec_struct_t jl_bytevec(const uint8_t *data, size_t n)
         memcpy(b.there.data, data, n);
         b.there.neglen = -n;
     }
+    // printf("b = 0x%016lx%016lx\n", b.there.neglen, b.there.data);
     return b;
 }
 

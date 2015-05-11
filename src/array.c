@@ -349,14 +349,19 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     jl_datatype_t *string_type = u8_isvalid((char*)data,n) == 1 ?
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *s = (jl_value_t*)alloc_2w();
-    jl_set_typeof(s, string_type);
     *(jl_bytevec_struct_t*)s = jl_bytevec(data,n);
+    jl_set_typeof(s, string_type);
     return s;
 }
 
+static jl_bytevec_struct_t jl_shared_bytevec[1024];
+
 const char *jl_bytestring_ptr(jl_value_t *s) {
     jl_bytevec_struct_t *b = (jl_bytevec_struct_t*)s;
-    return b->there.neglen < 0 ? b->there.data : b->here.data;
+    if (b->there.neglen < 0)
+        return b->there.data;
+    jl_shared_bytevec[0] = *b;
+    return jl_shared_bytevec[0].here.data;
 }
 
 jl_value_t *jl_pchar_to_string(const char *str, size_t len)

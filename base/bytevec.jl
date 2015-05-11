@@ -3,13 +3,24 @@ convert(::Type{ByteVec}, s::AbstractString) = ByteVec(bytestring(s).data)
 convert(::Type{ByteVec}, v::Vector{UInt8}) =
     ccall(:jl_bytevec, ByteVec, (Ptr{UInt8}, Csize_t), v, length(v))
 
-size(b::ByteVec) = (length(b),)
+const bytevec_buf = Vector{UInt8}(1024)
+
+function unsafe_convert(::Type{Ptr{UInt8}}, b::ByteVec)
+    println("D")
+    println(b.x)
+    b.x < 0 && return reinterpret(Ptr{Uint8}, b.x % UInt)
+    p = pointer(bytevec_buf)
+    unsafe_store!(convert(Ptr{ByteVec}, p), b)
+    return p
+end
 
 function length(b::ByteVec)
     here = (b.x >>> 8*(sizeof(b.x)-1)) % Int
     there = -(b.x >> 8*sizeof(Int)) % Int
     ifelse(b.x < 0, there, here)
 end
+
+size(b::ByteVec) = (length(b),)
 
 getindex(b::ByteVec, i::Real) =
     box(UInt8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
