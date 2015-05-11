@@ -147,14 +147,14 @@
 
    Obtain the path of a temporary directory (possibly shared with other processes).
 
-.. function:: mktemp()
+.. function:: mktemp([parent=tempdir()])
 
    Returns ``(path, io)``, where ``path`` is the path of a new temporary file
-   and ``io`` is an open file object for this path.
+   in ``parent`` and ``io`` is an open file object for this path.
 
-.. function:: mktempdir()
+.. function:: mktempdir([parent=tempdir()])
 
-   Create a temporary directory and return its path.
+   Create a temporary directory in the ``parent`` directory and return its path.
 
 .. function:: isblockdev(path) -> Bool
 

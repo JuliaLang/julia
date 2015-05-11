@@ -112,6 +112,17 @@ cp(newfile, c_file)
 @test isfile(c_file)
 @test_throws SystemError rm(c_tmpdir)
 
+# create temp dir in specific directory
+d_tmpdir = mktempdir(c_tmpdir)
+@test isdir(d_tmpdir)
+@test Base.samefile(dirname(d_tmpdir), c_tmpdir)
+
+# create temp file in specific directory
+d_tmpfile,f = mktemp(c_tmpdir)
+close(f)
+@test isfile(d_tmpfile)
+@test Base.samefile(dirname(d_tmpfile), c_tmpdir)
+
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
 
