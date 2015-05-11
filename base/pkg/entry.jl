@@ -111,11 +111,11 @@ function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
-        prepo = LibGit2.GitRepo(pkg)
+        repo = LibGit2.GitRepo(pkg)
         try
-            res = Read.installed_version(pkg, prepo, avail)
+            res = Read.installed_version(pkg, repo, avail)
         finally
-            LibGit2.finalize(prepo)
+            LibGit2.finalize(repo)
         end
         return res
     end
@@ -163,6 +163,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             else
                 print(io, string(LibGit2.Oid(phead))[1:8])
             end
+            LibGit2.finalize(phead)
             attrs = AbstractString[]
             isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
@@ -212,7 +213,7 @@ function clone(url_or_pkg::AbstractString)
 end
 
 function _checkout(pkg::AbstractString, what::AbstractString, merge::Bool=false, pull::Bool=false, branch::Bool=false)
-    Git.transact(dir=pkg) do
+    Git.transact(dir=pkg) do #TODO: finish restore()
         Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
         branch ? Git.run(`checkout -q -B $what -t origin/$what`, dir=pkg) : Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
@@ -235,17 +236,22 @@ function free(pkg::AbstractString)
     Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be freed – not a registered package")
-    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
-    info("Freeing $pkg")
-    vers = sort!(collect(keys(avail)), rev=true)
-    while true
-        for ver in vers
-            sha1 = avail[ver].sha1
-            Git.iscommit(sha1, dir=pkg) || continue
-            return _checkout(pkg,sha1)
+    repo = LibGit2.GitRepo(pkg)
+    try
+        LibGit2.isdirty(repo) && error("$pkg cannot be freed – repo is dirty")
+        info("Freeing $pkg")
+        vers = sort!(collect(keys(avail)), rev=true)
+        while true
+            for ver in vers
+                sha1 = avail[ver].sha1
+                LibGit2.iscommit(sha1, repo) || continue
+                return _checkout(pkg, sha1)
+            end
+            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+            error("can't find any registered versions of $pkg to checkout")
         end
-        isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-        error("can't find any registered versions of $pkg to checkout")
+    finally
+        LibGit2.finalize(repo)
     end
 end
 
@@ -275,13 +281,18 @@ end
 
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    branch = "pinned.$(head[1:8]).tmp"
-    rslv = (head != Git.head(dir=pkg))
-    info("Creating $pkg branch $branch")
-    Git.run(`checkout -q -B $branch $head`, dir=pkg)
+    rslv = !isempty(head) # no need to resolve, branch will be from HEAD
+    with(GitRepo, pkg) do repo
+        if isempty(head) # get HEAD oid
+            head = head_oid(repo)
+        end
+        branch = "pinned.$(head[1:8]).tmp"
+        info("Creating $pkg branch $branch")
+        LibGit2.create_branch(repo, branch, head)
+    end
     rslv ? resolve() : nothing
 end
-pin(pkg::AbstractString) = pin(pkg,Git.head(dir=pkg))
+pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
     ispath(pkg,".git") || error("$pkg is not a git repo")
