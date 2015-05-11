@@ -15,6 +15,7 @@ function fetch(pkg::AbstractString, sha1::AbstractString)
     cache = Cache.path(pkg)
     with(GitRepo, pkg) do repo
         LibGit2.fetch(repo, cache, refspec)
+        LibGit2.need_update(repo)
         LibGit2.iscommit(sha1, repo)
     end && return
     f = with(GitRepo, cache) do repo

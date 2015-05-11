@@ -6,15 +6,6 @@ export GitRepo, GitConfig, GitIndex
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-function __init__()
-    err = ccall((:git_libgit2_init, :libgit2), Cint, ())
-    err > 0 || error("error initializing LibGit2 module")
-    atexit() do
-        gc()
-        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
-    end
-end
-
 include("libgit2/const.jl")
 include("libgit2/types.jl")
 include("libgit2/error.jl")
@@ -29,18 +20,33 @@ include("libgit2/remote.jl")
 include("libgit2/strarray.jl")
 include("libgit2/index.jl")
 
+immutable State
+    head::Oid
+    index::Oid
+    work::Oid
+end
+
+function normalize_url(url::AbstractString)
+    m = match(GITHUB_REGEX,url)
+    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
+end
+
+function gitdir(d, repo::GitRepo)
+    g = joinpath(d,".git")
+    isdir(g) && return g
+    path(repo)
+end
+
 function need_update(repo::GitRepo)
     if !isbare(repo)
-        "git update-index -q --really-refresh" #TODO: update-index
+        # read updates index from filesystem
+        # i.e. "git update-index -q --really-refresh"
+        read!(repo, true)
     end
 end
 
-function isattached(repo::GitRepo)
-    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
-end
-
+""" Checks if commit is in repository """
 function iscommit(id::AbstractString, repo::GitRepo)
-    need_update(repo)
     res = true
     try
         get(GitCommit, repo, id)
@@ -55,7 +61,7 @@ isdirty(repo::GitRepo, paths::AbstractString="") = isdiff(repo, "HEAD", paths)
 
 """ git diff-index <treeish> [-- <path>]"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString="")
-    tree_oid = revparse(repo, "$treeish^{tree}")
+    tree_oid = revparseid(repo, "$treeish^{tree}")
     iszero(tree_oid) && return true
     emptypathspec = isempty(paths)
 
@@ -103,7 +109,7 @@ function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
 end
 
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
-    A = revparse(repo, a)
+    A = revparseid(repo, a)
     merge_base(a, b, repo) == A
 end
 
@@ -215,15 +221,38 @@ function branch_name(repo::GitRepo)
     return brnch
 end
 
-function normalize_url(url::AbstractString)
-    m = match(GITHUB_REGEX,url)
-    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
+function checkout(repo::GitRepo, branch::AbstractString="master";
+                  strategy::Cuint = GitConst.CHECKOUT_SAFE)
+    treeish_obj = revparse(repo, branch)
+    try
+        opts = CheckoutOptionsStruct()
+        opts.checkout_strategy = strategy
+        error = git_checkout_tree(repo, treeish, &opts);
+        ccall((:git_checkout_tree, :libgit2), Cint,
+              (Ptr{Void}, Ptr{Void}, Ref{CheckoutOptionsStruct}),
+               repo.ptr, treeish_obj.ptr, Ref(opts))
+    finally
+        finalize(treeish_obj)
+    end
 end
 
-immutable State
-    head::Oid
-    index::Oid
-    work::Oid
+function create_branch(repo::GitRepo, branch::AbstractString,
+                       commit_oid::AbstractString, force::Bool=false)
+    cmt = get(CitCommit, repo, commit_oid)
+    frc = CInt(force)
+    oid = Oid()
+    try
+        ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+        @check ccall((:git_branch_create, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ref{Void}, Cint),
+                      ref_ptr_ptr, repo.ptr, branch, cmt.ptr, CInt(force))
+        ref = GitReference(ref_ptr_ptr[])
+        oid = Oid(ref.ptr)
+        finalize(ref)
+    finally
+        finalize(treeish_obj)
+    end
+    return oid
 end
 
 function snapshot(repo::GitRepo; dir="")
@@ -279,10 +308,14 @@ function transact(f::Function, repo::GitRepo; dir="")
     end
 end
 
-function gitdir(d, repo::GitRepo)
-    g = joinpath(d,".git")
-    isdir(g) && return g
-    path(repo)
+
+function __init__()
+    err = ccall((:git_libgit2_init, :libgit2), Cint, ())
+    err > 0 || error("error initializing LibGit2 module")
+    atexit() do
+        gc()
+        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+    end
 end
 
 end # module

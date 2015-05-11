@@ -5,6 +5,11 @@ function GitIndex(repo::GitRepo)
     return GitIndex(idx_ptr_ptr[])
 end
 
+function read!(idx::GitIndex, force::Bool = false)
+    @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Void}, Cint), idx.ptr, Cint(force))
+    return idx
+end
+
 function write!(idx::GitIndex)
     @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Void},), idx.ptr)
     return idx
@@ -95,5 +100,11 @@ function remove!{T<:AbstractString}(repo::GitRepo, files::T...)
     with(GitIndex, repo) do idx
         remove!(idx, files...)
         write!(idx)
+    end
+end
+
+function read!(repo::GitRepo, force::Bool = false)
+    with(GitIndex, repo) do idx
+        read!(idx, force)
     end
 end

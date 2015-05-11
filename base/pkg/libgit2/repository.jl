@@ -30,19 +30,37 @@ function head(repo::GitRepo)
                 (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr_ptr, repo.ptr)
     return GitReference(head_ptr_ptr[])
 end
-head_oid(repo::GitRepo) = Oid(head(repo))
+
+function head_oid(repo::GitRepo)
+    head_ref = head(repo)
+    oid = Oid(head_ref)
+    finalize(head_ref)
+    return oid
+end
 
 function isbare(repo::GitRepo)
     return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) == 1
 end
 
+function isattached(repo::GitRepo)
+    ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
+end
+
+""" Returns a found object """
 function revparse(repo::GitRepo, obj::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_revparse_single, :libgit2), Cint,
             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, obj)
-    err != 0 && return Oid()
-    oid = Oid(obj_ptr_ptr[])
-    finalize(GitAnyObject(obj_ptr_ptr[]))
+    err != 0 && return GitAnyObject(C_NULL)
+    return GitAnyObject(obj_ptr_ptr[])
+end
+
+""" Returns id of a found object """
+function revparseid(repo::GitRepo, obj::AbstractString)
+    obj = revparse(repo, objname)
+    isempty(obj) && return Oid()
+    oid = Oid(obj.ptr)
+    finalize(obj)
     return oid
 end
 

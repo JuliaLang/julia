@@ -19,7 +19,7 @@ immutable StrArrayStruct
 end
 StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
 
-immutable CheckoutOptionsStruct
+type CheckoutOptionsStruct
     version::Cuint
     checkout_strategy::Cuint
     disable_filters::Cint
