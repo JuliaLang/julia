@@ -182,8 +182,9 @@ function clone(url::AbstractString, pkg::AbstractString)
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try
-        Git.run(`clone -q $url $pkg`)
-        Git.set_remote_url(url, dir=pkg)
+        repo = LibGit2.clone(url, pkg)
+        LibGit2.set_remote_url(repo, url)
+        LibGit2.finalize(repo)
     catch
         Base.rm(pkg, recursive=true)
         rethrow()
