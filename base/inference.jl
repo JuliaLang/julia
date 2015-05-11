@@ -204,7 +204,7 @@ function istopfunction(topmod, f::ANY, sym)
     return false
 end
 
-isknownlength(t::DataType) = !isvatuple(t) && !(t.name===NTuple.name && !isa(t.parameters[1],Int))
+isknownlength(t::DataType) = !isvatuple(t) || (length(t.parameters) == 1 && isa(t.parameters[1].parameters[2],Int))
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
@@ -430,9 +430,6 @@ function getfield_tfunc(s0::ANY, name)
         return reduce(tmerge, Bottom, map(t->getfield_tfunc(t, name)[1], s.types)), false
     end
     if isa(s,DataType)
-        if is(s.name,NTuple.name)
-            return (name ⊑ Symbol ? Bottom : s.parameters[2]), true
-        end
         if s.abstract
             return Any, false
         end
@@ -862,7 +859,9 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
     assert(n == length(types))
     result = cell(n)
     for i = 1:n
-        ai = args[i]; ti = types[i]; tti = widenconst(ti)
+        ai = args[i]
+        ti = types[i]
+        tti = widenconst(ti)
         if isa(ai,Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
                                                  abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
             aa = ai.args
@@ -874,8 +873,8 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
             return nothing
         elseif ti ⊑ Tuple
             if i == n
-                if tti.name === NTuple.name
-                    result[i] = Any[Vararg{tti.parameters[2]}]
+                if isvatuple(tti) && length(tti.parameters) == 1
+                    result[i] = Any[Vararg{tti.parameters[1].parameters[1]}]
                 else
                     result[i] = tti.parameters
                 end

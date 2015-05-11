@@ -33,8 +33,6 @@ jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
 jl_datatype_t *jl_anytuple_type_type;
-jl_datatype_t *jl_ntuple_type;
-jl_typename_t *jl_ntuple_typename;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
@@ -316,17 +314,11 @@ static int needs_translation_tuple(jl_datatype_t *tt);
 
 static int needs_translation(jl_value_t *v)
 {
-    if (jl_is_tuple_type(v)) return needs_translation_tuple((jl_datatype_t*)v);
-    if (jl_is_typevar(v)) return needs_translation(((jl_tvar_t*)v)->ub) || needs_translation(((jl_tvar_t*)v)->lb);
-    return jl_is_ntuple_type(v);
+    return 0;
 }
 
 static int needs_translation_data(jl_value_t **data, int n)
 {
-    int i;
-    for (i = 0; i < n; i++)
-        if (needs_translation(data[i]))
-            return 1;
     return 0;
 }
 
@@ -342,34 +334,7 @@ static int needs_translation_tuple(jl_datatype_t *tt)
 
 static jl_value_t *ntuple_translate(jl_value_t *v)
 {
-    jl_value_t *tva = NULL, *result = NULL, *temp = NULL;
-    JL_GC_PUSH4(&v, &tva, &result, &temp);
-    if (jl_is_tuple_type(v)) {
-        result = (jl_value_t*)ntuple_translate_tuple((jl_datatype_t*)v);
-        JL_GC_POP();
-        return result;
-    }
-    if (jl_is_typevar(v)) {
-        jl_tvar_t *tv = (jl_tvar_t*) v;
-        tva = (jl_value_t*)ntuple_translate(tv->lb);
-        temp = (jl_value_t*)ntuple_translate(tv->ub);
-        result = (jl_value_t*)jl_new_typevar(tv->name, tva, temp);
-        ((jl_tvar_t*)result)->bound = tv->bound;
-        JL_GC_POP();
-        return result;
-    }
-    if (!jl_is_ntuple_type(v)) {
-        JL_GC_POP();
-        return v;
-    }
-    if (v == (jl_value_t*)jl_ntuple_type)
-        result = (jl_value_t*)jl_anytuple_type;
-    else {
-        tva = (jl_value_t*) jl_wrap_vararg(jl_tparam1(v), jl_tparam0(v));
-        result = (jl_value_t*)jl_tupletype_fill(1, tva);
-    }
-    JL_GC_POP();
-    return result;
+    return v;
 }
 
 static jl_svec_t *ntuple_translate_data(jl_value_t **data, int n)
@@ -1894,18 +1859,6 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                              pi);
         }
     }
-    if (tc == (jl_value_t*)jl_ntuple_type && (n == 1 || n == 2)) {
-        if (!jl_is_typevar(params[0])) {
-            size_t nt;
-            if (!jl_get_size(params[0], &nt)) {
-                // Only allow Int or TypeVar as the first parameter to
-                // NTuple. issue #9233
-                jl_type_error_rt("NTuple", "parameter 1",
-                                 (jl_value_t*)jl_long_type, params[0]);
-            }
-            return jl_tupletype_fill(nt, (n==2) ? params[1] : (jl_value_t*)jl_any_type);
-        }
-    }
     size_t ntp = jl_svec_len(tp);
     if (n > ntp)
         jl_errorf("too many parameters for type %s", tname);
@@ -2378,6 +2331,26 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
     jl_datatype_t *tt = (jl_datatype_t*)t;
     jl_svec_t *tp = tt->parameters;
     size_t ntp = jl_svec_len(tp);
+    // Instantiate NTuple{3,Int}
+    // Note this does not instantiate Tuple{Vararg{Int,3}}; that's done in
+    // jl_apply_tuple_type_v_
+    if (jl_is_va_tuple(tt) && ntp == 1 && n == 2) {
+        // If this is a Tuple{Vararg{T,N}} with known N, expand it to
+        // a fixed-length tuple
+        jl_value_t *T=NULL, *N=NULL;
+        int i;
+        for (i = 0; i < 2*n; i+=2) {
+            jl_value_t *tv = env[i];
+            if (jl_is_typevar(tv)) {
+                if (((jl_tvar_t*)tv)->name == jl_symbol("T"))
+                    T = env[i+1];
+                else if (((jl_tvar_t*)tv)->name == jl_symbol("N"))
+                    N = env[i+1];
+            }
+        }
+        if (T != NULL && N != NULL && jl_is_long(N))
+            return (jl_value_t*)jl_tupletype_fill(jl_unbox_long(N), T);
+    }
     jl_value_t **iparams;
     int onstack = ntp < jl_page_size/sizeof(jl_value_t*);
     JL_GC_PUSHARGS(iparams, onstack ? ntp : 1);
@@ -2618,6 +2591,7 @@ static int jl_tuple_subtype_new(jl_value_t **child, size_t clenr,
 static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
                              jl_datatype_t *pdt, int ta, int invariant)
 {
+    /*
     jl_svec_t  *newchilds=NULL;
     jl_datatype_t *newpdt=NULL;
     JL_GC_PUSH2(&newchilds, &newpdt);
@@ -2626,6 +2600,9 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
     int retnew = jl_tuple_subtype_new(jl_svec_data(newchilds), cl, newpdt, ta, invariant);
     JL_GC_POP();
     return retnew;
+    */
+    return jl_tuple_subtype_new(child, cl, pdt, ta, invariant);
+
 }
 
 int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta)
@@ -3565,11 +3542,6 @@ void jl_init_types(void)
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
                                        (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_any_type);
     jl_type_type->parameters = jl_svec(1, tttvar);
-
-    tv = jl_svec2(tvar("N"), tvar("T"));
-    jl_ntuple_type = jl_new_abstracttype((jl_value_t*)jl_symbol("NTuple"),
-                                         jl_any_type, tv);
-    jl_ntuple_typename = jl_ntuple_type->name;
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
     empty_tuple_type->uid = jl_assign_type_uid();

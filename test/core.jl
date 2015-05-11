@@ -163,8 +163,8 @@ end
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
 #@test issubtype(Array{Tuple{Vararg}}, Array{NTuple})
-@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
-@test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
+#@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
+#@test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
 # this is fancy: know that any type T<:Number must be either a DataType or a Union
