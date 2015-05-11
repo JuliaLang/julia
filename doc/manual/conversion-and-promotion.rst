@@ -97,21 +97,27 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
-     in convert at base.jl:9
+    ERROR: MethodError: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
+    This may have arisen from a call to the constructor FloatingPoint(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      call{T}(::Type{T}, ::Any)
+      convert(::Type{FloatingPoint}, !Matched::Bool)
+      convert(::Type{FloatingPoint}, !Matched::Int8)
+      ...
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
-Therefore in Julia the dedicated ``parse`` function must be used
+Therefore in Julia the dedicated :func:`parse` function must be used
 to perform this operation, making it more explicit.
 
 Defining New Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-To define a new conversion, simply provide a new method for ``convert``.
+To define a new conversion, simply provide a new method for :func:`convert`.
 That's really all there is to it. For example, the method to convert a
 number to a boolean is simply this::
 
@@ -140,7 +146,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:16
+     in convert at complex.jl:18
 
     julia> convert(Bool, 0im)
     false
@@ -296,7 +302,7 @@ This allows calls like the following to work:
     -3//1
 
     julia> typeof(ans)
-    Rational{Int32} (constructor with 1 method)
+    Rational{Int32}
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions

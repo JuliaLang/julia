@@ -468,7 +468,7 @@ Iterable Collections
 
    .. doctest::
 
-      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
       14
 
    The associativity of the reduction is implementation-dependent.
@@ -934,7 +934,7 @@ Dequeues
 
      julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
      ERROR: ArgumentError: indices must be unique and sorted
-      in deleteat! at array.jl:594
+      in deleteat! at array.jl:631
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
@@ -1023,7 +1023,7 @@ Dequeues
       5
       4
 
-   .. doctest::
+   .. code-block:: julia
 
      julia> resize!([6, 5, 4, 3, 2, 1], 8)
      8-element Array{Int64,1}:
