@@ -143,16 +143,18 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp()
-    b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{UInt8}, ), b) # modifies b
+function mktemp(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
+    systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
 
 # Create and return the name of a temporary directory
-function mktempdir()
-    b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8}, ), b)
+function mktempdir(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8},), b)
+    systemerror(:mktempdir, p == C_NULL)
     return bytestring(p)
 end
 end
@@ -178,18 +180,17 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     resize!(tname,lentname+1)
     return utf8(UTF16String(tname))
 end
-function mktemp()
-    filename = tempname()
+function mktemp(parent=tempdir())
+    filename = tempname(parent, UInt32(0))
     return (filename, open(filename,"r+"))
 end
-function mktempdir()
+function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
-    dir = tempdir()
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
         end
-        filename = tempname(dir, seed)
+        filename = tempname(parent, seed)
         ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(filename))
         if ret == 0
             return filename
