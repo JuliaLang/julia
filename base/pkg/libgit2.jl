@@ -50,9 +50,13 @@ function iscommit(id::AbstractString, repo::GitRepo)
     return res
 end
 
-function isdirty(repo::GitRepo, paths::AbstractString="")
-    tree_oid = revparse(repo, "HEAD^{tree}")
-    tree_oid == nothing && return true
+""" git diff-index HEAD [-- <path>]"""
+isdirty(repo::GitRepo, paths::AbstractString="") = isdiff(repo, "HEAD", paths)
+
+""" git diff-index <treeish> [-- <path>]"""
+function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString="")
+    tree_oid = revparse(repo, "$treeish^{tree}")
+    iszero(tree_oid) && return true
     emptypathspec = isempty(paths)
 
     result = false
@@ -198,6 +202,17 @@ function authors(repo::GitRepo)
         (oid,repo)->author(get(GitCommit, repo, oid))::Signature,
         repo) #, by = Pkg.LibGit2.GitConst.SORT_TIME)
     return athrs
+end
+
+function branch_name(repo::GitRepo)
+    head_ref = head(repo)
+    brnch = ""
+    try
+        brnch = branch(head_ref)
+    finally
+        finalize(head_ref)
+    end
+    return brnch
 end
 
 function normalize_url(url::AbstractString)

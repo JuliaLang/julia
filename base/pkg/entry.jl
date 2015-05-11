@@ -4,6 +4,7 @@ module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..LibGit2, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
+importall ..LibGit2
 using ..Types
 
 macro recover(ex)
@@ -50,18 +51,20 @@ function add(pkg::AbstractString, vers::VersionSet)
             info("Nothing to be done")
         end
         branch = Dir.getmetabranch()
-        if Git.branch(dir="METADATA") == branch
-            if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
-                outdated = :yes
-            else
-                try
-                    run(pipeline(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
-                    outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
-                        (:no) : (:yes)
+        outdated = with(GitRepo, "METADATA") do repo
+            current_barnch = LibGit2.branch_name(repo)
+            if current_barnch == branch
+                if LibGit2.isdiff(repo, "origin/$branch") # diff origin/metadata-v2
+                    outdated = :yes
+                else
+                    try
+                        LibGit2.fetch(repo)
+                        outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
+                    end
                 end
+            else
+                :no # user is doing something funky with METADATA
             end
-        else
-            outdated = :no # user is doing something funky with METADATA
         end
     end
     if outdated != :no
