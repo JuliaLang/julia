@@ -330,7 +330,7 @@ from the REPL will exhibit allocation due to events that happen in the
 REPL code itself.  More significantly, JIT-compilation also adds to
 allocation counts, because much of julia's compiler is written in
 Julia (and compilation usually requires memory allocation).  The
-recommended procedure it to force compilation by executing all the
-commands you want to analyze, then call ``clear_malloc_data()`` to
+recommended procedure is to force compilation by executing all the
+commands you want to analyze, then call ``Profile.clear_malloc_data()`` to
 reset all allocation counters.  Finally, execute the desired commands
 and quit julia to trigger the generation of the ``.mem`` files.
