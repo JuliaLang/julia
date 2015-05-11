@@ -1387,6 +1387,11 @@ else ifeq ($(OS), Linux)
 endif
 	touch -c $@
 
+ifneq ($(PATCHELF),patchelf)
+$(FFTW_DOUBLE_OBJ_TARGET): $(PATCHELF)
+$(FFTW_SINGLE_OBJ_TARGET): $(PATCHELF)
+endif
+
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
 	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
