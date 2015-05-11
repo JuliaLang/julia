@@ -877,7 +877,7 @@ A = sparse(ones(5,5))
 
 #test sparse
 @test sparse(A) == A
-@test sparse([1:5],[1:5],1) == speye(5)
+@test sparse([1:5;],[1:5;],1) == speye(5)
 
 #test speye and one
 @test speye(A) == speye(5)
