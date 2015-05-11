@@ -82,7 +82,7 @@ easily:
 
 .. doctest::
 
-    julia> int('x')
+    julia> Int('x')
     120
 
     julia> typeof(ans)
@@ -224,16 +224,8 @@ a normal value:
     julia> str[end-1]
     '.'
 
-    julia> str[end/2]
+    julia> str[end÷2]
     ' '
-
-    julia> str[end/3]
-    ERROR: InexactError()
-     in getindex at string.jl:59
-
-    julia> str[end/4]
-    ERROR: InexactError()
-     in getindex at string.jl:59
 
 Using an index less than 1 or greater than ``end`` raises an error::
 
@@ -298,14 +290,14 @@ such an invalid byte index, an error is thrown:
     '∀'
 
     julia> s[2]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: ArgumentError: invalid UTF-8 character index
+     in next at ./utf8.jl:80
+     in getindex at string.jl:62
 
     julia> s[3]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: ArgumentError: invalid UTF-8 character index
+     in next at ./utf8.jl:80
+     in getindex at string.jl:62
 
     julia> s[4]
     ' '
@@ -510,7 +502,10 @@ contained in a string:
     false
 
     julia> contains("Xylophon", 'o')
-    ERROR: `contains` has no method matching contains(::ASCIIString, ::Char)
+    ERROR: MethodError: `contains` has no method matching contains(::ASCIIString, ::Char)
+    Closest candidates are:
+      contains(!Matched::Function, ::Any, !Matched::Any)
+      contains(::AbstractString, !Matched::AbstractString)
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
@@ -579,7 +574,7 @@ any options turned on just uses ``r"..."``:
     r"^\s*(?:#|$)"
 
     julia> typeof(ans)
-    Regex (constructor with 3 methods)
+    Regex
 
 To check if a regex matches a string, use :func:`ismatch`:
 

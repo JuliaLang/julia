@@ -346,8 +346,8 @@ Mathematical Operators
 
       julia> B
       2x2 Array{Float64,2}:
-       3.0 3.0
-       7.0 7.0
+       3.0  3.0
+       7.0  7.0
 
 .. function:: A_mul_Bc(...)
 

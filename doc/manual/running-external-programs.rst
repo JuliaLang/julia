@@ -335,9 +335,7 @@ flush the :const:`STDOUT` handle, which is necessary for this example to
 work. Otherwise all the output is buffered and printed to the pipe at
 once, to be read by just one consumer process.)
 
-Here is an even more complex multi-stage producer-consumer example:
-
-.. doctest::
+Here is an even more complex multi-stage producer-consumer example::
 
     julia> run(pipe(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
                prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),

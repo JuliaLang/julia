@@ -571,19 +571,21 @@ Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib
 The :class:`BigInt` and :class:`BigFloat` types are available in Julia for arbitrary precision
 integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, or from :class:`AbstractString`.
-Once created, they participate in arithmetic with all other numeric types thanks to Julia's
-:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
+Constructors exist to create these types from primitive numerical types, and
+:func:`parse` can be use to construct them from :class:`AbstractString`\ s.  Once
+created, they participate in arithmetic with all other numeric types thanks to
+Julia's
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`:
 
 .. doctest::
 
     julia> BigInt(typemax(Int64)) + 1
     9223372036854775808
 
-    julia> BigInt("123456789012345678901234567890") + 1
+    julia> parse(BigInt, "123456789012345678901234567890") + 1
     123456789012345678901234567891
 
-    julia> BigFloat("1.23456789012345678901")
+    julia> parse(BigFloat, "1.23456789012345678901")
     1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00 with 256 bits of precision
 
     julia> BigFloat(2.0^66) / 3
@@ -613,7 +615,7 @@ However, type promotion between the primitive types above and
     -9223372036854775809
 
     julia> typeof(y)
-    BigInt (constructor with 10 methods)
+    Base.GMP.BigInt
 
 The default precision (in number of bits of the significand) and
 rounding mode of :class:`BigFloat` operations can be changed globally
@@ -627,17 +629,17 @@ block of code by :func:`with_bigfloat_precision` or
 .. doctest::
 
     julia> with_rounding(BigFloat,RoundUp) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
 
     julia> with_rounding(BigFloat,RoundDown) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
 
     julia> with_bigfloat_precision(40) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.1000000000004e+00 with 40 bits of precision
 
@@ -696,12 +698,22 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      DivideError()
+      ...
 
     julia> x(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      DivideError()
+      ...
 
-Both of these expressions are interpreted as function application: any
+Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
 parenthetical, is interpreted as a function applied to the values in
 parentheses (see :ref:`man-functions` for more about functions).
