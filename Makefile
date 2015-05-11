@@ -54,15 +54,13 @@ julia-base: julia-deps
 julia-libccalltest:
 	@$(MAKE) $(QUIET_MAKE) -C test libccalltest
 
-julia-src-%: julia-deps
+julia-src-release julia-src-debug : julia-src-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C src libjulia-$*
 
-$(JULIA_EXECUTABLE_debug): julia-ui-debug
-$(JULIA_EXECUTABLE_release): julia-ui-release
-julia-ui-%: julia-src-%
+julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C ui julia-$*
 
-julia-sysimg : julia-base
+julia-sysimg : julia-base julia-ui-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 julia-debug julia-release : julia-% : julia-ui-% julia-symlink julia-sysimg julia-libccalltest
@@ -148,14 +146,14 @@ else
 	@true
 endif
 
-$(build_private_libdir)/sys0.o: | $(build_private_libdir) $(JULIA_EXECUTABLE)
+$(build_private_libdir)/sys0.o: | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
 COMMA:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT) $(JULIA_EXECUTABLE)
+$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
@@ -464,8 +462,8 @@ distcleanall: cleanall
 	rm -fr $(build_prefix)
 
 .PHONY: default debug release check-whitespace release-candidate \
-	julia-debug julia-release \
-	julia-deps julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
+	julia-debug julia-release julia-deps \
+	julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
 	julia-symlink julia-base julia-sysimg \
 	test testall testall1 test clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
