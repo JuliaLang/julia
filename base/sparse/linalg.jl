@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.LinAlg: chksquare
+
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
 # Convert from 1-based to 0-based indices
