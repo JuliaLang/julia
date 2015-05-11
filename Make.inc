@@ -875,10 +875,11 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 endif
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
-ifeq ($(JULIA_DEBUG), 1)
-JULIA_BUILD_MODE = debug
-else
 JULIA_BUILD_MODE = release
+ifeq (,$(findstring release,$(MAKECMDGOALS)))
+ifneq (,$(findstring debug,$(MAKECMDGOALS)))
+JULIA_BUILD_MODE = debug
+endif
 endif
 
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
