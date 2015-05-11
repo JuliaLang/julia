@@ -189,7 +189,6 @@ typedef struct {
             char *data;
             intptr_t neglen;
         } there;
-        __uint128_t value;
     };
 } jl_bytevec_struct_t;
 
