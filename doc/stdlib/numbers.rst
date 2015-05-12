@@ -253,18 +253,32 @@ General Number Functions and Constants
 
 .. function:: BigInt(x)
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or an ``AbstractString``.
-   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
+   that can be converted to an ``Int``).  The usual mathematical operators are
+   defined for this type, and results are promoted to a ``BigInt``.
+
+   Instances can be constructed from strings via :func:`parse`, or using the
+   ``big`` string literal.
 
 .. function:: BigFloat(x)
 
    Create an arbitrary precision floating point number. ``x`` may be
-   an ``Integer``, a ``Float64``, an ``AbstractString`` or a ``BigInt``. The
+   an ``Integer``, a ``Float64`` or a ``BigInt``. The
    usual mathematical operators are defined for this type, and results
-   are promoted to a ``BigFloat``. Note that because floating-point
-   numbers are not exactly-representable in decimal notation,
-   ``BigFloat(2.1)`` may not yield what you expect. You may prefer to
-   initialize constants using strings, e.g., ``BigFloat("2.1")``.
+   are promoted to a ``BigFloat``.
+
+   Note that because decimal literals are converted to floating point numbers
+   when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead
+   prefer to initialize constants from strings via :func:`parse`, or using the
+   ``big`` string literal.
+
+   .. doctest::
+      julia> BigFloat(2.1)
+      2.100000000000000088817841970012523233890533447265625e+00 with 256 bits of precision
+
+      julia> big"2.1"
+      2.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
+
 
 .. function:: get_rounding(T)
 
