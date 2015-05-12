@@ -222,6 +222,11 @@ if VERSION < v"0.4.0-dev+4319"
     @test @compat Tuple{Int, Tuple{Float64}} == (Int, (Float64,))
     @test @compat Tuple{Int, Tuple{Float64, Char}} == (Int, (Float64, Char))
     @test @compat Tuple{Int, Vararg{Float64}} == (Int, Float64...)
+    # Issue 81
+    a81 = [Int, Int]
+    b81 = (Int, Int)
+    @test @compat Tuple{a81..., Vararg{Float64}} == (Int, Int, Float64...)
+    @test @compat Tuple{b81..., Vararg{Float64}} == (Int, Int, Float64...)
 end
 
 # Ensure eachindex iterates over the whole array
