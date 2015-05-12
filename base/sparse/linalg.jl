@@ -313,6 +313,9 @@ end
 
 function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     colptr = Array(Ti, n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
@@ -341,6 +344,9 @@ end
 
 function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     colptr = Array(Ti, n+1)
     nnz = 0
     colptr[1] = 1

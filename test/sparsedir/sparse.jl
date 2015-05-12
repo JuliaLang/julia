@@ -180,6 +180,11 @@ for i = 1:5
     @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
     @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
+    @test full(kron(full(a),b)) == kron(full(a), full(b))
+    @test full(kron(a,full(b))) == kron(full(a), full(b))
+    c = sparse(rand(Float32,5,5))
+    d = sparse(rand(Float64,5,5))
+    @test full(kron(c,d)) == kron(full(c),full(d))
 end
 
 # scale and scale!
@@ -201,6 +206,7 @@ b = randn(3)
 @test scale(0.5, dA) == scale(0.5, sA)
 @test scale(0.5, dA) == scale!(sC, sA, 0.5)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
+@test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
 # reductions
 pA = sparse(rand(3, 7))
@@ -904,3 +910,23 @@ A = sparse(tril(rand(5,5)))
 @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
 @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
 @test diagm(sparse(ones(1,5))) == speye(5)
+
+# triu/tril
+
+A = sprand(5,5,0.2)
+AF = full(A)
+@test full(triu(A,1)) == triu(AF,1)
+@test full(tril(A,1)) == tril(AF,1)
+@test_throws BoundsError tril(A,6)
+@test_throws BoundsError tril(A,-6)
+@test_throws BoundsError triu(A,6)
+@test_throws BoundsError triu(A,-6)
+
+# test norm
+
+A = sparse(Int[],Int[],Float64[],0,0)
+@test norm(A) == zero(eltype(A))
+A = sparse([1.0])
+@test norm(A) == 1.0
+@test_throws ArgumentError norm(sprand(5,5,0.2),3)
+@test_throws ArgumentError norm(sprand(5,5,0.2),2)
