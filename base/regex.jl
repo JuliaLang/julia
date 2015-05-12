@@ -135,7 +135,7 @@ match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Int32
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
 match(r::Regex, s::AbstractString, i::Integer) =
-    error("regex matching is only available for bytestrings; use bytestring(s) to convert")
+    throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))
 
 function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     regex = compile(re).regex
@@ -190,7 +190,7 @@ function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
         ((re.ovec[1]+1):prevind(str,re.ovec[2]+1)) : (0:-1)
 end
 search(s::AbstractString, r::Regex, idx::Integer) =
-    error("regex search is only available for bytestrings; use bytestring(s) to convert")
+    throw(ArgumentError("regex search is only available for bytestrings; use bytestring(s) to convert"))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
 immutable RegexMatchIterator
