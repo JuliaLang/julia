@@ -314,15 +314,15 @@ function getindex(A::Array, I::UnitRange{Int})
     return X
 end
 
-function getindex{T<:Real}(A::Array, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
+function getindex{T<:Real,V}(A::Array{V}, I::AbstractVector{T})
+    return V[ A[i] for i in to_index(I) ]
 end
-function getindex{T<:Real}(A::Range, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
+function getindex{T<:Real,V}(A::Range{V}, I::AbstractVector{T})
+    return V[ A[i] for i in to_index(I) ]
 end
-function getindex(A::Range, I::AbstractVector{Bool})
+function getindex{V}(A::Range{V}, I::AbstractVector{Bool})
     checkbounds(A, I)
-    return [ A[i] for i in to_index(I) ]
+    return V[ A[i] for i in to_index(I) ]
 end
 
 
@@ -514,7 +514,9 @@ end
 
 function push!{T}(a::Array{T,1}, item)
     # convert first so we don't grow the array if the assignment won't work
-    item = convert(T, item)
+    if T !== Union()
+        item = convert(T, item)
+    end
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
     a[end] = item
     return a

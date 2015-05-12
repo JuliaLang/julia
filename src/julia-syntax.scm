@@ -2158,6 +2158,7 @@
                          ,@lengths))
         (= ,ri 1)
         ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
+        ,@(if atype '() `((call (top freeze!) ,result)))
         ,result))))))
 
 (define (lower-dict-comprehension expr ranges)
