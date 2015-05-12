@@ -525,7 +525,7 @@ end
 @test convert(FloatRange, 0:5) === 0.:1.:5.
 @test convert(FloatRange, 0:1:5) === 0.:1.:5.
 
-# Issue 11244
+# Issue #11245
 let io = IOBuffer()
     show(io, linspace(1, 2, 3))
     str = takebuf_string(io)
