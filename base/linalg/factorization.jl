@@ -65,7 +65,8 @@ function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Va
     end
     QR(A, τ)
 end
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = pivot==Val{true} ? QRPivoted(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{false}} = Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
 qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = qrfact!(copy(A), pivot)
 copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
 copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
