@@ -235,9 +235,9 @@ function show(io::IO, r::LinSpace)
     print(io, "linspace(")
     show(io, first(r))
     print(io, ',')
-    show(last(r))
+    show(io, last(r))
     print(io, ',')
-    show(length(r))
+    show(io, length(r))
     print(io, ')')
 end
 
