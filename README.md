@@ -96,8 +96,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `zero(Ptr{T})` is now `Ptr{T}(0)` [#8909](https://github.com/JuliaLang/julia/pull/8909)
 
-## Nullable type
+## New types
+
 * [`Nullable` types](http://julia.readthedocs.org/en/latest/manual/types/?highlight=nullable#nullable-types-representing-missing-values) and their associated operations.
+
+* The parametric `Val{T}` ["value types"](http://julia.readthedocs.org/en/latest/manual/types/#value-types) can be used in julia 0.3.
 
 ## Developer tips
 

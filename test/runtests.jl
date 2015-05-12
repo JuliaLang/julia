@@ -279,3 +279,13 @@ if VERSION < v"0.4.0-dev+4502"
     @test keytype(@compat(Dict(1 => 1.))) == Int
     @test valtype(@compat(Dict(1 => 1.))) == Float64
 end
+
+# Val
+begin
+    local firstlast
+    firstlast(::Type{Val{true}}) = "First"
+    firstlast(::Type{Val{false}}) = "Last"
+
+    @test firstlast(Val{true}) == "First"
+    @test firstlast(Val{false}) == "Last"
+end
