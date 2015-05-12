@@ -33,3 +33,7 @@ show(buf, r"")
 
 # issue #10994: PCRE does not allow NUL chars in the pattern
 @test_throws ArgumentError Regex("a\0b")
+
+# regex match / search string must be a ByteString
+@test_throws ArgumentError match(r"test", utf32("this is a test"))
+@test_throws ArgumentError search(utf32("this is a test"), r"test")
