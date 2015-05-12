@@ -273,3 +273,9 @@ end
 @test isdiag(diagm([1,2,3,4]))
 @test !isdiag([1 2; 3 4])
 @test isdiag(5)
+
+# keytype & valtype
+if VERSION < v"0.4.0-dev+4502"
+    @test keytype(@compat(Dict(1 => 1.))) == Int
+    @test valtype(@compat(Dict(1 => 1.))) == Float64
+end
