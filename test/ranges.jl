@@ -524,3 +524,10 @@ end
 @test convert(FloatRange{Float64}, 0:1:5) === 0.:1.:5.
 @test convert(FloatRange, 0:5) === 0.:1.:5.
 @test convert(FloatRange, 0:1:5) === 0.:1.:5.
+
+# Issue 11244
+let io = IOBuffer()
+    show(io, linspace(1, 2, 3))
+    str = takebuf_string(io)
+    @test str == "linspace(1.0,2.0,3)"
+end
