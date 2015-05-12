@@ -294,6 +294,9 @@ Library improvements
     * New function `relpath` returns a relative filepath to path either from the current
       directory or from an optional start directory ([#10893]).
 
+    * `mktemp` and `mktempdir` now take an optional argument to set which
+      directory the temporary file or directory is created in.
+
 Deprecated or removed
 ---------------------
 
