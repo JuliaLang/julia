@@ -59,7 +59,11 @@ debug && println("Bunch-Kaufman factors of a pos-def matrix")
 debug && println("QR decomposition (without pivoting)")
     for i = 1:2
         let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
-            qra   = qrfact(a, Val{false})
+            @inferred qrfact(a)
+            if eltya <: BlasFloat
+                @inferred qrfact(a, Val{true})
+            end
+            qra   = @inferred qrfact(a, Val{false})
             q, r  = qra[:Q], qra[:R]
             @test_throws KeyError qra[:Z]
             @test_approx_eq q'*full(q, thin = false) eye(n)
@@ -69,7 +73,7 @@ debug && println("QR decomposition (without pivoting)")
             @test_approx_eq full(qra) a
 
 debug && println("Thin QR decomposition (without pivoting)")
-            qra   = qrfact(a[:,1:n1], Val{false})
+            qra   = @inferred qrfact(a[:,1:n1], Val{false})
             q,r   = qra[:Q], qra[:R]
             @test_throws KeyError qra[:Z]
             @test_approx_eq q'*full(q, thin=false) eye(n)
