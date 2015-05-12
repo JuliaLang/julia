@@ -192,6 +192,12 @@ end
 @test parse(Float64, "222") == 222.0
 @test parse(Float32, "1.1") == convert(Float32, 1.1)
 @test parse(BigFloat, "1.125") == convert(BigFloat, 1.125)
+@test isa(tryparse(Float32, "1.1"), Nullable)
+@test get(tryparse(Float32, "1.1")) == 1.1f0
+@test isa(tryparse(Float32, "a"), Nullable{Float32})
+@test isa(tryparse(Float64, "1.1"), Nullable)
+@test get(tryparse(Float64, "1.1")) == 1.1
+@test isa(tryparse(Float64, "a"), Nullable{Float64})
 
 # Make sure exports from Libc and Libdl are defined
 for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:MS_SYNC,:munmap,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:MS_INVALIDATE,:MS_ASYNC,:time,:strerror,:gethostname,:free,:mmap]

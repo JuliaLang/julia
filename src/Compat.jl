@@ -298,6 +298,19 @@ if VERSION < v"0.4.0-dev+656"
     include("nullable.jl")
 end
 
+if VERSION < v"0.4.0-dev+3864"
+    function tryparse(T::Type{Float32}, s)
+        r = Array(T,1)
+        float32_isvalid(s, r) ? Nullable(r[1]) : Nullable{Float32}()
+    end
+
+    function tryparse(T::Type{Float64}, s)
+        r = Array(T,1)
+        float64_isvalid(s, r) ? Nullable(r[1]) : Nullable{Float64}()
+    end
+    export tryparse
+end
+
 if VERSION < v"0.4.0-dev+3844"
     @eval module Libc
         const FILE = Base.CFILE
