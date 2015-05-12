@@ -3,19 +3,21 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert
+import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid
 
 export isgraphemebreak
 
 # also exported by Base:
-export normalize_string, graphemes, is_valid_char, is_assigned_char, charwidth,
+export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
-is_valid_char(ch::Unsigned) = !Bool((ch-0xd800<0x800)|(ch>0x10ffff))
-is_valid_char(ch::Integer) = is_valid_char(Unsigned(ch))
-is_valid_char(ch::Char) = is_valid_char(UInt32(ch))
+isvalid(::Type{Char}, ch::Unsigned) = !((ch - 0xd800 < 0x800) | (ch > 0x10ffff))
+isvalid(::Type{Char}, ch::Integer) = isvalid(Char, Unsigned(ch))
+isvalid(::Type{Char}, ch::Char) = isvalid(Char, UInt32(ch))
+
+isvalid(ch::Char) = isvalid(Char, ch)
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
