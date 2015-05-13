@@ -185,16 +185,14 @@ function clone(url::AbstractString, path::AbstractString;
                branch::AbstractString="",
                bare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL)
-    # start cloning
-    clone_opts = CloneOptionsStruct()
-    clone_opts.bare = Int32(bare)
-    if !isempty(branch)
-        clone_opts.checkout_branch = pointer(branch)
-    end
-    if remote_cb != C_NULL
-        clone_opts.remote_cb = remote_cb
-    end
+    # setup colne options
+    clone_opts = CloneOptionsStruct(
+                    bare = Int32(bare),
+                    checkout_branch = isempty(branch) ? Ptr{UInt8}(C_NULL) : pointer(branch),
+                    remote_cb = remote_cb
+                )
 
+    # start cloning
     clone_opts_ref = Ref(clone_opts)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,
@@ -225,9 +223,7 @@ function checkout(repo::GitRepo, branch::AbstractString="master";
                   strategy::Cuint = GitConst.CHECKOUT_SAFE)
     treeish_obj = revparse(repo, branch)
     try
-        opts = CheckoutOptionsStruct()
-        opts.checkout_strategy = strategy
-        error = git_checkout_tree(repo, treeish, &opts);
+        opts = CheckoutOptionsStruct(checkout_strategy = strategy)
         ccall((:git_checkout_tree, :libgit2), Cint,
               (Ptr{Void}, Ptr{Void}, Ref{CheckoutOptionsStruct}),
                repo.ptr, treeish_obj.ptr, Ref(opts))
