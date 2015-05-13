@@ -2,11 +2,11 @@ function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ptr{Void}[0]
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{UInt8}), repo_ptr_ptr, path)
-    if err != GitErrorConst.GIT_OK
+    if err != Error.GIT_OK
         if repo_ptr_ptr[] != C_NULL
             finalize(GitRepo(repo_ptr_ptr[]))
         end
-        throw(GitError(err))
+        throw(Error.GitError(err))
     end
     return GitRepo(repo_ptr_ptr[])
 end
