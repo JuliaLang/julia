@@ -75,6 +75,8 @@ copy!(s, d)
 s = Base.shmem_rand(dims)
 copy!(s, sdata(d))
 @test s == d
+a = rand(dims)
+@test sdata(a) == a
 
 d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
@@ -84,6 +86,24 @@ for p in procs(d)
     @test d[idxf] == p
     @test d[idxl] == p
 end
+
+# reshape
+
+d = Base.shmem_fill(1.0, (10,10,10))
+@test ones(100, 10) == reshape(d,(100,10))
+d = Base.shmem_fill(1.0, (10,10,10))
+@test_throws ErrorException reshape(d,(50,))
+
+# rand, randn
+d = Base.shmem_rand(dims)
+@test size(rand!(d)) == dims
+d = Base.shmem_fill(1.0, dims)
+@test size(randn!(d)) == dims
+
+# similar
+d = Base.shmem_rand(dims)
+@test size(similar(d, Complex128)) == dims
+@test size(similar(d, dims)) == dims
 
 # issue #6362
 d = Base.shmem_rand(dims)
