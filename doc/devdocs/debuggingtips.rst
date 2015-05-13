@@ -114,14 +114,14 @@ the related call to ``jl_apply``. To take a real-world example::
     #3  0x00007ffff6541154 in jl_apply (f=0x7ffdf367f630, args=0x7fffffffc2b0, nargs=2) at julia.h:1281
     ...
 
-The most recent ``jl_apply`` is at frame #3, so we can go back there and look at the AST for the function 
+The most recent ``jl_apply`` is at frame #3, so we can go back there and look at the AST for the function
 ``julia_convert_16886``. This is the uniqued name for some method of ``convert``. ``f`` in this frame is a
 ``jl_function_t*``, so we can look at the type signature, if any, from the ``specTypes`` field::
 
     (gdb) f 3
     #3  0x00007ffff6541154 in jl_apply (f=0x7ffdf367f630, args=0x7fffffffc2b0, nargs=2) at julia.h:1281
     1281	    return f->fptr((jl_value_t*)f, args, nargs);
-    (gdb) p f->linfo->specTypes 
+    (gdb) p f->linfo->specTypes
     $4 = (jl_tupletype_t *) 0x7ffdf39b1030
     (gdb) p jl_( f->linfo->specTypes )
     Tuple{Type{Float32}, Float64}           # <-- type signature for julia_convert_16886
