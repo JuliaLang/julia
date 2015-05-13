@@ -163,6 +163,8 @@ let
     @test x == -12
     X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
+    @test Base.elsize(X) == sizeof(Float32)
+    @test !isinteger(X)
     @test isnan(X) == [trues(6);falses(5)]
     @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
@@ -1172,3 +1174,15 @@ ctranspose!(b,a)
 a = zeros(Complex,1,5)
 ctranspose!(a,b)
 @test a == ones(Complex,1,5)
+
+# flipdim
+a = rand(5,3)
+@test flipdim(flipdim(a,2),2) == a
+@test flipdim(a,3) == a
+
+# bounds checking for copy!
+a = rand(5,3)
+b = rand(6,7)
+@test_throws BoundsError copy!(a,b)
+@test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
+@test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
