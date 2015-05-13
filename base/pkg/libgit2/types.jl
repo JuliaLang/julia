@@ -40,8 +40,8 @@ immutable CheckoutOptionsStruct
 end
 CheckoutOptionsStruct(; checkout_strategy::Cuint = GitConst.CHECKOUT_SAFE_CREATE,
                         disable_filters::Cint = zero(Cint),
-                        dir_mode::Cuint = Cuint(0o755),
-                        file_mode::Cuint = Cuint(0o755),
+                        dir_mode::Cuint = Cuint(0), # Cuint(0o755),
+                        file_mode::Cuint = Cuint(0), #Cuint(0o644),
                         file_open_flags::Cint = zero(Cint),
                         notify_flags::Cuint = GitConst.CHECKOUT_NOTIFY_NONE,
                         notify_cb::Ptr{Void} = Ptr{Void}(0),

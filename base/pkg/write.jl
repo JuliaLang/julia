@@ -10,14 +10,12 @@ function prefetch(pkg::AbstractString, sha1::AbstractString)
     error("$pkg: couldn't find commit $(sha1[1:10])")
 end
 
-function fetch(pkg::AbstractString, sha1::AbstractString)
+function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
     refspec = "+refs/*:refs/remotes/cache/*"
     cache = Cache.path(pkg)
-    with(GitRepo, pkg) do repo
-        LibGit2.fetch(repo, cache, refspec)
-        LibGit2.need_update(repo)
-        LibGit2.iscommit(sha1, repo)
-    end && return
+    LibGit2.fetch(repo, cache, refspec)
+    LibGit2.need_update(repo)
+    LibGit2.iscommit(sha1, repo) && return
     f = with(GitRepo, cache) do repo
          LibGit2.iscommit(sha1, repo)
     end ? "fetch" : "prefetch"
@@ -29,28 +27,34 @@ function fetch(pkg::AbstractString, sha1::AbstractString)
     end
 end
 
-function checkout(pkg::AbstractString, sha1::AbstractString)
-    with(GitRepo, pkg) do repo
-        LibGit2.set_remote_url(repo, Read.url(pkg))
-        LibGit2.checkout(repo, sha1)
-    end
+function checkout(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
+    LibGit2.set_remote_url(repo, Read.url(pkg))
+    LibGit2.set_head_detached(repo, sha1)
+    LibGit2.checkout(repo, sha1, strategy = LibGit2.GitConst.CHECKOUT_FORCE)
 end
 
 function install(pkg::AbstractString, sha1::AbstractString)
     prefetch(pkg, sha1)
-    if isdir(".trash/$pkg")
+    repo = if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
+        LibGit2.GitRepo(pkg)
     else
         LibGit2.clone(Cache.path(pkg), pkg)
     end
-    fetch(pkg, sha1)
-    checkout(pkg, sha1)
+    try
+        fetch(repo, pkg, sha1)
+        checkout(repo, pkg, sha1)
+    finally
+        LibGit2.finalize(repo)
+    end
 end
 
 function update(pkg::AbstractString, sha1::AbstractString)
     prefetch(pkg, sha1)
-    fetch(pkg, sha1)
-    checkout(pkg, sha1)
+    with(GitRepo, pkg) do repo
+        fetch(repo, pkg, sha1)
+        checkout(repo, pkg, sha1)
+    end
 end
 
 function remove(pkg::AbstractString)
