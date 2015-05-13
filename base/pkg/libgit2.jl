@@ -37,6 +37,19 @@ function gitdir(d, repo::GitRepo)
     path(repo)
 end
 
+"""Return HEAD Oid as string"""
+function head(pkg::AbstractString)
+    head_id =""
+    repo = GitRepo(pkg)
+    try
+        head_id = string(head_oid(repo))
+    catch err
+        warn(err)
+    finally
+        finalize(repo)
+    end
+end
+
 function need_update(repo::GitRepo)
     if !isbare(repo)
         # read updates index from filesystem
@@ -69,8 +82,7 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     tree = get(GitTree, repo, tree_oid)
     if !emptypathspec
         sa = StrArrayStruct(paths)
-        diff_opts = DiffOptionsStruct()
-        diff_opts.pathspec = sa
+        diff_opts = DiffOptionsStruct(pathspec = sa)
     end
     try
         diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -217,19 +229,6 @@ function branch_name(repo::GitRepo)
         finalize(head_ref)
     end
     return brnch
-end
-
-function checkout(repo::GitRepo, branch::AbstractString="master";
-                  strategy::Cuint = GitConst.CHECKOUT_SAFE)
-    treeish_obj = revparse(repo, branch)
-    try
-        opts = CheckoutOptionsStruct(checkout_strategy = strategy)
-        ccall((:git_checkout_tree, :libgit2), Cint,
-              (Ptr{Void}, Ptr{Void}, Ref{CheckoutOptionsStruct}),
-               repo.ptr, treeish_obj.ptr, Ref(opts))
-    finally
-        finalize(treeish_obj)
-    end
 end
 
 function create_branch(repo::GitRepo, branch::AbstractString,
