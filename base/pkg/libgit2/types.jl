@@ -260,3 +260,28 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
         warn("$(string(T)) thrown exception: $err")
     end
 end
+
+
+function getobjecttype{T<:GitObject}(::Type{T})
+    return if T == GitCommit
+        GitConst.OBJ_COMMIT
+    elseif T == GitTree
+        GitConst.OBJ_TREE
+    elseif T == GitAnyObject
+        GitConst.OBJ_ANY
+    else
+        error("Type $T is not supported")
+    end
+end
+
+function getobjecttype(obj_type::Cint)
+    return if obj_type == GitConst.OBJ_COMMIT
+        GitCommit
+    elseif obj_type == GitConst.OBJ_TREE
+        GitTree
+    elseif obj_type == GitConst.OBJ_ANY
+        GitAnyObject
+    else
+        error("Type $T is not supported")
+    end
+end

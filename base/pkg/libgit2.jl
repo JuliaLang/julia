@@ -70,7 +70,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """ git diff-index HEAD [-- <path>]"""
-isdirty(repo::GitRepo, paths::AbstractString="") = isdiff(repo, "HEAD", paths)
+isdirty(repo::GitRepo, paths::AbstractString="") = isdiff(repo, GitConst.HEAD_FILE, paths)
 
 """ git diff-index <treeish> [-- <path>]"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString="")
@@ -193,6 +193,92 @@ function fetch(repo::GitRepo, remote_path::AbstractString, refspecs::AbstractStr
     end
 end
 
+""" git branch """
+function branch(repo::GitRepo)
+    head_ref = head(repo)
+    brnch = ""
+    try
+        brnch = branch(head_ref)
+    finally
+        finalize(head_ref)
+    end
+    return brnch
+end
+
+""" git branch -b <branch> [<start-point>] """
+function branch!(repo::GitRepo, branch::AbstractString,
+                 commit::AbstractString = "";
+                 force::Bool=false)
+    # if commit is empty get head commit oid
+    commit_oid = if isempty(commit)
+        head_ref = head(repo)
+        commit_id = peel(head_ref, GitConst.OBJ_COMMIT)
+    else
+        Oid(commit)
+    end
+    iszero(commit_id) && return
+
+    cmt =  get(GitCommit, repo, commit_oid)
+    try
+        create_branch(repo, cmt, branch,
+            force=force,
+            msg="pkg.libgit2.branch: moving to $branch")
+        ref = create_branch(repo, cmt, branch, force=force)
+        finalize(ref)
+    finally
+        finalize(cmt)
+    end
+end
+
+""" git checkout [-f] --detach <commit> """
+function checkout!(repo::GitRepo, commit::AbstractString = "";
+                  force::Bool = true)
+    # nothing to do
+    isempty(commit) && return
+
+    # grab head name
+    head_name = GitConst.HEAD_FILE
+    try
+        head_ref = head(repo)
+        head_name = shortname(head_ref)
+        # if it is HEAD use short OID instead
+        if head_name == GitConst.HEAD_FILE
+            head_name = string(Oid(head_ref))
+        end
+        finalize(head_ref)
+    catch err
+        warn(err)
+    end
+
+    # search for commit or revparse branch to get a commit object
+    obj = get(GitAnyObject, repo, Oid(commit))
+    obj == nothing && return
+    try
+        peeled = peel(obj, GitConst.OBJ_COMMIT)
+        peeled == nothing && return
+        opts = force ? CheckoutOptionsStruct(checkout_strategy = GitConst.CHECKOUT_FORCE) :
+                           CheckoutOptionsStruct()
+        try
+            # detach commit
+            obj_oid = Oid(peeled)
+            ref = create_reference(repo, obj_oid,
+                force=force,
+                msg="pkg.libgit2.checkout: moving from $head_name to $(string(obj_oid))")
+            finalize(ref)
+
+            # checkout branch or commit
+            checkout_tree(repo, peeled, options = opts)
+        finally
+            finalize(peeled)
+        end
+    catch err
+        rethrow(err)
+        #warn("Checkout: $err")
+    finally
+        finalize(obj)
+    end
+end
+
 function clone(url::AbstractString, path::AbstractString;
                branch::AbstractString="",
                bare::Bool = false,
@@ -220,38 +306,8 @@ function authors(repo::GitRepo)
     return athrs
 end
 
-function branch_name(repo::GitRepo)
-    head_ref = head(repo)
-    brnch = ""
-    try
-        brnch = branch(head_ref)
-    finally
-        finalize(head_ref)
-    end
-    return brnch
-end
-
-function create_branch(repo::GitRepo, branch::AbstractString,
-                       commit_oid::AbstractString, force::Bool=false)
-    cmt = get(CitCommit, repo, commit_oid)
-    frc = CInt(force)
-    oid = Oid()
-    try
-        ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-        @check ccall((:git_branch_create, :libgit2), Cint,
-                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ref{Void}, Cint),
-                      ref_ptr_ptr, repo.ptr, branch, cmt.ptr, CInt(force))
-        ref = GitReference(ref_ptr_ptr[])
-        oid = Oid(ref.ptr)
-        finalize(ref)
-    finally
-        finalize(treeish_obj)
-    end
-    return oid
-end
-
 function snapshot(repo::GitRepo; dir="")
-    head = Oid(repo, "HEAD")
+    head = Oid(repo, GitConst.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
         with(GitIndex, repo) do idx

@@ -29,8 +29,7 @@ end
 
 function checkout(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
     LibGit2.set_remote_url(repo, Read.url(pkg))
-    LibGit2.set_head_detached(repo, sha1)
-    LibGit2.checkout(repo, sha1, strategy = LibGit2.GitConst.CHECKOUT_FORCE)
+    LibGit2.checkout!(repo, sha1)
 end
 
 function install(pkg::AbstractString, sha1::AbstractString)
