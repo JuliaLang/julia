@@ -2036,7 +2036,7 @@ static void gc_verify(void)
             jl_printf(JL_STDERR, "val : ");
             jl_(jl_valueof(v));
             jl_printf(JL_STDERR, "Let's try to backtrack the missing write barrier :\n");
-            lostval = v;
+            lostval = jl_valueof(v);
             break;
         }
     }

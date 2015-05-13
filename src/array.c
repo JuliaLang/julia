@@ -505,7 +505,11 @@ void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
-        gc_wb(a, rhs);
+        jl_value_t *owner = (jl_value_t*)a;
+        if (a->how == 3) {
+            owner = jl_array_data_owner(a);
+        }
+        gc_wb(owner, rhs);
     }
 }
 

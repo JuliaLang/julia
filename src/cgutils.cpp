@@ -1381,6 +1381,16 @@ static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ct
     return emit_arraysize(t, dim);
 }
 
+static Value *emit_arrayflags(Value *t, jl_codectx_t *ctx)
+{
+    Value *addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                            nullptr,
+#endif
+                            builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    return builder.CreateLoad(addr); // TODO tbaa
+}
+
 static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
 {
     tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
