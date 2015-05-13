@@ -260,6 +260,8 @@ Library improvements
 
     * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
 
+    * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
+
   * Other improvements
 
     * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
@@ -1405,3 +1407,4 @@ Too numerous to mention.
 [#10893]: https://github.com/JuliaLang/julia/issues/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
 [#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11145]: https://github.com/JuliaLang/julia/issues/11145

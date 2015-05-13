@@ -126,9 +126,10 @@
    use or situations in which more options are need, please use a package that provides the
    desired functionality instead.
 
-.. function:: mv(src::AbstractString,dst::AbstractString)
+.. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
-   Move a file from `src` to `dst`.
+   Move the file, link, or directory from *src* to *dest*.
+   \"remove_destination=true\" will first remove an existing `dst`.
 
 .. function:: rm(path::AbstractString; recursive=false)
 
