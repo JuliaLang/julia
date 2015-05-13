@@ -47,18 +47,18 @@ function isattached(repo::GitRepo)
 end
 
 """ Returns a found object """
-function revparse(repo::GitRepo, obj::AbstractString)
+function revparse(repo::GitRepo, objname::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_revparse_single, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, obj)
-    err != 0 && return GitAnyObject(C_NULL)
+            (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, objname)
+    err != 0 && return nothing
     return GitAnyObject(obj_ptr_ptr[])
 end
 
 """ Returns id of a found object """
-function revparseid(repo::GitRepo, obj::AbstractString)
+function revparseid(repo::GitRepo, objname::AbstractString)
     obj = revparse(repo, objname)
-    isempty(obj) && return Oid()
+    obj == nothing && return Oid()
     oid = Oid(obj.ptr)
     finalize(obj)
     return oid
