@@ -155,6 +155,19 @@ let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
     testintersect(T,Real,Float64)
 end
 
+# issue #8652
+args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b) != 0
+let T1 = TypeVar(:T, Integer, true), T2 = TypeVar(:T, Integer, true)
+    a = Tuple{Type{T1}, T1}
+    b2 = Tuple{Type{T2}, Integer}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
+    a = Tuple{Type{T1}, Ptr{T1}}
+    b2 = Tuple{Type{T2}, Ptr{Integer}}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
+end
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,AbstractString) === Any
@@ -316,6 +329,11 @@ sptest3{T}(x::T) = y->T
 let m = sptest3(:a)
     @test is(m(0),Symbol)
 end
+
+sptest4{T}(x::T, y::T) = 42
+sptest4{T}(x::T, y) = 44
+@test sptest4(1,2) == 42
+@test sptest4(1, "cat") == 44
 
 # closures
 function clotest()

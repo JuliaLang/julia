@@ -2718,6 +2718,8 @@ int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 
 // ----------------------------------------------------------------------------
 
+int type_match_invariance_mask = 1;
+
 static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant);
 
@@ -2728,6 +2730,7 @@ static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
     size_t cl = jl_nparams(child);
     size_t pl = jl_nparams(parent);
     int mode = 0;
+    invariant = invariant & type_match_invariance_mask;
     while(1) {
         int cseq = (ci<cl) && jl_is_vararg_type(jl_tparam(child,ci));
         int pseq = (pi<pl) && jl_is_vararg_type(jl_tparam(parent,pi));
@@ -2778,6 +2781,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant)
 {
     jl_value_t *tmp, *tmp2;
+    invariant = invariant & type_match_invariance_mask;
     if (jl_is_typector(child))
         child = (jl_value_t*)((jl_typector_t*)child)->body;
     if (jl_is_typector(parent))
