@@ -49,7 +49,11 @@ endif
 
 FLISP_EXECUTABLE_debug = $(BUILDDIR)/flisp/flisp-debug
 FLISP_EXECUTABLE_release = $(BUILDDIR)/flisp/flisp
+ifeq ($(OS),WINNT)
+FLISP_EXECUTABLE = $(FLISP_EXECUTABLE_release)
+else
 FLISP_EXECUTABLE = $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
+endif
 
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
