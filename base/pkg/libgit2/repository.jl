@@ -1,5 +1,5 @@
 function GitRepo(path::AbstractString)
-    repo_ptr_ptr = Ptr{Void}[0]
+    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{UInt8}), repo_ptr_ptr, path)
     if err != Error.GIT_OK
@@ -22,13 +22,6 @@ function init(path::AbstractString, bare::Cuint = Cuint(0))
     @check ccall((:git_repository_init, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{UInt8}, Cuint), repo_ptr_ptr, path, bare)
     return GitRepo(repo_ptr_ptr[])
-end
-
-function head(repo::GitRepo)
-    head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_repository_head, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr_ptr, repo.ptr)
-    return GitReference(head_ptr_ptr[])
 end
 
 function head_oid(repo::GitRepo)
@@ -67,25 +60,24 @@ end
 function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, prefix::Bool=false)
     id_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    git_otype = getobjecttype(T)
 
-    git_otype = if T == GitCommit
-        GitConst.OBJ_COMMIT
-    elseif T == GitTree
-        GitConst.OBJ_TREE
-    elseif T == GitAnyObject
-        GitConst.OBJ_ANY
-    else
-        error("Type $T is not supported")
-    end
-
-    @check if prefix
+    err = if prefix
         ccall((:git_object_lookup_prefix, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Csize_t, Cint),
-              obj_ptr_ptr, r.ptr, id_ptr, len, git_otype)
+              obj_ptr_ptr, r.ptr, id_ptr, len, git_otype) #TODO: length
     else
         ccall((:git_object_lookup, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
               obj_ptr_ptr, r.ptr, id_ptr, git_otype)
+    end
+    if err == Error.ENOTFOUND
+        return nothing
+    elseif err != Error.GIT_OK
+        if obj_ptr_ptr[] != C_NULL
+            finalize(GitAnyObject(obj_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
     end
     return T(obj_ptr_ptr[])
 end
@@ -100,36 +92,35 @@ function path(repo::GitRepo)
 end
 
 
-function checkout(repo::GitRepo, spec::AbstractString="master";
-                  strategy::Cuint = GitConst.CHECKOUT_SAFE_CREATE)
-    treeish_obj = revparse(repo, spec)
-    treeish_obj == nothing && return
-    try
-        opts = CheckoutOptionsStruct(checkout_strategy = strategy)
-        checkout_tree(repo, treeish_obj, opts)
-    catch err
-        warn("'checkout' thrown exception: $err")
-    finally
-        finalize(treeish_obj)
+function peel(obj::GitObject, obj_type::Cint)
+    peeled_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    git_otype = getobjecttype(obj_type)
+    err = ccall((:git_object_peel, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cint), peeled_ptr_ptr, obj.ptr, obj_type)
+    if err == Error.ENOTFOUND
+        return Oid()
+    elseif err != Error.GIT_OK
+        if peeled_ptr_ptr[] != C_NULL
+            finalize(GitAnyObject(peeled_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
     end
+    return git_otype(peeled_ptr_ptr[])
 end
 
-function checkout_tree(repo::GitRepo, obj::GitAnyObject,
-                       opts::CheckoutOptionsStruct = CheckoutOptionsStruct())
+function checkout_tree(repo::GitRepo, obj::GitObject;
+                       options::CheckoutOptionsStruct = CheckoutOptionsStruct())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
-                 repo.ptr, obj.ptr, opts == CheckoutOptionsStruct() ? C_NULL : Ref(opts))
+                 repo.ptr, obj.ptr,
+                 options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
 end
 
-function checkout_index(repo::GitRepo, idx::GitIndex,
-                        opts::CheckoutOptionsStruct = CheckoutOptionsStruct())
+function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
+                        options::CheckoutOptionsStruct = CheckoutOptionsStruct())
     @check ccall((:git_checkout_index, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
-                 repo.ptr, obj.ptr, opts == CheckoutOptionsStruct() ? C_NULL : Ref(opts))
-end
-
-function set_head_detached(repo::GitRepo, oid_str::AbstractString)
-    oid = Ref(Oid(oid_str))
-    @check ccall((:git_repository_set_head_detached, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Oid}), repo.ptr, oid)
+                 repo.ptr,
+                 isnull(idx) ? C_NULL : idx.ptr,
+                 options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
 end

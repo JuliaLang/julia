@@ -52,9 +52,9 @@ function add(pkg::AbstractString, vers::VersionSet)
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
-            current_barnch = LibGit2.branch_name(repo)
+            current_barnch = LibGit2.branch(repo)
             if current_barnch == branch
-                if LibGit2.isdiff(repo, "origin/$branch") # diff origin/metadata-v2
+                if LibGit2.isdiff(repo, "origin/$branch")
                     outdated = :yes
                 else
                     try
@@ -465,7 +465,7 @@ function resolve(
     missing = []
     for (pkg,(ver1,ver2)) in changes
         vers = ASCIIString[]
-        ver1 !== nothing && push!(vers,Git.head(dir=pkg))
+        ver1 !== nothing && push!(vers,LibGit2.head(pkg))
         ver2 !== nothing && push!(vers,Read.sha1(pkg,ver2))
         append!(missing,
             map(sha1->(pkg,(ver1,ver2),sha1),

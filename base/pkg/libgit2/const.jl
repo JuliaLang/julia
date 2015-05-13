@@ -1,5 +1,7 @@
 module GitConst
 
+    const HEAD_FILE  = "HEAD"
+
     const OBJ_ANY    = Cint(-2)
     const OBJ_BAD    = Cint(-1)
     const OBJ_COMMIT = Cint(1)
