@@ -19,7 +19,7 @@ immutable StrArrayStruct
 end
 StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
 
-type CheckoutOptionsStruct
+immutable CheckoutOptionsStruct
     version::Cuint
     checkout_strategy::Cuint
     disable_filters::Cint
@@ -38,21 +38,39 @@ type CheckoutOptionsStruct
     our_label::Ptr{UInt8}
     their_label::Ptr{UInt8}
 end
-CheckoutOptionsStruct() = CheckoutOptionsStruct(one(Cuint),
-                                                GitConst.CHECKOUT_SAFE_CREATE,
-                                                zero(Cint),
-                                                zero(Cuint), # Cuint(0o755), #
-                                                zero(Cuint), # Cuint(0o755), #
-                                                zero(Cint),
-                                                GitConst.CHECKOUT_NOTIFY_NONE,
-                                                Ptr{Void}(0), Ptr{Void}(0),
-                                                Ptr{Void}(0), Ptr{Void}(0),
-                                                StrArrayStruct(),
-                                                Ptr{Void}(0),
-                                                Ptr{UInt8}(0),
-                                                Ptr{UInt8}(0),
-                                                Ptr{UInt8}(0),
-                                                Ptr{UInt8}(0))
+CheckoutOptionsStruct(; checkout_strategy::Cuint = GitConst.CHECKOUT_SAFE_CREATE,
+                        disable_filters::Cint = zero(Cint),
+                        dir_mode::Cuint = Cuint(0o755),
+                        file_mode::Cuint = Cuint(0o755),
+                        file_open_flags::Cint = zero(Cint),
+                        notify_flags::Cuint = GitConst.CHECKOUT_NOTIFY_NONE,
+                        notify_cb::Ptr{Void} = Ptr{Void}(0),
+                        notify_payload::Ptr{Void} = Ptr{Void}(0),
+                        progress_cb::Ptr{Void} = Ptr{Void}(0),
+                        progress_payload::Ptr{Void} = Ptr{Void}(0),
+                        paths::StrArrayStruct = StrArrayStruct(),
+                        baseline::Ptr{Void} = Ptr{Void}(0),
+                        target_directory::Ptr{UInt8} = Ptr{UInt8}(0),
+                        ancestor_label::Ptr{UInt8} =Ptr{UInt8}(0),
+                        our_label::Ptr{UInt8} = Ptr{UInt8}(0),
+                        their_label::Ptr{UInt8} = Ptr{UInt8}(0)
+)=CheckoutOptionsStruct(one(Cuint),
+                        checkout_strategy,
+                        disable_filters,
+                        dir_mode,
+                        file_mode,
+                        file_open_flags,
+                        notify_flags,
+                        notify_cb,
+                        notify_payload,
+                        progress_cb,
+                        progress_payload,
+                        paths,
+                        baseline,
+                        target_directory,
+                        ancestor_label,
+                        our_label,
+                        their_label)
 
 immutable RemoteCallbacksStruct
     version::Cuint
@@ -79,7 +97,7 @@ RemoteCallbacksStruct() = RemoteCallbacksStruct(one(Cuint),
                                                 Ptr{Void}(0),
                                                 Ptr{Void}(0))
 
-type CloneOptionsStruct
+immutable CloneOptionsStruct
     version::Cuint
     checkout_opts::CheckoutOptionsStruct
     remote_callbacks::RemoteCallbacksStruct
@@ -92,20 +110,30 @@ type CloneOptionsStruct
     remote_cb::Ptr{Void}
     remote_cb_payload::Ptr{Void}
 end
-
-CloneOptionsStruct() = CloneOptionsStruct(one(Cuint),
-                                          CheckoutOptionsStruct(),
-                                          RemoteCallbacksStruct(),
-                                          zero(Cint),
-                                          zero(Cint),
-                                          Ptr{UInt8}(0),
-                                          Ptr{Void}(0),
-                                          Ptr{Void}(0), Ptr{Void}(0),
-                                          Ptr{Void}(0), Ptr{Void}(0)
-                                        )
+CloneOptionsStruct(; checkout_opts::CheckoutOptionsStruct = CheckoutOptionsStruct(),
+                     remote_callbacks::RemoteCallbacksStruct = RemoteCallbacksStruct(),
+                     bare::Cint = zero(Cint),
+                     localclone::Cint = zero(Cint),
+                     checkout_branch::Ptr{UInt8} = Ptr{UInt8}(0),
+                     signature::Ptr{Void} = Ptr{Void}(0),
+                     repository_cb::Ptr{Void} = Ptr{Void}(0),
+                     repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
+                     remote_cb::Ptr{Void} = Ptr{Void}(0),
+                     remote_cb_payload::Ptr{Void} = Ptr{Void}(0)
+)=CloneOptionsStruct(one(Cuint),
+                     checkout_opts,
+                     remote_callbacks,
+                     bare,
+                     localclone,
+                     checkout_branch,
+                     signature,
+                     repository_cb,
+                     repository_cb_payload,
+                     remote_cb,
+                     remote_cb_payload)
 
 # git diff option struct
-type DiffOptionsStruct
+immutable DiffOptionsStruct
     version::Cuint
     flags::UInt32
 
@@ -123,18 +151,30 @@ type DiffOptionsStruct
     old_prefix::Ptr{UInt8}
     new_prefix::Ptr{UInt8}
 end
-DiffOptionsStruct() = DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
-                                        GitConst.DIFF_NORMAL,
-                                        GitConst.SUBMODULE_IGNORE_DEFAULT,
-                                        StrArrayStruct(),
-                                        Ptr{Void}(0),
-                                        Ptr{Void}(0),
-                                        UInt32(3),
-                                        zero(UInt32),
-                                        UInt16(7),
-                                        Coff_t(512*1024*1024), #zero(Coff_t),
-                                        Ptr{UInt8}(0),
-                                        Ptr{UInt8}(0))
+DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
+                    ignore_submodules::Cint = GitConst.SUBMODULE_IGNORE_DEFAULT,
+                    pathspec::StrArrayStruct = StrArrayStruct(),
+                    notify_cb::Ptr{Void} = Ptr{Void}(0),
+                    notify_payload::Ptr{Void} = Ptr{Void}(0),
+                    context_lines::UInt32 = UInt32(3),
+                    interhunk_lines::UInt32 = zero(UInt32),
+                    id_abbrev::UInt16 = UInt16(7),
+                    max_size::Coff_t = Coff_t(512*1024*1024), #zero(Coff_t), #512Mb
+                    old_prefix::Ptr{UInt8} = Ptr{UInt8}(0),
+                    new_prefix::Ptr{UInt8} = Ptr{UInt8}(0)
+)=DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
+                    flags,
+                    ignore_submodules,
+                    pathspec,
+                    notify_cb,
+                    notify_payload,
+                    context_lines,
+                    interhunk_lines,
+                    id_abbrev,
+                    max_size,
+                    old_prefix,
+                    new_prefix
+                )
 
 # Abstract object types
 abstract AbstractGitObject
