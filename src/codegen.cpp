@@ -2181,16 +2181,38 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *ary = emit_expr(args[1], ctx);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
-                    if (jl_array_store_unboxed(ety) &&
-                        ((jl_datatype_t*)ety)->size == 0) {
+                    bool isboxed = !jl_array_store_unboxed(ety);
+                    if (!isboxed && ((jl_datatype_t*)ety)->size == 0) {
                         // no-op, but emit expr for possible effects
                         assert(jl_is_datatype(ety));
                         emit_expr(args[2],ctx,false);
                     }
                     else {
                         Value* v = ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx);
+                        PHINode* data_owner = NULL; // owner object against which the write barrier must check
+                        if (isboxed) { // if not boxed we don't need a write barrier
+                            Value *flags = emit_arrayflags(ary,ctx);
+                            // the owner of the data is ary itself except if ary->how == 3
+                            flags = builder.CreateAnd(flags, 3);
+                            Value *is_owned = builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                            BasicBlock *curBB = builder.GetInsertBlock();
+                            BasicBlock *ownedBB = BasicBlock::Create(getGlobalContext(), "array_owned", ctx->f);
+                            BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "merge_own", ctx->f);
+                            builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+                            builder.SetInsertPoint(ownedBB);
+                            // load owner pointer
+                            Value *own_ptr = builder.CreateLoad(
+                                builder.CreateBitCast(builder.CreateConstGEP1_32(
+                                    builder.CreateBitCast(ary,T_pint8), jl_array_data_owner_offset(nd)),
+                                    jl_ppvalue_llvmt));
+                            builder.CreateBr(mergeBB);
+                            builder.SetInsertPoint(mergeBB);
+                            data_owner = builder.CreatePHI(jl_pvalue_llvmt, 2);
+                            data_owner->addIncoming(ary, curBB);
+                            data_owner->addIncoming(own_ptr, ownedBB);
+                        }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, tbaa_user, ety == (jl_value_t*)jl_any_type ? ary : NULL);
+                                    ety, ctx, tbaa_user, data_owner);
                     }
                     JL_GC_POP();
                     return ary;
@@ -4834,6 +4856,7 @@ static void init_julia_llvm_env(Module *m)
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
+                      , T_int16
     };
     Type* jl_array_llvmt =
         StructType::create(jl_LLVMContext,
