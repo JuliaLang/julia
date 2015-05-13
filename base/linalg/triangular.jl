@@ -265,73 +265,51 @@ eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S}) = (for i = 1
 # Generic routines #
 ####################
 
-(*)(A::UpperTriangular, x::Number) = UpperTriangular(A.data*x)
-(*)(A::LowerTriangular, x::Number) = LowerTriangular(A.data*x)
-function (*)(A::UnitUpperTriangular, x::Number)
-    B = A.data*x
-    for i = 1:size(A, 1)
-        B[i,i] = x
+for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
+                   (LowerTriangular, UnitLowerTriangular))
+    @eval begin
+        (*)(A::$t, x::Number) = $t(A.data*x)
+
+        function (*)(A::$unitt, x::Number)
+            B = A.data*x
+            for i = 1:size(A, 1)
+                B[i,i] = x
+            end
+            $t(B)
+        end
+
+        (*)(x::Number, A::$t) = $t(x*A.data)
+
+        function (*)(x::Number, A::$unitt)
+            B = x*A.data
+            for i = 1:size(A, 1)
+                B[i,i] = x
+            end
+            $t(B)
+        end
+
+        (/)(A::$t, x::Number) = $t(A.data/x)
+
+        function (/)(A::$unitt, x::Number)
+            B = A.data/x
+            invx = inv(x)
+            for i = 1:size(A, 1)
+                B[i,i] = invx
+            end
+            $t(B)
+        end
+
+        (\)(x::Number, A::$t) = $t(x\A.data)
+
+        function (\)(x::Number, A::$unitt)
+            B = x\A.data
+            invx = inv(x)
+            for i = 1:size(A, 1)
+                B[i,i] = invx
+            end
+            $t(B)
+        end
     end
-    UpperTriangular(B)
-end
-function (*)(A::UnitLowerTriangular, x::Number)
-    B = A.data*x
-    for i = 1:size(A, 1)
-        B[i,i] = x
-    end
-    LowerTriangular(B)
-end
-(*)(x::Number, A::UpperTriangular) = UpperTriangular(x*A.data)
-(*)(x::Number, A::LowerTriangular) = LowerTriangular(x*A.data)
-function (*)(x::Number, A::UnitUpperTriangular)
-    B = x*A.data
-    for i = 1:size(A, 1)
-        B[i,i] = x
-    end
-    UpperTriangular(B)
-end
-function (*)(x::Number, A::UnitLowerTriangular)
-    B = x*A.data
-    for i = 1:size(A, 1)
-        B[i,i] = x
-    end
-    LowerTriangular(B)
-end
-(/)(A::UpperTriangular, x::Number) = UpperTriangular(A.data/x)
-(/)(A::LowerTriangular, x::Number) = LowerTriangular(A.data/x)
-function (/)(A::UnitUpperTriangular, x::Number)
-    B = A.data*x
-    invx = inv(x)
-    for i = 1:size(A, 1)
-        B[i,i] = x
-    end
-    UpperTriangular(B)
-end
-function (/)(A::UnitLowerTriangular, x::Number)
-    B = A.data*x
-    invx = inv(x)
-    for i = 1:size(A, 1)
-        B[i,i] = x
-    end
-    LowerTriangular(B)
-end
-(\)(x::Number, A::UpperTriangular) = UpperTriangular(x\A.data)
-(\)(x::Number, A::LowerTriangular) = LowerTriangular(x\A.data)
-function (\)(x::Number, A::UnitUpperTriangular)
-    B = x\A.data
-    invx = inv(x)
-    for i = 1:size(A, 1)
-        B[i,i] = invx
-    end
-    UpperTriangular(B)
-end
-function (\)(x::Number, A::UnitLowerTriangular)
-    B = x\A.data
-    invx = inv(x)
-    for i = 1:size(A, 1)
-        B[i,i] = invx
-    end
-    LowerTriangular(B)
 end
 
 ## Generic triangular multiplication
