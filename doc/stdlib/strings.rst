@@ -54,9 +54,17 @@
 
    Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
 
+.. function:: ascii(::Ptr{UInt8}, [length])
+
+   Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+
 .. function:: utf8(::Array{UInt8,1})
 
    Create a UTF-8 string from a byte array.
+
+.. function:: utf8(::Ptr{UInt8}, [length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: utf8(s)
 
