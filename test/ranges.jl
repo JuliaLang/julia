@@ -531,3 +531,13 @@ let io = IOBuffer()
     str = takebuf_string(io)
     @test str == "linspace(1.0,2.0,3)"
 end
+
+# issue 10950
+r = 1//2:3
+@test length(r) == 3
+i = 1
+for x in r
+    @test x == i//2
+    i += 2
+end
+@test i == 7
