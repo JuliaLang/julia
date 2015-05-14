@@ -1353,6 +1353,7 @@ export
     # profiling
     @time,
     @timed,
+    @timev,
     @elapsed,
     @allocated,
     @profile,
