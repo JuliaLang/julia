@@ -431,3 +431,13 @@ for x in X
         end
     end
 end
+
+for n = 0:28
+    @test log(2,2^n) == n
+end
+with_bigfloat_precision(10_000) do
+    @test log(2,big(2)^100) == 100
+    @test log(2,big(2)^200) == 200
+    @test log(2,big(2)^300) == 300
+    @test log(2,big(2)^400) == 400
+end
