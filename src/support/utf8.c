@@ -615,87 +615,20 @@ size_t u8_printf(const char *fmt, ...)
     return cnt;
 }
 
-/* based on the valid_utf8 routine from the PCRE library by Philip Hazel
-
-   length is in bytes, since without knowing whether the string is valid
-   it's hard to know how many characters there are! */
-DLLEXPORT int u8_isvalid_old(const char *str, size_t length)
-{
-    const unsigned char *p, *pend = (unsigned char*)str + length;
-    unsigned char c;
-    int ret = 1; /* ASCII */
-    int ab;
-
-    for (p = (unsigned char*)str; p < pend; p++) {
-        c = *p;
-        if (c < 128)
-            continue;
-        ret = 2; /* non-ASCII UTF-8 */
-        if ((c & 0xc0) != 0xc0)
-            return 0;
-        ab = trailingBytesForUTF8[c];
-        if (length < ab)
-            return 0;
-        length -= ab;
-
-        p++;
-        /* Check top bits in the second byte */
-        if ((*p & 0xc0) != 0x80)
-            return 0;
-
-        /* Check for overlong sequences for each different length */
-        switch (ab) {
-            /* Check for xx00 000x */
-            case 1:
-                if ((c & 0x3e) == 0) return 0;
-                continue;   /* We know there aren't any more bytes to check */
-
-            /* Check for 1110 0000, xx0x xxxx */
-            case 2:
-                if (c == 0xe0 && (*p & 0x20) == 0) return 0;
-                break;
-
-            /* Check for 1111 0000, xx00 xxxx */
-            case 3:
-                if (c == 0xf0 && (*p & 0x30) == 0) return 0;
-                break;
-
-            /* Check for 1111 1000, xx00 0xxx */
-            case 4:
-                if (c == 0xf8 && (*p & 0x38) == 0) return 0;
-                break;
-
-            /* Check for leading 0xfe or 0xff,
-               and then for 1111 1100, xx00 00xx */
-            case 5:
-                if (c == 0xfe || c == 0xff ||
-                      (c == 0xfc && (*p & 0x3c) == 0)) return 0;
-                break;
-        }
-
-        /* Check for valid bytes after the 2nd, if any; all must start 10 */
-        while (--ab > 0) {
-            if ((*(++p) & 0xc0) != 0x80) return 0;
-        }
-    }
-
-    return ret;
-}
-
 /* Rewritten completely, original code not based on anything else
 
    length is in bytes, since without knowing whether the string is valid
    it's hard to know how many characters there are! */
-int u8_isvalid(const char *iStr, size_t iLength)
+int u8_isvalid(const char *str, size_t len)
 {
     const unsigned char *pnt;   // Current pointer in string
     const unsigned char *pend;  // End of string
     unsigned char       byt;    // Current byte
 
     // Empty strings can be considered valid ASCII
-    if (!iLength) return 1;
-    pnt = (unsigned char *)iStr;
-    pend = (unsigned char *)iStr + iLength;
+    if (!len) return 1;
+    pnt = (unsigned char *)str;
+    pend = (unsigned char *)str + len;
     // First scan for non-ASCII characters as fast as possible
     do {
         if (*pnt++ & 0x80) goto chkutf8;

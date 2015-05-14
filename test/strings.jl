@@ -1296,6 +1296,22 @@ end
 @test is_valid_utf32(utf32("\x00")) == true
 @test is_valid_utf32(UInt32[0xd800,0]) == false
 
+# Issue #11203
+@test is_valid_ascii(UInt8[]) == true
+@test is_valid_utf8(UInt8[]) == true
+@test is_valid_utf16(UInt16[]) == true
+@test is_valid_utf32(UInt32[]) == true
+
+let tests = (("abcd".data,true), [("α".data[i:i],false) for i in 1:2]..., ("🐨".data[1:3],false), ("🐨".data, true), (b"\ud800", false))
+    for (d1,v1) in tests
+        for (d2,v2) in tests
+            for (d3,v3) in tests
+                @test is_valid_utf8(vcat(d1,d2,d3)) == v1 && v2 && v3
+            end
+        end
+    end
+end
+
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
