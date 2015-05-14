@@ -431,3 +431,9 @@ for x in X
         end
     end
 end
+
+# promotion in 2-argument log
+@test_approx_eq_eps log(2,big(2)^100) 100 eps(BigFloat) * 1e3
+@test_approx_eq_eps log([2],big(2)^100)[1] 100 eps(BigFloat) * 1e3
+@test_approx_eq_eps log(2,[big(2)^100])[1] 100 eps(BigFloat) * 1e3
+@test_approx_eq_eps log([2],[big(2)^100])[1] 100 eps(BigFloat) * 1e3
