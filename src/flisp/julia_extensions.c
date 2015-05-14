@@ -84,6 +84,9 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
                 (wc >= 0x2a09 && wc <= 0x2a16) ||  // ⨉, ⨊, ⨋, ⨌, ⨍, ⨎, ⨏, ⨐, ⨑, ⨒, ⨓, ⨔, ⨕, ⨖
                 wc == 0x2a1b || wc == 0x2a1c)))) || // ⨛, ⨜
 
+            (wc == 0x1d7ce || wc == 0x1d7cf ) || // Mathematical bold 0, 1
+            (wc == 0x1d7d8 || wc == 0x1d7d9 ) || // Mathematical double-struck 0, 1
+
             (wc >= 0x1d6c1 && // variants of \nabla and \partial
              (wc == 0x1d6c1 || wc == 0x1d6db ||
               wc == 0x1d6fb || wc == 0x1d715 ||
