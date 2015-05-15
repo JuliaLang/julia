@@ -27,6 +27,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
+- **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
