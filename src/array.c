@@ -171,7 +171,15 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *di
     }
     JL_GC_PUSH1(&a);
 
-    jl_array_data_owner(a) = (jl_value_t*)data;
+    jl_array_t *owner = data;
+    // if data is itself a shared wrapper,
+    // owner should point back to the original array
+    if (owner->how == 3) {
+        owner = (jl_array_t*)jl_array_data_owner(owner);
+    }
+    assert(owner->how != 3);
+    jl_array_data_owner(a) = (jl_value_t*)owner;
+
     a->how = 3;
     a->data = data->data;
     a->isshared = 1;
