@@ -186,6 +186,10 @@
 
    Returns ``true`` if ``path`` is a symbolic link, ``false`` otherwise.
 
+.. function:: ismount(path) -> Bool
+
+   Returns ``true`` if ``path`` is a mount point, ``false`` otherwise.
+
 .. function:: ispath(path) -> Bool
 
    Returns ``true`` if ``path`` is a valid filesystem path, ``false`` otherwise.
