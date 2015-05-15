@@ -1030,9 +1030,10 @@ end
 let
     # make symbol with invalid char
     sym = symbol(Char(0xdcdb))
-    @test string(sym) == "\udcdb"
+    @test string(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
-    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
+    res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
 
 @test symbol("asdf") === :asdf
@@ -1284,16 +1285,91 @@ end
 @test is_valid_ascii("Σ_not_valid_ascii") == false
 @test is_valid_char('a') == true
 @test is_valid_char('\x00') == true
-@test is_valid_char('\ud800') == false
+@test is_valid_char(0xd800) == false
 
 @test is_valid_utf16(utf16("a")) == true
-@test is_valid_utf16(utf16("\ud800")) == false
+@test is_valid_utf16(UInt16[0xd800,0]) == false
 # TODO is_valid_utf8
 
 # Issue #11140
 @test is_valid_utf32(utf32("a")) == true
 @test is_valid_utf32(utf32("\x00")) == true
 @test is_valid_utf32(UInt32[0xd800,0]) == false
+
+# Issue #11203
+@test is_valid_ascii(UInt8[]) == true
+@test is_valid_utf8(UInt8[]) == true
+@test is_valid_utf16(UInt16[]) == true
+@test is_valid_utf32(UInt32[]) == true
+
+# Check UTF-8 characters
+# Check ASCII range (true),
+# then single continuation bytes and lead bytes with no following continuation bytes (false)
+for (rng,flg) in ((0:0x7f, true), (0x80:0xff, false))
+    for byt in rng
+        @test is_valid_utf8(UInt8[byt]) == flg
+    end
+end
+# Check overlong lead bytes for 2-character sequences (false)
+for byt = 0xc0:0xc1
+    @test is_valid_utf8(UInt8[byt,0x80]) == false
+end
+# Check valid lead-in to two-byte sequences (true)
+for byt = 0xc2:0xdf
+    for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test is_valid_utf8(UInt8[byt, cont]) == flg
+        end
+    end
+end
+# Check three-byte sequences
+for r1 in (0xe0:0xec, 0xee:0xef)
+    for byt = r1
+        # Check for short sequence
+        @test is_valid_utf8(UInt8[byt]) == false
+        for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+            for cont in rng
+                @test is_valid_utf8(UInt8[byt, cont]) == false
+                @test is_valid_utf8(UInt8[byt, cont, 0x80]) == flg
+            end
+        end
+    end
+end
+# Check hangul characters (0xd000-0xd7ff) hangul
+# Check for short sequence, or start of surrogate pair
+for (rng,flg) in ((0x00:0x7f, false), (0x80:0x9f, true), (0xa0:0xff, false))
+    for cont in rng
+        @test is_valid_utf8(UInt8[0xed, cont]) == false
+        @test is_valid_utf8(UInt8[0xed, cont, 0x80]) == flg
+    end
+end
+# Check valid four-byte sequences
+for byt = 0xf0:0xf4
+    if (byt == 0xf0)
+        r0 = ((0x00:0x8f, false), (0x90:0xbf, true), (0xc0:0xff, false))
+    elseif byt == 0xf4
+        r0 = ((0x00:0x7f, false), (0x80:0x8f, true), (0x90:0xff, false))
+    else
+        r0 = ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+    end
+    for (rng,flg) in r0
+        for cont in rng
+            @test is_valid_utf8(UInt8[byt, cont]) == false
+            @test is_valid_utf8(UInt8[byt, cont, 0x80]) == false
+            @test is_valid_utf8(UInt8[byt, cont, 0x80, 0x80]) == flg
+        end
+    end
+end
+# Check five-byte sequences, should be invalid
+for byt = 0xf8:0xfb
+    @test is_valid_utf8(UInt8[byt, 0x80, 0x80, 0x80, 0x80]) == false
+end
+# Check six-byte sequences, should be invalid
+for byt = 0xfc:0xfd
+    @test is_valid_utf8(UInt8[byt, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+end
+# Check seven-byte sequences, should be invalid
+@test is_valid_utf8(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
