@@ -381,6 +381,26 @@ else
 build_shlibdir = $(build_libdir)
 endif
 
+# If we are running on ARM, set certain options automatically
+ifneq (,$(findstring arm,$(ARCH)))
+LLVM_ASSERTIONS=1
+LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --enable-assertions"
+
+OPENBLAS_DYNAMIC_ARCH=0
+OPENBLAS_TARGET_ARCH=ARMV7
+USE_BLAS64=0
+
+LLVM_VER=3.6.0
+
+USE_SYSTEM_LIBM=1
+USE_SYSTEM_FFTW=1
+USE_SYSTEM_GMP=1
+USE_SYSTEM_MPFR=1
+
+JCFLAGS += -fsigned-char
+endif
+
+
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif

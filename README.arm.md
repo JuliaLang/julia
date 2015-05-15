@@ -24,23 +24,9 @@ following command:
 sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.7 g++-4.7 gfortran libgfortran3
 ````
 
-# ARM specific Make.user
+# ARM specific build problems
 
-Please start from the standard [build
-instructions](README.md#source-download-and-compilation), in
-particular the Linux notes.
-
-Next, create a file in the `julia` top-level directory called
-`Make.user` with the following contents:
-
-```
-include $(JULIAHOME)/Make.arm
-```
-
-Then proceed to build as described in the primary README. Just typing
-`make -j 4` at this stage should build julia.
-
-If you run in to issues building LLVM, see these notes:
+If you run into issues building LLVM, see these notes:
 [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
 
 # Raspberry Pi
