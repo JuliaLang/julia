@@ -167,11 +167,13 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <http://julialang.org/manual/>
-  - **Status: ** <http://status.julialang.org/>
+  - **Status:** <http://status.julialang.org/>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
+  - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
   - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
+  - [All Julia Publications](http://julialang.org/publications/)
 
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
