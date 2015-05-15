@@ -472,3 +472,18 @@ with_bigfloat_precision(10_000) do
     @test log(2,big(2)^300) == 300
     @test log(2,big(2)^400) == 400
 end
+
+# test vectorization of 2-arg vectorized functions
+binary_math_functions = [
+    copysign, flipsign, log, atan2, hypot, max, min,
+    airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+    besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
+    polygamma, zeta, beta, lbeta,
+]
+for f in binary_math_functions
+    x = y = 2
+    v = [f(x,y)]
+    @test f([x],y) == v
+    @test f(x,[y]) == v
+    @test f([x],[y]) == v
+end
