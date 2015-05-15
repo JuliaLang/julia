@@ -41,7 +41,7 @@ $(build_docdir):
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
-	@ln -sf "$(JULIA_EXECUTABLE)" julia
+	@ln -sf "$(shell contrib/relative_path.sh "$(JULIAHOME)" "$(JULIA_EXECUTABLE)")" julia
 endif
 endif
 
