@@ -62,6 +62,10 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 ## misc syntax ##
 
+macro _meta(args...)
+    Expr(:meta, args...)
+end
+
 macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end

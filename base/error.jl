@@ -49,3 +49,13 @@ macro assert(ex, msgs...)
     end
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
+
+throw_with_args(typ::ANY) = (@_meta(noinline); throw(typ()))
+throw_with_args(typ::ANY, arg1) = (@_meta(noinline); throw(typ(arg1)))
+throw_with_args(typ::ANY, arg1, arg2) =
+    (@_meta(noinline); throw(typ(arg1, arg2)))
+throw_with_args(typ::ANY, arg1, arg2, arg3) =
+    (@_meta(noinline); throw(typ(arg1, arg2, arg3)))
+throw_with_args(typ::ANY, arg1, arg2, arg3, arg4) =
+    (@_meta(noinline); throw(typ(arg1, arg2, arg3, arg4)))
+throw_with_args(typ::ANY, args...) = throw(typ(args...))
