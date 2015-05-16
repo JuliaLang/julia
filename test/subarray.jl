@@ -355,6 +355,12 @@ if !testfull
     end
 end
 
+# issue #11289
+x11289 = randn(5,5)
+@test isempty(sub(x11289, Int[], :))
+@test isempty(sub(x11289, [2,5], Int[]))
+@test isempty(sub(x11289, Int[], 2))
+
 ####### "Classical" tests #######
 
 # sub
