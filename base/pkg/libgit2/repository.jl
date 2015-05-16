@@ -121,6 +121,50 @@ function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitInd
     @check ccall((:git_checkout_index, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
                  repo.ptr,
-                 isnull(idx) ? C_NULL : idx.ptr,
+                 isnull(idx) ? C_NULL : Base.get(idx).ptr,
                  options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
 end
+
+function checkout_head(repo::GitRepo; options::CheckoutOptionsStruct = CheckoutOptionsStruct())
+    @check ccall((:git_checkout_head, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{CheckoutOptionsStruct}),
+                 repo.ptr, options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
+end
+
+function fetch(rmt::GitRemote)
+    @check ccall((:git_remote_fetch, :libgit2), Cint,
+            (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
+            rmt.ptr, C_NULL, C_NULL)
+end
+
+function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractString...)
+    sa = StrArrayStruct(pathspecs...)
+    try
+        @check ccall((:git_reset_default, :libgit2), Cint,
+                (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
+                repo.ptr,
+                isnull(obj) ? C_NULL: Base.get(obj).ptr,
+                Ref(sa))
+    catch err
+        rethrow(err)
+    finally
+        finalize(sa)
+    end
+end
+
+function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
+               checkout_opts::CheckoutOptionsStruct = CheckoutOptionsStruct())
+    sig = default_signature(repo)
+    msg = "pkg.libgit2.reset: moving to $(string(Oid(obj)))"
+    try
+        @check ccall((:git_reset, :libgit2), Cint,
+                     (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptionsStruct}, Ptr{SignatureStruct}, Ptr{UInt8}),
+                      repo.ptr, obj.ptr, mode, Ref(checkout_opts), sig.ptr, msg)
+    catch err
+        rethrow(err)
+    finally
+        finalize(sig)
+    end
+    return
+end
+

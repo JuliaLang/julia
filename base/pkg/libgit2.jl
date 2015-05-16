@@ -165,25 +165,15 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{
 end
 const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
 
-function fetch(rmt::GitRemote)
-    @check ccall((:git_remote_fetch, :libgit2), Cint,
-            (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
-            rmt.ptr, C_NULL, C_NULL)
-end
-
-function fetch(repo::GitRepo, remote::AbstractString="origin")
-    rmt = get(GitRemote, repo, remote)
-    try
-        fetch(rmt)
-    catch err
-        warn("'fetch' thrown exception: $err")
-    finally
-        finalize(rmt)
+""" git fetch <repository> [<refspec>]"""
+function fetch(repo::GitRepo, remote::AbstractString="origin";
+               refspecs::AbstractString="")
+    rmt = if isempty(refspecs)
+        get(GitRemote, repo, remote)
+    else
+        GitRemoteAnon(repo, remote, refspecs)
     end
-end
 
-function fetch(repo::GitRepo, remote_path::AbstractString, refspecs::AbstractString)
-    rmt = GitRemoteAnon(repo, remote_path, refspecs)
     try
         fetch(rmt)
     catch err
@@ -279,6 +269,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 end
 
+""" git clone [-b <branch>] [--bare] <url> <dir> """
 function clone(url::AbstractString, path::AbstractString;
                branch::AbstractString="",
                bare::Bool = false,
@@ -299,6 +290,36 @@ function clone(url::AbstractString, path::AbstractString;
     return GitRepo(repo_ptr_ptr[])
 end
 
+""" git reset [<committish>] [--] <pathspecs>... """
+function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
+    target_obj = isempty(committish) ? Nullable{GitAnyObject}() :
+                                       Nullable(revparse(repo, committish))
+    try
+        reset!(repo, target_obj, pathspecs...)
+    catch err
+        rethrow(err)
+        #warn("Reset: $err")
+    finally
+        !isnull(target_obj) && finalize(Base.get(target_obj))
+    end
+end
+
+""" git reset [--soft | --mixed | --hard] <commit> """
+function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.GIT_RESET_MIXED)
+
+    obj = get(GitAnyObject, repo, commit)
+    obj == nothing && return
+    try
+        reset!(repo, obj, mode)
+    catch err
+        rethrow(err)
+        #warn("Reset: $err")
+    finally
+        finalize(obj)
+    end
+end
+
+""" Returns all commit authors """
 function authors(repo::GitRepo)
     athrs = map(
         (oid,repo)->author(get(GitCommit, repo, oid))::Signature,
@@ -316,7 +337,7 @@ function snapshot(repo::GitRepo; dir="")
                 files = [utf8(bytestring(c))::UTF8String for c in content]
                 push!(files, utf8("."))
 
-                add!(idx, files..., flags = GitConst.INDEX_ADD_CHECK_PATHSPEC)
+                add!(idx, files...)
                 write!(idx)
             end
             write_tree!(idx)
@@ -331,28 +352,24 @@ function snapshot(repo::GitRepo; dir="")
     State(head, index, work)
 end
 
-function restore(s::State, repo::GitRepo; dir="")
+function restore(s::State, repo::GitRepo)
+    reset!(repo, GitConst.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
-        #TODO: reset -q --                  # unstage everything
+        read_tree!(idx, s.work)            # move work tree to index
+        opts = CheckoutOptionsStruct(
+                checkout_strategy = GitConst.CHECKOUT_FORCE |     # check the index out to work
+                                    GitConst.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
+        checkout_index(repo, Nullable(idx), options = opts)
 
-        read_tree!(idx, s.work)             # move work tree to index
-        write!(idx)
-
-        #TODO: checkout-index -fa           # check the index out to work
-        #TODO: clean -qdf                   # remove everything else
-
-        read_tree!(idx, s.index)            # restore index
-        write!(idx)
-
-        #TODO: reset -q --soft $(s.head)    # restore head
+        read_tree!(idx, s.index)  # restore index
     end
+    reset!(repo, s.head, GitConst.GIT_RESET_SOFT) # restore head
 end
 
-# TODO: restore required
 function transact(f::Function, repo::GitRepo; dir="")
-    #state = snapshot(repo, dir=dir)
+    state = snapshot(repo, dir=dir)
     try f(repo) catch
-        #restore(state, repo, dir=dir)
+        restore(state, repo)
         rethrow()
     finally
         finalize(repo)
@@ -364,7 +381,6 @@ function __init__()
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
     err > 0 || error("error initializing LibGit2 module")
     atexit() do
-        gc()
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 end
