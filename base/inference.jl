@@ -109,24 +109,35 @@ cmp_tfunc = (x,y)->Bool
 
 isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
 
-const t_func = ObjectIdDict()
-t_func[throw] = (1, 1, x->Bottom)
-t_func[box] = (2, 2, (t,v)->(isType(t) ? t.parameters[1] : Any))
-t_func[eq_int] = (2, 2, cmp_tfunc)
-t_func[ne_int] = (2, 2, cmp_tfunc)
-t_func[slt_int] = (2, 2, cmp_tfunc)
-t_func[ult_int] = (2, 2, cmp_tfunc)
-t_func[sle_int] = (2, 2, cmp_tfunc)
-t_func[ule_int] = (2, 2, cmp_tfunc)
-t_func[eq_float] = (2, 2, cmp_tfunc)
-t_func[ne_float] = (2, 2, cmp_tfunc)
-t_func[lt_float] = (2, 2, cmp_tfunc)
-t_func[le_float] = (2, 2, cmp_tfunc)
-t_func[fpiseq] = (2, 2, cmp_tfunc)
-t_func[fpislt] = (2, 2, cmp_tfunc)
-t_func[nan_dom_err] = (2, 2, (a, b)->a)
-t_func[eval(Core.Intrinsics,:ccall)] =
-    (3, Inf, function(fptr, rt, at, a...)
+const IInf = typemax(Int) # integer infinity
+const n_ifunc = reinterpret(Int32,llvmcall)+1
+const t_ifunc = Array{Tuple{Int,Int,Function},1}(n_ifunc)
+const t_ffunc_key = Array{Function,1}(0)
+const t_ffunc_val = Array{Tuple{Int,Int,Function},1}(0)
+function add_tfunc(f::IntrinsicFunction, minarg::Int, maxarg::Int, tfunc::Function)
+    t_ifunc[reinterpret(Int32,f)+1] = (minarg, maxarg, tfunc)
+end
+function add_tfunc(f::Function, minarg::Int, maxarg::Int, tfunc::Function)
+    push!(t_ffunc_key, f)
+    push!(t_ffunc_val, (minarg, maxarg, tfunc))
+end
+add_tfunc(throw, 1, 1, x->Bottom)
+add_tfunc(box, 2, 2, (t,v)->(isType(t) ? t.parameters[1] : Any))
+add_tfunc(eq_int, 2, 2, cmp_tfunc)
+add_tfunc(ne_int, 2, 2, cmp_tfunc)
+add_tfunc(slt_int, 2, 2, cmp_tfunc)
+add_tfunc(ult_int, 2, 2, cmp_tfunc)
+add_tfunc(sle_int, 2, 2, cmp_tfunc)
+add_tfunc(ule_int, 2, 2, cmp_tfunc)
+add_tfunc(eq_float, 2, 2, cmp_tfunc)
+add_tfunc(ne_float, 2, 2, cmp_tfunc)
+add_tfunc(lt_float, 2, 2, cmp_tfunc)
+add_tfunc(le_float, 2, 2, cmp_tfunc)
+add_tfunc(fpiseq, 2, 2, cmp_tfunc)
+add_tfunc(fpislt, 2, 2, cmp_tfunc)
+add_tfunc(nan_dom_err, 2, 2, (a, b)->a)
+add_tfunc(getfield(Core.Intrinsics,:ccall), 3, IInf,
+    function(fptr, rt, at, a...)
         if !isType(rt)
             return Any
         end
@@ -140,36 +151,36 @@ t_func[eval(Core.Intrinsics,:ccall)] =
         end
         return t
     end)
-t_func[eval(Core.Intrinsics,:llvmcall)] =
-    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
-t_func[eval(Core.Intrinsics,:cglobal)] =
-    (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
-                          isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
-t_func[eval(Core.Intrinsics,:select_value)] =
+add_tfunc(eval(Core.Intrinsics,:llvmcall), 3, IInf,
+    (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
+add_tfunc(eval(Core.Intrinsics,:cglobal), 1, 2,
+    (fptr, t...)->(isempty(t) ? Ptr{Void} :
+                   isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
+add_tfunc(eval(Core.Intrinsics,:select_value), 3, 3,
     # TODO: return Bottom if cnd is definitely not a Bool
-    (3, 3, (cnd, x, y)->Union(x,y))
-t_func[is] = (2, 2, cmp_tfunc)
-t_func[issubtype] = (2, 2, cmp_tfunc)
-t_func[isa] = (2, 2, cmp_tfunc)
-t_func[isdefined] = (1, Inf, (args...)->Bool)
-t_func[Core.sizeof] = (1, 1, x->Int)
-t_func[nfields] = (1, 1, x->Int)
-t_func[Union] = (0, Inf,
-                 (args...)->(if all(isType,args)
-                                 Type{Union(map(t->t.parameters[1],args)...)}
-                             else
-                                 Type
-                             end))
-t_func[_expr] = (1, Inf, (args...)->Expr)
-t_func[method_exists] = (2, 2, cmp_tfunc)
-t_func[applicable] = (1, Inf, (f, args...)->Bool)
-t_func[arraylen] = (1, 1, x->Int)
-#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && a<:Array ?
+    (cnd, x, y)->Union(x,y))
+add_tfunc(is, 2, 2, cmp_tfunc)
+add_tfunc(issubtype, 2, 2, cmp_tfunc)
+add_tfunc(isa, 2, 2, cmp_tfunc)
+add_tfunc(isdefined, 1, IInf, (args...)->Bool)
+add_tfunc(Core.sizeof, 1, 1, x->Int)
+add_tfunc(nfields, 1, 1, x->Int)
+add_tfunc(Union, 0, IInf,
+         (args...)->(if all(isType,args)
+                         Type{Union(map(t->t.parameters[1],args)...)}
+                     else
+                         Type
+                     end))
+add_tfunc(_expr, 1, IInf, (args...)->Expr)
+add_tfunc(method_exists, 2, 2, cmp_tfunc)
+add_tfunc(applicable, 1, IInf, (f, args...)->Bool)
+add_tfunc(arraylen, 1, 1, x->Int)
+#add_tfunc(arrayref, 2,IInf,(a,i...)->(isa(a,DataType) && a<:Array ?
 #                                     a.parameters[1] : Any))
-#t_func[arrayset] = (3, Inf, (a,v,i...)->a)
-t_func[arraysize] = (2, 2, (a,d)->Int)
-t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
-t_func[pointerset] = (3, 3, (a,v,i)->a)
+#add_tfunc(arrayset, 3, IInf, (a,v,i...)->a)
+add_tfunc(arraysize, 2, 2, (a,d)->Int)
+add_tfunc(pointerref, 2, 2, (a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
+add_tfunc(pointerset, 3, 3, (a,v,i)->a)
 
 const typeof_tfunc = function (t)
     if isType(t)
@@ -193,11 +204,11 @@ const typeof_tfunc = function (t)
         Type
     end
 end
-t_func[typeof] = (1, 1, typeof_tfunc)
+add_tfunc(typeof, 1, 1, typeof_tfunc)
 # involving constants: typeassert, getfield, fieldtype, apply_type
 # therefore they get their arguments unevaluated
-t_func[typeassert] =
-    (2, 2, (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) : Any))
+add_tfunc(typeassert, 2, 2,
+    (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) : Any))
 
 function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     if isa(t,TypeVar) || isa(t,TypeConstructor)
@@ -313,8 +324,8 @@ const getfield_tfunc = function (A, s0, name)
         return reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union(s.types...)=#, false
     end
 end
-t_func[getfield] = (2, 2, (A,s,name)->getfield_tfunc(A,s,name)[1])
-t_func[setfield!] = (3, 3, (o, f, v)->v)
+add_tfunc(getfield, 2, 2, (A,s,name)->getfield_tfunc(A,s,name)[1])
+add_tfunc(setfield!, 3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
     if isType(s)
         s = s.parameters[1]
@@ -327,8 +338,7 @@ const fieldtype_tfunc = function (A, s, name)
     end
     Type{exact || isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
-t_func[fieldtype] = (2, 2, fieldtype_tfunc)
-t_func[Box] = (1, 1, (a,)->Box)
+add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
 function valid_tparam(x::ANY)
     if isa(x,Tuple)
@@ -431,7 +441,7 @@ const apply_type_tfunc = function (A, args...)
     end
     uncertain && !isa(appl,TypeVar) ? Type{TypeVar(:_,appl)} : Type{appl}
 end
-t_func[apply_type] = (1, Inf, apply_type_tfunc)
+add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
 function tuple_tfunc(argtype::ANY)
     if isa(argtype,DataType) && argtype.name === Tuple.name
@@ -471,10 +481,20 @@ function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
         end
         return Expr
     end
-    tf = get(t_func::ObjectIdDict, f, false)
-    if is(tf,false)
-        # unknown/unhandled builtin
-        return Any
+    if isa(f, IntrinsicFunction)
+        iidx = Int(reinterpret(Int32, f::IntrinsicFunction))+1
+        if !isdefined(t_ifunc, iidx)
+            # unknown/unhandled intrinsic (most fall in this category since most return an unboxed value)
+            return Any
+        end
+        tf = t_ifunc[iidx]
+    else
+        fidx = findfirst(t_ffunc_key, f::Function)
+        if fidx == 0
+            # unknown/unhandled builtin or anonymous function
+            return Any
+        end
+        tf = t_ffunc_val[fidx]
     end
     tf = tf::Tuple{Real, Real, Function}
     if isva
