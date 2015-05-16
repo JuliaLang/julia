@@ -32,11 +32,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     isdir(".cache") || mkcachedir()
     cache = path(pkg)
     repo = if isdir(cache)
-        try
-            LibGit2.GitRepo(cache) # open repo, free it at the end
-        catch err
-            rethrow(err)
-        end
+        LibGit2.GitRepo(cache) # open repo, free it at the end
     else
         info("Cloning cache of $pkg from $url")
         try
@@ -58,8 +54,6 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             end
         end
         filter(sha1->!LibGit2.iscommit(sha1, repo), sha1s)
-    catch err
-        rethrow(err)
     finally
         LibGit2.finalize(repo) # closing repo opened/created above
     end

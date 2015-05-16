@@ -236,21 +236,12 @@ end
 function with_libgit2(f::Function, obj)
     try
         f(obj)
-    catch err
-        rethrow(err)
     finally
         finalize(obj)
     end
 end
 
-function with{T}(f::Function, ::Type{T}, args...; warn_on_exception::Bool=true)
-    obj = T(args...)
-    try
-        with_libgit2(f, obj)
-    catch err
-        rethrow(err)
-    end
-end
+with{T}(f::Function, ::Type{T}, args...) = with_libgit2(f, T(args...))
 
 function with_warn{T}(f::Function, ::Type{T}, args...)
     obj = T(args...)

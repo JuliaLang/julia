@@ -1,6 +1,7 @@
 module GitConst
 
     const HEAD_FILE  = "HEAD"
+    const REMOTE_ORIGIN = "origin"
 
     const OBJ_ANY    = Cint(-2)
     const OBJ_BAD    = Cint(-1)
