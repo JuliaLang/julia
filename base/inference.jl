@@ -2303,12 +2303,12 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     body = Expr(:block)
     body.args = without_linenums(ast.args[3].args)::Array{Any,1}
     need_mod_annotate = true
-    cost = 1.0
+    cost::Int = 1000
     if incompletematch
         cost *= 4
     end
     if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
-        cost /= 4
+        cost ÷= 4
     end
     inline_op = (f===(+) || f===(*) || f===min || f===max) && (3 <= length(argexprs) <= 9) &&
         meth[3].sig == Tuple{Any,Any,Any,Vararg{Any}}
@@ -2676,17 +2676,18 @@ end
 # doesn't work on Tuples of TypeVars
 const inline_incompletematch_allowed = false
 
-inline_worthy(body, cost::Real) = true
-function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
+inline_worthy(body, cost::Integer) = true
+function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
     if popmeta!(body, :inline)[1]
         return true
     end
     if popmeta!(body, :noinline)[1]
         return false
     end
-    symlim = 1+5/cost
-    if length(body.args) < symlim
+    symlim = 1000 + 5_000_000 ÷ cost
+    if length(body.args) < (symlim + 500) ÷ 1000
         symlim *= 16
+        symlim ÷= 1000
         if occurs_more(body, e->true, symlim) < symlim
             return true
         end
