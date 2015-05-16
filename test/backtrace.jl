@@ -19,8 +19,11 @@ dlls = Libdl.dllist()
 @test !isempty(dlls)
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
-    @test Base.samefile(Libdl.dlpath(dlls[1]), dlls[1])
-    @test Base.samefile(Libdl.dlpath(dlls[end]), dlls[end])
+    for dl in dlls
+        if isfile(dl)
+            @test Base.samefile(Libdl.dlpath(dl), dl)
+        end
+    end
 end
 @test length(filter(dlls) do dl
         return ismatch(Regex("^libjulia(?:.*)\.$(Libdl.dlext)(?:\..+)?\$"), basename(dl))
