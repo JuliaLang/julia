@@ -209,4 +209,8 @@ module GitConst
     const GIT_REPOSITORY_STATE_REBASE_MERGE = Cint(7)
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX = Cint(8)
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE = Cint(9)
+
+    const GIT_RESET_SOFT  = Cint(1) # Move the head to the given commit
+    const GIT_RESET_MIXED = Cint(2) # SOFT plus reset index to the commit
+    const GIT_RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 end

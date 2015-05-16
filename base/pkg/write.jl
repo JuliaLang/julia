@@ -11,9 +11,8 @@ function prefetch(pkg::AbstractString, sha1::AbstractString)
 end
 
 function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
-    refspec = "+refs/*:refs/remotes/cache/*"
     cache = Cache.path(pkg)
-    LibGit2.fetch(repo, cache, refspec)
+    LibGit2.fetch(repo, cache, refspecs = "+refs/*:refs/remotes/cache/*")
     LibGit2.need_update(repo)
     LibGit2.iscommit(sha1, repo) && return
     f = with(GitRepo, cache) do repo
