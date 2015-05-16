@@ -43,7 +43,7 @@ Then proceed to build as described in the primary README. Just typing
 If you run in to issues building LLVM, see these notes:
 [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
 
-# Raspberry Pi
+# Raspberry Pi (the original)
 
 The Raspberry Pi ARM CPU is not correctly detected by LLVM. Before
 starting the build, `export JULIA_CPU_ARCH=arm1176jzf-s`. This tells
