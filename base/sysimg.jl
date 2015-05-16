@@ -28,7 +28,7 @@ end
 
 
 ## Load essential files and libraries
-
+include("essentials.jl")
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
@@ -51,32 +51,34 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
-
-include("float.jl")
-include("complex.jl")
-include("rational.jl")
-
-# core data structures (used by type inference)
+# array structures
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 include("subarray2.jl")
-include("functors.jl")
-include("bitarray.jl")
-include("intset.jl")
-include("dict.jl")
-include("set.jl")
+
+# numeric operations
 include("hashing.jl")
-include("iterator.jl")
+include("rounding.jl")
+importall .Rounding
+include("float.jl")
+include("complex.jl")
+include("rational.jl")
 
 # SIMD loops
 include("simdloop.jl")
 importall .SimdLoop
 
+# map-reduce operators
+include("functors.jl")
 include("reduce.jl")
+
+## core structures
+include("bitarray.jl")
+include("intset.jl")
+include("dict.jl")
+include("set.jl")
+include("iterator.jl")
 
 # compiler
 include("inference.jl")

@@ -1,5 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+## floating point traits ##
+
+const Inf16 = box(Float16,unbox(UInt16,0x7c00))
+const NaN16 = box(Float16,unbox(UInt16,0x7e00))
+const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
+const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
+const Inf = box(Float64,unbox(UInt64,0x7ff0000000000000))
+const NaN = box(Float64,unbox(UInt64,0x7ff8000000000000))
+
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -89,11 +98,11 @@ end
 
 #convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
 convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
-convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,x))
+convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,unbox(Float64,x)))
 
 #convert(::Type{Float32}, x::Float16) = box(Float32,fpext(Float32,x))
 convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
-convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,x))
+convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,unbox(Float32,x)))
 
 convert(::Type{FloatingPoint}, x::Bool)    = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int8)    = convert(Float64, x)
@@ -301,14 +310,17 @@ isfinite(x::Integer) = true
 
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
-## floating point traits ##
+## hashing small, built-in numeric types ##
 
-const Inf16 = box(Float16,unbox(UInt16,0x7c00))
-const NaN16 = box(Float16,unbox(UInt16,0x7e00))
-const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
-const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
-const Inf = box(Float64,unbox(UInt64,0x7ff0000000000000))
-const NaN = box(Float64,unbox(UInt64,0x7ff8000000000000))
+hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
+const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
+
+hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
+hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
+hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN $ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
+
+hash(x::Union(Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32), h::UInt) = hash(Int64(x), h)
+hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
 ## precision, as defined by the effective number of bits in the mantissa ##
 precision(::Type{Float16}) = 11
@@ -438,3 +450,25 @@ significand_mask(::Type{Float32}) = 0x007f_ffff
 significand_bits{T<:FloatingPoint}(::Type{T}) = trailing_ones(significand_mask(T))
 exponent_bits{T<:FloatingPoint}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
 exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+
+## Array operations on floating point numbers ##
+
+float{T<:FloatingPoint}(x::AbstractArray{T}) = x
+
+float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
+
+function float(A::AbstractArray)
+    cnv(x) = convert(FloatingPoint,x)
+    map_promote(cnv, A)
+end
+
+for fn in (:float,:big)
+    @eval begin
+        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
+        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
+        $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
+    end
+end
+
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
