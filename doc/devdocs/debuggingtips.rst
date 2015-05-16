@@ -85,13 +85,13 @@ Errors that occur during ``make`` need special handling. Julia is built in two s
 At the time of this writing, you can debug build errors during the ``sys0`` phase from the ``base``
 directory using::
 
-    julia/base$ gdb --args ../usr/bin/julia-debug -C native --build ../usr/lib/julia/sys0 sysimg.jl
+    julia/base$ gdb --args julia -C native --build sys0 sysimg.jl
 
 You might need to delete all the files in ``usr/lib/julia/`` to get this to work.
 
 You can debug the ``sys.ji`` phase using::
 
-    julia/base$ gdb --args .../usr/bin/julia-debug -C native --build ../usr/lib/julia/sys -J ../usr/lib/julia/sys0.ji sysimg.jl
+    julia/base$ gdb --args julia -C native --build sys -J sys0.ji sysimg.jl
 
 By default, any errors will cause Julia to exit, even under gdb. To catch an error "in the act", set a breakpoint
 in ``jl_error`` (there are several other useful spots, for specific kinds of failures, including: ``jl_too_few_args``,
