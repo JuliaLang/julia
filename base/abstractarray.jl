@@ -402,6 +402,14 @@ map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
 map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
 map{T<:FloatingPoint}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
 
+## unsafe/pointer conversions ##
+
+# note: the following type definitions don't mean any AbstractArray is convertible to
+# a data Ref. they just map the array element type to the pointer type for
+# convenience in cases that work.
+pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
+pointer{T}(x::AbstractArray{T}, i::Integer) = unsafe_convert(Ptr{T},x) + (i-1)*elsize(x)
+
 ## Unary operators ##
 
 conj{T<:Real}(x::AbstractArray{T}) = x

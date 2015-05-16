@@ -199,9 +199,10 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.nprocs = jl_cpu_cores();
             }
             else {
-                jl_options.nprocs = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || jl_options.nprocs < 1)
+                long nprocs = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT_MAX)
                     jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+                jl_options.nprocs = (int)nprocs;
             }
             break;
         case opt_machinefile:
