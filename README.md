@@ -62,6 +62,10 @@ First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
+If you are not going to join the development but only need the source for compilation, which means you don't need the commit history, add parameter `--depth 1` to shallow clone, it will really help you speed up the cloning process, and save bandwidth and disk space:
+
+    git clone git://github.com/JuliaLang/julia.git --depth 1
+
 (If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
 
     git config --global url."https://".insteadOf git://
