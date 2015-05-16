@@ -943,6 +943,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     }
     if (jl_options.build_path)
         jl_options.build_path = abspath(jl_options.build_path);
+    if (jl_options.machinefile)
+        jl_options.machinefile = abspath(jl_options.machinefile);
+    if (jl_options.load)
+        jl_options.load = abspath(jl_options.load);
 }
 
 void _julia_init(JL_IMAGE_SEARCH rel)
