@@ -259,6 +259,15 @@ function ==(l::Associative, r::Associative)
     true
 end
 
+const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
+function hash(a::Associative, h::UInt)
+    h += hasha_seed
+    for (k,v) in a
+        h $= hash(k, hash(v))
+    end
+    return h
+end
+
 # some support functions
 
 _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))

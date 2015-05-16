@@ -749,7 +749,6 @@ end
 
 promote_array_type{Scalar, Arry}(::Type{Scalar}, ::Type{Arry}) = promote_type(Scalar, Arry)
 promote_array_type{S<:Real, A<:FloatingPoint}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
@@ -863,33 +862,6 @@ for f in (:+, :-)
             return F
         end
     end
-end
-
-## promotion to complex ##
-
-function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); throw(DimensionMismatch()); end
-    F = similar(A, typeof(complex(zero(S),zero(T))))
-    for i in eachindex(A)
-        @inbounds F[i] = complex(A[i], B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Real, B::Array{T})
-    F = similar(B, typeof(complex(A,zero(T))))
-    for i in eachindex(B)
-        @inbounds F[i] = complex(A, B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Array{T}, B::Real)
-    F = similar(A, typeof(complex(zero(T),B)))
-    for i in eachindex(A)
-        @inbounds F[i] = complex(A[i], B)
-    end
-    return F
 end
 
 # use memcmp for lexcmp on byte arrays
