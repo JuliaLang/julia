@@ -38,13 +38,6 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-
-# note: the following type definitions don't mean any AbstractArray is convertible to
-# a data Ref. they just map the array element type to the pointer type for
-# convenience in cases that work.
-pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = unsafe_convert(Ptr{T},x) + (i-1)*elsize(x)
-
 immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A
     i::Int

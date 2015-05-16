@@ -149,7 +149,6 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/array.jl \
 		base/bool.jl \
 		base/build_h.jl \
-		base/c.jl \
 		base/dict.jl \
 		base/error.jl \
 		base/essentials.jl \
@@ -164,13 +163,11 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/number.jl \
 		base/operators.jl \
 		base/options.jl \
-		base/osutils.jl \
 		base/pointer.jl \
 		base/promotion.jl \
 		base/range.jl \
 		base/reduce.jl \
 		base/reflection.jl \
-		base/refpointer.jl \
 		base/subarray.jl \
 		base/subarray2.jl \
 		base/tuple.jl

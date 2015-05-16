@@ -1533,7 +1533,7 @@ typedef struct {
     const char *load;
     const char *image_file;
     const char *cpu_target;
-    long   nprocs;
+    int32_t nprocs;
     const char *machinefile;
     int8_t isinteractive;
     int8_t color;

@@ -21,10 +21,11 @@ print(a::ANY...) = for x=a; print(x); end
 include("essentials.jl")
 include("reflection.jl")
 include("build_h.jl")
-include("c.jl")
 include("options.jl")
 
 # core operations & types
+typealias Cint Int32
+typealias Csize_t UInt
 include("promotion.jl")
 include("tuple.jl")
 include("range.jl")
@@ -37,7 +38,6 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
-include("refpointer.jl")
 
 # core array operations
 include("abstractarray.jl")
@@ -77,10 +77,6 @@ precompile(occurs_more, (UInt8, Function, Int))
 precompile(occurs_undef, (Symbol, Expr))
 precompile(sym_replace, (UInt8, Array{Any,1}, Array{Any,1}, Array{Any,1}, Array{Any,1}))
 precompile(symequal, (Symbol, Symbol))
-
-# For OS specific stuff in I/O
-# to force compile of inference
-include("osutils.jl")
 
 end # baremodule Inference
 ))
