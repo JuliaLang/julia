@@ -91,7 +91,6 @@ function path(repo::GitRepo)
                             (Ptr{Void},), repo.ptr))
 end
 
-
 function peel(obj::GitObject, obj_type::Cint)
     peeled_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     git_otype = getobjecttype(obj_type)
@@ -145,8 +144,6 @@ function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractS
                 repo.ptr,
                 isnull(obj) ? C_NULL: Base.get(obj).ptr,
                 Ref(sa))
-    catch err
-        rethrow(err)
     finally
         finalize(sa)
     end
@@ -160,8 +157,6 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
         @check ccall((:git_reset, :libgit2), Cint,
                      (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptionsStruct}, Ptr{SignatureStruct}, Ptr{UInt8}),
                       repo.ptr, obj.ptr, mode, Ref(checkout_opts), sig.ptr, msg)
-    catch err
-        rethrow(err)
     finally
         finalize(sig)
     end

@@ -50,10 +50,10 @@ function head(pkg::AbstractString)
     end
 end
 
+""" git update-index """
 function need_update(repo::GitRepo)
     if !isbare(repo)
         # read updates index from filesystem
-        # i.e. "git update-index -q --really-refresh"
         read!(repo, true)
     end
 end
@@ -62,7 +62,8 @@ end
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
     try
-        get(GitCommit, repo, id)
+        c = get(GitCommit, repo, id)
+        finalize(c)
     catch
         res = false
     end
@@ -195,29 +196,51 @@ function branch(repo::GitRepo)
     return brnch
 end
 
-""" git branch -b <branch> [<start-point>] """
-function branch!(repo::GitRepo, branch::AbstractString,
-                 commit::AbstractString = "";
-                 force::Bool=false)
-    # if commit is empty get head commit oid
-    commit_oid = if isempty(commit)
-        head_ref = head(repo)
-        commit_id = peel(head_ref, GitConst.OBJ_COMMIT)
-    else
-        Oid(commit)
-    end
-    iszero(commit_id) && return
+""" git checkout [-b|-B] <branch> [<start-point>] [--track <remote>/<branch>] """
+function branch!(repo::GitRepo, branch_name::AbstractString,
+                 commit::AbstractString = ""; # start point
+                 track::AbstractString  = "", # track remote branch
+                 force::Bool=false,           # force branch creation
+                 set_head::Bool=true)         # set as head reference on exit
+    # try to lookup branch first
+    branch_ref = force ? nothing : lookup_branch(repo, branch_name)
+    if branch_ref == nothing
+        # if commit is empty get head commit oid
+        commit_id = if isempty(commit)
+            head_ref = head(repo)
+            try
+                peel(head_ref, GitConst.OBJ_COMMIT)
+            finally
+                finalize(head_ref)
+            end
+        else
+            Oid(commit)
+        end
+        iszero(commit_id) && return
 
-    cmt =  get(GitCommit, repo, commit_oid)
-    try
-        create_branch(repo, cmt, branch,
-            force=force,
-            msg="pkg.libgit2.branch: moving to $branch")
-        ref = create_branch(repo, cmt, branch, force=force)
-        finalize(ref)
-    finally
-        finalize(cmt)
+        cmt =  get(GitCommit, repo, commit_id)
+        try
+            branch_ref = create_branch(repo, cmt, branch_name,
+                force=force,
+                msg="pkg.libgit2.branch: moving to $branch_name")
+        finally
+            finalize(cmt)
+        end
     end
+    try
+        if !isempty(track) # setup tracking
+            with(GitConfig, repo) do cfg
+                set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
+                set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+            end
+        end
+
+        # switch head to the branch
+        set_head && head!(repo, branch_ref)
+    finally
+        finalize(branch_ref)
+    end
+    return
 end
 
 """ git checkout [-f] --detach <commit> """
@@ -240,7 +263,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
         warn(err)
     end
 
-    # search for commit or revparse branch to get a commit object
+    # search for commit to get a commit object
     obj = get(GitAnyObject, repo, Oid(commit))
     obj == nothing && return
     try
@@ -256,14 +279,11 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
                 msg="pkg.libgit2.checkout: moving from $head_name to $(string(obj_oid))")
             finalize(ref)
 
-            # checkout branch or commit
+            # checkout commit
             checkout_tree(repo, peeled, options = opts)
         finally
             finalize(peeled)
         end
-    catch err
-        rethrow(err)
-        #warn("Checkout: $err")
     finally
         finalize(obj)
     end
@@ -296,9 +316,6 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
                                        Nullable(revparse(repo, committish))
     try
         reset!(repo, target_obj, pathspecs...)
-    catch err
-        rethrow(err)
-        #warn("Reset: $err")
     finally
         !isnull(target_obj) && finalize(Base.get(target_obj))
     end
@@ -311,9 +328,6 @@ function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.GIT_RESET_MIXE
     obj == nothing && return
     try
         reset!(repo, obj, mode)
-    catch err
-        rethrow(err)
-        #warn("Reset: $err")
     finally
         finalize(obj)
     end
@@ -327,12 +341,13 @@ function authors(repo::GitRepo)
     return athrs
 end
 
-function snapshot(repo::GitRepo; dir="")
+function snapshot(repo::GitRepo)
     head = Oid(repo, GitConst.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
+        dir = splitdir(path(repo)[1:end-1])[1] # remove `/.git` part
         with(GitIndex, repo) do idx
-            content = readdir(abspath(dir))
+            content = readdir(dir)
             if length(content) > 1
                 files = [utf8(bytestring(c))::UTF8String for c in content]
                 push!(files, utf8("."))
@@ -366,8 +381,8 @@ function restore(s::State, repo::GitRepo)
     reset!(repo, s.head, GitConst.GIT_RESET_SOFT) # restore head
 end
 
-function transact(f::Function, repo::GitRepo; dir="")
-    state = snapshot(repo, dir=dir)
+function transact(f::Function, repo::GitRepo)
+    state = snapshot(repo)
     try f(repo) catch
         restore(state, repo)
         rethrow()
