@@ -296,3 +296,5 @@ convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
 cconvert(T::Type, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
+
+ccall(:jl_set_istopmod, Void, (Bool,), true)

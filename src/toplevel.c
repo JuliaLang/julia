@@ -205,11 +205,14 @@ static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base
-jl_module_t *jl_base_relative_to(jl_module_t *m)
+DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
-    if (m==jl_core_module || m==jl_old_base_module)
-        return m;
-    return (jl_base_module==NULL) ? jl_core_module : jl_base_module;
+    while (m != jl_main_module) {
+        if (m->istopmod)
+            return m;
+        m = m->parent;
+    }
+    return jl_top_module;
 }
 
 int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
@@ -582,8 +585,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
 
 jl_value_t *jl_load(const char *fname)
 {
-    if (jl_current_module == jl_base_module) {
-        //This deliberatly uses ios, because stdio initialization has been moved to Julia
+    if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), (uv_run_mode)1);

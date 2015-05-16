@@ -502,6 +502,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, m->constant_table);
+    write_uint8(s, m->istopmod);
     write_uint64(s, m->uuid);
 }
 
@@ -1253,6 +1254,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
         if (m->constant_table != NULL) gc_wb(m, m->constant_table);
+        m->istopmod = read_uint8(s);
         m->uuid = read_uint64(s);
         return (jl_value_t*)m;
     }
@@ -1424,9 +1426,11 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
-    jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
+    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
     jl_serialize_value(&f, jl_main_module);
+    jl_serialize_value(&f, jl_top_module);
+    jl_serialize_value(&f, jl_typeinf_func);
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     ptrint_t i=2;
@@ -1527,7 +1531,9 @@ void jl_restore_system_image(const char *fname)
     datatype_list = jl_alloc_cell_1d(0);
 
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
+    jl_top_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
     jl_internal_main_module = jl_main_module;
+    jl_typeinf_func = (jl_function_t*)jl_deserialize_value(&f, NULL);
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1554,11 +1560,11 @@ void jl_restore_system_image(const char *fname)
     datatype_list = NULL;
 
     jl_get_builtin_hooks();
-    jl_get_system_hooks();
-    jl_get_uv_hooks();
+    if (jl_base_module) {
+        jl_get_system_hooks();
+        jl_get_uv_hooks();
+    }
     jl_boot_file_loaded = 1;
-    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                    jl_symbol("typeinf_ext"));
     jl_init_box_caches();
 
     jl_set_t_uid_ctr(read_int32(&f));

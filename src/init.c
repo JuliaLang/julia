@@ -1029,6 +1029,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
 

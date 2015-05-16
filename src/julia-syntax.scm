@@ -1684,7 +1684,7 @@
                                (expand-forms
                                 (lower-tuple-assignment
                                  (list lhs st)
-                                 `(call (|.| (top Base) (quote indexed_next))
+                                 `(call (top indexed_next)
                                         ,xx ,(+ i 1) ,st))))
                              (iota (length lhss))
                              lhss)
