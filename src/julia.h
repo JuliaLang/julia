@@ -321,6 +321,7 @@ typedef struct _jl_module_t {
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_array_t *constant_table;
     jl_function_t *call_func;  // cached lookup of `call` within this module
+    uint8_t istopmod;
     uint64_t uuid;
 } jl_module_t;
 
@@ -1069,6 +1070,7 @@ extern DLLEXPORT jl_module_t *jl_main_module;
 extern DLLEXPORT jl_module_t *jl_internal_main_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
+extern DLLEXPORT jl_module_t *jl_top_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
@@ -1229,7 +1231,7 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_value_t *sp, jl_expr_t *ast, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-jl_module_t *jl_base_relative_to(jl_module_t *m);
+DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_info_t *def);
 
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,

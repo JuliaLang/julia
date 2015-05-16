@@ -82,7 +82,7 @@ function _iisconst(s::Symbol)
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
 _iisconst(s::SymbolNode) = _iisconst(s.name)
-_iisconst(s::TopNode) = isconst(_basemod(), s.name)
+_iisconst(s::TopNode) = isconst(_topmod(), s.name)
 _iisconst(x::Expr) = false
 _iisconst(x::ANY) = true
 
@@ -91,12 +91,18 @@ _ieval(x::ANY) =
           (inference_stack::CallStack).mod, x, C_NULL, 0)
 _iisdefined(x::ANY) = isdefined((inference_stack::CallStack).mod, x)
 
-function _basemod()
+function _topmod()
     m = (inference_stack::CallStack).mod
-    if m === Core || m === Base
-        return m
+    return ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+end
+
+function istopfunction(topmod, f, sym)
+    if isdefined(Main, :Base) && isdefined(Main.Base, sym) && f === getfield(Main.Base, sym)
+        return true
+    elseif isdefined(topmod, sym) && f === getfield(topmod, sym)
+        return true
     end
-    return Main.Base
+    return false
 end
 
 cmp_tfunc = (x,y)->Bool
@@ -489,7 +495,7 @@ end
 
 function isconstantfunc(f::ANY, sv::StaticVarInfo)
     if isa(f,TopNode)
-        m = _basemod()
+        m = _topmod()
         return isconst(m, f.name) && isdefined(m, f.name) && f
     end
     if isa(f,GlobalRef)
@@ -583,22 +589,22 @@ end
 
 function abstract_call_gf(f, fargs, argtype, e)
     argtypes = argtype.parameters
+    tm = _topmod()
     if length(argtypes)>1 && (argtypes[1] <: Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
-        if f === Main.Base.getindex
+        if istopfunction(tm, f, :getindex)
             isa(e,Expr) && (e.head = :call1)
             return getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
-        elseif f === Main.Base.next
+        elseif istopfunction(tm, f, :next)
             isa(e,Expr) && (e.head = :call1)
             return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
-        elseif f === Main.Base.indexed_next
+        elseif istopfunction(tm, f, :indexed_next)
             isa(e,Expr) && (e.head = :call1)
             return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
         end
     end
-    if (isdefined(Main.Base,:promote_type) && f === Main.Base.promote_type) ||
-       (isdefined(Main.Base,:typejoin) && f === Main.Base.typejoin)
+    if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
         la = length(argtypes)
         c = cell(la)
         for i = 1:la
@@ -609,7 +615,7 @@ function abstract_call_gf(f, fargs, argtype, e)
                 return Type
             end
         end
-        if isdefined(Main.Base,:promote_type) && f === Main.Base.promote_type
+        if istopfunction(tm, f, :promote_type)
             try
                 RT = Type{f(c...)}
                 isa(e,Expr) && (e.head = :call1)
@@ -676,20 +682,22 @@ function abstract_call_gf(f, fargs, argtype, e)
             sp = sp.prev
         end
         ls = length(sig.parameters)
-        if limit && ls > lsig+1 && !(isdefined(Main.Base,:promote_typeof) && f === Main.Base.promote_typeof)
-            fst = sig.parameters[lsig+1]
-            allsame = true
-            # allow specializing on longer arglists if all the trailing
-            # arguments are the same, since there is no exponential
-            # blowup in this case.
-            for i = lsig+2:ls
-                if sig.parameters[i] != fst
-                    allsame = false
-                    break
+        if limit && ls > lsig+1
+            if !istopfunction(tm, f, :promote_typeof)
+                fst = sig.parameters[lsig+1]
+                allsame = true
+                # allow specializing on longer arglists if all the trailing
+                # arguments are the same, since there is no exponential
+                # blowup in this case.
+                for i = lsig+2:ls
+                    if sig.parameters[i] != fst
+                        allsame = false
+                        break
+                    end
                 end
-            end
-            if !allsame
-                sig = limit_tuple_type_n(sig, lsig+1)
+                if !allsame
+                    sig = limit_tuple_type_n(sig, lsig+1)
+                end
             end
         end
         #print(m,"\n")
@@ -899,7 +907,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         end
         return Any
     end
-    #print("call ", e.args[1], argtypes, " ")
+    #print("call ", e.args[1], argtypes, "\n\n")
     f = _ieval(func)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
@@ -908,7 +916,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     if isa(e,QuoteNode)
         return typeof((e::QuoteNode).value)
     elseif isa(e,TopNode)
-        return abstract_eval_global(_basemod(), (e::TopNode).name)
+        return abstract_eval_global(_topmod(), (e::TopNode).name)
     elseif isa(e,Symbol)
         return abstract_eval_symbol(e::Symbol, vtypes, sv)
     elseif isa(e,SymbolNode)
@@ -1917,8 +1925,8 @@ function resolve_relative(sym, locals, args, from, to, orig)
         if const_to && is(eval(from,sym), eval(to,sym))
             return orig
         end
-        m = _basemod()
-        if is(from,m) || is(from,Core)
+        m = _topmod()
+        if is(from, m) || is(from, Core)
             return TopNode(sym)
         end
     end
@@ -2003,7 +2011,7 @@ function exprtype(x::ANY, sv::StaticVarInfo)
     elseif isa(x,GenSym)
         return abstract_eval_gensym(x::GenSym, sv)
     elseif isa(x,TopNode)
-        return abstract_eval_global(_basemod(), (x::TopNode).name)
+        return abstract_eval_global(_topmod(), (x::TopNode).name)
     elseif isa(x,Symbol)
         sv = inference_stack.sv
         if is_local(sv, x::Symbol)
@@ -2180,16 +2188,16 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         # remove redundant unbox
         return (e.args[3],())
     end
-    if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
-        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1],sv,true) &&
-        isleaftype(atypes[1].parameters[1])
+    topmod = _topmod()
+    if istopfunction(topmod, f, :isbits) && length(atypes)==1 && isType(atypes[1]) &&
+        effect_free(argexprs[1],sv,true) && isleaftype(atypes[1].parameters[1])
         return (isbits(atypes[1].parameters[1]),())
     end
     # special-case inliners for known pure functions that compute types
     if isType(e.typ)
         if (is(f,apply_type) || is(f,fieldtype) ||
-            (isdefined(Main.Base,:typejoin) && is(f,Main.Base.typejoin)) ||
-            (isdefined(Main.Base,:promote_type) && is(f,Main.Base.promote_type))) &&
+            istopfunction(topmod, f, :typejoin) ||
+            istopfunction(topmod, f, :promote_type)) &&
                 isleaftype(e.typ.parameters[1])
             return (e.typ.parameters[1],())
         end
@@ -2265,7 +2273,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     nm = length(methargs)
     if !(atype <: metharg)
         incompletematch = true
-        if !inline_incompletematch_allowed
+        if !inline_incompletematch_allowed || !isdefined(Main,:Base)
+            # provide global disable if this optimization is not desirable
+            # need Main.Base defined for MethodError
             return NF
         end
     else
@@ -2439,7 +2449,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         argexprs2 = t.args
         icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
-        thrw = Expr(:call, :throw, Expr(:call, TopNode(:MethodError), Expr(:call, top_tuple, e.args[1], QuoteNode(:inline)), t))
+        thrw = Expr(:call, :throw, Expr(:call, GlobalRef(Main.Base,:MethodError), Expr(:call, top_tuple, e.args[1], QuoteNode(:inline)), t))
         thrw.typ = Bottom
     end
 
@@ -2712,7 +2722,7 @@ function mk_tuplecall(args, sv::StaticVarInfo)
     e
 end
 
-const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
+const corenumtype = Union(Int32,Int64,Float32,Float64)
 
 function inlining_pass(e::Expr, sv, ast)
     if e.head == :method
@@ -2814,17 +2824,20 @@ function inlining_pass(e::Expr, sv, ast)
                 e.args = Any[is_global(sv,:call) ? (:call) : GlobalRef((inference_stack::CallStack).mod, :call), e.args...]
             end
 
-            if is(f, ^) || is(f, .^)
+            if isdefined(Main, :Base) &&
+               ((isdefined(Main.Base, :^) && is(f, Main.Base.(:^))) ||
+                (isdefined(Main.Base, :.^) && is(f, Main.Base.(:.^))))
                 if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
                     a1 = e.args[2]
+                    basenumtype = Union(corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational)
                     if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode) || isa(a1,GenSym)) &&
                                                exprtype(a1,sv) <: basenumtype)
                         if e.args[3]==2
-                            e.args = Any[TopNode(:*), a1, a1]
-                            f = *
+                            e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
+                            f = Main.Base.(:*)
                         elseif e.args[3]==3
-                            e.args = Any[TopNode(:*), a1, a1, a1]
-                            f = *
+                            e.args = Any[GlobalRef(Main.Base,:*), a1, a1, a1]
+                            f = Main.Base.(:*)
                         end
                     end
                 end
