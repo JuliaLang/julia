@@ -1511,13 +1511,13 @@ void jl_restore_system_image(const char *fname)
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         jl_errorf("System image file \"%s\" not found\n", fname);
     }
-    int build_mode = 0;
+    int imaging_mode = jl_options.build_path != NULL;
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release
-    if (jl_is_debugbuild()) build_mode = 1;
+    if (jl_is_debugbuild()) imaging_mode = 1;
 #endif
-    if (!build_mode) {
+    if (!imaging_mode) {
         jl_load_sysimg_so();
     }
 #ifdef JL_GC_MARKSWEEP
