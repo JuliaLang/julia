@@ -174,7 +174,7 @@ immutable Combinations{T}
     t::Int
 end
 
-eltype{T}(::Type{Combinations{T}}) = Vector{eltype(T)}
+eltype{T}(::Combinations{T}) = T
 
 length(c::Combinations) = binomial(length(c.a),c.t)
 
@@ -212,7 +212,7 @@ immutable Permutations{T}
     a::T
 end
 
-eltype{T}(::Type{Permutations{T}}) = Vector{eltype(T)}
+eltype{T}(::Permutations{T}) = T
 
 length(p::Permutations) = factorial(length(p.a))
 
