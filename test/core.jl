@@ -1614,9 +1614,9 @@ macro m6031(x); x; end
 @test (@m6031 [2,4,6])[2] == 4
 
 # issue #6050
-@test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
-                          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-                          :vals) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
+@test Core.Inference.getfield_tfunc([nothing, QuoteNode(:vals)],
+          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+          :vals) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
 
 # issue #6068
 x6068 = 1

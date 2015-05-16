@@ -203,6 +203,11 @@ code_native(f::ANY, types::ANY) = code_native(STDOUT, f, types)
 code_native(io::IO, f::ANY, t::ANY) =
     code_native(io, call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
 
+if isdefined(Core, :Inference) && not_int(is(current_module(), Core.Inference))
+    code_typed(args...;kwargs...) = Core.Inference.code_typed(args...;kwargs...)
+    return_types(args...;kwargs...) = Core.Inference.return_types(args...;kwargs...)
+end
+
 which(f::ANY, t::Tuple{Vararg{Type}}) = which(f, Tuple{t...})
 function which(f::ANY, t::ANY)
     if isleaftype(t)

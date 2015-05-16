@@ -130,13 +130,11 @@ ifeq ($(OS), WINNT)
 $(build_sysconfdir)/julia/juliarc.jl: contrib/windows/juliarc.jl
 endif
 
-# use sys.ji if it exists, otherwise run two stages
-$(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
-
+.SECONDARY: $(build_private_libdir)/inference0.o
+.SECONDARY: $(build_private_libdir)/inference.o
 .SECONDARY: $(build_private_libdir)/sys.o
-.SECONDARY: $(build_private_libdir)/sys0.o
 
-$(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 ifneq ($(USEMSVC), 1)
 	@$(call PRINT_LINK, $(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
@@ -146,17 +144,54 @@ else
 	@true
 endif
 
-$(build_private_libdir)/sys0.o: | $(build_private_libdir)
-	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
+CORE_SRCS := base/boot.jl base/coreimg.jl \
+		base/abstractarray.jl \
+		base/array.jl \
+		base/bool.jl \
+		base/build_h.jl \
+		base/c.jl \
+		base/dict.jl \
+		base/error.jl \
+		base/essentials.jl \
+		base/expr.jl \
+		base/functors.jl \
+		base/hashing.jl \
+		base/inference.jl \
+		base/int.jl \
+		base/intset.jl \
+		base/iterator.jl \
+		base/nofloat_hashing.jl \
+		base/number.jl \
+		base/operators.jl \
+		base/options.jl \
+		base/osutils.jl \
+		base/pointer.jl \
+		base/promotion.jl \
+		base/range.jl \
+		base/reduce.jl \
+		base/reflection.jl \
+		base/refpointer.jl \
+		base/subarray.jl \
+		base/subarray2.jl \
+		base/tuple.jl
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
-COMMA:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
+$(build_private_libdir)/inference0.o: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
-		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/inference0) -f \
+		coreimg.jl)
+
+$(build_private_libdir)/inference.o: $(build_private_libdir)/inference0.$(SHLIB_EXT)
+	@$(call PRINT_JULIA, cd base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/inference) -f \
+		-J $(call cygpath_w,$(build_private_libdir)/inference0.ji) coreimg.jl)
+
+COMMA:=,
+$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/inference.$(SHLIB_EXT)
+	@$(call PRINT_JULIA, cd base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) -f \
+		-J $(call cygpath_w,$(build_private_libdir)/inference.ji) sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(COMMA) try `make cleanall`. ***' && false; } )
 
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)

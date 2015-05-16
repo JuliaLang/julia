@@ -80,9 +80,6 @@ include("dict.jl")
 include("set.jl")
 include("iterator.jl")
 
-# compiler
-include("inference.jl")
-
 # For OS specific stuff in I/O
 include("osutils.jl")
 
