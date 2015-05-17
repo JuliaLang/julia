@@ -307,7 +307,6 @@ export
     clamp,
     cld,
     cmp,
-    combinations,
     complex,
     conj,
     copysign,
@@ -488,6 +487,7 @@ export
     checkbounds,
     circshift,
     colon,
+    combinations,
     conj!,
     copy!,
     cummax,
@@ -541,6 +541,8 @@ export
     minimum!,
     minimum,
     minmax,
+    multiset_combinations,
+    multiset_permutations,
     ndims,
     nnz,
     nonzeros,
@@ -603,6 +605,7 @@ export
     sum_kbn,
     vcat,
     vec,
+    with_replacement_combinations,
     zeros,
 
 # linear algebra
