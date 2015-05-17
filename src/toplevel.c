@@ -25,7 +25,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-int jl_lineno = 0;
+DLLEXPORT int jl_lineno = 0;
+// current file name
+DLLEXPORT const char *jl_filename = "no file";
 
 jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
@@ -535,7 +537,9 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
-    jl_lineno=0;
+    const char *last_filename = jl_filename;
+    jl_lineno = 0;
+    jl_filename = fname;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
     JL_GC_PUSH4(&fn, &ln, &form, &result);
     JL_TRY {
@@ -560,6 +564,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
+        jl_filename = last_filename;
         if (jl_loaderror_type == NULL) {
             jl_rethrow();
         }
@@ -570,6 +575,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
+    jl_filename = last_filename;
     JL_GC_POP();
     return result;
 }

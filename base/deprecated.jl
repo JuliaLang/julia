@@ -38,10 +38,13 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if JLOptions().depwarn!=0
+    if JLOptions().depwarn != 0
+        ln = unsafe_load(cglobal(:jl_lineno, Int))
+        fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
-        warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+        warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
+             filename=fn, lineno=ln)
     end
 end
 
