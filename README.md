@@ -66,6 +66,10 @@ If you are not going to join the development but only need the source for compil
 
     git clone git://github.com/JuliaLang/julia.git --depth 1
 
+And if you found that you need the history some day, you can use the command to convert the shallow-cloned repo to a full-cloned repo:
+
+    git fetch --unshallow
+
 (If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
 
     git config --global url."https://".insteadOf git://
