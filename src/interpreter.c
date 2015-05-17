@@ -233,8 +233,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                 return rhs;
             }
         }
+        JL_GC_PUSH1(&rhs);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
         jl_checked_assignment(b, rhs);
+        JL_GC_POP();
         return rhs;
     }
     else if (ex->head == new_sym) {
