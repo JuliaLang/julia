@@ -86,7 +86,7 @@ function package(
             elseif LibGit2.isdirty(repo)
                 LibGit2.remove!(repo, files...)
                 info("Regenerated files left unstaged, use `git add -p` to select")
-                open(io->print(io,msg), joinpath(LibGit2.gitdir(pkg, repo),"MERGE_MSG"), "w")
+                open(io->print(io,msg), joinpath(LibGit2.gitdir(repo),"MERGE_MSG"), "w")
             else
                 info("Regenerated files are unchanged")
             end
