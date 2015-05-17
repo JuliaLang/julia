@@ -20,6 +20,7 @@ include("libgit2/remote.jl")
 include("libgit2/strarray.jl")
 include("libgit2/index.jl")
 include("libgit2/merge.jl")
+include("libgit2/tag.jl")
 
 immutable State
     head::Oid
@@ -30,12 +31,6 @@ end
 function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
     m == nothing ? url : "git://github.com/$(m.captures[1]).git"
-end
-
-function gitdir(d, repo::GitRepo)
-    g = joinpath(d,".git")
-    isdir(g) && return g
-    path(repo)
 end
 
 """Return HEAD Oid as string"""
@@ -109,7 +104,7 @@ function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
-        warn("merge_base: ", e.msg)
+        #warn("Pkg:",path(repo),"=>",e.msg)
         Oid()
     end
     return moid
@@ -172,7 +167,7 @@ function fetch(repo::GitRepo, remote::AbstractString="origin";
     try
         fetch(rmt)
     catch err
-        warn("'fetch' thrown exception: $err")
+        warn("fetch: $err")
     finally
         finalize(rmt)
     end
@@ -223,9 +218,13 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
     end
     try
         if !isempty(track) # setup tracking #TODO: what is branch tracks other then "origin" remote
-            with(GitConfig, repo) do cfg
-                set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
-                set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+            try
+                with(GitConfig, repo) do cfg
+                    set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
+                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+                end
+            catch
+                warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
             end
         end
 
@@ -337,9 +336,8 @@ function snapshot(repo::GitRepo)
     head = Oid(repo, GitConst.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
-        dir = splitdir(path(repo)[1:end-1])[1] # remove `/.git` part
         with(GitIndex, repo) do idx
-            content = readdir(dir)
+            content = readdir(path(repo))
             if length(content) > 1
                 files = [utf8(bytestring(c))::UTF8String for c in content]
                 push!(files, utf8("."))
