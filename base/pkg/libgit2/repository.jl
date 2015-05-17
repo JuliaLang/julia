@@ -86,9 +86,14 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
     return get(T, r, Oid(oid), length(oid) != OID_HEXSZ)
 end
 
-function path(repo::GitRepo)
+function gitdir(repo::GitRepo)
     return bytestring(ccall((:git_repository_path, :libgit2), Ptr{UInt8},
                             (Ptr{Void},), repo.ptr))
+end
+
+function path(repo::GitRepo)
+    rpath = gitdir(repo)
+    return isbare(repo) ? rpath : splitdir(rpath[1:end-1])[1]*"/" # remove '.git' part
 end
 
 function peel(obj::GitObject, obj_type::Cint)
