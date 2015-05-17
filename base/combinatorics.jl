@@ -283,6 +283,43 @@ end
 done(c::MultiSetCombinations, s) =
     (!isempty(s) && max(s[1], c.t) > length(c.ref)) ||  (isempty(s) && c.t > 0)
 
+immutable WithReplacementCombinations{T}
+    a::T
+    t::Int
+end
+
+eltype{T}(::Type{WithReplacementCombinations{T}}) = Vector{eltype(T)}
+
+length(c::WithReplacementCombinations) = binomial(length(c.a)+c.t-1, c.t)
+
+with_replacement_combinations(a, t::Integer) = WithReplacementCombinations(a, t)
+
+start(c::WithReplacementCombinations) = [1 for i in 1:c.t]
+function next(c::WithReplacementCombinations, s)
+    n = length(c.a)
+    t = c.t
+    comb = [c.a[si] for si in s]
+    if t > 0
+        s = copy(s)
+        changed = false
+        for i in t:-1:1
+            if s[i] < n
+                s[i] += 1
+                for j in (i+1):t
+                    s[j] = s[i]
+                end
+                changed = true
+                break
+            end
+        end
+        !changed && (s[1] = n+1)
+    else
+        s = [n+1]
+    end
+    (comb, s)
+end
+done(c::WithReplacementCombinations, s) = !isempty(s) && s[1] > length(c.a) || c.t < 0
+
 immutable Permutations{T}
     a::T
     t::Int

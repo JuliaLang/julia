@@ -39,6 +39,15 @@ a = randcycle(10)
 @test collect(multiset_combinations("", 0)) == Any[Char[]]
 @test collect(multiset_combinations("", -1)) == Any[]
 
+@test collect(with_replacement_combinations("abc", 2)) == Any[['a','a'],['a','b'],['a','c'],
+                                                              ['b','b'],['b','c'],['c','c']]
+@test collect(with_replacement_combinations("abc", 1)) == Any[['a'],['b'],['c']]
+@test collect(with_replacement_combinations("abc", 0)) == Any[Char[]]
+@test collect(with_replacement_combinations("abc", -1)) == Any[]
+@test collect(with_replacement_combinations("", 1)) == Any[]
+@test collect(with_replacement_combinations("", 0)) == Any[Char[]]
+@test collect(with_replacement_combinations("", -1)) == Any[]
+
 @test collect(permutations("abc")) == Any[['a','b','c'],['a','c','b'],['b','a','c'],
                                           ['b','c','a'],['c','a','b'],['c','b','a']]
 @test collect(permutations("abc", 4)) == Any[]
