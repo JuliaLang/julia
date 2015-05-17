@@ -40,6 +40,15 @@ a = randcycle(10)
 @test collect(permutations("", 0)) == Any[Char[]]
 @test collect(permutations("", -1)) == Any[]
 
+@test collect(multiset_permutations("aabc", 5)) == Any[]
+@test collect(multiset_permutations("aabc", 2)) == Any[['a','a'],['a','b'], ['a','c'],['b','a'],
+                                                       ['b','c'],['c','a'],['c','b']]
+@test collect(multiset_permutations("aabc", 0)) == Any[Char[]]
+@test collect(multiset_permutations("aabc", -1)) == Any[]
+@test collect(multiset_permutations("", 1)) == Any[]
+@test collect(multiset_permutations("", 0)) == Any[Char[]]
+@test collect(multiset_permutations("", -1)) == Any[]
+
 @test collect(filter(x->(iseven(x[1])),permutations([1,2,3]))) == Any[[2,1,3],[2,3,1]]
 @test collect(filter(x->(iseven(x[3])),permutations([1,2,3]))) == Any[[1,3,2],[3,1,2]]
 @test collect(filter(x->(iseven(x[1])),combinations([1,2,3],2))) == Any[[2,3]]
