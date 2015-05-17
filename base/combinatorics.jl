@@ -208,6 +208,81 @@ function next(c::Combinations, s)
 end
 done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
 
+immutable MultiSetCombinations{T}
+    m::T
+    f::Vector{Int}
+    t::Int
+    ref::Vector{Int}
+end
+
+eltype{T}(::Type{MultiSetCombinations{T}}) = Vector{eltype(T)}
+
+function length(c::MultiSetCombinations)
+    t = c.t
+    if t > length(c.ref)
+        return 0
+    end
+    p = [1; zeros(Int,t)]
+    for i in 1:length(c.f)
+        f = c.f[i]
+        if i == 1
+            for j in 1:min(f, t)
+                p[j+1] = 1
+            end
+        else
+            for j in t:-1:1
+                p[j+1] = sum(p[max(1,j+1-f):(j+1)])
+            end
+        end
+    end
+    return p[t+1]
+end
+
+function multiset_combinations{T<:Integer}(m, f::Vector{T}, t::Integer)
+    length(m) == length(f) || error("Lengths of m and f are not the same.")
+    ref = length(f) > 0 ? vcat([[i for j in 1:f[i] ] for i in 1:length(f)]...) : Int[]
+    if t < 0
+        t = length(ref) + 1
+    end
+    MultiSetCombinations(m, f, t, ref)
+end
+
+function multiset_combinations{T}(a::T, t::Integer)
+    m = unique(collect(a))
+    f = Int[sum([c == x for c in a]) for x in m]
+    multiset_combinations(m, f, t)
+end
+
+start(c::MultiSetCombinations) = c.ref
+function next(c::MultiSetCombinations, s)
+    ref = c.ref
+    n = length(ref)
+    t = c.t
+    changed = false
+    comb = [c.m[s[i]] for i in 1:t]
+    if t > 0
+        s = copy(s)
+        for i in t:-1:1
+            if s[i] < ref[i + (n - t)]
+                j = 1
+                while ref[j] <= s[i]; j += 1; end
+                s[i] = ref[j]
+                for l in (i+1):t
+                    s[l] = ref[j+=1]
+                end
+                changed = true
+                break
+            end
+        end
+        !changed && (s[1] = n+1)
+    else
+        s = [n+1]
+    end
+    (comb, s)
+end
+done(c::MultiSetCombinations, s) =
+    (!isempty(s) && max(s[1], c.t) > length(c.ref)) ||  (isempty(s) && c.t > 0)
+
 immutable Permutations{T}
     a::T
     t::Int
