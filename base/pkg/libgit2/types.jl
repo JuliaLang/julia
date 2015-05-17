@@ -18,6 +18,12 @@ immutable StrArrayStruct
    count::Csize_t
 end
 StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
+function Base.finalize(sa::StrArrayStruct)
+    sa_ptr = Ref(sa)
+    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
+    return sa_ptr[]
+end
+
 
 immutable CheckoutOptionsStruct
     version::Cuint
@@ -202,7 +208,7 @@ abstract AbstractGitObject
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
 abstract GitObject <: AbstractGitObject
-function finalize(obj::GitObject)
+function Base.finalize(obj::GitObject)
     if obj.ptr != C_NULL
         ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), obj.ptr)
         obj.ptr = C_NULL
@@ -235,7 +241,7 @@ for (typ, ref, sup, fnc) in (
     end
 
     if fnc != nothing
-        @eval function finalize(obj::$typ)
+        @eval function Base.finalize(obj::$typ)
             if obj.ptr != C_NULL
                 ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
                 obj.ptr = C_NULL

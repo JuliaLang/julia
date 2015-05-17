@@ -21,9 +21,3 @@ function Base.convert(::Type{Vector{AbstractString}}, sa::StrArrayStruct)
     end
     return arr
 end
-
-function finalize(sa::StrArrayStruct)
-    sa_ptr = Ref(sa)
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
-    return sa_ptr[]
-end
