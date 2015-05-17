@@ -2,6 +2,7 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
+#TODO: The Oid generated code should now use an immutable type that wraps an ntuple of length 20
 # immutable Oid
 #   id1::UInt8
 #   id2::UInt8
@@ -54,9 +55,7 @@ end
 
 function Oid(ref::GitReference)
     isempty(ref) && return Oid()
-
-    typ = ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
-    typ != 1 && return Oid()
+    reftype(ref) != GitConst.REF_OID && return Oid()
     oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
     oid_ptr == C_NULL && return Oid()
     return Oid(oid_ptr)

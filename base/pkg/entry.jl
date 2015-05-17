@@ -212,23 +212,22 @@ function clone(url_or_pkg::AbstractString)
     clone(url,pkg)
 end
 
-function _checkout(pkg::AbstractString, what::AbstractString, merge::Bool=false, pull::Bool=false, branch::Bool=false)
-    Git.transact(dir=pkg) do #TODO: finish restore()
-        Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-        branch ? Git.run(`checkout -q -B $what -t origin/$what`, dir=pkg) : Git.run(`checkout -q $what`, dir=pkg)
-        merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
-        if pull
-            info("Pulling $pkg latest $what...")
-            Git.run(`pull -q --ff-only`, dir=pkg)
-        end
-        resolve()
-    end
-end
-
 function checkout(pkg::AbstractString, branch::AbstractString, merge::Bool, pull::Bool)
     ispath(pkg,".git") || error("$pkg is not a git repo")
     info("Checking out $pkg $branch...")
-    _checkout(pkg,branch,merge,pull,true)
+    LibGit2.with(LibGit2.GitRepo, pkg) do r
+        LibGit2.transact(r) do repo
+            LibGit2.isdirty(repo) && error("$pkg is dirty, bailing")
+            LibGit2.branch!(repo, branch, track=LibGit2.GitConst.REMOTE_ORIGIN)
+            merge && LibGit2.merge!(repo) # merge changes
+            if pull
+                info("Pulling $pkg latest $branch...")
+                LibGit2.fetch(repo)
+                LibGit2.merge!(repo)
+            end
+            resolve()
+        end
+    end
 end
 
 function free(pkg::AbstractString)
@@ -245,7 +244,11 @@ function free(pkg::AbstractString)
             for ver in vers
                 sha1 = avail[ver].sha1
                 LibGit2.iscommit(sha1, repo) || continue
-                return _checkout(pkg, sha1)
+                return LibGit2.transact(repo) do r
+                    LibGit2.isdirty(repo) && error("$pkg is dirty, bailing")
+                    LibGit2.checkout!(repo, sha1)
+                    resolve()
+                end
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
             error("can't find any registered versions of $pkg to checkout")
@@ -306,18 +309,22 @@ end
 function update(branch::AbstractString)
     info("Updating METADATA...")
     cd("METADATA") do
-        if Git.branch() != branch
-            Git.dirty() && error("METADATA is dirty and not on $branch, bailing")
-            Git.attached() || error("METADATA is detached not on $branch, bailing")
-            Git.run(`fetch -q --all`)
-            Git.run(`checkout -q HEAD^0`)
-            Git.run(`branch -f $branch refs/remotes/origin/$branch`)
-            Git.run(`checkout -q $branch`)
+        with(GitRepo, ".") do repo
+            with(LibGit2.head(repo)) do h
+                if LibGit2.branch(h) != branch
+                    LibGit2.isdirty(repo) && error("METADATA is dirty and not on $branch, bailing")
+                    LibGit2.isattached(repo) || error("METADATA is detached not on $branch, bailing")
+                    LibGit2.fetch(repo)
+                    LibGit2.checkout_head(repo)
+                    LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
+                    LibGit2.merge!(repo)
+                end
+            end
         end
         # TODO: handle merge conflicts
-        Base.withenv("GIT_MERGE_AUTOEDIT"=>"no") do
-            Git.run(`pull --rebase -q`, out=DevNull)
-        end
+        # Base.withenv("GIT_MERGE_AUTOEDIT"=>"no") do
+        #     Git.run(`pull --rebase -q`, out=DevNull)
+        # end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
@@ -332,17 +339,17 @@ function update(branch::AbstractString)
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        begin
-            if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
+        with(GitRepo, pkg) do repo
+            if LibGit2.isattached(repo) && !LibGit2.isdirty(repo)
                 info("Updating $pkg...")
                 @recover begin
-                    Git.run(`fetch -q --all`, dir=pkg)
-                    Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+                    LibGit2.fetch(repo)
+                    LibGit2.merge!(repo)
                 end
             end
-            if haskey(avail,pkg)
-                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-            end
+        end
+        if haskey(avail,pkg)
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
     info("Computing changes...")
@@ -577,10 +584,13 @@ function register(pkg::AbstractString, url::AbstractString)
 end
 
 function register(pkg::AbstractString)
-    Git.success(`config remote.origin.url`, dir=pkg) ||
-        error("$pkg: no URL configured")
-    url = Git.readchomp(`config remote.origin.url`, dir=pkg)
-    register(pkg,Git.normalize_url(url))
+    url = LibGit2.with(LibGit2.GitRepo, pkg) do repo
+        LibGit2.with(LibGit2.GitConfig, repo) do cfg
+            LibGit2.get(cfg, "remote.origin.url", "")
+        end
+    end
+    isempty(url) || error("$pkg: no URL configured")
+    register(pkg, LibGit2.normalize_url(url))
 end
 
 function isrewritable(v::VersionNumber)

@@ -176,6 +176,27 @@ DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
                     new_prefix
                 )
 
+immutable MergeOptionsStruct
+    version::Cuint
+    flags::Cint
+    rename_threshold::Cuint
+    target_limit::Cuint
+    metric::Ptr{Void}
+    file_favor::Cint
+end
+MergeOptionsStruct(; flags::Cint = Cint(0),
+                      rename_threshold::Cuint = Cuint(50),
+                      target_limit::Cuint = Cuint(200),
+                      metric::Ptr{Void} = Ptr{Void}(0),
+                      file_favor::Cint = GitConst.MERGE_FILE_FAVOR_NORMAL
+)=MergeOptionsStruct(one(Cuint),
+                      flags,
+                      rename_threshold,
+                      target_limit,
+                      metric,
+                      file_favor
+                    )
+
 # Abstract object types
 abstract AbstractGitObject
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -197,6 +218,7 @@ for (typ, ref, sup, fnc) in (
             (:GitDiff,       :Void, :AbstractGitObject, :(:git_diff_free)),
             (:GitIndex,      :Void, :AbstractGitObject, :(:git_index_free)),
             (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
+            (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
             (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
             (:GitAnyObject,  :Void, :GitObject, nothing),
             (:GitCommit,     :Void, :GitObject, nothing),
@@ -233,7 +255,7 @@ end
 
 """ Resource management helper function
 """
-function with_libgit2(f::Function, obj)
+function with(f::Function, obj)
     try
         f(obj)
     finally
@@ -241,12 +263,12 @@ function with_libgit2(f::Function, obj)
     end
 end
 
-with{T}(f::Function, ::Type{T}, args...) = with_libgit2(f, T(args...))
+with{T}(f::Function, ::Type{T}, args...) = with(f, T(args...))
 
 function with_warn{T}(f::Function, ::Type{T}, args...)
     obj = T(args...)
     try
-        with_libgit2(f, obj)
+        with(f, obj)
     catch err
         warn("$(string(T)) thrown exception: $err")
     end

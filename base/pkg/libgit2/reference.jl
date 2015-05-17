@@ -20,10 +20,13 @@ function shortname(ref::GitReference)
     return bytestring(name_ptr)
 end
 
+function reftype(ref::GitReference)
+    return ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
+end
+
 function fullname(ref::GitReference)
     isempty(ref) && return ""
-    typ = ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
-    typ == 1 && return ""
+    reftype(ref) == GitConst.REF_OID && return ""
     rname = ccall((:git_reference_symbolic_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
     rname == C_NULL && return ""
     return bytestring(rname)
@@ -121,3 +124,29 @@ function lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=
     end
     return GitReference(ref_ptr_ptr[])
 end
+
+function upstream(ref::GitReference)
+    isempty(ref) && return nothing
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_branch_upstream, :libgit2), Cint,
+                 (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
+    return GitReference(ref_ptr_ptr[])
+end
+
+function owner(ref::GitReference)
+    repo_ptr = ccall((:git_reference_owner, :libgit2), Ptr{Void},
+                     (Ptr{Void},), ref.ptr)
+    return GitRepo(repo_ptr)
+end
+
+function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    repo
+    with(default_signature(owner(ref))) do sig
+        @check ccall((:git_reference_set_target, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Ptr{SignatureStruct}, Ptr{UInt8}),
+                 ref_ptr_ptr, ref.ptr, Ref(new_oid), sig.ptr, isempty(msg) ? Ptr{UInt8}(C_NULL) : msg)
+    end
+    return GitReference(ref_ptr_ptr[])
+end
+

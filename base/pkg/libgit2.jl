@@ -1,6 +1,6 @@
 module LibGit2
 
-export with_libgit2, with, with_warn
+export with, with_warn
 export GitRepo, GitConfig, GitIndex
 
 const GITHUB_REGEX =
@@ -19,6 +19,7 @@ include("libgit2/walker.jl")
 include("libgit2/remote.jl")
 include("libgit2/strarray.jl")
 include("libgit2/index.jl")
+include("libgit2/merge.jl")
 
 immutable State
     head::Oid
@@ -39,14 +40,8 @@ end
 
 """Return HEAD Oid as string"""
 function head(pkg::AbstractString)
-    head_id =""
-    repo = GitRepo(pkg)
-    try
-        head_id = string(head_oid(repo))
-    catch err
-        warn(err)
-    finally
-        finalize(repo)
+    with(GitRepo, pkg) do repo
+        string(head_oid(repo))
     end
 end
 
@@ -96,7 +91,6 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
         result = c > 0
         finalize(diff)
     catch err
-        warn(err)
         result = true
     finally
         !emptypathspec && finalize(sa)
@@ -228,7 +222,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         end
     end
     try
-        if !isempty(track) # setup tracking
+        if !isempty(track) # setup tracking #TODO: what is branch tracks other then "origin" remote
             with(GitConfig, repo) do cfg
                 set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
                 set!(cfg, "branch.$branch_name.merge", name(branch_ref))
@@ -252,15 +246,13 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     # grab head name
     head_name = GitConst.HEAD_FILE
     try
-        head_ref = head(repo)
-        head_name = shortname(head_ref)
-        # if it is HEAD use short OID instead
-        if head_name == GitConst.HEAD_FILE
-            head_name = string(Oid(head_ref))
+        with(head(repo)) do head_ref
+            head_name = shortname(head_ref)
+            # if it is HEAD use short OID instead
+            if head_name == GitConst.HEAD_FILE
+                head_name = string(Oid(head_ref))
+            end
         end
-        finalize(head_ref)
-    catch err
-        warn(err)
     end
 
     # search for commit to get a commit object
@@ -322,7 +314,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
-function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.GIT_RESET_MIXED)
+function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.RESET_MIXED)
 
     obj = get(GitAnyObject, repo, commit)
     obj == nothing && return
@@ -378,7 +370,7 @@ function restore(s::State, repo::GitRepo)
 
         read_tree!(idx, s.index)  # restore index
     end
-    reset!(repo, s.head, GitConst.GIT_RESET_SOFT) # restore head
+    reset!(repo, s.head, GitConst.RESET_SOFT) # restore head
 end
 
 function transact(f::Function, repo::GitRepo)

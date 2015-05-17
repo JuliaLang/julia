@@ -18,6 +18,14 @@ end
 
 @test check_version()
 
+#TODO: tests need 'user.name' & 'user.email' in config ???
+Pkg.LibGit2.with(Pkg.LibGit2.GitConfig) do cfg
+    git_user = Pkg.LibGit2.get(cfg, "user.name", "")
+    isempty(git_user) && Pkg.LibGit2.set(cfg, "user.email", "Test User")
+    git_user_email = Pkg.LibGit2.get(cfg, "user.email", "")
+    isempty(git_user) && Pkg.LibGit2.set(cfg, "user.email", "Test@User.com")
+end
+
 function temp_dir(fn::Function, remove_tmp_dir::Bool=true)
     tmpdir = joinpath(tempdir(),randstring())
     @test !isdir(tmpdir)
@@ -150,7 +158,7 @@ temp_dir() do dir_cache
         cp(joinpath(path, "REQUIRE"), joinpath(path, "CCC"))
         cp(joinpath(path, "REQUIRE"), joinpath(path, "AAA"))
         Pkg.LibGit2.add!(repo, "AAA")
-        @test_throws ErrorException Pkg.LibGit2.transact(repo, dir=path) do repo
+        @test_throws ErrorException Pkg.LibGit2.transact(repo) do repo
             mv(joinpath(path, "REQUIRE"), joinpath(path, "BBB"))
             Pkg.LibGit2.add!(repo, "BBB")
             oid = Pkg.LibGit2.commit(repo, "test commit")
