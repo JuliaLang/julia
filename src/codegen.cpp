@@ -4480,19 +4480,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
     Function *f = NULL;
 
     bool specsig = false;
-    if (!va && !hasCapt && lam->specTypes != jl_anytuple_type && lam->inferred) {
-        // no captured vars and not vararg
-        // consider specialized signature
-        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
-            if (isbits_spec(jl_tparam(lam->specTypes, i))) { // assumes !va
-                specsig = true;
-                break;
-            }
-        }
-        if (jl_nparams(lam->specTypes) == 0)
-            specsig = true;
-        if (isbits_spec(jlrettype))
-            specsig = true;
+    if (!va && !hasCapt && lam->specTypes != jl_anytuple_type &&
+        lam->inferred && jl_nparams(lam->specTypes) <= 64) {
+        // Specialize signature if there's no captured vars, not vararg
+        // and if the number of arguments is reasonable. #11304
+        specsig = true;
     }
 
     std::stringstream funcName;
