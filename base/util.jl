@@ -352,7 +352,9 @@ const have_warned = Set()
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
 warn_once(msg...) = warn(STDERR, msg..., once=true)
 
-function warn(io::IO, msg...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+function warn(io::IO, msg...;
+              prefix="WARNING: ", once=false, key=nothing, bt=nothing,
+              filename=nothing, lineno::Int=0)
     str = chomp(string(msg...))
     if once
         if key === nothing
@@ -364,6 +366,9 @@ function warn(io::IO, msg...; prefix="WARNING: ", once=false, key=nothing, bt=no
     print_with_color(:red, io, prefix, str)
     if bt !== nothing
         show_backtrace(io, bt)
+    end
+    if filename !== nothing
+        print(io, "\nwhile loading $filename, in expression starting on line $lineno")
     end
     println(io)
     return
@@ -384,4 +389,3 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
-
