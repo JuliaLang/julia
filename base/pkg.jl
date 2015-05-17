@@ -7,7 +7,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
        update, resolve, register, tag, publish, generate, test,
        build, free, pin
 
-const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
+const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
 for file in split("git libgit2 dir github types reqs cache read query resolve write generate entry")
