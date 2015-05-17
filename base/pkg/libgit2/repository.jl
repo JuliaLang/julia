@@ -11,7 +11,7 @@ function GitRepo(path::AbstractString)
     return GitRepo(repo_ptr_ptr[])
 end
 
-function close(r::GitRepo)
+function cleanup(r::GitRepo)
     if r.ptr != C_NULL
         ccall((:git_repository__cleanup, :libgit2), Void, (Ptr{Void},), r.ptr)
     end
@@ -111,8 +111,7 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptionsStruct = CheckoutOptionsStruct())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
-                 repo.ptr, obj.ptr,
-                 options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
+                 repo.ptr, obj.ptr, Ref(options))
 end
 
 function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
@@ -121,13 +120,13 @@ function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitInd
                  (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
                  repo.ptr,
                  isnull(idx) ? C_NULL : Base.get(idx).ptr,
-                 options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
+                 Ref(options))
 end
 
 function checkout_head(repo::GitRepo; options::CheckoutOptionsStruct = CheckoutOptionsStruct())
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Void}, Ptr{CheckoutOptionsStruct}),
-                 repo.ptr, options == CheckoutOptionsStruct() ? C_NULL : Ref(options))
+                 repo.ptr, Ref(options))
 end
 
 function fetch(rmt::GitRemote)
@@ -162,4 +161,3 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
     end
     return
 end
-

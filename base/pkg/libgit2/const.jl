@@ -172,6 +172,11 @@ module GitConst
 
     const MERGE_TREE_FIND_RENAMES = Cint(1) << Cint(0)
 
+    const MERGE_FILE_FAVOR_NORMAL = Cint(0)
+    const MERGE_FILE_FAVOR_OURS   = Cint(1)
+    const MERGE_FILE_FAVOR_THEIRS = Cint(2)
+    const MERGE_FILE_FAVOR_UNION  = Cint(3)
+
     const MERGE_AUTOMERGE_NORMAL  = Cint(0)
     const MERGE_AUTOMERGE_FAVOR_OURS = Cint(1)
     const MERGE_AUTOMERGE_FAVOR_THEIRS = Cint(2)
@@ -180,15 +185,15 @@ module GitConst
     const MERGE_NO_FASTFORWARD = Cint(1)
     const MERGE_FASTFORWARD_ONLY = Cint(2)
 
-    const GIT_MERGE_ANALYSIS_NONE = 0,
-    const GIT_MERGE_ANALYSIS_NORMAL = (1 << 0)
-    const GIT_MERGE_ANALYSIS_UP_TO_DATE = (1 << 1)
-    const GIT_MERGE_ANALYSIS_FASTFORWARD = (1 << 2)
-    const GIT_MERGE_ANALYSIS_UNBORN = (1 << 3)
+    const MERGE_ANALYSIS_NONE = 0,
+    const MERGE_ANALYSIS_NORMAL = (1 << 0)
+    const MERGE_ANALYSIS_UP_TO_DATE = (1 << 1)
+    const MERGE_ANALYSIS_FASTFORWARD = (1 << 2)
+    const MERGE_ANALYSIS_UNBORN = (1 << 3)
 
-    const GIT_MERGE_PREFERENCE_NONE = 0
-    const GIT_MERGE_PREFERENCE_NO_FASTFORWARD = (1 << 0)
-    const GIT_MERGE_PREFERENCE_FASTFORWARD_ONLY = (1 << 1)
+    const MERGE_PREFERENCE_NONE = 0
+    const MERGE_PREFERENCE_NO_FASTFORWARD = (1 << 0)
+    const MERGE_PREFERENCE_FASTFORWARD_ONLY = (1 << 1)
 
     const DIRECTION_FETCH = Cint(0)
     const DIRECTION_PUSH  = Cint(1)
@@ -211,7 +216,7 @@ module GitConst
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX = Cint(8)
     const GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE = Cint(9)
 
-    const GIT_RESET_SOFT  = Cint(1) # Move the head to the given commit
-    const GIT_RESET_MIXED = Cint(2) # SOFT plus reset index to the commit
-    const GIT_RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
+    const RESET_SOFT  = Cint(1) # Move the head to the given commit
+    const RESET_MIXED = Cint(2) # SOFT plus reset index to the commit
+    const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 end
