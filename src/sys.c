@@ -578,7 +578,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
         uv_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
-        if ((handle & (-4)) == (probe_handle & (-4)))
+        if (((intptr_t)handle & (-4)) == ((intptr_t)probe_handle & (-4)))
             return image_name;
     }
 
