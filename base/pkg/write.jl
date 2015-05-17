@@ -34,8 +34,8 @@ end
 function install(pkg::AbstractString, sha1::AbstractString)
     prefetch(pkg, sha1)
     repo = if isdir(".trash/$pkg")
-        mv(".trash/$pkg", "./$pkg")
-        LibGit2.GitRepo(pkg)
+        mv(".trash/$pkg", "./$pkg") #TODO check for newer version in cache before moving
+        GitRepo(pkg)
     else
         LibGit2.clone(Cache.path(pkg), pkg)
     end
@@ -43,7 +43,7 @@ function install(pkg::AbstractString, sha1::AbstractString)
         fetch(repo, pkg, sha1)
         checkout(repo, pkg, sha1)
     finally
-        LibGit2.finalize(repo)
+        finalize(repo)
     end
 end
 

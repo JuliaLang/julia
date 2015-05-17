@@ -1,3 +1,25 @@
+const OID_RAWSZ = 20
+const OID_HEXSZ = OID_RAWSZ * 2
+const OID_MINPREFIXLEN = 4
+
+#TODO: The Oid generated code should now use an immutable type that wraps an ntuple of length 20
+# immutable Oid
+#   id1::UInt8
+#   id2::UInt8
+#   ...
+#   id20::UInt8
+# end
+@eval begin
+    $(Expr(:type, false, :Oid,
+        Expr(:block,
+            [Expr(:(::), symbol("id$i"), :UInt8) for i=1:OID_RAWSZ]...)))
+end
+
+# default Oid constructor (all zeros)
+@generated function Oid()
+    return Expr(:call, :Oid, [:(zero(UInt8)) for _=1:OID_RAWSZ]...)
+end
+
 immutable TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
@@ -203,6 +225,45 @@ MergeOptionsStruct(; flags::Cint = Cint(0),
                       file_favor
                     )
 
+immutable IndexTime
+    seconds::Int64
+    nanoseconds::Cuint
+    IndexTime() = new(zero(Int64), zero(Cuint))
+end
+
+immutable IndexEntry
+    ctime::IndexTime
+    mtime::IndexTime
+
+    dev::Cuint
+    ino::Cuint
+    mode::Cuint
+    uid::Cuint
+    gid::Cuint
+    file_size::Int64
+
+    id::Oid
+
+    flags::UInt16
+    flags_extended::UInt16
+
+    path::Ptr{UInt8}
+end
+IndexEntry() = IndexEntry(IndexTime(),
+                          IndexTime(),
+                          Cuint(0),
+                          Cuint(0),
+                          Cuint(0),
+                          Cuint(0),
+                          Cuint(0),
+                          Cuint(0),
+                          Oid(),
+                          UInt16(0),
+                          UInt16(0),
+                          Ptr{UInt8}(0))
+Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
+
+
 # Abstract object types
 abstract AbstractGitObject
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -228,6 +289,7 @@ for (typ, ref, sup, fnc) in (
             (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
             (:GitAnyObject,  :Void, :GitObject, nothing),
             (:GitCommit,     :Void, :GitObject, nothing),
+            (:GitBlob,       :Void, :GitObject, nothing),
             (:GitTree,       :Void, :GitObject, nothing)
         )
 
@@ -286,6 +348,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
         GitConst.OBJ_COMMIT
     elseif T == GitTree
         GitConst.OBJ_TREE
+    elseif T == GitBlob
+        GitConst.OBJ_BLOB
     elseif T == GitAnyObject
         GitConst.OBJ_ANY
     else
@@ -298,6 +362,8 @@ function getobjecttype(obj_type::Cint)
         GitCommit
     elseif obj_type == GitConst.OBJ_TREE
         GitTree
+    elseif obj_type == GitConst.OBJ_BLOB
+        GitBlob
     elseif obj_type == GitConst.OBJ_ANY
         GitAnyObject
     else

@@ -100,3 +100,17 @@ function read!(repo::GitRepo, force::Bool = false)
         read!(idx, force)
     end
 end
+
+function Base.count(idx::GitIndex)
+    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
+end
+
+function Base.getindex(idx::GitIndex, i::Csize_t)
+    # return ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
+    #               (Ptr{Void}, Csize_t), idx.ptr, i)
+    ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
+                  (Ptr{Void}, Csize_t), idx.ptr, i)
+    ie_ptr == C_NULL && return nothing
+    return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
+end
+Base.getindex(idx::GitIndex, i::Int) = getindex(idx, Csize_t(i))

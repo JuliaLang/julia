@@ -21,6 +21,7 @@ include("libgit2/strarray.jl")
 include("libgit2/index.jl")
 include("libgit2/merge.jl")
 include("libgit2/tag.jl")
+include("libgit2/blob.jl")
 
 immutable State
     head::Oid
@@ -30,7 +31,7 @@ end
 
 function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
-    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
+    m == nothing ? url : "https://github.com/$(m.captures[1]).git"
 end
 
 """Return HEAD Oid as string"""
@@ -61,10 +62,10 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """ git diff-index HEAD [-- <path>]"""
-isdirty(repo::GitRepo, paths::AbstractString="") = isdiff(repo, GitConst.HEAD_FILE, paths)
+isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(repo, GitConst.HEAD_FILE, paths, cached=cached)
 
 """ git diff-index <treeish> [-- <path>]"""
-function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString="")
+function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
     iszero(tree_oid) && return true
     emptypathspec = isempty(paths)
@@ -77,9 +78,15 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     end
     try
         diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-        @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
-                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
-                   diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
+        if cached
+            @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
+                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
+                           diff_ptr_ptr, repo.ptr, tree.ptr, NULL,  emptypathspec ? C_NULL : Ref(diff_opts))
+        else
+            @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
+                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
+                           diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
+        end
         diff = GitDiff(diff_ptr_ptr[])
 
         c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
@@ -314,7 +321,6 @@ end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
 function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.RESET_MIXED)
-
     obj = get(GitAnyObject, repo, commit)
     obj == nothing && return
     try
@@ -324,11 +330,24 @@ function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.RESET_MIXED)
     end
 end
 
+""" git cat-file <commit> """
+function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
+    obj_id = revparseid(repo, object)
+    iszero(obj_id) && return
+
+    obj = get(T, repo, obj_id)
+    if isa(obj, GitBlob)
+        return bytestring(convert(Ptr{UInt8}, content(obj)))
+    else
+        return nothing
+    end
+end
+
 """ Returns all commit authors """
 function authors(repo::GitRepo)
     athrs = map(
         (oid,repo)->author(get(GitCommit, repo, oid))::Signature,
-        repo) #, by = Pkg.LibGit2.GitConst.SORT_TIME)
+        repo) #, by = GitConst.SORT_TIME)
     return athrs
 end
 

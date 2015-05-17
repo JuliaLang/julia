@@ -44,12 +44,12 @@ function package(
     isnew = !ispath(pkg)
     try
         repo = if isnew
-            url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
+            url = isempty(user) ? "" : "https://github.com/$user/$pkg.jl.git"
             Generate.init(pkg,url,config=config)
         else
             repo = GitRepo(pkg)
             if LibGit2.isdirty(repo)
-                LibGit2.finalize(repo)
+                finalize(repo)
                 error("$pkg is dirty – commit or stash your changes")
             end
             repo
