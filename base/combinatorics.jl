@@ -210,18 +210,34 @@ done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
 
 immutable Permutations{T}
     a::T
+    t::Int
 end
 
 eltype{T}(::Type{Permutations{T}}) = Vector{eltype(T)}
 
-length(p::Permutations) = factorial(length(p.a))
+length(p::Permutations) = (0 <= p.t <= length(p.a))?factorial(length(p.a), length(p.a)-p.t):0
 
-permutations(a) = Permutations(a)
+permutations(a) = Permutations(a, length(a))
+
+function permutations(a, t::Integer)
+    if t < 0
+        t = length(a) + 1
+    end
+    Permutations(a, t)
+end
 
 start(p::Permutations) = [1:length(p.a);]
 function next(p::Permutations, s)
-    perm = [p.a[si] for si in s]
-    if length(p.a) == 0
+    if length(p.a) == p.t
+        return nextpermutation0(p.a, s)
+    else
+        return nextpermutation(p.a, length(p.a), p.t, s)
+    end
+end
+
+function nextpermutation0(m, s)
+    perm = [m[si] for si in s]
+    if length(m) == 0
         # special case to generate 1 result for len==0
         return (perm,[1])
     end
@@ -238,8 +254,39 @@ function next(p::Permutations, s)
     end
     (perm,s)
 end
-done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
 
+function nextpermutation(m, n, t, s)
+    perm = [m[s[i]] for i in 1:t]
+    if t > 0
+        s = copy(s)
+        if t < n
+            j = t + 1
+            while j <= n &&  s[t] >= s[j]; j+=1; end
+        end
+        if t < n && j <= n
+            s[t], s[j] = s[j], s[t]
+        else
+            if t < n
+                reverse!(s, t+1)
+            end
+            i = t - 1
+            while i>=1 && s[i] >= s[i+1]; i -= 1; end
+            if i > 0
+                j = n
+                while j>i && s[i] >= s[j]; j -= 1; end
+                s[i], s[j] = s[j], s[i]
+                reverse!(s, i+1)
+            else
+                s[1] = n+1
+            end
+        end
+    else
+        s = [n+1]
+    end
+    return(perm, s)
+end
+
+done(p::Permutations, s) = !isempty(s) && max(s[1], p.t) > length(p.a) ||  (isempty(s) && p.t > 0)
 
 # Integer Partitions
 

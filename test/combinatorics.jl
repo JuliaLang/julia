@@ -31,6 +31,14 @@ a = randcycle(10)
 @test collect(combinations("abc",-1)) == Any[]
 @test collect(permutations("abc")) == Any[['a','b','c'],['a','c','b'],['b','a','c'],
                                           ['b','c','a'],['c','a','b'],['c','b','a']]
+@test collect(permutations("abc", 4)) == Any[]
+@test collect(permutations("abc", 2)) == Any[['a','b'],['a','c'],['b','a'],
+                                             ['b','c'],['c','a'],['c','b']]
+@test collect(permutations("abc", 0)) == Any[Char[]]
+@test collect(permutations("abc", -1)) == Any[]
+@test collect(permutations("", 1)) == Any[]
+@test collect(permutations("", 0)) == Any[Char[]]
+@test collect(permutations("", -1)) == Any[]
 
 @test collect(filter(x->(iseven(x[1])),permutations([1,2,3]))) == Any[[2,1,3],[2,3,1]]
 @test collect(filter(x->(iseven(x[3])),permutations([1,2,3]))) == Any[[1,3,2],[3,1,2]]
