@@ -148,14 +148,11 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
     ispath(pkg,".git") || return pkgreq
     repo = LibGit2.GitRepo(pkg)
-    head = ""
-    try
+    head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
         LibGit2.iszero(LibGit2.revparseid(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
-        head = string(LibGit2.head_oid(repo))
-    finally
-        LibGit2.finalize(repo)
+        string(LibGit2.head_oid(repo))
     end
     for (ver,info) in avail
         if head == info.sha1
@@ -185,7 +182,7 @@ function installed(avail::Dict=available())
             catch e
                 pkgs[pkg] = (typemin(VersionNumber), true)
             finally
-                LibGit2.finalize(prepo)
+                finalize(prepo)
             end
         catch
             pkgs[pkg] = (typemin(VersionNumber), true)

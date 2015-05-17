@@ -1,4 +1,4 @@
-function tags(repo::GitRepo)
+function tag_list(repo::GitRepo)
     with(StrArrayStruct()) do sa
         sa_ref = Ref(sa)
         @check ccall((:git_tag_list, :libgit2), Cint,
