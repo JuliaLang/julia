@@ -938,11 +938,6 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
             ((jl_datatype_t*)(t))->name == jl_tuple_typename);
 }
 
-STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
-{
-    return 0;
-}
-
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&

@@ -136,35 +136,10 @@ end
 
 @test () != Type{Tuple{}}
 
-#let N = TypeVar(:N,true), V = TypeVar(:V, NTuple{N,Int}), T = TypeVar(:T,true)
-#    @test Tuple{} <: NTuple
-#    @test Tuple{} <: NTuple{N,Int}
-#    @test Tuple{} <: NTuple{N,T}
-#    @test !(Array{Tuple{}} <: Array{NTuple})    # is the difference...
-#    @test Array{Tuple{}} <: Array{NTuple{N}}    # ...here desirable?
-#    @test Array{Tuple{}} <: Array{NTuple{N,Int}}
-#    @test Array{Tuple{}} <: Array{NTuple{N,T}}
-#    @test Array{Tuple{Int}} <: Array{NTuple{N,Int}}
-#    @test Array{Tuple{}} <: Array{NTuple{TypeVar(:N),Int}}    # these two...
-#    @test !(Array{Tuple{Int}} <: Array{Tuple{Vararg{Int}}})   # ...conflict
-#    @test !(Array{Tuple{Int}} <: Array{Tuple{Int,Vararg{Int}}})
-#    @test Tuple{Type{Int8}, Tuple{}} <: Tuple{Type{Int8}, NTuple{N,Int}}
-#    @test Tuple{Type{Int8}, Tuple{Int,Int}} <: Tuple{Type{Int8}, NTuple{N,Int}}
-#    @test V <: NTuple             # and...
-#    @test !(V <: Tuple{Vararg})   # ...here
-#end
-
 # issue #6561
-# We have to decide whether NTuple translates to Tuple{Vararg} or
-# Tuple{Vararg{Any}}. Assuming the former, then it's hard to get
-#  Array{Tuple{Vararg}} <: Array{Tuple{Vararg{Any}}}
-# because the LHS is Array{Tuple{Vararg{T<:Any}}}.
-# Another option is to make Tuple === Tuple{Vararg{T<:Any}}
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
-#@test issubtype(Array{Tuple{Vararg}}, Array{NTuple})
-#@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
-#@test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
+@test issubtype(Array{Tuple{Vararg}}, Array{NTuple})
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
 # this is fancy: know that any type T<:Number must be either a DataType or a Union

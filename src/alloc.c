@@ -111,20 +111,6 @@ typedef struct {
 // Note that this function updates len
 static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
 {
-    if (jl_is_ntuple_type(dt)) {
-        jl_value_t *lenvar = jl_tparam0(dt);
-        jl_value_t *elty = jl_tparam1(dt);
-        assert(jl_is_datatype(elty));
-        size_t alignment = ((jl_datatype_t*)elty)->alignment;
-        *len = LLT_ALIGN((*len), alignment);
-        assert(jl_is_long(lenvar));
-        size_t l = jl_unbox_long(lenvar);
-        size_t nb = l*LLT_ALIGN(jl_datatype_size(elty), alignment);
-        jl_value_t *v = (jl_value_t*)newobj(dt, NWORDS(nb));
-        memcpy(jl_data_ptr(v), data, nb);
-        return v;
-    }
-
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
