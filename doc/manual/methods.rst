@@ -550,6 +550,32 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
+.. _man-vararg-fixedlen:
+
+Parametrically-constrained Varargs methods
+------------------------------------------
+
+Function parameters can also be used to constrain the number of arguments that may be supplied to a "varargs" function (:ref:`man-varargs-functions`).  The notation ``Vararg{T,N}`` is used to indicate such a constraint.  For example:
+
+.. doctest::
+
+    julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
+
+    julia> bar(1,2,3)
+    ERROR: MethodError: `bar` has no matching method bar(::Int, ::Int, ::Int)
+
+    julia> bar(1,2,3,4)
+    (1,2,(3,4))
+
+    julia> bar(1,2,3,4,5)
+    ERROR: MethodError: `bar` has no method matching bar(::Int, ::Int, ::Int, ::Int, ::Int)
+
+More usefully, it is possible to constrain varargs methods by a parameter.  For example::
+
+    function getindex{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Number,N})
+
+would be called only when the number of ``indexes`` matches the dimensionality of the array.
+
 .. _man-note-on-optional-and-keyword-arguments:
 
 Note on Optional and keyword Arguments

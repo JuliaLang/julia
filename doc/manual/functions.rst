@@ -333,6 +333,8 @@ the zero or more values passed to ``bar`` after its first two arguments:
 In all these cases, ``x`` is bound to a tuple of the trailing values
 passed to ``bar``.
 
+It is possible to constrain the number of values passed as a variable argument; this will be discussed later in :ref:`man-vararg-fixedlen`.
+
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
 do this, one also uses ``...`` but in the function call instead:
