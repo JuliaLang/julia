@@ -5,7 +5,7 @@ module Generate
 import ..LibGit2, ..Read
 importall ..LibGit2
 
-copyright_year() =  Dates.year(Dates.today())
+copyright_year() =  string(Dates.year(Dates.today()))
 copyright_name(repo::GitRepo) =
     with(GitConfig, repo) do cfg
         LibGit2.get(cfg, "user.name", "")
@@ -150,7 +150,7 @@ function license(pkg::AbstractString,
         end
         print(io, LICENSES[license](pkg, string(years), authors))
     end
-    isempty(file) || info("License file exists, leaving unmodified; use `force=true` to overwrite")
+    !isempty(file) || info("License file exists, leaving unmodified; use `force=true` to overwrite")
     file
 end
 
