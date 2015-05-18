@@ -2338,13 +2338,15 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
         // If this is a Tuple{Vararg{T,N}} with known N, expand it to
         // a fixed-length tuple
         jl_value_t *T=NULL, *N=NULL;
+        jl_value_t *ttT = jl_tparam0(jl_tparam0(tt));
+        jl_value_t *ttN = jl_tparam1(jl_tparam0(tt));
         int i;
         for (i = 0; i < 2*n; i+=2) {
             jl_value_t *tv = env[i];
             if (jl_is_typevar(tv)) {
-                if (((jl_tvar_t*)tv)->name == jl_symbol("T"))
+                if (tv == ttT)
                     T = env[i+1];
-                else if (((jl_tvar_t*)tv)->name == jl_symbol("N"))
+                else if (tv == ttN)
                     N = env[i+1];
             }
         }
