@@ -2,7 +2,7 @@
 
 # check that libgit2 has been installed correctly
 
-const LIBGIT2_VER = v"0.22+"
+const LIBGIT2_VER = v"0.22.2+"
 
 function check_version()
     major, minor, patch = Cint[0], Cint[0], Cint[0]
@@ -18,12 +18,16 @@ end
 
 @test check_version()
 
+function credentials!(cfg::Pkg.LibGit2.GitConfig, usr="Test User", usr_email="Test@User.com")
+    git_user = Pkg.LibGit2.get(cfg, "user.name", usr)
+    usr==git_user && Pkg.LibGit2.set!(cfg, "user.name", usr)
+    git_user_email = Pkg.LibGit2.get(cfg, "user.email", usr_email)
+    usr_email==git_user_email && Pkg.LibGit2.set!(cfg, "user.email", usr_email)
+end
+
 #TODO: tests need 'user.name' & 'user.email' in config ???
 Pkg.LibGit2.with(Pkg.LibGit2.GitConfig) do cfg
-    git_user = Pkg.LibGit2.get(cfg, "user.name", "")
-    isempty(git_user) && Pkg.LibGit2.set(cfg, "user.email", "Test User")
-    git_user_email = Pkg.LibGit2.get(cfg, "user.email", "")
-    isempty(git_user) && Pkg.LibGit2.set(cfg, "user.email", "Test@User.com")
+    credentials!(cfg)
 end
 
 function temp_dir(fn::Function, remove_tmp_dir::Bool=true)
@@ -92,6 +96,9 @@ temp_dir() do dir_cache
     url = "https://github.com/JuliaLang/Example.jl"
     path_cache = joinpath(dir_cache, "Example.Bare")
     repo = Pkg.LibGit2.clone(url, path_cache, bare = true, remote_cb = Pkg.LibGit2.mirror_cb)
+    Pkg.LibGit2.with(Pkg.LibGit2.GitConfig, repo) do cfg
+        credentials!(cfg)
+    end
     Pkg.LibGit2.finalize(repo)
 
 
@@ -101,8 +108,10 @@ temp_dir() do dir_cache
         # clone repo
         path = joinpath(dir, "Example")
         repo = Pkg.LibGit2.clone(path_cache, path)
+        Pkg.LibGit2.with(Pkg.LibGit2.GitConfig, repo) do cfg
+            credentials!(cfg)
+        end
 
-        # fetch
         Pkg.LibGit2.fetch(repo)
         refs1 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
@@ -120,6 +129,9 @@ temp_dir() do dir_cache
     temp_dir() do dir
         path = joinpath(dir, "Example")
         repo = Pkg.LibGit2.clone(path_cache, path)
+        Pkg.LibGit2.with(Pkg.LibGit2.GitConfig, repo) do cfg
+            credentials!(cfg)
+        end
         oids = Pkg.LibGit2.map((oid,repo)->string(oid), repo, by = Pkg.LibGit2.GitConst.SORT_TIME)
         @test length(oids) > 0
         Pkg.LibGit2.finalize(repo)
@@ -163,6 +175,9 @@ temp_dir() do dir_cache
         # clone repo
         path = joinpath(dir, "Example")
         repo = Pkg.LibGit2.clone(path_cache, path)
+        Pkg.LibGit2.with(Pkg.LibGit2.GitConfig, repo) do cfg
+            credentials!(cfg)
+        end
         cp(joinpath(path, "REQUIRE"), joinpath(path, "CCC"))
         cp(joinpath(path, "REQUIRE"), joinpath(path, "AAA"))
         Pkg.LibGit2.add!(repo, "AAA")

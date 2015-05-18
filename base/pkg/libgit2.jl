@@ -172,7 +172,7 @@ function fetch(repo::GitRepo, remote::AbstractString="origin";
     end
 
     try
-        fetch(rmt)
+        fetch(repo, rmt, msg="from $(url(rmt))")
     catch err
         warn("fetch: $err")
     finally
