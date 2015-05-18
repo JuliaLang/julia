@@ -48,7 +48,9 @@ function get{T}(::Type{T}, c::GitConfig, name::AbstractString)
 end
 
 function get{T}(c::GitConfig, name::AbstractString, default::T)
-    return try get(T,c,name) catch default end
+    res = default
+    try res = get(T,c,name) end
+    return res
 end
 
 function set!{T}(c::GitConfig, name::AbstractString, value::T)

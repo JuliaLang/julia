@@ -134,10 +134,13 @@ function checkout_head(repo::GitRepo; options::CheckoutOptionsStruct = CheckoutO
                  repo.ptr, Ref(options))
 end
 
-function fetch(rmt::GitRemote)
-    @check ccall((:git_remote_fetch, :libgit2), Cint,
-            (Ptr{Void}, Ptr{Void}, Ptr{UInt8}),
-            rmt.ptr, C_NULL, C_NULL)
+function fetch(repo::GitRepo, rmt::GitRemote; msg::AbstractString="")
+    msg = "pkg.libgit2.fetch: $msg"
+    with(default_signature(repo)) do sig
+        @check ccall((:git_remote_fetch, :libgit2), Cint,
+            (Ptr{Void}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{UInt8}),
+            rmt.ptr, C_NULL, sig.ptr, msg)
+    end
 end
 
 function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractString...)
@@ -155,14 +158,10 @@ end
 
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
                checkout_opts::CheckoutOptionsStruct = CheckoutOptionsStruct())
-    sig = default_signature(repo)
-    msg = "pkg.libgit2.reset: moving to $(string(Oid(obj)))"
-    try
+    with(default_signature(repo)) do sig
+        msg = "pkg.libgit2.reset: moving to $(string(Oid(obj)))"
         @check ccall((:git_reset, :libgit2), Cint,
                      (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptionsStruct}, Ptr{SignatureStruct}, Ptr{UInt8}),
                       repo.ptr, obj.ptr, mode, Ref(checkout_opts), sig.ptr, msg)
-    finally
-        finalize(sig)
     end
-    return
 end
