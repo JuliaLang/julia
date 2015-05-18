@@ -265,6 +265,9 @@ typedef struct {
     uint16_t isptr:1;
 } jl_fielddesc_t;
 
+#define JL_FIELD_MAX_OFFSET ((1ul << 16) - 1ul)
+#define JL_FIELD_MAX_SIZE ((1ul << 15) - 1ul)
+
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
