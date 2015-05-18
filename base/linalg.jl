@@ -209,7 +209,12 @@ include("linalg/lapack.jl")
 include("linalg/dense.jl")
 include("linalg/tridiag.jl")
 include("linalg/triangular.jl")
+
 include("linalg/factorization.jl")
+include("linalg/qr.jl")
+include("linalg/eigen.jl")
+include("linalg/svd.jl")
+include("linalg/schur.jl")
 include("linalg/cholesky.jl")
 include("linalg/lu.jl")
 
