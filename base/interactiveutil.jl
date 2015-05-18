@@ -33,7 +33,7 @@ function edit(file::AbstractString, line::Integer)
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
-    elseif startswith(edname, "subl") || edname == "atom"
+    elseif startswith(edname, "subl") || edname == "atom" || endswith(string(edname),"subl")
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`cmd /c start /b $file`)
