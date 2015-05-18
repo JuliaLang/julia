@@ -89,32 +89,6 @@ end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
-
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
-
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = Eigen(LAPACK.stegr!('V', A.dv, A.ev, convert(T, vl), convert(T, vu), 0, 0)...)
-eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
-
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-eigvals{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
-
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
-eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
-
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
-eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
-
-#Computes largest and smallest eigenvalue
-eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
-
-#Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
-eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
-
 ###################
 # Generic methods #
 ###################

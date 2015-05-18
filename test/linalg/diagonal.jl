@@ -70,9 +70,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test factorize(D) == D
 
     debug && println("Eigensystem")
-    eigD = eigfact(D)
-    @test_approx_eq Diagonal(eigD[:values]) D
-    @test eigD[:vectors] == eye(D)
+    eigD = @inferred(eigfact(D))
+    @test_approx_eq eigD[:vectors]*eigD[:values]*eigD[:vectors]' D
+    @test isperm(mapslices(find, eigD[:vectors], 1))
 
     debug && println("ldiv")
     v = rand(n + 1)

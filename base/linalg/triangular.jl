@@ -254,13 +254,6 @@ function errorbounds{TA<:Number,S<:StridedMatrix,TX<:Number,TB<:Number}(A::Abstr
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
 
-# Eigensystems
-## Notice that trecv works for quasi-triangular matrices and therefore the lower sub diagonal must be zeroed before calling the subroutine
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UpperTriangular{T,S}) = LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitUpperTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data)))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::LowerTriangular{T,S}) = LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)'))
-
 ####################
 # Generic routines #
 ####################
@@ -865,19 +858,10 @@ end
 sqrtm(A::LowerTriangular) = sqrtm(A.').'
 sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
 
-#Generic eigensystems
-eigvals(A::AbstractTriangular) = diag(A)
-function eigvecs{T}(A::AbstractTriangular{T})
-    TT = promote_type(T, Float32)
-    TT <: BlasFloat && return eigvecs(convert(AbstractMatrix{TT}, A))
-    throw(ArgumentError("eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
-end
 det{T}(A::UnitUpperTriangular{T}) = one(T)*one(T)
 det{T}(A::UnitLowerTriangular{T}) = one(T)*one(T)
 det{T}(A::UpperTriangular{T}) = prod(diag(A.data))
 det{T}(A::LowerTriangular{T}) = prod(diag(A.data))
-
-eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 #Generic singular systems
 for func in (:svd, :svdfact, :svdfact!, :svdvals)

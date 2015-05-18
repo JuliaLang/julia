@@ -75,9 +75,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         debug && println("Eigensystems")
         d1, v1 = eig(T)
         d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-        @test_approx_eq isupper?d1:reverse(d1) d2
+        @test_approx_eq isupper ? diag(d1) : reverse(diag(d1)) diag(d2)
         if elty <: Real
-            Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+            Test.test_approx_eq_modphase(v1, isupper ? v2 : v2[:,n:-1:1])
         end
 
         debug && println("Singular systems")
@@ -91,7 +91,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 Test.test_approx_eq_modphase(u1, u2)
                 Test.test_approx_eq_modphase(v1, v2)
             end
-            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1' - Tfull))
+            @test_approx_eq_eps 0 vecnorm(u2*d2*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*d1*v1' - Tfull))
             @inferred svdvals(T)
             @inferred svd(T)
         end

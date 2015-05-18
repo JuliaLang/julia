@@ -134,7 +134,7 @@ debug && println("Matmul with QR factorizations")
 debug && println("non-symmetric eigen decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         d,v   = eig(a)
-        for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
+        for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i,i]*v[:,i] end
     end
 
 debug && println("symmetric generalized eigenproblem")
@@ -143,9 +143,9 @@ debug && println("symmetric generalized eigenproblem")
         a_sg = a[:,n1+1:n2]
         f = eigfact(asym_sg, a_sg'a_sg)
         eig(asym_sg, a_sg'a_sg) # same result, but checks that method works
-        @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
-        @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
+        @test_approx_eq asym_sg*f[:vectors] a_sg'a_sg*f[:vectors]*f[:values]
+        @test_approx_eq diag(f[:values]) eigvals(asym_sg, a_sg'a_sg)
+        @test_approx_eq_eps prod(diag(f[:values])) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
         @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
         @test_throws KeyError f[:Z]
     end
@@ -156,9 +156,9 @@ debug && println("Non-symmetric generalized eigenproblem")
         a2_nsg = a[n1+1:n2, n1+1:n2]
         f = eigfact(a1_nsg, a2_nsg)
         eig(a1_nsg, a2_nsg) # same result, but checks that method works
-        @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
-        @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
+        @test_approx_eq a1_nsg*f[:vectors] a2_nsg*f[:vectors]*f[:values]
+        @test_approx_eq diag(f[:values]) eigvals(a1_nsg, a2_nsg)
+        @test_approx_eq_eps prod(diag(f[:values])) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
         @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
         @test_throws KeyError f[:Z]
     end
@@ -167,8 +167,8 @@ debug && println("Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = schurfact(a)
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
-        @test_approx_eq sort(real(f[:values])) sort(real(d))
-        @test_approx_eq sort(imag(f[:values])) sort(imag(d))
+        @test_approx_eq sort(real(f[:values])) sort(real(diag(d)))
+        @test_approx_eq sort(imag(f[:values])) sort(imag(diag(d)))
         @test istriu(f[:Schur]) || iseltype(a,Real)
         @test_approx_eq full(f) a
         @test_throws KeyError f[:A]
@@ -218,7 +218,7 @@ debug && println("Reorder Generalized Schur")
 debug && println("singular value decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         usv = svdfact(a)
-        @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
+        @test_approx_eq usv[:U]*(usv[:S]*usv[:Vt]) a
         @test_approx_eq full(usv) a
         @test_approx_eq usv[:Vt]' usv[:V]
         @test_throws KeyError usv[:Z]
@@ -234,8 +234,8 @@ debug && println("Generalized svd")
         @test_throws KeyError usv[:Z]
         α = eltya == Int ? -1 : rand(eltya)
         β = svdfact(α)
-        @test β[:S] == [abs(α)]
-        @test svdvals(α) == [abs(α)]
+        @test β[:S] == abs(α)
+        @test svdvals(α) == abs(α)
     end
 
 debug && println("Solve square general system of equations")
