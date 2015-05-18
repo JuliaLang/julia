@@ -1080,8 +1080,9 @@ STATIC_INLINE JL_VARARG_KIND jl_vararg_kind(jl_value_t *v)
     jl_value_t *lenv = jl_tparam1(v);
     if (jl_is_long(lenv))
         return JL_VARARG_INT;
-    assert(jl_is_typevar(lenv));
-    return ((jl_tvar_t*)lenv)->bound ? JL_VARARG_BOUND : JL_VARARG_UNBOUND;
+    if (jl_is_typevar(lenv))
+        return ((jl_tvar_t*)lenv)->bound ? JL_VARARG_BOUND : JL_VARARG_UNBOUND;
+    return JL_VARARG_UNBOUND;
 }
 
 STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
