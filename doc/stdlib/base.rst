@@ -742,7 +742,15 @@ System
 
 .. function:: @time
 
-   A macro to execute an expression, printing the time it took to execute and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
+   A macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
+
+.. function:: @timev
+
+   This is a verbose version of the ``@time`` macro, it first prints the same information as ``@time``, then any non-zero memory allocation counters, and then returns the value of the expression.
+
+.. function:: @timed
+
+   A macro to execute an expression, and return the value of the expression, elapsed time, total bytes allocated, garbage collection time, and an object with various memory allocation counters.
 
 .. function:: @elapsed
 
