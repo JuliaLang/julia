@@ -875,7 +875,7 @@ $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 $(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
 	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(build_includedir)
 	cp $< $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libDSFMT.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
 
 clean-dsfmt:
 	-rm -f dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
