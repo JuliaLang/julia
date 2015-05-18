@@ -42,7 +42,6 @@ function temp_dir(fn::Function, remove_tmp_dir::Bool=true)
     end
 end
 
-println("test 1")
 # clone bare
 temp_dir() do dir
     url = "https://github.com/JuliaLang/Example.jl"
@@ -53,7 +52,6 @@ temp_dir() do dir
     @test isfile(joinpath(path, Pkg.LibGit2.GitConst.HEAD_FILE))
 end
 
-println("test 2")
 # clone
 temp_dir() do dir
     url = "https://github.com/JuliaLang/Example.jl"
@@ -64,7 +62,6 @@ temp_dir() do dir
     @test isdir(joinpath(path, ".git"))
 end
 
-println("test 3")
 # init
 temp_dir() do dir
     path = joinpath(dir, "Example")
@@ -89,7 +86,6 @@ temp_dir() do dir
     Pkg.LibGit2.finalize(repo)
 end
 
-println("test 4")
 # fetch
 temp_dir() do dir_cache
     # create cache
@@ -102,7 +98,6 @@ temp_dir() do dir_cache
     Pkg.LibGit2.finalize(repo)
 
 
-    println("test 4.1")
     # fetch
     temp_dir() do dir
         # clone repo
@@ -124,7 +119,6 @@ temp_dir() do dir_cache
         @test refs2 > refs1
     end
 
-    println("test 4.2")
     # revwalk
     temp_dir() do dir
         path = joinpath(dir, "Example")
@@ -143,7 +137,6 @@ temp_dir() do dir_cache
         end
     end
 
-    println("test 4.3")
     # signature
     temp_dir() do dir
         path = joinpath(dir, "Example")
@@ -169,7 +162,6 @@ temp_dir() do dir_cache
         @test sig.time == sig2.time
     end
 
-    println("test 4.4")
     # transact
     temp_dir() do dir
         # clone repo
@@ -195,7 +187,6 @@ temp_dir() do dir_cache
 
 end
 
-println("test 5")
 # strarray
 begin
     p1 = "XXX"
