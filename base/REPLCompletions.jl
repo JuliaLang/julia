@@ -110,10 +110,11 @@ function complete_keyword(s::ByteString)
 end
 
 function complete_path(path::AbstractString, pos)
-    if ismatch(r"^~(?:/|$)", path)
-        path = homedir() * path[2:end]
+    dir, prefix = splitdir(expanduser(path))
+    # if the path is just "~", don't consider the expanded username as a prefix
+    @unix_only if path == "~"
+        dir, prefix = expanduser(path), ""
     end
-    dir, prefix = splitdir(path)
     local files
     try
         if length(dir) == 0
