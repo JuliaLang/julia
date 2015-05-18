@@ -765,18 +765,21 @@ function with_bigfloat_precision(f::Function, precision::Integer)
 end
 
 function string(x::BigFloat)
-    lng = 128
-    for i = 1:2
-        z = Array(UInt8, lng + 1)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
-        if lng < 128 || i == 2
-            return bytestring(z[1:lng])
-        end
+    lng::Int32 = 127
+    buf = Array(UInt8, lng + 1)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
+    (84 <= lng <= 127) && return bytestring(pointer(buf), lng)
+    if lng < 84 # print at least 78 decimal places
+        lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.78Re", &x)
+    elseif lng > 127
+        buf = Array(UInt8, lng + 1)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
+    return bytestring(pointer(buf), lng)
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
-show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
+show(io::IO, b::BigFloat) = print(io, string(b))
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 # get/set exponent min/max
