@@ -1433,11 +1433,19 @@ function ccopy!(B, A)
 end
 
 function transpose(A::StridedMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
+    if size(A, 1) == 1
+        B = similar(A, size(A,2))
+    else
+        B = similar(A, size(A, 2), size(A, 1))
+    end
     transpose!(B, A)
 end
 function ctranspose(A::StridedMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
+    if size(A, 1) == 1
+        B = similar(A, size(A,2))
+    else
+        B = similar(A, size(A, 2), size(A, 1))
+    end
     ctranspose!(B, A)
 end
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
