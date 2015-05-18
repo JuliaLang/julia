@@ -76,6 +76,7 @@ let T = TypeVar(:T,true)
 
     testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}, Bottom)
     testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}, Bottom)
+    testintersect(Tuple{Vararg{T}}, Tuple{Float64,Int}, Bottom)
 
     testintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}, Tuple{Rational{Integer},Int})
 
@@ -120,6 +121,26 @@ let T = TypeVar(:T,Union{Float32,Float64})
 end
 let T = TypeVar(:T,Union{Float32,Float64},true)
     testintersect(AbstractArray, Matrix{T}, Matrix{T})
+end
+
+# Vararg{T,N}
+let N = TypeVar(:N,true)
+    @test is(Bottom,typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real}))
+    @test is(Bottom,typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}}))
+    @test Tuple{Int,Vararg{Int,2}} == Tuple{Int,Int,Int}
+    @test Tuple{Int,Vararg{Int,2}} == Tuple{Int,Int,Vararg{Int,1}}
+    @test Tuple{Int,Vararg{Int,2}} == Tuple{Int,Int,Int,Vararg{Int,0}}
+    @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Int,Vararg{Int,1}})
+    #@test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Vararg{Int,N}})
+    @test Tuple{Int,Vararg{Int,N}} == Tuple{Int,Vararg{Int,N}}
+    #@test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Vararg{Int}})
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}},Tuple{Array{Int,0}}) == Tuple{Array{Int,0}}
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}},Tuple{Array{Int,2}}) == Bottom
+
+    @test typeintersect(Tuple{Int,Vararg{Int,N}}, Tuple{Int,Int,Int,Vararg{Float64}}) == Tuple{Int,Int,Int}
+    @test typeintersect(Tuple{Int,Vararg{Int,N}}, Tuple{Int,Vararg{Float64}}) == Tuple{Int}
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Matrix{Int},Int,Int,Vararg{Float64}}) == Tuple{Matrix{Int},Int,Int}
+    @test typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Matrix{Int},Int,Vararg{Float64}}) == Bottom
 end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
