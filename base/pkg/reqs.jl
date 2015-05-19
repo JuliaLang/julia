@@ -24,12 +24,12 @@ immutable Requirement <: Line
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,shift!(fields)[2:end])
         end
-        isempty(fields) && error("invalid requires entry: $content")
+        isempty(fields) && throw(PkgError("invalid requires entry: $content"))
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $content")
+            throw(PkgError("invalid requires entry for $package: $content"))
         versions = VersionNumber[fields...]
-        issorted(versions) || error("invalid requires entry for $package: $content")
+        issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
         new(content, package, VersionSet(versions), system)
     end
     function Requirement(package::AbstractString, versions::VersionSet, system::Vector{AbstractString}=AbstractString[])

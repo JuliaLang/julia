@@ -56,7 +56,7 @@ isinstalled(pkg::AbstractString) =
     pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
-    isinstalled(pkg) || error("$pkg is not an installed package.")
+    isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
 

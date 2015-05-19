@@ -42,18 +42,14 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             LibGit2.clone(url, cache, bare = true, remote_cb = LibGit2.mirror_cb)
         catch err
             isdir(cache) && rm(cache, recursive=true)
-            error("Cannot clone $pkg from $url\n", err)
+            throw(PkgError("Cannot clone $pkg from $url\n", err))
         end
     end
     try
         LibGit2.set_remote_url(repo, url)
         if !all(sha1->LibGit2.iscommit(sha1, repo), sha1s)
             info("Updating cache of $pkg...")
-            try
-                LibGit2.fetch(repo)
-            catch
-                error("couldn't update $cache using `git remote update`")
-            end
+            LibGit2.fetch(repo)
         end
         filter(sha1->!LibGit2.iscommit(sha1, repo), sha1s)
     finally

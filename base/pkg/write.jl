@@ -7,7 +7,7 @@ importall ..LibGit2
 
 function prefetch(pkg::AbstractString, sha1::AbstractString)
     isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) && return
-    error("$pkg: couldn't find commit $(sha1[1:10])")
+    throw(PkgError("$pkg: couldn't find commit $(sha1[1:10])"))
 end
 
 function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
@@ -20,9 +20,9 @@ function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
     end ? "fetch" : "prefetch"
     url = Read.issue_url(pkg)
     if isempty(url)
-        error("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug report with the package author.")
+        throw(PkgError("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug report with the package author."))
     else
-        error("$pkg: $f failed to get commit $(sha1[1:10]), please file an issue at $url")
+        throw(PkgError("$pkg: $f failed to get commit $(sha1[1:10]), please file an issue at $url"))
     end
 end
 

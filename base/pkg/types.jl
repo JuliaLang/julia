@@ -91,4 +91,8 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
 # Free could include the same information too, it just isn't
 # required by anything that processes these things.
 
+type PkgError <: Exception
+    msg::AbstractString
+end
+
 end # module

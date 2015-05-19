@@ -16,13 +16,13 @@ function user()
         LibGit2.get(cfg, "github.user", "")
     end
     if isempty(usr)
-        error("""
+        throw(PkgError("""
         no GitHub user name configured; please configure it with:
 
             git config --global github.user USERNAME
 
         where USERNAME is replaced with your GitHub user name.
-        """)
+        """))
     end
     return usr
 end
@@ -31,13 +31,13 @@ function json()
     isdefined(:JSON) || try eval(Main, :(import JSON))
     catch err
         warn(err)
-        error("using the GitHub API requires having the JSON package installed ")
+        throw(PkgError("using the GitHub API requires having the JSON package installed "))
     end
     Main.JSON
 end
 
 function curl(url::AbstractString, opts::Cmd=``)
-    success(`curl --version`) || error("using the GitHub API requires having `curl` installed")
+    success(`curl --version`) || throw(PkgError("using the GitHub API requires having `curl` installed"))
     out, proc = open(`curl -i -s -S $opts $url`,"r")
     head = readline(out)
     status = parse(Int,split(head,r"\s+";limit=3)[2])
@@ -50,7 +50,7 @@ function curl(url::AbstractString, opts::Cmd=``)
         end
         wait(proc); return status, header, readall(out)
     end
-    error("strangely formatted HTTP response")
+    throw(PkgError("strangely formatted HTTP response"))
 end
 curl(url::AbstractString, data::Void, opts::Cmd=``) = curl(url,opts)
 curl(url::AbstractString, data, opts::Cmd=``) =
@@ -83,7 +83,7 @@ function token(user::AbstractString=user())
             if tfa
                 info("Retrieving existing GitHub token. (You may have to re-enter your password twice more.)")
                 status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
-                status != 401 && error("$status: $(json().parse(content)["message"])")
+                status != 401 && throw(PkgError("$status: $(json().parse(content)["message"])"))
                 print(STDERR, "New authentication code: ")
                 code = readline(STDIN) |> chomp
                 status, header, content = curl("https://api.github.com/authorizations",`-H "X-GitHub-OTP: $code" -u $user`)
@@ -91,7 +91,7 @@ function token(user::AbstractString=user())
                 info("Retrieving existing GitHub token. (You may have to re-enter your password.)")
                 status, header, content = curl("https://api.github.com/authorizations", `-u $user`)
             end
-            (status >= 400) && error("$status: $(json().parse(content)["message"])")
+            (status >= 400) && throw(PkgError("$status: $(json().parse(content)["message"])"))
             for entry in json().parse(content)
                 if entry["note"] == AUTH_NOTE
                     tok = entry["token"]
@@ -99,10 +99,10 @@ function token(user::AbstractString=user())
                 end
             end
         else
-            error("GitHub returned validation error (422): $error_code: $(json().parse(content)["message"])")
+            throw(PkgError("GitHub returned validation error (422): $error_code: $(json().parse(content)["message"])"))
         end
     else
-        (status != 401 && status != 403) || error("$status: $(json().parse(content)["message"])")
+        (status != 401 && status != 403) || throw(PkgError("$status: $(json().parse(content)["message"])"))
         tok = json().parse(content)["token"]
     end
 
@@ -131,11 +131,11 @@ end
 
 function pushable(owner::AbstractString, repo::AbstractString, user::AbstractString=user())
     status, response = HEAD("repos/$owner/$repo")
-    status == 404 && error("repo $owner/$repo does not exist")
+    status == 404 && throw(PkgError("repo $owner/$repo does not exist"))
     status, response = GET("repos/$owner/$repo/collaborators/$user")
     status == 204 && return true
     status == 404 && return false
-    error("unexpected API status code: $status – $(response["message"])")
+    throw(PkgError("unexpected API status code: $status – $(response["message"])"))
 end
 
 function fork(owner::AbstractString, repo::AbstractString)
@@ -144,7 +144,7 @@ function fork(owner::AbstractString, repo::AbstractString)
         delete_token()
         status, response = POST("repos/$owner/$repo/forks")
     end
-    status == 202 || error("forking $owner/$repo failed: $(response["message"])")
+    status == 202 || throw(PkgError("forking $owner/$repo failed: $(response["message"])"))
     return response
 end
 

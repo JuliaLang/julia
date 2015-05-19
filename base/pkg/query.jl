@@ -8,7 +8,7 @@ using ..Types
 function requirements(reqs::Dict, fix::Dict, avail::Dict)
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
-            haskey(avail, p2) || haskey(fix, p2) || error("unknown package $p2 required by $p1")
+            haskey(avail, p2) || haskey(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
         end
         satisfies(p1, f1.version, reqs) ||
             warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
@@ -108,7 +108,7 @@ function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
             else
                 err_msg *= "       available versions are $(join(available_list, ", ", " and "))"
             end
-            error(err_msg)
+            throw(PkgError(err_msg))
         end
     end
 end

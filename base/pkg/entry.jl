@@ -33,8 +33,8 @@ end
 
 function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
-    editor !== nothing ||
-        error("set the EDITOR environment variable to an edit command")
+    editor != nothing ||
+        throw(PkgError("set the EDITOR environment variable to an edit command"))
     editor = Base.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
@@ -48,7 +48,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || error("unknown package $pkg")
+            ispath(pkg) || throw(PkgError("unknown package $pkg"))
             info("Nothing to be done")
         end
         branch = Dir.getmetabranch()
@@ -97,7 +97,7 @@ function available(pkg::AbstractString)
     if !isempty(avail) || Read.isinstalled(pkg)
         return sort!(collect(keys(avail)))
     end
-    error("$pkg is not a package (not registered or installed)")
+    throw(PkgError("$pkg is not a package (not registered or installed)"))
 end
 
 function installed()
@@ -120,7 +120,7 @@ function installed(pkg::AbstractString)
         end
         return res
     end
-    isempty(avail) && error("$pkg is not a package (not registered or installed)")
+    isempty(avail) && throw(PkgError("$pkg is not a package (not registered or installed)"))
     return nothing # registered but not installed
 end
 
@@ -182,7 +182,7 @@ end
 
 function clone(url::AbstractString, pkg::AbstractString)
     info("Cloning $pkg from $url")
-    ispath(pkg) && error("$pkg already exists")
+    ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
             LibGit2.set_remote_url(repo, url)
@@ -207,18 +207,18 @@ function clone(url_or_pkg::AbstractString)
     else
         url = url_or_pkg
         m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m !== nothing || error("can't determine package name from URL: $url")
+        m != nothing || throw(PkgError("can't determine package name from URL: $url"))
         pkg = m.captures[1]
     end
     clone(url,pkg)
 end
 
 function checkout(pkg::AbstractString, branch::AbstractString, merge::Bool, pull::Bool)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
-            LibGit2.isdirty(repo) && error("$pkg is dirty, bailing")
+            LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
             LibGit2.branch!(repo, branch, track=LibGit2.GitConst.REMOTE_ORIGIN)
             merge && LibGit2.merge!(repo, fast_forward=true) # merge changes
             if pull
@@ -232,12 +232,12 @@ function checkout(pkg::AbstractString, branch::AbstractString, merge::Bool, pull
 end
 
 function free(pkg::AbstractString)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be freed – not a registered package")
+    isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
     with(GitRepo, pkg) do repo
-        LibGit2.isdirty(repo) && error("$pkg cannot be freed – repo is dirty")
+        LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
         info("Freeing $pkg")
         vers = sort!(collect(keys(avail)), rev=true)
         while true
@@ -245,13 +245,13 @@ function free(pkg::AbstractString)
                 sha1 = avail[ver].sha1
                 LibGit2.iscommit(sha1, repo) || continue
                 return LibGit2.transact(repo) do r
-                    LibGit2.isdirty(repo) && error("$pkg is dirty, bailing")
+                    LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
                     LibGit2.checkout!(repo, sha1)
                     resolve()
                 end
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-            error("can't find any registered versions of $pkg to checkout")
+            throw(PkgError("can't find any registered versions of $pkg to checkout"))
         end
     end
 end
@@ -281,7 +281,7 @@ end
 # end
 
 function pin(pkg::AbstractString, head::AbstractString)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     rslv = !isempty(head) # no need to resolve, branch will be from HEAD
     with(GitRepo, pkg) do repo
         if isempty(head) # get HEAD oid
@@ -296,12 +296,12 @@ end
 pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be pinned – not an installed package".tmp)
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package".tmp))
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be pinned – not a registered package".tmp)
-    haskey(avail,ver) || error("$pkg – $ver is not a registered version")
-    pin(pkg,avail[ver].sha1)
+    isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package".tmp))
+    haskey(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
+    pin(pkg, avail[ver].sha1)
 end
 
 function update(branch::AbstractString)
@@ -309,8 +309,8 @@ function update(branch::AbstractString)
     with(GitRepo, "METADATA") do repo
         with(LibGit2.head(repo)) do h
             if LibGit2.branch(h) != branch
-                LibGit2.isdirty(repo) && error("METADATA is dirty and not on $branch, bailing")
-                LibGit2.isattached(repo) || error("METADATA is detached not on $branch, bailing")
+                LibGit2.isdirty(repo) && throw(PkgError("METADATA is dirty and not on $branch, bailing"))
+                LibGit2.isattached(repo) || throw(PkgError("METADATA is detached not on $branch, bailing"))
                 LibGit2.fetch(repo)
                 LibGit2.checkout_head(repo)
                 LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
@@ -358,7 +358,7 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         Git.readchomp(`rev-parse --verify $commit`, dir=dir)
     isempty(url) && (url = Git.readchomp(`config remote.origin.url`, dir=dir))
     m = match(Git.GITHUB_REGEX, url)
-    m === nothing && error("not a GitHub repo URL, can't make a pull request: $url")
+    m == nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
     owner, repo = m.captures[2:3]
     user = GitHub.user()
     info("Forking $owner/$repo to $user")
@@ -379,11 +379,11 @@ end
 
 function publish(branch::AbstractString)
     Git.branch(dir="METADATA") == branch ||
-        error("METADATA must be on $branch to publish changes")
+        throw(PkgError("METADATA must be on $branch to publish changes"))
     Git.run(`fetch -q`, dir="METADATA")
     ahead_remote, ahead_local = map(x->parse(Int,x),split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
-    ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
-    ahead_local == 0 && error("There are no METADATA changes to publish")
+    ahead_remote > 0 && throw(PkgError("METADATA is behind origin/$branch – run `Pkg.update()` before publishing"))
+    ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
 
     tags = Dict{ByteString,Vector{ASCIIString}}()
     Git.run(`update-index -q --really-refresh`, dir="METADATA")
@@ -396,14 +396,14 @@ function publish(branch::AbstractString)
         sha1 = readchomp(joinpath("METADATA",path))
         if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
             old = Git.readchomp(`cat-file blob origin/$branch:$path`, dir="METADATA")
-            old == sha1 || error("$pkg v$ver SHA1 changed in METADATA – refusing to publish")
+            old == sha1 || throw(PkgError("$pkg v$ver SHA1 changed in METADATA – refusing to publish"))
         end
         any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
             ver == convert(VersionNumber,tag) || return false
             haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
             push!(tags[pkg], tag)
             return true
-        end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
+        end || throw(PkgError("$pkg v$ver is incorrectly tagged – $sha1 expected"))
     end
     isempty(tags) && info("No new package versions to publish")
     info("Validating METADATA")
@@ -445,11 +445,11 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                error("$pkg can't be installed because it has no versions that support ", VERSION, " of julia. " *
-                   "You may need to update METADATA by running `Pkg.update()`")
+                throw(PkgError("$pkg can't be installed because it has no versions that support ", VERSION, " of julia. " *
+                   "You may need to update METADATA by running `Pkg.update()`"))
             else
-                error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
-                   join(conflicts[pkg], ", ", " and "))
+                throw(PkgError("$pkg's requirements can't be satisfied because of the following fixed packages: ",
+                   join(conflicts[pkg], ", ", " and ")))
             end
         end
     end
@@ -478,7 +478,7 @@ function resolve(
         for (pkg,ver,sha1) in missing
             msg *= "  $pkg v$ver [$sha1[1:10]]\n"
         end
-        error(msg)
+        throw(PkgError(msg))
     end
 
     # try applying changes, roll back everything if anything fails
@@ -527,7 +527,7 @@ function write_tag_metadata(repo::GitRepo, pkg::AbstractString, ver::VersionNumb
         if !force && ispath(sha1file)
             current = readchomp(sha1file)
             current == commit ||
-                error("$pkg v$ver is already registered as $current, bailing")
+                throw(PkgError("$pkg v$ver is already registered as $current, bailing"))
         end
         open(io->println(io,commit), sha1file, "w")
         LibGit2.add!(repo, sha1file)
@@ -543,8 +543,8 @@ function write_tag_metadata(repo::GitRepo, pkg::AbstractString, ver::VersionNumb
 end
 
 function register(pkg::AbstractString, url::AbstractString)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
-    isfile("METADATA",pkg,"url") && error("$pkg already registered")
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    isfile("METADATA",pkg,"url") && throw(PkgError("$pkg already registered"))
     LibGit2.transact(GitRepo("METADATA")) do repo
         # Get versions from package repo
         versions = with(GitRepo, pkg) do pkg_repo
@@ -593,9 +593,9 @@ function register(pkg::AbstractString)
             end
         end
     catch err
-        error("$pkg: $err")
+        throw(PkgError("$pkg: $err"))
     end
-    isempty(url) || error("$pkg: no URL configured")
+    isempty(url) || throw(PkgError("$pkg: no URL configured"))
     register(pkg, LibGit2.normalize_url(url))
 end
 
@@ -608,12 +608,12 @@ end
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
 function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=false, commitish::AbstractString="HEAD")
-    ispath(pkg,".git") || error("$pkg is not a git repo")
+    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     with(GitRepo,"METADATA") do repo
-        LibGit2.isdirty(repo, pkg) && error("METADATA/$pkg is dirty – commit or stash changes to tag")
+        LibGit2.isdirty(repo, pkg) && throw(PkgError("METADATA/$pkg is dirty – commit or stash changes to tag"))
     end
     with(GitRepo,pkg) do repo
-        LibGit2.isdirty(repo) && error("$pkg is dirty – commit or stash changes to tag")
+        LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty – commit or stash changes to tag"))
         commit = string(LibGit2.revparseid(repo, commitish))
         registered = isfile("METADATA",pkg,"url")
 
@@ -640,7 +640,7 @@ function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=
                       (ver == :patch) ? nextpatch(prv) :
                       (ver == :minor) ? nextminor(prv) :
                       (ver == :major) ? nextmajor(prv) :
-                                        error("invalid version selector: $ver")
+                                        throw(PkgError("invalid version selector: $ver"))
             end
             isrewritable(ver) && filter!(v->v!=ver,existing)
             check_new_version(existing,ver)
@@ -675,7 +675,7 @@ function check_metadata(pkgs::Set{ByteString} = Set{ByteString}())
     deps, conflicts = Query.dependencies(avail)
 
     for (dp,dv) in deps, (v,a) in dv, p in keys(a.requires)
-        haskey(deps, p) || error("package $dp v$v requires a non-registered package: $p")
+        haskey(deps, p) || throw(PkgError("package $dp v$v requires a non-registered package: $p"))
     end
 
     problematic = Resolve.sanity_check(deps, pkgs)
@@ -684,7 +684,7 @@ function check_metadata(pkgs::Set{ByteString} = Set{ByteString}())
         for (p, vn, rp) in problematic
             msg *= "    $p v$vn – no valid versions exist for package $rp\n"
         end
-        error(msg)
+        throw(PkgError(msg))
     end
     return
 end
@@ -703,7 +703,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         pkg == "julia" && continue
         pkg in seen && continue
         build!(Read.requires_list(pkg),errs,push!(seen,pkg))
-        Read.isinstalled(pkg) || error("$pkg is not an installed package")
+        Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
         info("Building $pkg")
@@ -802,7 +802,7 @@ function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
         messages = AbstractString[]
         isempty(errs) || push!(messages, "$(join(errs,", "," and ")) had test errors")
         isempty(notests) || push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
-        error(join(messages, "and"))
+        throw(PkgError(join(messages, "and")))
     end
 end
 
