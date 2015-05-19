@@ -64,6 +64,9 @@ USE_LIBCPP = 0
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP = 0
 
+# GC debugging options
+WITH_GC_VERIFY = 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH=
 
@@ -416,6 +419,11 @@ ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
 endif
+endif
+
+ifeq ($(WITH_GC_VERIFY), 1)
+JCXXFLAGS += -DGC_VERIFY
+JCFLAGS += -DGC_VERIFY
 endif
 
 # ===========================================================================
