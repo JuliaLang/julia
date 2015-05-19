@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+ccall(:jl_, Void, (Any,), "Precompiling")
+ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_current_module, Ptr{Void})))
+ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_base_module, Ptr{Void})))
+
 # prime method cache with some things we know we'll need right after startup
 precompile(!=, (Bool, Bool))
 precompile(!=, (SubString{ASCIIString}, ASCIIString))
