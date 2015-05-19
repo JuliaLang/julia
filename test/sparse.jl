@@ -551,6 +551,12 @@ let M = 2^8, N=2^3
     end
 end
 
+# issue #9917
+@test full(sparse([])) == zeros(0, 1)
+@test_throws BoundsError sparse([])[1]
+x = speye(100)
+@test_throws BoundsError x[-10:10]
+
 # issue #10407
 @test maximum(spzeros(5, 5)) == 0.0
 @test minimum(spzeros(5, 5)) == 0.0
