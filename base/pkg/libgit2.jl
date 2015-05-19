@@ -2,6 +2,8 @@
 
 module LibGit2
 
+import ...Pkg.PkgError
+
 export with, with_warn
 export GitRepo, GitConfig, GitIndex
 
@@ -342,6 +344,15 @@ function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
         return bytestring(convert(Ptr{UInt8}, content(obj)))
     else
         return nothing
+    end
+end
+
+""" git push <url> [<refspecs>]"""
+function push(repo::GitRepo, url::AbstractString, refspecs::AbstractString="")
+    with(GitRemoteAnon(repo, url, refspecs)) do rmt
+        with(default_signature(repo)) do sig
+            push(rmt, sig)
+        end
     end
 end
 

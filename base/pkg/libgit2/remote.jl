@@ -33,3 +33,16 @@ function url(rmt::GitRemote)
     url_ptr == C_NULL && return ""
     return  bytestring(url_ptr)
 end
+
+function push(rmt::GitRemote, sig::GitSignature, refspecs::AbstractString="";
+              msg::AbstractString="")
+    push_opts = PushOptionsStruct()
+    !isempty(refspecs) && (sa = StrArrayStruct(pathspecs...))
+    try
+        @check ccall((:git_remote_push, :libgit2), Cint,
+            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptionsStruct}, Ptr{Void}, Ptr{UInt8}),
+             rmt.ptr, !isempty(refspecs) ? Ref(sa) : C_NULL, Ref(push_opts), sig.ptr, isempty(msg) ? C_NULL : msg)
+    finally
+        !isempty(refspecs) && finalize(sa)
+    end
+end
