@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitIndex(repo::GitRepo)
     idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,

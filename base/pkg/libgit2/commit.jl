@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function message(c::GitCommit, raw::Bool=false)
     local msg_ptr::Ptr{UInt8}
     msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), Ptr{UInt8}, (Ptr{Void},), c.ptr) :

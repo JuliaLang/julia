@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,

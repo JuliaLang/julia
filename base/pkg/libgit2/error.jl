@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Error
 
 @enum(Code, GIT_OK          = Cint(0),   # no error

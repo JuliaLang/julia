@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
