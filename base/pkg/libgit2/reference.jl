@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitReference(repo::GitRepo, ref_name::AbstractString)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_lookup, :libgit2), Cint,

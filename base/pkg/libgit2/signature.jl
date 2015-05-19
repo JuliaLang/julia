@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function Signature(ptr::Ptr{SignatureStruct})
     sig   = unsafe_load(ptr)::SignatureStruct
     name  = bytestring(sig.name)

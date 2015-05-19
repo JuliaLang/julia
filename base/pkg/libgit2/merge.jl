@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitAnnotated(repo::GitRepo, commit_id::Oid)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,

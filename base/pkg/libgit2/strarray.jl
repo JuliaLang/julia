@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function StrArrayStruct{T<:AbstractString}(strs::T...)
     count = length(strs)
     strings = convert(Ptr{Ptr{Uint8}}, Libc.malloc(sizeof(Ptr{Uint8}) * count))

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitRevWalker(r::GitRepo)
     w_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revwalk_new, :libgit2), Cint,

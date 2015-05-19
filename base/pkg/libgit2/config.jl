@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function GitConfig(path::AbstractString)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_config_open_ondisk, :libgit2), Cint,

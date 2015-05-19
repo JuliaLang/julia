@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function tag_list(repo::GitRepo)
     with(StrArrayStruct()) do sa
         sa_ref = Ref(sa)
