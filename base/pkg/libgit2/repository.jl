@@ -146,15 +146,12 @@ function fetch(repo::GitRepo, rmt::GitRemote; msg::AbstractString="")
 end
 
 function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractString...)
-    sa = StrArrayStruct(pathspecs...)
-    try
+    with(StrArrayStruct(pathspecs...)) do sa
         @check ccall((:git_reset_default, :libgit2), Cint,
                 (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                 repo.ptr,
                 isnull(obj) ? C_NULL: Base.get(obj).ptr,
                 Ref(sa))
-    finally
-        finalize(sa)
     end
 end
 

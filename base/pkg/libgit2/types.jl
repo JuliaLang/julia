@@ -227,6 +227,12 @@ MergeOptionsStruct(; flags::Cint = Cint(0),
                       file_favor
                     )
 
+immutable PushOptionsStruct
+    version::Cuint
+    parallelism::Cint
+end
+PushOptionsStruct() = PushOptionsStruct(one(Cuint),one(Cuint))
+
 immutable IndexTime
     seconds::Int64
     nanoseconds::Cuint

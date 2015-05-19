@@ -354,21 +354,31 @@ function update(branch::AbstractString)
 end
 
 function pull_request(dir::AbstractString, commit::AbstractString="", url::AbstractString="")
-    commit = isempty(commit) ? Git.head(dir=dir) :
-        Git.readchomp(`rev-parse --verify $commit`, dir=dir)
-    isempty(url) && (url = Git.readchomp(`config remote.origin.url`, dir=dir))
-    m = match(Git.GITHUB_REGEX, url)
-    m == nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
-    owner, repo = m.captures[2:3]
-    user = GitHub.user()
-    info("Forking $owner/$repo to $user")
-    response = GitHub.fork(owner,repo)
-    fork = response["ssh_url"]
-    branch = "pull-request/$(commit[1:8])"
-    info("Pushing changes as branch $branch")
-    Git.run(`push -q $fork $commit:refs/heads/$branch`, dir=dir)
-    pr_url = "$(response["html_url"])/compare/$branch"
-    @osx? run(`open $pr_url`) : info("To create a pull-request, open:\n\n  $pr_url\n")
+    with(GitRepo, dir) do repo
+        if isempty(commit)
+            commit = string(LibGit2.head_oid(repo))
+        else
+            !LibGit2.iscommit(commit, repo) && throw(PkgError("Cannot find pull commit: $commit"))
+        end
+        if isempty(url)
+            with(GitConfig, repo) do cfg
+                url = LibGit2.get(cfg, "remote.origin.url", "")
+            end
+        end
+
+        m = match(LibGit2.GITHUB_REGEX, url)
+        m == nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
+        owner, repo = m.captures[2:3]
+        user = GitHub.user()
+        info("Forking $owner/$repo to $user")
+        response = GitHub.fork(owner,repo)
+        fork = response["ssh_url"]
+        branch = "pull-request/$(commit[1:8])"
+        info("Pushing changes as branch $branch")
+        LibGit2.push(repo, fork, "$commit:refs/heads/$branch")
+        pr_url = "$(response["html_url"])/compare/$branch"
+        @osx? run(`open $pr_url`) : info("To create a pull-request, open:\n\n  $pr_url\n")
+    end
 end
 
 function submit(pkg::AbstractString, commit::AbstractString="")
