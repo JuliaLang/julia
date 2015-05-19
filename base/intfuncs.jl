@@ -79,7 +79,11 @@ function power_by_squaring(x, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
-        throw(DomainError())
+        let o = one(x)
+            x == o && return o
+            x == -1 && return iseven(p) ? o : copy(x)
+            throw(DomainError())
+        end
     end
     t = trailing_zeros(p) + 1
     p >>= t

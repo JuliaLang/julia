@@ -2454,3 +2454,8 @@ for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
     @test_throws InexactError T(big(typemax(T))+1)
     @test_throws InexactError T(big(typemin(T))-1)
 end
+
+# Integer exponentiation with negative powers (#8900)
+@test_throws DomainError 2^(-3)
+@test 1^(-3) == 1 == (-1)^(-4)
+@test (-1)^(-3) == -1
