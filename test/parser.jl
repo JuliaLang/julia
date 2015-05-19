@@ -83,3 +83,6 @@ macro test999_str(args...); args; end
 
 # issue #10994
 @test parse("1 + #= \0 =# 2") == :(1 + 2)
+
+# issue #10985
+@test expand(:(f(::Int...) = 1)).head == :method
