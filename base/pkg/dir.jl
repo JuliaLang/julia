@@ -2,7 +2,7 @@
 
 module Dir
 
-import ..Pkg: DEFAULT_META, META_BRANCH
+import ..Pkg: DEFAULT_META, META_BRANCH, PkgError
 import ..LibGit2, ..LibGit2.with
 
 const DIR_NAME = ".julia"
