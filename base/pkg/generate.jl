@@ -50,7 +50,7 @@ function package(
             repo = GitRepo(pkg)
             if LibGit2.isdirty(repo)
                 finalize(repo)
-                error("$pkg is dirty – commit or stash your changes")
+                throw(PkgError("$pkg is dirty – commit or stash your changes"))
             end
             repo
         end
@@ -110,7 +110,7 @@ function init(pkg::AbstractString, url::AbstractString=""; config::Dict=Dict())
             end
             LibGit2.commit(repo, "initial empty commit")
         catch err
-            error("Unable to initialize $pkg package: $err")
+            throw(PkgError("Unable to initialize $pkg package: $err"))
         end
     else
         repo = GitRepo(pkg)
@@ -146,7 +146,7 @@ function license(pkg::AbstractString,
     file = genfile(pkg,"LICENSE.md",force) do io
         if !haskey(LICENSES,license)
             licenses = join(sort!(collect(keys(LICENSES)), by=lowercase), ", ")
-            error("$license is not a known license choice, choose one of: $licenses.")
+            throw(PkgError("$license is not a known license choice, choose one of: $licenses."))
         end
         print(io, LICENSES[license](pkg, string(years), authors))
     end

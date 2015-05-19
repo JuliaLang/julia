@@ -403,7 +403,7 @@ end
 
 function __init__()
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
-    err > 0 || error("error initializing LibGit2 module")
+    err > 0 || throw(PkgError("error initializing LibGit2 module"))
     atexit() do
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end

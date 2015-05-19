@@ -353,7 +353,7 @@ function getobjecttype{T<:GitObject}(::Type{T})
     elseif T == GitAnyObject
         GitConst.OBJ_ANY
     else
-        error("Type $T is not supported")
+        throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
     end
 end
 
@@ -367,6 +367,6 @@ function getobjecttype(obj_type::Cint)
     elseif obj_type == GitConst.OBJ_ANY
         GitAnyObject
     else
-        error("Type $T is not supported")
+        throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))
     end
 end

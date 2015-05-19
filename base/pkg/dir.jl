@@ -26,7 +26,7 @@ function cd(f::Function, args...; kws...)
     metadata_dir = joinpath(dir, "METADATA")
     if !isdir(metadata_dir)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
-            error("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it.")
+            throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
     Base.cd(()->f(args...; kws...), dir)
 end

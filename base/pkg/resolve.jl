@@ -34,7 +34,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
                     msg *= "\n  (you may try increasing the value of the" *
                            "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
                 end
-                error(msg)
+                throw(PkgError(msg))
             end
             rethrow(err)
         end
