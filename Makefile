@@ -243,7 +243,7 @@ install: $(build_bindir)/stringreplace doc/_build/html
 
 	$(INSTALL_M) $(build_bindir)/julia* $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(build_bindir)/*.dll $(build_bindir)/*.bat $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(build_bindir)/*.dll $(DESTDIR)$(bindir)/
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 
