@@ -749,6 +749,10 @@ end
 
 # issue #9917
 @test sparse([]') == reshape(sparse([]), 1, 0)
+@test full(sparse([])) == zeros(0, 1)
+@test_throws BoundsError sparse([])[1]
+x = speye(100)
+@test_throws BoundsError x[-10:10]
 
 for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
     let R=rand(T[1:100;],2,2), I=rand(T[1:100;],2,2)
