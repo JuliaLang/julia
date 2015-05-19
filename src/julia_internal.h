@@ -119,6 +119,7 @@ extern JL_THREAD void *jl_stackbase;
 void jl_dump_bitcode(char *fname);
 void jl_dump_objfile(char *fname, int jit_model);
 int32_t jl_get_llvm_gv(jl_value_t *p);
+void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 #ifdef _OS_LINUX_
 DLLEXPORT void jl_read_sonames(void);
