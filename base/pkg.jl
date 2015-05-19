@@ -10,6 +10,10 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
+type PkgError <: Exception
+    msg::AbstractString
+end
+
 for file in split("git libgit2 dir github types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end

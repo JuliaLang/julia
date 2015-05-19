@@ -3,7 +3,7 @@
 module Reqs
 
 import Base: ==, hash
-
+import Pkg.PkgError
 using ..Types
 
 # representing lines of REQUIRE files

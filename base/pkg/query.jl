@@ -2,7 +2,7 @@
 
 module Query
 
-import ...Pkg
+import ...Pkg.PkgError
 using ..Types
 
 function requirements(reqs::Dict, fix::Dict, avail::Dict)

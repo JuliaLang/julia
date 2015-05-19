@@ -2,7 +2,7 @@
 
 module GitHub
 
-import Main, ..LibGit2, ..Dir
+import Main, ..LibGit2, ..Dir, ...Pkg.PkgError
 
 const AUTH_NOTE = "Julia Package Manager"
 const AUTH_DATA = Dict{Any,Any}(
@@ -64,7 +64,10 @@ end
 
 function token(user::AbstractString=user())
     tokfile = Dir.path(".github","token")
-    isfile(tokfile) && return strip(readchomp(tokfile))
+    if isfile(tokfile)
+        tok = strip(readchomp(tokfile))
+        !isempty(tok) && return tok
+    end
     status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
     tfa = false
 
