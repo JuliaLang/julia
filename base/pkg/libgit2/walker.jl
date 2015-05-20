@@ -35,21 +35,32 @@ function Base.push!(w::GitRevWalker, cid::Oid)
     return w
 end
 
+function Base.push!(w::GitRevWalker, range::AbstractString)
+    @check ccall((:git_revwalk_push_range, :libgit2), Cint, (Ptr{Void}, Ptr{UInt8}), w.ptr, range)
+    return w
+end
+
 function Base.sort!(w::GitRevWalker; by::Cint = GitConst.SORT_NONE, rev::Bool=false)
     rev && (by |= GitConst.SORT_REVERSE)
     ccall((:git_revwalk_sorting, :libgit2), Void, (Ptr{Void}, Cint), w.ptr, by)
     return w
 end
 
-function Base.map(f::Function, repo::GitRepo; oid::Oid=Oid(), by::Cint = GitConst.SORT_NONE, rev::Bool=false)
+function Base.map(f::Function, repo::GitRepo;
+                  oid::Oid=Oid(),
+                  range::AbstractString="",
+                  by::Cint = GitConst.SORT_NONE,
+                  rev::Bool=false)
     walker = GitRevWalker(repo)
     res = nothing
     try
         sort!(walker, by=by, rev=rev)
-        if iszero(oid)
-            push_head!(walker)
-        else
+        if !iszero(oid)
             push!(walker, oid)
+        elseif !isempty(range)
+            push!(walker, range)
+        else
+            push_head!(walker)
         end
         s = start(walker)
 
@@ -65,4 +76,28 @@ function Base.map(f::Function, repo::GitRepo; oid::Oid=Oid(), by::Cint = GitCons
         finalize(walker)
     end
     return res
+end
+
+function Base.count(f::Function, repo::GitRepo;
+                  oid::Oid=Oid(),
+                  by::Cint = GitConst.SORT_NONE,
+                  rev::Bool=false)
+    c = 0
+    with(GitRevWalker(repo)) do walker
+        sort!(walker, by=by, rev=rev)
+        if !iszero(oid)
+            push!(walker, oid)
+        else
+            push_head!(walker)
+        end
+        s = start(walker)
+
+        val = true
+        while !done(walker, s) && val
+            val = f(s[1], repo)
+            _, s = next(walker, s)
+            c += 1
+        end
+    end
+    return c
 end

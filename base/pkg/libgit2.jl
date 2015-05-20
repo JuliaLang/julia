@@ -356,6 +356,19 @@ function push(repo::GitRepo, url::AbstractString, refspecs::AbstractString="")
     end
 end
 
+""" git rev-list --count <commit1> <commit2> """
+function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
+    fst_id = revparseid(repo, fst)
+    snd_id = revparseid(repo, snd)
+    base_id = merge_base(string(fst_id), string(snd_id), repo)
+    fc = count((i,r)->i!=base_id, repo, oid=fst_id,
+                by=Pkg.LibGit2.GitConst.SORT_TOPOLOGICAL)
+    sc = count((i,r)->i!=base_id, repo, oid=snd_id,
+                by=Pkg.LibGit2.GitConst.SORT_TOPOLOGICAL)
+    return (fc-1, sc-1)
+end
+
+
 """ Returns all commit authors """
 function authors(repo::GitRepo)
     athrs = map(
