@@ -389,13 +389,15 @@ function submit(pkg::AbstractString, commit::AbstractString="")
 end
 
 function publish(branch::AbstractString)
-    Git.branch(dir="METADATA") == branch ||
-        throw(PkgError("METADATA must be on $branch to publish changes"))
-    Git.run(`fetch -q`, dir="METADATA")
-    ahead_remote, ahead_local = map(x->parse(Int,x),split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
-    ahead_remote > 0 && throw(PkgError("METADATA is behind origin/$branch – run `Pkg.update()` before publishing"))
-    ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
+    with(GitRepo, "METADATA") do repo
+        LibGit2.branch(repo) == branch ||
+            throw(PkgError("METADATA must be on $branch to publish changes"))
+        LibGit2.fetch(repo)
 
+        ahead_remote, ahead_local = LibGit2.revcount(repo, "origin/$branch", branch)
+        ahead_remote > 0 && throw(PkgError("METADATA is behind origin/$branch – run `Pkg.update()` before publishing"))
+        ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
+    end
     tags = Dict{ByteString,Vector{ASCIIString}}()
     Git.run(`update-index -q --really-refresh`, dir="METADATA")
     cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
