@@ -101,6 +101,13 @@ importall .Base64
 include("io.jl")
 include("iostream.jl")
 
+const _is_sys0 = (JLOptions().image_file == C_NULL &&
+                  (JLOptions().build_path != C_NULL &&
+                   endswith(bytestring(JLOptions().build_path), "sys0")))
+
+ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_current_module, Ptr{Void})))
+ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_base_module, Ptr{Void})))
+
 # system & environment
 include("libc.jl")
 using .Libc: getpid, gethostname, time, msync
@@ -313,7 +320,12 @@ function __init__()
     init_parallel()
 end
 
-include("precompile.jl")
+if !_is_sys0
+    ccall(:jl_, Void, (Any,), "Loading precompile.jl")
+    ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_current_module, Ptr{Void})))
+    ccall(:jl_, Void, (Any,), unsafe_load(cglobal(:jl_base_module, Ptr{Void})))
+    include("precompile.jl")
+end
 
 include = include_from_node1
 
