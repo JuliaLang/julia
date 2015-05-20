@@ -399,8 +399,6 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     return jl_method_list_insert(pml, type, method, jl_emptysvec, 0, 0, cache_array ? cache_array : (jl_value_t*)mt)->func;
 }
 
-extern jl_function_t *jl_typeinf_func;
-
 /*
   run type inference on lambda "li" in-place, for given argument types.
   "def" is the original method definition of which this is an instance;
