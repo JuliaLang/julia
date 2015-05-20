@@ -2,8 +2,8 @@
 
 module Reqs
 
-import Base: ==, hash
-import Pkg.PkgError
+import Base: ==
+import ...Pkg.PkgError
 using ..Types
 
 # representing lines of REQUIRE files

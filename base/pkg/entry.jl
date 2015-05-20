@@ -5,6 +5,7 @@ module Entry
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..LibGit2, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
 importall ..LibGit2
+import ...Pkg.PkgError
 using ..Types
 
 macro recover(ex)

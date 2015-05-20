@@ -2,7 +2,7 @@
 
 module Cache
 
-import ..LibGit2, ..Dir, Pkg.PkgError
+import ..LibGit2, ..Dir, ...Pkg.PkgError
 using ..Types
 
 path(pkg::AbstractString) = abspath(".cache", pkg)

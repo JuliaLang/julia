@@ -2,7 +2,7 @@
 
 module Generate
 
-import ..LibGit2, ..Read
+import ..LibGit2, ..Read, ...Pkg.PkgError
 importall ..LibGit2
 
 copyright_year() =  string(Dates.year(Dates.today()))
