@@ -390,27 +390,6 @@ convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(Abst
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
-big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
-big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
-big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
-
-float{T<:FloatingPoint}(x::AbstractArray{T}) = x
-complex{T<:Complex}(x::AbstractArray{T}) = x
-
-float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
-complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
-    convert(AbstractArray{typeof(complex(zero(T)))}, x)
-
-function float(A::AbstractArray)
-    cnv(x) = convert(FloatingPoint,x)
-    map_promote(cnv, A)
-end
-
-function complex(A::AbstractArray)
-    cnv(x) = convert(Complex,x)
-    map_promote(cnv, A)
-end
-
 full(x::AbstractArray) = x
 
 map(::Type{Integer},  a::Array) = map!(Integer, similar(a,typeof(Integer(one(eltype(a))))), a)
@@ -423,13 +402,13 @@ map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
 map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
 map{T<:FloatingPoint}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
 
-for fn in (:float,:big)
-    @eval begin
-        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
-        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
-        $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
-    end
-end
+## unsafe/pointer conversions ##
+
+# note: the following type definitions don't mean any AbstractArray is convertible to
+# a data Ref. they just map the array element type to the pointer type for
+# convenience in cases that work.
+pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
+pointer{T}(x::AbstractArray{T}, i::Integer) = unsafe_convert(Ptr{T},x) + (i-1)*elsize(x)
 
 ## Unary operators ##
 
@@ -1424,3 +1403,38 @@ push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 unshift!(A, a, b) = unshift!(unshift!(A, b), a)
 unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+
+## hashing collections ##
+
+const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
+const hashrle_seed = UInt == UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
+function hash(a::AbstractArray, h::UInt)
+    h += hashaa_seed
+    h += hash(size(a))
+
+    state = start(a)
+    done(a, state) && return h
+    x2, state = next(a, state)
+    done(a, state) && return hash(x2, h)
+
+    x1 = x2
+    while !done(a, state)
+        x1 = x2
+        x2, state = next(a, state)
+        if isequal(x2, x1)
+            # For repeated elements, use run length encoding
+            # This allows efficient hashing of sparse arrays
+            runlength = 2
+            while !done(a, state)
+                x2, state = next(a, state)
+                isequal(x1, x2) || break
+                runlength += 1
+            end
+            h += hashrle_seed
+            h = hash(runlength, h)
+        end
+        h = hash(x1, h)
+    end
+    !isequal(x2, x1) && (h = hash(x2, h))
+    return h
+end

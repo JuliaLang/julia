@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 extern size_t jl_page_size;
+extern jl_function_t *jl_typeinf_func;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
