@@ -75,6 +75,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
+        fname = realpath(fname)
         try
             @test readchomp(`$exename --machinefile $fname -e "println(bytestring(Base.JLOptions().machinefile))"`) == fname
         finally
