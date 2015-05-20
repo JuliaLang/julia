@@ -582,6 +582,11 @@ jl_value_t *jl_load_file_string(const char *text, size_t len,
     return jl_parse_eval_all(filename, namelen);
 }
 
+DLLEXPORT jl_value_t* jl_toggle_fieldref() {
+    value_t e = fl_applyn(0, symbol_value(symbol("jl-toggle-fieldref")));
+    return scm_to_julia(e,0);
+}
+
 // returns either an expression or a thunk
 jl_value_t *jl_expand(jl_value_t *expr)
 {

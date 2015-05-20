@@ -1253,6 +1253,11 @@ DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
     jl_typeinf_func = (jl_function_t*)f;
 }
 
+DLLEXPORT void jl_disable_inference(void)
+{
+    jl_typeinf_func = NULL;
+}
+
 static jl_value_t *core(char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
@@ -1300,6 +1305,7 @@ void jl_get_builtin_hooks(void)
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
+    jl_fieldref_type = (jl_datatype_t*)core("FieldRef");
     jl_globalref_type = (jl_datatype_t*)core("GlobalRef");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 

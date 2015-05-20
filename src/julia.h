@@ -440,6 +440,7 @@ extern DLLEXPORT jl_value_t *jl_array_any_type;
 extern DLLEXPORT jl_value_t *jl_array_symbol_type;
 extern DLLEXPORT jl_datatype_t *jl_expr_type;
 extern DLLEXPORT jl_datatype_t *jl_symbolnode_type;
+extern DLLEXPORT jl_datatype_t *jl_fieldref_type;
 extern DLLEXPORT jl_datatype_t *jl_globalref_type;
 extern DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
 extern DLLEXPORT jl_datatype_t *jl_labelnode_type;
@@ -466,6 +467,7 @@ extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
 extern DLLEXPORT jl_sym_t *jl_incomplete_sym;
+extern jl_sym_t *fieldref_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
@@ -1212,6 +1214,8 @@ DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 #if defined(__linux__) || defined(__FreeBSD__)
 DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 #endif
+
+DLLEXPORT jl_value_t* jl_toggle_fieldref();
 
 // compiler
 void jl_compile(jl_function_t *f);

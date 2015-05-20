@@ -217,6 +217,10 @@
                            e
                            (expand-toplevel-expr e))))))))))
 
+(define *fieldref* #f)
+(define (jl-toggle-fieldref)
+    (set! *fieldref* (eq? *fieldref* #f)))
+
 (define (jl-parser-current-lineno)
   (input-port-line (ts:port current-token-stream)))
 
