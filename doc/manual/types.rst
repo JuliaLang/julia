@@ -403,11 +403,11 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
     ERROR: InexactError()
      in call at no file
 
-You may find a list of field names using the ``fieldnames`` function.
+You may find a list of field names using the ``names`` function.
 
 .. doctest::
 
-    julia> fieldnames(foo)
+    julia> names(foo)
     3-element Array{Symbol,1}:
      :bar
      :baz
