@@ -1007,10 +1007,19 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
+#ifdef LLVM37
       return builder.CreateCall
+#else
+      return builder.CreateCall3
+#endif
         (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
                                    ArrayRef<Type*>(x->getType())),
-         {FP(x), FP(y), FP(z)});
+         #ifdef LLVM37
+         {FP(x), FP(y), FP(z)}
+         #else
+         FP(x), FP(y), FP(z)
+         #endif
+        );
     }
 #else
       return math_builder(ctx, true)().
