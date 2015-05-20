@@ -10,16 +10,16 @@ include("parse/config.jl")
 include("parse/util.jl")
 include("parse/parse.jl")
 
-include("Common/Common.jl")
-include("GitHub/GitHub.jl")
-include("IPython/IPython.jl")
-include("Julia/Julia.jl")
-
 include("render/plain.jl")
 include("render/html.jl")
 include("render/latex.jl")
 
 include("render/terminal/render.jl")
+
+include("Common/Common.jl")
+include("GitHub/GitHub.jl")
+include("IPython/IPython.jl")
+include("Julia/Julia.jl")
 
 export readme, license, @md_str, @doc_str
 
