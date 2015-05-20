@@ -129,6 +129,18 @@ static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
+static void write_int64(ios_t *s, int64_t i)
+{
+    write_uint8(s, i       & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
+    write_uint8(s, (i>>16) & 0xff);
+    write_uint8(s, (i>>24) & 0xff);
+    write_uint8(s, (i>>32) & 0xff);
+    write_uint8(s, (i>>40) & 0xff);
+    write_uint8(s, (i>>48) & 0xff);
+    write_uint8(s, (i>>56) & 0xff);
+}
+
 static void write_int32(ios_t *s, int32_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -1452,8 +1464,14 @@ DLLEXPORT void jl_save_system_image(const char *fname)
 
     // record reinitialization functions
     for (i = 0; i < reinit_list.len; i += 2) {
-        write_int32(&f, (int)reinit_list.items[i]);
-        write_int32(&f, (int)reinit_list.items[i+1]);
+        if(sizeof(size_t) == 8) {
+            write_int64(&f, (size_t)reinit_list.items[i]);
+            write_int64(&f, (size_t)reinit_list.items[i+1]);
+        }
+        else {
+            write_int32(&f, (size_t)reinit_list.items[i]);
+            write_int32(&f, (size_t)reinit_list.items[i+1]);
+        }
     }
     write_int32(&f, -1);
 
