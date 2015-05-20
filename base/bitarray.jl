@@ -347,7 +347,7 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
     @inbounds r = (Bc[i1] & u) != 0
     return r
 end
-@inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
+@inline unsafe_getindex(v::BitArray, ind::Int) = unsafe_bitgetindex(v.chunks, ind)
 
 @inline function getindex(B::BitArray, i::Int)
     1 <= i <= length(B) || throw(BoundsError(B, i))
@@ -430,7 +430,7 @@ end
         end
     end
 end
-@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
+@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (unsafe_bitsetindex!(v.chunks, x, ind); v)
 
 setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x), 1)
 
@@ -498,7 +498,7 @@ function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Ic = I.chunks
     @assert length(Bc) == length(Ic)
     lc = length(Bc)
-    last_chunk_len = Base._mod64(length(B)-1)+1
+    last_chunk_len = _mod64(length(B)-1)+1
 
     c = 1
     for i = 1:lc
