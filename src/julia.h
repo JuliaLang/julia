@@ -182,6 +182,19 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
     return (ndims < 3 ? 0 : ndims-2);
 }
 
+typedef struct {
+    union {
+        struct {
+            char data[2*sizeof(void*)-1];
+            uint8_t length;
+        } here;
+        struct {
+            char *data;
+            intptr_t neglen;
+        } there;
+    };
+} jl_bytevec_struct_t;
+
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_datatype_t jl_tupletype_t;
@@ -380,6 +393,7 @@ extern DLLEXPORT jl_datatype_t *jl_anytuple_type;
 extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
 extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
+extern DLLEXPORT jl_datatype_t *jl_bytevec_type;
 extern DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
 
@@ -622,8 +636,7 @@ static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
 
-#define allocb(nb)    malloc(nb)
-DLLEXPORT jl_value_t *allocobj(size_t sz);
+#define allocb(nb) malloc(nb)
 STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
@@ -725,8 +738,6 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_tparam(t,i) jl_svecref(((jl_datatype_t*)(t))->parameters, i)
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
@@ -1013,6 +1024,9 @@ DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// byte vectors
+DLLEXPORT jl_bytevec_struct_t jl_bytevec(const uint8_t *data, size_t n);
 
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);

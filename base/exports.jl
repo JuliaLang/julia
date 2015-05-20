@@ -36,6 +36,7 @@ export
     BitArray,
     BitMatrix,
     BitVector,
+    ByteVec,
     BufferStream,
     CartesianIndex,
     CartesianRange,

@@ -352,12 +352,24 @@ jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     // TODO: check type of array?
-    jl_datatype_t *string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
+    uint8_t *data = (uint8_t*)a->data;
+    size_t n = jl_array_len(a);
+    jl_datatype_t *string_type = u8_isvalid((char*)data,n) == 1 ?
         jl_ascii_string_type : jl_utf8_string_type;
-    jl_value_t *s = (jl_value_t*)alloc_1w();
+    jl_value_t *s = (jl_value_t*)alloc_2w();
+    *(jl_bytevec_struct_t*)s = jl_bytevec(data,n);
     jl_set_typeof(s, string_type);
-    jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
+}
+
+static jl_bytevec_struct_t jl_shared_bytevec[1024];
+
+const char *jl_bytestring_ptr(jl_value_t *s) {
+    jl_bytevec_struct_t *b = (jl_bytevec_struct_t*)s;
+    if (b->there.neglen < 0)
+        return b->there.data;
+    jl_shared_bytevec[0] = *b;
+    return jl_shared_bytevec[0].here.data;
 }
 
 jl_value_t *jl_pchar_to_string(const char *str, size_t len)

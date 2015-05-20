@@ -1379,7 +1379,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, "nothing");
     }
     else if (jl_is_byte_string(v)) {
-        n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
+        n += jl_printf(out, "\"%s\"", jl_bytestring_ptr(v));
     }
     else if (jl_is_uniontype(v)) {
         n += jl_printf(out, "Union");

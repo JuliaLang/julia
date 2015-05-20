@@ -596,7 +596,7 @@ static void emit_write_barrier(jl_codectx_t*,Value*,Value*);
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
     if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
-        char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+        const char *str = jl_bytestring_ptr(jl_fieldref(jl_exception_in_transit,0));
         char buf[1024];
         va_list args;
         va_start(args, fmt);
@@ -5423,6 +5423,7 @@ static void init_julia_llvm_env(Module *m)
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     FPM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     FPM->add(createLICMPass());                 // Hoist loop invariants
+    FPM->add(createEarlyCSEPass());             // Common subexpression elimination
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
 #ifndef INSTCOMBINE_BUG

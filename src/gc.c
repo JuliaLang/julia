@@ -1649,6 +1649,12 @@ static int push_root(jl_value_t *v, int d, int bits)
             }
         }
     }
+    else if (vt == (jl_value_t*)jl_bytevec_type) {
+        MARK(v, bits = gc_setmark(v, sizeof(jl_bytevec_struct_t), GC_MARKED_NOESC));
+        jl_bytevec_struct_t b = *(jl_bytevec_struct_t*)jl_data_ptr(v);
+        if (b.there.neglen < 0)
+            gc_setmark_buf(b.there.data, bits);
+    }
     else if (((jl_datatype_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         jl_taggedvalue_t *o = jl_astaggedvalue(v);

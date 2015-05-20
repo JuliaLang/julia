@@ -466,7 +466,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         if (nargs == 0)
             jl_error("malformed \"error\" expression");
         if (jl_is_byte_string(args[0]))
-            jl_errorf("syntax: %s", jl_string_data(args[0]));
+            jl_errorf("syntax: %s", jl_bytestring_ptr(args[0]));
         jl_throw(args[0]);
     }
     else if (ex->head == boundscheck_sym) {

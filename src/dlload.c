@@ -110,7 +110,7 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
-                char *dl_path = jl_string_data(jl_cell_data(DL_LOAD_PATH)[j]);
+                const char *dl_path = jl_bytestring_ptr(jl_cell_data(DL_LOAD_PATH)[j]);
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;

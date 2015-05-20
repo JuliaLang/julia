@@ -15,7 +15,7 @@ eval(m,x) = Core.eval(m,x)
 
 include("exports.jl")
 
-if false
+if true
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
@@ -70,6 +70,7 @@ include("dict.jl")
 include("set.jl")
 include("hashing.jl")
 include("iterator.jl")
+include("bytevec.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -91,8 +92,8 @@ include("utf16.jl")
 include("utf32.jl")
 include("iobuffer.jl")
 include("string.jl")
-include("utf8proc.jl")
-importall .UTF8proc
+# include("utf8proc.jl")
+# importall .UTF8proc
 include("regex.jl")
 include("base64.jl")
 importall .Base64
@@ -106,7 +107,7 @@ include("libc.jl")
 using .Libc: getpid, gethostname, time, msync
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
-include("env.jl")
+# include("env.jl")
 include("path.jl")
 include("intfuncs.jl")
 
