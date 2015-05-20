@@ -17,7 +17,7 @@ if _oldstyle_array_vcat_
     function oldstyle_vcat_warning(n::Int)
         if n == 1
             before = "a"
-            after  = "a;"
+            after  = "collect(a)"
         elseif n == 2
             before = "a,b"
             after  = "a;b"
