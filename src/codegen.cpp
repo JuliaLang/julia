@@ -1172,7 +1172,11 @@ static void mallocVisitLine(std::string filename, int line)
     }
     GlobalVariable *v = prepare_global(vec[line]);
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
-                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
+                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func)
+#ifdef LLVM37
+                                            , {}
+#endif
+                                            )),
                         v, true);
 }
 
@@ -1724,13 +1728,18 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     }
     Value *env_tuple;
     env_tuple = builder.CreateCall(prepare_call(jlnsvec_func),
-                                   ArrayRef<Value*>(&captured[0],
-                                                    1+clen));
+                                   ArrayRef<Value*>(&captured[0], 1+clen));
     ctx->argDepth = argStart;
     make_gcroot(env_tuple, ctx);
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(jlclosure_func),
+                                        {Constant::getNullValue(T_pint8),
+                                        env_tuple, literal_pointer_val(expr)});
+#else
     Value *result = builder.CreateCall3(prepare_call(jlclosure_func),
                                         Constant::getNullValue(T_pint8),
                                         env_tuple, literal_pointer_val(expr));
+#endif
     ctx->argDepth--;
     return result;
 }
@@ -1796,8 +1805,13 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     make_gcroot(arg2, ctx);
     Value *myargs = builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(jlgetfield_func), {V_null, myargs,
+                                        ConstantInt::get(T_int32,2)});
+#else
     Value *result = builder.CreateCall3(prepare_call(jlgetfield_func), V_null, myargs,
                                         ConstantInt::get(T_int32,2));
+#endif
     ctx->argDepth = argStart;
     return result;
 }
@@ -1887,8 +1901,13 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     varg1 = boxed(varg1,ctx); varg2 = boxed(varg2,ctx);
     if (ptr_comparable)
         answer = builder.CreateICmpEQ(varg1, varg2);
-    else
+    else {
+#ifdef LLVM37
+        answer = builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
+#else
         answer = builder.CreateTrunc(builder.CreateCall2(prepare_call(jlegal_func), varg1, varg2), T_int1);
+#endif
+    }
  done:
     ctx->argDepth = last_depth;
     return answer;
@@ -1989,7 +2008,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
             int ldepth = ctx->argDepth;
             Value *arg1 = emit_boxed_rooted(args[1], ctx);
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(typeassert), {arg1, boxed(emit_expr(args[2], ctx),ctx)});
+#else
             builder.CreateCall2(prepare_call(typeassert), arg1, boxed(emit_expr(args[2], ctx),ctx));
+#endif
             ctx->argDepth = ldepth;
             JL_GC_POP();
             return arg1;
@@ -2046,10 +2069,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         nva = builder.CreateTrunc(nva, T_int32);
 #endif
         Value *r =
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(theFptr), {theF,
+                                builder.CreateGEP(ctx->argArray,
+                                                  ConstantInt::get(T_size, ctx->nReqArgs)),
+                                nva});
+#else
             builder.CreateCall3(prepare_call(theFptr), theF,
                                 builder.CreateGEP(ctx->argArray,
                                                   ConstantInt::get(T_size, ctx->nReqArgs)),
                                 nva);
+#endif
         JL_GC_POP();
         return r;
     }
@@ -2070,8 +2100,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
         JL_GC_POP();
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jlthrow_line_func), {arg1,
+                            ConstantInt::get(T_int32, ctx->lineno)});
+#else
         builder.CreateCall2(prepare_call(jlthrow_line_func), arg1,
                             ConstantInt::get(T_int32, ctx->lineno));
+#endif
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
@@ -2382,8 +2417,13 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
     }
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
+                                        ConstantInt::get(T_int32,nargs)});
+#else
     Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
                                         ConstantInt::get(T_int32,nargs));
+#endif
     ctx->argDepth = argStart;
     return result;
 }
@@ -2570,18 +2610,30 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
                                        ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
         }
         theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
+#ifdef LLVM37
+        Value *r1 = builder.CreateCall(prepare_call(theFptr), {theFunc, myargs,
+                                        ConstantInt::get(T_int32,nargs)});
+#else
         Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
                                         ConstantInt::get(T_int32,nargs));
+#endif
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(elseBB1);
         builder.SetInsertPoint(elseBB1);
         // not function
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+#ifdef LLVM37
+        Value *r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
+                                        {literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
+                                        myargs,
+                                        ConstantInt::get(T_int32,nargs+1)});
+#else
         Value *r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
                                         literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
                                         myargs,
                                         ConstantInt::get(T_int32,nargs+1));
+#endif
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(mergeBB1);
         builder.SetInsertPoint(mergeBB1);
@@ -2842,9 +2894,15 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
     if (bnd) {
         Value *rval = boxed(emit_expr(r, ctx, true),ctx);
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jlcheckassign_func),
+                           {literal_pointer_val(bnd),
+                            rval});
+#else
         builder.CreateCall2(prepare_call(jlcheckassign_func),
-                            literal_pointer_val(bnd),
+                           literal_pointer_val(bnd),
                             rval);
+#endif
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
     }
@@ -3148,7 +3206,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(prepare_call(jlenter_func), jbuf);
 #ifndef _OS_WINDOWS_
+#ifdef LLVM37
+        CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), { jbuf, ConstantInt::get(T_int32,0) });
+#else
         CallInst *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
+#endif
 #else
         CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
 #endif
@@ -4453,12 +4515,21 @@ static Function *emit_function(jl_lambda_info_t *lam)
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
             Value *lv = vi.memvalue;
             if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
+#ifdef LLVM37
+                Value *restTuple =
+                    builder.CreateCall(prepare_call(jltuple_func), {V_null,
+                                        builder.CreateGEP(argArray,
+                                                          ConstantInt::get(T_size,nreq)),
+                                        builder.CreateSub(argCount,
+                                                          ConstantInt::get(T_int32,nreq))});
+#else
                 Value *restTuple =
                     builder.CreateCall3(prepare_call(jltuple_func), V_null,
                                         builder.CreateGEP(argArray,
                                                           ConstantInt::get(T_size,nreq)),
                                         builder.CreateSub(argCount,
                                                           ConstantInt::get(T_int32,nreq)));
+#endif
                 if (isBoxed(argname, &ctx))
                     builder.CreateStore(builder.CreateCall(prepare_call(jlbox_func), restTuple), lv);
                 else
