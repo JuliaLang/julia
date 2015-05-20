@@ -129,18 +129,6 @@ static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
-static void write_int64(ios_t *s, int64_t i)
-{
-    write_uint8(s, i       & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, (i>>16) & 0xff);
-    write_uint8(s, (i>>24) & 0xff);
-    write_uint8(s, (i>>32) & 0xff);
-    write_uint8(s, (i>>40) & 0xff);
-    write_uint8(s, (i>>48) & 0xff);
-    write_uint8(s, (i>>56) & 0xff);
-}
-
 static void write_int32(ios_t *s, int32_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -1465,8 +1453,8 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     // record reinitialization functions
     for (i = 0; i < reinit_list.len; i += 2) {
         if(sizeof(size_t) == 8) {
-            write_int64(&f, (size_t)reinit_list.items[i]);
-            write_int64(&f, (size_t)reinit_list.items[i+1]);
+            write_uint64(&f, (size_t)reinit_list.items[i]);
+            write_uint64(&f, (size_t)reinit_list.items[i+1]);
         }
         else {
             write_int32(&f, (size_t)reinit_list.items[i]);
@@ -1583,10 +1571,10 @@ void jl_restore_system_image(const char *fname)
     jl_set_gs_ctr(read_int32(&f));
 
     // run reinitialization functions
-    int pos = read_int32(&f);
-    while (pos != -1) {
+    size_t pos = (sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f);
+    while (pos != (size_t)-1) {
         jl_value_t *v = (jl_value_t*)backref_list.items[pos];
-        switch (read_int32(&f)) {
+        switch ((sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f)) {
             case 1: {
                 jl_array_t **a = (jl_array_t**)&v->fieldptr[0];
                 jl_idtable_rehash(a, jl_array_len(*a));
@@ -1596,7 +1584,7 @@ void jl_restore_system_image(const char *fname)
             default:
                 assert(0);
         }
-        pos = read_int32(&f);
+        pos = (sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f);
     }
 
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
