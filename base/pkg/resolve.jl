@@ -6,7 +6,7 @@ include("resolve/versionweight.jl")
 include("resolve/interface.jl")
 include("resolve/maxsum.jl")
 
-using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
+using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum, ...Pkg.PkgError
 
 export resolve, sanity_check
 
