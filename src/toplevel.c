@@ -110,7 +110,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *parent_module = jl_current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
-    if (b->value != NULL) {
+    if (b->value != NULL && jl_options.build_path == NULL) {
         jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
