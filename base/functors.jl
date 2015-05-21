@@ -24,6 +24,9 @@ call(::ExpFun, x) = exp(x)
 immutable LogFun <: Func{1} end
 call(::LogFun, x) = log(x)
 
+immutable ConjFun <: Func{1} end
+call(::ConjFun, x) = conj(x)
+
 immutable AndFun <: Func{2} end
 call(::AndFun, x, y) = x & y
 
