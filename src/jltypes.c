@@ -750,6 +750,16 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                     break;
                 }
             }
+            for(i=0; i < eqc->n; i+=2) {
+                if (eqc->data[i] == b && !jl_is_typevar(eqc->data[i+1])) {
+                    jl_value_t *ti = jl_type_intersection((jl_value_t*)a, eqc->data[i+1]);
+                    if (ti == (jl_value_t*)jl_bottom_type) {
+                        JL_GC_POP();
+                        return ti;
+                    }
+                    break;
+                }
+            }
         }
         extend((jl_value_t*)a, b, penv);
         if (jl_is_typevar(b)) {

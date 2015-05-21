@@ -2855,3 +2855,9 @@ type B11136 end
 let T = TypeVar(:T, true), TB = TypeVar(:T, B11136, true)
     testintersect(Tuple{T, T}, Tuple{A11136, TB}, Bottom)
 end
+
+# issue #11367
+abstract Foo11367
+let T1 = TypeVar(:T1, true), T2 = TypeVar(:T2, Foo11367, true)
+    testintersect(Tuple{T1, T1}, Tuple{Type{BigInt}, T2}, Bottom)
+end
