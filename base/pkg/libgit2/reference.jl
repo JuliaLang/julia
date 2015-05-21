@@ -151,4 +151,3 @@ function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
     end
     return GitReference(ref_ptr_ptr[])
 end
-

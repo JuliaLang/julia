@@ -68,4 +68,3 @@ function merge!(repo::GitRepo; fast_forward::Bool=false)
         end
     end
 end
-
