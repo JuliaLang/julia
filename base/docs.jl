@@ -17,7 +17,7 @@ macro init ()
     quote
         if !isdefined(:META)
             const $META = ObjectIdDict()
-            doc($META, doc"Documentation metadata for $(string(current_module())).")
+            doc($META, @doc_str $("Documentation metadata for `$(current_module())`."))
             push!(modules, current_module())
             nothing
         end
