@@ -217,7 +217,8 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 ($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
 
 =={T<:Number}(x::T, y::T) = x === y
-<{T<:Real}(x::T, y::T) = no_op_err("<", T)
+ <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
+<={T<:Real}(x::T, y::T) = no_op_err("<=", T)
 
 div{T<:Real}(x::T, y::T) = no_op_err("div", T)
 fld{T<:Real}(x::T, y::T) = no_op_err("fld", T)
