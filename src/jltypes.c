@@ -3182,6 +3182,7 @@ void jl_init_types(void)
     jl_ntuple_typename = jl_ntuple_type->name;
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
+    empty_tuple_type->uid = jl_assign_type_uid();
     jl_emptytuple = ((jl_datatype_t*)empty_tuple_type)->instance;
 
     // non-primitive definitions follow
