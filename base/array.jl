@@ -206,10 +206,11 @@ end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     # note: checking bit pattern
     xT = convert(T,x)
-    if isbits(T) && ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
-                     (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
-                     (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
-                     (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
+    if isbits(T) && nfields(T)==0 &&
+        ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
+         (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
+         (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
+         (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
               a, 0, length(a)*sizeof(T))
     else
