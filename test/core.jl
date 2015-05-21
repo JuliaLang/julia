@@ -2816,3 +2816,11 @@ g10995((1, 2))
 # issue #11149
 @noinline f11149(a,b,args...) = (a,b,args...)
 @test f11149(1,2,3) == invoke(f11149, Tuple{Int,Int,Int}, 1,2,3)
+
+# issue #11357
+function f11357()
+    x = (1,2,3)
+    i = (1,)
+    x[i...]
+end
+@test f11357() === 1

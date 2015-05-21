@@ -269,7 +269,8 @@ const getfield_tfunc = function (A, s0, name)
     if s <: Tuple && name === Symbol
         return Bottom, true
     end
-    if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
+    haveargs = A !== nothing && length(A)>1
+    if haveargs && isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
         A1 = A[1]
         if isa(A1,Module) && isdefined(A1,fld) && isconst(A1, fld)
@@ -307,7 +308,7 @@ const getfield_tfunc = function (A, s0, name)
             end
         end
         return Bottom, true
-    elseif isa(A[2],Int)
+    elseif haveargs && isa(A[2],Int)
         if isa(A[1],Module) || s === Module
             return Bottom, true
         end
