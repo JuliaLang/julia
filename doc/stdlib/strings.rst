@@ -383,7 +383,7 @@
 
 .. function:: utf32(s)
 
-   Create a UTF-32 string from a byte array, array of ``UInt32``, or
+   Create a UTF-32 string from a byte array, array of ``Char`` or ``UInt32``, or
    any other string type.  (Conversions of byte arrays check for a
    byte-order marker in the first four bytes, and do not include it in
    the resulting string.)
@@ -393,7 +393,7 @@
    string (so that it is mostly invisible in Julia); this allows the
    string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   `utf32(s)` conversion function.  If you have a ``UInt32`` array
+   `utf32(s)` conversion function.  If you have a ``Char`` or ``UInt32`` array
    ``A`` that is already NUL-terminated UTF-32 data, then you
    can instead use `UTF32String(A)`` to construct the string without
    making a copy of the data and treating the NUL as a terminator
