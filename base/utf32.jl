@@ -18,15 +18,6 @@ next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
 
-function utf32(c::Integer...)
-    a = Array(Char, length(c) + 1)
-    for i = 1:length(c)
-        a[i] = Char(c[i])
-    end
-    a[end] = Char(0)
-    UTF32String(a)
-end
-
 utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
