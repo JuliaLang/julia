@@ -55,24 +55,43 @@ function get{T}(c::GitConfig, name::AbstractString, default::T)
     return res
 end
 
-function set!{T}(c::GitConfig, name::AbstractString, value::T)
-    err = if T<:AbstractString
-        @check ccall((:git_config_set_string, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}), c.ptr, name, value)
-    elseif is(T, Bool)
-        bval = Int32(value)
-        @check ccall((:git_config_set_bool, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, bval)
-    elseif is(T, Int32)
-        @check ccall((:git_config_set_int32, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, value)
-    elseif is(T, Int64)
-        @check ccall((:git_config_set_int64, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{UInt8}, Cintmax_t), c.ptr, name, value)
-    else
-        warn("Type $T is not supported")
-        -1
+function getconfig{T}(r::GitRepo, name::AbstractString, default::T)
+    with(GitConfig, r) do cfg
+        get(cfg, name, default)
     end
-    return err
 end
 
+function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
+    with(GitRepo, rname) do r
+        with(GitConfig, r) do cfg
+            get(cfg, name, default)
+        end
+    end
+end
+
+function getconfig{T}(name::AbstractString, default)
+    with(GitConfig) do cfg
+        get(cfg, name, default)
+    end
+end
+
+function set!{T <: AbstractString}(c::GitConfig, name::AbstractString, value::T)
+    @check ccall((:git_config_set_string, :libgit2), Cint,
+             (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}), c.ptr, name, value)
+end
+
+function set!(c::GitConfig, name::AbstractString, value::Bool)
+    bval = Int32(value)
+    @check ccall((:git_config_set_bool, :libgit2), Cint,
+             (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, bval)
+end
+
+function set!(c::GitConfig, name::AbstractString, value::Int32)
+    @check ccall((:git_config_set_int32, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, value)
+end
+
+function set!(c::GitConfig, name::AbstractString, value::Int64)
+    @check ccall((:git_config_set_int64, :libgit2), Cint,
+             (Ptr{Void}, Ptr{UInt8}, Cintmax_t), c.ptr, name, value)
+end

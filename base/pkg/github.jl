@@ -12,9 +12,7 @@ const AUTH_DATA = Dict{Any,Any}(
 )
 
 function user()
-    usr = LibGit2.with(LibGit2.GitConfig) do cfg
-        LibGit2.get(cfg, "github.user", "")
-    end
+    usr = LibGit2.getconfig("github.user", "")
     if isempty(usr)
         throw(PkgError("""
         no GitHub user name configured; please configure it with:
