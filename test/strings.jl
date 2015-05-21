@@ -1603,3 +1603,16 @@ let s = "ba\0d"
     @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
     @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
 end
+
+# issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
+a = UInt32[48,0]
+b = UTF32String(a)
+@test b=="0"
+a[1] = 65
+@test b=="A"
+c = Char['0','\0']
+d = UTF32String(c)
+@test d=="0"
+c[1] = 'A'
+@test d=="A"
+
