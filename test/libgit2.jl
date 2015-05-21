@@ -2,7 +2,7 @@
 
 # check that libgit2 has been installed correctly
 
-const LIBGIT2_VER = v"0.22.2+"
+const LIBGIT2_VER = v"0.22.1+"
 
 function check_version()
     major, minor, patch = Cint[0], Cint[0], Cint[0]
@@ -47,7 +47,7 @@ temp_dir() do dir
     url = "https://github.com/JuliaLang/Example.jl"
     path = joinpath(dir, "Example.Bare")
     repo = Pkg.LibGit2.clone(url, path, bare = true, remote_cb = Pkg.LibGit2.mirror_cb)
-    Pkg.LibGit2.finalize(repo)
+    finalize(repo)
     @test isdir(path)
     @test isfile(joinpath(path, Pkg.LibGit2.GitConst.HEAD_FILE))
 end
@@ -57,7 +57,7 @@ temp_dir() do dir
     url = "https://github.com/JuliaLang/Example.jl"
     path = joinpath(dir, "Example")
     repo = Pkg.LibGit2.clone(url, path)
-    Pkg.LibGit2.finalize(repo)
+    finalize(repo)
     @test isdir(path)
     @test isdir(joinpath(path, ".git"))
 end
@@ -74,7 +74,7 @@ temp_dir() do dir
     url = "https://github.com/JuliaLang/julia.git"
     remote = Pkg.LibGit2.GitRemote(repo, branch, url)
     Pkg.LibGit2.save(remote)
-    Pkg.LibGit2.finalize(remote)
+    finalize(remote)
 
     config = joinpath(path, ".git", "config")
     lines = split(open(readall, config, "r"), "\n")
@@ -83,7 +83,7 @@ temp_dir() do dir
     remote = Pkg.LibGit2.get(Pkg.LibGit2.GitRemote, repo, branch)
     @test Pkg.LibGit2.url(remote) == url
 
-    Pkg.LibGit2.finalize(repo)
+    finalize(repo)
 end
 
 # fetch
@@ -95,7 +95,7 @@ temp_dir() do dir_cache
     Pkg.LibGit2.with(Pkg.LibGit2.GitConfig, repo) do cfg
         credentials!(cfg)
     end
-    Pkg.LibGit2.finalize(repo)
+    finalize(repo)
 
 
     # fetch
@@ -113,7 +113,7 @@ temp_dir() do dir_cache
         Pkg.LibGit2.fetch(repo, path_cache, refspecs = "+refs/*:refs/remotes/cache/*")
         refs2 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
-        Pkg.LibGit2.finalize(repo)
+        finalize(repo)
         @test refs1 > 0
         @test refs2 > 0
         @test refs2 > refs1
@@ -128,7 +128,7 @@ temp_dir() do dir_cache
         end
         oids = Pkg.LibGit2.map((oid,repo)->string(oid), repo, by = Pkg.LibGit2.GitConst.SORT_TIME)
         @test length(oids) > 0
-        Pkg.LibGit2.finalize(repo)
+        finalize(repo)
 
         Pkg.LibGit2.with(Pkg.LibGit2.GitRepo, path) do repo
             oid = Pkg.LibGit2.Oid(oids[end])
@@ -151,12 +151,12 @@ temp_dir() do dir_cache
         @test isa(cmtr, Pkg.LibGit2.Signature)
         @test length(cmtr.email) > 0
         @test length(cmsg) > 0
-        Pkg.LibGit2.finalize(repo)
+        finalize(repo)
 
         sig = Pkg.LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
         git_sig = convert(Pkg.LibGit2.GitSignature, sig)
         sig2 = Pkg.LibGit2.Signature(git_sig)
-        Pkg.LibGit2.finalize(git_sig)
+        finalize(git_sig)
         @test sig.name == sig2.name
         @test sig.email == sig2.email
         @test sig.time == sig2.time
@@ -196,7 +196,7 @@ begin
         arr = convert(Vector{AbstractString}, sa1)
         @test arr[1] == p1
     finally
-        Pkg.LibGit2.finalize(sa1)
+        finalize(sa1)
     end
 
     sa2 = Pkg.LibGit2.StrArrayStruct(p1, p2)
@@ -205,7 +205,7 @@ begin
         @test arr[1] == p1
         @test arr[2] == p2
     finally
-        Pkg.LibGit2.finalize(sa2)
+        finalize(sa2)
     end
 end
 
