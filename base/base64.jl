@@ -163,10 +163,6 @@ base64encode(x...) = base64encode(write, x...)
 
 #############################################################################
 
-# read(b::Base64Pipe, ::Type{UInt8}) = # TODO: decode base64
-
-#############################################################################
-
 type Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
@@ -182,7 +178,7 @@ end
 
 function read(b::Base64DecodePipe, t::Type{UInt8})
     if length(b.cache) > 0
-        val = shift!(b.cache)
+        return shift!(b.cache)
     else
         empty!(b.encvec)
         while !eof(b.io) && length(b.encvec) < 4
@@ -191,24 +187,21 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
                 push!(b.encvec, c)
             end
         end
-        val = b64decode!(b.encvec,b.cache)
+        return b64decode!(b.encvec,b.cache)
     end
-    val
 end
 
-function eof(b::Base64DecodePipe)
-    return length(b.cache) == 0 && eof(b.io)
-end
-
-function close(b::Base64DecodePipe)
-end
+eof(b::Base64DecodePipe) = length(b.cache) == 0 && eof(b.io)
+close(b::Base64DecodePipe) = nothing
 
 # Decodes a base64-encoded string
 function base64decode(s)
     b = IOBuffer(s)
-    decoded = readall(Base64DecodePipe(b))
-    close(b)
-    decoded
+    try
+        return readbytes(Base64DecodePipe(b))
+    finally
+        close(b)
+    end
 end
 
 end # module
