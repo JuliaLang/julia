@@ -3,15 +3,16 @@
 ## UTF-32 in the native byte order, i.e. plain old character arrays ##
 
 immutable UTF32String <: DirectIndexString
-    data::Array{Char,1} # includes 32-bit NULL termination after string chars
+    data::Vector{Char} # includes 32-bit NULL termination after string chars
 
-    function UTF32String(a::Array{Char,1})
+    function UTF32String(a::Vector{Char})
         if length(a) < 1 || a[end] != Char(0)
             throw(ArgumentError("UTF32String data must be NULL-terminated"))
         end
         new(a)
     end
 end
+UTF32String(data::Vector{UInt32}) = UTF32String(reinterpret(Char, data))
 
 next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
