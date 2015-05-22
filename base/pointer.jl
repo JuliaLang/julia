@@ -27,7 +27,9 @@ cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
 unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 unsafe_convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
-
+unsafe_convert(::Type{Ptr{Union()}}, a::Array{Union()}) = Ptr{Union()}(0)
+unsafe_convert(::Type{Ptr{Void}}, a::Array{Union()}) = Ptr{Void}(0)
+unsafe_convert{T}(::Type{Ptr{T}}, a::Array{Union()}) = Ptr{T}(0)
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)

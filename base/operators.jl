@@ -351,6 +351,24 @@ for f in (:+, :-)
     end
 end
 
+
+## non-linear operations on ranges and fallbacks for non-real numbers ##
+
+.+(x::Number, r::Range) = [ x+y for y=r ]
+.+(r::Range, y::Number) = [ x+y for x=r ]
+
+.-(x::Number, r::Range) = [ x-y for y=r ]
+.-(r::Range, y::Number) = [ x-y for x=r ]
+
+.*(x::Number, r::Range) = [ x*y for y=r ]
+.*(r::Range, y::Number) = [ x*y for x=r ]
+
+./(x::Number, r::Range) = [ x/y for y=r ]
+./(r::Range, y::Number) = [ x/y for x=r ]
+
+.^(x::Number, r::Range) = [ x^y for y=r ]
+.^(r::Range, y::Number) = [ x^y for x=r ]
+
 # vectorization
 
 macro vectorize_1arg(S,f)

@@ -130,7 +130,7 @@ function greedysolver(interface::Interface)
     np = interface.np
 
     # initialize solution: all uninstalled
-    sol = [spp[p0] for p0 = 1:np]
+    sol = Int[spp[p0] for p0 = 1:np]
 
     # set up required packages to their highest allowed versions
     for (rp,rvs) in reqs

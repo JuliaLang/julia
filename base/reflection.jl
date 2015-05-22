@@ -41,7 +41,15 @@ function binding_module(m::Module, var::Symbol)
     mod
 end
 
-fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
+function fieldnames(t::DataType)
+    n = length(t.name.names)
+    A = Array(Symbol, n)
+    for i=1:n
+        A[i] = t.name.names[i]
+    end
+    A
+end
+
 function fieldnames(v)
     t = typeof(v)
     if !isa(t,DataType)

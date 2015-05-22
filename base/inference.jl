@@ -955,7 +955,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     end
     e = e::Expr
     # handle:
-    # call  null  new  &  static_typeof
+    # call  null  new
     if is(e.head,:call) || is(e.head,:call1)
         t = abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:null)
@@ -973,40 +973,6 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:&)
         abstract_eval(e.args[1], vtypes, sv)
         t = Any
-    elseif is(e.head,:static_typeof)
-        var = e.args[1]
-        t = abstract_eval(var, vtypes, sv)
-        if isa(t,DataType) && typeseq(t,t.name.primary)
-            # remove unnecessary typevars
-            t = t.name.primary
-        end
-        if is(t,Bottom)
-            # if we haven't gotten fed-back type info yet, return Bottom. otherwise
-            # Bottom is the actual type of the variable, so return Type{Bottom}.
-            if haskey(sv.fedbackvars, var)
-                t = Type{Bottom}
-            end
-        elseif isleaftype(t)
-            t = Type{t}
-        elseif isleaftype(inference_stack.types)
-            if isa(t,TypeVar)
-                t = Type{t.ub}
-            else
-                t = Type{t}
-            end
-        else
-            # if there is any type uncertainty in the arguments, we are
-            # effectively predicting what static_typeof will say when
-            # the function is compiled with actual arguments. in that case
-            # abstract types yield Type{<:T} instead of Type{T}.
-            # this doesn't really model the situation perfectly, but
-            # "isleaftype(inference_stack.types)" should be good enough.
-            if isa(t,TypeVar)
-                t = Type{t}
-            else
-                t = Type{TypeVar(:_,t)}
-            end
-        end
     elseif is(e.head,:method)
         t = Function
     elseif is(e.head,:copyast)
@@ -1523,10 +1489,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     recpts = IntSet()  # statements that depend recursively on our value
     W = IntSet()
 
-    @label typeinf_top
-
-    typegotoredo = false
-
     # exception handlers
     cur_hand = ()
     handler_at = Any[ () for i=1:n ]
@@ -1597,24 +1559,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
                             s[l] = stupdate(s[l], changes, vars)
                         end
                     end
-                elseif is(hd,:type_goto)
-                    for i = 2:length(stmt.args)
-                        var = stmt.args[i]::GenSym
-                        # Store types that need to be fed back via type_goto
-                        # in gensym_init. After finishing inference, if any
-                        # of these types changed, start over with the fed-back
-                        # types known from the beginning.
-                        # See issue #3821 (using !typeseq instead of !subtype),
-                        # and issue #7810.
-                        id = var.id+1
-                        vt = gensym_types[id]
-                        ot = gensym_init[id]
-                        if ot===NF || !typeseq(vt,ot)
-                            gensym_init[id] = vt
-                            typegotoredo = true
-                        end
-                        sv.fedbackvars[var] = true
-                    end
                 elseif is(hd,:return)
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
@@ -1669,16 +1613,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
         end
     end
 
-    if typegotoredo
-        # if any type_gotos changed, clear state and restart.
-        for ll = 2:length(s)
-            s[ll] = ()
-        end
-        empty!(W)
-        gensym_types[:] = gensym_init
-        frame.result = curtype
-        @goto typeinf_top
-    end
     for i = 1:length(gensym_types)
         if gensym_types[i] === NF
             gensym_types[i] = Union()
@@ -1780,7 +1714,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo, undef
 
     e = e::Expr
     head = e.head
-    if is(head,:static_typeof) || is(head,:line) || is(head,:const)
+    if is(head,:line) || is(head,:const)
         return e
     #elseif is(head,:gotoifnot) || is(head,:return)
     #    e.typ = Any
@@ -2119,9 +2053,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
     end
     if isa(e,Expr)
         e = e::Expr
-        if e.head === :static_typeof
-            return true
-        end
+
         ea = e.args
         if e.head === :call || e.head === :call1
             if is_known_call_p(e, is_pure_builtin, sv)

@@ -3464,7 +3464,6 @@ void jl_init_types(void)
     exc_sym = jl_symbol("the_exception");
     enter_sym = jl_symbol("enter");
     leave_sym = jl_symbol("leave");
-    static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
@@ -3475,7 +3474,6 @@ void jl_init_types(void)
     abstracttype_sym = jl_symbol("abstract_type");
     bitstype_sym = jl_symbol("bits_type");
     compositetype_sym = jl_symbol("composite_type");
-    type_goto_sym = jl_symbol("type_goto");
     toplevel_sym = jl_symbol("toplevel");
     tuple_sym = jl_symbol("tuple");
     kw_sym = jl_symbol("kw");

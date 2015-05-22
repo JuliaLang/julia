@@ -3146,20 +3146,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == null_sym) {
         return literal_pointer_val((jl_value_t*)jl_nothing);
     }
-    else if (head == static_typeof_sym) {
-        jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
-        if (jl_is_type_type(extype)) {
-            extype = jl_tparam0(extype);
-            if (jl_is_typevar(extype))
-                extype = ((jl_tvar_t*)extype)->ub;
-        }
-        else {
-            extype = (jl_value_t*)jl_any_type;
-        }
-        if (jl_is_tuple_type(extype))
-            jl_add_linfo_root(ctx->linfo, extype);
-        return literal_pointer_val(extype);
-    }
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
@@ -3269,7 +3255,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             return valuepos ? literal_pointer_val(jl_nothing) : NULL;
         }
         // some expression types are metadata and can be ignored
-        if (valuepos || !(head == line_sym || head == type_goto_sym)) {
+        if (valuepos || head != line_sym) {
             if (head == abstracttype_sym || head == compositetype_sym ||
                 head == bitstype_sym) {
                 jl_errorf("type definition not allowed inside a local scope");

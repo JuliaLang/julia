@@ -218,7 +218,6 @@ int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
-    if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
         ((jl_is_symbol(e0) && is_intrinsic(m,(jl_sym_t*)e0)) ||

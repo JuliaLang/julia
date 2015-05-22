@@ -1956,11 +1956,11 @@ i7652()
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
 
 # issue #7810
-type Foo7810{T<:AbstractVector}
+#=type Foo7810{T<:AbstractVector}
     v::T
 end
 bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
-@test Base.return_types(bar7810,Tuple{})[1] == Array{Foo7810{Array{Tuple{Int,Int},1}},1}
+@test Base.return_types(bar7810,Tuple{})[1] == Array{Foo7810{Array{Tuple{Int,Int},1}},1}=#
 
 # issue 7897
 function issue7897!(data, arr)
