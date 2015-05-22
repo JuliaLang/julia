@@ -768,14 +768,14 @@ function string(x::BigFloat)
     lng::Int32 = 127
     buf = Array(UInt8, lng + 1)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
-    (84 <= lng <= 127) && return bytestring(pointer(buf), lng)
+    (84 <= lng <= 127) && return bytestring(pointer(buf), 1 <= x < 10 ? lng-4 : lng)
     if lng < 84 # print at least 78 decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.78Re", &x)
-    elseif lng > 127
+    else
         buf = Array(UInt8, lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    return bytestring(pointer(buf), lng)
+    return bytestring(pointer(buf), 1 <= x < 10 ? lng-4 : lng)
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
