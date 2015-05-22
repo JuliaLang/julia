@@ -138,7 +138,26 @@ for f in (:round, :ceil, :floor, :trunc)
         function ($f)(x, digits::Integer, base::Integer=10)
             x = float(x)
             og = convert(eltype(x),base)^digits
-            ($f)(x * og) / og
+            r = ($f)(x * og) / og
+
+            if !isfinite(r)
+                if digits > 0
+                    return x
+                elseif x > 0
+                    if ceil == $f
+                        return convert(eltype(x), Inf)
+                    end
+                    return zero(x)
+                elseif x < 0
+                    if floor == $f
+                        return -convert(eltype(x), Inf)
+                    end
+                    return -zero(x)
+                else
+                    return x
+                end
+            end
+            return r
         end
     end
 end
