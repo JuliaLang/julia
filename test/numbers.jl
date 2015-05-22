@@ -1833,6 +1833,29 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(ceil(-123.456,1), -123.4)
 @test approx_eq(floor(123.456,1), 123.4)
 @test approx_eq(floor(-123.456,1), -123.5)
+# rounding with too much (or too few) precision
+for x in (12345.6789, 0, -12345.6789)
+    y = float(x)
+    @test y == trunc(x, 1000)
+    @test y == round(x, 1000)
+    @test y == floor(x, 1000)
+    @test y == ceil(x, 1000)
+end
+x = 12345.6789
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test Inf == ceil(x, -1000)
+x = -12345.6789
+@test -0.0 == trunc(x, -1000)
+@test -0.0 == round(x, -1000)
+@test -Inf == floor(x, -1000)
+@test -0.0 == ceil(x, -1000)
+x = 0.0
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test 0.0 == ceil(x, -1000)
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
