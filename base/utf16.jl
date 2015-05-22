@@ -95,7 +95,7 @@ sizeof(s::UTF16String) = sizeof(s.data) - sizeof(UInt16)
 unsafe_convert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, pointer(s))
 
-function is_valid_utf16(data::AbstractArray{UInt16})
+function isvalid(::Type{UTF16String}, data::AbstractArray{UInt16})
     i = 1
     n = length(data) # this may include NULL termination; that's okay
     while i < n # check for unpaired surrogates
@@ -110,10 +110,8 @@ function is_valid_utf16(data::AbstractArray{UInt16})
     return i > n || !utf16_is_surrogate(data[i])
 end
 
-is_valid_utf16(s::UTF16String) = is_valid_utf16(s.data)
-
 function convert(::Type{UTF16String}, data::AbstractVector{UInt16})
-    !is_valid_utf16(data) && throw(ArgumentError("invalid UTF16 data"))
+    !isvalid(UTF16String, data) && throw(ArgumentError("invalid UTF16 data"))
     len = length(data)
     d = Array(UInt16, len + 1)
     d[end] = 0 # NULL terminate
@@ -144,7 +142,7 @@ function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
         copy!(d,1, data,1, length(data)) # assume native byte order
     end
     d[end] = 0 # NULL terminate
-    !is_valid_utf16(d) && throw(ArgumentError("invalid UTF16 data"))
+    !isvalid(UTF16String, d) && throw(ArgumentError("invalid UTF16 data"))
     UTF16String(d)
 end
 

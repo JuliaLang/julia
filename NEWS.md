@@ -367,6 +367,13 @@ Deprecated or removed
 
   * Instead of `linrange`, use `linspace` ([#9666]).
 
+  * The functions `is_valid_char`, `is_valid_ascii`, `is_valid_utf8`, `is_valid_utf16`, and
+    `is_valid_utf32` have been replaced by generic `isvalid` methods.
+    The single argument form `isvalid(value)` can now be used for values of type `Char`, `ASCIIString`,
+    `UTF8String`, `UTF16String` and `UTF32String`.
+    The two argument form `isvalid(type, value)` can be used with the above types, with values
+    of type `Vector{UInt8}`, `Vector{UInt16}`, `Vector{UInt32}`, and `Vector{Char}` ([#11241]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -1379,6 +1386,7 @@ Too numerous to mention.
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
 [#9862]: https://github.com/JuliaLang/julia/issues/9862
 [#9957]: https://github.com/JuliaLang/julia/issues/9957
+[#10008]: https://github.com/JuliaLang/julia/issues/10008
 [#10024]: https://github.com/JuliaLang/julia/issues/10024
 [#10031]: https://github.com/JuliaLang/julia/issues/10031
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
@@ -1406,5 +1414,9 @@ Too numerous to mention.
 [#10888]: https://github.com/JuliaLang/julia/issues/10888
 [#10893]: https://github.com/JuliaLang/julia/issues/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
+[#10955]: https://github.com/JuliaLang/julia/issues/10955
 [#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
+[#11171]: https://github.com/JuliaLang/julia/issues/11171
+[#11241]: https://github.com/JuliaLang/julia/issues/11241
