@@ -298,3 +298,25 @@ end
 
 # fma and muladd
 @test fma(3,4,5) == 3*4+5 == muladd(3,4,5)
+
+# is_valid_utf32
+s = utf32("abc")
+@test is_valid_utf32(s)
+s = utf32(UInt32[65,0x110000])
+@test !is_valid_utf32(s)
+
+# isvalid
+let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
+    bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
+
+    @test !isvalid(bad32)
+    @test !isvalid(badch)
+    @test isvalid(s)
+    @test isvalid(u8)
+    @test isvalid(u16)
+    @test isvalid(u32)
+    @test isvalid(ASCIIString, s)
+    @test isvalid(UTF8String,  u8)
+    @test isvalid(UTF16String, u16)
+    @test isvalid(UTF32String, u32)
+end

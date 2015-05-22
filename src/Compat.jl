@@ -400,4 +400,30 @@ if VERSION < v"0.4.0-dev+2861"
     export muladd
 end
 
+if VERSION < v"0.4.0-dev+4734"
+    function is_valid_utf32(str::Union(Vector{Char}, Vector{UInt32}))
+        for i=1:length(str)
+            @inbounds if !is_valid_char(reinterpret(UInt32, str[i])) ; return false ; end
+        end
+        return true
+    end
+    is_valid_utf32(str::UTF32String) = is_valid_utf32(str.data)
+    export is_valid_utf32
+end
+
+if VERSION < v"0.4.0-dev+4939"
+    import Base.isvalid
+    isvalid(ch::Char)         = is_valid_char(ch)
+    isvalid(str::ASCIIString) = is_valid_ascii(str)
+    isvalid(str::UTF8String)  = is_valid_utf8(str)
+    isvalid(str::UTF16String) = is_valid_utf16(str)
+    isvalid(str::UTF32String) = is_valid_utf32(str)
+    isvalid(::Type{Char}, ch)         = is_valid_char(ch)
+    isvalid(::Type{ASCIIString}, str) = is_valid_ascii(str)
+    isvalid(::Type{UTF8String},  str) = is_valid_utf8(str)
+    isvalid(::Type{UTF16String}, str) = is_valid_utf16(str)
+    isvalid(::Type{UTF32String}, str) = is_valid_utf32(str)
+    export isvalid
+end
+
 end # module
