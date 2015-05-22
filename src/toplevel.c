@@ -116,8 +116,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
-
-    gc_wb(parent_module, newm);
+    gc_wb_binding(b, newm);
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
