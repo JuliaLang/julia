@@ -235,11 +235,11 @@ using .IteratorsMD
     end
 end
 
-@inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
+@inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v, ind)
 
 @inline unsafe_setindex!{T}(v::Array{T}, x::T, ind::Int) = (@inbounds v[ind] = x; v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
-@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
+@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v, x, ind); v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
@@ -640,7 +640,6 @@ end
     quote
         @nexprs $N d->(I_d = I[d])
         X = BitArray(index_shape($(Isplat...)))
-        Xc = X.chunks
 
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d * size(B, d))
@@ -649,7 +648,7 @@ end
         @nloops($N, i, d->I_d,
                 d->(offset_{d-1} = offset_d + (i_d-1)*stride_d), # PRE
                 begin
-                    unsafe_bitsetindex!(Xc, B[offset_0], ind)
+                    unsafe_bitsetindex!(X, B[offset_0], ind)
                     ind += 1
                 end)
         return X
