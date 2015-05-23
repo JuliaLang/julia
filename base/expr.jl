@@ -80,6 +80,14 @@ end
 _noinline(ex::Expr) = pushmeta!(ex, :noinline)
 _noinline(arg) = arg
 
+macro target(mod::Symbol, ex)
+    esc(_target(mod, ex))
+
+end
+
+_target(mod::Symbol, ex::Expr) = pushmeta!(ex, :target, mod)
+_target(mod::Symbol, arg) = arg
+
 ## some macro utilities ##
 
 find_vars(e) = find_vars(e, [])

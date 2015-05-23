@@ -1042,6 +1042,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     init_stdio();
     // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
 
+    jl_init_llvm();
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
     jl_init_serializer();

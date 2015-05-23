@@ -666,6 +666,11 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     Function *f;
     Type *rettype = julia_type_to_llvm(rtt);
+    Module *parent_Module;
+    if (ctx->target == PTX)
+        parent_Module = cgctx_ptx->m;
+    else
+        parent_Module = jl_Module;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;
@@ -673,7 +678,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream name;
             name << (ctx->f->getName().str()) << "u" << i++;
             ir_name = name.str();
-            if (jl_Module->getFunction(ir_name) == NULL)
+            if (parent_Module->getFunction(ir_name) == NULL)
                 break;
         }
 
@@ -698,11 +703,11 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
         Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*parent_Module,Err);
         if (!failed)
-            m = jl_Module;
+            m = parent_Module;
 #else
-        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
+        Module *m = ParseAssemblyString(ir_string.c_str(),parent_Module,Err,jl_LLVMContext);
 #endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
@@ -723,8 +728,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(*it == f->getFunctionType()->getParamType(i));
 
 #ifdef USE_MCJIT
-        if (f->getParent() != jl_Module) {
-            FunctionMover mover(jl_Module,f->getParent());
+        if (f->getParent() != parent_Module) {
+            FunctionMover mover(parent_Module,f->getParent());
             f = mover.CloneFunction(f);
         }
 #endif

@@ -320,6 +320,7 @@ function serialize(s, linfo::LambdaStaticData)
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
     serialize(s, linfo.module)
+    serialize(s, linfo.target)
     if isdefined(linfo, :capt)
         serialize(s, linfo.capt)
     else
@@ -493,6 +494,7 @@ function deserialize(s, ::Type{LambdaStaticData})
     sparams = deserialize(s)
     infr = deserialize(s)
     mod = deserialize(s)
+    target = deserialize(s)
     capt = deserialize(s)
     if haskey(known_lambda_data, lnumber)
         return known_lambda_data[lnumber]
@@ -500,6 +502,7 @@ function deserialize(s, ::Type{LambdaStaticData})
         linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
         linfo.inferred = infr
         linfo.module = mod
+        linfo.target = target
         linfo.roots = roots
         if !is(capt,nothing)
             linfo.capt = capt

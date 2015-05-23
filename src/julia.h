@@ -205,6 +205,7 @@ typedef struct _jl_lambda_info_t {
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     struct _jl_module_t *module;
+    jl_sym_t *target;  // target system to generate code for
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_value_t *capt;  // captured var info
     jl_sym_t *file;

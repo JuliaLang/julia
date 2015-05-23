@@ -559,13 +559,27 @@ static Value *emit_checked_fptosi(Type *to, Value *x, jl_codectx_t *ctx)
     x = FP(x);
     Value *v = builder.CreateFPToSI(x, to);
     if (x->getType() == T_float32 && to == T_int32) {
-        raise_exception_unless
-            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
-                                   builder.CreateSIToFP(v, T_float64)),
-             prepare_global(jlinexacterr_var), ctx);
+        if (ctx->target == PTX) {
+//          Constant *c = cgctx_ptx->m->getGlobalVariable("cu_inexact", true);
+//          raise_exception_unless
+//              (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+//                                     builder.CreateSIToFP(v, T_float64)),
+//               c, ctx);
+        } else {
+            raise_exception_unless
+                (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+                                       builder.CreateSIToFP(v, T_float64)),
+                 prepare_global(jlinexacterr_var), ctx);
+        }
     }
     else {
-        raise_exception_unless(emit_eqfsi(x, v), prepare_global(jlinexacterr_var), ctx);
+        // FIXME: what does this check?
+        if (ctx->target == PTX) {
+//          Constant *c = cgctx_ptx->m->getGlobalVariable("cu_inexact", true);
+//          raise_exception_unless(emit_eqfsi64(xx, vv), c, ctx);
+        } else {
+            raise_exception_unless(emit_eqfsi(x, v), prepare_global(jlinexacterr_var), ctx);
+        }
     }
     return v;
 }
@@ -862,6 +876,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(fpext,2) {
         Value *x = auto_unbox(args[2],ctx);
+        if (ctx->target == PTX) {
+            return builder.CreateFPExt(x, Type::getDoubleTy(getGlobalContext()));
+        }
 #if JL_NEED_FLOATTEMP_VAR
         // Target platform might carry extra precision.
         // Force rounding to single precision first. The reason is that it's
@@ -1035,8 +1052,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(checked_umul,2) {
         Value *ix = JL_INT(x); Value *iy = JL_INT(y);
         assert(ix->getType() == iy->getType());
+        Module *m = ctx->target == PTX ? cgctx_ptx->m : jl_Module;
         Value *intr =
-            Intrinsic::getDeclaration(jl_Module,
+            Intrinsic::getDeclaration(m,
                f==checked_sadd ?
                Intrinsic::sadd_with_overflow :
                (f==checked_uadd ?
@@ -1055,7 +1073,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *res = builder.CreateCall2(intr, ix, iy);
 #endif
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
-        raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
+        if (ctx->target == PTX)
+            raise_exception_if(obit, (Value*) NULL, ctx);
+        else
+            raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
     }
 

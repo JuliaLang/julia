@@ -69,6 +69,7 @@
 #    file::Symbol
 #    line::Int
 #    module::Module
+#    target::Symbol
 #end
 
 #type Box{T}

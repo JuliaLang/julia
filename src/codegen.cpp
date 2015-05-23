@@ -74,6 +74,16 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
+// For PTX
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+#include <llvm/Transforms/IPO.h>
+#ifdef LLVM35
+#include <llvm/Linker/Linker.h>
+#else
+#include <llvm/Linker.h>
+#endif
+
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
 #endif
@@ -95,6 +105,10 @@ using namespace llvm;
 #if LLVM37
 using namespace llvm::legacy;
 #endif
+
+namespace llvm {
+    extern ModulePass *createNVVMReflectPass(const StringMap<int> &Mapping);
+}
 
 extern "C" {
 
@@ -156,6 +170,17 @@ static Module *jl_Module;
 static MDBuilder *mbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
+
+struct CodegenContext {
+    Module *m;
+    PassManager *pm;
+    FunctionPassManager *fpm;
+    TargetMachine *tm;
+};
+// TODO: define a CodegenContext for host compilation, and select the active
+//       context at the beginning of emit_function rather than switching modules
+//       based on `target` all over the place
+CodegenContext *cgctx_ptx = NULL;
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
@@ -512,6 +537,11 @@ typedef struct {
     jl_value_t *ty;
 } jl_arrayvar_t;
 
+enum codegen_target {
+    HOST,
+    PTX
+};
+
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 typedef struct {
@@ -553,6 +583,7 @@ typedef struct {
     bool debug_enabled;
     std::vector<Instruction*> gc_frame_pops;
     std::vector<CallInst*> to_inline;
+    codegen_target target;
 } jl_codectx_t;
 
 typedef struct {
@@ -679,6 +710,113 @@ static Function *to_function(jl_lambda_info_t *li)
     }
     JL_SIGATOMIC_END();
     return f;
+}
+
+// TODO: a lot of duplication with to_function and init_julia_llvm_env
+// TODO: invoke by call()ing a @target("ptx") function
+extern "C" DLLEXPORT
+const jl_value_t * jl_to_ptx() {
+    Module *M = cgctx_ptx->m;
+
+    // IDEA: alternative: to_ptx(jl_Module), all functions marked PTX
+
+    // IDEA: no dump module, but return ptx code when calling a function?
+    // then much of the current infrastructure (get function name, dump module, etc) is also not necessary
+    // WATCH OUT: overhead -- every call, compilation. currently handled by @cuda
+    // --> still handle by @cuda? only call once, cache others
+
+    // Create list of external functions
+    // TODO: with IDEA above, only export a single function
+    std::vector<const char *> func_name_list;
+    for (Module::iterator MI = cgctx_ptx->m->begin(), ME=cgctx_ptx->m->end();
+        MI != ME; ++MI)
+        func_name_list.push_back(MI->getName().data());
+
+    // Link in CUDA's libdevice
+    // TODO: use cuLinkAddData for incremental kernel linking?
+    // TODO: only read the file once for every compilation?
+    // TODO: read the capabilities (in user-code?), don't hardcode compute_20
+    const char* LibDeviceDirs[2] = {
+            "/usr/lib/nvidia-cuda-toolkit/libdevice",
+            getenv("NVVMIR_LIBRARY_DIR") };
+    const char *LibDeviceDir = NULL;
+    bool isDir = false;
+    for (int i = 0; i < 2; i++) {
+        llvm::error_code ec = sys::fs::is_directory(LibDeviceDirs[i], isDir);
+        if (!ec && isDir) {
+            LibDeviceDir = LibDeviceDirs[i];
+            break;
+        }
+    }
+    if (LibDeviceDir == NULL)
+        jl_error("CUDA device library not found -- specify path using NVVMIR_LIBRARY_DIR");
+    std::string LibDeviceFile =
+        std::string(LibDeviceDir) + "/libdevice.compute_20.10.bc";
+#if defined(LLVM35) || defined(LLVM36)
+    llvm::ErrorOr<std::unique_ptr<MemoryBuffer>> MB =
+        MemoryBuffer::getFile(LibDeviceFile);
+    if (std::error_code ec = MB.getError())
+        jl_errorf("Cannot open CUDA device library bitcode file: %s",
+                  ec.message().c_str());
+    ErrorOr<Module*> M2OrError = parseBitcodeFile(
+#if defined(LLVM36)
+                                                  MB->get()->getMemBufferRef(),
+#else
+                                                  MB->release(),
+#endif
+                                                  getGlobalContext());
+    if (std::error_code ec = M2OrError.getError())
+        jl_errorf("could not parse device library: %s", ec.message().c_str());
+    Module* M2 = *M2OrError;
+#else
+    std::string Error;
+    OwningPtr<MemoryBuffer> *MB = new OwningPtr<MemoryBuffer>;
+    if (MemoryBuffer::getFile(LibDeviceFile, *MB, -1, true))
+        jl_error("Cannot open CUDA device library bitcode file");
+    Module *M2 = ParseBitcodeFile(MB->take(), getGlobalContext(), &Error);
+    if (M2 == NULL)
+        jl_errorf("could not parse device library: %s", Error.c_str());
+#endif
+    // HACK: libdevice has OpenCL triple, triggering a warning
+    M2->setTargetTriple(M->getTargetTriple());
+#ifdef LLVM36
+    // TODO: use the DiagnosticHandler
+    if (Linker::LinkModules(M, M2))
+        jl_error("Could not link device library");
+#else
+    if (Linker::LinkModules(M, M2, Linker::DestroySource, &Error))
+        jl_errorf("could not link device library: %s", Error.c_str());
+#endif
+    delete M2;
+
+    // Internalize functions added from libdevice
+    PassManager *PM = new PassManager();
+#if defined(LLVM36)
+    PM->add(new DataLayoutPass());
+#elif defined(LLVM35)
+    PM->add(new DataLayoutPass(*cgctx_ptx->tm->getDataLayout()));
+#else
+    PM->add(new DataLayout(*cgctx_ptx->tm->getDataLayout()));
+#endif
+    PM->add(createInternalizePass(func_name_list));
+    PM->run(*M);
+
+    // Run common passes
+    for (Module::iterator F = M->begin(), E = M->end(); F != E; ++F)
+        cgctx_ptx->fpm->run(*F);
+    cgctx_ptx->pm->run(*M);
+
+    // Write the assembly
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    llvm::formatted_raw_ostream fstream(stream);
+    cgctx_ptx->tm->addPassesToEmitFile(
+        *PM, fstream, TargetMachine::CGFT_AssemblyFile, true, 0, 0);
+    PM->run(*M);
+    fstream.flush();
+    stream.flush();
+
+    return jl_cstr_to_string(const_cast<char *>(code.c_str()));
 }
 
 static void jl_setup_module(Module *m, bool add)
@@ -1025,6 +1163,16 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     }
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+}
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function_name(jl_function_t *f, jl_tupletype_t *types)
+{
+    // TODO: no wrapper in PTX?
+    void *llvmf = jl_get_llvmf(f,types,false);
+    if (llvmf == NULL)
+        return jl_cstr_to_string(const_cast<char*>(""));
+    return jl_cstr_to_string(((Function*)llvmf)->getName().data());
 }
 
 // Pre-declaration. Definition in disasm.cpp
@@ -2181,6 +2329,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         assert(((jl_datatype_t*)ety)->instance != NULL);
                         return literal_pointer_val(((jl_datatype_t*)ety)->instance);
                     }
+                    if (ctx->target == PTX) {
+                        Value *vptr = builder.CreateGEP(ary, idx);
+                        return builder.CreateLoad(vptr, false);
+                    }
                     return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_user);
                 }
             }
@@ -2235,8 +2387,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                             data_owner->addIncoming(ary, curBB);
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
-                        typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
+                        if (ctx->target == PTX) {
+                            typed_store(ary, idx, v, ety, ctx, tbaa_user, data_owner);
+                        }
+                        else {
+                            typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
                                     ety, ctx, tbaa_user, data_owner);
+                        }
                     }
                     JL_GC_POP();
                     return ary;
@@ -3805,6 +3962,39 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     return w;
 }
 
+// generate a julia-callable function that calls a ptx function f
+// TODO: actually allow this, rather than just errorring
+// TODO: duplication with gen_jlcall_wrapper
+static Function *gen_ptxcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast,
+                                     Function *f) {
+    // TODO: rename ptxcall
+    std::stringstream funcName;
+    const std::string &fname = f->getName().str();
+    funcName << "jlcall_";
+    if (fname.compare(0, 6, "julia_") == 0)
+        funcName << fname.substr(6);
+    else
+        funcName << fname;
+
+#ifdef USE_MCJIT
+    Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+                                   funcName.str(), shadow_module);
+#else
+    Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+                                   funcName.str(), jl_Module);
+#endif
+    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", w);
+
+    builder.SetInsertPoint(b0);
+    DebugLoc noDbg;
+    builder.SetCurrentDebugLocation(noDbg);
+
+    // TODO: just_emit_error doesn't actually use the context?
+    just_emit_error("cannot call ptx functions", /*ctx=*/0);
+
+    return w;
+}
+
 // cstyle = compile with c-callable signature, not jlcall
 static Function *emit_function(jl_lambda_info_t *lam)
 {
@@ -3834,6 +4024,13 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.vaName = NULL;
     ctx.vaStack = false;
     ctx.boundsCheck.push_back(true);
+    if (ctx.linfo->target == null_sym || ctx.linfo->target == jl_symbol("host"))
+        ctx.target = HOST;
+    else if (ctx.linfo->target == jl_symbol("ptx"))
+        ctx.target = PTX;
+    else
+        jl_error((std::string("unknown codegen target ") + ctx.linfo->target->name).c_str());
+
 
     // step 2. process var-info lists to see what vars are captured, need boxing
     jl_value_t *gensym_types = jl_lam_gensyms(ast);
@@ -3972,6 +4169,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
     funcName << "_" << globalUnique++;
 
+    if (ctx.target == PTX)
+        m = cgctx_ptx->m;
+
     if (specsig) { // assumes !va
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
@@ -3994,7 +4194,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
             lam->specFunctionID = jl_assign_functionID(f);
         }
         if (lam->functionObject == NULL) {
-            Function *fwrap = gen_jlcall_wrapper(lam, ast, f);
+            Function *fwrap;
+            if (ctx.target == PTX)
+                fwrap = gen_ptxcall_wrapper(lam, ast, f);
+            else
+                fwrap = gen_jlcall_wrapper(lam, ast, f);
             lam->functionObject = (void*)fwrap;
             lam->functionID = jl_assign_functionID(fwrap);
         }
@@ -4027,9 +4231,24 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
 
 #ifdef JL_DEBUG_BUILD
-    f->addFnAttr(Attribute::StackProtectReq);
+    if (ctx.target != PTX)
+        f->addFnAttr(Attribute::StackProtectReq);
 #endif
     ctx.f = f;
+
+// Add named metadata for PTX host kernel
+    if (ctx.target == PTX) {
+        // if the name starts with "kernel", we mark the function as a kernel
+        // TODO: use something like @target
+        if (strncmp(ctx.linfo->name->name, "kernel_", 7) == 0) {
+            Value *Elts[] = { f, MDString::get(getGlobalContext(), "kernel"),
+                              ConstantInt::get(T_size, 1) };
+            MDNode *Node = MDNode::get(getGlobalContext(), Elts);
+
+            NamedMDNode *NMD = m->getOrInsertNamedMetadata("nvvm.annotations");
+            NMD->addOperand(Node);
+        }
+    }
 
     // step 5. set up debug info context and create first basic block
     bool in_user_code = !jl_is_submodule(lam->module, jl_base_module) && !jl_is_submodule(lam->module, jl_core_module);
@@ -4275,6 +4494,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (store_unboxed_p(s, &ctx)) {
             alloc_local(s, &ctx);
         }
+        else if (ctx.target == PTX) {
+            jl_errorf("PTX target does not support boxing of function argument %s",
+                      s->name);
+        }
         else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
             n_roots++;
         }
@@ -4285,6 +4508,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         assert(jl_is_symbol(s));
         if (store_unboxed_p(s, &ctx)) {
             alloc_local(s, &ctx);
+        }
+        else if (ctx.target == PTX) {
+            jl_errorf("PTX target does not support boxing of local variable %s",
+                      s->name);
         }
         else {
             jl_varinfo_t &vi = ctx.vars[s];
@@ -5484,6 +5711,96 @@ static void init_julia_llvm_env(Module *m)
 
     FPM->doInitialization();
 }
+
+extern "C" void jl_init_llvm(void)
+{
+    // TODO: move the common LLVM stuff from jl_init_codegen to here
+
+    LLVMInitializeNVPTXTarget();
+    LLVMInitializeNVPTXTargetInfo();
+    LLVMInitializeNVPTXTargetMC();
+    LLVMInitializeNVPTXAsmPrinter();
+}
+
+extern "C" DLLEXPORT
+void jl_init_codegen_ptx(jl_value_t* TripleString, jl_value_t* CPUString) {
+    assert(jl_is_ascii_string(TripleString));
+    StringRef TheTriple(jl_string_data(TripleString));
+    assert(jl_is_ascii_string(CPUString));
+    StringRef TheCPU(jl_string_data(CPUString));
+
+    if (cgctx_ptx != NULL)
+        jl_error("cannot re-initialize PTX codegen, destroy the existing one first");
+
+    Module *m = new Module("cuda", getGlobalContext());
+    m->setDataLayout(StringRef(
+        "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-"
+        "f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"));
+    m->setTargetTriple(TheTriple);
+    jl_setup_module(m,false);
+
+    std::string Error;
+    const Target *target =
+        TargetRegistry::lookupTarget(m->getTargetTriple(), Error);
+    if (!target)
+        jl_errorf("could not create PTX target: %s", Error.c_str());
+
+    TargetMachine *tm = target->createTargetMachine(
+        TheTriple, TheCPU, "", TargetOptions(),
+        Reloc::PIC_, CodeModel::Default, CodeGenOpt::Aggressive);
+    if (!tm)
+        jl_error("Could not create PTX target machine");
+    tm->setAsmVerbosityDefault(true);
+
+    PassManager *pm = new PassManager();
+    FunctionPassManager *fpm = new FunctionPassManager(m);
+
+    // Add the target data from the target machine
+#if defined(LLVM36)
+    pm->add(new DataLayoutPass());
+#elif defined(LLVM35)
+    pm->add(new DataLayoutPass(*tm->getDataLayout()));
+#else
+    pm->add(new DataLayout(*tm->getDataLayout()));
+#endif
+
+    // Enqueue standard optimizations
+    PassManagerBuilder PMB;
+    PMB.OptLevel = CodeGenOpt::Aggressive;
+    PMB.populateFunctionPassManager(*fpm);
+
+    // Eliminate all unused functions
+    pm->add(createGlobalOptimizerPass());
+    pm->add(createStripDeadPrototypesPass());
+
+    // Run NVVMReflect
+    StringMap<int> ReflectParams;
+    ReflectParams["__CUDA_FTZ"] = 1;
+    pm->add(createNVVMReflectPass(ReflectParams));
+    pm->add(createAlwaysInlinerPass());
+
+    // Create the global codegen context
+    cgctx_ptx = new CodegenContext();
+    cgctx_ptx->m = m;
+    cgctx_ptx->pm = pm;
+    cgctx_ptx->fpm = fpm;
+    cgctx_ptx->tm = tm;
+}
+
+extern "C" DLLEXPORT
+void jl_destroy_codegen_ptx() {
+    if (cgctx_ptx == NULL)
+        jl_error("cannot destroy an uninitialized PTX codegen");
+
+    delete cgctx_ptx->tm;
+    delete cgctx_ptx->fpm;
+    delete cgctx_ptx->pm;
+    delete cgctx_ptx->m;
+    delete cgctx_ptx;
+
+    cgctx_ptx = NULL;
+}
+
 
 extern "C" void jl_init_codegen(void)
 {
