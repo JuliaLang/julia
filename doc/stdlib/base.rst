@@ -759,6 +759,9 @@ System
 .. function:: @allocated
 
    A macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression.
+   Note: the expression is evaluated inside a local function, instead of the current context, in order to eliminate the effects of compilation,
+   however, there still may be some allocations due to JIT compilation.  This also makes the results inconsistent with the ``@time`` macros,
+   which do not try to adjust for the effects of compilation.
 
 .. function:: EnvHash() -> EnvHash
 
