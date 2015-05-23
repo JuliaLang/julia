@@ -641,8 +641,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 // for T..., intersect with T
                 if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
-                jl_svecset(newparams, i,
-                           jl_type_intersection(declt, (jl_value_t*)jl_typetype_type));
+                jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
+                if (di == (jl_value_t*)jl_datatype_type)
+                    // issue #11355: DataType has a UID and so takes precedence in the cache
+                    jl_svecset(newparams, i, (jl_value_t*)jl_typetype_type);
+                else
+                    jl_svecset(newparams, i, di);
                 // TODO: recompute static parameter values, so in extreme cases we
                 // can give `T=Type` instead of `T=Type{Type{Type{...`.
             }

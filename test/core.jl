@@ -2861,3 +2861,18 @@ abstract Foo11367
 let T1 = TypeVar(:T1, true), T2 = TypeVar(:T2, Foo11367, true)
     testintersect(Tuple{T1, T1}, Tuple{Type{BigInt}, T2}, Bottom)
 end
+
+# issue #11355
+function f11355{T<:Tuple}(sig::Type{T})
+    f11355(sig.parameters[1])
+end
+function f11355(arg::DataType)
+    if arg <: Tuple
+        return 200
+    end
+    return 100
+end
+let t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+    @test f11355(t) == 100
+    @test f11355(t) == 100
+end
