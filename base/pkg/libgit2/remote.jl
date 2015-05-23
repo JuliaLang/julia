@@ -3,23 +3,23 @@
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_create, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}),
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url)
     return GitRemote(rmt_ptr_ptr[])
 end
 
-function GitRemoteAnon(repo::GitRepo, url::AbstractString, refspec::AbstractString)
+function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}),
-                rmt_ptr_ptr, repo.ptr, url, refspec)
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Ptr{UInt8}),
+                rmt_ptr_ptr, repo.ptr, url, C_NULL)
     return GitRemote(rmt_ptr_ptr[])
 end
 
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_lookup, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}),
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name)
     return GitRemote(rmt_ptr_ptr[])
 end
@@ -34,15 +34,32 @@ function url(rmt::GitRemote)
     return  bytestring(url_ptr)
 end
 
-function push(rmt::GitRemote, sig::GitSignature, refspecs::AbstractString="";
+function fetch{T<:AbstractString}(rmt::GitRemote, sig::GitSignature, refspecs::Vector{T};
+               msg::AbstractString="")
+    msg = "pkg.libgit2.fetch: $msg"
+    no_refs = (length(refspecs) == 0)
+    !no_refs && (sa = StrArrayStruct(refspecs...))
+    try
+        @check ccall((:git_remote_fetch, :libgit2), Cint,
+            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{SignatureStruct}, Cstring),
+            rmt.ptr, no_refs ? C_NULL : Ref(sa), sig.ptr, msg)
+    finally
+        !no_refs && finalize(sa)
+    end
+end
+
+function push{T<:AbstractString}(rmt::GitRemote, sig::GitSignature, refspecs::Vector{T};
+              force::Bool=false,
               msg::AbstractString="")
+    msg = "pkg.libgit2.push: $msg"
     push_opts = PushOptionsStruct()
-    !isempty(refspecs) && (sa = StrArrayStruct(pathspecs...))
+    no_refs = (length(refspecs) == 0)
+    !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_push, :libgit2), Cint,
-            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptionsStruct}, Ptr{Void}, Ptr{UInt8}),
-             rmt.ptr, !isempty(refspecs) ? Ref(sa) : C_NULL, Ref(push_opts), sig.ptr, isempty(msg) ? C_NULL : msg)
+            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptionsStruct}, Ptr{Void}, Cstring),
+             rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(push_opts), sig.ptr, msg)
     finally
-        !isempty(refspecs) && finalize(sa)
+        !no_refs && finalize(sa)
     end
 end

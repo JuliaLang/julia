@@ -26,7 +26,7 @@ end
 function get{T}(::Type{T}, c::GitConfig, name::AbstractString)
     if T<:AbstractString
         str_ptr = Ref{Ptr{UInt8}}(C_NULL)
-        @check ccall((:git_config_get_string, :libgit2), Cint,
+        @check ccall((:git_config_get_string, :libgit2), Cint, #TODO: git_config_get_string_buf
                     (Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{UInt8}), str_ptr, c.ptr, name)
         return bytestring(str_ptr[])
     elseif is(T, Bool)
@@ -69,7 +69,7 @@ function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
     end
 end
 
-function getconfig{T}(name::AbstractString, default)
+function getconfig{T}(name::AbstractString, default::T)
     with(GitConfig) do cfg
         get(cfg, name, default)
     end

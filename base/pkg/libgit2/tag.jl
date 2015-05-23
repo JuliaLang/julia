@@ -27,3 +27,12 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::AbstractString;
     end
     return oid_ptr[]
 end
+
+function name(tag::GitTag)
+    return bytestring(ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr))
+end
+
+function target(tag::GitTag)
+    oid_ptr = Ref(ccall((:git_tag_target_id, :libgit2), Ptr{Oid}, (Ptr{Void}, ), tag.ptr))
+    return oid_ptr[]
+end

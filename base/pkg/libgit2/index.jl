@@ -111,7 +111,7 @@ function Base.getindex(idx::GitIndex, i::Csize_t)
     # return ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
     #               (Ptr{Void}, Csize_t), idx.ptr, i)
     ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
-                  (Ptr{Void}, Csize_t), idx.ptr, i)
+                  (Ptr{Void}, Csize_t), idx.ptr, i-1)
     ie_ptr == C_NULL && return nothing
     return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
 end

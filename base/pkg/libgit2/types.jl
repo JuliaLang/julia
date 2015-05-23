@@ -206,6 +206,25 @@ DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
                     new_prefix
                 )
 
+immutable DiffFile
+    id::Oid
+    path::Cstring
+    size::Coff_t
+    flags::Cuint
+    mode::UInt16
+end
+DiffFile()=DiffFile(Oid(),convert(Cstring, Ptr{UInt8}(C_NULL)),Coff_t(0),Cuint(0),UInt16(0))
+
+immutable DiffDelta
+    status::Cint
+    flags::Cuint
+    similarity::UInt16
+    nfiles::UInt16
+    old_file::DiffFile
+    new_file::DiffFile
+end
+DiffDelta()=DiffDelta(Cint(0),Cuint(0),UInt16(0),UInt16(0),DiffFile(),DiffFile())
+
 immutable MergeOptionsStruct
     version::Cuint
     flags::Cint
@@ -215,16 +234,16 @@ immutable MergeOptionsStruct
     file_favor::Cint
 end
 MergeOptionsStruct(; flags::Cint = Cint(0),
-                      rename_threshold::Cuint = Cuint(50),
-                      target_limit::Cuint = Cuint(200),
-                      metric::Ptr{Void} = Ptr{Void}(0),
-                      file_favor::Cint = GitConst.MERGE_FILE_FAVOR_NORMAL
+                     rename_threshold::Cuint = Cuint(50),
+                     target_limit::Cuint = Cuint(200),
+                     metric::Ptr{Void} = Ptr{Void}(0),
+                     file_favor::Cint = GitConst.MERGE_FILE_FAVOR_NORMAL
 )=MergeOptionsStruct(one(Cuint),
-                      flags,
-                      rename_threshold,
-                      target_limit,
-                      metric,
-                      file_favor
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     file_favor
                     )
 
 immutable PushOptionsStruct
@@ -248,7 +267,7 @@ immutable IndexEntry
     mode::Cuint
     uid::Cuint
     gid::Cuint
-    file_size::Int64
+    file_size::Coff_t
 
     id::Oid
 
@@ -264,13 +283,27 @@ IndexEntry() = IndexEntry(IndexTime(),
                           Cuint(0),
                           Cuint(0),
                           Cuint(0),
-                          Cuint(0),
+                          Coff_t(0),
                           Oid(),
                           UInt16(0),
                           UInt16(0),
                           Ptr{UInt8}(0))
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
+immutable RebaseOptionsStruct
+    version::Cuint
+    quiet::Cint
+    rewrite_notes_ref::Cstring
+end
+RebaseOptionsStruct()=RebaseOptionsStruct(one(Cuint), Cint(1), convert(Cstring, Ptr{UInt8}(C_NULL)))
+
+immutable RebaseOperation
+    optype::Cint
+    id::Oid
+    exec::Cstring
+end
+RebaseOperation()=RebaseOperation(Cint(0),Oid(),convert(Cstring, Ptr{UInt8}(C_NULL)))
+Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
 # Abstract object types
 abstract AbstractGitObject
@@ -294,11 +327,13 @@ for (typ, ref, sup, fnc) in (
             (:GitIndex,      :Void, :AbstractGitObject, :(:git_index_free)),
             (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
             (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
+            (:GitRebase,     :Void, :AbstractGitObject, :(:git_rebase_free)),
             (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
             (:GitAnyObject,  :Void, :GitObject, nothing),
             (:GitCommit,     :Void, :GitObject, nothing),
             (:GitBlob,       :Void, :GitObject, nothing),
-            (:GitTree,       :Void, :GitObject, nothing)
+            (:GitTree,       :Void, :GitObject, nothing),
+            (:GitTag,        :Void, :GitObject, nothing)
         )
 
     @eval type $typ <: $sup
@@ -358,6 +393,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
         GitConst.OBJ_TREE
     elseif T == GitBlob
         GitConst.OBJ_BLOB
+    elseif T == GitTag
+        GitConst.OBJ_TAG
     elseif T == GitAnyObject
         GitConst.OBJ_ANY
     else
@@ -372,6 +409,8 @@ function getobjecttype(obj_type::Cint)
         GitTree
     elseif obj_type == GitConst.OBJ_BLOB
         GitBlob
+    elseif obj_type == GitConst.OBJ_TAG
+        GitTag
     elseif obj_type == GitConst.OBJ_ANY
         GitAnyObject
     else
