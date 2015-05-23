@@ -42,7 +42,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             LibGit2.clone(url, cache, bare = true, remote_cb = LibGit2.mirror_cb)
         catch err
             isdir(cache) && rm(cache, recursive=true)
-            throw(PkgError("Cannot clone $pkg from $url\n", err))
+            throw(PkgError("Cannot clone $pkg from $url. $(err.msg)"))
         end
     end
     try

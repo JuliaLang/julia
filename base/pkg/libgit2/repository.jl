@@ -59,15 +59,15 @@ function revparseid(repo::GitRepo, objname::AbstractString)
     return oid
 end
 
-function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, prefix::Bool=false)
+function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_HEXSZ)
     id_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     git_otype = getobjecttype(T)
 
-    err = if prefix
+    err = if oid_size != OID_HEXSZ
         ccall((:git_object_lookup_prefix, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Csize_t, Cint),
-              obj_ptr_ptr, r.ptr, id_ptr, len, git_otype) #TODO: length
+              obj_ptr_ptr, r.ptr, id_ptr, Csize_t(oid_size), git_otype)
     else
         ccall((:git_object_lookup, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
@@ -85,7 +85,7 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, prefix::Bool=false
 end
 
 function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
-    return get(T, r, Oid(oid), length(oid) != OID_HEXSZ)
+    return get(T, r, Oid(oid), length(oid))
 end
 
 function gitdir(repo::GitRepo)
@@ -134,15 +134,6 @@ function checkout_head(repo::GitRepo; options::CheckoutOptionsStruct = CheckoutO
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Void}, Ptr{CheckoutOptionsStruct}),
                  repo.ptr, Ref(options))
-end
-
-function fetch(repo::GitRepo, rmt::GitRemote; msg::AbstractString="")
-    msg = "pkg.libgit2.fetch: $msg"
-    with(default_signature(repo)) do sig
-        @check ccall((:git_remote_fetch, :libgit2), Cint,
-            (Ptr{Void}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{UInt8}),
-            rmt.ptr, C_NULL, sig.ptr, msg)
-    end
 end
 
 function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractString...)

@@ -318,14 +318,17 @@ function update(branch::AbstractString)
                 LibGit2.merge!(repo)
             end
         end
-        # TODO: handle merge conflicts
         LibGit2.fetch(repo)
-        LibGit2.merge!(repo)
+        LibGit2.merge!(repo, fast_forward=true) || LibGit2.rebase!(repo, "origin/$branch")
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
     for pkg in filter!(Read.isinstalled,collect(keys(avail)))
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        try
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        catch err
+            warn("Package $pkg: unable to update cache\n$(err.msg)")
+        end
     end
     instd = Read.installed(avail)
     free = Read.free(instd)
@@ -345,7 +348,11 @@ function update(branch::AbstractString)
             end
         end
         if haskey(avail,pkg)
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            try
+                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            catch err
+                warn("Package $pkg: unable to update cache\n$(err.msg)")
+            end
         end
     end
     info("Computing changes...")
@@ -362,9 +369,7 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
             !LibGit2.iscommit(commit, repo) && throw(PkgError("Cannot find pull commit: $commit"))
         end
         if isempty(url)
-            with(GitConfig, repo) do cfg
-                url = LibGit2.get(cfg, "remote.origin.url", "")
-            end
+            url = LibGit2.getconfig(repo, "remote.origin.url", "")
         end
 
         m = match(LibGit2.GITHUB_REGEX, url)
@@ -376,9 +381,9 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         fork = response["ssh_url"]
         branch = "pull-request/$(commit[1:8])"
         info("Pushing changes as branch $branch")
-        LibGit2.push(repo, fork, "$commit:refs/heads/$branch")
+        LibGit2.push(repo, url=fork, refspecs=["$commit:refs/heads/$branch"])
         pr_url = "$(response["html_url"])/compare/$branch"
-        @osx? run(`open $pr_url`) : info("To create a pull-request, open:\n\n  $pr_url\n")
+        info("To create a pull-request, open:\n\n  $pr_url\n")
     end
 end
 
@@ -397,32 +402,34 @@ function publish(branch::AbstractString)
         ahead_remote, ahead_local = LibGit2.revcount(repo, "origin/$branch", branch)
         ahead_remote > 0 && throw(PkgError("METADATA is behind origin/$branch – run `Pkg.update()` before publishing"))
         ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
-    end
-    tags = Dict{ByteString,Vector{ASCIIString}}()
-    Git.run(`update-index -q --really-refresh`, dir="METADATA")
-    cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
-    for line in eachline(Git.cmd(cmd, dir="METADATA"))
-        path = chomp(line)
-        m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
-        m !== nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
-        pkg, ver = m.captures; ver = convert(VersionNumber,ver)
-        sha1 = readchomp(joinpath("METADATA",path))
-        if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
-            old = Git.readchomp(`cat-file blob origin/$branch:$path`, dir="METADATA")
-            old == sha1 || throw(PkgError("$pkg v$ver SHA1 changed in METADATA – refusing to publish"))
+
+        tags = Dict{ByteString,Vector{ASCIIString}}()
+
+        # get changed files
+        for path in LibGit2.diff_files(repo, "origin/metadata-v2", LibGit2.GitConst.HEAD_FILE)
+            println(path)
+            m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
+            m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+            pkg, ver = m.captures; ver = convert(VersionNumber,ver)
+            sha1 = readchomp(joinpath("METADATA",path))
+            old = LibGit2.cat(repo, LibGit2.GitBlob, "origin/$branch:$path")
+            old != nothing && old != sha1 && throw(PkgError("$pkg v$ver SHA1 changed in METADATA – refusing to publish"))
+            with(GitRepo, pkg) do pkg_repo
+                tag_name = "v$ver"
+                tag_commit = LibGit2.revparseid(pkg_repo, "$(tag_name)^{commit}")
+                LibGit2.iszero(tag_commit) || string(tag_commit) == sha1 || return false
+                haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
+                push!(tags[pkg], tag_name)
+                return true
+            end || throw(PkgError("$pkg v$ver is incorrectly tagged – $sha1 expected"))
         end
-        any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
-            ver == convert(VersionNumber,tag) || return false
-            haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
-            push!(tags[pkg], tag)
-            return true
-        end || throw(PkgError("$pkg v$ver is incorrectly tagged – $sha1 expected"))
+        isempty(tags) && info("No new package versions to publish")
+        info("Validating METADATA")
+        check_metadata(Set(keys(tags)))
     end
-    isempty(tags) && info("No new package versions to publish")
-    info("Validating METADATA")
-    check_metadata(Set(keys(tags)))
-    @sync for pkg in sort!(collect(keys(tags)))
-        @async begin
+
+    for pkg in sort!(collect(keys(tags)))
+        with(GitRepo, pkg) do pkg_repo
             forced = ASCIIString[]
             unforced = ASCIIString[]
             for tag in tags[pkg]
@@ -431,13 +438,13 @@ function publish(branch::AbstractString)
             end
             if !isempty(forced)
                 info("Pushing $pkg temporary tags: ", join(forced,", "))
-                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
-                Git.run(`push -q --force origin $refspecs`, dir=pkg)
+                LibGit2.push(pkg_repo, remote="origin", force=true,
+                             refspecs=["refs/tags/$tag:refs/tags/$tag" for tag in forced])
             end
             if !isempty(unforced)
                 info("Pushing $pkg permanent tags: ", join(unforced,", "))
-                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
-                Git.run(`push -q origin $refspecs`, dir=pkg)
+                LibGit2.push(pkg_repo, remote="origin",
+                             refspecs=["refs/tags/$tag:refs/tags/$tag" for tag in unforced])
             end
         end
     end
@@ -600,15 +607,11 @@ end
 function register(pkg::AbstractString)
     url = ""
     try
-        url = with(GitRepo, pkg) do repo
-            with(GitConfig, repo) do cfg
-                LibGit2.get(cfg, "remote.origin.url", "")
-            end
-        end
+        url = LibGit2.getconfig(pkg, "remote.origin.url", "")
     catch err
         throw(PkgError("$pkg: $err"))
     end
-    isempty(url) || throw(PkgError("$pkg: no URL configured"))
+    !isempty(url) || throw(PkgError("$pkg: no URL configured"))
     register(pkg, LibGit2.normalize_url(url))
 end
 

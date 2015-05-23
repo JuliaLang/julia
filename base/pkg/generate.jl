@@ -6,8 +6,8 @@ import ..LibGit2, ..Read, ...Pkg.PkgError
 importall ..LibGit2
 
 copyright_year() =  string(Dates.year(Dates.today()))
-copyright_name(repo::GitRepo) = getconfig(repo, "user.name", "")
-github_user() = getconfig("user.name", "github.user", "")
+copyright_name(repo::GitRepo) = LibGit2.getconfig(repo, "user.name", "")
+github_user() = LibGit2.getconfig("github.user", "")
 
 function git_contributors(repo::GitRepo, n::Int=typemax(Int))
     contrib = Dict()

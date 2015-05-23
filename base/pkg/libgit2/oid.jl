@@ -57,7 +57,7 @@ function Oid(obj::Ptr{Void})
     return Oid(oid_ptr)
 end
 
-function Oid(obj::GitObject)
+function Oid{T<:GitObject}(obj::T)
     obj == nothing && return Oid()
     return Oid(obj.ptr)
 end

@@ -110,7 +110,7 @@ temp_dir() do dir_cache
         Pkg.LibGit2.fetch(repo)
         refs1 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
-        Pkg.LibGit2.fetch(repo, path_cache, refspecs = "+refs/*:refs/remotes/cache/*")
+        Pkg.LibGit2.fetch(repo, remoteurl=path_cache, refspecs =["+refs/*:refs/remotes/cache/*"])
         refs2 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
         finalize(repo)

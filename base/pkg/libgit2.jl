@@ -26,6 +26,8 @@ include("libgit2/index.jl")
 include("libgit2/merge.jl")
 include("libgit2/tag.jl")
 include("libgit2/blob.jl")
+include("libgit2/diff.jl")
+include("libgit2/rebase.jl")
 
 immutable State
     head::Oid
@@ -72,37 +74,43 @@ isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(re
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
     iszero(tree_oid) && return true
-    emptypathspec = isempty(paths)
-
     result = false
     tree = get(GitTree, repo, tree_oid)
-    if !emptypathspec
-        sa = StrArrayStruct(paths)
-        diff_opts = DiffOptionsStruct(pathspec = sa)
-    end
     try
-        diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-        if cached
-            @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
-                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
-                           diff_ptr_ptr, repo.ptr, tree.ptr, NULL,  emptypathspec ? C_NULL : Ref(diff_opts))
-        else
-            @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
-                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
-                           diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
-        end
-        diff = GitDiff(diff_ptr_ptr[])
-
-        c = ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
-        result = c > 0
+        diff = diff_tree(repo, tree, paths)
+        result = count(diff) > 0
         finalize(diff)
     catch err
         result = true
     finally
-        !emptypathspec && finalize(sa)
         finalize(tree)
     end
     return result
+end
+
+""" git diff --name-only --diff-filter=<filter> <branch1> <branch2> """
+function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
+                    filter::Set{Cint}=Set([GitConst.DELTA_ADDED, GitConst.DELTA_MODIFIED, GitConst.DELTA_DELETED]))
+    b1_id = revparseid(repo, branch1*"^{tree}")
+    b2_id = revparseid(repo, branch2*"^{tree}")
+    tree1 = get(GitTree, repo, b1_id)
+    tree2 = get(GitTree, repo, b2_id)
+    files = AbstractString[]
+    try
+        diff = diff_tree(repo, tree1, tree2)
+        for i in 1:count(diff)
+            delta = diff[i]
+            delta == nothing && break
+            if delta.status in filter
+                push!(files, bytestring(delta.new_file.path))
+            end
+        end
+        finalize(diff)
+    finally
+        finalize(tree1)
+        finalize(tree2)
+    end
+    return files
 end
 
 function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
@@ -166,19 +174,44 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{
 end
 const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
 
-""" git fetch <repository> [<refspec>]"""
-function fetch(repo::GitRepo, remote::AbstractString="origin";
-               refspecs::AbstractString="")
-    rmt = if isempty(refspecs)
+""" git fetch [<url>|<repository>] [<refspecs>]"""
+function fetch{T<:AbstractString}(repo::GitRepo;
+                                  remote::AbstractString="origin",
+                                  remoteurl::AbstractString="",
+                                  refspecs::Vector{T}=AbstractString[])
+    rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
-        GitRemoteAnon(repo, remote, refspecs)
+        GitRemoteAnon(repo, remoteurl)
     end
-
     try
-        fetch(repo, rmt, msg="from $(url(rmt))")
+        with(default_signature(repo)) do sig
+            fetch(rmt, sig, refspecs, msg="from $(url(rmt))")
+        end
     catch err
         warn("fetch: $err")
+    finally
+        finalize(rmt)
+    end
+end
+
+""" git push [<url>|<repository>] [<refspecs>]"""
+function push{T<:AbstractString}(repo::GitRepo;
+              refspecs::Vector{T}=AbstractString[],
+              remote::AbstractString="origin",
+              remoteurl::AbstractString="",
+              force::Bool=false)
+    rmt = if isempty(remoteurl)
+        get(GitRemote, repo, remote)
+    else
+        GitRemoteAnon(repo, remoteurl)
+    end
+    try
+        with(default_signature(repo)) do sig
+            push(rmt, sig, refspecs, force=force, msg="to $(url(rmt))")
+        end
+    catch err
+        warn("push: $err")
     finally
         finalize(rmt)
     end
@@ -337,22 +370,13 @@ end
 """ git cat-file <commit> """
 function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
     obj_id = revparseid(repo, object)
-    iszero(obj_id) && return
+    iszero(obj_id) && return nothing
 
     obj = get(T, repo, obj_id)
     if isa(obj, GitBlob)
         return bytestring(convert(Ptr{UInt8}, content(obj)))
     else
         return nothing
-    end
-end
-
-""" git push <url> [<refspecs>]"""
-function push(repo::GitRepo, url::AbstractString, refspecs::AbstractString="")
-    with(GitRemoteAnon(repo, url, refspecs)) do rmt
-        with(default_signature(repo)) do sig
-            push(rmt, sig)
-        end
     end
 end
 
@@ -366,6 +390,81 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     sc = count((i,r)->i!=base_id, repo, oid=snd_id,
                 by=Pkg.LibGit2.GitConst.SORT_TOPOLOGICAL)
     return (fc-1, sc-1)
+end
+
+""" git merge [--ff-only] [<committish>] """
+function merge!(repo::GitRepo, committish::AbstractString=""; fast_forward::Bool=false)
+    # get head annotated upstream reference
+    ret = with(head(repo)) do head_ref
+        brn_ref = upstream(head_ref)
+        upst_ann  = isempty(committish) ? GitAnnotated(repo, brn_ref) : GitAnnotated(repo, committish)
+        try
+            ma, mp = merge_analysis(repo, upst_ann)
+            (ma & GitConst.MERGE_ANALYSIS_UP_TO_DATE == GitConst.MERGE_ANALYSIS_UP_TO_DATE) && return true
+            if (ma & GitConst.MERGE_ANALYSIS_FASTFORWARD == GitConst.MERGE_ANALYSIS_FASTFORWARD)
+                # do fastforward: checkout tree and update branch references
+                # hur_oid = Oid(hur)
+                # with(get(GitCommit, repo, hur_oid)) do cmt
+                #     checkout_tree(repo, cmt)
+                # end
+                # target!(hr, hur_oid, msg="pkg.libgit2.megre!: fastforward $(name(hur)) into $(name(hr))")
+                # head!(repo, hur, msg="--fastforward")
+
+                brn_ref_oid = Oid(brn_ref)
+                target!(head_ref, brn_ref_oid, msg="pkg.libgit2.megre!: fastforward $(name(brn_ref)) into $(name(head_ref))")
+                reset!(repo, brn_ref_oid, GitConst.RESET_HARD)
+            elseif (ma & GitConst.MERGE_ANALYSIS_NORMAL == GitConst.MERGE_ANALYSIS_NORMAL)
+                fast_forward && return false # do not do merge
+                merge(repo, hua)
+                cleanup(repo)
+                info("Review and commit merged changes.")
+            else
+                warn("Unknown merge analysis result. Merging is not possible.")
+                return false
+            end
+            return true
+        finally
+            finalize(upst_ann)
+            finalize(brn_ref)
+        end
+    end
+    return ret
+end
+
+""" git rebase --merge [--onto <newbase>] [<upstream>] """
+function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
+    with(head(repo)) do head_ref
+        head_ann = GitAnnotated(repo, head_ref)
+        upst_ann  = if isempty(upstream)
+            with(upstream(head_ref)) do brn_ref
+                GitAnnotated(repo, brn_ref)
+            end
+        else
+            GitAnnotated(repo, upstream)
+        end
+        try
+            sig = default_signature(repo)
+            try
+                rbs = GitRebase(repo, head_ann, upst_ann, sig=Nullable(sig))
+                try
+                    while (rbs_op = next(rbs)) != nothing
+                        commit(rbs, sig)
+                    end
+                    finish(rbs, sig)
+                catch err
+                    abort(rbs, sig)
+                finally
+                    finalize(rbs)
+                end
+            finally
+                #!isnull(onto_ann) && finalize(get(onto_ann))
+                finalize(sig)
+            end
+        finally
+            finalize(upst_ann)
+            finalize(head_ann)
+        end
+    end
 end
 
 
