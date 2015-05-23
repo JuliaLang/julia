@@ -1317,10 +1317,11 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
         jl_defer_signal--;                                      \
         if (jl_defer_signal == 0 && jl_signal_pending != 0) {   \
             jl_signal_pending = 0;                              \
-            jl_throw(jl_interrupt_exception);                   \
+            jl_sigint_action();                                 \
         }                                                       \
     } while(0)
 
+DLLEXPORT void jl_sigint_action(void);
 DLLEXPORT void restore_signals(void);
 DLLEXPORT void jl_install_sigint_handler();
 DLLEXPORT void jl_sigatomic_begin(void);
