@@ -110,10 +110,15 @@ function complete_keyword(s::ByteString)
 end
 
 function complete_path(path::AbstractString, pos)
-    dir, prefix = splitdir(expanduser(path))
-    # if the path is just "~", don't consider the expanded username as a prefix
-    @unix_only if path == "~"
-        dir, prefix = expanduser(path), ""
+    if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
+        else
+            dir, prefix = splitdir(homedir() * path[2:end])
+        end
+    else
+        dir, prefix = splitdir(path)
     end
     local files
     try
