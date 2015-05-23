@@ -151,7 +151,7 @@ CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
     :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
 
-stagedfunction eachindex{S,T,M,N}(::LinearSlow, A::AbstractArray{S,M}, B::AbstractArray{T,N})
+@generated function eachindex{S,T,M,N}(::LinearSlow, A::AbstractArray{S,M}, B::AbstractArray{T,N})
     K = max(M,N)
     startargs = fill(1, K)
     stopargs = [:(max(size(A,$i),size(B,$i))) for i=1:K]

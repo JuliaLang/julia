@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.LinAlg: chksquare
+
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
 # Convert from 1-based to 0-based indices
@@ -311,6 +313,9 @@ end
 
 function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     colptr = Array(Ti, n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
@@ -339,6 +344,9 @@ end
 
 function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     colptr = Array(Ti, n+1)
     nnz = 0
     colptr[1] = 1

@@ -126,9 +126,10 @@
    use or situations in which more options are need, please use a package that provides the
    desired functionality instead.
 
-.. function:: mv(src::AbstractString,dst::AbstractString)
+.. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
-   Move a file from `src` to `dst`.
+   Move the file, link, or directory from *src* to *dest*.
+   \"remove_destination=true\" will first remove an existing `dst`.
 
 .. function:: rm(path::AbstractString; recursive=false)
 
@@ -147,14 +148,14 @@
 
    Obtain the path of a temporary directory (possibly shared with other processes).
 
-.. function:: mktemp()
+.. function:: mktemp([parent=tempdir()])
 
    Returns ``(path, io)``, where ``path`` is the path of a new temporary file
-   and ``io`` is an open file object for this path.
+   in ``parent`` and ``io`` is an open file object for this path.
 
-.. function:: mktempdir()
+.. function:: mktempdir([parent=tempdir()])
 
-   Create a temporary directory and return its path.
+   Create a temporary directory in the ``parent`` directory and return its path.
 
 .. function:: isblockdev(path) -> Bool
 

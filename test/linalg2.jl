@@ -333,8 +333,21 @@ end
 @test I[1,1] == 1 # getindex
 @test I[1,2] == 0 # getindex
 @test I === I' # transpose
+@test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
+@test zero(UniformScaling{Float32}) == UniformScaling(zero(Float32))
+@test zero(UniformScaling(rand(Complex128))) == zero(UniformScaling{Complex128})
+@test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
+@test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
+@test -one(UniformScaling(2)) == UniformScaling(-1)
+α = randn()
+@test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
+@test UniformScaling(α)./α == UniformScaling(1.0)
+@test α + UniformScaling(1.0) == UniformScaling(1.0) + α
+@test α - UniformScaling(1.0) == -(UniformScaling(1.0) - α)
 λ = complex(randn(),randn())
 J = UniformScaling(λ)
+@test ndims(J) == 2
+@test transpose(J) == J
 @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
 @test I + I === UniformScaling(2) # +
 @test inv(I) == I

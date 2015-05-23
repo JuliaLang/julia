@@ -17,7 +17,7 @@ macro init ()
     quote
         if !isdefined(:META)
             const $META = ObjectIdDict()
-            doc($META, doc"Documentation metadata for $(string(current_module())).")
+            doc($META, @doc_str $("Documentation metadata for `$(current_module())`."))
             push!(modules, current_module())
             nothing
         end
@@ -190,7 +190,7 @@ function docm(meta, def)
     isexpr(def′, :type) && return namedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     fexpr(def′) && return funcdoc(meta, def)
-    isexpr(def, :macrocall) && (def = namify(def))
+    isexpr(def′, :macrocall) && (def = namify(def′))
     return objdoc(meta, def)
 end
 

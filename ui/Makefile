@@ -46,9 +46,6 @@ release debug:
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
-$(build_bindir)/julia.bat: $(JULIAHOME)/contrib/windows/*.bat
-	cp $(JULIAHOME)/contrib/windows/*.bat $(build_bindir)
-julia-release julia-debug: $(build_bindir)/julia.bat
 ifneq ($(USEMSVC), 1)
 julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \

@@ -54,9 +54,17 @@
 
    Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
 
+.. function:: ascii(::Ptr{UInt8}, [length])
+
+   Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+
 .. function:: utf8(::Array{UInt8,1})
 
    Create a UTF-8 string from a byte array.
+
+.. function:: utf8(::Ptr{UInt8}, [length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: utf8(s)
 
@@ -101,17 +109,19 @@
    even though they may contain more than one codepoint; for example
    a letter combined with an accent mark is a single grapheme.)
 
-.. function:: is_valid_ascii(s) -> Bool
+.. function:: isvalid(value) -> Bool
 
-   Returns true if the argument (``ASCIIString``, ``UTF8String``, or byte vector) is valid ASCII, false otherwise.
+   Returns true if the given value is valid for its type,
+   which currently can be one of ``Char``, ``ASCIIString``, ``UTF8String``, ``UTF16String``, or ``UTF32String``
 
-.. function:: is_valid_utf8(s) -> Bool
+.. function:: isvalid(T, value) -> Bool
 
-   Returns true if the argument (``ASCIIString``, ``UTF8String``, or byte vector) is valid UTF-8, false otherwise.
-
-.. function:: is_valid_char(c) -> Bool
-
-   Returns true if the given char or integer is a valid Unicode code point.
+   Returns true if the given value is valid for that type.
+   Types currently can be ``Char``, ``ASCIIString``, ``UTF8String``, ``UTF16String``, or ``UTF32String``
+   Values for ``Char`` can be of type ``Char`` or ``UInt32``
+   Values for ``ASCIIString`` and ``UTF8String`` can be of that type, or ``Vector{UInt8}``
+   Values for ``UTF16String`` can be ``UTF16String`` or ``Vector{UInt16}``
+   Values for ``UTF32String`` can be ``UTF32String``, ``Vector{Char}`` or ``Vector{UInt32}``
 
 .. function:: is_assigned_char(c) -> Bool
 
@@ -371,13 +381,9 @@
 
    Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
 
-.. function:: is_valid_utf16(s) -> Bool
-
-   Returns true if the argument (``UTF16String`` or ``UInt16`` array) is valid UTF-16.
-
 .. function:: utf32(s)
 
-   Create a UTF-32 string from a byte array, array of ``UInt32``, or
+   Create a UTF-32 string from a byte array, array of ``Char`` or ``UInt32``, or
    any other string type.  (Conversions of byte arrays check for a
    byte-order marker in the first four bytes, and do not include it in
    the resulting string.)
@@ -387,7 +393,7 @@
    string (so that it is mostly invisible in Julia); this allows the
    string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   `utf32(s)` conversion function.  If you have a ``UInt32`` array
+   `utf32(s)` conversion function.  If you have a ``Char`` or ``UInt32`` array
    ``A`` that is already NUL-terminated UTF-32 data, then you
    can instead use `UTF32String(A)`` to construct the string without
    making a copy of the data and treating the NUL as a terminator

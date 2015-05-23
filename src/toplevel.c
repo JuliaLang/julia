@@ -25,7 +25,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-int jl_lineno = 0;
+DLLEXPORT int jl_lineno = 0;
+// current file name
+DLLEXPORT const char *jl_filename = "no file";
 
 jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
@@ -108,14 +110,13 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *parent_module = jl_current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
-    if (b->value != NULL) {
+    if (b->value != NULL && jl_options.build_path == NULL) {
         jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
-
-    gc_wb(parent_module, newm);
+    gc_wb_binding(b, newm);
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
@@ -203,11 +204,14 @@ static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base
-jl_module_t *jl_base_relative_to(jl_module_t *m)
+DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
-    if (m==jl_core_module || m==jl_old_base_module)
-        return m;
-    return (jl_base_module==NULL) ? jl_core_module : jl_base_module;
+    while (m != jl_main_module) {
+        if (m->istopmod)
+            return m;
+        m = m->parent;
+    }
+    return jl_top_module;
 }
 
 int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
@@ -535,7 +539,9 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
-    jl_lineno=0;
+    const char *last_filename = jl_filename;
+    jl_lineno = 0;
+    jl_filename = fname;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
     JL_GC_PUSH4(&fn, &ln, &form, &result);
     JL_TRY {
@@ -560,6 +566,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
+        jl_filename = last_filename;
         if (jl_loaderror_type == NULL) {
             jl_rethrow();
         }
@@ -570,14 +577,14 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
+    jl_filename = last_filename;
     JL_GC_POP();
     return result;
 }
 
 jl_value_t *jl_load(const char *fname)
 {
-    if (jl_current_module == jl_base_module) {
-        //This deliberatly uses ios, because stdio initialization has been moved to Julia
+    if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), (uv_run_mode)1);

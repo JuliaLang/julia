@@ -93,6 +93,60 @@ You can debug the ``sys.ji`` phase using::
 
     julia/base$ gdb --args .../usr/bin/julia-debug -C native --build ../usr/lib/julia/sys -J ../usr/lib/julia/sys0.ji sysimg.jl
 
+By default, any errors will cause Julia to exit, even under gdb. To catch an error "in the act", set a breakpoint
+in ``jl_error`` (there are several other useful spots, for specific kinds of failures, including: ``jl_too_few_args``,
+``jl_too_many_args``, and ``jl_throw``).
+
+Once an error is caught, a useful technique is to walk up the stack and examine the function by inspecting
+the related call to ``jl_apply``. To take a real-world example::
+
+    Breakpoint 1, jl_throw (e=0x7ffdf42de400) at task.c:802
+    802	{
+    (gdb) p jl_(e)
+    ErrorException("auto_unbox: unable to determine argument type")
+    $2 = void
+    (gdb) bt 10
+    #0  jl_throw (e=0x7ffdf42de400) at task.c:802
+    #1  0x00007ffff65412fe in jl_error (str=0x7ffde56be000 <_j_str267> "auto_unbox:
+       unable to determine argument type")
+       at builtins.c:39
+    #2  0x00007ffde56bd01a in julia_convert_16886 ()
+    #3  0x00007ffff6541154 in jl_apply (f=0x7ffdf367f630, args=0x7fffffffc2b0, nargs=2) at julia.h:1281
+    ...
+
+The most recent ``jl_apply`` is at frame #3, so we can go back there and look at the AST for the function
+``julia_convert_16886``. This is the uniqued name for some method of ``convert``. ``f`` in this frame is a
+``jl_function_t*``, so we can look at the type signature, if any, from the ``specTypes`` field::
+
+    (gdb) f 3
+    #3  0x00007ffff6541154 in jl_apply (f=0x7ffdf367f630, args=0x7fffffffc2b0, nargs=2) at julia.h:1281
+    1281	    return f->fptr((jl_value_t*)f, args, nargs);
+    (gdb) p f->linfo->specTypes
+    $4 = (jl_tupletype_t *) 0x7ffdf39b1030
+    (gdb) p jl_( f->linfo->specTypes )
+    Tuple{Type{Float32}, Float64}           # <-- type signature for julia_convert_16886
+
+Then, we can look at the AST for this function::
+
+    (gdb) p jl_( jl_uncompress_ast(f->linfo, f->linfo->ast) )
+    Expr(:lambda, Array{Any, 1}[:#s29, :x], Array{Any, 1}[Array{Any, 1}[], Array{Any, 1}[Array{Any, 1}[:#s29, :Any, 0], Array{Any, 1}[:x, :Any, 0]], Array{Any, 1}[], 0], Expr(:body,
+    Expr(:line, 90, :float.jl)::Any,
+    Expr(:return, Expr(:call, :box, :Float32, Expr(:call, :fptrunc, :Float32, :x)::Any)::Any)::Any)::Any)::Any
+
+Finally, and perhaps most usefully, we can force the function to be recompiled in order to step through the
+codegen process. To do this, clear the cached ``functionObject`` from the ``jl_lamdbda_info_t*``::
+
+    (gdb) p f->linfo->functionObject
+    $8 = (void *) 0x1289d070
+    (gdb) set f->linfo->functionObject = NULL
+
+Then, set a breakpoint somewhere useful (e.g. ``emit_function``, ``emit_expr``, ``emit_call``, etc.), and run
+codegen::
+
+    (gdb) p jl_compile(f)
+    ... # your breakpoint here
+
+
 Mozilla's Record and Replay Framework (rr)
 ---------------------------------------------
 

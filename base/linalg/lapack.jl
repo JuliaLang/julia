@@ -120,14 +120,14 @@ for (gebal, gebak, elty, relty) in
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   SCALE( * ), V( LDV, * )
         function gebak!(job::Char, side::Char,
-                        ilo::BlasInt, ihi::BlasInt, scale::Vector{$elty},
+                        ilo::BlasInt, ihi::BlasInt, scale::Vector{$relty},
                         V::StridedMatrix{$elty})
             chkstride1(V)
-            chksquare(V)
+            n = chksquare(V)
             info    = Array(BlasInt, 1)
             ccall(($(blasfunc(gebak)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &max(1,stride(V,2)), info)
             @lapackerror
             V

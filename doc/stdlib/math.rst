@@ -346,8 +346,8 @@ Mathematical Operators
 
       julia> B
       2x2 Array{Float64,2}:
-       3.0 3.0
-       7.0 7.0
+       3.0  3.0
+       7.0  7.0
 
 .. function:: A_mul_Bc(...)
 
@@ -608,7 +608,12 @@ Mathematical Functions
 
 .. function:: log(x)
 
-   Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
+   Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative
+   ``Real`` arguments. Use complex negative arguments to obtain complex
+   results.
+
+   There is an experimental variant in the ``Base.Math.JuliaLibm`` module,
+   which is typically faster and more accurate.
 
 .. function:: log(b,x)
 
@@ -625,6 +630,9 @@ Mathematical Functions
 .. function:: log1p(x)
 
    Accurate natural logarithm of ``1+x``.  Throws ``DomainError`` for ``Real`` arguments less than -1.
+
+   There is an experimental variant in the ``Base.Math.JuliaLibm`` module,
+   which is typically faster and more accurate.
 
 .. function:: frexp(val)
 

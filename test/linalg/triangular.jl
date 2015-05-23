@@ -98,13 +98,14 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test full(-A1) == -full(A1)
 
         # Binary operations
-        @test A1*0.5 == full(A1*0.5)
-        @test 0.5*A1 == full(0.5*A1)
-        @test A1/0.5 == full(A1/0.5)
-        @test 0.5\A1 == full(0.5\A1)
+        @test A1*0.5 == full(A1)*0.5
+        @test 0.5*A1 == 0.5*full(A1)
+        @test A1/0.5 == full(A1)/0.5
+        @test 0.5\A1 == 0.5\full(A1)
 
         # inversion
         @test_approx_eq inv(A1) inv(lufact(full(A1)))
+        inv(full(A1)) # issue #11298
         @test isa(inv(A1), t1)
 
         # Determinant

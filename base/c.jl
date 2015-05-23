@@ -59,6 +59,10 @@ end
 convert{T<:Union(Int8,UInt8)}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, unbox(Ptr{Cwchar_t}, p))
 
+# convert strings to ByteString etc. to pass as pointers
+cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
+cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
+
 containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
 function unsafe_convert(::Type{Cstring}, s::ByteString)
     p = unsafe_convert(Ptr{Cchar}, s)

@@ -233,8 +233,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                 return rhs;
             }
         }
+        JL_GC_PUSH1(&rhs);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
         jl_checked_assignment(b, rhs);
+        JL_GC_POP();
         return rhs;
     }
     else if (ex->head == new_sym) {
@@ -420,8 +422,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             ((jl_tvar_t*)jl_svecref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
-        if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_singleton(dt))
+        if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_singleton(dt)) {
             dt->instance = newstruct(dt);
+            gc_wb(dt, dt->instance);
+        }
 
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {

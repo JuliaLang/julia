@@ -210,10 +210,11 @@ end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     # note: checking bit pattern
     xT = convert(T,x)
-    if isbits(T) && ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
-                     (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
-                     (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
-                     (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
+    if isbits(T) && nfields(T)==0 &&
+        ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
+         (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
+         (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
+         (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
               a, 0, length(a)*sizeof(T))
     else
@@ -397,7 +398,7 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
-        is(I,A) && (I = X)
+        is(I,A) && (I = X::typeof(I))
     elseif is(I,A)
         I = copy(I)
     end
@@ -753,7 +754,6 @@ end
 
 promote_array_type{Scalar, Arry}(::Type{Scalar}, ::Type{Arry}) = promote_type(Scalar, Arry)
 promote_array_type{S<:Real, A<:FloatingPoint}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
@@ -867,33 +867,6 @@ for f in (:+, :-)
             return F
         end
     end
-end
-
-## promotion to complex ##
-
-function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); throw(DimensionMismatch()); end
-    F = similar(A, typeof(complex(zero(S),zero(T))))
-    for i in eachindex(A)
-        @inbounds F[i] = complex(A[i], B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Real, B::Array{T})
-    F = similar(B, typeof(complex(A,zero(T))))
-    for i in eachindex(B)
-        @inbounds F[i] = complex(A, B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Array{T}, B::Real)
-    F = similar(A, typeof(complex(zero(T),B)))
-    for i in eachindex(A)
-        @inbounds F[i] = complex(A[i], B)
-    end
-    return F
 end
 
 # use memcmp for lexcmp on byte arrays

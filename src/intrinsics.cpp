@@ -437,7 +437,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         if (vxt == T_void)
             return vx;
         if (!vxt->isSingleValueType()) {
-            jl_error("box: argument not of a primitive type");
+            emit_error("reinterpret: expected non-struct value as second argument", ctx);
+            return UndefValue::get(jl_pvalue_llvmt);
         }
         if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
@@ -603,7 +604,11 @@ static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t
     int ldepth = ctx->argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
+#ifdef LLVM37
+    Value *ret = builder.CreateCall(prepare_call(preffunc), { parg, iarg });
+#else
     Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
+#endif
     ctx->argDepth = ldepth;
     return ret;
 }
@@ -660,7 +665,11 @@ static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
+#ifdef LLVM37
+    builder.CreateCall(prepare_call(psetfunc), { parg, xarg, iarg });
+#else
     builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
+#endif
     ctx->argDepth = ldepth;
     return parg;
 }
@@ -986,20 +995,32 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fma_float,3) {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
-      return builder.CreateCall3
-        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
-                                   ArrayRef<Type*>(x->getType())),
-         FP(x), FP(y), FP(z));
+      Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
+                                   ArrayRef<Type*>(x->getType()));
+#ifdef LLVM37
+      return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
+#else
+      return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
+#endif
     }
     HANDLE(muladd_float,3)
 #ifdef LLVM34
     {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
+#ifdef LLVM37
+      return builder.CreateCall
+#else
       return builder.CreateCall3
+#endif
         (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
                                    ArrayRef<Type*>(x->getType())),
-         FP(x), FP(y), FP(z));
+         #ifdef LLVM37
+         {FP(x), FP(y), FP(z)}
+         #else
+         FP(x), FP(y), FP(z)
+         #endif
+        );
     }
 #else
       return math_builder(ctx, true)().
@@ -1014,21 +1035,25 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(checked_umul,2) {
         Value *ix = JL_INT(x); Value *iy = JL_INT(y);
         assert(ix->getType() == iy->getType());
-        Value *res = builder.CreateCall2
-            (Intrinsic::getDeclaration(jl_Module,
-                                       f==checked_sadd ?
-                                       Intrinsic::sadd_with_overflow :
-                                       (f==checked_uadd ?
-                                        Intrinsic::uadd_with_overflow :
-                                        (f==checked_ssub ?
-                                         Intrinsic::ssub_with_overflow :
-                                         (f==checked_usub ?
-                                          Intrinsic::usub_with_overflow :
-                                          (f==checked_smul ?
-                                           Intrinsic::smul_with_overflow :
-                                           Intrinsic::umul_with_overflow)))),
-                                       ArrayRef<Type*>(ix->getType())),
-             ix, iy);
+        Value *intr =
+            Intrinsic::getDeclaration(jl_Module,
+               f==checked_sadd ?
+               Intrinsic::sadd_with_overflow :
+               (f==checked_uadd ?
+                Intrinsic::uadd_with_overflow :
+                (f==checked_ssub ?
+                 Intrinsic::ssub_with_overflow :
+                 (f==checked_usub ?
+                  Intrinsic::usub_with_overflow :
+                  (f==checked_smul ?
+                   Intrinsic::smul_with_overflow :
+                   Intrinsic::umul_with_overflow)))),
+               ArrayRef<Type*>(ix->getType()));
+#ifdef LLVM37
+        Value *res = builder.CreateCall(intr,{ix, iy});
+#else
+        Value *res = builder.CreateCall2(intr, ix, iy);
+#endif
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
         raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
@@ -1139,15 +1164,23 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ctlz_int,1) {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        return builder.CreateCall2(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
-                                      ArrayRef<Type*>(types)), x, ConstantInt::get(T_int1,0));
+        Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
+                                      ArrayRef<Type*>(types));
+#ifdef LLVM37
+        return builder.CreateCall(ctlz, {x, ConstantInt::get(T_int1,0)});
+#else
+        return builder.CreateCall2(ctlz, x, ConstantInt::get(T_int1,0));
+#endif
     }
     HANDLE(cttz_int,1) {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        return builder.CreateCall2(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types)), x, ConstantInt::get(T_int1, 0));
+        Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types));
+#ifdef LLVM37
+        return builder.CreateCall(cttz, {x, ConstantInt::get(T_int1, 0)});
+#else
+        return builder.CreateCall2(cttz, x, ConstantInt::get(T_int1, 0));
+#endif
     }
 
     HANDLE(nan_dom_err,2) {
@@ -1254,16 +1287,19 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Type *tx = x->getType();
 #ifdef LLVM36
         Type *ts[1] = { tx };
-        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
-                                                             ArrayRef<Type*>(ts)),
-                                   x, y);
+        Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
+            ArrayRef<Type*>(ts));
+#ifdef LLVM37
+        return builder.CreateCall(powi, {x, y});
+#else
+        return builder.CreateCall2(powi, x, y);
+#endif
 #else
         // issue #6506
         Type *ts[2] = { tx, tx };
-        return builder.
-            CreateCall2(jl_Module->getOrInsertFunction(tx==T_float64 ? "pow" : "powf",
-                                                       FunctionType::get(tx, ts, false)),
-                        x, builder.CreateSIToFP(y, tx));
+        Value *pow = jl_Module->getOrInsertFunction(
+            tx==T_float64 ? "pow" : "powf", FunctionType::get(tx, ts, false));
+        return builder.CreateCall2(pow, x, builder.CreateSIToFP(y, tx));
 #endif
     }
     HANDLE(sqrt_llvm_fast,1) {

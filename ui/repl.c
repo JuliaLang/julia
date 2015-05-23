@@ -41,7 +41,6 @@ extern "C" {
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
-static char *program = NULL;
 static int imagepathspecified = 0;
 
 static const char usage[] = "julia [options] [program] [args...]\n";
@@ -200,9 +199,10 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.nprocs = jl_cpu_cores();
             }
             else {
-                jl_options.nprocs = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || jl_options.nprocs < 1)
+                long nprocs = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT_MAX)
                     jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+                jl_options.nprocs = (int)nprocs;
             }
             break;
         case opt_machinefile:
@@ -345,13 +345,9 @@ void parse_opts(int *argcp, char ***argvp)
     optind -= skip;
     *argvp += optind;
     *argcp -= optind;
-    if (jl_options.image_file==NULL && *argcp > 0) {
-        if (strcmp((*argvp)[0], "-"))
-            program = (*argvp)[0];
-    }
 }
 
-static int exec_program(void)
+static int exec_program(char *program)
 {
     int err = 0;
  again: ;
@@ -427,42 +423,56 @@ static int true_main(int argc, char *argv[])
         }
     }
 
-    // run program if specified, otherwise enter REPL
-    if (program) {
-        int ret = exec_program();
-        uv_tty_reset_mode();
-        return ret;
-    }
-
-    jl_function_t *start_client =
-        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
+    jl_function_t *start_client = jl_base_module ?
+        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
         return 0;
     }
 
-    int iserr = 0;
-
- again:
-    ;
-    JL_TRY {
-        if (iserr) {
-            //jl_show(jl_exception_in_transit);# What if the error was in show?
-            jl_printf(JL_STDERR, "\n\n");
-            iserr = 0;
+    // run program if specified, otherwise enter REPL
+    if (argc > 0) {
+        if (strcmp(argv[0], "-")) {
+            return exec_program(argv[0]);
         }
-        uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
     }
-    JL_CATCH {
-        iserr = 1;
-        jl_printf(JL_STDERR, "error during run:\n");
-        jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
-        jlbacktrace();
-        goto again;
+
+    ios_puts("warning: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
+    if (!jl_errorexception_type)
+        ios_puts("warning: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
+
+    while (!ios_eof(ios_stdin)) {
+        char *volatile line = NULL;
+        JL_TRY {
+            ios_puts("\njulia> ", ios_stdout);
+            ios_flush(ios_stdout);
+            line = ios_readline(ios_stdin);
+            jl_value_t *val = jl_eval_string(line);
+            if (jl_exception_occurred()) {
+                jl_printf(JL_STDERR, "error during run:\n");
+                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_exception_clear();
+            } else if (val) {
+                jl_static_show(JL_STDOUT, val);
+            }
+            jl_printf(JL_STDOUT, "\n");
+            free(line);
+            line = NULL;
+            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
+        }
+        JL_CATCH {
+            if (line) {
+                free(line);
+                line = NULL;
+            }
+            jl_printf(JL_STDERR, "\nparser error:\n");
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace();
+        }
     }
-    return iserr;
+    return 0;
 }
 
 DLLEXPORT extern void julia_save();

@@ -348,6 +348,7 @@ getindex(::Colon, i) = i
 
 step(::Colon) = 1
 first(::Colon) = 1
+isempty(::Colon) = false
 in(::Int, ::Colon) = true
 
 ## Strides
@@ -429,8 +430,12 @@ function first_index_expr(Asym, Isym::Symbol, n::Int)
     for i = 1:n
         ex = quote
             $ex
-            f += (first($Isym[$i])-1)*s
-            s *= size($Asym, $i)
+            if isempty($Isym[$i])
+                f = s = 0
+            else
+                f += (first($Isym[$i])-1)*s
+                s *= size($Asym, $i)
+            end
         end
     end
     ex

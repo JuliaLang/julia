@@ -70,7 +70,7 @@ but with differences that will be discussed below.
 TypeVars
 --------
 
-Many types take parameters; an easy example is ``Array``, which takes
+Many types take parameters; an easy example is :obj:`Array`, which takes
 two parameters often written as ``Array{T,N}``.  Let's compare the
 following methods::
 
@@ -93,7 +93,7 @@ Let's look at these types a little more closely:
    julia> xdump(Array)
    Array{T,N}::DataType  <: DenseArray{T,N}
 
-This indicates that ``Array`` is a shorthand for ``Array{T,N}``.  If
+This indicates that :obj:`Array` is a shorthand for ``Array{T,N}``.  If
 you type this at the REPL prompt---on its own, not while defining
 a function or type---you get an error ``T not defined``. So what,
 exactly, are ``T`` and ``N``? You can learn more by extracting these
@@ -111,28 +111,25 @@ parameters:
      ub: Any::DataType  <: Any
      bound: Bool false
 
-A ``TypeVar`` is one of Julia's built-in types---it's defined in
+A :obj:`TypeVar` is one of Julia's built-in types---it's defined in
 ``jltypes.c``, although you can find a commented-out version in
 ``boot.jl``.  The ``name`` field is straightforward: it's what's
 printed when showing the object.  ``lb`` and ``ub`` stand for "lower
 bound" and "upper bound," respectively: these are the sets that
 constrain what types the TypeVar may represent.  In this case, ``T``\ 's
 lower bound is ``Union()`` (i.e., ``Bottom`` or the empty set); in
-other words, this ``TypeVar`` is not constrained from below.  The
+other words, this :obj:`TypeVar` is not constrained from below.  The
 upper bound is ``Any``, so neither is it constrained from above.
 
 In a method definition like::
 
    g{S<:Integer}(x::S) = 0
 
-one can extract the underlying ``TypeVar``::
-
-.. testsetup:: s
-
-   g{S<:Integer}(x::S) = 0
+one can extract the underlying :obj:`TypeVar`::
 
 .. testcode:: s
 
+   g{S<:Integer}(x::S) = 0
    m = start(methods(g))
    p = m.sig.parameters
    tv = p[1]
@@ -148,8 +145,8 @@ one can extract the underlying ``TypeVar``::
 
 Here ``ub`` is ``Integer``, as specified in the function definition.
 
-The last field of a ``TypeVar`` is ``bound``.  This boolean value
-specifies whether the ``TypeVar`` is defined as one of the function
+The last field of a :obj:`TypeVar` is ``bound``.  This boolean value
+specifies whether the :obj:`TypeVar` is defined as one of the function
 parameters. For example:
 
 .. doctest::
@@ -190,9 +187,9 @@ Note that ``p2`` shows two objects called ``T``, but only one of them
 has the upper bound ``Real``; in contrast, ``p3`` shows both of them
 bounded.  This is because in ``h3``, the same type ``T`` is used in
 both places, whereas for ``h2`` the ``T`` inside the array is simply
-the default symbol used for the first parameter of ``Array``.
+the default symbol used for the first parameter of :obj:`Array`.
 
-One can construct ``TypeVar``\s manually:
+One can construct :obj:`TypeVar`\s manually:
 
 .. doctest::
 
@@ -236,13 +233,16 @@ These therefore print identically, but they have very different behavior:
    julia> sneaky([1],3.2)
    1
 
-To see what's happening, it's helpful to use Julia's internal ``jl_``
+To see what's happening, it's helpful to use Julia's internal :c:func:`jl_`
 function (defined in ``builtins.c``) for display, because it prints
-bound ``TypeVar`` objects with a hash (``#T`` instead of ``T``)::
+bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
+
+.. doctest::
 
    julia> jl_(x) = ccall(:jl_, Void, (Any,), x)
    jl_ (generic function with 1 method)
 
+::
    julia> jl_(start(methods(candid)))
    Method(sig=Tuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
 
@@ -251,14 +251,14 @@ bound ``TypeVar`` objects with a hash (``#T`` instead of ``T``)::
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
-element type of the ``Array``.
+element type of the :obj:`Array`.
 
-Some ``TypeVar`` interactions depend on the ``bound`` state, even when there are not two or more uses of the same ``TypeVar``. For example:
+Some :obj:`TypeVar` interactions depend on the ``bound`` state, even when there are not two or more uses of the same :obj:`TypeVar`. For example:
 
 .. doctest::
 
-   julia> S = TypeVar(:S, false), T = TypeVar(:T, true)
-   S
+   julia> S = TypeVar(:S, false); T = TypeVar(:T, true)
+   T
 
    # These would be the same no matter whether we used S or T
    julia> Array{Array{S}} <: Array{Array}
@@ -290,8 +290,8 @@ to match despite the invariance of Julia's type parameters.
 TypeNames
 ---------
 
-The following two ``Array`` types are functionally equivalent, yet
-print differently via ``jl_``:
+The following two :obj:`Array` types are functionally equivalent, yet
+print differently via :c:func:`jl_`:
 
 .. doctest::
 
@@ -305,7 +305,7 @@ print differently via ``jl_``:
    Array{T<:Any, N<:Any}
 
 These can be distinguished by examining the ``name`` field of
-the type, which is an object of type ``TypeName``:
+the type, which is an object of type :obj:`TypeName`:
 
 .. doctest::
 
@@ -337,7 +337,7 @@ reference to the "primary" instance of the type::
    julia> pointer_from_objref(Array{TV,NV}.name.primary)
    Ptr{Void} @0x00007fcc7de64850
 
-The ``primary`` field of ``Array`` points to itself, but for
+The ``primary`` field of :obj:`Array` points to itself, but for
 ``Array{TV,NV}`` it points back to the default definition of the type.
 
 What about the other fields? ``uid`` assigns a unique integer to each
@@ -356,12 +356,21 @@ type:
    MyType{Float32,5}
 
    julia> MyType.name.cache
-   svec(MyType{Float32,5},MyType{Int64,2},Error showing value of type SimpleVector:
+   svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
+   ERROR: UndefRefError: access to undefined reference
+    in getindex at /Users/jiahao/local/src/julia/usr/lib/julia/sys.dylib
+    in show_delim_array at show.jl:195
+    in show at show.jl:223
+    in anonymous at show.jl:1243
+    in with_output_limit at ./show.jl:1220
+    in showlimited at show.jl:1242
+    in display at multimedia.jl:120
+    in display at multimedia.jl:151
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)
 Consequently, when you instantiate a parametric type, each concrete
-type gets saved in a type-cache.  However, instances with ``TypeVar``
+type gets saved in a type-cache.  However, instances with :obj:`TypeVar`
 parameters are not cached.
 
 Tuple-types
@@ -392,8 +401,8 @@ It's worth noting that the parameter is a type, ``Any``, rather than a
 
 Unlike other types, tuple-types are covariant in their parameters, so
 this definition permits ``Tuple`` to match any type of tuple.  This is
-therefore equivalent to having an unbound ``TypeVar`` but distinct
-from a bound ``TypeVar``
+therefore equivalent to having an unbound :obj:`TypeVar` but distinct
+from a bound :obj:`TypeVar`
 
 .. doctest::
 
@@ -512,7 +521,7 @@ We can make it more interesting by trying a more complex case::
    (gdb) call jl_(b)
    Tuple{Array{Int64, 2}, Int8}
 
-Let's watch how this bound ``TypeVar`` gets handled.  To follow this,
+Let's watch how this bound :obj:`TypeVar` gets handled.  To follow this,
 you'll need to examine the variables ``penv`` and ``eqc``, which are
 defined as:
 
@@ -559,7 +568,7 @@ Armed with this knowledge, you may find yourself surprised by the following:
    julia> Tuple{Array{Int},Float64} <: Tuple{Array{T},T}
    true
 
-where ``T`` is a bound ``TypeVar``.  In other words, ``A <: B`` does
+where ``T`` is a bound :obj:`TypeVar`.  In other words, ``A <: B`` does
 not imply that ``typeintersect(A, B) == A``.  A little bit of digging
 reveals the reason why: ``jl_subtype_le`` does not use the ``cenv_t``
 constraints that we just saw in ``typeintersect``.

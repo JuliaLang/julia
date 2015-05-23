@@ -210,7 +210,11 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
+#ifdef LLVM37
+    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, builder.CreateGlobalStringPtr(f_name), libptrgv });
+#else
     Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
+#endif
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
 
