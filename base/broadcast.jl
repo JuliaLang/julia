@@ -417,11 +417,11 @@ end
 (.^)(A::BitArray, B::AbstractArray{Bool}) = (B .<= A)
 (.^)(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = (B .<= A)
 
-function bitcache_pow{T}(Ac::Vector{UInt64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
+function bitcache_pow{T}(A::BitArray, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
     left = l - ind + 1
     @inbounds begin
         for j = 1:min(bitcache_size, left)
-            C[j] = unsafe_bitgetindex(Ac, ind) ^ B[ind]
+            C[j] = unsafe_bitgetindex(A, ind) ^ B[ind]
             ind += 1
         end
         C[left+1:bitcache_size] = false
@@ -438,13 +438,12 @@ function (.^){T<:Integer}(A::BitArray, B::Array{T})
     F = BitArray(shape)
     l = length(F)
     l == 0 && return F
-    Ac = A.chunks
     Fc = F.chunks
     C = Array(Bool, bitcache_size)
     ind = 1
     cind = 1
     for i = 1:div(l + bitcache_size - 1, bitcache_size)
-        ind = bitcache_pow(Ac, B, l, ind, C)
+        ind = bitcache_pow(A, B, l, ind, C)
         dumpbitcache(Fc, cind, C)
         cind += bitcache_chunks
     end
