@@ -2,7 +2,34 @@
 
 # Method and method-table pretty-printing
 
-function argtype_decl(n, t) # -> (argname, argtype)
+const  filler = :_ # e.g. Array{_,_}
+function replace_tvars(t::DataType, tv)
+    # Returns a string representation of t with its TypeVars replaced
+    # with the ones in tv, if found, else with *.
+    length(t.parameters)==0 && return string(t.name)
+    outstr = string(t.name) * "{"
+    for p in t.parameters
+        nstr = if isa(p,Union(DataType,TypeConstructor))
+             replace_tvars(p, tv)
+        elseif !isa(p,TypeVar)
+            string(p)
+        elseif isa(p,TypeVar)
+            # find which TypeVar features the method parameter
+            i = find([p===t for t in tv])
+            length(i)==1 ? string(tv[i[1]].name) : string(filler)
+        else
+            error("hu?")
+        end
+        outstr = outstr * nstr *","
+    end
+    return outstr[1:end-1]*"}"
+end
+function replace_tvars(t::TypeConstructor, tv)
+    tt = TypeVar(filler)
+    return string(t{[tt for i=1:length(t.parameters)]...})
+end
+
+function argtype_decl(n, t, tv) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -21,6 +48,8 @@ function argtype_decl(n, t) # -> (argname, argtype)
             return s, string(t.parameters[1], "...")
         end
     end
+    # If DataType/TypeConstructor replace all unbound TypeVars with *
+    isa(t,Union(DataType,TypeConstructor)) &&  return s, replace_tvars(t, tv)
     return s, string(t)
 end
 
@@ -33,7 +62,7 @@ function arg_decl_parts(m::Method)
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
+    decls = [argtype_decl(get(argnames,i,s), m.sig.types[i], tv) for i=1:length(m.sig.types)]
     return tv, decls, li.file, li.line
 end
 

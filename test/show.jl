@@ -233,3 +233,27 @@ end
 
 # issue #9865
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+
+# issue #10794
+let
+    filler = "_"
+    f9580(a::Vector) = 1
+    @test startswith(sprint(show, f9580.env.defs), "f9580(a::Array{$filler,1})")
+
+    f9581{T}(a::Array, b::T) = 1
+    @test startswith(sprint(show, f9581.env.defs), "f9581{T}(a::Array{$filler,$filler},b::T)" )
+
+    f9582(a::Vector{Vector}) = 1
+    @test startswith(sprint(show, f9582.env.defs), "f9582(a::Array{Array{$filler,1},1})" )
+
+    typealias VI Vector{Int32}
+    f9583(a::Vector{VI}) = 1
+    @test startswith(sprint(show,f9583.env.defs), "f9583(a::Array{Array{Int32,1},1})")
+
+    typealias II Int32
+    f9584(a::II) = 1
+    @test startswith(sprint(show, f9584.env.defs), "f9584(a::Int32)")
+
+    f9585{T,N}(a::Array, b::Array{T}, c::Array{T,N}, d::T, e::Int32, f::Vector, g::Vector{T}, h::Array{Vector,1}) = 1
+    @test startswith(sprint(show, f9585.env.defs), "f9585{T,N}(a::Array{$filler,$filler},b::Array{T,$filler},c::Array{T,N},d::T,e::Int32,f::Array{$filler,1},g::Array{T,1},h::Array{Array{$filler,1},1})" )
+end
