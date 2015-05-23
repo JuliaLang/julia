@@ -115,15 +115,11 @@ end
 # For move command
 function rename(src::AbstractString, dst::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-
     # on error, default to cp && rm
     if err < 0
-        # Note that those two functions already handle their errors.
-        # first copy
-        sendfile(src, dst)
-
-        # then rm
-        unlink(src)
+        # remove_destination: is already done in the mv function
+        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        rm(src; recursive=true)
     end
 end
 

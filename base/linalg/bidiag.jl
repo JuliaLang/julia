@@ -87,7 +87,6 @@ for func in (:round, :trunc, :floor, :ceil)
     @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
 end
 
-
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
@@ -142,10 +141,30 @@ end
 A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(A, b)
 At_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(transpose(A), b)
 Ac_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
-for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+function A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if nA != n
+        throw(DimensionMismatch())
+    end
+    for i = 1:size(B,2)
+        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        A_ldiv_B!(A, tmp)
+        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
+end
+A_ldiv_B(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix) = A_ldiv_B!(A,copy(B))
+
+for func in (:Ac_ldiv_B!, :At_ldiv_B!)
     @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
-        tmp = similar(B[:,1])
+        nA,mA = size(A)
+        tmp = similar(B,size(B,1))
         n = size(B, 1)
+        if mA != n
+            throw(DimensionMismatch())
+        end
         for i = 1:size(B,2)
             copy!(tmp, 1, B, (i - 1)*n + 1, n)
             ($func)(A, tmp)
@@ -154,19 +173,8 @@ for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
         B
     end
 end
-for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!)
-    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
-        tmp = similar(B[:, 2])
-        m, n = size(B)
-        nm = n*m
-        for i = 1:size(B, 1)
-            copy!(tmp, 1, B, i:m:nm, n)
-            ($func)(A, tmp)
-            copy!(B, i:m:nm, tmp, 1, n)
-        end
-        B
-    end
-end
+Ac_ldiv_B(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix) = Ac_ldiv_B!(A,copy(B))
+At_ldiv_B(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix) = At_ldiv_B!(A,copy(B))
 
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)

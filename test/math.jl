@@ -125,11 +125,27 @@ end
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
+@test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
 @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
 @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+@test_throws ArgumentError airyx(5,z)
+
+# bessely0, bessely1, besselj0, besselj1
+@test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
+@test_approx_eq besselj1(Float32(2.0)) besselj1(Float64(2.0))
+@test_approx_eq bessely0(Float32(2.0)) bessely0(Float64(2.0))
+@test_approx_eq bessely1(Float32(2.0)) bessely1(Float64(2.0))
+@test_approx_eq besselj0(2) besselj0(2.0)
+@test_approx_eq besselj1(2) besselj1(2.0)
+@test_approx_eq bessely0(2) bessely0(2.0)
+@test_approx_eq bessely1(2) bessely1(2.0)
+@test_approx_eq besselj0(2.0 + im) besselj(0, 2.0 + im)
+@test_approx_eq besselj1(2.0 + im) besselj(1, 2.0 + im)
+@test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
+@test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
@@ -147,12 +163,15 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(3,-3) -true_i33
 @test_approx_eq besseli(-3,-3) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
+@test_throws DomainError besseli(0.4,-1.0)
 
 # besselj
 @test besselj(0,0) == 1
 for i = 1:5
     @test besselj(i,0) == 0
     @test besselj(-i,0) == 0
+    @test besselj(-i,Float32(0)) == 0
+    @test besselj(-i,Float32(0)) == 0
 end
 
 j33 = besselj(3,3.)
@@ -190,11 +209,15 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 # bessely
 y33 = bessely(3,3.)
 @test bessely(3,3) == y33
+@test bessely(3.,3.) == y33
+@test_approx_eq bessely(3,Float32(3.)) y33
 @test_approx_eq bessely(-3,3) -y33
 @test_approx_eq y33 -0.53854161610503161800
 @test_throws DomainError bessely(3,-3)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
+@test_throws DomainError bessely(0.4,-1.0)
+@test_throws DomainError bessely(0.4,Float32(-1.0))
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
@@ -218,6 +241,10 @@ end
 @test_throws Base.Math.AmosException besseljx(-1, 0)
 @test besselkx(1, 0) == Inf
 @test_throws Base.Math.AmosException besselyx(1, 0)
+@test_throws DomainError besselix(0.4,-1.0)
+@test_throws DomainError besseljx(0.4, -1.0)
+@test_throws DomainError besselkx(0.4,-1.0)
+@test_throws DomainError besselyx(0.4,-1.0)
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
@@ -233,9 +260,11 @@ if Base.Math.libm == "libopenlibm"
 else
     @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
 end
-@test_approx_eq gamma(1/2) sqrt(π)
-@test_approx_eq gamma(-1/2) -2sqrt(π)
-@test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
+for elty in (Float32, Float64)
+    @test_approx_eq gamma(convert(elty,1/2)) convert(elty,sqrt(π))
+    @test_approx_eq gamma(convert(elty,-1/2)) convert(elty,-2sqrt(π))
+    @test_approx_eq lgamma(convert(elty,-1/2)) convert(elty,log(abs(gamma(-1/2))))
+end
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
 @test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
@@ -296,6 +325,7 @@ end
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
 @test_approx_eq zeta(4) pi^4/90
+@test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
 
 # quadgk
 @test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
@@ -353,6 +383,7 @@ end
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), zeta(2 + 1im, -1.1+0im))
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), -1525.8095173321060982383023516086563741006869909580583246557 + 1719.4753293650912305811325486980742946107143330321249869576im)
+@test_approx_eq polygamma(3,5) polygamma(3,5.)
 
 @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
 @test let evalcounts=0
@@ -430,4 +461,29 @@ for x in X
             end
         end
     end
+end
+
+for n = 0:28
+    @test log(2,2^n) == n
+end
+with_bigfloat_precision(10_000) do
+    @test log(2,big(2)^100) == 100
+    @test log(2,big(2)^200) == 200
+    @test log(2,big(2)^300) == 300
+    @test log(2,big(2)^400) == 400
+end
+
+# test vectorization of 2-arg vectorized functions
+binary_math_functions = [
+    copysign, flipsign, log, atan2, hypot, max, min,
+    airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+    besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
+    polygamma, zeta, beta, lbeta,
+]
+for f in binary_math_functions
+    x = y = 2
+    v = [f(x,y)]
+    @test f([x],y) == v
+    @test f(x,[y]) == v
+    @test f([x],[y]) == v
 end

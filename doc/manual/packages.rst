@@ -141,7 +141,7 @@ same operating system and environment.
 
 1. Adds the name of the package to ``INSTALLED``.
 2. Downloads the package to ``.cache``, then copies the package to the package root directory.
-3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRES`` file.
+3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRE`` file.
 4. Runs :func:`Pkg.build`
 
 .. warning::

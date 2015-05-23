@@ -9,6 +9,8 @@ Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branc
 
 Windows: [![Build status](https://ci.appveyor.com/api/projects/status/4vr88cmgo7u02644/branch/master?svg=true)](https://ci.appveyor.com/project/StefanKarpinski/julia/branch/master)
 
+Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master)
+
 <a name="The-Julia-Language"/>
 ## The Julia Language
 
@@ -27,6 +29,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
+- **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
@@ -334,16 +337,17 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia. `make USE_SYSTEM_SUITESPARSE=1` will then use the SuiteSparse that has been copied into Julia's directory, but will not build a new SuiteSparse library from scratch.
 
-### Intel compilers and Math Kernel Libraries
+### Intel compilers and Math Kernel Library (MKL)
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed.
+To build Julia using the Intel compilers (icc, icpc, ifort), and link against
+the [MKL] BLAS and LAPACK libraries, first make sure you have a recent version
+of the compiler suite (version 15 or later).
+
 For a 64-bit architecture, the environment should be set up as follows:
 
     # bash
-    source /path/to/mkl/bin/mklvars.sh intel64 ilp64
-    export MKL_INTERFACE_LAYER=ILP64
+    source /path/to/intel/bin/compilervars.sh intel64
 
-It is recommended that Intel compilers be used to build Julia when using MKL.
 Add the following to the `Make.user` file:
 
     USEICC = 1

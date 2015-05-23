@@ -14,6 +14,7 @@ extern "C" {
 jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
+jl_module_t *jl_top_module=NULL;
 jl_module_t *jl_current_module=NULL;
 
 jl_module_t *jl_new_module(jl_sym_t *name)
@@ -26,6 +27,8 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->parent = NULL;
     m->constant_table = NULL;
     m->call_func = NULL;
+    m->istopmod = 0;
+    m->uuid = uv_now(uv_default_loop());
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -41,10 +44,24 @@ jl_module_t *jl_new_module(jl_sym_t *name)
 DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 {
     jl_module_t *m = jl_new_module(name);
+    JL_GC_PUSH1(&m);
     m->parent = jl_main_module;
     gc_wb(m, m->parent);
     if (std_imports) jl_add_standard_imports(m);
+    JL_GC_POP();
     return (jl_value_t*)m;
+}
+
+DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
+{
+    jl_current_module->istopmod = 1;
+    if (isprimary)
+        jl_top_module = jl_current_module;
+}
+
+DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
+{
+    return mod->istopmod;
 }
 
 static jl_binding_t *new_binding(jl_sym_t *name)
@@ -465,6 +482,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 
 DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
+DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 
 jl_function_t *jl_module_get_initializer(jl_module_t *m)
 {

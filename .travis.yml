@@ -39,8 +39,6 @@ before_install:
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
         brew update;
-        sed -i '' -e "s@https://downloads.sf.net/project/machomebrew/Bottles@https://cache.e.ip.saba.us/https://downloads.sf.net/project/machomebrew/Bottles@" /usr/local/Library/Homebrew/software_spec.rb;
-        sed -i '' -e "s@https://homebrew.bintray.com@https://cache.e.ip.saba.us/https://homebrew.bintray.com@" /usr/local/Library/Homebrew/software_spec.rb;
         brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";

@@ -35,7 +35,6 @@ USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
-USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_LIBGIT2=0
 USE_SYSTEM_PATCHELF=0
 
@@ -381,6 +380,26 @@ build_shlibdir = $(build_bindir)
 else
 build_shlibdir = $(build_libdir)
 endif
+
+# If we are running on ARM, set certain options automatically
+ifneq (,$(findstring arm,$(ARCH)))
+LLVM_ASSERTIONS=1
+LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --enable-assertions"
+
+OPENBLAS_DYNAMIC_ARCH=0
+OPENBLAS_TARGET_ARCH=ARMV7
+USE_BLAS64=0
+
+LLVM_VER=3.6.0
+
+USE_SYSTEM_LIBM=1
+USE_SYSTEM_FFTW=1
+USE_SYSTEM_GMP=1
+USE_SYSTEM_MPFR=1
+
+JCFLAGS += -fsigned-char
+endif
+
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -875,9 +894,16 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 endif
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
+JULIA_BUILD_MODE = release
+ifeq (,$(findstring release,$(MAKECMDGOALS)))
+ifneq (,$(findstring debug,$(MAKECMDGOALS)))
+JULIA_BUILD_MODE = debug
+endif
+endif
+
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
-JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
+JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE

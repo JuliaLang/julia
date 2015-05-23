@@ -159,6 +159,13 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
+// what to do on SIGINT
+DLLEXPORT void jl_sigint_action(void)
+{
+    if (exit_on_sigint) jl_exit(0);
+    jl_throw(jl_interrupt_exception);
+}
+
 #ifdef _OS_WINDOWS_
 static char *strsignal(int sig)
 {
@@ -195,13 +202,12 @@ void __cdecl crt_sig_handler(int sig, int num)
         break;
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
-        if (exit_on_sigint) jl_exit(0);
         if (jl_defer_signal) {
             jl_signal_pending = sig;
         }
         else {
             jl_signal_pending = 0;
-            jl_throw(jl_interrupt_exception);
+            jl_sigint_action();
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
@@ -326,7 +332,6 @@ volatile HANDLE hMainThread = NULL;
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
-    if (exit_on_sigint) jl_exit(0);
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -340,6 +345,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     else {
         jl_signal_pending = 0;
+        if (exit_on_sigint) jl_exit(0);
         if ((DWORD)-1 == SuspendThread(hMainThread)) {
             //error
             jl_safe_printf("error: SuspendThread failed\n");
@@ -477,7 +483,6 @@ void restore_signals(void)
 
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
-    if (exit_on_sigint) jl_exit(0);
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     }
@@ -487,7 +492,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         sigemptyset(&sset);
         sigaddset(&sset, SIGINT);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_throw(jl_interrupt_exception);
+        jl_sigint_action();
     }
 }
 #endif
@@ -943,6 +948,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     }
     if (jl_options.build_path)
         jl_options.build_path = abspath(jl_options.build_path);
+    if (jl_options.machinefile)
+        jl_options.machinefile = abspath(jl_options.machinefile);
+    if (jl_options.load)
+        jl_options.load = abspath(jl_options.load);
 }
 
 void _julia_init(JL_IMAGE_SEARCH rel)
@@ -1029,6 +1038,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
 

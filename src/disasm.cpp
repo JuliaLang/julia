@@ -164,7 +164,11 @@ void SymbolTable::createSymbols()
         uint64_t addr = isymb->first - ip;
         std::ostringstream name;
         name << "L" << addr;
+#ifdef LLVM37
+        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
+#else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
+#endif
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
         isymb->second = symb;
     }

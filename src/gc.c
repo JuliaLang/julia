@@ -38,8 +38,34 @@ extern "C" {
 #define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
 
 int jl_in_gc; // referenced from switchto task.c
-static int64_t allocd_bytes;
-static int64_t freed_bytes;
+
+// This struct must be kept in sync with the Julia type of the same name in base/util.jl
+typedef struct {
+    int64_t     allocd;
+    int64_t     freed;
+    uint64_t    malloc;
+    uint64_t    realloc;
+    uint64_t    poolalloc;
+    uint64_t    freecall;
+    uint64_t    total_time;
+    uint64_t    total_allocd;
+    uint64_t    since_sweep;
+    size_t      collect;
+    int         pause;
+    int         full_sweep;
+} GC_Num;
+
+static GC_Num gc_num = {0,0,0,0,0,0,0,0,0,0,0,0};
+
+#define collect_interval gc_num.collect
+#define n_pause         gc_num.pause
+#define n_full_sweep    gc_num.full_sweep
+#define allocd_bytes    gc_num.allocd
+#define freed_bytes     gc_num.freed
+#define total_gc_time   gc_num.total_time
+#define total_allocd_bytes gc_num.total_allocd
+#define allocd_bytes_since_sweep gc_num.since_sweep
+
 static long system_page_size;
 
 // malloc wrappers, aligned allocation
@@ -310,7 +336,6 @@ static size_t max_collect_interval = 1250000000UL;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
 #endif
-static size_t collect_interval;
 
 #define HEAP_DECL static
 
@@ -369,9 +394,6 @@ static bigval_t *big_objects_marked = NULL;
 
 // global variables for GC stats
 
-static int64_t total_allocd_bytes = 0;
-static int64_t allocd_bytes_since_sweep = 0;
-static uint64_t total_gc_time = 0;
 #define NS_TO_S(t) ((double)(t/1000)/(1000*1000))
 #define NS2MS(t) ((double)(t/1000)/1000)
 static int64_t live_bytes = 0;
@@ -391,8 +413,6 @@ static uint64_t total_sweep_time=0;
 static uint64_t total_mark_time=0;
 static uint64_t total_fin_time=0;
 #endif
-static int n_pause = 0;
-static int n_full_sweep = 0;
 int sweeping = 0;
 
 // manipulating mark bits
@@ -573,7 +593,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
 #endif
     }
     _gc_setmark(o, mark_mode);
-    verify_val(o);
+    verify_val(jl_valueof(o));
     return mark_mode;
 }
 
@@ -601,7 +621,7 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
     }
     _gc_setmark(o, mark_mode);
     page->gc_bits |= mark_mode;
-    verify_val(o);
+    verify_val(jl_valueof(o));
     return mark_mode;
 }
 
@@ -1032,6 +1052,7 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
         jl_gc_collect(0);
         //allocd_bytes += osize;
     }
+    gc_num.poolalloc++;
     // first try to use the freelist
     v = p->freelist;
     if (v) {
@@ -1460,7 +1481,7 @@ static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 #endif
     assert(v != NULL);
     jl_taggedvalue_t* o = jl_astaggedvalue(v);
-    verify_val(o);
+    verify_val(v);
     int bits = gc_bits(o);
     if (!gc_marked(o)) {
         return push_root((jl_value_t*)v, d, bits);
@@ -1541,6 +1562,9 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
         verify_parent1("module", m, &m->constant_table, "constant_table");
         refyoung |= gc_push_root(m->constant_table, d);
     }
+
+    refyoung |= gc_push_root(m->parent, d);
+
     return refyoung;
 }
 
@@ -1994,7 +2018,8 @@ static void gc_verify_track(void)
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
             int clean_len = bits_save[GC_CLEAN].len;
             for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
-                if (bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j] == lostval_parent) {
+                void* p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+                if (jl_valueof(p) == lostval_parent) {
                     lostval = lostval_parent;
                     lostval_parent = NULL;
                     break;
@@ -2031,11 +2056,11 @@ static void gc_verify(void)
         gcval_t* v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
             jl_printf(JL_STDERR, "Error. Early free of 0x%lx type :", (uptrint_t)v);
-            jl_(jl_typeof(v));
+            jl_(jl_typeof(jl_valueof(v)));
             jl_printf(JL_STDERR, "val : ");
-            jl_(v);
+            jl_(jl_valueof(v));
             jl_printf(JL_STDERR, "Let's try to backtrack the missing write barrier :\n");
-            lostval = v;
+            lostval = jl_valueof(v);
             break;
         }
     }
@@ -2070,8 +2095,7 @@ DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
-DLLEXPORT int64_t jl_gc_num_pause(void) { return n_pause; }
-DLLEXPORT int64_t jl_gc_num_full_sweep(void) { return n_full_sweep; }
+DLLEXPORT GC_Num jl_gc_num(void) { return gc_num; }
 
 int64_t diff_gc_total_bytes(void)
 {
@@ -2664,6 +2688,7 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     allocd_bytes += allocsz;
+    gc_num.alloc++;
     return jl_valueof(malloc(allocsz));
 }
 int64_t diff_gc_total_bytes(void)
@@ -2687,6 +2712,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     maybe_collect();
     allocd_bytes += sz;
+    gc_num.malloc++;
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -2697,12 +2723,18 @@ DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
     freed_bytes += sz;
+    gc_num.freecall++;
 }
 
 DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     maybe_collect();
-    allocd_bytes += (sz-old);
+
+    if (sz < old)
+       freed_bytes += (old - sz);
+    else
+       allocd_bytes += (sz - old);
+    gc_num.realloc++;
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -2712,10 +2744,11 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
 DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     maybe_collect();
-    allocd_bytes += sz;
     size_t allocsz = LLT_ALIGN(sz, 16);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
+    allocd_bytes += allocsz;
+    gc_num.malloc++;
     void *b = malloc_a16(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -2737,7 +2770,11 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
     }
     else
 #endif
-    allocd_bytes += allocsz - oldsz;
+    if (allocsz < oldsz)
+        freed_bytes += (oldsz - allocsz);
+    else
+        allocd_bytes += (allocsz - oldsz);
+    gc_num.realloc++;
 
     void *b;
     if (isaligned)

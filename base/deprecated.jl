@@ -1,4 +1,22 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+#
+# Deprecated functions and objects
+#
+# Please add new deprecations at the bottom of the file.
+# A function deprecated in a release will be removed in the next one.
+# Please also add a reference to the pull request which introduced the
+# deprecation.
+#
+# For simple cases where a direct replacement is available, use @deprecate:
+# the first argument is the signature of the deprecated method, the second one
+# is the call which replaces it. Remove the definition of the deprecated method
+# and unexport it, as @deprecate takes care of calling the replacement
+# and of exporting the function.
+#
+# For more complex cases, move the body of the deprecated method in this file,
+# and call depwarn() directly from inside it. The symbol depwarn() expects is
+# the name of the function, which is used to ensure that the deprecation warning
+# is only printed the first time for each call place.
 
 macro deprecate(old,new)
     meta = Expr(:meta, :noinline)
@@ -38,10 +56,13 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if JLOptions().depwarn!=0
+    if JLOptions().depwarn != 0
+        ln = unsafe_load(cglobal(:jl_lineno, Int))
+        fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
-        warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+        warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
+             filename=fn, lineno=ln)
     end
 end
 
@@ -440,3 +461,21 @@ export float32_isvalid, float64_isvalid
 @deprecate (&)(x::Char, y::Char)  Char(UInt32(x) & UInt32(y))
 @deprecate (|)(x::Char, y::Char)  Char(UInt32(x) | UInt32(y))
 @deprecate ($)(x::Char, y::Char)  Char(UInt32(x) $ UInt32(y))
+
+# 11241
+
+@deprecate is_valid_char(ch::Char)          isvalid(ch)
+@deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
+@deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
+@deprecate is_valid_utf16(str::UTF16String) isvalid(str)
+@deprecate is_valid_utf32(str::UTF32String) isvalid(str)
+
+@deprecate is_valid_char(ch)   isvalid(Char, ch)
+@deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
+@deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
+@deprecate is_valid_utf16(str) isvalid(UTF16String, str)
+@deprecate is_valid_utf32(str) isvalid(UTF32String, str)
+
+# 11379
+
+@deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])

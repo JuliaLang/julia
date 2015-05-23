@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 extern size_t jl_page_size;
+extern jl_function_t *jl_typeinf_func;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
@@ -84,6 +85,7 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta);
 
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
+extern int type_match_invariance_mask;
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
@@ -119,6 +121,7 @@ extern JL_THREAD void *jl_stackbase;
 void jl_dump_bitcode(char *fname);
 void jl_dump_objfile(char *fname, int jit_model);
 int32_t jl_get_llvm_gv(jl_value_t *p);
+void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 #ifdef _OS_LINUX_
 DLLEXPORT void jl_read_sonames(void);

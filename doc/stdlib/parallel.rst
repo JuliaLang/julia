@@ -90,7 +90,7 @@ Tasks
 
 .. function:: @task
 
-   Wrap an expression in a Task executing it, and return the Task. This
+   Wrap an expression in a Task without executing it, and return the Task. This
    only creates a task, and does not run it.
 
 .. function:: sleep(seconds)

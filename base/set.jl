@@ -132,3 +132,12 @@ function filter!(f, s::Set)
     end
     return s
 end
+
+const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
+function hash(s::Set, h::UInt)
+    h += hashs_seed
+    for x in s
+        h $= hash(x)
+    end
+    return h
+end

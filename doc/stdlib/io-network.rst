@@ -436,8 +436,8 @@ Text I/O
 
 .. function:: base64decode(string)
 
-   Decodes the base64-encoded ``string`` and returns the obtained bytes.
-
+   Decodes the base64-encoded ``string`` and returns a ``Vector{UInt8}``
+   of the decoded bytes.
 
 Multimedia I/O
 --------------

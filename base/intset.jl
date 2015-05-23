@@ -291,6 +291,19 @@ function ==(s1::IntSet, s2::IntSet)
     return true
 end
 
+const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
+function hash(s::IntSet, h::UInt)
+    h += hashis_seed
+    h += hash(s.fill1s)
+    filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
+    for x in s.bits
+        if x != filln
+            h = hash(x, h)
+        end
+    end
+    return h
+end
+
 issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))
 <(a::IntSet, b::IntSet) = (a<=b) && !isequal(a,b)
 <=(a::IntSet, b::IntSet) = issubset(a, b)

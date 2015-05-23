@@ -18,8 +18,8 @@
 
 ## native julia error handling ##
 
-error(s::AbstractString) = throw(ErrorException(s))
-error(s...) = throw(ErrorException(string(s...)))
+error(s::AbstractString) = throw(Main.Base.ErrorException(s))
+error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
 
 rethrow() = ccall(:jl_rethrow, Void, ())::Bottom
 rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)::Bottom
@@ -31,21 +31,21 @@ kwerr(kw) = error("unrecognized keyword argument \"", kw, "\"")
 
 ## system error handling ##
 
-systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
+systemerror(p, b::Bool) = b ? throw(Main.Base.SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
-assert(x) = x ? nothing : throw(AssertionError())
+assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if !isempty(msgs) && isa(msg, Expr)
         # message is an expression needing evaluating
-        msg = :(string($(esc(msg))))
-    elseif isdefined(Base, :string)
-        msg = string(msg)
+        msg = :(Main.Base.string($(esc(msg))))
+    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string)
+        msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(string($(Expr(:quote,msg))))
+        msg = :(Main.Base.string($(Expr(:quote,msg))))
     end
-    :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
+    :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end

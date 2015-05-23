@@ -909,8 +909,13 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
+#ifdef LLVM37
+    builder.CreateCall(prepare_call(jlthrow_line_func), { exc,
+                        ConstantInt::get(T_int32, ctx->lineno) });
+#else
     builder.CreateCall2(prepare_call(jlthrow_line_func), exc,
                         ConstantInt::get(T_int32, ctx->lineno));
+#endif
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
@@ -950,10 +955,17 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                                          ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
                                        ArrayRef<Value*>(zeros));
-    builder.CreateCall5(prepare_call(jltypeerror_func),
-                        fname_val, msg_val,
+#ifdef LLVM37
+    builder.CreateCall(prepare_call(jltypeerror_func),
+                        { fname_val, msg_val,
                         literal_pointer_val(type), boxed(x,ctx),
-                        ConstantInt::get(T_int32, ctx->lineno));
+                        ConstantInt::get(T_int32, ctx->lineno) });
+#else
+    builder.CreateCall5(prepare_call(jltypeerror_func),
+                    fname_val, msg_val,
+                    literal_pointer_val(type), boxed(x,ctx),
+                    ConstantInt::get(T_int32, ctx->lineno));
+#endif
 }
 
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
@@ -962,8 +974,14 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     Value *istype;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         istype = builder.
-            CreateICmpNE(builder.CreateCall3(prepare_call(jlsubtype_func), x, literal_pointer_val(type),
+            CreateICmpNE(
+#ifdef LLVM37
+                builder.CreateCall(prepare_call(jlsubtype_func), { x, literal_pointer_val(type),
+                                             ConstantInt::get(T_int32,1) }),
+#else
+                builder.CreateCall3(prepare_call(jlsubtype_func), x, literal_pointer_val(type),
                                              ConstantInt::get(T_int32,1)),
+#endif
                          ConstantInt::get(T_int32,0));
     }
     else {
@@ -995,7 +1013,11 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
         builder.CreateCondBr(ok, passBB, failBB);
         builder.SetInsertPoint(failBB);
         if (ty == (jl_value_t*)jl_any_type) {
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(jlvboundserror_func), { a, len, i });
+#else
             builder.CreateCall3(prepare_call(jlvboundserror_func), a, len, i);
+#endif
         }
         else if (ty) {
             if (!a->getType()->isPtrOrPtrVectorTy()) {
@@ -1003,13 +1025,24 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
                 builder.CreateStore(a, tempSpace);
                 a = tempSpace;
             }
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(jluboundserror_func), {
+                                builder.CreatePointerCast(a, T_pint8),
+                                literal_pointer_val(ty),
+                                i });
+#else
             builder.CreateCall3(prepare_call(jluboundserror_func),
                                 builder.CreatePointerCast(a, T_pint8),
                                 literal_pointer_val(ty),
                                 i);
+#endif
         }
         else {
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(jlboundserror_func), { a, i });
+#else
             builder.CreateCall2(prepare_call(jlboundserror_func), a, i);
+#endif
         }
         builder.CreateUnreachable();
         ctx->f->getBasicBlockList().push_back(passBB);
@@ -1196,7 +1229,11 @@ static Value *emit_getfield_unknownidx(Value *strct, Value *idx, jl_datatype_t *
         }
         else {
             idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+#ifdef LLVM37
+            Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { strct, idx });
+#else
             Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), strct, idx);
+#endif
             return fld;
         }
     }
@@ -1381,6 +1418,16 @@ static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ct
     return emit_arraysize(t, dim);
 }
 
+static Value *emit_arrayflags(Value *t, jl_codectx_t *ctx)
+{
+    Value *addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                            nullptr,
+#endif
+                            builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    return builder.CreateLoad(addr); // TODO tbaa
+}
+
 static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
 {
     tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
@@ -1440,7 +1487,11 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
         for(size_t k=0; k < nidxs; k++) {
             builder.CreateStore(idxs[k], builder.CreateGEP(tmp, ConstantInt::get(T_size, k)));
         }
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jlboundserrorv_func), { a, tmp, ConstantInt::get(T_size, nidxs) });
+#else
         builder.CreateCall3(prepare_call(jlboundserrorv_func), a, tmp, ConstantInt::get(T_size, nidxs));
+#endif
         builder.CreateUnreachable();
 
         ctx->f->getBasicBlockList().push_back(endBB);
@@ -1621,9 +1672,17 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     if (jb == jl_float64_type) {
         // manually inline alloc & init of Float64 box. cheap, I know.
 #ifdef _P64
-        Value *newv = builder.CreateCall(prepare_call(jlalloc1w_func));
+        Value *newv = builder.CreateCall(prepare_call(jlalloc1w_func)
+#ifdef LLVM37
+            , {}
+#endif
+        );
 #else
-        Value *newv = builder.CreateCall(prepare_call(jlalloc2w_func));
+        Value *newv = builder.CreateCall(prepare_call(jlalloc2w_func)
+#ifdef LLVM37
+            , {}
+#endif
+        );
 #endif
         return init_bits_value(newv, literal_pointer_val(jt), t, v);
     }
@@ -1675,11 +1734,24 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
 static Value* emit_allocobj(size_t static_size)
 {
     if (static_size == sizeof(void*)*1)
-        return builder.CreateCall(prepare_call(jlalloc1w_func));
+
+        return builder.CreateCall(prepare_call(jlalloc1w_func)
+#ifdef LLVM37
+            , {}
+#endif
+            );
     else if (static_size == sizeof(void*)*2)
-        return builder.CreateCall(prepare_call(jlalloc2w_func));
+        return builder.CreateCall(prepare_call(jlalloc2w_func)
+#ifdef LLVM37
+            , {}
+#endif
+            );
     else if (static_size == sizeof(void*)*3)
-        return builder.CreateCall(prepare_call(jlalloc3w_func));
+        return builder.CreateCall(prepare_call(jlalloc3w_func)
+#ifdef LLVM37
+            , {}
+#endif
+            );
     else
         return builder.CreateCall(prepare_call(jlallocobj_func),
                                   ConstantInt::get(T_size, static_size));
@@ -1694,7 +1766,7 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
 
     // the branch hint does not seem to make it to the generated code
-    //builder.CreateCall2(expect_func, parent_marked, ConstantInt::get(T_int1, 0));
+    //builder.CreateCall(expect_func, {parent_marked, ConstantInt::get(T_int1, 0)});
     Value* parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
 
     BasicBlock* cont = BasicBlock::Create(getGlobalContext(), "cont");
@@ -1791,12 +1863,15 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
             return mark_julia_type(strct,ty);
         }
         Value *f1 = NULL;
-        size_t j = 0;
         int fieldStart = ctx->argDepth;
         bool needroots = false;
-        for(size_t i=1; i < nargs; i++) {
-            needroots |= might_need_root(args[i]);
+        for (size_t i = 1;i < nargs;i++) {
+            if (might_need_root(args[i])) {
+                needroots = true;
+                break;
+            }
         }
+        size_t j = 0;
         if (nf > 0 && sty->fields[0].isptr && nargs>1) {
             // emit first field before allocating struct to save
             // a couple store instructions. avoids initializing
@@ -1827,20 +1902,25 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
                 emit_setfield(sty, strct, i, V_null, ctx, false, false);
             }
         }
+        bool need_wb = false;
         for(size_t i=j+1; i < nargs; i++) {
             Value *rhs = emit_expr(args[i],ctx);
-            if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt &&
-                !needroots) {
-                // if this struct element needs boxing and we haven't rooted
-                // the struct, root it now.
-                make_gcroot(strct, ctx);
-                needroots = true;
+            if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt) {
+                if (!needroots) {
+                    // if this struct element needs boxing and we haven't rooted
+                    // the struct, root it now.
+                    make_gcroot(strct, ctx);
+                    needroots = true;
+                }
+                need_wb = true;
             }
             if (rhs->getType() == jl_pvalue_llvmt) {
                 if (!jl_subtype(expr_type(args[i],ctx), jl_svecref(sty->types,i-1), 0))
                     emit_typecheck(rhs, jl_svecref(sty->types,i-1), "new", ctx);
             }
-            emit_setfield(sty, strct, i-1, rhs, ctx, false, false);
+            if (!need_wb && might_need_root(args[i]))
+                need_wb = true;
+            emit_setfield(sty, strct, i-1, rhs, ctx, false, need_wb);
         }
         ctx->argDepth = fieldStart;
         return strct;

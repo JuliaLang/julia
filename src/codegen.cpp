@@ -1172,7 +1172,11 @@ static void mallocVisitLine(std::string filename, int line)
     }
     GlobalVariable *v = prepare_global(vec[line]);
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
-                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
+                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func)
+#ifdef LLVM37
+                                            , {}
+#endif
+                                            )),
                         v, true);
 }
 
@@ -1282,27 +1286,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,sp,ast,sparams,allow_alloc);
             if (f && jl_is_function(f)) {
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
-                if (fptr == &jl_apply_generic) {
-                    if (f == jl_get_global(jl_base_module, jl_symbol("dlsym")) ||
-                        f == jl_get_global(jl_base_module, jl_symbol("dlopen"))) {
-                        size_t i;
-                        size_t n = jl_array_dim0(e->args);
-                        jl_value_t **v;
-                        JL_GC_PUSHARGS(v, n);
-                        v[0] = f;
-                        for (i = 1; i < n; i++) {
-                            v[i] = jl_static_eval(jl_exprarg(e,i),ctx,mod,sp,ast,sparams,allow_alloc);
-                            if (v[i] == NULL) {
-                                JL_GC_POP();
-                                return NULL;
-                            }
-                        }
-                        jl_value_t *result = jl_apply_generic(f, v+1, (uint32_t)n-1);
-                        JL_GC_POP();
-                        return result;
-                    }
-                }
-                else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
+                if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
                     m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,sp,ast,sparams,allow_alloc);
                     s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
@@ -1724,13 +1708,18 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     }
     Value *env_tuple;
     env_tuple = builder.CreateCall(prepare_call(jlnsvec_func),
-                                   ArrayRef<Value*>(&captured[0],
-                                                    1+clen));
+                                   ArrayRef<Value*>(&captured[0], 1+clen));
     ctx->argDepth = argStart;
     make_gcroot(env_tuple, ctx);
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(jlclosure_func),
+                                        {Constant::getNullValue(T_pint8),
+                                        env_tuple, literal_pointer_val(expr)});
+#else
     Value *result = builder.CreateCall3(prepare_call(jlclosure_func),
                                         Constant::getNullValue(T_pint8),
                                         env_tuple, literal_pointer_val(expr));
+#endif
     ctx->argDepth--;
     return result;
 }
@@ -1796,8 +1785,13 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     make_gcroot(arg2, ctx);
     Value *myargs = builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(jlgetfield_func), {V_null, myargs,
+                                        ConstantInt::get(T_int32,2)});
+#else
     Value *result = builder.CreateCall3(prepare_call(jlgetfield_func), V_null, myargs,
                                         ConstantInt::get(T_int32,2));
+#endif
     ctx->argDepth = argStart;
     return result;
 }
@@ -1887,8 +1881,13 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     varg1 = boxed(varg1,ctx); varg2 = boxed(varg2,ctx);
     if (ptr_comparable)
         answer = builder.CreateICmpEQ(varg1, varg2);
-    else
+    else {
+#ifdef LLVM37
+        answer = builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
+#else
         answer = builder.CreateTrunc(builder.CreateCall2(prepare_call(jlegal_func), varg1, varg2), T_int1);
+#endif
+    }
  done:
     ctx->argDepth = last_depth;
     return answer;
@@ -1989,7 +1988,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
             int ldepth = ctx->argDepth;
             Value *arg1 = emit_boxed_rooted(args[1], ctx);
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(typeassert), {arg1, boxed(emit_expr(args[2], ctx),ctx)});
+#else
             builder.CreateCall2(prepare_call(typeassert), arg1, boxed(emit_expr(args[2], ctx),ctx));
+#endif
             ctx->argDepth = ldepth;
             JL_GC_POP();
             return arg1;
@@ -2046,10 +2049,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         nva = builder.CreateTrunc(nva, T_int32);
 #endif
         Value *r =
+#ifdef LLVM37
+            builder.CreateCall(prepare_call(theFptr), {theF,
+                                builder.CreateGEP(ctx->argArray,
+                                                  ConstantInt::get(T_size, ctx->nReqArgs)),
+                                nva});
+#else
             builder.CreateCall3(prepare_call(theFptr), theF,
                                 builder.CreateGEP(ctx->argArray,
                                                   ConstantInt::get(T_size, ctx->nReqArgs)),
                                 nva);
+#endif
         JL_GC_POP();
         return r;
     }
@@ -2070,8 +2080,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
         JL_GC_POP();
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jlthrow_line_func), {arg1,
+                            ConstantInt::get(T_int32, ctx->lineno)});
+#else
         builder.CreateCall2(prepare_call(jlthrow_line_func), arg1,
                             ConstantInt::get(T_int32, ctx->lineno));
+#endif
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
@@ -2181,16 +2196,38 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *ary = emit_expr(args[1], ctx);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
-                    if (jl_array_store_unboxed(ety) &&
-                        ((jl_datatype_t*)ety)->size == 0) {
+                    bool isboxed = !jl_array_store_unboxed(ety);
+                    if (!isboxed && ((jl_datatype_t*)ety)->size == 0) {
                         // no-op, but emit expr for possible effects
                         assert(jl_is_datatype(ety));
                         emit_expr(args[2],ctx,false);
                     }
                     else {
                         Value* v = ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx);
+                        PHINode* data_owner = NULL; // owner object against which the write barrier must check
+                        if (isboxed) { // if not boxed we don't need a write barrier
+                            Value *flags = emit_arrayflags(ary,ctx);
+                            // the owner of the data is ary itself except if ary->how == 3
+                            flags = builder.CreateAnd(flags, 3);
+                            Value *is_owned = builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                            BasicBlock *curBB = builder.GetInsertBlock();
+                            BasicBlock *ownedBB = BasicBlock::Create(getGlobalContext(), "array_owned", ctx->f);
+                            BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "merge_own", ctx->f);
+                            builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+                            builder.SetInsertPoint(ownedBB);
+                            // load owner pointer
+                            Value *own_ptr = builder.CreateLoad(
+                                builder.CreateBitCast(builder.CreateConstGEP1_32(
+                                    builder.CreateBitCast(ary,T_pint8), jl_array_data_owner_offset(nd)),
+                                    jl_ppvalue_llvmt));
+                            builder.CreateBr(mergeBB);
+                            builder.SetInsertPoint(mergeBB);
+                            data_owner = builder.CreatePHI(jl_pvalue_llvmt, 2);
+                            data_owner->addIncoming(ary, curBB);
+                            data_owner->addIncoming(own_ptr, ownedBB);
+                        }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, tbaa_user, ety == (jl_value_t*)jl_any_type ? ary : NULL);
+                                    ety, ctx, tbaa_user, data_owner);
                     }
                     JL_GC_POP();
                     return ary;
@@ -2360,8 +2397,13 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
     }
+#ifdef LLVM37
+    Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
+                                        ConstantInt::get(T_int32,nargs)});
+#else
     Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
                                         ConstantInt::get(T_int32,nargs));
+#endif
     ctx->argDepth = argStart;
     return result;
 }
@@ -2548,18 +2590,30 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
                                        ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
         }
         theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
+#ifdef LLVM37
+        Value *r1 = builder.CreateCall(prepare_call(theFptr), {theFunc, myargs,
+                                        ConstantInt::get(T_int32,nargs)});
+#else
         Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
                                         ConstantInt::get(T_int32,nargs));
+#endif
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(elseBB1);
         builder.SetInsertPoint(elseBB1);
         // not function
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+#ifdef LLVM37
+        Value *r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
+                                        {literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
+                                        myargs,
+                                        ConstantInt::get(T_int32,nargs+1)});
+#else
         Value *r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
                                         literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
                                         myargs,
                                         ConstantInt::get(T_int32,nargs+1));
+#endif
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(mergeBB1);
         builder.SetInsertPoint(mergeBB1);
@@ -2820,9 +2874,15 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
     if (bnd) {
         Value *rval = boxed(emit_expr(r, ctx, true),ctx);
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jlcheckassign_func),
+                           {literal_pointer_val(bnd),
+                            rval});
+#else
         builder.CreateCall2(prepare_call(jlcheckassign_func),
-                            literal_pointer_val(bnd),
+                           literal_pointer_val(bnd),
                             rval);
+#endif
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
     }
@@ -3126,7 +3186,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(prepare_call(jlenter_func), jbuf);
 #ifndef _OS_WINDOWS_
+#ifdef LLVM37
+        CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), { jbuf, ConstantInt::get(T_int32,0) });
+#else
         CallInst *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
+#endif
 #else
         CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
 #endif
@@ -4431,12 +4495,21 @@ static Function *emit_function(jl_lambda_info_t *lam)
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
             Value *lv = vi.memvalue;
             if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
+#ifdef LLVM37
+                Value *restTuple =
+                    builder.CreateCall(prepare_call(jltuple_func), {V_null,
+                                        builder.CreateGEP(argArray,
+                                                          ConstantInt::get(T_size,nreq)),
+                                        builder.CreateSub(argCount,
+                                                          ConstantInt::get(T_int32,nreq))});
+#else
                 Value *restTuple =
                     builder.CreateCall3(prepare_call(jltuple_func), V_null,
                                         builder.CreateGEP(argArray,
                                                           ConstantInt::get(T_size,nreq)),
                                         builder.CreateSub(argCount,
                                                           ConstantInt::get(T_int32,nreq)));
+#endif
                 if (isBoxed(argname, &ctx))
                     builder.CreateStore(builder.CreateCall(prepare_call(jlbox_func), restTuple), lv);
                 else
@@ -4834,6 +4907,7 @@ static void init_julia_llvm_env(Module *m)
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
+                      , T_int16
     };
     Type* jl_array_llvmt =
         StructType::create(jl_LLVMContext,

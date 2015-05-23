@@ -3,28 +3,20 @@
 ## UTF-32 in the native byte order, i.e. plain old character arrays ##
 
 immutable UTF32String <: DirectIndexString
-    data::Array{Char,1} # includes 32-bit NULL termination after string chars
+    data::Vector{Char} # includes 32-bit NULL termination after string chars
 
-    function UTF32String(a::Array{Char,1})
+    function UTF32String(a::Vector{Char})
         if length(a) < 1 || a[end] != Char(0)
             throw(ArgumentError("UTF32String data must be NULL-terminated"))
         end
         new(a)
     end
 end
+UTF32String(data::Vector{UInt32}) = UTF32String(reinterpret(Char, data))
 
 next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
-
-function utf32(c::Integer...)
-    a = Array(Char, length(c) + 1)
-    for i = 1:length(c)
-        a[i] = Char(c[i])
-    end
-    a[end] = Char(0)
-    UTF32String(a)
-end
 
 utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
@@ -92,13 +84,14 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     UTF32String(d)
 end
 
-function is_valid_utf32(s::Union(Vector{Char}, Vector{UInt32}))
-    for i=1:length(s)
-        @inbounds if !is_valid_char(reinterpret(UInt32, s[i])) ; return false ; end
+function isvalid(::Type{UTF32String}, str::Union(Vector{Char}, Vector{UInt32}))
+    for i=1:length(str)
+        @inbounds if !isvalid(Char, reinterpret(UInt32, str[i])) ; return false ; end
     end
     return true
 end
-is_valid_utf32(s::UTF32String) = is_valid_utf32(s.data)
+isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
+isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(str::T) = isvalid(T, str.data)
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)

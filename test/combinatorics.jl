@@ -28,6 +28,7 @@ a = randcycle(10)
 @test collect(combinations("abc",2)) == Any[['a','b'],['a','c'],['b','c']]
 @test collect(combinations("abc",1)) == Any[['a'],['b'],['c']]
 @test collect(combinations("abc",0)) == Any[Char[]]
+@test collect(combinations("abc",-1)) == Any[]
 @test collect(permutations("abc")) == Any[['a','b','c'],['a','c','b'],['b','a','c'],
                                           ['b','c','a'],['c','a','b'],['c','b','a']]
 
@@ -45,6 +46,8 @@ a = randcycle(10)
 @test collect(partitions([1,2,3,4],1)) == Any[Any[[1, 2, 3, 4]]]
 @test collect(partitions([1,2,3,4],5)) == []
 
+@test length(partitions(0)) == 1
+@test length(partitions(-1)) == 0
 @test length(collect(partitions(30))) == length(partitions(30))
 @test length(collect(partitions(90,4))) == length(partitions(90,4))
 @test length(collect(partitions('a':'h'))) == length(partitions('a':'h'))
@@ -57,6 +60,16 @@ for n = 0:7, k = 1:factorial(n)
 end
 
 @test factorial(7) == 5040
+@test factorial(Int8(7)) == 5040
+@test factorial(UInt8(7)) == 5040
+@test factorial(Int16(7)) == 5040
+@test factorial(UInt16(7)) == 5040
+@test factorial(Int32(7)) == 5040
+@test factorial(UInt32(7)) == 5040
+@test factorial(Int64(7)) == 5040
+@test factorial(UInt64(7)) == 5040
+@test factorial(Int128(7)) == 5040
+@test factorial(UInt128(7)) == 5040
 @test factorial(7,3) == 7*6*5*4
 @test_throws DomainError factorial(3,7)
 @test_throws DomainError factorial(-3,-7)

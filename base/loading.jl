@@ -38,7 +38,6 @@ end
 package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
 package_locks = Dict{ByteString,Any}()
-require(fname::AbstractString) = require(bytestring(fname))
 require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
 # only broadcast top-level (not nested) requires and reloads

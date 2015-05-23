@@ -31,7 +31,7 @@ _hasenv(s::AbstractString) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NO
 function _jl_win_getenv(s::UTF16String,len::UInt32)
     val=zeros(UInt16,len)
     ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),s,val,len)
-    if ret==0 || ret != len-1 || val[end] != 0
+    if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
         error(string("getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
     end
     val

@@ -25,37 +25,45 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Enter base/ and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
+        julia = joinpath(JULIA_HOME, "julia")
+        ld = find_system_linker()
+
+        # Ensure we have write-permissions to wherever we're trying to write to
         try
-            julia = joinpath(JULIA_HOME, "julia")
-            ld = find_system_linker()
+            touch("$sysimg_path.ji")
+        catch
+            err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
+            err_msg *= "and is writable. Absolute paths work best.)"
+            error( err_msg )
+        end
 
-            # Ensure we have write-permissions to wherever we're trying to write to
-            try
-                touch("$sysimg_path.ji")
-            catch
-                err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
-                err_msg *= "and is writable. Absolute paths work best. Do you need to run this with sudo?)"
-                error( err_msg )
+        # Copy in userimg.jl if it exists...
+        if userimg_path != nothing
+            if !isreadable(userimg_path)
+                error("$userimg_path is not readable, ensure it is an absolute path!")
             end
-
-            # Copy in userimg.jl if it exists...
-            if userimg_path != nothing
-                if !isreadable(userimg_path)
-                    error("$userimg_path is not readable, ensure it is an absolute path!")
-                end
-                cp(userimg_path, "userimg.jl")
+            if isfile("userimg.jl")
+                error("$base_dir/userimg.jl already exists, delete manually to continue.")
             end
+            cp(userimg_path, "userimg.jl")
+        end
+        try
+            # Start by building inference0.{ji,o}
+            inference0_path = joinpath(dirname(sysimg_path), "inference0")
+            info("Building inference0.o...")
+            println("$julia -C $cpu_target --build $inference0_path coreimg.jl")
+            run(`$julia -C $cpu_target --build $inference0_path coreimg.jl`)
 
-            # Start by building sys0.{ji,o}
-            sys0_path = joinpath(dirname(sysimg_path), "sys0")
-            info("Building sys0.o...")
-            println("$julia -C $cpu_target --build $sys0_path sysimg.jl")
-            run(`$julia -C $cpu_target --build $sys0_path sysimg.jl`)
+            # Bootstrap off off that to create inference.{ji,o}
+            inference_path = joinpath(dirname(sysimg_path), "inference")
+            info("Building inference.o...")
+            println("$julia -C $cpu_target --build $inference_path coreimg.jl")
+            run(`$julia -C $cpu_target --build $inference_path coreimg.jl`)
 
-            # Bootstrap off of that to create sys.{ji,o}
+            # Bootstrap off off that to create sys.{ji,o}
             info("Building sys.o...")
-            println("$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl")
-            run(`$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl`)
+            println("$julia -C $cpu_target --build $sysimg_path -J $inference_path.ji -f sysimg.jl")
+            run(`$julia -C $cpu_target --build $sysimg_path -J $inference_path.ji -f sysimg.jl`)
 
             if ld != nothing
                 link_sysimg(sysimg_path, ld)
@@ -70,7 +78,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             end
         finally
             # Cleanup userimg.jl
-            if isfile("userimg.jl")
+            if userimg_path != nothing && isfile("userimg.jl")
                 rm("userimg.jl")
             end
         end
