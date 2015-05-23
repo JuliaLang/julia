@@ -301,6 +301,8 @@ If you are building for 64-bit windows, the steps are essentially the same. Just
   Manager by clicking on the high-memory `svchost.exe` process and selecting `Go to Services`. Disable child services
   one-by-one until a culprit is found.
 
+- Julia binaries and DLLs must not be encrypted with the Windows EFS.
+
 - Beware of [BLODA](https://cygwin.com/faq/faq.html#faq.using.bloda)
 
   The [vmmap](http://technet.microsoft.com/en-us/sysinternals/dd535533.aspx) tool is indispensable for identifying
