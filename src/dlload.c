@@ -50,7 +50,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
     dlerror(); /* Reset error status. */
     lib->handle = dlopen(filename,
                          (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
-                         | JL_RTLD(flags, GLOBAL) | JL_RTLD(flags, LOCAL)
+                         | (flags & JL_RTLD_GLOBAL ? RTLD_GLOBAL : RTLD_LOCAL)
 #ifdef RTLD_NODELETE
                          | JL_RTLD(flags, NODELETE)
 #endif
