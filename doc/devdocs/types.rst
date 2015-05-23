@@ -111,22 +111,21 @@ parameters:
      ub: Any::DataType  <: Any
      bound: Bool false
 
-A :obj`TypeVar` is one of Julia's built-in types---it's defined in
+A :obj:`TypeVar` is one of Julia's built-in types---it's defined in
 ``jltypes.c``, although you can find a commented-out version in
 ``boot.jl``.  The ``name`` field is straightforward: it's what's
 printed when showing the object.  ``lb`` and ``ub`` stand for "lower
 bound" and "upper bound," respectively: these are the sets that
 constrain what types the TypeVar may represent.  In this case, ``T``\ 's
 lower bound is ``Union()`` (i.e., ``Bottom`` or the empty set); in
-other words, this :obj`TypeVar` is not constrained from below.  The
+other words, this :obj:`TypeVar` is not constrained from below.  The
 upper bound is ``Any``, so neither is it constrained from above.
 
 In a method definition like::
 
    g{S<:Integer}(x::S) = 0
 
-one can extract the underlying :obj`TypeVar`::
-
+one can extract the underlying :obj:`TypeVar`::
 
 .. testcode:: s
 
@@ -146,8 +145,8 @@ one can extract the underlying :obj`TypeVar`::
 
 Here ``ub`` is ``Integer``, as specified in the function definition.
 
-The last field of a :obj`TypeVar` is ``bound``.  This boolean value
-specifies whether the :obj`TypeVar` is defined as one of the function
+The last field of a :obj:`TypeVar` is ``bound``.  This boolean value
+specifies whether the :obj:`TypeVar` is defined as one of the function
 parameters. For example:
 
 .. doctest::
@@ -190,7 +189,7 @@ bounded.  This is because in ``h3``, the same type ``T`` is used in
 both places, whereas for ``h2`` the ``T`` inside the array is simply
 the default symbol used for the first parameter of :obj:`Array`.
 
-One can construct :obj`TypeVar`\s manually:
+One can construct :obj:`TypeVar`\s manually:
 
 .. doctest::
 
@@ -236,7 +235,7 @@ These therefore print identically, but they have very different behavior:
 
 To see what's happening, it's helpful to use Julia's internal :c:func:`jl_`
 function (defined in ``builtins.c``) for display, because it prints
-bound :obj`TypeVar` objects with a hash (``#T`` instead of ``T``):
+bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
 
 .. doctest::
 
@@ -254,7 +253,7 @@ Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
 element type of the :obj:`Array`.
 
-Some :obj`TypeVar` interactions depend on the ``bound`` state, even when there are not two or more uses of the same :obj`TypeVar`. For example:
+Some :obj:`TypeVar` interactions depend on the ``bound`` state, even when there are not two or more uses of the same :obj:`TypeVar`. For example:
 
 .. doctest::
 
@@ -371,7 +370,7 @@ type:
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)
 Consequently, when you instantiate a parametric type, each concrete
-type gets saved in a type-cache.  However, instances with :obj`TypeVar`
+type gets saved in a type-cache.  However, instances with :obj:`TypeVar`
 parameters are not cached.
 
 Tuple-types
@@ -402,8 +401,8 @@ It's worth noting that the parameter is a type, ``Any``, rather than a
 
 Unlike other types, tuple-types are covariant in their parameters, so
 this definition permits ``Tuple`` to match any type of tuple.  This is
-therefore equivalent to having an unbound :obj`TypeVar` but distinct
-from a bound :obj`TypeVar`
+therefore equivalent to having an unbound :obj:`TypeVar` but distinct
+from a bound :obj:`TypeVar`
 
 .. doctest::
 
@@ -522,7 +521,7 @@ We can make it more interesting by trying a more complex case::
    (gdb) call jl_(b)
    Tuple{Array{Int64, 2}, Int8}
 
-Let's watch how this bound :obj`TypeVar` gets handled.  To follow this,
+Let's watch how this bound :obj:`TypeVar` gets handled.  To follow this,
 you'll need to examine the variables ``penv`` and ``eqc``, which are
 defined as:
 
@@ -569,7 +568,7 @@ Armed with this knowledge, you may find yourself surprised by the following:
    julia> Tuple{Array{Int},Float64} <: Tuple{Array{T},T}
    true
 
-where ``T`` is a bound :obj`TypeVar`.  In other words, ``A <: B`` does
+where ``T`` is a bound :obj:`TypeVar`.  In other words, ``A <: B`` does
 not imply that ``typeintersect(A, B) == A``.  A little bit of digging
 reveals the reason why: ``jl_subtype_le`` does not use the ``cenv_t``
 constraints that we just saw in ``typeintersect``.
