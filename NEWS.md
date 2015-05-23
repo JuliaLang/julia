@@ -374,6 +374,8 @@ Deprecated or removed
     The two argument form `isvalid(type, value)` can be used with the above types, with values
     of type `Vector{UInt8}`, `Vector{UInt16}`, `Vector{UInt32}`, and `Vector{Char}` ([#11241]).
 
+  * Instead of `utf32(64,123,...)` use `utf32(UInt32[64,123,...])` ([#11379]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -1420,3 +1422,4 @@ Too numerous to mention.
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11379]: https://github.com/JuliaLang/julia/issues/11379
