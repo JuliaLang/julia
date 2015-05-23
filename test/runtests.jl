@@ -3,7 +3,7 @@ using Compat
 
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 so_many_as = repmat([0x61], 1000000)
-data = {"", "test", lorem, so_many_as}
+data = Any["", "test", lorem, so_many_as]
 data_desc = ["the empty string", "the string \"test\"", "lorem ipsum", "one million a's"]
 #hash_types = [SHA224_CTX, SHA256_CTX, SHA384_CTX, SHA512_CTX]
 sha_funcs =  [sha224, sha256, sha384, sha512]
