@@ -113,6 +113,10 @@ end
 catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
+# Generic Callables
+
+doc(f, ::Method) = doc(f)
+
 # Modules
 
 function doc(m::Module)
