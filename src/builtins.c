@@ -890,6 +890,7 @@ void jl_flush_cstdio(void)
 
 jl_value_t *jl_stdout_obj(void)
 {
+    if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
     if (stdout_obj != NULL) return stdout_obj;
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
@@ -897,6 +898,7 @@ jl_value_t *jl_stdout_obj(void)
 
 jl_value_t *jl_stderr_obj(void)
 {
+    if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
     if (stderr_obj != NULL) return stderr_obj;
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
