@@ -1542,12 +1542,10 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     return jl_static_show_x(out, v, 0);
 }
 
-DLLEXPORT size_t
-jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
+DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
-    if (!jl_is_tuple_type(type)) {
+    if (!jl_is_tuple_type(type))
         return jl_static_show(s, type);
-    }
     size_t n = 0;
     size_t tl = jl_nparams(type);
     n += jl_printf(s, "(");
@@ -1557,11 +1555,13 @@ jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         if (i != tl - 1) {
             n += jl_static_show(s, tp);
             n += jl_printf(s, ", ");
-        } else {
+        }
+        else {
             if (jl_is_vararg_type(tp)) {
                 n += jl_static_show(s, jl_tparam0(tp));
                 n += jl_printf(s, "...");
-            } else {
+            }
+            else {
                 n += jl_static_show(s, tp);
             }
         }
