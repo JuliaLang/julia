@@ -208,7 +208,7 @@ Base.abs2(x::SparseVector) = SparseVector(x.n, copy(x.nzind), abs2(x.nzval))
 
 # zero-preserved: f(0, 0) -> 0
 function zero_preserve_map{Tx,Ty}(f, x::SparseVector{Tx}, y::SparseVector{Ty})
-    R = typeof(_eval(op, zero(Tx), zero(Ty)))
+    R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 
@@ -239,7 +239,7 @@ function zero_preserve_map{Tx,Ty}(f, x::SparseVector{Tx}, y::SparseVector{Ty})
             ix += 1
             iy += 1
         elseif jx < jy
-            v = f(xnzval[i], zero(Ty))
+            v = f(xnzval[ix], zero(Ty))
             if v != zero(v)
                 push!(rind, jx)
                 push!(rval, v)
@@ -277,7 +277,7 @@ function zero_preserve_map{Tx,Ty}(f, x::SparseVector{Tx}, y::SparseVector{Ty})
 end
 
 function map{Tx,Ty}(f, x::StridedVector{Tx}, y::SparseVector{Ty})
-    R = typeof(_eval(op, zero(Tx), zero(Ty)))
+    R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 
@@ -306,7 +306,7 @@ function map{Tx,Ty}(f, x::StridedVector{Tx}, y::SparseVector{Ty})
 end
 
 function map{Tx,Ty}(f, x::SparseVector{Tx}, y::StridedVector{Ty})
-    R = typeof(_eval(op, zero(Tx), zero(Ty)))
+    R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 

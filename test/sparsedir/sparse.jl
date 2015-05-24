@@ -188,8 +188,8 @@ for i = 1:5
     a = sprand(10, 5, 0.7)
     b = sprand(5, 15, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.Sparse.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.Sparse.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
     @test full(kron(full(a),b)) == kron(full(a), full(b))
     @test full(kron(a,full(b))) == kron(full(a), full(b))
@@ -635,9 +635,9 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
         ((minj < 1) || (maxj > n)) && BoundsError()
     end
 
-    (alg == 0) ? Base.SparseMatrix.getindex_I_sorted_bsearch_A(A, I, J) :
-    (alg == 1) ? Base.SparseMatrix.getindex_I_sorted_bsearch_I(A, I, J) :
-    Base.SparseMatrix.getindex_I_sorted_linear(A, I, J)
+    (alg == 0) ? Base.Sparse.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? Base.Sparse.getindex_I_sorted_bsearch_I(A, I, J) :
+    Base.Sparse.getindex_I_sorted_linear(A, I, J)
 end
 
 let M=2^14, N=2^4
