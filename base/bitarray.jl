@@ -5,7 +5,7 @@
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
 type BitArray{N} <: DenseArray{Bool, N}
-    chunks::Vector{UInt64}
+    const chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
     function BitArray(dims::Int...)
@@ -23,6 +23,12 @@ type BitArray{N} <: DenseArray{Bool, N}
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
         return b
+    end
+
+    function BitArray(chunks::Vector{UInt64}, dims::NTuple{N,Int})
+        len = prod(dims)
+        num_bit_chunks(len) <= length(chunks) || throw(ArgumentError("chunks vector is too short for the given dimensions"))
+        return new(chunks, len, dims)
     end
 end
 
@@ -280,11 +286,7 @@ function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     dims == size(B) && return B
-    Br = BitArray{N}(ntuple(N,i->0)...)
-    Br.chunks = B.chunks
-    Br.len = prod(dims)
-    N != 1 && (Br.dims = dims)
-    return Br
+    return BitArray{N}(B.chunks, dims)
 end
 
 ## Conversions ##

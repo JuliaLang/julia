@@ -166,11 +166,5 @@ function mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset::FileOffs
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(N,i->0)...)
-    B.chunks = chunks
-    B.len = n
-    if N != 1
-        B.dims = dims
-    end
-    return B
+    return BitArray{N}(chunks, dims)
 end
