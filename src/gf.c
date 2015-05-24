@@ -1156,33 +1156,6 @@ DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-static void
-show_func_sig(JL_STREAM *s, jl_value_t *errstream, jl_value_t *type)
-{
-    if (!jl_is_tuple_type(type)) {
-        jl_show(errstream, type);
-        return;
-    }
-    size_t tl = jl_nparams(type);
-    jl_printf(s, "(");
-    size_t i;
-    for (i = 0;i < tl;i++) {
-        jl_value_t *tp = jl_tparam(type, i);
-        if (i != tl - 1) {
-            jl_show(errstream, tp);
-            jl_printf(s, ", ");
-        } else {
-            if (jl_is_vararg_type(tp)) {
-                jl_show(errstream, jl_tparam0(tp));
-                jl_printf(s, "...");
-            } else {
-                jl_show(errstream, tp);
-            }
-        }
-    }
-    jl_printf(s, ")");
-}
-
 /*
   warn about ambiguous method priorities
 
@@ -1228,7 +1201,6 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
         }
         jl_methlist_t *l = ml;
         char *n;
-        jl_value_t *errstream;
         JL_STREAM *s;
         while (l != (void*)jl_nothing) {
             if (sigs_eq(isect, (jl_value_t*)l->sig, 0))
@@ -1236,16 +1208,15 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
             l = l->next;
         }
         n = fname->name;
-        errstream = jl_stderr_obj();
         s = JL_STDERR;
         jl_printf(s, "Warning: New definition \n    %s", n);
-        show_func_sig(s, errstream, (jl_value_t*)type);
+        jl_static_show_func_sig(s, (jl_value_t*)type);
         print_func_loc(s, linfo);
         jl_printf(s, "\nis ambiguous with: \n    %s", n);
-        show_func_sig(s, errstream, (jl_value_t*)sig);
+        jl_static_show_func_sig(s, (jl_value_t*)sig);
         print_func_loc(s, oldmeth->func->linfo);
         jl_printf(s, ".\nTo fix, define \n    %s", n);
-        show_func_sig(s, errstream, isect);
+        jl_static_show_func_sig(s, isect);
         jl_printf(s, "\nbefore the new definition.\n");
     done_chk_amb:
         JL_GC_POP();
@@ -1280,10 +1251,9 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             if (check_amb && l->func->linfo && method->linfo &&
                 (l->func->linfo->module != method->linfo->module)) {
                 jl_module_t *newmod = method->linfo->module;
-                jl_value_t *errstream = jl_stderr_obj();
                 JL_STREAM *s = JL_STDERR;
                 jl_printf(s, "Warning: Method definition %s", method->linfo->name->name);
-                show_func_sig(s, errstream, (jl_value_t*)type);
+                jl_static_show_func_sig(s, (jl_value_t*)type);
                 jl_printf(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
                 jl_printf(s, " overwritten in module %s", newmod->name->name);
