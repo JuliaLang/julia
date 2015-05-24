@@ -2,7 +2,7 @@
 
 module SparseMatrix
 
-using Base: Func, AddFun, OrFun, ConjFun, IdFun
+using Base: Func, AddFun, SubFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular
 
@@ -12,12 +12,14 @@ import Base.promote_eltype
 import Base.@get!
 import Base.Broadcast.eltype_plus, Base.Broadcast.broadcast_shape
 
-export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, SparseMatrixCSC,
+export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
+       SparseVector, SparseMatrixCSC,
        blkdiag, dense, droptol!, dropzeros!, etree, issparse, nnz, nonzeros, nzrange,
        rowvals, sparse, sparsevec, spdiagm, speye, spones, sprand, sprandbool, sprandn,
        spzeros, symperm
 
 include("sparse/abstractsparse.jl")
+include("sparse/sparsevector.jl")
 include("sparse/sparsematrix.jl")
 include("sparse/csparse.jl")
 
