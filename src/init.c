@@ -543,7 +543,7 @@ DLLEXPORT void jl_atexit_hook()
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_show(jl_stderr_obj(),jl_exception_in_transit);
+                jl_static_show(JL_STDERR, jl_exception_in_transit);
             }
         }
     }
@@ -1060,7 +1060,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }
