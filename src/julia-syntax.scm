@@ -126,6 +126,9 @@
 (define (llist-types lst)
   (map arg-type lst))
 
+(define (const-decl? e)
+  (and (pair? e) (eq? (car e) 'const) (eq? (caadr e) '|::|)))
+
 (define (decl? e)
   (and (pair? e) (eq? (car e) '|::|)))
 
@@ -137,10 +140,18 @@
 
 ; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
-  (if (decl? v) (cadr v) v))
+  (if (decl? v)
+      (cadr v)
+      (if (const-decl? v)
+          (cadadr v)
+          v)))
 
 (define (decl-type v)
-  (if (decl? v) (caddr v) 'Any))
+  (if (decl? v)
+      (caddr v)
+      (if (const-decl? v)
+          (caddr (cadr v))
+          'Any)))
 
 (define (sym-dot? e)
   (and (length= e 3) (eq? (car e) '|.|)
@@ -922,11 +933,12 @@
 
 (define (struct-def-expr- name params bounds super fields mut)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
+   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x) (const-decl? x)))
                            fields)
    (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
+          (field-const (map const-decl? fields))
           (defs2 (if (null? defs)
                      (default-inner-ctors name field-names field-types (null? params))
                      defs))
@@ -940,7 +952,8 @@
            (global ,name) (const ,name)
            (composite_type ,name (call (top svec) ,@params)
                            (call (top svec) ,@(map (lambda (x) `',x) field-names))
-                           ,super (call (top svec) ,@field-types) ,mut ,min-initialized)
+                           ,super (call (top svec) ,@field-types)
+                           (call (top svec) ,@field-const) ,mut ,min-initialized)
            (call
             (lambda ()
               (scope-block
@@ -959,7 +972,8 @@
              ,@(map make-assignment params (symbols->typevars params bounds #t))
              (composite_type ,name (call (top svec) ,@params)
                              (call (top svec) ,@(map (lambda (x) `',x) field-names))
-                             ,super (call (top svec) ,@field-types) ,mut ,min-initialized)))
+                             ,super (call (top svec) ,@field-types)
+                             (call (top svec) ,@field-const) ,mut ,min-initialized)))
            ;; "inner" constructors
            (call
             (lambda ()

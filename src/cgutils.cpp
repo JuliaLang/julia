@@ -1805,7 +1805,7 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
 static Value *emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx0,
                             Value *rhs, jl_codectx_t *ctx, bool checked, bool wb)
 {
-    if (sty->mutabl || !checked) {
+    if ((sty->mutabl && !(sty->fields[idx0].isconst)) || !checked) {
         Value *addr =
             builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                               ConstantInt::get(T_size, sty->fields[idx0].offset));

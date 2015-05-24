@@ -1566,6 +1566,23 @@ static bool isbits_spec(jl_value_t *jt, bool allow_unsized = true)
          (jl_is_datatype(jt) && jl_datatype_nfields(jt)>0)));
 }
 
+static bool is_constant_field(jl_datatype_t *ty, jl_value_t *fld)
+{
+    if (!jl_is_leaf_type((jl_value_t*)ty))
+        return false;
+    jl_sym_t *name = NULL;
+    if (jl_is_quotenode(fld) && jl_is_symbol(jl_fieldref(fld,0))) {
+        name = (jl_sym_t*)jl_fieldref(fld,0);
+    }
+    for(size_t i=0; i < jl_svec_len(ty->types); i++) {
+        if (ty->fields[i].isconst &&
+              (name && name == jl_field_name(ty,i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // does "ex" compute something that doesn't need a root over the whole function?
 static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 {
@@ -1592,7 +1609,7 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
                 // something reached via getfield from a stable value is also stable.
                 if (jl_array_dim0(e->args) == 3) {
                     jl_value_t *ty = expr_type(jl_exprarg(e,1), ctx);
-                    if ((fptr == &jl_f_get_field && jl_is_immutable_datatype(ty) &&
+                    if ((fptr == &jl_f_get_field && (jl_is_immutable_datatype(ty) || is_constant_field((jl_datatype_t*)ty, jl_exprarg(e,2))) &&
                          is_getfield_nonallocating((jl_datatype_t*)ty, jl_exprarg(e,2)))) {
                         if (is_stable_expr(jl_exprarg(e,1), ctx))
                             return true;

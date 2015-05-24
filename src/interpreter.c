@@ -395,7 +395,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         temp = eval(args[2], locals, nl, ngensym);  // field names
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_svec_t*)para,
                              (jl_svec_t*)temp, NULL,
-                             0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
+                             0, args[6]==jl_true ? 1 : 0, jl_unbox_long(args[7]));
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -421,7 +421,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         for(size_t i=0; i < jl_svec_len(para); i++) {
             ((jl_tvar_t*)jl_svecref(para,i))->bound = 0;
         }
-        jl_compute_field_offsets(dt);
+        jl_compute_field_offsets(dt, (jl_svec_t*)eval(args[5], locals, nl, ngensym));
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_singleton(dt)) {
             dt->instance = newstruct(dt);
             gc_wb(dt, dt->instance);

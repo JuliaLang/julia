@@ -704,6 +704,9 @@ JL_CALLABLE(jl_f_set_field)
     if (!jl_subtype(args[2], ft, 1)) {
         jl_type_error("setfield!", ft, args[2]);
     }
+    if (st->fields[idx].isconst) {
+        jl_errorf("field in type %s is immutable", st->name->name->name);
+    }
     jl_set_nth_field(v, idx, args[2]);
     return args[2];
 }

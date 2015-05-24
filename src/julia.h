@@ -261,12 +261,13 @@ typedef struct {
 
 typedef struct {
     uint16_t offset;   // offset relative to data start, excluding type tag
-    uint16_t size:15;
+    uint16_t size:14;
+    uint16_t isconst:1;
     uint16_t isptr:1;
 } jl_fielddesc_t;
 
 #define JL_FIELD_MAX_OFFSET ((1ul << 16) - 1ul)
-#define JL_FIELD_MAX_SIZE ((1ul << 15) - 1ul)
+#define JL_FIELD_MAX_SIZE ((1ul << 14) - 1ul)
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
@@ -739,6 +740,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_field_offset(st,i)  (((jl_datatype_t*)st)->fields[i].offset)
 #define jl_field_size(st,i)    (((jl_datatype_t*)st)->fields[i].size)
 #define jl_field_isptr(st,i)   (((jl_datatype_t*)st)->fields[i].isptr)
+#define jl_field_isconst(st,i) (((jl_datatype_t*)st)->fields[i].isconst)
 #define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)

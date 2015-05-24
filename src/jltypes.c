@@ -2007,7 +2007,11 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
                 ndt->pointerfree = dt->pointerfree;
             }
             else {
-                jl_compute_field_offsets(ndt);
+                int i;
+                jl_compute_field_offsets(ndt, jl_emptysvec);
+                for (i=0; i < jl_svec_len(ftypes); i++) {
+                    ndt->fields[i].isconst = dt->fields[i].isconst;
+                }
             }
             if (jl_is_datatype_singleton(ndt)) {
                 ndt->instance = newstruct(ndt);
@@ -3391,24 +3395,24 @@ void jl_init_types(void)
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
 
-    jl_compute_field_offsets(jl_datatype_type);
-    jl_compute_field_offsets(jl_typename_type);
-    jl_compute_field_offsets(jl_uniontype_type);
-    jl_compute_field_offsets(jl_tvar_type);
-    jl_compute_field_offsets(jl_method_type);
-    jl_compute_field_offsets(jl_methtable_type);
-    jl_compute_field_offsets(jl_expr_type);
-    jl_compute_field_offsets(jl_linenumbernode_type);
-    jl_compute_field_offsets(jl_labelnode_type);
-    jl_compute_field_offsets(jl_gotonode_type);
-    jl_compute_field_offsets(jl_quotenode_type);
-    jl_compute_field_offsets(jl_topnode_type);
-    jl_compute_field_offsets(jl_module_type);
-    jl_compute_field_offsets(jl_lambda_info_type);
-    jl_compute_field_offsets(jl_box_type);
-    jl_compute_field_offsets(jl_typector_type);
-    jl_compute_field_offsets(jl_function_type);
-    jl_compute_field_offsets(jl_simplevector_type);
+    jl_compute_field_offsets(jl_datatype_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_typename_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_uniontype_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_tvar_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_method_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_methtable_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_expr_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_linenumbernode_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_labelnode_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_gotonode_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_quotenode_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_topnode_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_module_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_lambda_info_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_box_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_typector_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_function_type, jl_emptysvec);
+    jl_compute_field_offsets(jl_simplevector_type, jl_emptysvec);
     jl_simplevector_type->pointerfree = 0;
 
     call_sym = jl_symbol("call");

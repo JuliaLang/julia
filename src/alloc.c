@@ -524,7 +524,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
     return t;
 }
 
-void jl_compute_field_offsets(jl_datatype_t *st)
+void jl_compute_field_offsets(jl_datatype_t *st, jl_svec_t *consts)
 {
     size_t sz = 0, alignm = 1;
     int ptrfree = 1;
@@ -556,6 +556,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             jl_throw(jl_overflow_exception);
         st->fields[i].offset = sz;
         st->fields[i].size = fsz;
+        st->fields[i].isconst = (jl_svec_len(consts) == 0) ? 0 : jl_svecref(consts, i)==jl_true;
         sz += fsz;
     }
     st->alignment = alignm;
@@ -628,7 +629,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     else {
         t->uid = jl_assign_type_uid();
         if (t->types != NULL)
-            jl_compute_field_offsets(t);
+            jl_compute_field_offsets(t, jl_emptysvec);
     }
     JL_GC_POP();
     return t;
