@@ -21,10 +21,12 @@
 
    Returns the files and directories in the directory `dir` (or the current working directory if not given).
 
-.. function:: mkdir(path, [mode])
+.. function:: mkdir(path, [mode]; recursive=false))
 
    Make a new directory with name ``path`` and permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
+   If ``recursive==true``, any missing parent directories will also be
+   created.
 
 .. function:: mkpath(path, [mode])
 

@@ -36,7 +36,13 @@ end
 end
 cd(f::Function) = cd(f, homedir())
 
-function mkdir(path::AbstractString, mode::Unsigned=0o777)
+function mkdir(path::AbstractString, mode::Unsigned=0o777; recursive::Bool=false)
+    if recursive
+        pdir = splitdir(path)[1]
+        if !isdir(pdir)
+            mkdir(pdir, mode; recursive=true)
+        end
+    end
     @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     systemerror(:mkdir, ret != 0)

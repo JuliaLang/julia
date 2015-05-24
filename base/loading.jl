@@ -38,6 +38,9 @@ end
 package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
 package_locks = Dict{ByteString,Any}()
+# List of files associated with each module
+package_files = Dict{Symbol,Set{ByteString}}()
+current_package = Array(Symbol, 0)
 require(fname::AbstractString) = require(bytestring(fname))
 require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
@@ -54,10 +57,24 @@ function _require_from_cache(name::AbstractString)
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
         if isfile(path)
+            mt = mtime(path)
             if nprocs() == 1
                 if ccall(:jl_restore_new_module, UInt, (Ptr{Uint8},), path) != 0
+                    @show symbol(basename(name))
                     #package_list[path] = time()
+                    try
+                        module_files = eval(symbol(basename(name))).__module_files__
+                        @show module_files
+                    end
                     return true
+#                        for f in module_files
+#                            if mtime(f) > mt
+#                                return false
+#                            end
+#                        end
+#                        return true
+#                    end
+#                    return false
                 end
             else
                 content = open(readbytes, path)
@@ -82,6 +99,7 @@ end
 function require(name::AbstractString)
     path = find_in_node1_path(name)
     path == nothing && throw(ArgumentError("$name not found in path"))
+    push!(current_package, symbol(name))
 
     if myid() == 1 && toplevel_load
         refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
@@ -90,6 +108,7 @@ function require(name::AbstractString)
     else
         _require(path)
     end
+    pop!(current_package)
     nothing
 end
 
@@ -178,6 +197,13 @@ function include_from_node1(path::AbstractString)
             tls[:SOURCE_PATH] = prev
         end
     end
+    if !isempty(Base.current_package)
+        mod = Base.current_package[end]
+        if !haskey(Base.package_files, mod)
+            Base.package_files[mod] = Set{ByteString}()
+        end
+        push!(Base.package_files[mod], path)
+    end
     result
 end
 
@@ -220,10 +246,11 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...
 create_expr_cache(m::Box) = create_expr_cache(m.contents::Expr)
 function create_expr_cache(m::Expr)
     assert(m.head === :module)
-    typeassert(m.args[2], Symbol)
+    modname = m.args[2]
+    typeassert(modname, Symbol)
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
-        mkdir(cachepath)
+        mkdir(cachepath; recursive=true)
     end
     code_object = """
         while !eof(STDIN)
@@ -245,16 +272,21 @@ function create_expr_cache(m::Expr)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
+    Base.package_files[modname] = Set{ByteString}()
     serialize(io, m)
     if source !== nothing
         serialize(io, quote
             delete!(task_local_storage(), :SOURCE_PATH)
         end)
     end
+    pkg_files = Base.package_files[modname]
+    serialize(io, quote
+        eval(eval($modname), :(__module_files__ = Base.package_files[$$modname]))
+    end)
     close(io)
     wait(pobj)
-    if !_require_from_cache(string(m.args[2]))
-        error("Warning: @cacheable module failed to define a module")
+    if !_require_from_cache(string(modname))
+        error("Warning: @cacheable module $modname failed to define a module")
     end
 end
 
