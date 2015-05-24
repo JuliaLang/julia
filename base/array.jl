@@ -66,7 +66,11 @@ strides{T}(a::Array{T,1}) = (1,)
 strides{T}(a::Array{T,2}) = (1, size(a,1))
 strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 
-isassigned(a::Array, i::Int...) = isdefined(a, i...)
+function isassigned{T}(a::Array{T}, i::Int...)
+    ii = sub2ind(size(a), i...)
+    1 <= ii <= length(a) || return false
+    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
+end
 
 ## copy ##
 
@@ -206,10 +210,11 @@ end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     # note: checking bit pattern
     xT = convert(T,x)
-    if isbits(T) && ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
-                     (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
-                     (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
-                     (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
+    if isbits(T) && nfields(T)==0 &&
+        ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
+         (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
+         (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
+         (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
               a, 0, length(a)*sizeof(T))
     else

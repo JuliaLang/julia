@@ -100,7 +100,7 @@ ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
-    is_valid_ascii(a) || throw(ArgumentError("invalid ASCII sequence"))
+    isvalid(ASCIIString,a) || throw(ArgumentError("invalid ASCII sequence"))
     return ASCIIString(a)
 end
 

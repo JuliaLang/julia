@@ -199,7 +199,13 @@ macro elapsed(ex)
     end
 end
 
-# measure bytes allocated without any contamination from compilation
+# measure bytes allocated without *most* contamination from compilation
+# Note: This reports a different value from the @time macros, because
+# it wraps the call in a function, however, this means that things
+# like:  @allocated y = foo()
+# will not work correctly, because it will set y in the context of
+# the local function made by the macro, not the current function
+
 macro allocated(ex)
     quote
         let

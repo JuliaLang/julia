@@ -233,3 +233,8 @@ end
 
 # issue #9865
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+
+# issue 11413
+@test string(:(*{1,2})) == "*{1,2}"
+@test string(:(*{1,x})) == "*{1,x}"
+@test string(:(-{x}))   == "-{x}"

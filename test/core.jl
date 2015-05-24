@@ -4,6 +4,12 @@
 
 const Bottom = Union()
 
+function testintersect(a, b, result, cmp=is)
+    @test cmp(typeintersect(a, b), result)
+    @test cmp(typeintersect(b, a), result)
+end
+isnot(x,y) = !is(x,y)
+
 # basic type relationships
 @test Int8 <: Integer
 @test Int32 <: Integer
@@ -23,7 +29,7 @@ const Bottom = Union()
 @test Array{Int8,1} <: Array{Int8,1}
 @test !(Type{Bottom} <: Type{Int32})
 @test !(Vector{Float64} <: Vector{Union(Float64,Float32)})
-@test is(Bottom, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
+testintersect(Vector{Float64}, Vector{Union(Float64,Float32)}, Bottom)
 
 @test !isa(Array,Type{Any})
 @test Type{Complex} <: DataType
@@ -31,88 +37,88 @@ const Bottom = Union()
 @test !(Type{Ptr{Bottom}} <: Type{Ptr})
 @test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
-    @test !is(Bottom, typeintersect(Array{Bottom},AbstractArray{T}))
-    @test  is(Bottom, typeintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
-                                    Tuple{Type{Ptr{T}},Ptr{T}}))
+    testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
+    testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
+                  Tuple{Type{Ptr{T}},Ptr{T}}, Bottom)
     @test !(Type{T} <: TypeVar)
 
-    @test isequal(typeintersect(Tuple{Range{Int},Tuple{Int,Int}},Tuple{AbstractArray{T},Dims}),
+    testintersect(Tuple{Range{Int},Tuple{Int,Int}},Tuple{AbstractArray{T},Dims},
                   Tuple{Range{Int},Tuple{Int,Int}})
 
-    @test isequal(typeintersect(Tuple{T, AbstractArray{T}}, Tuple{Number, Array{Int,1}}),
+    testintersect(Tuple{T, AbstractArray{T}}, Tuple{Number, Array{Int,1}},
                   Tuple{Int, Array{Int,1}})
 
-    @test isequal(typeintersect(Tuple{T, AbstractArray{T}}, Tuple{Int, Array{Number,1}}),
+    testintersect(Tuple{T, AbstractArray{T}}, Tuple{Int, Array{Number,1}},
                   Tuple{Int, Array{Number,1}})
 
-    @test isequal(typeintersect(Tuple{T, AbstractArray{T}},Tuple{Any, Array{Number,1}}),
-                  Tuple{Number, Array{Number,1}})
-    @test !is(Bottom, typeintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}))
+    testintersect(Tuple{T, AbstractArray{T}},Tuple{Any, Array{Number,1}},
+                  Tuple{Number, Array{Number,1}}, isequal)
+    testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, isnot)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws MethodError f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
-    @test typeintersect(Tuple{T,T}, Tuple{Union(Float64,Int64),Int64}) == Tuple{Int64,Int64}
-    @test typeintersect(Tuple{T,T}, Tuple{Int64,Union(Float64,Int64)}) == Tuple{Int64,Int64}
+    testintersect(Tuple{T,T}, Tuple{Union(Float64,Int64),Int64}, Tuple{Int64,Int64})
+    testintersect(Tuple{T,T}, Tuple{Int64,Union(Float64,Int64)}, Tuple{Int64,Int64})
 
     TT = TypeVar(:T)
     S = TypeVar(:S,true); N = TypeVar(:N,true); SN = TypeVar(:S,Number,true)
-    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{SN,N}}) == Type{Array{SN,1}}
+    testintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{SN,N}}, Type{Array{SN,1}})
     # issue #5359
-    @test typeintersect(Tuple{Type{Array{T,1}},Array{T,1}},
-                        Tuple{Type{AbstractVector},Vector{Int}}) === Bottom
+    testintersect(Tuple{Type{Array{T,1}},Array{T,1}},
+                  Tuple{Type{AbstractVector},Vector{Int}}, Bottom)
     # issue #5559
-    @test typeintersect(Tuple{Type{Vector{Complex128}}, AbstractVector},
-                        Tuple{Type{Array{T,N}}, Array{S,N}}) == Tuple{Type{Vector{Complex128}},Vector}
-    @test typeintersect(Tuple{Type{Vector{Complex128}}, AbstractArray},
-                        Tuple{Type{Array{T,N}}, Array{S,N}}) == Tuple{Type{Vector{Complex128}},Vector}
+    testintersect(Tuple{Type{Vector{Complex128}}, AbstractVector},
+                  Tuple{Type{Array{T,N}}, Array{S,N}}, Tuple{Type{Vector{Complex128}},Vector}, isequal)
+    testintersect(Tuple{Type{Vector{Complex128}}, AbstractArray},
+                  Tuple{Type{Array{T,N}}, Array{S,N}}, Tuple{Type{Vector{Complex128}},Vector}, isequal)
 
-    @test typeintersect(Type{Array{T}}, Type{AbstractArray{T}}) === Bottom
+    testintersect(Type{Array{T}}, Type{AbstractArray{T}}, Bottom)
 
-    @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}) === Bottom
-    @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}) === Bottom
+    testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}, Bottom)
+    testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}, Bottom)
 
-    @test typeintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}) === Tuple{Rational{Integer},Int}
+    testintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}, Tuple{Rational{Integer},Int})
 
-    @test typeintersect(Pair{T,Ptr{T}}, Pair{Ptr{S},S}) === Bottom
-    @test typeintersect(Tuple{T,Ptr{T}}, Tuple{Ptr{S},S}) === Bottom
+    testintersect(Pair{T,Ptr{T}}, Pair{Ptr{S},S}, Bottom)
+    testintersect(Tuple{T,Ptr{T}}, Tuple{Ptr{S},S}, Bottom)
 end
 let N = TypeVar(:N,true)
-    @test isequal(typeintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
-                                Tuple{Tuple{Integer,Integer}, Tuple{Vararg{Integer}}}),
+    testintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
+                  Tuple{Tuple{Integer,Integer}, Tuple{Vararg{Integer}}},
                   Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
-    @test isequal(typeintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
-                                Tuple{Tuple{Vararg{Integer}}, Tuple{Integer,Integer}}),
+    testintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
+                  Tuple{Tuple{Vararg{Integer}}, Tuple{Integer,Integer}},
                   Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
     local A = typeintersect(Tuple{NTuple{N,Any},Array{Int,N}},
                             Tuple{Tuple{Int,Vararg{Int}},Array})
     local B = Tuple{Tuple{Int,Vararg{Int}},Array{Int,N}}
     @test A<:B && B<:A
-    @test isequal(typeintersect(Tuple{NTuple{N,Any},Array{Int,N}},
-                                Tuple{Tuple{Int,Vararg{Int}},Array{Int,2}}),
+    testintersect(Tuple{NTuple{N,Any},Array{Int,N}},
+                  Tuple{Tuple{Int,Vararg{Int}},Array{Int,2}},
                   Tuple{Tuple{Int,Int}, Array{Int,2}})
 end
-@test is(Bottom, typeintersect(Type{Any},Type{Complex}))
-@test is(Bottom, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
+testintersect(Type{Any},Type{Complex}, Bottom)
+testintersect(Type{Any},Type{TypeVar(:T,Real)}, Bottom)
 @test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
 @test !(Type{Array{Integer}} <: Type{Array{TypeVar(:T,Integer)}})
-@test is(Bottom, typeintersect(Type{Function},UnionType))
-@test is(Type{Int32}, typeintersect(Type{Int32},DataType))
+testintersect(Type{Function},UnionType,Bottom)
+testintersect(Type{Int32}, DataType, Type{Int32})
 @test !(Type <: TypeVar)
-@test !is(Bottom, typeintersect(DataType, Type))
-@test !is(Bottom, typeintersect(UnionType, Type))
-@test !is(Bottom, typeintersect(DataType, Type{Int}))
-@test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Int)}))
-@test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
+testintersect(DataType, Type, Bottom, isnot)
+testintersect(UnionType, Type, Bottom, isnot)
+testintersect(DataType, Type{Int}, Bottom, isnot)
+testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, isnot)
+testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, isnot)
 
-@test typeintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}) === Tuple{}
-@test typeintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}) === Bottom
-@test typeintersect(Tuple{Bool,Vararg{Int}}, Tuple{Vararg{Bool}}) === Tuple{Bool,}
+testintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{})
+testintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}, Bottom)
+testintersect(Tuple{Bool,Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{Bool,})
 
 let T = TypeVar(:T,Union(Float32,Float64))
-    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+    testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
 let T = TypeVar(:T,Union(Float32,Float64),true)
-    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+    testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
@@ -146,7 +152,20 @@ end
 
 # issue #2997
 let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
-    @test typeintersect(T,Real) === Float64
+    testintersect(T,Real,Float64)
+end
+
+# issue #8652
+args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b) != 0
+let T1 = TypeVar(:T, Integer, true), T2 = TypeVar(:T, Integer, true)
+    a = Tuple{Type{T1}, T1}
+    b2 = Tuple{Type{T2}, Integer}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
+    a = Tuple{Type{T1}, Ptr{T1}}
+    b2 = Tuple{Type{T2}, Ptr{Integer}}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
 end
 
 # join
@@ -311,6 +330,11 @@ let m = sptest3(:a)
     @test is(m(0),Symbol)
 end
 
+sptest4{T}(x::T, y::T) = 42
+sptest4{T}(x::T, y) = 44
+@test sptest4(1,2) == 42
+@test sptest4(1, "cat") == 44
+
 # closures
 function clotest()
     c = 0
@@ -452,6 +476,28 @@ begin
 
     @test_throws TypeError isdefined(2)
 end
+
+begin
+    local a
+    a = cell(2)
+    @test !isassigned(a,1) && !isassigned(a,2)
+    a[1] = 1
+    @test isassigned(a,1) && !isassigned(a,2)
+    a = Array(Float64,1)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,2)
+end
+
+# isassigned, issue #11167
+type Type11167{T,N} end
+Type11167{Int,2}
+@test !isassigned(Type11167.name.cache, 0)
+@test isassigned(Type11167.name.cache, 1)
+@test !isassigned(Type11167.name.cache, 2)
+Type11167{Float32,5}
+@test isassigned(Type11167.name.cache, 2)
+@test !isassigned(Type11167.name.cache, 3)
 
 # dispatch
 begin
@@ -1361,7 +1407,7 @@ abstract IT4805{N, T}
 let
     T = TypeVar(:T,Int,true)
     N = TypeVar(:N,true)
-    @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != Bottom
+    testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, isnot)
 end
 
 let
@@ -2002,7 +2048,7 @@ abstract AbstractThing{T,N}
 type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
 end
 
-@test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
+testintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing, ConcreteThing{TypeVar(:T,FloatingPoint),2}, isequal)
 
 # issue #8978
 module I8978
@@ -2816,3 +2862,39 @@ g10995((1, 2))
 # issue #11149
 @noinline f11149(a,b,args...) = (a,b,args...)
 @test f11149(1,2,3) == invoke(f11149, Tuple{Int,Int,Int}, 1,2,3)
+
+# issue #11357
+function f11357()
+    x = (1,2,3)
+    i = (1,)
+    x[i...]
+end
+@test f11357() === 1
+
+# issue #11136
+type A11136 end
+type B11136 end
+let T = TypeVar(:T, true), TB = TypeVar(:T, B11136, true)
+    testintersect(Tuple{T, T}, Tuple{A11136, TB}, Bottom)
+end
+
+# issue #11367
+abstract Foo11367
+let T1 = TypeVar(:T1, true), T2 = TypeVar(:T2, Foo11367, true)
+    testintersect(Tuple{T1, T1}, Tuple{Type{BigInt}, T2}, Bottom)
+end
+
+# issue #11355
+function f11355{T<:Tuple}(sig::Type{T})
+    f11355(sig.parameters[1])
+end
+function f11355(arg::DataType)
+    if arg <: Tuple
+        return 200
+    end
+    return 100
+end
+let t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+    @test f11355(t) == 100
+    @test f11355(t) == 100
+end

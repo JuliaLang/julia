@@ -99,14 +99,14 @@ convert an integer value back to a :obj:`Char` just as easily:
 Not all integer values are valid Unicode code points, but for
 performance, the :func:`Char` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the :func:`is_valid_char` function:
+valid code point, use the :func:`isvalid` function:
 
 .. doctest::
 
     julia> Char(0x110000)
     '\U110000'
 
-    julia> is_valid_char(0x110000)
+    julia> isvalid(Char, 0x110000)
     false
 
 As of this writing, the valid Unicode code points are ``U+00`` through

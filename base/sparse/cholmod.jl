@@ -1144,7 +1144,7 @@ function issym(A::Sparse)
     if s.stype != 0
         return isreal(A)
     end
-    i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
+    i = symmetry(A, 1)[1]
     return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
 end
 
@@ -1153,7 +1153,7 @@ function ishermitian(A::Sparse{Float64})
     if s.stype != 0
         return true
     else
-        i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
+        i = symmetry(A, 1)[1]
         return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
     end
 end
@@ -1162,7 +1162,7 @@ function ishermitian(A::Sparse{Complex{Float64}})
     if s.stype != 0
         return true
     else
-        i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
+        i = symmetry(A, 1)[1]
         return i == MM_HERMITIAN || i == MM_HERMITIAN_POSDIAG
     end
 end

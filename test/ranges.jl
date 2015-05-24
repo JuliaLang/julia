@@ -541,3 +541,47 @@ for x in r
     i += 2
 end
 @test i == 7
+
+# Issue 11049 and related
+@test promote(linspace(0f0, 1f0, 3), linspace(0., 5., 2)) ===
+    (linspace(0., 1., 3), linspace(0., 5., 2))
+@test convert(LinSpace{Float64}, linspace(0., 1., 3)) === linspace(0., 1., 3)
+@test convert(LinSpace{Float64}, linspace(0f0, 1f0, 3)) === linspace(0., 1., 3)
+
+@test promote(linspace(0., 1., 3), 0:5) === (linspace(0., 1., 3),
+                                             linspace(0., 5., 6))
+@test convert(LinSpace{Float64}, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace{Float64}, 0:1:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:1:5) === linspace(0., 5., 6)
+
+function test_range_index(r, s)
+    @test typeof(r[s]) == typeof(r)
+    @test [r;][s] == [r[s];]
+end
+test_range_index(linspace(0.1, 0.3, 3), 1:2)
+test_range_index(linspace(0.1, 0.3, 3), 1:0)
+test_range_index(linspace(1.0, 1.0, 1), 1:1)
+test_range_index(linspace(1.0, 1.0, 1), 1:0)
+test_range_index(linspace(1.0, 2.0, 0), 1:0)
+
+function test_linspace_identity(r, mr)
+    @test -r == mr
+    @test isa(-r, LinSpace)
+
+    @test 1 + r + (-1) == r
+    @test isa(1 + r + (-1), LinSpace)
+    @test 1 - r - 1 == mr
+    @test isa(1 - r - 1, LinSpace)
+
+    @test 1 * r * 1 == r
+    @test isa(1 * r * 1, LinSpace)
+    @test r / 1 == r
+    @test isa(r / 1, LinSpace)
+end
+
+test_linspace_identity(linspace(1.0, 27.0, 1275), linspace(-1.0, -27.0, 1275))
+
+@test reverse(linspace(1.0, 27.0, 1275)) == linspace(27.0, 1.0, 1275)
+@test [reverse(linspace(1.0, 27.0, 1275));] ==
+    reverse([linspace(1.0, 27.0, 1275);])

@@ -14,9 +14,12 @@
   (if (any vararg? (butlast l))
       (error "invalid ... on non-final argument"))
   (map (lambda (a)
-         (if (and (pair? a) (eq? (car a) 'kw))
-             `(kw ,(fill-missing-argname (cadr a)) ,(caddr a))
-             (fill-missing-argname a)))
+         (cond ((and (pair? a) (eq? (car a) 'kw))
+                `(kw ,(fill-missing-argname (cadr a)) ,(caddr a)))
+               ((and (pair? a) (eq? (car a) '...))
+                `(... ,(fill-missing-argname (cadr a))))
+               (else
+                (fill-missing-argname a))))
        l))
 
 (define (deparse-arglist l (sep ",")) (string.join (map deparse l) sep))

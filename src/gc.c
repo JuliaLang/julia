@@ -1562,6 +1562,9 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
         verify_parent1("module", m, &m->constant_table, "constant_table");
         refyoung |= gc_push_root(m->constant_table, d);
     }
+
+    refyoung |= gc_push_root(m->parent, d);
+
     return refyoung;
 }
 

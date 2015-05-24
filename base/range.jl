@@ -393,6 +393,15 @@ function getindex(r::FloatRange, s::OrdinalRange)
     FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, sl, r.divisor)
 end
 
+function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    sl::T = check_indexingrange(s, r)
+    ifirst = first(s)
+    ilast = last(s)
+    vfirst::T = ((r.len - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
+    vlast::T = ((r.len - ilast) * r.start + (ilast - 1) * r.stop) / r.divisor
+    return linspace(vfirst, vlast, sl)
+end
+
 function show(io::IO, r::Range)
     print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 end
@@ -541,27 +550,34 @@ end
 
 -(r::OrdinalRange) = range(-r.start, -step(r), length(r))
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
+-(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
 .+(x::Real, r::UnitRange)  = range(x + r.start, length(r))
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
+.+(x::Real, r::LinSpace)   = LinSpace(x + r.start, x + r.stop, r.len, r.divisor)
 .+(r::Range, x::Real)      = x + r
 #.+(r::FloatRange, x::Real) = x + r
 
 .-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
 .-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+.-(x::Real, r::LinSpace)   = LinSpace(x - r.start, x - r.stop, r.len, r.divisor)
 .-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
+.-(r::LinSpace, x::Real)   = LinSpace(r.start - x, r.stop - x, r.len, r.divisor)
 
 .*(x::Real, r::OrdinalRange) = range(x*r.start, x*step(r), length(r))
 .*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+.*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
 .*(r::Range, x::Real)        = x .* r
 .*(r::FloatRange, x::Real)   = x .* r
+.*(r::LinSpace, x::Real)     = x .* r
 
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
+./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
 
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
     UnitRange{promote_type(T1,T2)}
@@ -591,6 +607,19 @@ convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
     FloatRange{T}(first(r), step(r), length(r), one(T))
 convert{T}(::Type{FloatRange}, r::OrdinalRange{T}) =
     FloatRange{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
+promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
+    LinSpace{promote_type(T1,T2)}
+convert{T}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
+convert{T}(::Type{LinSpace{T}}, r::LinSpace) =
+    LinSpace{T}(r.start, r.stop, r.len, r.divisor)
+
+promote_rule{F,OR<:OrdinalRange}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T}(::Type{LinSpace{T}}, r::OrdinalRange) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
+    convert(LinSpace{typeof(float(first(r)))}, r)
 
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
@@ -633,6 +662,7 @@ collect(r::Range) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
+reverse(r::LinSpace)     = LinSpace(r.stop, r.start, r.len, r.divisor)
 
 ## sorting ##
 

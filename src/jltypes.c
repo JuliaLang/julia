@@ -739,6 +739,28 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                 break;
             }
         }
+        if (jl_is_typevar(b)) {
+            for(i=0; i < penv->n; i+=2) {
+                if (penv->data[i] == b && !jl_is_typevar(penv->data[i+1])) {
+                    jl_value_t *ti = jl_type_intersection((jl_value_t*)a, penv->data[i+1]);
+                    if (ti == (jl_value_t*)jl_bottom_type) {
+                        JL_GC_POP();
+                        return ti;
+                    }
+                    break;
+                }
+            }
+            for(i=0; i < eqc->n; i+=2) {
+                if (eqc->data[i] == b && !jl_is_typevar(eqc->data[i+1])) {
+                    jl_value_t *ti = jl_type_intersection((jl_value_t*)a, eqc->data[i+1]);
+                    if (ti == (jl_value_t*)jl_bottom_type) {
+                        JL_GC_POP();
+                        return ti;
+                    }
+                    break;
+                }
+            }
+        }
         extend((jl_value_t*)a, b, penv);
         if (jl_is_typevar(b)) {
             JL_GC_POP();
@@ -2706,6 +2728,8 @@ int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 
 // ----------------------------------------------------------------------------
 
+int type_match_invariance_mask = 1;
+
 static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant);
 
@@ -2716,6 +2740,7 @@ static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
     size_t cl = jl_nparams(child);
     size_t pl = jl_nparams(parent);
     int mode = 0;
+    invariant = invariant & type_match_invariance_mask;
     while(1) {
         int cseq = (ci<cl) && jl_is_vararg_type(jl_tparam(child,ci));
         int pseq = (pi<pl) && jl_is_vararg_type(jl_tparam(parent,pi));
@@ -2766,6 +2791,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                cenv_t *env, int morespecific, int invariant)
 {
     jl_value_t *tmp, *tmp2;
+    invariant = invariant & type_match_invariance_mask;
     if (jl_is_typector(child))
         child = (jl_value_t*)((jl_typector_t*)child)->body;
     if (jl_is_typector(parent))
@@ -3182,6 +3208,7 @@ void jl_init_types(void)
     jl_ntuple_typename = jl_ntuple_type->name;
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
+    empty_tuple_type->uid = jl_assign_type_uid();
     jl_emptytuple = ((jl_datatype_t*)empty_tuple_type)->instance;
 
     // non-primitive definitions follow
