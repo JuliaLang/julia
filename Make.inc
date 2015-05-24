@@ -66,6 +66,7 @@ HAVE_SSP = 0
 
 # GC debugging options
 WITH_GC_VERIFY = 0
+WITH_GC_DEBUG_ENV = 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH=
@@ -424,6 +425,11 @@ endif
 ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
+endif
+
+ifeq ($(WITH_GC_DEBUG_ENV), 1)
+JCXXFLAGS += -DGC_DEBUG_ENV
+JCFLAGS += -DGC_DEBUG_ENV
 endif
 
 # ===========================================================================
