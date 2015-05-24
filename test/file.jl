@@ -126,6 +126,13 @@ close(f)
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
 
+# recursive mkdir
+d_tmpdir = joinpath(c_tmpdir, "a", "b")
+@test_throws SystemError mkdir(d_tmpdir)
+mkdir(d_tmpdir, recursive=true)
+@test isdir(d_tmpdir)
+rm(c_tmpdir, recursive=true)
+
 
 #######################################################################
 # This section tests file watchers.                                   #
