@@ -484,13 +484,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         head !== :row && print(io, cl)
 
-    # function declaration (like :call but always printed with parens)
-    # (:calldecl is a "fake" expr node created when we find a :function expr)
-    elseif head == :calldecl && nargs >= 1
-        show_call(io, head, args[1], args[2:end], indent)
-
     # function call
-    elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
+    elseif head == :call && nargs >= 1
         func = args[1]
         func_prec = operator_precedence(func)
         func_args = args[2:end]
@@ -535,10 +530,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
             end
 
-        # normal function (i.e. "f(x,y)" or "A[x,y]")
+        # normal function (i.e. "f(x,y)")
         else
             show_call(io, head, func, func_args, indent)
         end
+
+    # other call-like expressions ("A[1,2]", "T{X,Y}")
+    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl
+        show_call(io, head, ex.args[1], ex.args[2:end], indent)
 
     # comprehensions
     elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 3
