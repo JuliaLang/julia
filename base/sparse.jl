@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module SparseMatrix
+module Sparse
 
 using Base: Func, AddFun, SubFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
