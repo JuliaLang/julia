@@ -3279,15 +3279,11 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
 end
 
 function code_typed(f, types::ANY; optimize=true)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     code_typed(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...}, optimize=optimize)
 end
 function code_typed(f::Function, types::ANY; optimize=true)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
@@ -3306,15 +3302,11 @@ function code_typed(f::Function, types::ANY; optimize=true)
 end
 
 function return_types(f, types::ANY)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     return_types(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...})
 end
 function return_types(f::Function, types::ANY)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
