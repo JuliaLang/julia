@@ -250,10 +250,10 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
                          LabelNode, GotoNode, TopNode)
-print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex); nothing)
+print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, 0); nothing)
 show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, 0)
-show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
-show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
+show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 1)
+show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 1)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 ## AST printing constants ##
@@ -341,7 +341,7 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
-        show_unquoted(io, ex, ind)
+        show_unquoted(io, ex, ind, 0)
     end
     print(io, '\n', " "^indent)
 end
@@ -355,7 +355,7 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=1, enclose_operators::Bool=false)
     n = length(items)
     if n == 0; return end
     indent += indent_width
@@ -370,7 +370,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=1, encl_ops=false)
     print(io, op); show_list(io, items, sep, indent, prec, encl_ops); print(io, cl)
 end
 
@@ -387,9 +387,9 @@ function show_call(io::IO, head, func, func_args, indent)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ',', indent, 0)
+        show_list(io, func_args[2:end], ',', indent)
         print(io, "; ")
-        show_list(io, func_args[1].args, ',', indent, 0)
+        show_list(io, func_args[1].args, ',', indent)
         print(io, cl)
     else
         show_enclosed_list(io, op, func_args, ",", cl, indent)
@@ -610,7 +610,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_list(io, args, ", ", indent)
 
     elseif is(head, :macrocall) && nargs >= 1
-        show_list(io, args, ' ', indent)
+        if prec >= 1 # nested in calls
+            show_call(io, :call, ex.args[1], ex.args[2:end], indent)
+        else
+            show_list(io, args, ' ', indent, 1)
+        end
 
     elseif is(head, :typealias) && nargs == 2
         print(io, "typealias ")
