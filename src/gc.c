@@ -28,12 +28,17 @@
 #endif
 #endif
 
-#ifdef GC_VERIFY
-void jl_(void *jl_value);
+#ifdef GC_DEBUG_ENV
+#include <inttypes.h>
+#include <stdio.h>
 #endif
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if defined GC_VERIFY || defined GC_DEBUG_ENV
+void jl_(void *jl_value);
 #endif
 
 #define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
@@ -771,11 +776,104 @@ no_decommit:
     current_pg_count--;
 }
 
+#ifdef GC_DEBUG_ENV
+
+typedef struct {
+    uint64_t num;
+
+    uint64_t min;
+    uint64_t interv;
+    uint64_t max;
+} jl_alloc_num_t;
+
+DLLEXPORT struct {
+    jl_alloc_num_t pool;
+    jl_alloc_num_t other;
+    jl_alloc_num_t print;
+} gc_debug_env = {{0, 0, 0, 0},
+                  {0, 0, 0, 0},
+                  {0, 0, 0, 0}};
+
+static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
+{
+    // Not very generic and robust but good enough for a
+    // debug option
+    char buff[128];
+    sprintf(buff, "JL_GC_ALLOC_%s", name);
+    char *env = getenv(buff);
+    if (!env)
+        return;
+    num->interv = 1;
+    num->max = (uint64_t)-1ll;
+    sscanf(env, "%" SCNd64 ":%" SCNd64 ":%" SCNd64,
+           (int64_t*)&num->min, (int64_t*)&num->interv, (int64_t*)&num->max);
+}
+
+static int gc_debug_alloc_check(jl_alloc_num_t *num)
+{
+    num->num++;
+    if (num->interv == 0 || num->num < num->min || num->num > num->max)
+        return 0;
+    return ((num->num - num->min) % num->interv) == 0;
+}
+
+static void gc_debug_init()
+{
+    gc_debug_alloc_init(&gc_debug_env.pool, "POOL");
+    gc_debug_alloc_init(&gc_debug_env.other, "OTHER");
+    gc_debug_alloc_init(&gc_debug_env.print, "PRINT");
+}
+
+static inline int gc_debug_check_pool()
+{
+    return gc_debug_alloc_check(&gc_debug_env.pool);
+}
+
+static inline int gc_debug_check_other()
+{
+    return gc_debug_alloc_check(&gc_debug_env.other);
+}
+
+static inline void gc_debug_print()
+{
+    if (!gc_debug_alloc_check(&gc_debug_env.print))
+        return;
+    uint64_t pool_count = gc_debug_env.pool.num;
+    uint64_t other_count = gc_debug_env.other.num;
+    jl_printf(JL_STDOUT,
+              "Allocations: %" PRIu64 " "
+              "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
+              pool_count + other_count, pool_count, other_count,
+              n_pause);
+}
+
+#else
+
+static inline int gc_debug_check_other()
+{
+    return 0;
+}
+
+static inline int gc_debug_check_pool()
+{
+    return 0;
+}
+
+static inline void gc_debug_print()
+{
+}
+
+static inline void gc_debug_init()
+{
+}
+
+#endif
+
 #define should_collect() (__unlikely(allocd_bytes>0))
 
 static inline int maybe_collect(void)
 {
-    if (should_collect()) {
+    if (should_collect() || gc_debug_check_other()) {
         jl_gc_collect(0);
         return 1;
     }
@@ -1049,7 +1147,7 @@ static NOINLINE void add_page(pool_t *p)
 static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 {
     gcval_t *v, *end;
-    if (__unlikely((allocd_bytes += osize) >= 0)) {
+    if (__unlikely((allocd_bytes += osize) >= 0) || gc_debug_check_pool()) {
         //allocd_bytes -= osize;
         jl_gc_collect(0);
         //allocd_bytes += osize;
@@ -2168,6 +2266,7 @@ void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;
+    gc_debug_print();
     JL_SIGATOMIC_BEGIN();
     jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
@@ -2381,8 +2480,9 @@ void jl_gc_collect(int full)
         // mostly because of gc_counted_* allocations
     }
 #endif
-    if (recollect)
+    if (recollect) {
         jl_gc_collect(0);
+    }
 }
 
 // allocator entry points
@@ -2543,6 +2643,7 @@ static void jl_mk_thread_heap(void) {
 // System-wide initializations
 void jl_gc_init(void)
 {
+    gc_debug_init();
     jl_mk_thread_heap();
 
     arraylist_new(&finalizer_list, 0);
