@@ -114,6 +114,11 @@ Language changes
     macro. Instead, the string is first unindented and then `x_str` is invoked,
     as if the string had been single-quoted ([#10228]).
 
+Command line option changes
+---------------------------
+
+  * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
+
 Compiler improvements
 ---------------------
 
@@ -1426,4 +1431,5 @@ Too numerous to mention.
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379

@@ -61,7 +61,7 @@ static const char opts[]  =
     "                           'auto' launches as many workers as the number of local cores\n"
     " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
 
-    " -i                        Force isinteractive() to be true\n"
+    " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
     " --color={yes|no}          Enable or disable color text\n\n"
     " --history-file={yes|no}   Load or save history\n"
     " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n"
@@ -76,8 +76,7 @@ static const char opts[]  =
 
     " --track-allocation={none|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line\n\n"
-    " -O, --optimize\n"
-    "                           Run time-intensive code optimizations\n"
+    " -O, --optimize            Run time-intensive code optimizations\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
     " --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)\n"
     " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n"
