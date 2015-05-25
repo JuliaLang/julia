@@ -16,7 +16,6 @@
 /libcxx-*
 /libcxxabi-*
 /libffi-*
-/libgit*
 /llvm-*
 /lldb-*
 /mpfr-*
@@ -33,6 +32,8 @@
 /Rmath-julia*
 
 # git-externals:
+/libgit2
+/libgit2-*
 /libuv
 /libuv-*
 /openblas
