@@ -610,5 +610,17 @@ to get ``70``.
 ``call`` overloading is also used extensively for type constructors in
 Julia, discussed :ref:`later in the manual <constructors-call-and-conversion>`.
 
+Empty generic functions
+-----------------------
+
+Occasionally it is useful to introduce a generic function without yet adding
+methods.
+This can be used to separate interface definitions from implementations.
+It might also be done for the purpose of documentation or code readability.
+The syntax for this is an empty ``function`` block without a tuple of
+arguments::
+
+    function emptyfunc
+    end
 
 .. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

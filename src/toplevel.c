@@ -660,6 +660,30 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
+// empty generic function def
+// TODO: maybe have jl_method_def call this
+DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
+                                              jl_binding_t *bnd)
+{
+    jl_value_t *gf=NULL;
+
+    if (bnd && bnd->value != NULL && !bnd->constp)
+        jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
+    if (*bp != NULL) {
+        gf = *bp;
+        if (!jl_is_gf(gf))
+            jl_errorf("cannot define function %s; it already has a value", name->name);
+    }
+    if (bnd)
+        bnd->constp = 1;
+    if (*bp == NULL) {
+        gf = (jl_value_t*)jl_new_generic_function(name);
+        *bp = gf;
+        if (bp_owner) gc_wb(bp_owner, gf);
+    }
+    return gf;
+}
+
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                     jl_binding_t *bnd,
                                     jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
