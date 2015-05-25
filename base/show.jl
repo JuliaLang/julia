@@ -122,9 +122,13 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(UInt(p), WORD_SIZE>>2))")
 
 function show(io::IO, p::Pair)
+    isa(p.first,Pair) && print(io, "(")
     show(io, p.first)
+    isa(p.first,Pair) && print(io, ")")
     print(io, "=>")
+    isa(p.second,Pair) && print(io, "(")
     show(io, p.second)
+    isa(p.second,Pair) && print(io, ")")
 end
 
 function show(io::IO, m::Module)
