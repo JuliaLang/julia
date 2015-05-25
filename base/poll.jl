@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Poll
+
+using Base.Streams: Callback, UVError, associate_julia_struct, disassociate_julia_struct,
+    eventloop, uvfinalize, uv_error, _sizeof_uv_fs_event, _sizeof_uv_fs_poll, _sizeof_uv_poll
+
+import Base: close, isreadable, iswritable, wait
+import Base.Streams: _uv_hook_close
+
+export FileMonitor, poll_fd, poll_file, watch_file
+
 type FileMonitor
     handle::Ptr{Void}
     cb::Callback
@@ -139,7 +149,7 @@ end
 
 function fdw_wait_cb(fdw::FDWatcher, events::FDEvent, status)
     if status == -1
-        notify_error(fdw.notify,UVError("FDWatcher",status))
+        Base.notify_error(fdw.notify,UVError("FDWatcher",status))
     else
         notify(fdw.notify,events)
     end
@@ -214,7 +224,7 @@ end
 
 function pfw_wait_cb(pfw::PollingFileWatcher, events, status)
     if status < 0
-        notify_error(pfw.notify,UVError("PollingFileWatcher",status))
+        Base.notify_error(pfw.notify,UVError("PollingFileWatcher",status))
     else
         notify(pfw.notify,events)
     end
@@ -224,7 +234,7 @@ function wait(pfw::PollingFileWatcher; interval=2.0)
     if !pfw.open
         start_watching(pfw_wait_cb,pfw,interval)
     end
-    events = stream_wait(pfw,pfw.notify)
+    events = Base.Streams.stream_wait(pfw,pfw.notify)
     if isempty(pfw.notify.waitq)
         stop_watching(pfw)
     end
@@ -234,7 +244,7 @@ function wait(pfw::PollingFileWatcher; interval=2.0)
 end
 
 function wait(m::FileMonitor)
-    err, filename, events = stream_wait(m,m.notify)
+    err, filename, events = Base.Streams.stream_wait(m,m.notify)
     filename, events
 end
 
@@ -279,7 +289,7 @@ function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::
         t.cb(fname, fe, status)
     end
     if status < 0
-        notify_error(t.notify,(UVError("FileMonitor",status), fname, fe))
+        Base.notify_error(t.notify,(UVError("FileMonitor",status), fname, fe))
     else
         notify(t.notify,(status, fname, fe))
     end
@@ -336,3 +346,4 @@ function watch_file(cb, s; poll=false)
         return FileMonitor(cb,s)
     end
 end
+end # module

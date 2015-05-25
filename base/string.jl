@@ -1,5 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Strings
+
+importall Base
+
+import Base: containsnul, unsafe_convert, write_sub
+
+export @b_str, @mstr, RepString, RevString, RopeString, String, SubString, WString,
+    bytes2hex, chomp, chop, chr2ind, endswith, escape_string, hex2bytes, ind2chr, isascii,
+    isxdigit, join, lpad, lstrip, nextind, parse, prevind, println, print_escaped,
+    print_joined, replace, rpad, rsearchindex, rstrip, searchindex, split, startswith,
+    string, strip, strwidth, tryparse, unescape_string, wstring
+
 ## core text I/O ##
 
 print(io::IO, x) = show(io, x)
@@ -7,8 +19,8 @@ print(io::IO, xs...) = for x in xs print(io, x) end
 
 println(io::IO, xs...) = print(io, xs..., '\n')
 
-print(xs...)   = print(STDOUT, xs...)
-println(xs...) = println(STDOUT, xs...)
+print(xs...)   = print(Base.Streams.STDOUT, xs...)
+println(xs...) = println(Base.Streams.STDOUT, xs...)
 
 ## core string functions ##
 
@@ -42,7 +54,7 @@ function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{UInt8},), p)
 end
-bytestring(s::Cstring) = bytestring(box(Ptr{Cchar}, unbox(Cstring,s)))
+bytestring(s::Cstring) = bytestring(Base.box(Ptr{Cchar}, Base.unbox(Cstring,s)))
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
@@ -607,7 +619,7 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::AbstractIOBuffer, s::SubString{T}) =
+write{T<:ByteString}(to::Base.AbstractIOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset + 1, nextind(s, s.endof) - 1)
 
 sizeof(s::SubString{ASCIIString}) = s.endof
@@ -1719,7 +1731,7 @@ bytes2hex{T<:UInt8}(arr::Vector{T}) = join([hex(i,2) for i in arr])
 
 function repr(x)
     s = IOBuffer()
-    showall(s, x)
+    Base.showall(s, x)
     takebuf_string(s)
 end
 
@@ -1734,7 +1746,7 @@ elseif sizeof(Cwchar_t) == 4
     const WString = UTF32String
     const wstring = utf32
 end
-wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
+wstring(s::Cwstring) = wstring(Base.box(Ptr{Cwchar_t}, Base.unbox(Cwstring,s)))
 
 # Cwstring is defined in c.jl, but conversion needs to be defined here
 # to have WString
@@ -1757,3 +1769,4 @@ pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointe
 # IOBuffer views of a (byte)string:
 IOBuffer(str::ByteString) = IOBuffer(str.data)
 IOBuffer{T<:ByteString}(s::SubString{T}) = IOBuffer(sub(s.string.data, s.offset + 1 : s.offset + sizeof(s)))
+end # module

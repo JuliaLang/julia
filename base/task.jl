@@ -256,7 +256,7 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 global const Workqueue = Any[]
 
 function enq_work(t::Task)
-    ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
+    ccall(:uv_stop,Void,(Ptr{Void},),Base.Streams.eventloop())
     push!(Workqueue, t)
     t.state = :queued
     t
@@ -295,8 +295,8 @@ yield() = (enq_work(current_task()); wait())
 function wait()
     while true
         if isempty(Workqueue)
-            c = process_events(true)
-            if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
+            c = Base.Streams.process_events(true)
+            if c==0 && Base.Streams.eventloop()!=C_NULL && isempty(Workqueue)
                 # if there are no active handles and no runnable tasks, just
                 # wait for signals.
                 pause()
@@ -307,7 +307,7 @@ function wait()
             t.result = nothing
             t.state = :runnable
             result = yieldto(t, arg)
-            process_events(false)
+            Base.Streams.process_events(false)
             # return when we come out of the queue
             return result
         end

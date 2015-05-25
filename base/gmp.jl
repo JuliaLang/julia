@@ -6,9 +6,11 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
+             ndigits, promote_rule, rem, show, isqrt, string, powermod,
+             sum, trailing_zeros, trailing_ones, count_ones, base,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed
+import Base.Strings: tryparse_internal
+import Base.Primes: isprime
 
 if Clong == Int32
     typealias ClongMax Union(Int8, Int16, Int32)
@@ -82,7 +84,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     # don't make a copy in the common case where we are parsing a whole bytestring
     bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,i,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
+    sgn, base, i = Base.Strings.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
         return _n

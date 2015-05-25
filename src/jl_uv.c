@@ -79,7 +79,7 @@ enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_UINT32, CB_INT64, CB_UINT64 };
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
-#define JULIA_HOOK(hook) jl_uvhook_##hook
+#define JULIA_HOOK(hook) jl_uvhookk_##hook
 #define XX(hook) static jl_function_t *JULIA_HOOK(hook) = 0;
 JL_CB_TYPES(XX)
 #undef XX
@@ -94,12 +94,17 @@ DLLEXPORT void jl_get_uv_hooks()
 
 extern jl_module_t *jl_old_base_module;
 // Use:  JULIA_CB(hook, arg1, numberOfAdditionalArgs, arg2Type, arg2, ..., argNType, argN)
-#define JULIA_CB(hook,val, ...) \
+    // (!jl_old_base_module ? (
+        // jl_callback_call(JULIA_HOOK(hook),(jl_value_t*)val,__VA_ARGS__)
+    // ) : (
+#define JULIA_CB(hook,mod,val, ...) \
     (!jl_old_base_module ? ( \
-        jl_callback_call(JULIA_HOOK(hook),(jl_value_t*)val,__VA_ARGS__) \
+        jl_callback_call( \
+            JULIA_HOOK_((jl_module_t*)jl_get_binding(jl_base_module, mod)->value, hook), \
+            (jl_value_t*)val,__VA_ARGS__) \
     ) : ( \
         jl_callback_call( \
-            JULIA_HOOK_(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module), hook), \
+            JULIA_HOOK_((jl_module_t*)jl_get_binding(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module), mod)->value, hook), \
             (jl_value_t*)val,__VA_ARGS__) \
     ))
 
@@ -158,7 +163,7 @@ DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
     if (handle->data) {
-        JULIA_CB(close,handle->data,0);
+        JULIA_CB(close,jl_symbol("Streams"),handle->data,0);
     }
     free(handle);
 }
@@ -178,18 +183,18 @@ DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t *req, int status)
 
 DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int64_t exit_status, int term_signal)
 {
-    JULIA_CB(return_spawn,p->data,2,CB_INT64,exit_status,CB_INT32,term_signal);
+    JULIA_CB(return_spawn,jl_symbol("Processes"),p->data,2,CB_INT64,exit_status,CB_INT32,term_signal);
 }
 
 DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf)
 {
-    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len);
+    JULIA_CB(readcb,jl_symbol("Streams"),handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len);
 }
 
 DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     if (handle->data) {
-        jl_value_t *ret = JULIA_CB(alloc_buf,handle->data,1,CB_UINT,suggested_size);
+        jl_value_t *ret = JULIA_CB(alloc_buf,jl_symbol("Streams"),handle->data,1,CB_UINT,suggested_size);
         JL_GC_PUSH1(&ret);
         // TODO: jl_fieldref allocates boxes here. should avoid that.
         assert(jl_is_tuple(ret) && jl_nfields(ret)==2 && jl_is_pointer(jl_fieldref(ret,0)));
@@ -210,50 +215,50 @@ DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_bu
 
 DLLEXPORT void jl_uv_connectcb(uv_connect_t *connect, int status)
 {
-    JULIA_CB(connectcb,connect->handle->data,1,CB_INT32,status);
+    JULIA_CB(connectcb,jl_symbol("Streams"),connect->handle->data,1,CB_INT32,status);
     free(connect);
 }
 
 DLLEXPORT void jl_uv_connectioncb(uv_stream_t *stream, int status)
 {
-    JULIA_CB(connectioncb,stream->data,1,CB_INT32,status);
+    JULIA_CB(connectioncb,jl_symbol("Streams"),stream->data,1,CB_INT32,status);
 }
 
 DLLEXPORT void jl_uv_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
 {
-    JULIA_CB(getaddrinfo,req->data,2,CB_PTR,addr,CB_INT32,status);
+    JULIA_CB(getaddrinfo,jl_symbol("Sockets"),req->data,2,CB_PTR,addr,CB_INT32,status);
     free(req);
 }
 
 DLLEXPORT void jl_uv_asynccb(uv_handle_t *handle)
 {
-    JULIA_CB(asynccb,handle->data,0);
+    JULIA_CB(asynccb,jl_symbol("Streams"),handle->data,0);
 }
 
 DLLEXPORT void jl_uv_pollcb(uv_poll_t *handle, int status, int events)
 {
-    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events);
+    JULIA_CB(pollcb,jl_symbol("Poll"),handle->data,2,CB_INT32,status,CB_INT32,events);
 }
 
 DLLEXPORT void jl_uv_fspollcb(uv_fs_poll_t *handle, int status, const uv_stat_t *prev, const uv_stat_t *curr)
 {
-    JULIA_CB(fspollcb,handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr);
+    JULIA_CB(fspollcb,jl_symbol("Poll"),handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr);
 }
 
 
 DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
-    JULIA_CB(fseventscb,handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status);
+    JULIA_CB(fseventscb,jl_symbol("Poll"),handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status);
 }
 
 DLLEXPORT void jl_uv_recvcb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, struct sockaddr* addr, unsigned flags)
 {
-    JULIA_CB(recv,handle->data,5,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len,CB_PTR,addr,CB_INT32,flags);
+    JULIA_CB(recv,jl_symbol("Sockets"),handle->data,5,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len,CB_PTR,addr,CB_INT32,flags);
 }
 
 DLLEXPORT void jl_uv_sendcb(uv_udp_send_t *handle, int status)
 {
-    JULIA_CB(send,handle->data,1,CB_INT32,status);
+    JULIA_CB(send,jl_symbol("Sockets"),handle->data,1,CB_INT32,status);
     free(handle);
 }
 
@@ -517,7 +522,7 @@ DLLEXPORT int jl_fs_close(int handle)
 
 DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
 {
-    JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status);
+    JULIA_CB(writecb_task, jl_symbol("Streams"), req->handle->data, 2, CB_PTR, req, CB_INT32, status);
 }
 
 DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n, uv_write_t *uvw, void *writecb)

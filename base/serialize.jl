@@ -2,6 +2,9 @@
 
 module Serializer
 
+using Base.Strings
+using Base.RegexModule
+
 import Base: GMP, Bottom, svec, unsafe_convert, uncompressed_ast
 
 export serialize, deserialize

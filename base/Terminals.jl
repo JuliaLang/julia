@@ -25,17 +25,22 @@ export
     raw!,
     writepos
 
+using Base.Streams: TTY, uv_error
+
 import Base:
     flush,
     read,
+    readall,
     readuntil,
     size,
-    start_reading,
-    stop_reading,
     write,
     writemime,
-    reseteof,
     eof
+
+import Base.Streams:
+    start_reading,
+    stop_reading,
+    reseteof
 
 ## TextTerminal ##
 
@@ -113,9 +118,9 @@ end
 
 type TTYTerminal <: UnixTerminal
     term_type::ASCIIString
-    in_stream::Base.TTY
-    out_stream::Base.TTY
-    err_stream::Base.TTY
+    in_stream::TTY
+    out_stream::TTY
+    err_stream::TTY
 end
 
 reseteof(t::TTYTerminal) = reseteof(t.in_stream)
@@ -131,7 +136,7 @@ cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
 @windows_only begin
-    ispty(s::Base.TTY) = s.ispty
+    ispty(s::TTY) = s.ispty
     ispty(s) = false
 end
 @windows ? begin
@@ -171,7 +176,7 @@ let s = zeros(Int32, 2)
                 return 24,80
             end
         end
-        Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
+        uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                           Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                           t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
         w,h = s[1],s[2]

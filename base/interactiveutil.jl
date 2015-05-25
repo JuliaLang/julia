@@ -34,7 +34,7 @@ function edit(file::AbstractString, line::Integer)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
     elseif startswith(edname, "subl") || edname == "atom"
-        spawn(`$(shell_split(edpath)) $file:$line`)
+        spawn(`$(Base.Strings.shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`cmd /c start /b $file`)
         println(no_line_msg)
@@ -42,7 +42,7 @@ function edit(file::AbstractString, line::Integer)
         spawn(`open -t $file`)
         println(no_line_msg)
     else
-        run(`$(shell_split(edpath)) $file`)
+        run(`$(Base.Strings.shell_split(edpath)) $file`)
         println(no_line_msg)
     end
     nothing
@@ -172,7 +172,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
         try println(io,     "Uptime: $(Sys.uptime()) sec") end
         print(io,           "Load Avg: ")
-        print_matrix(io,    Sys.loadavg()')
+        Base.print_matrix(io,    Sys.loadavg()')
         println(io          )
         Sys.cpu_summary(io)
         println(io          )

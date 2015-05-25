@@ -94,9 +94,11 @@ include("utf16.jl")
 include("utf32.jl")
 include("iobuffer.jl")
 include("string.jl")
+using .Strings
 include("utf8proc.jl")
 importall .UTF8proc
 include("regex.jl")
+using .RegexModule
 include("base64.jl")
 importall .Base64
 
@@ -106,7 +108,7 @@ include("iostream.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, time, msync
+using .Libc
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
@@ -121,11 +123,15 @@ include("task.jl")
 include("lock.jl")
 include("show.jl")
 include("stream.jl")
+using .Streams
 include("socket.jl")
+using .Sockets
 include("stat.jl")
+using .Stat
 include("fs.jl")
 importall .FS
 include("process.jl")
+using .Processes
 include("multimedia.jl")
 importall .Multimedia
 ccall(:jl_get_uv_hooks, Void, ()) # TODO: should put this in _init
@@ -148,6 +154,7 @@ using .Cartesian
 include("multidimensional.jl")
 
 include("primes.jl")
+using .Primes
 
 begin
     SOURCE_PATH = ""
@@ -185,6 +192,7 @@ big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 
 include("combinatorics.jl")
+using .Combinatorics
 
 # more hashing definitions
 include("hashing2.jl")
@@ -209,13 +217,16 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("multi.jl")
+using .Multiprocessing
 include("managers.jl")
+using .Managers
 
 # code loading
 include("loading.jl")
 
 # Polling (requires multi.jl)
 include("poll.jl")
+using .Poll
 
 # memory-mapped and shared arrays
 include("mmap.jl")
@@ -308,9 +319,9 @@ include("basedocs.jl")
 
 function __init__()
     # Base library init
-    reinit_stdio()
+    Streams.reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-    fdwatcher_init()
+    Poll.fdwatcher_init()
     early_init()
     init_load_path()
     init_parallel()
@@ -323,6 +334,8 @@ include = include_from_node1
 end # baremodule Base
 
 using Base
+
 importall Base.Operators
 
 Base.isfile("userimg.jl") && Base.include("userimg.jl")
+

@@ -4,7 +4,8 @@ module Git
 #
 # some utility functions for working with git repos
 #
-import Base: shell_escape
+
+using Base.Processes: Cmd
 
 function dir(d)
     g = joinpath(d,".git")

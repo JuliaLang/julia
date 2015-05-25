@@ -1,5 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Stat
+
+import Base: isreadable, iswritable, stat
+
+export StatStruct, ctime, filemode, filesize, gperm, isblockdev, ischardev, isdir,
+    isexecutable, isfifo, isfile, islink, ispath, issetgid, issetuid, issocket, issticky, lstat,
+    mtime,
+    operm, uperm
+
 immutable StatStruct
     device  :: UInt
     inode   :: UInt
@@ -39,7 +48,7 @@ macro stat_call(sym, arg1type, arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{UInt8}), $(esc(arg)), stat_buf)
-        r==0 || r==UV_ENOENT || r==UV_ENOTDIR || throw(UVError("stat",r))
+        r==0 || r==Base.Streams.UV_ENOENT || r==Base.Streams.UV_ENOTDIR || throw(Base.Streams.UVError("stat",r))
         st = StatStruct(stat_buf)
         if ispath(st) != (r==0)
             error("stat returned zero type for a valid path")
@@ -139,3 +148,4 @@ function ismount(path...)
     (s1.inode == s2.inode) && return true
     false
 end
+end # module

@@ -3,6 +3,7 @@
 module Profile
 
 import Base: hash, ==
+import Base.Multiprocessing: fetch
 
 export @profile
 

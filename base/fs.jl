@@ -44,8 +44,11 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
-            _sizeof_uv_fs, uv_error
+import Base: close, fd, nb_available, position, stat, close, write, read, read!,
+    readbytes, isopen
+import Base.Streams: eventloop, uvtype, uvhandle, _sizeof_uv_fs
+
+using Base.Streams: uv_error
 
 include("file_constants.jl")
 
@@ -68,7 +71,7 @@ isopen(f::Union(File,AsyncFile)) = f.open
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
-uvtype(::File) = Base.UV_RAW_FD
+uvtype(::File) = Base.Streams.UV_RAW_FD
 
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 

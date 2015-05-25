@@ -2,6 +2,8 @@
 
 module Dates
 
+using Base.RegexModule
+
 include("dates/types.jl")
 include("dates/periods.jl")
 include("dates/accessors.jl")

@@ -32,8 +32,8 @@ macro deprecate(old,new)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
-        oldcall = sprint(io->show_unquoted(io,old))
-        newcall = sprint(io->show_unquoted(io,new))
+        oldcall = sprint(io->Base.show_unquoted(io,old))
+        newcall = sprint(io->Base.show_unquoted(io,new))
         oldsym = if isa(old.args[1],Symbol)
             old.args[1]
         elseif isa(old.args[1],Expr) && old.args[1].head == :curly
@@ -87,7 +87,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
 end
 
 # 0.4 deprecations
-
+import Base.Strings: rsplit, split
 @deprecate split(x,y,l::Integer,k::Bool) split(x,y;limit=l,keep=k)
 @deprecate split(x,y,l::Integer) split(x,y;limit=l)
 @deprecate split(x,y,k::Bool) split(x,y;keep=k)
@@ -99,7 +99,7 @@ end
 export UdpSocket
 const TcpSocket = TCPSocket
 const UdpSocket = UDPSocket
-const IpAddr = IPAddr
+const IpAddr = Base.Sockets.IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
@@ -167,6 +167,7 @@ export Base64Pipe
 const Base64Pipe = Base64EncodePipe
 @deprecate base64 base64encode
 
+import Base.Strings: prevind, nextind
 @deprecate prevind(a::Any, i::Integer)   i-1
 @deprecate nextind(a::Any, i::Integer)   i+1
 
@@ -202,16 +203,16 @@ const MemoryError = OutOfMemoryError
 #9295
 @deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
 
-@deprecate (|>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, stderr=dest)
-@deprecate (|>)(src::Redirectable,   dest::AbstractCmd)    pipe(src, dest)
-@deprecate (|>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, stderr=dest)
-@deprecate (|>)(src::AbstractCmd,    dest::AbstractString) pipe(src, dest)
-@deprecate (|>)(src::AbstractString, dest::AbstractCmd)    pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stderr=dest)
-@deprecate (>>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stdout=dest, append=true)
-@deprecate (.>>)(src::AbstractCmd,   dest::AbstractString) pipe(src, stderr=dest, append=true)
+@deprecate (|>)(src::Processes.AbstractCmd,    dest::Processes.AbstractCmd)    pipe(src, dest)
+@deprecate (.>)(src::Processes.AbstractCmd,    dest::Processes.AbstractCmd)    pipe(src, stderr=dest)
+@deprecate (|>)(src::Processes.Redirectable,   dest::Processes.AbstractCmd)    pipe(src, dest)
+@deprecate (|>)(src::Processes.AbstractCmd,    dest::Processes.Redirectable)   pipe(src, dest)
+@deprecate (.>)(src::Processes.AbstractCmd,    dest::Processes.Redirectable)   pipe(src, stderr=dest)
+@deprecate (|>)(src::Processes.AbstractCmd,    dest::AbstractString) pipe(src, dest)
+@deprecate (|>)(src::AbstractString, dest::Processes.AbstractCmd)    pipe(src, dest)
+@deprecate (.>)(src::Processes.AbstractCmd,    dest::AbstractString) pipe(src, stderr=dest)
+@deprecate (>>)(src::Processes.AbstractCmd,    dest::AbstractString) pipe(src, stdout=dest, append=true)
+@deprecate (.>>)(src::Processes.AbstractCmd,   dest::AbstractString) pipe(src, stderr=dest, append=true)
 
 # 10314
 @deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)

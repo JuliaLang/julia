@@ -1,9 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Streams
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
 include("uv_constants.jl")
 
-import .Libc: RawFD, dup
+using Base.Libc: dup
+
+import Base: close, eof, flush, isreadable, ismarked, isopen, iswritable, mark,
+    nb_available, read, read!, readall, readbytes, reset, show, unmark, write
+import Base.Strings: println
+
+export STDERR, STDIN, STDOUT, Timer, accept, bind, connect, listen, redirect_stderr, redirect_stdin, redirect_stdout, sleep, start_timer, stop_timer
 
 ## types ##
 typealias Callback Union(Function,Bool)
@@ -251,6 +258,12 @@ disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Void}) =
     handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
+function uvfinalize(uv)
+    close(uv)
+    disassociate_julia_struct(uv)
+    uv.handle = C_NULL
+end
+
 function init_stdio(handle)
     t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
     if t == UV_FILE
@@ -361,7 +374,10 @@ end
 
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
-    @assert sock.status == StatusConnecting
+    ccall(:jl_breakpoint, Void, (Any,), sock.status)
+    if sock.status != StatusConnecting
+        error("sock.status is $(sock.status), but should be $StatusConnecting")
+    end
     if status >= 0
         sock.status = StatusOpen
         err = ()
@@ -372,7 +388,7 @@ function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
-    err===() ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
+    err===() ? notify(sock.connectnotify) : Base.notify_error(sock.connectnotify, err)
 end
 
 #from `listen`
@@ -386,13 +402,13 @@ function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     if isa(sock.ccb,Function)
         sock.ccb(sock,status)
     end
-    err===() ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
+    err===() ? notify(sock.connectnotify) : Base.notify_error(sock.connectnotify, err)
 end
 
 ## BUFFER ##
 ## Allocate a simple buffer
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, Int(recommended_size))
+    Base.ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
@@ -573,7 +589,7 @@ function sleep(sec::Real)
 end
 
 ## event loop ##
-eventloop() = global uv_eventloop::Ptr{Void}
+eventloop() = uv_eventloop::Ptr{Void}
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
 
 function run_event_loop()
@@ -788,7 +804,7 @@ function uv_write(s::AsyncStream, p, n::Integer)
                     Int32,
                     (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
                     handle(s), p, n, uvw,
-                    uv_jl_writecb_task::Ptr{Void})
+                    Base.Streams.uv_jl_writecb_task::Ptr{Void})
         if err < 0
             uv_error("write", err)
         end
@@ -974,7 +990,10 @@ _fd(x::IOStream) = RawFD(fd(x))
 @windows_only _fd(x::AsyncStream) = WindowsRawSocket(
     ccall(:jl_uv_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
-for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
+for (x,writable,unix_fd,c_symbol) in
+    ((:STDIN,false,0,:jl_uv_stdin),
+     (:STDOUT,true,1,:jl_uv_stdout),
+     (:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
     _f = symbol("_",f)
     @eval begin
@@ -982,8 +1001,8 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
             global $x
             @windows? (
                 ccall(:SetStdHandle,stdcall,Int32,(Int32,Ptr{Void}),
-                    $(-10-unix_fd),_get_osfhandle(_fd(stream)).handle) :
-                dup(_fd(stream),  RawFD($unix_fd)) )
+                    $(-10-unix_fd),Base.Poll._get_osfhandle(_fd(stream)).handle) :
+                dup(_fd(stream),  RawFD($unix_fd)))
             $x = stream
         end
         function ($f)(handle::AsyncStream)
@@ -1056,3 +1075,4 @@ end
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
 flush(s::BufferStream) = (notify(s.r_c; all=true); s)
+end #module

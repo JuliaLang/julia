@@ -5,12 +5,12 @@
 function pwd()
     b = Array(UInt8,1024)
     len = Csize_t[length(b),]
-    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
+    Base.Streams.uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     bytestring(b[1:len[1]-1])
 end
 
 function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+    Base.Streams.uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
 end
 cd() = cd(homedir())
 
@@ -77,7 +77,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
         if remove_destination
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
-            if Base.samefile(src, dst)
+            if Base.Stat.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
                 throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",

@@ -1,6 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module RegexModule
 ## object-oriented Regex interface ##
+
+using Base.Strings
+
+importall Base
+
+export @r_str, Regex, eachmatch, ismatch, match, matchall
 
 include("pcre.jl")
 
@@ -70,7 +77,7 @@ function show(io::IO, re::Regex)
     opts = re.compile_options
     if (opts & ~imsx) == DEFAULT_COMPILER_OPTS
         print(io, 'r')
-        print_quoted_literal(io, re.pattern)
+        Base.Strings.print_quoted_literal(io, re.pattern)
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
@@ -249,3 +256,5 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
 end
 
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+
+end # module

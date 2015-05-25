@@ -2,12 +2,14 @@
 
 module LineEdit
 
-using ..Terminals
+using Base: AnyDict, ensureroom
+using Base.Strings
+using Base.Terminals
 
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict
+import Base: peek, show
 
 abstract TextInterface
 abstract ModeState
@@ -1405,8 +1407,8 @@ AnyDict(
         input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
         input = replace(input, '\r', '\n')
         if position(buffer(s)) == 0
-            indent = Base.indentation(input)[1]
-            input = Base.unindent(input[(indent+1):end], indent)
+            indent = Base.Strings.indentation(input)[1]
+            input = Base.Strings.unindent(input[(indent+1):end], indent)
         end
         edit_insert(s, input)
     end,
@@ -1565,7 +1567,7 @@ keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], 
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
 
 function prompt!(term, prompt, s = init_state(term, prompt))
-    Base.reseteof(term)
+    Base.Streams.reseteof(term)
     raw!(term, true)
     enable_bracketed_paste(term)
     try

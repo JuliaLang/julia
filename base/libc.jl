@@ -2,8 +2,10 @@
 
 module Libc
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time,
+using Base.RegexModule: @r_str
+
+export FILE, RawFD, TmStruct, strftime, strptime, getpid, gethostname, free,
+    malloc, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
     MS_ASYNC, MS_INVALIDATE, MS_SYNC, mmap, munmap, msync
 
 include("errno.jl")

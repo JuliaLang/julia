@@ -93,13 +93,13 @@ cp(newfile, c_file)
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
 @test isdir(d_tmpdir)
-@test Base.samefile(dirname(d_tmpdir), c_tmpdir)
+@test Base.Stat.samefile(dirname(d_tmpdir), c_tmpdir)
 
 # create temp file in specific directory
 d_tmpfile,f = mktemp(c_tmpdir)
 close(f)
 @test isfile(d_tmpfile)
-@test Base.samefile(dirname(d_tmpfile), c_tmpdir)
+@test Base.Stat.samefile(dirname(d_tmpfile), c_tmpdir)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
@@ -442,7 +442,7 @@ mktempdir() do tmpdir
 
     @test !ispath(file)
     @test isfile(newfile)
-    @test Base.samefile(files_stat, newfile_stat)
+    @test Base.Stat.samefile(files_stat, newfile_stat)
 
     file = newfile
 
@@ -460,7 +460,7 @@ mktempdir() do tmpdir
 
     # get b_tmpdir's file info and compare with a_tmpdir
     b_stat = stat(b_tmpdir)
-    @test Base.samefile(a_stat, b_stat)
+    @test Base.Stat.samefile(a_stat, b_stat)
 
     rm(b_tmpdir)
 end
@@ -532,7 +532,7 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         @test "c.txt" in readdir(d_mv)
         @test length(readdir(d_mv)) == 1
         # d => d_mv same file/dir
-        @test Base.samefile(stat_d, stat_d_mv)
+        @test Base.Stat.samefile(stat_d, stat_d_mv)
     end
 
     ## Test require `remove_destination=true` (remove destination first) for existing
@@ -675,10 +675,10 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
         # cp
-        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
-        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
+        @test_throws Base.Streams.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
+        @test_throws Base.Streams.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
         # mv
-        @test_throws Base.UVError mv(none_existing_src,dst; remove_destination=true)
+        @test_throws Base.Streams.UVError mv(none_existing_src,dst; remove_destination=true)
     end
 end
 
@@ -740,7 +740,7 @@ end
         # all should contain the same
         @test readall(s) == readall(d_mv) == file_txt
         # d => d_mv same file/dir
-        @test Base.samefile(stat_d, stat_d_mv)
+        @test Base.Stat.samefile(stat_d, stat_d_mv)
     end
 
     ## Test require `remove_destination=true` (remove destination first) for existing

@@ -2,6 +2,8 @@
 
 module Cartesian
 
+using Base.Strings
+
 export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif
 
 ### Cartesian-specific macros

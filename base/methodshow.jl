@@ -88,7 +88,7 @@ function url(m::Method)
     line = m.func.code.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
-        return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
+        return "https://github.com/JuliaLang/julia/tree/$(GIT_VERSION_INFO.commit)/base/$file#L$line"
     else
         try
             d = dirname(file)

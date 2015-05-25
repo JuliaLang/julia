@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.Multiprocessing: procs
+
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
@@ -38,7 +40,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
         onlocalhost = true
     else
-        if !check_same_host(pids)
+        if !Base.Multiprocessing.check_same_host(pids)
             throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
         end
 
@@ -54,14 +56,14 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         shm_seg_name = @sprintf("/jl%06u%s", getpid() % 10^6, randstring(20))
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+            s = shm_mmap_array(T, dims, shm_seg_name, Base.FS.JL_O_CREAT | Base.FS.JL_O_RDWR)
         else
             # The shared array is created on a remote machine....
             shmmem_create_pid = pids[1]
-            remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end)
+            remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, Base.FS.JL_O_CREAT | Base.FS.JL_O_RDWR); nothing end)
         end
 
-        func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
+        func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, Base.FS.JL_O_RDWR)
 
         refs = Array(RemoteRef, length(pids))
         for (i, p) in enumerate(pids)
@@ -380,14 +382,14 @@ end
 @unix_only begin
 
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
+    fd_mem = shm_open(shm_seg_name, mode, Base.FS.S_IRUSR | Base.FS.S_IWUSR)
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
 
     s = fdio(fd_mem, true)
 
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
-    if (mode & JL_O_CREAT) == JL_O_CREAT
+    if (mode & Base.FS.JL_O_CREAT) == Base.FS.JL_O_CREAT
         rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
@@ -403,8 +405,8 @@ end # @unix_only
 @windows_only begin
 
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
-    create = (mode & JL_O_CREAT) == JL_O_CREAT
+    readonly = !((mode & Base.FS.JL_O_RDWR) == Base.FS.JL_O_RDWR)
+    create = (mode & Base.FS.JL_O_CREAT) == Base.FS.JL_O_CREAT
     s = SharedMemSpec(shm_seg_name, readonly, create)
     mmap_array(T, dims, s, zero(FileOffset))
 end
@@ -413,3 +415,4 @@ end
 shm_unlink(shm_seg_name) = 0
 
 end # @windows_only
+

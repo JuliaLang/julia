@@ -46,7 +46,7 @@ end
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, valgrind will
     # exit here with an error code, and no UVError will be raised.
-    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+    @test_throws Base.Streams.UVError run(`foo_is_not_a_valid_command`)
 end
 
 if false

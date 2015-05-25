@@ -2,6 +2,9 @@
 
 module Markdown
 
+using Base.Strings
+using Base.RegexModule
+
 import Base: writemime
 
 typealias String AbstractString

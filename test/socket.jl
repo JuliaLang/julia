@@ -19,12 +19,12 @@ let ipv = parseip("127.0.0.1")
     @test ipv == ip"127.0.0.1"
 end
 
-@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFF")
+@test_throws ArgumentError Base.Sockets.parseipv4("192.0xFFFFFFF")
 @test_throws ArgumentError IPv4(192,255,255,-1)
 @test_throws ArgumentError IPv4(192,255,255,256)
 
-@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFFFF")
-@test_throws ArgumentError Base.parseipv4("192.")
+@test_throws ArgumentError Base.Sockets.parseipv4("192.0xFFFFFFFFF")
+@test_throws ArgumentError Base.Sockets.parseipv4("192.")
 
 @test ip"::1" == IPv6(1)
 @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3",16))
@@ -42,13 +42,13 @@ end
 @test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
 
 # test InetAddr constructor
-let inet = Base.InetAddr(IPv4(127,0,0,1), 1024)
+let inet = Base.Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
 end
 # test InetAddr invalid port
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), -1)
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
+@test_throws ArgumentError Base.Sockets.InetAddr(IPv4(127,0,0,1), -1)
+@test_throws ArgumentError Base.Sockets.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
 
 # isless and comparisons
 @test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
@@ -70,7 +70,7 @@ defaultport = rand(2000:4000)
 tsk = @async begin
     p, s = listenany(defaultport)
     put!(port, p)
-    Base.notify(c)
+    notify(c)
     sock = accept(s)
     write(sock,"Hello World\n")
     close(s)
@@ -96,9 +96,9 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
     wait(tsk)
 end
 
-@test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws Base.Streams.UVError getaddrinfo(".invalid")
 @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
-@test_throws Base.UVError connect("localhost", 21452)
+@test_throws Base.Streams.UVError connect("localhost", 21452)
 
 # test invalid port
 @test_throws ArgumentError connect(ip"127.0.0.1",-1)
@@ -110,7 +110,7 @@ p, server = listenany(defaultport)
 r = RemoteRef()
 tsk = @async begin
     put!(r, :start)
-    @test_throws Base.UVError accept(server)
+    @test_throws Base.Streams.UVError accept(server)
 end
 @test fetch(r) === :start
 close(server)
@@ -120,13 +120,13 @@ port, server = listenany(defaultport)
 @async connect("localhost",port)
 s1 = accept(server)
 @test_throws ErrorException accept(server,s1)
-@test_throws Base.UVError listen(port)
+@test_throws Base.Streams.UVError listen(port)
 port2, server2 = listenany(port)
 @test port != port2
 close(server)
 close(server2)
 
-@test_throws Base.UVError connect(".invalid",80)
+@test_throws Base.Streams.UVError connect(".invalid",80)
 
 begin
     a = UDPSocket()

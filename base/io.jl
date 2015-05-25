@@ -154,7 +154,7 @@ end
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
         data = readuntil(s, delim%UInt8)
-        enc = byte_string_classify(data)
+        enc = Base.Strings.byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)
     end
     out = IOBuffer()
@@ -215,7 +215,7 @@ end
 
 
 readline(s::IO) = readuntil(s, '\n')
-readchomp(x) = chomp!(readall(x))
+readchomp(x) = Base.Strings.chomp!(readall(x))
 
 # read up to nb bytes into nb, returning # bytes read
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))

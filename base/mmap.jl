@@ -94,7 +94,7 @@ end
 # Mmapped-array constructor
 function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
     if isa(s,IO)
-        hdl = _get_osfhandle(RawFD(fd(s))).handle
+        hdl = Base.Poll._get_osfhandle(RawFD(fd(s))).handle
         if Int(hdl) == -1
             error("could not get handle for file to map: $(FormatMessage())")
         end

@@ -193,7 +193,6 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
 end
 
 ## julia version info
-
 # Include build number if we've got at least some distance from a tag (e.g. a release)
 try
     build_number = GIT_VERSION_INFO.build_number != 0 ? "+$(GIT_VERSION_INFO.build_number)" : ""

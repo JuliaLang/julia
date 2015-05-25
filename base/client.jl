@@ -40,7 +40,7 @@ exit() = exit(0)
 quit() = exit()
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    shell = Base.Strings.shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
     if Base.basename(shell[1]) == "fish"
@@ -63,7 +63,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@windows? dir : readchomp(`$shell -c "echo $(Base.Strings.shell_escape(dir))"`))
             end
         else
             cd()
@@ -71,7 +71,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        run(ignorestatus(@windows? cmd : (isa(Base.Streams.STDIN, Base.Streams.TTY) ? `$shell -i -c "($(Base.Strings.shell_escape(cmd))) && true"` : `$shell -c "($(Base.Strings.shell_escape(cmd))) && true"`)))
     end
     nothing
 end
@@ -83,7 +83,7 @@ end
 
 display_error(er) = display_error(er, [])
 function display_error(er, bt)
-    with_output_color(:red, STDERR) do io
+    with_output_color(:red, Base.Streams.STDERR) do io
         print(io, "ERROR: ")
         showerror(io, er, bt)
         println(io)
@@ -110,7 +110,7 @@ function eval_user_input(ast::ANY, show_value)
                     end
                     try display(value)
                     catch err
-                        println(STDERR, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
+                        println(Base.Streams.STDERR, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
                         rethrow(err)
                     end
                     println()
@@ -119,17 +119,17 @@ function eval_user_input(ast::ANY, show_value)
             break
         catch err
             if errcount > 0
-                println(STDERR, "SYSTEM: show(lasterr) caused an error")
+                println(Base.Streams.STDERR, "SYSTEM: show(lasterr) caused an error")
             end
             errcount, lasterr = errcount+1, err
             if errcount > 2
-                println(STDERR, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                println(Base.Streams.STDERR, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
                 break
             end
             bt = catch_backtrace()
         end
     end
-    isa(STDIN,TTY) && println()
+    isa(Base.Streams.STDIN,Base.Streams.TTY) && println()
 end
 
 syntax_deprecation_warnings(warn::Bool) =
@@ -207,9 +207,11 @@ function init_bind_addr()
             bind_addr = "127.0.0.1"
         end
     end
-    global LPROC
-    LPROC.bind_addr = bind_addr
-    LPROC.bind_port = UInt16(bind_port)
+    # global LPROC
+    # LPROC.bind_addr = bind_addr
+    # LPROC.bind_port = UInt16(bind_port)
+    Base.Multiprocessing.LPROC.bind_addr = bind_addr
+    Base.Multiprocessing.LPROC.bind_port = UInt16(bind_port)
 end
 
 # NOTE: This set of required arguments need to be kept in sync with the required arguments defined in ui/repl.c
@@ -237,12 +239,12 @@ let reqarg = Set(UTF8String["--home",          "-H",
         if !isempty(args)
             arg = first(args)
             if !isempty(arg) && arg[1] == '-' && in(arg, reqarg)
-                println(STDERR, "julia: option `$arg` is missing an argument")
+                println(Base.Streams.STDERR, "julia: option `$arg` is missing an argument")
                 exit(1)
             end
             idxs = find(x -> x == "--", args)
             if length(idxs) > 1
-                println(STDERR, "julia: redundant option terminator `--`")
+                println(Base.Streams.STDERR, "julia: redundant option terminator `--`")
                 exit(1)
             end
             deleteat!(ARGS, idxs)
@@ -260,7 +262,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
 
             # startup worker
             if opts.worker != 0
-                start_worker() # does not return
+                Base.Multiprocessing.start_worker() # does not return
             end
             # add processors
             if opts.nprocs > 0
@@ -303,7 +305,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                     end
                     include(args[1])
                 else
-                    println(STDERR, "julia: unknown option `$(args[1])`")
+                    println(Base.Streams.STDERR, "julia: unknown option `$(args[1])`")
                     exit(1)
                 end
             end
@@ -355,7 +357,8 @@ function load_machine_file(path::AbstractString)
 end
 
 function early_init()
-    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    # global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    eval(Base, :(const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())))
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
                                     get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
@@ -367,17 +370,19 @@ function early_init()
 end
 
 function init_parallel()
-    start_gc_msgs_task()
-    atexit(terminate_all_workers)
+    Base.Multiprocessing.start_gc_msgs_task()
+    atexit(Base.Multiprocessing.terminate_all_workers)
 
     init_bind_addr()
 
     # start in "head node" mode, if worker, will override later.
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    assert(length(PGRP.workers) == 0)
-    register_worker(LPROC)
+    # global PGRP
+    # global LPROC
+    # LPROC.id = 1
+    Base.Multiprocessing.LPROC.id = 1
+    # assert(length(PGRP.workers) == 0)
+    assert(length(Base.Multiprocessing.PGRP.workers) == 0)
+    Base.Multiprocessing.register_worker(Base.Multiprocessing.LPROC)
 end
 
 import .Terminals
@@ -392,8 +397,8 @@ function _atreplinit(repl)
         try
             f(repl)
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            show(Base.Streams.STDERR, err)
+            println(Base.Streams.STDERR)
         end
     end
 end
@@ -402,16 +407,15 @@ function _start()
     opts = JLOptions()
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
-
         local term
         global active_repl
         global active_repl_backend
         if repl
-            if !isa(STDIN,TTY)
-                global is_interactive |= !isa(STDIN,Union(File,IOStream))
+            if !isa(Base.Streams.STDIN,Base.Streams.TTY)
+                global is_interactive |= !isa(Base.Streams.STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
+                term = Base.Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),Base.Streams.STDIN,Base.Streams.STDOUT,Base.Streams.STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
                 quiet || REPL.banner(term,term)
@@ -430,15 +434,15 @@ function _start()
         end
 
         if repl
-            if !isa(STDIN,TTY)
+            if !isa(Base.Streams.STDIN,Base.Streams.TTY)
                 # note: currently IOStream is used for file STDIN
-                if isa(STDIN,File) || isa(STDIN,IOStream)
+                if isa(Base.Streams.STDIN,File) || isa(Base.Streams.STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(Main,parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readall(Base.Streams.STDIN)))
                 else
                     # otherwise behave repl-like
-                    while !eof(STDIN)
-                        eval_user_input(parse_input_line(STDIN), true)
+                    while !eof(Base.Streams.STDIN)
+                        eval_user_input(parse_input_line(Base.Streams.STDIN), true)
                     end
                 end
             else
@@ -465,8 +469,8 @@ function _atexit()
         try
             f()
         catch err
-            show(STDERR, err)
-            println(STDERR)
+            show(Base.Streams.STDERR, err)
+            println(Base.Streams.STDERR)
         end
     end
 end

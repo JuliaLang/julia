@@ -2,6 +2,8 @@
 
 module GitHub
 
+using Base.Processes: Cmd
+
 import Main, ..Git, ..Dir
 
 const AUTH_NOTE = "Julia Package Manager"

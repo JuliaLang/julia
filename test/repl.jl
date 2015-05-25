@@ -8,12 +8,12 @@ function fake_repl()
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    Base.link_pipe(stdin_read,true,stdin_write,true)
-    Base.link_pipe(stdout_read,true,stdout_write,true)
-    Base.link_pipe(stderr_read,true,stderr_write,true)
+    stdin_read,stdin_write = (Base.Streams.Pipe(C_NULL), Base.Streams.Pipe(C_NULL))
+    stdout_read,stdout_write = (Base.Streams.Pipe(C_NULL), Base.Streams.Pipe(C_NULL))
+    stderr_read,stderr_write = (Base.Streams.Pipe(C_NULL), Base.Streams.Pipe(C_NULL))
+    Base.Streams.link_pipe(stdin_read,true,stdin_write,true)
+    Base.Streams.link_pipe(stdout_read,true,stdout_write,true)
+    Base.Streams.link_pipe(stderr_read,true,stderr_write,true)
 
     repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
     stdin_write, stdout_read, stderr_read, repl
@@ -256,7 +256,7 @@ fds = ccall(:open,Cint,(Ptr{UInt8},Cint),ccall(:ptsname,Ptr{UInt8},(Cint,),fdm),
 
 # slave
 slave   = RawFD(fds)
-master = Base.TTY(RawFD(fdm); readable = true)
+master = Base.Streams.TTY(RawFD(fdm); readable = true)
 
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
