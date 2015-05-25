@@ -1005,6 +1005,12 @@ JL_CALLABLE(jl_f_union)
 
 // generic function reflection ------------------------------------------------
 
+static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
+{
+    if (!jl_is_tuple_type(t))
+        jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
+}
+
 JL_CALLABLE(jl_f_methodexists)
 {
     JL_NARGS(method_exists, 2, 2);

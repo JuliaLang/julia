@@ -613,12 +613,6 @@ DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
-void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
-{
-    if (!jl_is_tuple_type(t))
-        jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
-}
-
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
