@@ -306,7 +306,9 @@ let reqarg = Set(UTF8String["--home",          "-H",
                     repl = false
                     # remove filename from ARGS
                     shift!(ARGS)
-                    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+                    if !is_interactive
+                        ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+                    end
                     include(args[1])
                 else
                     println(STDERR, "julia: unknown option `$(args[1])`")
@@ -315,6 +317,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             break
         end
+        repl |= is_interactive
         return (quiet,repl,startup,color_set,history_file)
     end
 end
