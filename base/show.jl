@@ -259,7 +259,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 ## AST printing constants ##
 
 const indent_width = 4
-const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
+const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>)])
