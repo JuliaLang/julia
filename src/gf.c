@@ -642,7 +642,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
-                if (di == (jl_value_t*)jl_datatype_type)
+                if (is_kind(di))
                     // issue #11355: DataType has a UID and so takes precedence in the cache
                     jl_svecset(newparams, i, (jl_value_t*)jl_typetype_type);
                 else
@@ -653,6 +653,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             else {
                 jl_svecset(newparams, i, (jl_value_t*)jl_typetype_type);
             }
+            need_guard_entries = 1;
             assert(jl_svecref(newparams,i) != (jl_value_t*)jl_bottom_type);
         }
         else if (jl_is_type_type(elt) && very_general_type(decl_i) &&
