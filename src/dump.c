@@ -1456,8 +1456,14 @@ DLLEXPORT void jl_save_system_image(const char *fname)
 
     // record reinitialization functions
     for (i = 0; i < reinit_list.len; i += 2) {
-        write_int32(&f, (int)reinit_list.items[i]);
-        write_int32(&f, (int)reinit_list.items[i+1]);
+        if(sizeof(size_t) == 8) {
+            write_uint64(&f, (size_t)reinit_list.items[i]);
+            write_uint64(&f, (size_t)reinit_list.items[i+1]);
+        }
+        else {
+            write_int32(&f, (size_t)reinit_list.items[i]);
+            write_int32(&f, (size_t)reinit_list.items[i+1]);
+        }
     }
     write_int32(&f, -1);
 
@@ -1571,10 +1577,10 @@ void jl_restore_system_image(const char *fname)
     jl_set_gs_ctr(read_int32(&f));
 
     // run reinitialization functions
-    int pos = read_int32(&f);
-    while (pos != -1) {
+    size_t pos = (sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f);
+    while (pos != (size_t)-1) {
         jl_value_t *v = (jl_value_t*)backref_list.items[pos];
-        switch (read_int32(&f)) {
+        switch ((sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f)) {
             case 1: {
                 jl_array_t **a = (jl_array_t**)&v->fieldptr[0];
                 jl_idtable_rehash(a, jl_array_len(*a));
@@ -1584,7 +1590,7 @@ void jl_restore_system_image(const char *fname)
             default:
                 assert(0);
         }
-        pos = read_int32(&f);
+        pos = (sizeof(size_t) == 8)?read_uint64(&f):read_int32(&f);
     }
 
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
