@@ -53,6 +53,7 @@ if [ "$ARCH" = x86_64 ]; then
   archsuffix=64
   exc=seh
   echo "override MARCH = x86-64" >> Make.user
+  echo 'USE_BLAS64 = 1' >> Make.user
 else
   bits=32
   archsuffix=86
