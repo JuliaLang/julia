@@ -476,7 +476,7 @@ Types
 
       julia> @enum FRUIT apple=1 orange=2 kiwi=3
 
-      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(int(x))"
+      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(Int(x))"
       f (generic function with 1 method)
 
       julia> f(apple)
