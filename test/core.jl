@@ -2894,7 +2894,8 @@ function f11355(arg::DataType)
     end
     return 100
 end
-let t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+let t = Tuple{Type{Vector{Int}}}
     @test f11355(t) == 100
+    t = Tuple{Type{Dict{TypeVar(:K, true)}}}
     @test f11355(t) == 100
 end
