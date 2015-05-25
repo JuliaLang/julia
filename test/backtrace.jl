@@ -20,7 +20,7 @@ dlls = Libdl.dllist()
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     for dl in dlls
-        if isfile(dl)
+        if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
             @test Base.samefile(Libdl.dlpath(dl), dl)
         end
     end
