@@ -7,9 +7,6 @@ export Enum, @enum
 abstract Enum
 
 Base.convert{T<:Integer}(::Type{T},x::Enum) = convert(T, x.val)
-Base.convert{T<:Enum}(::Type{T},x::Integer) = T(x)
-Base.start{T<:Enum}(::Type{T}) = 1
-# next, done defined per Enum
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
@@ -32,8 +29,6 @@ macro enum(T,syms...)
     end
     if isa(T,Symbol)
         typename = T
-    elseif isa(T,Expr) && T.head === :curly
-        typename = T.args[1]
     else
         throw(ArgumentError("invalid type expression for enum $T"))
     end
@@ -92,26 +87,27 @@ macro enum(T,syms...)
         # enum definition
         immutable $(esc(T)) <: Enum
             val::$enumT
-            function $(esc(typename))(x::Integer)
+            function Base.convert(::Type{$(esc(typename))}, x::Integer)
                 $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
                 new(x)
             end
         end
-        Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
-        Base.typemax{E<:$(esc(typename))}(x::Type{E}) = E($hi)
-        Base.length{E<:$(esc(typename))}(x::Type{E}) = $(length(vals))
-        Base.next{E<:$(esc(typename))}(x::Type{E},s) = (E($values[s]),s+1)
-        Base.done{E<:$(esc(typename))}(x::Type{E},s) = s > $(length(values))
-        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(map(x->Expr(:quote, (x[1])), vals)...)]
-        Base.isless{E<:$(esc(typename))}(x::E, y::E) = isless(x.val, y.val)
-        function Base.print{E<:$(esc(typename))}(io::IO,x::E)
+        Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
+        Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        Base.length(x::Type{$(esc(typename))}) = $(length(vals))
+        Base.start(::Type{$(esc(typename))}) = 1
+        Base.next(x::Type{$(esc(typename))},s) = ($(esc(typename))($values[s]),s+1)
+        Base.done(x::Type{$(esc(typename))},s) = s > $(length(values))
+        Base.names(x::Type{$(esc(typename))}) = [$(map(x->Expr(:quote, (x[1])), vals)...)]
+        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless(x.val, y.val)
+        function Base.print(io::IO,x::$(esc(typename)))
             for (sym, i) in $vals
                 if i == x.val
                     print(io, sym); break
                 end
             end
         end
-        Base.show{E<:$(esc(typename))}(io::IO,x::E) = print(io, x, "::", E)
+        Base.show(io::IO,x::$(esc(typename))) = print(io, x, "::", $(esc(typename)))
     end
     if isa(T,Symbol)
         for (sym,i) in vals
