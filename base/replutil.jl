@@ -94,15 +94,15 @@ end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError, bt)
-    println(io, "DomainError:")
+    print(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
         if length(code) == 5 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                println(io,"$(code[1]) will only return a complex result if called with a complex argument.")
+                println(io,"\n$(code[1]) will only return a complex result if called with a complex argument.")
                 print(io, "try $(code[1]) (complex(x))")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring
-                println(io, "Cannot raise an integer x to a negative power -n. Make x a float by adding")
+                println(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
                 print(io, "a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
