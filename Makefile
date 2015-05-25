@@ -371,7 +371,10 @@ endif
 distclean dist-clean:
 	rm -fr julia-*.tar.gz julia*.exe julia-*.7z julia-$(JULIA_COMMIT)
 
-binary-dist dist: distclean
+dist:
+	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
+
+binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use binary-dist target
@@ -451,8 +454,11 @@ light-source-dist: light-source-dist.tmp
 	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
 	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
+source-dist:
+	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
+
 # Make tarball with Julia code plus all dependencies
-full-source-dist source-dist: light-source-dist.tmp
+full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall NO_GIT=1
 
