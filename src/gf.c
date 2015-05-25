@@ -442,15 +442,6 @@ static int very_general_type(jl_value_t *t)
                    ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
 }
 
-static int tuple_all_Any(jl_tupletype_t *t)
-{
-    for(int i=0; i < jl_nparams(t); i++) {
-        if (jl_tparam(t,i) != (jl_value_t*)jl_any_type)
-            return 0;
-    }
-    return 1;
-}
-
 static int is_kind(jl_value_t *v)
 {
     return (v==(jl_value_t*)jl_uniontype_type ||
