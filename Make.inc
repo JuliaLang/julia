@@ -140,7 +140,6 @@ private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
 libdir = $(prefix)/lib/$(MULTIARCH)/
 endif
 
-
 # LLVM Options
 LLVMROOT = $(build_prefix)
 LLVM_ASSERTIONS = 0
@@ -381,26 +380,6 @@ else
 build_shlibdir = $(build_libdir)
 endif
 
-# If we are running on ARM, set certain options automatically
-ifneq (,$(findstring arm,$(ARCH)))
-LLVM_ASSERTIONS=1
-LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --enable-assertions"
-
-OPENBLAS_DYNAMIC_ARCH=0
-OPENBLAS_TARGET_ARCH=ARMV7
-USE_BLAS64=0
-
-LLVM_VER=3.6.0
-
-USE_SYSTEM_LIBM=1
-USE_SYSTEM_FFTW=1
-USE_SYSTEM_GMP=1
-USE_SYSTEM_MPFR=1
-
-JCFLAGS += -fsigned-char
-endif
-
-
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
@@ -436,7 +415,6 @@ endif
 #    if MARCH is set newer than the native processor, be forewarned that the compile might fail
 # JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
 #    since it is set equal to MARCH by default
-
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
@@ -522,6 +500,26 @@ else ifneq (,$(findstring ppc,$(ARCH)))
 ISX86=0
 else
 $(error "unknown word-size for arch: $(ARCH)")
+endif
+
+# If we are running on ARM, set certain options automatically
+ifneq (,$(findstring arm,$(ARCH)))
+JCFLAGS += -fsigned-char
+
+LLVM_ASSERTIONS=1
+LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
+LLVM_VER=3.6.0
+
+USE_BLAS64=0
+#OPENBLAS_DYNAMIC_ARCH=0
+#OPENBLAS_TARGET_ARCH=ARMV7
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+USE_SYSTEM_LIBM=1
+USE_SYSTEM_FFTW=1
+USE_SYSTEM_GMP=1
+USE_SYSTEM_MPFR=1
+
 endif
 
 # Set some ARCH-specific flags
