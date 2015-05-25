@@ -5,7 +5,7 @@ New language features
 ---------------------
 
   * Function call overloading: for arbitrary objects `x` (not of type
-    `Function`), `x(...)` is transformed into `call(x, ...)`, and `Base.call`
+    `Function`), `x(...)` is transformed into `call(x, ...)`, and `call`
     can be overloaded as desired.  Constructors are now a special case of
     this mechanism, which allows e.g. constructors for abstract types.
     `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
@@ -23,11 +23,14 @@ New language features
     it operates at two different stages of evaluation. At compile time, the generated
     function is called with its arguments bound to the types for which it should
     specialize. The quoted expression it returns forms the body of the specialized
-    method which is then called at run time. ([#7311]).
+    method which is then called at run time ([#7311]).
 
   * (Also with syntax todo) Documentation system for functions, methods, types
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
+
+  * The syntax `function foo end` can be used to introduce a generic function without
+    yet adding any methods ([#8283]).
 
 Language changes
 ----------------
@@ -1324,6 +1327,7 @@ Too numerous to mention.
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
+[#8283]: https://github.com/JuliaLang/julia/issues/8283
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423

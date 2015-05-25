@@ -294,6 +294,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                 bp_owner = (jl_value_t*)jl_current_module;
             }
         }
+        if (jl_expr_nargs(ex) == 1)
+            return jl_generic_function_def(fname, bp, bp_owner, b);
         jl_value_t *atypes=NULL, *meth=NULL;
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], locals, nl, ngensym);

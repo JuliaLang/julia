@@ -2899,3 +2899,8 @@ let t = Tuple{Type{Vector{Int}}}
     t = Tuple{Type{Dict{TypeVar(:K, true)}}}
     @test f11355(t) == 100
 end
+
+# issue #8283
+function func8283 end
+@test isa(func8283,Function) && isgeneric(func8283)
+@test_throws MethodError func8283()
