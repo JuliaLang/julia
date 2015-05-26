@@ -39,7 +39,7 @@ const PRIMES = primes(2^16)
 #
 function isprime(n::Integer)
     (n < 3 || iseven(n)) && return n == 2
-    n <= 2^16 && return length(searchsorted(PRIMES,n)) == 1
+    n <= 2^16 && return PRIMES[searchsortedlast(PRIMES,n)] == n
     s = trailing_zeros(n-1)
     d = (n-1) >>> s
     for a in witnesses(n)
@@ -90,10 +90,10 @@ function factor{T<:Integer}(n::T)
     for p in PRIMES
         if n % p == 0
             h[p] = get(h,p,0)+1
-            n = oftype(n, div(n,p))
+            n = div(n,p)
             while n % p == 0
                 h[p] = get(h,p,0)+1
-                n = oftype(n, div(n,p))
+                n = div(n,p)
             end
             n == 1 && return h
             isprime(n) && (h[n] = 1; return h)
@@ -112,17 +112,17 @@ function pollardfactors!{T<:Integer}(n::T, h::Dict{T,Int})
         while G == 1
             x = y
             for i in 1:r
-                y = oftype(y, widemul(y,y)%n)
-                y = oftype(y, (widen(y)+widen(c))%n)
+                y = widemul(y,y)%n
+                y = (widen(y)+widen(c))%n
             end
             local k::T = 0
             G = 1
             while k < r && G == 1
                 for i in 1:(m>(r-k)?(r-k):m)
                     ys = y
-                    y = oftype(y, widemul(y,y)%n)
-                    y = oftype(y, (widen(y)+widen(c))%n)
-                    q = oftype(y, widemul(q,x>y?x-y:y-x)%n)
+                    y = widemul(y,y)%n
+                    y = (widen(y)+widen(c))%n
+                    q = widemul(q,x>y?x-y:y-x)%n
                 end
                 G = gcd(q,n)
                 k = k + m
@@ -131,13 +131,13 @@ function pollardfactors!{T<:Integer}(n::T, h::Dict{T,Int})
         end
         G == n && (G = 1)
         while G == 1
-            ys = oftype(ys, widemul(ys,ys)%n)
-            ys = oftype(ys, (widen(ys)+widen(c))%n)
+            ys = widemul(ys,ys)%n
+            ys = (widen(ys)+widen(c))%n
             G = gcd(x>ys?x-ys:ys-x,n)
         end
         if G != n
             isprime(G) ? h[G] = get(h,G,0) + 1 : pollardfactors!(G,h)
-            G2 = oftype(n,div(n,G))
+            G2 = div(n,G)
             isprime(G2) ? h[G2] = get(h,G2,0) + 1 : pollardfactors!(G2,h)
             return h
         end
