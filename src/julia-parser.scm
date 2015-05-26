@@ -1298,9 +1298,9 @@
          (from  (and (eq? next ':) (not (ts:space? s))))
          (done  (cond ((or from (eqv? next #\,))
                        (begin (take-token s) #f))
-                      ((memv next '(#\newline #\;)) #t)
-                      ((eof-object? next) #t)
-                      (else #f)))
+                      ((or (eq? next '|.|)
+                           (eqv? (string.sub (string next) 0 1) ".")) #f)
+                      (else #t)))
          (rest  (if done
                     '()
                     (parse-comma-separated s (lambda (s)
@@ -1346,7 +1346,7 @@
         (loop (cons (symbol (string.sub (string nxt) 1))
                     path)))
        (else
-        (error (string "invalid \"" word "\" statement")))))))
+        `(,word ,@(reverse path)))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
