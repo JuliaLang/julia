@@ -421,7 +421,7 @@ JL_CALLABLE(jl_f_apply)
         else if (jl_is_tuple(args[i])) {
             n += jl_nfields(args[i]);
         }
-        else if (jl_typeis(args[i], jl_array_any_type)) {
+        else if (jl_is_array(args[i]) && ((jl_array_t*)args[i])->ptrarray) {
             n += jl_array_len(args[i]);
         }
         else {
