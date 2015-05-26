@@ -109,3 +109,14 @@ macro test999_str(args...); args; end
                                            Expr(:toplevel,
                                                 Expr(:import, :A, :b),
                                                 Expr(:import, :A, :c, :d)))
+
+# issue #11332
+@test parse("export \$(symbol(\"A\"))") == :(export $(Expr(:$, :(symbol("A")))))
+@test parse("export \$A") == :(export $(Expr(:$, :A)))
+@test parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
+@test parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
+                                                          Expr(:$, :b)),
+                                          Expr(:using, Expr(:$, :c)))
+@test parse("using \$a: \$b, \$c.\$d") ==
+    Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
+         Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))
