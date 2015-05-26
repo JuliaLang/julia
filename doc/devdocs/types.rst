@@ -125,7 +125,7 @@ In a method definition like::
 
    g{S<:Integer}(x::S) = 0
 
-one can extract the underlying :obj:`TypeVar`::
+one can extract the underlying :obj:`TypeVar`:
 
 .. testcode:: s
 
