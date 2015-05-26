@@ -251,7 +251,6 @@ STDLIBCPP_FLAG =
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -467,7 +466,6 @@ endif
 endif
 
 JULIA_CPU_TARGET ?= native
-JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
