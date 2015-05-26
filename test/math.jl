@@ -348,3 +348,13 @@ for elty in (Float32, Float64)
     @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
     @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
 end
+
+for n = 0:28
+    @test log(2,2^n) == n
+end
+with_bigfloat_precision(10_000) do
+    @test log(2,big(2)^100) == 100
+    @test log(2,big(2)^200) == 200
+    @test log(2,big(2)^300) == 300
+    @test log(2,big(2)^400) == 400
+end

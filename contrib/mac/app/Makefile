@@ -31,7 +31,7 @@ dmg:
 	-chmod 755 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
 	@echo "We're going to chown the .app file to root:admin now, which requires sudo.  You may be asked for your password:"
 	sudo chown -R root:admin ./dmg/Julia-$(VERSION_SUFFIX).app
-	sudo hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 200m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	sudo hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 500m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:

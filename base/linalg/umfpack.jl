@@ -115,7 +115,6 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
 
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
@@ -295,8 +294,8 @@ for itype in UmfpackIndexTypes
         end
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_col + 1)
+            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+            Lp = Array($itype, n_row + 1)
             Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
             Lx = Array(Float64, lnz)
             Up = Array($itype, n_col + 1)
@@ -314,14 +313,14 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,
                         P, Q, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),Lx)),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),Ux),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
         function umf_extract(lu::UmfpackLU{Complex128,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_col + 1)
+            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+            Lp = Array($itype, n_row + 1)
             Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
             Lx = Array(Float64, lnz)
             Lz = Array(Float64, lnz)
@@ -341,8 +340,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),complex(Lx,Lz))),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),complex(Ux,Uz)),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex(Lx, Lz))),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end

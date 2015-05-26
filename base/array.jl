@@ -340,7 +340,7 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
-        is(I,A) && (I = X)
+        is(I,A) && (I = X::typeof(I))
     elseif is(I,A)
         I = copy(I)
     end
@@ -1418,7 +1418,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise!, :+),
         else
             n2 = n >> 1
             s_ = ($fp)(v, c, s, i1, n2)
-            s_ = $(op)(s_, ($fp)(v, c, s + s_, i1+n2, n-n2))
+            s_ = $(op)(s_, ($fp)(v, c, ($op)(s, s_), i1+n2, n-n2))
         end
         return s_
     end

@@ -925,3 +925,8 @@ a = [ [ 1 0 0 ], [ 0 0 0 ] ]
 let x = fill(1.5f0, 10^7)
     @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
 end
+
+# PR #11080
+let x = fill(0.9, 1000)
+    @test_approx_eq prod(x) cumprod(x)[end]
+end

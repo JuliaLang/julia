@@ -232,7 +232,7 @@ function rand!{T}(S::SharedArray{T})
 end
 
 function randn!(S::SharedArray)
-    f = S->map!(x->randn, S.loc_subarr_1d)
+    f = S->map!(x->randn(), S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(p, f, S)
     end

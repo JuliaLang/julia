@@ -299,12 +299,12 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
+     in next at ./utf8.jl:69
      in getindex at string.jl:57
 
     julia> s[3]
     ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
+     in next at ./utf8.jl:69
      in getindex at string.jl:57
 
     julia> s[4]

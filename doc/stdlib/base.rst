@@ -705,7 +705,7 @@ Errors
 
 .. function:: @assert
 
-   Raise an error if ``cond`` is false. Preferred syntax for writings assertions.
+   Raise an error if ``cond`` is false. Preferred syntax for writing assertions.
 
 .. data:: ArgumentError
 

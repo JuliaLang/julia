@@ -32,7 +32,7 @@ end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
     if all(A.dl .== 0) return Bidiagonal(A.d, A.du, true)
-    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, true)
+    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, false)
     else throw(ArgumentError("Matrix cannot be represented as Bidiagonal"))
     end
 end
@@ -52,7 +52,7 @@ function convert(::Type{Bidiagonal}, A::Triangular)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
         return Bidiagonal(diag(A), diag(fA,1), true)
     elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
-        return Bidiagonal(diag(A), diag(fA,-1), true)
+        return Bidiagonal(diag(A), diag(fA,-1), false)
     else
         throw(ArgumentError("Matrix cannot be represented as Bidiagonal"))
     end

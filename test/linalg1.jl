@@ -21,6 +21,8 @@ a2real = randn(n,n)/2
 a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
+creal = randn(n)/2
+cimg  = randn(n)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
@@ -31,6 +33,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -104,6 +107,7 @@ debug && println("(Automatic) Square LU decomposition")
     @test_approx_eq (l*u)[invperm(p),:] a
     @test_approx_eq a * inv(lua) eye(n)
     @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
+    @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
 
 debug && println("Thin LU")
     lua   = lufact(a[:,1:5])

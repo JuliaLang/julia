@@ -1028,3 +1028,64 @@ timesofar("linalg")
 # issue #7515
 @test sizeof(BitArray(64)) == 8
 @test sizeof(BitArray(65)) == 16
+
+#one
+@test bitunpack(one(BitMatrix(2,2))) == eye(2,2)
+@test_throws DimensionMismatch one(BitMatrix(2,3))
+
+#reshape
+a = trues(2,5)
+b = reshape(a,(5,2))
+@test b == trues(5,2)
+@test_throws DimensionMismatch reshape(a, (1,5))
+
+#resize!
+
+a = trues(5)
+@test_throws BoundsError resize!(a,-1)
+resize!(a, 3)
+@test a == trues(3)
+resize!(a, 5)
+@test a == append!(trues(3),falses(2))
+
+#flipbits!
+
+a = trues(5,5)
+flipbits!(a)
+@test a == falses(5,5)
+
+# findmax, findmin
+a = trues(0)
+@test_throws ErrorException findmax(a)
+@test_throws ErrorException findmin(a)
+
+a = falses(6)
+@test findmax(a) == (false,1)
+a = trues(6)
+@test findmin(a) == (true,1)
+a = bitpack([1,0,1,1,0])
+@test findmin(a) == (false,2)
+@test findmax(a) == (true,1)
+a = bitpack([0,0,1,1,0])
+@test findmin(a) == (false,1)
+@test findmax(a) == (true,3)
+
+#qr and svd
+
+A = randbool(10,10)
+uA = bitunpack(A)
+@test svd(A) == svd(uA)
+@test qr(A) == qr(uA)
+
+#diag and diagm
+
+v = randbool(10)
+uv = bitunpack(v)
+@test bitunpack(diagm(v)) == diagm(uv)
+v = randbool(10,2)
+uv = bitunpack(v)
+@test_throws DimensionMismatch diagm(v)
+
+B = randbool(10,10)
+uB = bitunpack(B)
+@test diag(uB) == bitunpack(diag(B))

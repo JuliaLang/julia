@@ -185,3 +185,8 @@ let q1 = parse(repr(:("$(a)b"))),
     @test q2.value.head == :string
     @test q2.value.args == [:ab,]
 end
+
+# issue #9474
+for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
+    @test sprint(show, parse(s)) == ":("*s*")"
+end
