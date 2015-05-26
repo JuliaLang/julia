@@ -42,6 +42,8 @@ function plain(io::IO, md::HorizontalRule)
     println(io, "–" ^ 3)
 end
 
+plain(io::IO, md) = writemime(io, "text/plain", md)
+
 # Inline elements
 
 plaininline(x) = sprint(plaininline, x)
