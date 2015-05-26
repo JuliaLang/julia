@@ -367,14 +367,17 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
 #endif
 }
 
-static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len)
+static void jl_sysimg_to_llvm(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars,
+                              const char *sysimg_data, size_t sysimg_len)
 {
     Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-    addComdat(new GlobalVariable(*mod, data->getType(), true, GlobalVariable::ExternalLinkage,
-                                 data, "jl_system_image_data"));
+    globalvars.push_back(addComdat(new GlobalVariable(*mod, data->getType(), true,
+                                                      GlobalVariable::ExternalLinkage,
+                                                      data, "jl_system_image_data")));
     Constant *len = ConstantInt::get(T_size, sysimg_len);
-    addComdat(new GlobalVariable(*mod, len->getType(), true, GlobalVariable::ExternalLinkage,
-                                 len, "jl_system_image_size"));
+    globalvars.push_back(addComdat(new GlobalVariable(*mod, len->getType(), true,
+                                                      GlobalVariable::ExternalLinkage,
+                                                      len, "jl_system_image_size")));
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)
