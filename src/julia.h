@@ -221,9 +221,11 @@ typedef struct _jl_lambda_info_t {
     void *cFunctionList;        // c callable llvm Functions
 
     // specialized llvm Function (common core for the other two)
-    void *specFunctionObject;
+    void *specFunctionObject; // Function*
+    void *specFunctionPtr; // function address
     int32_t functionID; // index that this function will have in the codegen table
     int32_t specFunctionID; // index that this specFunction will have in the codegen table
+    int8_t hasJLWrapper; // Whether the functionObject is a generic wrapper
 } jl_lambda_info_t;
 
 typedef struct _jl_function_t {
