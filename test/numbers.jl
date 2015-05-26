@@ -2092,6 +2092,10 @@ end
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
 
+# factorization of factors > 2^16
+@test factor((big(2)^31-1)^2) == Dict(big(2^31-1) => 2)
+@test factor((big(2)^31-1)*(big(2)^17-1)) == Dict(big(2^31-1) => 1, big(2^17-1) => 1)
+
 # large shift amounts
 @test Int32(-1)>>31 == -1
 @test Int32(-1)>>32 == -1
