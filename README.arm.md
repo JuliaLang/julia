@@ -17,11 +17,12 @@ This is the list of known issues on ARM:
 # Build dependencies
 
 In addition to the standard `build-essentials` toolchain the following
-libraries must be installed to build on ARM. On Debian/Ubuntu, use the
-following command:
+libraries may be installed to build on ARM, if you want to avoid
+compiling them. We recommend using Ubuntu 14.04 or newer. On
+Debian/Ubuntu, use the following command:
 
 ````
-sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.7 g++-4.7 gfortran libgfortran3
+sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3
 ````
 
 # ARM specific build problems
