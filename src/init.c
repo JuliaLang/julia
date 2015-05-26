@@ -1226,30 +1226,48 @@ DLLEXPORT void julia_save()
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
             jl_compile_all();
         char *build_ji;
-        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
+        // TODO: these should be replaced by an option to write either a .ji or a .so
+        int write_ji = 1;    // save a .ji file
+        int separate_so = 1; // save a separate .so file
+        ios_t *s = NULL;
+
+        if (write_ji) {
+            if (asprintf(&build_ji, "%s.ji",build_path) <= 0) {
+                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .ji build path\n");
+                return;
+            }
             jl_save_system_image(build_ji);
             free(build_ji);
-            if (jl_options.dumpbitcode == JL_OPTIONS_DUMPBITCODE_ON) {
-                char *build_bc;
-                if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
-                    jl_dump_bitcode(build_bc);
-                    free(build_bc);
-                }
-                else {
-                    jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
-                }
-            }
-            char *build_o;
-            if (asprintf(&build_o, "%s.o",build_path) > 0) {
-                jl_dump_objfile(build_o,0);
-                free(build_o);
-            }
-            else {
-                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
-            }
         }
         else {
-            jl_printf(JL_STDERR,"\nFATAL: failed to create string for .ji build path\n");
+            s = jl_create_system_image();
+        }
+
+        if (jl_options.dumpbitcode == JL_OPTIONS_DUMPBITCODE_ON) {
+            char *build_bc;
+            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                jl_dump_bitcode(build_bc);
+                free(build_bc);
+            }
+            else {
+                jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
+            }
+        }
+
+        if (!write_ji || separate_so) {
+            char *build_o;
+            if (asprintf(&build_o, "%s.o",build_path) <= 0) {
+                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
+                return;
+            }
+            if (separate_so) {
+                jl_dump_objfile(build_o, 0, NULL, 0);
+            }
+            else {
+                assert(s != NULL);
+                jl_dump_objfile(build_o, 0, (const char*)s->buf, s->size);
+            }
+            free(build_o);
         }
     }
 }

@@ -1173,8 +1173,10 @@ DLLEXPORT void jl_atexit_hook(void);
 DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT void jl_preload_sysimg_so(const char *fname);
+DLLEXPORT ios_t *jl_create_system_image();
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
+DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
 DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
 void jl_init_restored_modules();
