@@ -619,10 +619,12 @@ function abstract_call_gf(f, fargs, argtype, e)
             return getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
         elseif istopfunction(tm, f, :next)
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
+            t1 = getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
+            return t1===Bottom ? Bottom : Tuple{t1, Int}
         elseif istopfunction(tm, f, :indexed_next)
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
+            t1 = getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
+            return t1===Bottom ? Bottom : Tuple{t1, Int}
         end
     end
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
