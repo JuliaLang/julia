@@ -20,14 +20,31 @@ We recommend using at least Ubuntu 14.04 and gcc 4.8, which is part of the
 standard `build-essentials`.
 
 Julia on ARM can be built by simply typing `make`, which will download all
-the relevant libraries. This is the recommended way, and it will take a
+the relevant libraries. This is the *recommended* way, and it will take a
 few hours.
 
-In case the build is troublesome, you can avoid compiling all the
-dependencies by commenting out the appropriate `USE_SYSTEM_XYZ`
-lines in the `arm` section of `Make.inc`.  Install the following
-libraries in that case. Also note that this will use the reference
-BLAS, which is 10-100x slower.
+OpenBLAS detects the target architecture reasonably well, but in case
+it does not, you can force the target architecture should you need to in
+`Make.user`.
+
+````
+override OPENBLAS_TARGET_ARCH=ARMV7
+````
+
+Similarly, one can install other system libraries instead of building them,
+should the build be troublesome, by adding the following lines in `Make.user`:
+
+````
+override USE_SYSTEM_BLAS=1
+override USE_SYSTEM_LAPACK=1
+override USE_SYSTEM_LIBM=1
+override USE_SYSTEM_FFTW=1
+override USE_SYSTEM_GMP=1
+override USE_SYSTEM_MPFR=1
+override USE_SYSTEM_ARPACK=1
+````
+
+The following command will install all the necessary libraries on Ubuntu.
 
 ````
 sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3
