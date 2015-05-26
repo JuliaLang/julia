@@ -133,8 +133,6 @@ end
 @test !(Type{Tuple{Int,Int}} <: Tuple)
 @test Tuple{Type{Int}} <: Tuple{DataType}
 
-@test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
-
 @test () != Type{Tuple{}}
 
 # issue #6561
@@ -2904,3 +2902,9 @@ end
 function func8283 end
 @test isa(func8283,Function) && isgeneric(func8283)
 @test_throws MethodError func8283()
+
+# issue #11243
+let a = [Pair(1,2), Pair("a","b")]
+    @test typeof(a) == Vector{Pair}
+    @test typeof(a) <: Vector{Pair}
+end
