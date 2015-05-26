@@ -16,10 +16,18 @@ This is the list of known issues on ARM:
 
 # Build dependencies
 
-In addition to the standard `build-essentials` toolchain the following
-libraries may be installed to build on ARM, if you want to avoid
-compiling them. We recommend using Ubuntu 14.04 or newer. On
-Debian/Ubuntu, use the following command:
+We recommend using at least Ubuntu 14.04 and gcc 4.8, which is part of the
+standard `build-essentials`.
+
+Julia on ARM can be built by simply typing `make`, which will download all
+the relevant libraries. This is the recommended way, and it will take a
+few hours.
+
+In case the build is troublesome, you can avoid compiling all the
+dependencies by commenting out the appropriate `USE_SYSTEM_XYZ`
+lines in the `arm` section of `Make.inc`.  Install the following
+libraries in that case. Also note that this will use the reference
+BLAS, which is 10-100x slower.
 
 ````
 sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3
@@ -45,3 +53,7 @@ so by following these tutorials.
 
 - [Crouton Tutorial 1](http://www.howtogeek.com/162120/how-to-install-ubuntu-linux-on-your-chromebook-with-crouton/)
 - [Crouton Tutorial 2](http://lifehacker.com/how-to-install-linux-on-a-chromebook-and-unlock-its-ful-509039343)
+
+These tutorials will end up installing Ubuntu 12.04, and you have to
+upgrade to Ubuntu 14.04, or install Ubuntu 14.04 from scratch by
+finding appropriate `crouton` help.
