@@ -1076,9 +1076,10 @@ extern DLLEXPORT jl_module_t *jl_current_module;
 DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
 DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
-jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
-jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);

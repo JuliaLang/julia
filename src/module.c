@@ -79,7 +79,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 }
 
 // get binding for assignment
-jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b;
@@ -118,7 +118,7 @@ DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
 // get binding for adding a method
 // like jl_get_binding_wr, but uses existing imports instead of warning
 // and overwriting.
-jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b = *bp;
@@ -207,9 +207,17 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
     return b;
 }
 
-jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     return jl_get_binding_(m, var, NULL);
+}
+
+DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_binding_(m, var, NULL);
+    if (b == NULL)
+        jl_undefined_var_error(var);
+    return b;
 }
 
 static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
