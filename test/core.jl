@@ -2908,3 +2908,7 @@ let a = [Pair(1,2), Pair("a","b")]
     @test typeof(a) == Vector{Pair}
     @test typeof(a) <: Vector{Pair}
 end
+
+# issue #11366
+f11366{T}(x::Type{Ref{T}}) = Ref{x}
+@test !isleaftype(Base.return_types(f11366, (Any,))[1])
