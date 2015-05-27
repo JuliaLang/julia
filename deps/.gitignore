@@ -20,8 +20,7 @@
 /lldb-*
 /mpfr-*
 /patchelf-*
-/pcre-*
-!pcre-gcc49-compile.patch
+/pcre2-*
 /root
 /SuiteSparse-*
 /zlib-*

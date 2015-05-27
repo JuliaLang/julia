@@ -2,8 +2,6 @@ JULIAHOME = ..
 include ../deps/Versions.make
 include ../Make.inc
 
-PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
-
 TAGGED_RELEASE_BANNER = ""
 
 ifneq ($(USEMSVC), 1)
@@ -14,12 +12,15 @@ endif
 
 all: pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl version_git.jl.phony
 
-pcre_h.jl:
+PCRE_CONST = 0x[0-9a-fA-F]+|[0-9]+
 ifeq ($(USE_SYSTEM_PCRE), 1)
-	@$(call PRINT_PERL, $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = Int32($$2)"' | sort > $@)
+  PCRE_INCL_PATH = $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
 else
-	@$(call PRINT_PERL, $(CPP) -dM $(build_includedir)/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = Int32($$2)"' | sort > $@)
+  PCRE_INCL_PATH = $(build_includedir)/pcre2.h
 endif
+
+pcre_h.jl:
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $(PCRE_INCL_PATH) | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | sort > $@)
 
 errno_h.jl:
 	@$(call PRINT_PERL, echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)

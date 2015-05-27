@@ -557,9 +557,9 @@ LLVM_LLC=$(build_bindir)/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
-PCRE_CONFIG = pcre-config
+PCRE_CONFIG = pcre2-config
 else
-PCRE_CONFIG = $(build_bindir)/pcre-config
+PCRE_CONFIG = $(build_bindir)/pcre2-config
 endif
 
 # Use 64-bit libraries by default on 64-bit architectures
