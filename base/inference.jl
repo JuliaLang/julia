@@ -2,7 +2,7 @@
 
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 4
+const MAX_TYPE_DEPTH = 6
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
