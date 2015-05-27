@@ -171,7 +171,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
 fi
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
-    GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
+    GMP MPFR LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
 echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
@@ -183,7 +183,7 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = libuv' >> Make.user
+echo 'override STAGE1_DEPS = libuv pcre' >> Make.user
 echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 make -C deps get-libuv
