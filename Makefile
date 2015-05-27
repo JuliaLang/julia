@@ -112,8 +112,9 @@ release-candidate: release test
 	@echo 5. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 8. Announce on mailing lists
-	@echo 9. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 8. Update checksums on AWS for tarball and packaged binaries
+	@echo 9. Announce on mailing lists
+	@echo 10. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
