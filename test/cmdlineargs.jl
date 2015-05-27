@@ -151,13 +151,13 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
+        JL_OPTIONS_FAST_MATH_ON = 1,
         JL_OPTIONS_FAST_MATH_OFF = 2
         @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
         @test parse(Int,readchomp(`$exename --math-mode=user -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
+        @test parse(Int,readchomp(`$exename --math-mode=fast -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
     end
-    # --math-mode takes ieee/user as argument
-    @test !success(`$exename --math-mode=fast`)
 
     # --worker takes default / custom as arugment (default/custom arguments tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
