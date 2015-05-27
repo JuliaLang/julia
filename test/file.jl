@@ -935,8 +935,12 @@ for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat,
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
 @test_throws ArgumentError open("ba\0d", "w")
-for f in (cp, mv, symlink)
-    @test_throws ArgumentError f(file, "ba\0d")
+@test_throws ArgumentError cp(file, "ba\0d")
+@test_throws ArgumentError mv(file, "ba\0d")
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    @test_throws ArgumentError symlink(file, "ba\0d")
+else
+    @test_throws ErrorException symlink(file, "ba\0d")
 end
 @test_throws ArgumentError download("good", "ba\0d")
 @test_throws ArgumentError download("ba\0d", "good")
