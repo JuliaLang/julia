@@ -2,7 +2,7 @@
 
 module SparseMatrix
 
-using Base: Func, AddFun, OrFun
+using Base: Func, AddFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular
 
