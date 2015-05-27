@@ -101,6 +101,10 @@ end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
+function copy(a::Array{Union()})
+    a
+end
+
 function copy(a::Array)
     b = similar(a)
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), b, a, sizeof(a))
