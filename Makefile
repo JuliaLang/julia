@@ -406,10 +406,8 @@ ifeq ($(JULIA_CPU_TARGET), native)
 endif
 
 ifeq ($(OS), WINNT)
-ifeq ($(ARCH),x86_64)
-	# If we are running on WIN64, also delete sys.dll until we switch to llvm3.5+
+	# If we are running on windows, also delete sys.dll until we switch to llvm3.5+
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
-endif
 
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
