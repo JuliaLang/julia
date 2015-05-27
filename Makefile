@@ -555,7 +555,7 @@ endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
-	$(JLDOWNLOAD) busybox.exe http://intgat.tigress.co.uk/rmy/files/busybox/busybox-w32-TIG-1778-g15efec6.exe && \
+	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-1-g9eb16cb.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
