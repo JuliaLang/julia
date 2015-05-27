@@ -371,6 +371,8 @@ function extract_simple_tparam(Ai)
     return Bottom
 end
 
+has_typevars(t::ANY) = ccall(:jl_has_typevars, Cint, (Any,), t)!=0
+
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 const apply_type_tfunc = function (A, args...)
     if !isType(args[1])
@@ -387,8 +389,9 @@ const apply_type_tfunc = function (A, args...)
     for i=2:max(lA,length(args))
         ai = args[i]
         if isType(ai)
-            uncertain |= (!isleaftype(ai))
-            tparams = svec(tparams..., ai.parameters[1])
+            aip1 = ai.parameters[1]
+            uncertain |= has_typevars(aip1)
+            tparams = svec(tparams..., aip1)
         else
             if i<=lA
                 val = extract_simple_tparam(A[i])

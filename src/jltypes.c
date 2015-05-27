@@ -136,7 +136,7 @@ static int jl_has_typevars_from(jl_value_t *v, jl_svec_t *p)
     return jl_has_typevars__(v, 0, p);
 }
 
-int jl_has_typevars(jl_value_t *v)
+DLLEXPORT int jl_has_typevars(jl_value_t *v)
 {
     if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, 0, NULL);
