@@ -2376,17 +2376,41 @@ end
 squeeze(S::SparseMatrixCSC, dims::Dims) = throw(ArgumentError("squeeze is not available for sparse matrices"))
 
 ## Structure query functions
+issym(A::SparseMatrixCSC) = is_hermsym(A, IdFun())
 
-function issym(A::SparseMatrixCSC)
+ishermitian(A::SparseMatrixCSC) = is_hermsym(A, ConjFun())
+
+function is_hermsym(A::SparseMatrixCSC, check::Func)
     m, n = size(A)
     if m != n; return false; end
-    return countnz(A - A.') == 0
-end
 
-function ishermitian(A::SparseMatrixCSC)
-    m, n = size(A)
-    if m != n; return false; end
-    return countnz(A - A') == 0
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval = A.nzval
+    tracker = copy(A.colptr)
+    @inbounds for col = 1:A.n
+        for p = tracker[col]:colptr[col+1]-1
+            val = nzval[p]
+            if val == 0; continue; end # In case of explicit zeros
+            row = rowval[p]
+            if row < col; return false; end
+            if row == col # Diagonal element
+                if val != check(val)
+                    return false
+                end
+            else
+                row2 = rowval[tracker[row]]
+                if row2 > col; return false; end
+                if row2 == col # A[i,j] and A[j,i] exists
+                    if val != check(nzval[tracker[row]])
+                        return false
+                    end
+                    tracker[row] += 1
+                end
+            end
+        end
+    end
+    return true
 end
 
 function istriu{Tv}(A::SparseMatrixCSC{Tv})

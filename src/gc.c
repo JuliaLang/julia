@@ -1961,7 +1961,7 @@ static void clear_mark(int bits)
     for (int i = 0; i < 2; i++) {
         bigval_t *v = bigs[i];
         while (v != NULL) {
-            void* gcv = &v->data;
+            void* gcv = &v->header;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
