@@ -53,16 +53,20 @@ function newmethod(funcs, f)
     return newmethod(applicable)
 end
 
+def_dict(f) = [def => def.func for def in methods(f)]
+
 function trackmethod(def)
     name = uncurly(unblock(def).args[1].args[1])
     f = esc(name)
     quote
+        funcs = nothing
         if $(isexpr(name, Symbol)) && isdefined($(Expr(:quote, name))) && isgeneric($f)
-            funcs = [def => def.func for def in methods($f)]
-            $(esc(def))
+            funcs = def_dict($f)
+        end
+        $(esc(def))
+        if funcs !== nothing
             $f, newmethod(funcs, $f)
         else
-            $(esc(def))
             $f, newmethod(methods($f))
         end
     end
