@@ -2171,8 +2171,8 @@ void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;
-    jl_in_gc = 1;
     JL_SIGATOMIC_BEGIN();
+    jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
     int recollect = 0;
 #if defined(GC_TIME)
@@ -2376,8 +2376,8 @@ void jl_gc_collect(int full)
 #ifdef GC_FINAL_STATS
     max_pause = max_pause < pause ? pause : max_pause;
 #endif
-    JL_SIGATOMIC_END();
     jl_in_gc = 0;
+    JL_SIGATOMIC_END();
 #ifdef GC_TIME
     if (estimate_freed != SAVE2) {
         // this should not happen but it does
