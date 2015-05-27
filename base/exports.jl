@@ -1266,6 +1266,7 @@ export
     isfifo,
     isfile,
     islink,
+    ismount,
     ispath,
     isreadable,
     issetgid,

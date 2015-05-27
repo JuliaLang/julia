@@ -124,3 +124,18 @@ function samefile(a::AbstractString, b::AbstractString)
         return false
     end
 end
+
+function ismount(path...)
+    path = joinpath(path...)
+    isdir(path) || return false
+    s1 = lstat(path)
+    # Symbolic links cannot be mount points
+    islink(s1) && return false
+    parent_path = joinpath(path, "..")
+    s2 = lstat(parent_path)
+    # If a directory and its parent are on different devices,  then the
+    # directory must be a mount point
+    (s1.device != s2.device) && return true
+    (s1.inode == s2.inode) && return true
+    false
+end
