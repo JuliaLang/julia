@@ -115,10 +115,10 @@ function __init__()
              working with sparse matrix factorizations, e.g. solving
              systems of equations with \\.
 
-             This problem can be fixed by fixing the Julia build or by
-             downloading the OS X or generic Linux binary from
-             www.julialang.org, which ship with the correct versions
-             of all dependencies.
+             This problem can be fixed by modifying the Julia build
+             configuration or by downloading the OS X or generic
+             Linux binary from www.julialang.org, which include
+             the correct versions of all dependencies.
          """)
     end
 end
