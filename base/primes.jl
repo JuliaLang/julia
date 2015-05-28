@@ -99,12 +99,12 @@ function factor{T<:Integer}(n::T)
             isprime(n) && (h[n] = 1; return h)
         end
     end
-    pollardfactors!(n, h)
+    widemul(n-1,n-1) <= typemax(n) ? pollardfactors!(n, h) : pollardfactors!(widen(n), h)
 end
 
-function pollardfactors!{T<:Integer}(n::T, h::Dict{T,Int})
+function pollardfactors!{T<:Integer,K<:Integer}(n::T, h::Dict{K,Int})
     while true
-        local c::T = rand(1:(n-1)), G::T = 1, r::T = 1, y::T = rand(0:(n-1)), m::T = 1900
+        local c::T = rand(1:(n-1)), G::T = 1, r::K = 1, y::T = rand(0:(n-1)), m::K = 1900
         local ys::T, q::T = 1, x::T
         while c == n - 2
             c = rand(1:(n-1))
@@ -112,17 +112,17 @@ function pollardfactors!{T<:Integer}(n::T, h::Dict{T,Int})
         while G == 1
             x = y
             for i in 1:r
-                y = widemul(y,y)%n
-                y = (widen(y)+widen(c))%n
+                y = (y*y)%n
+                y = (y+c)%n
             end
-            local k::T = 0
+            local k::K = 0
             G = 1
             while k < r && G == 1
                 for i in 1:(m>(r-k)?(r-k):m)
                     ys = y
-                    y = widemul(y,y)%n
-                    y = (widen(y)+widen(c))%n
-                    q = widemul(q,x>y?x-y:y-x)%n
+                    y = (y*y)%n
+                    y = (y+c)%n
+                    q = (q*(x>y?x-y:y-x))%n
                 end
                 G = gcd(q,n)
                 k = k + m
@@ -131,8 +131,8 @@ function pollardfactors!{T<:Integer}(n::T, h::Dict{T,Int})
         end
         G == n && (G = 1)
         while G == 1
-            ys = widemul(ys,ys)%n
-            ys = (widen(ys)+widen(c))%n
+            ys = (ys*ys)%n
+            ys = (ys+c)%n
             G = gcd(x>ys?x-ys:ys-x,n)
         end
         if G != n
