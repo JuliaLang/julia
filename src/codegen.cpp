@@ -5527,7 +5527,9 @@ extern "C" void jl_init_codegen(void)
 #if defined(JL_DEBUG_BUILD) && !defined(LLVM37)
     options.JITEmitDebugInfo = true;
 #endif
+#ifndef LLVM37
     options.NoFramePointerElim = true;
+#endif
 #ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
 #endif
