@@ -16,16 +16,16 @@ const _oldstyle_array_vcat_ = true
 if _oldstyle_array_vcat_
     function oldstyle_vcat_warning(n::Int)
         if n == 1
-            before = "a"
+            before = "[a]"
             after  = "collect(a)"
         elseif n == 2
-            before = "a,b"
-            after  = "a;b"
+            before = "[a,b]"
+            after  = "[a;b]"
         else
-            before = "a,b,..."
-            after  = "a;b;..."
+            before = "[a,b,...]"
+            after  = "[a;b;...]"
         end
-        depwarn("[$before] concatenation is deprecated; use [$after] instead", :vect)
+        depwarn("$before concatenation is deprecated; use $after instead", :vect)
     end
     function vect(A::AbstractArray...)
         oldstyle_vcat_warning(length(A))
