@@ -256,3 +256,8 @@ end
 @test repr(:(@m x y))    == ":(@m x y)"
 @test string(:(@m x y))  ==   "@m x y"
 @test string(:(@m x y;)) == "begin \n    @m x y\nend"
+
+# issue #11436
+@test_repr "1 => 2 => 3"
+@test_repr "1 => (2 => 3)"
+@test_repr "(1 => 2) => 3"
