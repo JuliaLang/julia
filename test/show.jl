@@ -234,7 +234,25 @@ end
 # issue #9865
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
-# issue 11413
+# issue #11413
 @test string(:(*{1,2})) == "*{1,2}"
 @test string(:(*{1,x})) == "*{1,x}"
 @test string(:(-{x}))   == "-{x}"
+
+# issue #11393
+@test_repr "@m(x,y) + z"
+@test_repr "(@m(x,y),z)"
+@test_repr "[@m(x,y),z]"
+@test_repr "A[@m(x,y),z]"
+@test_repr "T{@m(x,y),z}"
+@test_repr "@m x @n(y) z"
+@test_repr "f(@m(x,y);z=@n(a))"
+@test_repr "@m(x,y).z"
+@test_repr "::@m(x,y)+z"
+@test_repr "[@m(x) y z]"
+@test_repr "[@m(x) y; z]"
+@test_repr "let @m(x), y=z; end"
+
+@test repr(:(@m x y))    == ":(@m x y)"
+@test string(:(@m x y))  ==   "@m x y"
+@test string(:(@m x y;)) == "begin \n    @m x y\nend"
