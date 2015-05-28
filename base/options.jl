@@ -29,6 +29,7 @@ immutable JLOptions
     fast_math::Int8
     worker::Int8
     bindto::Ptr{UInt8}
+    handle_signals::Int8
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
