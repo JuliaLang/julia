@@ -1327,9 +1327,10 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 
 DLLEXPORT void jl_sigint_action(void);
 DLLEXPORT void restore_signals(void);
-DLLEXPORT void jl_install_sigint_handler();
+DLLEXPORT void jl_install_sigint_handler(void);
 DLLEXPORT void jl_sigatomic_begin(void);
 DLLEXPORT void jl_sigatomic_end(void);
+void jl_install_default_signal_handlers(void);
 
 
 // tasks and exceptions -------------------------------------------------------
@@ -1555,6 +1556,7 @@ typedef struct {
     int8_t fast_math;
     int8_t worker;
     const char *bindto;
+    int8_t handle_signals;
 } jl_options_t;
 
 extern DLLEXPORT jl_options_t jl_options;
@@ -1589,6 +1591,9 @@ extern DLLEXPORT jl_options_t jl_options;
 #define JL_OPTIONS_FAST_MATH_ON 1
 #define JL_OPTIONS_FAST_MATH_OFF 2
 #define JL_OPTIONS_FAST_MATH_DEFAULT 0
+
+#define JL_OPTIONS_HANDLE_SIGNALS_ON 1
+#define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
 
 // Version information
 #include "julia_version.h"
