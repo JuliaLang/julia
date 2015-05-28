@@ -1301,12 +1301,22 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     return ml;
 }
 
+void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
+{
+    jl_value_t *fargs[3] = {
+        (jl_value_t*)jl_methoderror_type,
+        (jl_value_t*)f,
+        args
+    };
+    jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    // not reached
+}
+
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na);
     JL_GC_PUSH1(&argtup);
-    jl_value_t *fargs[3] = { (jl_value_t*)jl_methoderror_type, (jl_value_t*)f, argtup };
-    jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    jl_no_method_error_bare(f, argtup);
     // not reached
 }
 
@@ -1683,7 +1693,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
     size_t i;
 
     if ((jl_value_t*)m == jl_nothing) {
-        jl_no_method_error(gf, args, nargs);
+        jl_no_method_error_bare(gf, (jl_value_t*)types);
         // unreachable
     }
 
