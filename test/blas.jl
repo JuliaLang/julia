@@ -81,7 +81,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test all(triu(BLAS.herk('U', 'C', L4)) .== triu(BLAS.gemm('T', 'N', L4, L4)))
         @test all(tril(BLAS.herk('L', 'C', L4)) .== tril(BLAS.gemm('T', 'N', L4, L4)))
         ans = similar(L4)
-        @test all(tril(BLAS.herk('L','C', L4)) .== tril(BLAS.herk!('L', 'C', one(elty), L4, zero(elty), ans)))
+        @test all(tril(BLAS.herk('L','C', L4)) .== tril(BLAS.herk!('L', 'C', real(one(elty)), L4, real(zero(elty)), ans)))
         @test all(Base.LinAlg.copytri!(ans, 'L') .== LinAlg.BLAS.gemm('T', 'N', L4, L4))
     else
         @test all(triu(BLAS.syrk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
