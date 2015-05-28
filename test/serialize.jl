@@ -62,9 +62,12 @@ create_serialization_stream() do s
     lt = ntuple(len, i->0x1)
     serialize(s, lt)
 
+    serialize(s, Tuple{})
+
     seek(s, 0)
     @test deserialize(s) === tpl
     @test deserialize(s) === lt
+    @test deserialize(s) === Tuple{}
 end
 
 # Symbol

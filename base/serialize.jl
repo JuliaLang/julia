@@ -40,7 +40,7 @@ let i = 2
              :mul_float, :unbox, :box,
              :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
-             :Core, :Base, svec(), :reserved16,
+             :Core, :Base, svec(), Tuple{},
              :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
@@ -555,11 +555,11 @@ function deserialize(s, ::Type{DataType})
     mod = deserialize(s)::Module
     ty = eval(mod,name)
     if length(ty.parameters) == 0
-        params = svec()
+        t = ty
     else
         params = deserialize(s)
+        t = ty{params...}
     end
-    t = ty{params...}
     if form == 0
         return t
     end
