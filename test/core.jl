@@ -1172,11 +1172,12 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
-x[1] = 1.0
-x[2] = 2.0
-x[3] = 3.0
-foo(x) == [1.0, 2.0, 3.0]
+let x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
+    x[1] = 1.0
+    x[2] = 2.0
+    x[3] = 3.0
+    @test foo(x) == [1.0, 2.0, 3.0]
+end
 
 # TODO!!
 # issue #4115
