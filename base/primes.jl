@@ -99,7 +99,7 @@ function factor{T<:Integer}(n::T)
             isprime(n) && (h[n] = 1; return h)
         end
     end
-    widemul(n-1,n-1) <= typemax(n) ? pollardfactors!(n, h) : pollardfactors!(widen(n), h)
+    T <: BigInt || widemul(n-1,n-1) <= typemax(n) ? pollardfactors!(n, h) : pollardfactors!(widen(n), h)
 end
 
 function pollardfactors!{T<:Integer,K<:Integer}(n::T, h::Dict{K,Int})
