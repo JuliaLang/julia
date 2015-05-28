@@ -687,7 +687,8 @@ function syrk(uplo::Char, trans::Char, alpha::Number, A::StridedVecOrMat)
 end
 syrk(uplo::Char, trans::Char, A::StridedVecOrMat) = syrk(uplo, trans, one(eltype(A)), A)
 
-for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
+for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
+                             (:cherk_, :Complex64, :Float32))
    @eval begin
        # SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
        # *     .. Scalar Arguments ..
@@ -697,25 +698,25 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
        # *     ..
        # *     .. Array Arguments ..
        #       COMPLEX A(LDA,*),C(LDC,*)
-       function herk!(uplo::Char, trans::Char, alpha::($elty), A::StridedVecOrMat{$elty},
-                      beta::($elty), C::StridedMatrix{$elty})
+       function herk!(uplo::Char, trans::Char, α::$relty, A::StridedVecOrMat{$elty},
+                      β::$relty, C::StridedMatrix{$elty})
            n = chksquare(C)
-           n == size(A, trans == 'N' ? 1 : 2) || throw(DimensionMismatch("herk!"))
+           n == size(A, trans == 'N' ? 1 : 2) || throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
            k  = size(A, trans == 'N' ? 2 : 1)
            ccall(($(blasfunc(fname)), libblas), Void,
                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
-                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                  Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                   Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &n, &k,
-                 &alpha, A, &max(1,stride(A,2)), &beta,
+                 &α, A, &max(1,stride(A,2)), &β,
                  C, &max(1,stride(C,2)))
            C
        end
-       function herk(uplo::Char, trans::Char, alpha::($elty), A::StridedVecOrMat{$elty})
+       function herk(uplo::Char, trans::Char, α::$relty, A::StridedVecOrMat{$elty})
            n = size(A, trans == 'N' ? 1 : 2)
-           herk!(uplo, trans, alpha, A, zero($elty), similar(A, $elty, (n,n)))
+           herk!(uplo, trans, α, A, zero($relty), similar(A, (n,n)))
        end
-       herk(uplo::Char, trans::Char, A::StridedVecOrMat{$elty}) = herk(uplo, trans, one($elty), A)
+       herk(uplo::Char, trans::Char, A::StridedVecOrMat{$elty}) = herk(uplo, trans, one($relty), A)
    end
 end
 

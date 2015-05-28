@@ -223,7 +223,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
     return generic_matmatmul!(C, tA, tAt, A, A)
 end
 
-function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T})
+function herk_wrapper!{T<:BlasReal}(C::Union(StridedMatrix{T}, StridedMatrix{Complex{T}}), tA::Char, A::Union(StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}))
     nC = chksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
