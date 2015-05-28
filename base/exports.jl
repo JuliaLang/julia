@@ -686,6 +686,7 @@ export
     tril,
     triu!,
     triu,
+    vecdot,
     vecnorm,
     ⋅,
     ×,
