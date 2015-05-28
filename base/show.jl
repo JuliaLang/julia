@@ -254,10 +254,13 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
                          LabelNode, GotoNode, TopNode)
-print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, 0); nothing)
-show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, 0)
-show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 1)
-show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 1)
+# Operators have precedence levels from 1-N, and show_unquoted defaults to a
+# precedence level of 0 (the fourth argument). The top-level print and show
+# methods use a precedence of -1 to specially allow space-separated macro syntax
+print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, -1); nothing)
+show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, -1)
+show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
+show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 ## AST printing constants ##
@@ -345,7 +348,7 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
-        show_unquoted(io, ex, ind, 0)
+        show_unquoted(io, ex, ind, -1)
     end
     print(io, '\n', " "^indent)
 end
@@ -359,7 +362,7 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=1, enclose_operators::Bool=false)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
     n = length(items)
     if n == 0; return end
     indent += indent_width
@@ -374,7 +377,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=1, enclose_operato
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=1, encl_ops=false)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
     print(io, op); show_list(io, items, sep, indent, prec, encl_ops); print(io, cl)
 end
 
@@ -438,7 +441,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "end")
         else
             print(io, ":(")
-            show_unquoted(io, value, indent+indent_width, 0)
+            show_unquoted(io, value, indent+indent_width, -1)
             print(io, ")")
         end
     end
@@ -467,7 +470,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix_any && nargs==2) || (is(head,:(:)) && nargs==3)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
-        if func_prec < prec
+        if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, true)
         else
             show_list(io, args, head_, indent, func_prec, true)
@@ -614,10 +617,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_list(io, args, ", ", indent)
 
     elseif is(head, :macrocall) && nargs >= 1
-        if prec >= 1 # nested in calls
+        # Use the functional syntax unless specifically designated with prec=-1
+        if prec >= 0
             show_call(io, :call, ex.args[1], ex.args[2:end], indent)
         else
-            show_list(io, args, ' ', indent, 1)
+            show_list(io, args, ' ', indent)
         end
 
     elseif is(head, :typealias) && nargs == 2
