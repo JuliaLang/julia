@@ -113,6 +113,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // bindto
+                            JL_OPTIONS_HANDLE_SIGNALS_ON,
 };
 
 int jl_boot_file_loaded = 0;
@@ -1090,6 +1091,22 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_current_module = jl_main_module;
     jl_root_task->current_module = jl_current_module;
 
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handlers();
+
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_enable();
+#endif
+
+    if (jl_options.image_file)
+        jl_init_restored_modules();
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_sigint_handler();
+}
+
+void jl_install_default_signal_handlers(void)
+{
 #ifndef _OS_WINDOWS_
     signal_stack = malloc(sig_stack_size);
     struct sigaction actf;
@@ -1187,18 +1204,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     SetUnhandledExceptionFilter(exception_handler);
 #endif
-
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_enable();
-#endif
-
-    if (jl_options.image_file)
-        jl_init_restored_modules();
-
-    jl_install_sigint_handler();
 }
 
-DLLEXPORT void jl_install_sigint_handler()
+DLLEXPORT void jl_install_sigint_handler(void)
 {
 #ifdef _OS_WINDOWS_
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
