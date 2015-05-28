@@ -216,7 +216,19 @@ static void jl_load_sysimg_so()
     // attempt to load the pre-compiled sysimage from jl_sysimg_handle
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
-    if (jl_sysimg_handle != 0) {
+    if (jl_sysimg_handle == 0) {
+        sysimg_gvars = 0;
+        return;
+    }
+
+    int imaging_mode = jl_options.build_path != NULL;
+#ifdef _OS_WINDOWS_
+    //XXX: the windows linker forces our system image to be
+    //     linked against only one dll, I picked libjulia-release
+    if (jl_is_debugbuild()) imaging_mode = 1;
+#endif
+    // in --build mode only use sysimg data, not precompiled native code
+    if (!imaging_mode) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
@@ -252,8 +264,10 @@ static void jl_load_sysimg_so()
         }
 #endif
     }
-    else {
-        sysimg_gvars = 0;
+    const char *sysimg_data = (const char*)jl_dlsym_e(jl_sysimg_handle, "jl_system_image_data");
+    if (sysimg_data) {
+        size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
+        jl_restore_system_image_data(sysimg_data, len);
     }
 }
 
@@ -1410,7 +1424,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT void jl_save_system_image(const char *fname)
+void jl_save_system_image_to_stream(ios_t *f)
 {
     jl_gc_collect(1);
     jl_gc_collect(0);
@@ -1418,28 +1432,24 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     jl_gc_disable();
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
-    ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
-    }
 
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
-    jl_serialize_value(&f, jl_main_module);
-    jl_serialize_value(&f, jl_top_module);
-    jl_serialize_value(&f, jl_typeinf_func);
+    jl_serialize_value(f, jl_main_module);
+    jl_serialize_value(f, jl_top_module);
+    jl_serialize_value(f, jl_typeinf_func);
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     ptrint_t i=2;
     for (i=2; i < 255; i++) {
-        jl_serialize_gv(&f, deser_tag[i]);
+        jl_serialize_gv(f, deser_tag[i]);
     }
-    jl_serialize_globalvals(&f);
-    jl_serialize_gv_syms(&f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
-    jl_serialize_value(&f, NULL); // signal the end of the symbols list
+    jl_serialize_globalvals(f);
+    jl_serialize_gv_syms(f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
+    jl_serialize_value(f, NULL); // signal the end of the symbols list
 
     // save module initialization order
     if (jl_module_init_order != NULL) {
@@ -1449,23 +1459,40 @@ DLLEXPORT void jl_save_system_image(const char *fname)
             assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
-    jl_serialize_value(&f, jl_module_init_order);
+    jl_serialize_value(f, jl_module_init_order);
 
-    write_int32(&f, jl_get_t_uid_ctr());
-    write_int32(&f, jl_get_gs_ctr());
+    write_int32(f, jl_get_t_uid_ctr());
+    write_int32(f, jl_get_gs_ctr());
 
     // record reinitialization functions
     for (i = 0; i < reinit_list.len; i += 2) {
-        write_int32(&f, (int)reinit_list.items[i]);
-        write_int32(&f, (int)reinit_list.items[i+1]);
+        write_int32(f, (int)reinit_list.items[i]);
+        write_int32(f, (int)reinit_list.items[i+1]);
     }
-    write_int32(&f, -1);
+    write_int32(f, -1);
 
     htable_reset(&backref_table, 0);
     arraylist_free(&reinit_list);
 
-    ios_close(&f);
     if (en) jl_gc_enable();
+}
+
+DLLEXPORT void jl_save_system_image(const char *fname)
+{
+    ios_t f;
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
+    }
+    jl_save_system_image_to_stream(&f);
+    ios_close(&f);
+}
+
+DLLEXPORT ios_t *jl_create_system_image()
+{
+    ios_t *f; f = (ios_t*)malloc(sizeof(ios_t));
+    ios_mem(f, 1000000);
+    jl_save_system_image_to_stream(f);
+    return f;
 }
 
 extern jl_function_t *jl_typeinf_func;
@@ -1474,9 +1501,8 @@ extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks();
 
-// Takes in a path of the form "usr/lib/julia/sys.ji", such as passed in to jl_restore_system_image()
-DLLEXPORT
-void jl_preload_sysimg_so(const char *fname)
+// Takes in a path of the form "usr/lib/julia/sys.{ji,so}", as passed to jl_restore_system_image()
+DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
     // If passed NULL, don't even bother
     if (!fname)
@@ -1504,22 +1530,8 @@ void jl_preload_sysimg_so(const char *fname)
         jl_options.cpu_target = (const char *)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
 }
 
-DLLEXPORT
-void jl_restore_system_image(const char *fname)
+void jl_restore_system_image_from_stream(ios_t *f)
 {
-    ios_t f;
-    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        jl_errorf("System image file \"%s\" not found\n", fname);
-    }
-    int imaging_mode = jl_options.build_path != NULL;
-#ifdef _OS_WINDOWS_
-    //XXX: the windows linker forces our system image to be
-    //     linked against only one dll, I picked libjulia-release
-    if (jl_is_debugbuild()) imaging_mode = 1;
-#endif
-    if (!imaging_mode) {
-        jl_load_sysimg_so();
-    }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
     jl_gc_disable();
@@ -1530,10 +1542,10 @@ void jl_restore_system_image(const char *fname)
 
     datatype_list = jl_alloc_cell_1d(0);
 
-    jl_main_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
-    jl_top_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
+    jl_main_module = (jl_module_t*)jl_deserialize_value(f, NULL);
+    jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_internal_main_module = jl_main_module;
-    jl_typeinf_func = (jl_function_t*)jl_deserialize_value(&f, NULL);
+    jl_typeinf_func = (jl_function_t*)jl_deserialize_value(f, NULL);
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1543,12 +1555,12 @@ void jl_restore_system_image(const char *fname)
     // ensure everything in deser_tag is reassociated with its GlobalValue
     ptrint_t i;
     for (i=2; i < 255; i++) {
-        jl_deserialize_gv(&f, deser_tag[i]);
+        jl_deserialize_gv(f, deser_tag[i]);
     }
-    jl_deserialize_globalvals(&f);
-    jl_deserialize_gv_syms(&f);
+    jl_deserialize_globalvals(f);
+    jl_deserialize_gv_syms(f);
 
-    jl_module_init_order = (jl_array_t*)jl_deserialize_value(&f, NULL);
+    jl_module_init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
 
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
@@ -1567,14 +1579,14 @@ void jl_restore_system_image(const char *fname)
     jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
-    jl_set_t_uid_ctr(read_int32(&f));
-    jl_set_gs_ctr(read_int32(&f));
+    jl_set_t_uid_ctr(read_int32(f));
+    jl_set_gs_ctr(read_int32(f));
 
     // run reinitialization functions
-    int pos = read_int32(&f);
+    int pos = read_int32(f);
     while (pos != -1) {
         jl_value_t *v = (jl_value_t*)backref_list.items[pos];
-        switch (read_int32(&f)) {
+        switch (read_int32(f)) {
             case 1: {
                 jl_array_t **a = (jl_array_t**)&v->fieldptr[0];
                 jl_idtable_rehash(a, jl_array_len(*a));
@@ -1584,18 +1596,45 @@ void jl_restore_system_image(const char *fname)
             default:
                 assert(0);
         }
-        pos = read_int32(&f);
+        pos = read_int32(f);
     }
 
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
-    ios_close(&f);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
     mode = last_mode;
     jl_update_all_fptrs();
+}
+
+DLLEXPORT void jl_restore_system_image(const char *fname)
+{
+    char *dot = (char*) strrchr(fname, '.');
+    int is_ji = (dot && !strcmp(dot, ".ji"));
+
+    jl_load_sysimg_so();
+    if (!is_ji) {
+        if (sysimg_gvars == 0)
+            jl_errorf("System image file \"%s\" not found\n", fname);
+        return;
+    }
+
+    ios_t f;
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
+        jl_errorf("System image file \"%s\" not found\n", fname);
+    }
+    jl_restore_system_image_from_stream(&f);
+    ios_close(&f);
+}
+
+DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
+{
+    ios_t f;
+    ios_static_buffer(&f, (char*)buf, len);
+    jl_restore_system_image_from_stream(&f);
+    ios_close(&f);
 }
 
 void jl_init_restored_modules()
@@ -1847,8 +1886,8 @@ jl_module_t *jl_restore_new_module(const char *fname)
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
         jl_array_t *cache_arg1 = mt->cache_arg1;
-        mt->cache_targ = (void*)jl_nothing;
-        mt->cache_arg1 = (void*)jl_nothing;
+        mt->cache_targ = (jl_array_t*)jl_nothing;
+        mt->cache_arg1 = (jl_array_t*)jl_nothing;
         if (cache_targ != (void*)jl_nothing) {
             size_t j, l = jl_array_len(cache_targ);
             for (j = 0; j < l; j++) {

@@ -5,7 +5,7 @@ New language features
 ---------------------
 
   * Function call overloading: for arbitrary objects `x` (not of type
-    `Function`), `x(...)` is transformed into `call(x, ...)`, and `Base.call`
+    `Function`), `x(...)` is transformed into `call(x, ...)`, and `call`
     can be overloaded as desired.  Constructors are now a special case of
     this mechanism, which allows e.g. constructors for abstract types.
     `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
@@ -23,11 +23,14 @@ New language features
     it operates at two different stages of evaluation. At compile time, the generated
     function is called with its arguments bound to the types for which it should
     specialize. The quoted expression it returns forms the body of the specialized
-    method which is then called at run time. ([#7311]).
+    method which is then called at run time ([#7311]).
 
   * (Also with syntax todo) Documentation system for functions, methods, types
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
+
+  * The syntax `function foo end` can be used to introduce a generic function without
+    yet adding any methods ([#8283]).
 
 Language changes
 ----------------
@@ -111,6 +114,11 @@ Language changes
     macro. Instead, the string is first unindented and then `x_str` is invoked,
     as if the string had been single-quoted ([#10228]).
 
+Command line option changes
+---------------------------
+
+  * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
+
 Compiler improvements
 ---------------------
 
@@ -158,6 +166,8 @@ Library improvements
     * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
     * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
+
+    * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
 
   * Strings
 
@@ -1324,6 +1334,7 @@ Too numerous to mention.
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
+[#8283]: https://github.com/JuliaLang/julia/issues/8283
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
@@ -1422,4 +1433,6 @@ Too numerous to mention.
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
+[#11067]: https://github.com/JuliaLang/julia/issues/11067

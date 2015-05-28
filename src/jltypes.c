@@ -136,7 +136,7 @@ static int jl_has_typevars_from(jl_value_t *v, jl_svec_t *p)
     return jl_has_typevars__(v, 0, p);
 }
 
-int jl_has_typevars(jl_value_t *v)
+DLLEXPORT int jl_has_typevars(jl_value_t *v)
 {
     if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, 0, NULL);
@@ -2432,17 +2432,16 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                     if (jl_subtype_le(a, jl_tparam0(b), 0, 1))
                         return 1;
                 }
-                if (invariant && ttb == (jl_datatype_t*)ttb->name->primary)
-                    return 0;
                 assert(jl_nparams(tta) == jl_nparams(ttb));
                 size_t l = jl_nparams(tta);
                 for(i=0; i < l; i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
-                    if (invariant && jl_is_typevar(bpara) &&
-                        !((jl_tvar_t*)bpara)->bound) {
-                        if (!jl_is_typevar(apara))
-                            return 0;
+                    if (invariant) {
+                        if (jl_is_typevar(bpara) && !((jl_tvar_t*)bpara)->bound) {
+                            if (!jl_is_typevar(apara))
+                                return 0;
+                        }
                     }
                     if (!jl_subtype_le(apara, bpara, 0, 1))
                         return 0;

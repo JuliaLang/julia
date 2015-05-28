@@ -1128,7 +1128,7 @@ endif
 
 libgfortblas.$(SHLIB_EXT): gfortblas.c gfortblas.alias
 	$(CC) -Wall -O3 $(CPPFLAGS) $(CFLAGS) $(fPIC) -shared $< -o $@ -pipe \
-				-Wl,-reexport_framework,vecLib -Wl,-alias_list,gfortblas.alias
+				-Wl,-reexport_framework,Accelerate -Wl,-alias_list,gfortblas.alias
 $(build_shlibdir)/libgfortblas.$(SHLIB_EXT): libgfortblas.$(SHLIB_EXT)
 	cp -f $< $@
 	$(INSTALL_NAME_CMD)libgfortblas.$(SHLIB_EXT) $@
@@ -1869,7 +1869,11 @@ install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## libgit2
 
-LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
+LIBGIT2_GIT_URL = git://github.com/libgit2/libgit2.git
+LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
+$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_EXT)))
+
+LIBGIT2_OBJ_SOURCE = $(LIBGIT2_SRC_DIR)/build/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 LIBGIT2_OPTS = $(CMAKE_COMMON) -DTHREADSAFE=ON
@@ -1883,28 +1887,22 @@ LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MO
 endif
 endif
 
-libgit2-$(LIBGIT2_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
-libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
-	mkdir -p libgit2-$(LIBGIT2_VER)/build
-	cd libgit2-$(LIBGIT2_VER)/build/ && \
+$(LIBGIT2_SRC_DIR)/build/Makefile: $(LIBGIT2_SRC_DIR)/CMakeLists.txt
+	mkdir -p $(LIBGIT2_SRC_DIR)/build
+	cd $(LIBGIT2_SRC_DIR)/build/ && \
 	$(CMAKE) .. $(LIBGIT2_OPTS)
 	touch -c $@
-$(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
-	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build
+$(LIBGIT2_OBJ_SOURCE): $(LIBGIT2_SRC_DIR)/build/Makefile
+	$(MAKE) -C $(LIBGIT2_SRC_DIR)/build
 	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
+$(LIBGIT2_SRC_DIR)/build/checked: $(LIBGIT2_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build test
+	$(MAKE) -C $(LIBGIT2_SRC_DIR)/build test
 endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
-	#$$(call make-install,libgit2-$(LIBGIT2_VER)/build,)
+	#$$(call make-install,$(LIBGIT2_SRC_DIR)/build,)
 ifeq ($(OS),Linux)
 	# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
@@ -1917,15 +1915,13 @@ endif
 	touch -c $@
 
 clean-libgit2:
-	-rm -rf libgit2-$(LIBGIT2_VER)/build/
+	-rm -rf $(LIBGIT2_SRC_DIR)/build/
 	-rm -f $(LIBGIT2_OBJ_TARGET)
-distclean-libgit2:
-	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
-get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
-configure-libgit2: libgit2-$(LIBGIT2_VER)/build/Makefile
+get-libgit2: $(LIBGIT2_SRC_DIR)/CMakeLists.txt
+configure-libgit2: $(LIBGIT2_SRC_DIR)/build/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
-check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
+check-libgit2: $(LIBGIT2_SRC_DIR)/build/checked
 install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##

@@ -371,6 +371,8 @@ function extract_simple_tparam(Ai)
     return Bottom
 end
 
+has_typevars(t::ANY) = ccall(:jl_has_typevars, Cint, (Any,), t)!=0
+
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 const apply_type_tfunc = function (A, args...)
     if !isType(args[1])
@@ -387,8 +389,9 @@ const apply_type_tfunc = function (A, args...)
     for i=2:max(lA,length(args))
         ai = args[i]
         if isType(ai)
-            uncertain |= (!isleaftype(ai))
-            tparams = svec(tparams..., ai.parameters[1])
+            aip1 = ai.parameters[1]
+            uncertain |= has_typevars(aip1)
+            tparams = svec(tparams..., aip1)
         else
             if i<=lA
                 val = extract_simple_tparam(A[i])
@@ -619,10 +622,12 @@ function abstract_call_gf(f, fargs, argtype, e)
             return getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
         elseif istopfunction(tm, f, :next)
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
+            t1 = getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
+            return t1===Bottom ? Bottom : Tuple{t1, Int}
         elseif istopfunction(tm, f, :indexed_next)
             isa(e,Expr) && (e.head = :call1)
-            return Tuple{getfield_tfunc(fargs, argtypes[1], argtypes[2])[1], Int}
+            t1 = getfield_tfunc(fargs, argtypes[1], argtypes[2])[1]
+            return t1===Bottom ? Bottom : Tuple{t1, Int}
         end
     end
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
@@ -738,26 +743,18 @@ function invoke_tfunc(f, types, argtype)
     if is(argtype,Bottom)
         return Bottom
     end
-    applicable = _methods(f, types, -1)
-    if isempty(applicable)
-        return Any
-    end
-    for (m::SimpleVector) in applicable
-        local linfo
-        try
-            linfo = func_for_method(m[3],types,m[2])
-        catch
+    try
+        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
+        if is(meth, nothing)
             return Any
         end
-        if typeseq(m[1],types)
-            tvars = m[2][1:2:end]
-            (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
-                              argtype, m[1], tvars)::SimpleVector
-            (_tree,rt) = typeinf(linfo, ti, env, linfo)
-            return rt
-        end
+        (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                          argtype, meth.sig, meth.tvars)::SimpleVector
+        linfo = func_for_method(meth, types, env)
+        return typeinf(linfo, ti, env, linfo)[2]
+    catch
+        return Any
     end
-    return Any
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -3279,15 +3276,11 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
 end
 
 function code_typed(f, types::ANY; optimize=true)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     code_typed(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...}, optimize=optimize)
 end
 function code_typed(f::Function, types::ANY; optimize=true)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
@@ -3306,15 +3299,11 @@ function code_typed(f::Function, types::ANY; optimize=true)
 end
 
 function return_types(f, types::ANY)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     return_types(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...})
 end
 function return_types(f::Function, types::ANY)
-    if isa(types,Tuple)
-        types = Tuple{types...}
-    end
+    types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])

@@ -292,6 +292,7 @@ static Function *jlgetfield_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
 static Function *jlmethod_func;
+static Function *jlgenericfunction_func;
 static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlegal_func;
@@ -386,6 +387,8 @@ struct jl_varinfo_t {
 
 // --- helpers for reloading IR image
 static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars);
+static void jl_sysimg_to_llvm(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars,
+                              const char *sysimg_data, size_t sysimg_len);
 
 extern "C"
 void jl_dump_bitcode(char *fname)
@@ -415,7 +418,7 @@ void jl_dump_bitcode(char *fname)
 }
 
 extern "C"
-void jl_dump_objfile(char *fname, int jit_model)
+void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len)
 {
 #ifdef LLVM36
     std::error_code err;
@@ -486,9 +489,13 @@ void jl_dump_objfile(char *fname, int jit_model)
 
     SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
+    if (sysimg_data)
+        jl_sysimg_to_llvm(shadow_module, globalvars, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(shadow_module, globalvars);
     PM.run(*shadow_module);
 #else
+    if (sysimg_data)
+        jl_sysimg_to_llvm(jl_Module, globalvars, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(jl_Module, globalvars);
     PM.run(*jl_Module);
 #endif
@@ -1478,8 +1485,10 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         }
         else if (e->head == method_sym) {
             simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
+            if (jl_expr_nargs(e) > 1) {
+                simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
+                simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
+            }
         }
         else if (e->head == assign_sym) {
             // don't consider assignment LHS as a variable "use"
@@ -3121,16 +3130,22 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 }
             }
         }
-        Value *a1 = boxed(emit_expr(args[1], ctx),ctx);
-        make_gcroot(a1, ctx);
-        Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
-        make_gcroot(a2, ctx);
-        Value *mdargs[9] =
-            { name, bp, bp_owner, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]),
-              literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
-              ConstantInt::get(T_int32, (int)iskw) };
-        ctx->argDepth = last_depth;
-        return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 9));
+        if (jl_expr_nargs(ex) == 1) {
+            Value *mdargs[4] = { name, bp, bp_owner, literal_pointer_val(bnd) };
+            return builder.CreateCall(prepare_call(jlgenericfunction_func), ArrayRef<Value*>(&mdargs[0], 4));
+        }
+        else {
+            Value *a1 = boxed(emit_expr(args[1], ctx),ctx);
+            make_gcroot(a1, ctx);
+            Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
+            make_gcroot(a2, ctx);
+            Value *mdargs[9] =
+                { name, bp, bp_owner, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]),
+                  literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
+                  ConstantInt::get(T_int32, (int)iskw) };
+            ctx->argDepth = last_depth;
+            return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 9));
+        }
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -5200,6 +5215,17 @@ static void init_julia_llvm_env(Module *m)
                          "jl_method_def", m);
     add_named_global(jlmethod_func, (void*)&jl_method_def);
 
+    std::vector<Type*> funcdefargs(0);
+    funcdefargs.push_back(jl_pvalue_llvmt);
+    funcdefargs.push_back(jl_ppvalue_llvmt);
+    funcdefargs.push_back(jl_pvalue_llvmt);
+    funcdefargs.push_back(jl_pvalue_llvmt);
+    jlgenericfunction_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, funcdefargs, false),
+                         Function::ExternalLinkage,
+                         "jl_generic_function_def", m);
+    add_named_global(jlgenericfunction_func, (void*)&jl_generic_function_def);
+
     std::vector<Type*> ehargs(0);
     ehargs.push_back(T_pint8);
     jlenter_func =
@@ -5501,7 +5527,9 @@ extern "C" void jl_init_codegen(void)
 #if defined(JL_DEBUG_BUILD) && !defined(LLVM37)
     options.JITEmitDebugInfo = true;
 #endif
+#ifndef LLVM37
     options.NoFramePointerElim = true;
+#endif
 #ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
 #endif

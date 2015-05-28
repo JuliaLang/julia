@@ -94,15 +94,15 @@ end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError, bt)
-    println(io, "DomainError:")
+    print(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
         if length(code) == 5 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                println(io,"$(code[1]) will only return a complex result if called with a complex argument.")
+                println(io,"\n$(code[1]) will only return a complex result if called with a complex argument.")
                 print(io, "try $(code[1]) (complex(x))")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring
-                println(io, "Cannot raise an integer x to a negative power -n. Make x a float by adding")
+                println(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
                 print(io, "a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
@@ -124,6 +124,9 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
+    is_arg_types = isa(ex.args, DataType)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
     if isa(ex.f, Tuple)
         f = ex.f[1]
@@ -137,41 +140,41 @@ function showerror(io::IO, ex::MethodError)
     else
         print(io, "`$(name)` has no method matching $(name)(")
     end
-    for (i, arg) in enumerate(ex.args)
-        if isa(arg, Type) && arg != typeof(arg)
-            print(io, "::Type{$(arg)}")
-        else
-            print(io, "::$(typeof(arg))")
-        end
-        i == length(ex.args) || print(io, ", ")
+    for (i, typ) in enumerate(arg_types_param)
+        print(io, "::$typ")
+        i == length(arg_types_param) || print(io, ", ")
     end
     print(io, ")")
     # Check for local functions that shadow methods in Base
     if isdefined(Base, name)
         basef = eval(Base, name)
-        if basef !== f && isgeneric(basef) && applicable(basef, ex.args...)
+        if basef !== ex.f && isgeneric(basef) && method_exists(basef, arg_types)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
     end
-    # Check for row vectors used where a column vector is intended.
-    vec_args = []
-    hasrows = false
-    for arg in ex.args
-        isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
-        hasrows |= isrow
-        push!(vec_args, isrow ? vec(arg) : arg)
-    end
-    if hasrows && applicable(f, vec_args...)
-        print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
-        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
-        print(io, "\nYou can convert to a column vector with the vec() function.")
+    if !is_arg_types
+        # Check for row vectors used where a column vector is intended.
+        vec_args = []
+        hasrows = false
+        for arg in ex.args
+            isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
+            hasrows |= isrow
+            push!(vec_args, isrow ? vec(arg) : arg)
+        end
+        if hasrows && applicable(f, vec_args...)
+            print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
+            print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
+            print(io, "\nYou can convert to a column vector with the vec() function.")
+        end
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
+    if (f == Base.convert && !isempty(arg_types_param) &&
+        isa(arg_types_param[1], Type))
+        construct_type = arg_types_param[1].parameters[1]
         println(io)
-        print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...),")
+        print(io, "This may have arisen from a call to the constructor $construct_type(...),")
         print(io, "\nsince type constructors fall back to convert methods.")
     end
     show_method_candidates(io, ex)
@@ -181,6 +184,9 @@ const UNSHOWN_METHODS = ObjectIdDict(
     which(call, Tuple{Type, Vararg{Any}}) => true
 )
 function show_method_candidates(io::IO, ex::MethodError)
+    is_arg_types = isa(ex.args, DataType)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = arg_types.parameters
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     if isa(ex.f, Tuple)
@@ -217,7 +223,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                 show_delim_array(buf, tv, '{', ',', '}', false)
             end
             print(buf, "(")
-            t_i = Any[Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
+            t_i = Any[arg_types_param...]
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
                 i > (use_constructor_syntax ? 2 : 1) && print(buf, ", ")
@@ -259,7 +265,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
-                for t in typeof(ex.args).parameters[length(sig):end]
+                for t in arg_types_param[length(sig):end]
                     if t <: sig[end].parameters[1]
                         right_matches += 1
                     end

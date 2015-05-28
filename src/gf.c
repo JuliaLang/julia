@@ -77,13 +77,7 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig
             }
         }
         jl_value_t *a = types[i];
-        if (jl_is_tuple_type(decl)) {
-            // tuples don't have to match exactly, to avoid caching
-            // signatures for tuples of every length
-            if (!jl_subtype(a, decl, 0))
-                return 0;
-        }
-        else if (jl_is_datatype(a) && jl_is_datatype(decl) &&
+        if (jl_is_datatype(a) && jl_is_datatype(decl) &&
                  ((jl_datatype_t*)decl)->name == jl_type_type->name &&
                  ((jl_datatype_t*)a   )->name == jl_type_type->name) {
             jl_value_t *tp0 = jl_tparam0(decl);
@@ -131,15 +125,6 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tupletype_t *sig,
               we know there are only concrete types here, and types are
               hash-consed, so pointer comparison should work.
             */
-        }
-        else if (jl_is_tuple_type(decl)) {
-            // tuples don't have to match exactly, to avoid caching
-            // signatures for tuples of every length
-            jl_datatype_t *ta = (jl_datatype_t*)jl_typeof(a);
-            if (!jl_is_tuple_type(ta) || //!jl_subtype(a, decl, 1))
-                !jl_tuple_subtype(jl_svec_data(ta->parameters), jl_datatype_nfields(ta),
-                                  (jl_datatype_t*)decl, 0))
-                return 0;
         }
         else if (jl_is_type_type(decl) && jl_is_type(a)) {
             jl_value_t *tp0 = jl_tparam0(decl);
@@ -457,33 +442,11 @@ static int very_general_type(jl_value_t *t)
                    ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
 }
 
-static int tuple_all_Any(jl_tupletype_t *t)
-{
-    for(int i=0; i < jl_nparams(t); i++) {
-        if (jl_tparam(t,i) != (jl_value_t*)jl_any_type)
-            return 0;
-    }
-    return 1;
-}
-
 static int is_kind(jl_value_t *v)
 {
     return (v==(jl_value_t*)jl_uniontype_type ||
             v==(jl_value_t*)jl_datatype_type ||
             v==(jl_value_t*)jl_typector_type);
-}
-
-static int jl_is_specializable_tuple(jl_tupletype_t *t)
-{
-    if (jl_nparams(t)==0) return 1;
-    jl_value_t *e0 = jl_tparam(t,0);
-    if (jl_is_tuple_type(e0) || e0 == (jl_value_t*)jl_datatype_type) return 0;
-    size_t i, l=jl_nparams(t);
-    // allow specialization on homogeneous tuples
-    for(i=1; i < l; i++) {
-        if (jl_tparam(t,i) != e0) return 0;
-    }
-    return 1;
 }
 
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
@@ -559,72 +522,6 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
         if (set_to_any) {
         }
-        else if (jl_is_tuple_type(elt) && !jl_is_specializable_tuple((jl_tupletype_t*)elt)) {
-            /*
-              don't cache tuple type exactly; just remember that it was
-              a tuple, unless the declaration asks for something more
-              specific. determined with a type intersection.
-            */
-            int might_need_guard=0;
-            if (i < jl_nparams(decl)) {
-                jl_value_t *declt = jl_tparam(decl,i);
-                if (jl_is_vararg_type(declt))
-                    declt = jl_tparam0(declt);
-                // note: ignore va flag (for T..., intersect with T)
-                if (!jl_has_typevars(declt)) {
-                    if (declt == (jl_value_t*)jl_anytuple_type ||
-                        jl_subtype((jl_value_t*)jl_anytuple_type, declt, 0)) {
-                        // don't specialize args that matched (Any...) or Any
-                        jl_svecset(newparams, i, (jl_value_t*)jl_anytuple_type);
-                        might_need_guard = 1;
-                    }
-                    else {
-                        declt = jl_type_intersection(declt, (jl_value_t*)jl_anytuple_type);
-                        if (jl_nparams(elt) > 3 ||
-                            (jl_is_tuple_type(declt) && tuple_all_Any((jl_tupletype_t*)declt))) {
-                            jl_svecset(newparams, i, declt);
-                            might_need_guard = 1;
-                        }
-                    }
-                }
-            }
-            else {
-                jl_svecset(newparams, i, (jl_value_t*)jl_anytuple_type);
-                might_need_guard = 1;
-            }
-            assert(jl_svecref(newparams,i) != (jl_value_t*)jl_bottom_type);
-            if (might_need_guard) {
-                jl_methlist_t *curr = mt->defs;
-                // can't generalize type if there's an overlapping definition
-                // with typevars.
-                // TODO: it seems premature to take these intersections
-                // before the whole signature has been generalized.
-                // example ((T...,),S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,...)
-                temp2 = (jl_value_t*)jl_svec_copy(newparams);
-                temp2 = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)temp2);
-                while (curr != (void*)jl_nothing && curr->func!=method) {
-                    if (curr->tvars!=jl_emptysvec &&
-                        jl_type_intersection((jl_value_t*)curr->sig, (jl_value_t*)temp2) !=
-                        (jl_value_t*)jl_bottom_type) {
-                        jl_svecset(newparams, i, jl_tparam(type, i));
-                        might_need_guard = 0;
-                        break;
-                    }
-                    curr = curr->next;
-                }
-            }
-            if (might_need_guard) {
-                jl_methlist_t *curr = mt->defs;
-                while (curr != (void*)jl_nothing && curr->func!=method) {
-                    jl_tupletype_t *sig = curr->sig;
-                    if (jl_nparams(sig) > i && jl_is_tuple_type(jl_tparam(sig,i))) {
-                        need_guard_entries = 1;
-                        break;
-                    }
-                    curr = curr->next;
-                }
-            }
-        }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
                  // give up on specializing static parameters for Type{Type{Type{...}}}
                  (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) ||
@@ -642,7 +539,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
-                if (di == (jl_value_t*)jl_datatype_type)
+                if (is_kind(di))
                     // issue #11355: DataType has a UID and so takes precedence in the cache
                     jl_svecset(newparams, i, (jl_value_t*)jl_typetype_type);
                 else
@@ -653,6 +550,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             else {
                 jl_svecset(newparams, i, (jl_value_t*)jl_typetype_type);
             }
+            need_guard_entries = 1;
             assert(jl_svecref(newparams,i) != (jl_value_t*)jl_bottom_type);
         }
         else if (jl_is_type_type(elt) && very_general_type(decl_i) &&
@@ -1156,33 +1054,6 @@ DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-static void
-show_func_sig(JL_STREAM *s, jl_value_t *errstream, jl_value_t *type)
-{
-    if (!jl_is_tuple_type(type)) {
-        jl_show(errstream, type);
-        return;
-    }
-    size_t tl = jl_nparams(type);
-    jl_printf(s, "(");
-    size_t i;
-    for (i = 0;i < tl;i++) {
-        jl_value_t *tp = jl_tparam(type, i);
-        if (i != tl - 1) {
-            jl_show(errstream, tp);
-            jl_printf(s, ", ");
-        } else {
-            if (jl_is_vararg_type(tp)) {
-                jl_show(errstream, jl_tparam0(tp));
-                jl_printf(s, "...");
-            } else {
-                jl_show(errstream, tp);
-            }
-        }
-    }
-    jl_printf(s, ")");
-}
-
 /*
   warn about ambiguous method priorities
 
@@ -1228,7 +1099,6 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
         }
         jl_methlist_t *l = ml;
         char *n;
-        jl_value_t *errstream;
         JL_STREAM *s;
         while (l != (void*)jl_nothing) {
             if (sigs_eq(isect, (jl_value_t*)l->sig, 0))
@@ -1236,16 +1106,15 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
             l = l->next;
         }
         n = fname->name;
-        errstream = jl_stderr_obj();
         s = JL_STDERR;
         jl_printf(s, "Warning: New definition \n    %s", n);
-        show_func_sig(s, errstream, (jl_value_t*)type);
+        jl_static_show_func_sig(s, (jl_value_t*)type);
         print_func_loc(s, linfo);
         jl_printf(s, "\nis ambiguous with: \n    %s", n);
-        show_func_sig(s, errstream, (jl_value_t*)sig);
+        jl_static_show_func_sig(s, (jl_value_t*)sig);
         print_func_loc(s, oldmeth->func->linfo);
         jl_printf(s, ".\nTo fix, define \n    %s", n);
-        show_func_sig(s, errstream, isect);
+        jl_static_show_func_sig(s, isect);
         jl_printf(s, "\nbefore the new definition.\n");
     done_chk_amb:
         JL_GC_POP();
@@ -1280,10 +1149,9 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             if (check_amb && l->func->linfo && method->linfo &&
                 (l->func->linfo->module != method->linfo->module)) {
                 jl_module_t *newmod = method->linfo->module;
-                jl_value_t *errstream = jl_stderr_obj();
                 JL_STREAM *s = JL_STDERR;
                 jl_printf(s, "Warning: Method definition %s", method->linfo->name->name);
-                show_func_sig(s, errstream, (jl_value_t*)type);
+                jl_static_show_func_sig(s, (jl_value_t*)type);
                 jl_printf(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
                 jl_printf(s, " overwritten in module %s", newmod->name->name);
@@ -1433,12 +1301,22 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     return ml;
 }
 
+void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
+{
+    jl_value_t *fargs[3] = {
+        (jl_value_t*)jl_methoderror_type,
+        (jl_value_t*)f,
+        args
+    };
+    jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    // not reached
+}
+
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na);
     JL_GC_PUSH1(&argtup);
-    jl_value_t *fargs[3] = { (jl_value_t*)jl_methoderror_type, (jl_value_t*)f, argtup };
-    jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    jl_no_method_error_bare(f, argtup);
     // not reached
 }
 
@@ -1815,7 +1693,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
     size_t i;
 
     if ((jl_value_t*)m == jl_nothing) {
-        jl_no_method_error(gf, args, nargs);
+        jl_no_method_error_bare(gf, (jl_value_t*)types);
         // unreachable
     }
 

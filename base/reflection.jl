@@ -105,10 +105,24 @@ isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
+function to_tuple_type(t::ANY)
+    if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
+        t = Tuple{t...}
+    end
+    if isa(t,Type) && t<:Tuple
+        if !all(p->(isa(p,Type)||isa(p,TypeVar)), t.parameters)
+            error("argument tuple type must contain only types")
+        end
+    else
+        error("expected tuple type")
+    end
+    t
+end
+
 tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
 
 code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
-methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
+methods(f::Function,t::ANY) = (t=to_tuple_type(t); Any[m[3] for m in _methods(f,t,-1)])
 methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
     if isa(t,Type)
@@ -170,9 +184,8 @@ uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
-_dump_function(f, t::Tuple{Vararg{Type}}, native, wrapper, strip_ir_metadata) =
-    _dump_function(f, Tuple{t...}, native, wrapper, strip_ir_metadata)
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
+    t = to_tuple_type(t)
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
 
     if llvmf == C_NULL
@@ -183,7 +196,7 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
         str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
     else
         str = ccall(:jl_dump_function_ir, Any,
-                        (Ptr{Void}, Bool), llvmf, strip_ir_metadata)::ByteString
+                    (Ptr{Void}, Bool), llvmf, strip_ir_metadata)::ByteString
     end
 
     return str
@@ -208,8 +221,8 @@ if isdefined(Core, :Inference) && not_int(is(current_module(), Core.Inference))
     return_types(args...;kwargs...) = Core.Inference.return_types(args...;kwargs...)
 end
 
-which(f::ANY, t::Tuple{Vararg{Type}}) = which(f, Tuple{t...})
 function which(f::ANY, t::ANY)
+    t = to_tuple_type(t)
     if isleaftype(t)
         ms = methods(f, t)
         isempty(ms) && error("no method found for the specified argument types")

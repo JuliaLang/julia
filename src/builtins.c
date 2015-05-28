@@ -421,7 +421,7 @@ JL_CALLABLE(jl_f_apply)
         else if (jl_is_tuple(args[i])) {
             n += jl_nfields(args[i]);
         }
-        else if (jl_typeis(args[i], jl_array_any_type)) {
+        else if (jl_is_array(args[i]) && ((jl_array_t*)args[i])->ptrarray) {
             n += jl_array_len(args[i]);
         }
         else {
@@ -620,7 +620,7 @@ JL_CALLABLE(jl_f_tuple)
     if (nargs == 0) return (jl_value_t*)jl_emptytuple;
     jl_datatype_t *tt;
     if (nargs < jl_page_size/sizeof(jl_value_t*)) {
-        jl_value_t **types = alloca(nargs*sizeof(jl_value_t*));
+        jl_value_t **types = (jl_value_t**)alloca(nargs*sizeof(jl_value_t*));
         for(i=0; i < nargs; i++)
             types[i] = jl_typeof(args[i]);
         tt = jl_inst_concrete_tupletype_v(types, nargs);
@@ -890,6 +890,7 @@ void jl_flush_cstdio(void)
 
 jl_value_t *jl_stdout_obj(void)
 {
+    if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
     if (stdout_obj != NULL) return stdout_obj;
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
@@ -897,6 +898,7 @@ jl_value_t *jl_stdout_obj(void)
 
 jl_value_t *jl_stderr_obj(void)
 {
+    if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
     if (stderr_obj != NULL) return stderr_obj;
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
@@ -1002,6 +1004,12 @@ JL_CALLABLE(jl_f_union)
 }
 
 // generic function reflection ------------------------------------------------
+
+static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
+{
+    if (!jl_is_tuple_type(t))
+        jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
+}
 
 JL_CALLABLE(jl_f_methodexists)
 {
@@ -1542,12 +1550,10 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     return jl_static_show_x(out, v, 0);
 }
 
-DLLEXPORT size_t
-jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
+DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
-    if (!jl_is_tuple_type(type)) {
+    if (!jl_is_tuple_type(type))
         return jl_static_show(s, type);
-    }
     size_t n = 0;
     size_t tl = jl_nparams(type);
     n += jl_printf(s, "(");
@@ -1557,11 +1563,13 @@ jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         if (i != tl - 1) {
             n += jl_static_show(s, tp);
             n += jl_printf(s, ", ");
-        } else {
+        }
+        else {
             if (jl_is_vararg_type(tp)) {
                 n += jl_static_show(s, jl_tparam0(tp));
                 n += jl_printf(s, "...");
-            } else {
+            }
+            else {
                 n += jl_static_show(s, tp);
             }
         }

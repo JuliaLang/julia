@@ -133,8 +133,6 @@ end
 @test !(Type{Tuple{Int,Int}} <: Tuple)
 @test Tuple{Type{Int}} <: Tuple{DataType}
 
-@test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
-
 @test () != Type{Tuple{}}
 
 # issue #6561
@@ -2894,7 +2892,23 @@ function f11355(arg::DataType)
     end
     return 100
 end
-let t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+let t = Tuple{Type{Vector{Int}}}
     @test f11355(t) == 100
+    t = Tuple{Type{Dict{TypeVar(:K, true)}}}
     @test f11355(t) == 100
 end
+
+# issue #8283
+function func8283 end
+@test isa(func8283,Function) && isgeneric(func8283)
+@test_throws MethodError func8283()
+
+# issue #11243
+let a = [Pair(1,2), Pair("a","b")]
+    @test typeof(a) == Vector{Pair}
+    @test typeof(a) <: Vector{Pair}
+end
+
+# issue #11366
+f11366{T}(x::Type{Ref{T}}) = Ref{x}
+@test !isleaftype(Base.return_types(f11366, (Any,))[1])

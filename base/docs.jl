@@ -17,14 +17,14 @@ macro init ()
     quote
         if !isdefined(:META)
             const $META = ObjectIdDict()
-            doc($META, @doc_str $("Documentation metadata for `$(current_module())`."))
+            doc!($META, @doc_str $("Documentation metadata for `$(current_module())`."))
             push!(modules, current_module())
             nothing
         end
     end
 end
 
-function doc(obj, data)
+function doc!(obj, data)
     meta()[obj] = data
 end
 
@@ -53,16 +53,20 @@ function newmethod(funcs, f)
     return newmethod(applicable)
 end
 
+def_dict(f) = [def => def.func for def in methods(f)]
+
 function trackmethod(def)
     name = uncurly(unblock(def).args[1].args[1])
     f = esc(name)
     quote
+        funcs = nothing
         if $(isexpr(name, Symbol)) && isdefined($(Expr(:quote, name))) && isgeneric($f)
-            funcs = [def => def.func for def in methods($f)]
-            $(esc(def))
+            funcs = def_dict($f)
+        end
+        $(esc(def))
+        if funcs !== nothing
             $f, newmethod(funcs, $f)
         else
-            $(esc(def))
             $f, newmethod(methods($f))
         end
     end
@@ -78,7 +82,7 @@ FuncDoc() = FuncDoc(Method[], Dict(), Dict())
 
 getset(coll, key, default) = coll[key] = get(coll, key, default)
 
-function doc(f::Function, m::Method, data, source)
+function doc!(f::Function, m::Method, data, source)
     fd = getset(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
     !haskey(fd.meta, m) && push!(fd.order, m)
@@ -112,6 +116,10 @@ end
 
 catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
+
+# Generic Callables
+
+doc(f, ::Method) = doc(f)
 
 # Modules
 
@@ -159,7 +167,7 @@ function namedoc(meta, def, name)
     quote
         @init
         $(esc(def))
-        doc($(esc(name)), $(mdify(meta)))
+        doc!($(esc(name)), $(mdify(meta)))
         nothing
     end
 end
@@ -168,7 +176,7 @@ function funcdoc(meta, def)
     quote
         @init
         f, m = $(trackmethod(def))
-        doc(f, m, $(mdify(meta)), $(esc(Expr(:quote, def))))
+        doc!(f, m, $(mdify(meta)), $(esc(Expr(:quote, def))))
         f
     end
 end
@@ -177,7 +185,7 @@ function objdoc(meta, def)
     quote
         @init
         f = $(esc(def))
-        doc(f, $(mdify(meta)))
+        doc!(f, $(mdify(meta)))
         f
     end
 end

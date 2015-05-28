@@ -251,7 +251,11 @@ typedef struct {
     char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
-} region_t __attribute__((aligned(GC_PAGE_SZ)));
+} region_t
+#ifndef _COMPILER_MICROSOFT_
+__attribute__((aligned(GC_PAGE_SZ)))
+#endif
+;
 static region_t *regions[REGION_COUNT] = {NULL};
 // store a lower bound of the first free page in each region
 static int regions_lb[REGION_COUNT] = {0};
@@ -280,7 +284,7 @@ static region_t *find_region(void *ptr)
 static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data);
-    int pg_idx = PAGE_INDEX(r, data);
+    int pg_idx = PAGE_INDEX(r, (char*)data);
     return &r->meta[pg_idx];
 }
 
@@ -1961,7 +1965,7 @@ static void clear_mark(int bits)
     for (int i = 0; i < 2; i++) {
         bigval_t *v = bigs[i];
         while (v != NULL) {
-            void* gcv = &v->data;
+            void* gcv = &v->header;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
@@ -2171,8 +2175,8 @@ void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;
-    jl_in_gc = 1;
     JL_SIGATOMIC_BEGIN();
+    jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
     int recollect = 0;
 #if defined(GC_TIME)
@@ -2376,8 +2380,8 @@ void jl_gc_collect(int full)
 #ifdef GC_FINAL_STATS
     max_pause = max_pause < pause ? pause : max_pause;
 #endif
-    JL_SIGATOMIC_END();
     jl_in_gc = 0;
+    JL_SIGATOMIC_END();
 #ifdef GC_TIME
     if (estimate_freed != SAVE2) {
         // this should not happen but it does

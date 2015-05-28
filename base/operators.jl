@@ -19,7 +19,8 @@ isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x
 isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
-==(T::Type, S::Type) = typeseq(T, S)
+=={T}(::Type{T}, ::Type{T}) = true  # encourage more specialization on types (see #11425)
+==(T::Type, S::Type)        = typeseq(T, S)
 
 ## comparison fallbacks ##
 

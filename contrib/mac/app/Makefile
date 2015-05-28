@@ -16,7 +16,7 @@ all: clean dmg
 
 dmg:
 	make -C ../../../deps install-git
-	make -C ../../.. dist
+	make -C ../../.. binary-dist
 	tar zxf ../../../julia-*.tar.gz
 	mv julia-* julia
 	-mkdir -p ./julia/libexec ./julia/share

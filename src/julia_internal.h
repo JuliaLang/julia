@@ -48,8 +48,8 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
-void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx);
 
 #define JL_CALLABLE(name) \
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
@@ -119,7 +119,7 @@ extern JL_THREAD void *jl_stackbase;
 #endif
 
 void jl_dump_bitcode(char *fname);
-void jl_dump_objfile(char *fname, int jit_model);
+void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 

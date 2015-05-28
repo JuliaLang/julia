@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code, LaTeX
 import Base: writemime
 
 # Basics
@@ -176,3 +176,18 @@ t = """a   |   b
 1   |   2
 """
 @test plain(Markdown.parse(t)) == t
+
+
+# LaTeX extension
+latex_doc = md"""
+We have $x^2 < x$ whenever:
+
+$|x| < 1$"""
+
+@test latex_doc == MD(Any[Paragraph(Any["We have ",
+                                        LaTeX("x^2 < x"),
+                                        " whenever:"]),
+                          LaTeX("|x| < 1")])
+
+
+@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$"

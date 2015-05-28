@@ -86,3 +86,37 @@ macro test999_str(args...); args; end
 
 # issue #10985
 @test expand(:(f(::Int...) = 1)).head == :method
+
+# issue #10910
+@test parse(":(using A)") == Expr(:quote, Expr(:using, :A))
+@test parse(":(using A.b, B)") == Expr(:quote,
+                                       Expr(:toplevel,
+                                            Expr(:using, :A, :b),
+                                            Expr(:using, :B)))
+@test parse(":(using A: b, c.d)") == Expr(:quote,
+                                          Expr(:toplevel,
+                                               Expr(:using, :A, :b),
+                                               Expr(:using, :A, :c, :d)))
+
+@test parse(":(importall A)") == Expr(:quote, Expr(:importall, :A))
+
+@test parse(":(import A)") == Expr(:quote, Expr(:import, :A))
+@test parse(":(import A.b, B)") == Expr(:quote,
+                                        Expr(:toplevel,
+                                             Expr(:import, :A, :b),
+                                             Expr(:import, :B)))
+@test parse(":(import A: b, c.d)") == Expr(:quote,
+                                           Expr(:toplevel,
+                                                Expr(:import, :A, :b),
+                                                Expr(:import, :A, :c, :d)))
+
+# issue #11332
+@test parse("export \$(symbol(\"A\"))") == :(export $(Expr(:$, :(symbol("A")))))
+@test parse("export \$A") == :(export $(Expr(:$, :A)))
+@test parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
+@test parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
+                                                          Expr(:$, :b)),
+                                          Expr(:using, Expr(:$, :c)))
+@test parse("using \$a: \$b, \$c.\$d") ==
+    Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
+         Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))

@@ -110,10 +110,16 @@ function complete_keyword(s::ByteString)
 end
 
 function complete_path(path::AbstractString, pos)
-    if ismatch(r"^~(?:/|$)", path)
-        path = homedir() * path[2:end]
+    if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
+        else
+            dir, prefix = splitdir(homedir() * path[2:end])
+        end
+    else
+        dir, prefix = splitdir(path)
     end
-    dir, prefix = splitdir(path)
     local files
     try
         if length(dir) == 0
@@ -296,7 +302,7 @@ function completions(string, pos)
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
+           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end

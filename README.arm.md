@@ -16,12 +16,38 @@ This is the list of known issues on ARM:
 
 # Build dependencies
 
-In addition to the standard `build-essentials` toolchain the following
-libraries must be installed to build on ARM. On Debian/Ubuntu, use the
-following command:
+We recommend using at least Ubuntu 14.04 and gcc 4.8, which is part of the
+standard `build-essentials`.
+
+Julia on ARM can be built by simply typing `make`, which will download all
+the relevant libraries. This is the *recommended* way, and it will take a
+few hours.
+
+OpenBLAS detects the target architecture reasonably well, but in case
+it does not, you can force the target architecture should you need to in
+`Make.user`.
 
 ````
-sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.7 g++-4.7 gfortran libgfortran3
+override OPENBLAS_TARGET_ARCH=ARMV7
+````
+
+Similarly, one can install other system libraries instead of building them,
+should the build be troublesome, by adding the following lines in `Make.user`:
+
+````
+override USE_SYSTEM_BLAS=1
+override USE_SYSTEM_LAPACK=1
+override USE_SYSTEM_LIBM=1
+override USE_SYSTEM_FFTW=1
+override USE_SYSTEM_GMP=1
+override USE_SYSTEM_MPFR=1
+override USE_SYSTEM_ARPACK=1
+````
+
+The following command will install all the necessary libraries on Ubuntu.
+
+````
+sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3 m4
 ````
 
 # ARM specific build problems
@@ -44,3 +70,7 @@ so by following these tutorials.
 
 - [Crouton Tutorial 1](http://www.howtogeek.com/162120/how-to-install-ubuntu-linux-on-your-chromebook-with-crouton/)
 - [Crouton Tutorial 2](http://lifehacker.com/how-to-install-linux-on-a-chromebook-and-unlock-its-ful-509039343)
+
+These tutorials will end up installing Ubuntu 12.04, and you have to
+upgrade to Ubuntu 14.04, or install Ubuntu 14.04 from scratch by
+finding appropriate `crouton` help.

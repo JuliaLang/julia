@@ -140,7 +140,6 @@ private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
 libdir = $(prefix)/lib/$(MULTIARCH)/
 endif
 
-
 # LLVM Options
 LLVMROOT = $(build_prefix)
 LLVM_ASSERTIONS = 0
@@ -252,7 +251,6 @@ STDLIBCPP_FLAG =
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -381,26 +379,6 @@ else
 build_shlibdir = $(build_libdir)
 endif
 
-# If we are running on ARM, set certain options automatically
-ifneq (,$(findstring arm,$(ARCH)))
-LLVM_ASSERTIONS=1
-LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --enable-assertions"
-
-OPENBLAS_DYNAMIC_ARCH=0
-OPENBLAS_TARGET_ARCH=ARMV7
-USE_BLAS64=0
-
-LLVM_VER=3.6.0
-
-USE_SYSTEM_LIBM=1
-USE_SYSTEM_FFTW=1
-USE_SYSTEM_GMP=1
-USE_SYSTEM_MPFR=1
-
-JCFLAGS += -fsigned-char
-endif
-
-
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
@@ -436,7 +414,6 @@ endif
 #    if MARCH is set newer than the native processor, be forewarned that the compile might fail
 # JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
 #    since it is set equal to MARCH by default
-
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
@@ -489,7 +466,6 @@ endif
 endif
 
 JULIA_CPU_TARGET ?= native
-JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
@@ -522,6 +498,18 @@ else ifneq (,$(findstring ppc,$(ARCH)))
 ISX86=0
 else
 $(error "unknown word-size for arch: $(ARCH)")
+endif
+
+# If we are running on ARM, set certain options automatically
+ifneq (,$(findstring arm,$(ARCH)))
+JCFLAGS += -fsigned-char
+
+LLVM_ASSERTIONS=1
+LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
+LLVM_VER=3.6.0
+
+USE_BLAS64=0
+OPENBLAS_DYNAMIC_ARCH=0
 endif
 
 # Set some ARCH-specific flags
@@ -574,9 +562,17 @@ else
 PCRE_CONFIG = $(build_bindir)/pcre-config
 endif
 
-# Use 64-bit libraries by default on 64-bit architectures
+# Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 USE_BLAS64 ?= 1
+else # non MKL system blas is most likely LP64
+USE_BLAS64 ?= 0
+endif
+else
+USE_BLAS64 ?= 1
+endif
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)

@@ -425,9 +425,9 @@ JL_CALLABLE(jl_f_arraysize)
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     assert(i < jl_array_len(a));
-    jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
     if (!a->ptrarray) {
+        jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
         elt = jl_new_bits(el_type, &((char*)a->data)[i*a->elsize]);
     }
     else {

@@ -70,6 +70,11 @@
 (define syntactic-op? (Set syntactic-operators))
 (define syntactic-unary-op? (Set syntactic-unary-operators))
 
+(define (symbol-or-interpolate? ex)
+  (or (symbol? ex)
+      (and (pair? ex)
+           (eq? '$ (car ex)))))
+
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
@@ -1123,28 +1128,33 @@
     ((stagedfunction function macro)
      (if (eq? word 'stagedfunction) (syntax-deprecation-warning s "stagedfunction" "@generated function"))
      (let* ((paren (eqv? (require-token s) #\())
-            (sig   (parse-call s))
-            (def   (if (or (symbol? sig)
-                           (and (pair? sig) (eq? (car sig) '|::|)
-                                (symbol? (cadr sig))))
-                       (if paren
-                           ;; in "function (x)" the (x) is a tuple
-                           `(tuple ,sig)
-                           ;; function foo  =>  syntax error
-                           (error (string "expected \"(\" in \"" word "\" definition")))
-                       (if (not (and (pair? sig)
-                                     (or (eq? (car sig) 'call)
-                                         (eq? (car sig) 'tuple))))
-                           (error (string "expected \"(\" in \"" word "\" definition"))
-                           sig)))
-            (loc   (begin (if (not (eq? (peek-token s) 'end))
-                              ;; if ends on same line, don't skip the following newline
-                              (skip-ws-and-comments (ts:port s)))
-                          (line-number-filename-node s)))
-            (body  (parse-block s)))
-       (expect-end s)
-       (add-filename-to-block! body loc)
-       (list word def body)))
+            (sig   (parse-call s)))
+       (if (and (eq? word 'function) (not paren) (symbol? sig))
+	   (begin (if (not (eq? (require-token s) 'end))
+		      (error (string "expected \"end\" in definition of function \"" sig "\"")))
+		  (take-token s)
+		  `(function ,sig))
+	   (let* ((def   (if (or (symbol? sig)
+				 (and (pair? sig) (eq? (car sig) '|::|)
+				      (symbol? (cadr sig))))
+			     (if paren
+				 ;; in "function (x)" the (x) is a tuple
+				 `(tuple ,sig)
+				 ;; function foo  =>  syntax error
+				 (error (string "expected \"(\" in " word " definition")))
+			     (if (not (and (pair? sig)
+					   (or (eq? (car sig) 'call)
+					       (eq? (car sig) 'tuple))))
+				 (error (string "expected \"(\" in " word " definition"))
+				 sig)))
+		  (loc   (begin (if (not (eq? (peek-token s) 'end))
+				    ;; if ends on same line, don't skip the following newline
+				    (skip-ws-and-comments (ts:port s)))
+				(line-number-filename-node s)))
+		  (body  (parse-block s)))
+	     (expect-end s)
+	     (add-filename-to-block! body loc)
+	     (list word def body)))))
     ((abstract)
      (list 'abstract (parse-subtype-spec s)))
     ((type immutable)
@@ -1240,8 +1250,8 @@
                  body))))
     ((export)
      (let ((es (map macrocall-to-atsym
-                    (parse-comma-separated s parse-atom))))
-       (if (not (every symbol? es))
+                    (parse-comma-separated s parse-unary-prefix))))
+       (if (not (every symbol-or-interpolate? es))
            (error "invalid \"export\" statement"))
        `(export ,@es)))
     ((import using importall)
@@ -1293,9 +1303,9 @@
          (from  (and (eq? next ':) (not (ts:space? s))))
          (done  (cond ((or from (eqv? next #\,))
                        (begin (take-token s) #f))
-                      ((memv next '(#\newline #\;)) #t)
-                      ((eof-object? next) #t)
-                      (else #f)))
+                      ((or (eq? next '|.|)
+                           (eqv? (string.sub (string next) 0 1) ".")) #f)
+                      (else #t)))
          (rest  (if done
                     '()
                     (parse-comma-separated s (lambda (s)
@@ -1322,17 +1332,17 @@
            (begin (take-token s)
                   (loop (list* '|.| '|.| '|.| '|.| l) (peek-token s))))
           (else
-           (cons (macrocall-to-atsym (parse-atom s)) l)))))
+           (cons (macrocall-to-atsym (parse-unary-prefix s)) l)))))
 
 (define (parse-import s word)
   (let loop ((path (parse-import-dots s)))
-    (if (not (symbol? (car path)))
+    (if (not (symbol-or-interpolate? (car path)))
         (error (string "invalid \"" word "\" statement: expected identifier")))
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
         (take-token s)
-        (loop (cons (macrocall-to-atsym (parse-atom s)) path)))
+        (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
         `(,word ,@(reverse path)))
@@ -1341,7 +1351,7 @@
         (loop (cons (symbol (string.sub (string nxt) 1))
                     path)))
        (else
-        (error (string "invalid \"" word "\" statement")))))))
+        `(,word ,@(reverse path)))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
