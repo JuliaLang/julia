@@ -68,3 +68,58 @@ for f in [getindex, setindex!]
     Base.show_method_candidates(buf, MethodError(f,(test_type, 1,1)))
     test_have_color(buf, "", "")
 end
+
+
+function _except_str(expr, err_type=Exception)
+    quote
+        let
+            local err::$(esc(err_type))
+            try
+                $(esc(expr))
+            catch err
+            end
+            err
+            buff = IOBuffer()
+            showerror(buff, err)
+            takebuf_string(buff)
+        end
+    end
+end
+
+macro except_str(args...)
+    _except_str(args...)
+end
+
+# Pull Request 11007
+abstract InvokeType11007
+abstract MethodType11007 <: InvokeType11007
+type InstanceType11007 <: MethodType11007
+end
+let
+    f11007(::MethodType11007) = nothing
+    err_str = @except_str(invoke(f11007, Tuple{InvokeType11007},
+                                 InstanceType11007()), MethodError)
+    @test !contains(err_str, "::InstanceType11007")
+    @test contains(err_str, "::InvokeType11007")
+end
+
+let
+    +() = nothing
+    err_str = @except_str 1 + 2 MethodError
+    @test contains(err_str, "Base.+")
+end
+
+let
+    g11007(::AbstractVector) = nothing
+    err_str = @except_str g11007([[1] [1]])
+    @test contains(err_str, "row vector")
+    @test contains(err_str, "column vector")
+end
+
+abstract T11007
+let
+    err_str = @except_str T11007()
+    @test contains(err_str, "convert")
+    @test contains(err_str, "constructor")
+    @test contains(err_str, "T11007(...)")
+end
