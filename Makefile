@@ -76,9 +76,9 @@ endif
 
 release-candidate: release test
 	@#Check documentation
-	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@$(JULIA_EXECUTABLE) doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
-	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
+	@$(JULIA_EXECUTABLE) doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
 	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
 		rm doc/UNDOCUMENTED.rst; \
 	else \
