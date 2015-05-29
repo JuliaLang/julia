@@ -1166,7 +1166,8 @@ typedef enum {
 } JL_IMAGE_SEARCH;
 DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 DLLEXPORT void jl_init(const char *julia_home_dir);
-DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path);
+DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path,
+                                  int enable_handlers);
 DLLEXPORT int jl_is_initialized(void);
 DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac,char *av[]));
 DLLEXPORT void jl_atexit_hook(void);
