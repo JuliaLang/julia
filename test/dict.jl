@@ -325,3 +325,11 @@ let
     Base.showdict(IOBuffer(), a)
     Base.showdict(IOBuffer(), a; limit=true)
 end
+
+# Issue #7944
+let d = Dict{Int,Int}()
+    get!(d, 0) do
+        d[0] = 1
+    end
+    @test length(d) == 1
+end
