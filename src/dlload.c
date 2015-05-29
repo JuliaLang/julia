@@ -127,6 +127,9 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
                     }
                     error = jl_uv_dlopen(path, handle, flags);
                     if (!error) goto done;
+                    if (error && (strstr(handle->errmsg, "No such file") == NULL)) {
+                        JL_PRINTF(JL_STDERR, "WARNING: while loading %s: %s\n", modname, handle->errmsg);
+                    }
                 }
             }
         }
