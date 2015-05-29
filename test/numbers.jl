@@ -2119,6 +2119,9 @@ end
 @test factor((big(2)^31-1)^2) == Dict(big(2^31-1) => 2)
 @test factor((big(2)^31-1)*(big(2)^17-1)) == Dict(big(2^31-1) => 1, big(2^17-1) => 1)
 
+# fast factorization of Int128 (#11477)
+@test factor((Int128(2)^39-7)^2) == Dict(Int128(2)^39-7 => 2)
+
 # large shift amounts
 @test Int32(-1)>>31 == -1
 @test Int32(-1)>>32 == -1
