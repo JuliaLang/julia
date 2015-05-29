@@ -92,6 +92,7 @@ function isvalid(::Type{UTF32String}, str::Union(Vector{Char}, Vector{UInt32}))
 end
 isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
 isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(str::T) = isvalid(T, str.data)
+isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(::Type{T}, str::T) = isvalid(T, str.data)
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
