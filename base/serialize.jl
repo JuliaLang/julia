@@ -14,73 +14,98 @@ abstract LongTuple
 abstract LongExpr
 abstract UndefRefTag
 
-const ser_version = 2 # do not make changes without bumping the version #!
-const ser_tag = ObjectIdDict()
-const deser_tag = ObjectIdDict()
-let i = 2
-    global ser_tag, deser_tag
-    for t = Any[
-             Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
-             Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
-             DataType, UnionType, Function,
-             Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
-             LineNumberNode, SymbolNode, LabelNode, GotoNode,
-             QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             Module, UndefRefTag, Task, ASCIIString, UTF8String,
-             UTF16String, UTF32String, Float16,
-             SimpleVector, :reserved10, :reserved11, :reserved12,
+const TAGS = Any[
+    Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
+    Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
+    DataType, UnionType, Function,
+    Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+    LineNumberNode, SymbolNode, LabelNode, GotoNode,
+    QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
+    Module, UndefRefTag, Task, ASCIIString, UTF8String,
+    UTF16String, UTF32String, Float16,
+    SimpleVector, :reserved10, :reserved11, :reserved12,
 
-             (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
-             :Array, :TypeVar, :Box,
-             :lambda, :body, :return, :call, symbol("::"),
-             :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
-             :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
-             :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
-             :add_int, :sub_int, :mul_int, :add_float, :sub_float,
-             :mul_float, :unbox, :box,
-             :eq_int, :slt_int, :sle_int, :ne_int,
-             :arrayset, :arrayref,
-             :Core, :Base, svec(), Tuple{},
-             :reserved17, :reserved18, :reserved19, :reserved20,
-             false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-             12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-             28, 29, 30, 31, 32]
-        ser_tag[t] = Int32(i)
-        deser_tag[Int32(i)] = t
+    (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
+    :Array, :TypeVar, :Box,
+    :lambda, :body, :return, :call, symbol("::"),
+    :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
+    :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
+    :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
+    :add_int, :sub_int, :mul_int, :add_float, :sub_float,
+    :mul_float, :unbox, :box,
+    :eq_int, :slt_int, :sle_int, :ne_int,
+    :arrayset, :arrayref,
+    :Core, :Base, svec(), Tuple{},
+    :reserved17, :reserved18, :reserved19, :reserved20,
+    false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+    28, 29, 30, 31, 32
+]
+
+const ser_version = 2 # do not make changes without bumping the version #!
+const SER_TAG = ObjectIdDict()
+let i = 2
+    for t = TAGS
+        SER_TAG[t] = Int32(i)
         i += 1
     end
 end
 
-# tags >= this just represent themselves, their whole representation is 1 byte
-const VALUE_TAGS = ser_tag[()]
+const NTAGS = length(TAGS)
 
-const EMPTY_TUPLE_TAG = ser_tag[()]
-const ZERO_TAG = ser_tag[0]
-const INT_TAG = ser_tag[Int]
-
-writetag(s, x) = write(s, UInt8(ser_tag[x]))
-
-function write_as_tag(s, x)
-    t = ser_tag[x]
-    if t < VALUE_TAGS
-        write(s, UInt8(0))
+function sertag(v::ANY)
+    ptr = pointer_from_objref(v)
+    ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
+    @inbounds @simd for i = 1:NTAGS
+        ptr == unsafe_load(ptags,i) && return (i+1)%Int32
     end
-    write(s, UInt8(t))
+    return Int32(-1)
+end
+desertag(i::Int32) = TAGS[i-1]
+
+# tags >= this just represent themselves, their whole representation is 1 byte
+const VALUE_TAGS = SER_TAG[()]
+const ZERO_TAG = SER_TAG[0]
+const TRUE_TAG = SER_TAG[true]
+const FALSE_TAG = SER_TAG[false]
+const EMPTYTUPLE_TAG = SER_TAG[()]
+const TUPLE_TAG = SER_TAG[Tuple]
+const LONGTUPLE_TAG = SER_TAG[LongTuple]
+const SIMPLEVECTOR_TAG = SER_TAG[SimpleVector]
+const SYMBOL_TAG = SER_TAG[Symbol]
+const LONGSYMBOL_TAG = SER_TAG[LongSymbol]
+const ARRAY_TAG = SER_TAG[Array]
+const UNDEFREF_TAG = SER_TAG[UndefRefTag]
+const EXPR_TAG = SER_TAG[Expr]
+const LONGEXPR_TAG = SER_TAG[LongExpr]
+const MODULE_TAG = SER_TAG[Module]
+const FUNCTION_TAG = SER_TAG[Function]
+const LAMBDASTATICDATA_TAG = SER_TAG[LambdaStaticData]
+const TASK_TAG = SER_TAG[Task]
+const DATATYPE_TAG = SER_TAG[DataType]
+const INT_TAG = SER_TAG[Int]
+
+writetag(s, tag) = write(s, UInt8(tag))
+
+function write_as_tag(s, tag)
+    tag < VALUE_TAGS && write(s, UInt8(0))
+    write(s, UInt8(tag))
 end
 
-serialize(s, x::Bool) = write_as_tag(s, x)
+serialize(s, x::Bool) = x ? writetag(s, TRUE_TAG) :
+                            writetag(s, FALSE_TAG)
 
 serialize(s, ::Ptr) = error("cannot serialize a pointer")
 
-serialize(s, ::Tuple{}) = write(s, UInt8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
+serialize(s, ::Tuple{}) = writetag(s, EMPTYTUPLE_TAG)
 
 function serialize(s, t::Tuple)
     l = length(t)
     if l <= 255
-        writetag(s, Tuple)
+        writetag(s, TUPLE_TAG)
         write(s, UInt8(l))
     else
-        writetag(s, LongTuple)
+        writetag(s, LONGTUPLE_TAG)
         write(s, Int32(l))
     end
     for i = 1:l
@@ -89,7 +114,7 @@ function serialize(s, t::Tuple)
 end
 
 function serialize(s, v::SimpleVector)
-    writetag(s, SimpleVector)
+    writetag(s, SIMPLEVECTOR_TAG)
     write(s, Int32(length(v)))
     for i = 1:length(v)
         serialize(s, v[i])
@@ -97,16 +122,17 @@ function serialize(s, v::SimpleVector)
 end
 
 function serialize(s, x::Symbol)
-    if haskey(ser_tag, x)
-        return write_as_tag(s, x)
+    tag = sertag(x)
+    if tag > 0
+        return write_as_tag(s, tag)
     end
     pname = unsafe_convert(Ptr{UInt8}, x)
     ln = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
     if ln <= 255
-        writetag(s, Symbol)
+        writetag(s, SYMBOL_TAG)
         write(s, UInt8(ln))
     else
-        writetag(s, LongSymbol)
+        writetag(s, LONGSYMBOL_TAG)
         write(s, Int32(ln))
     end
     write(s, pname, ln)
@@ -133,7 +159,7 @@ function serialize_array_data(s, a)
 end
 
 function serialize(s, a::Array)
-    writetag(s, Array)
+    writetag(s, ARRAY_TAG)
     elty = eltype(a)
     if elty !== UInt8
         serialize(s, elty)
@@ -150,7 +176,7 @@ function serialize(s, a::Array)
             if isdefined(a, i)
                 serialize(s, a[i])
             else
-                writetag(s, UndefRefTag)
+                writetag(s, UNDEFREF_TAG)
             end
         end
     end
@@ -160,7 +186,7 @@ function serialize{T,N,A<:Array}(s, a::SubArray{T,N,A})
     if !isbits(T) || stride(a,1)!=1
         return serialize(s, copy(a))
     end
-    writetag(s, Array)
+    writetag(s, ARRAY_TAG)
     serialize(s, T)
     serialize(s, size(a))
     serialize_array_data(s, a)
@@ -173,34 +199,33 @@ end
 
 # Don't serialize the pointers
 function serialize(s, r::Regex)
-    Serializer.serialize_type(s, typeof(r))
+    serialize_type(s, typeof(r))
     serialize(s, r.pattern)
     serialize(s, r.options)
 end
 
 function serialize(s, n::BigInt)
-    Serializer.serialize_type(s, BigInt)
+    serialize_type(s, BigInt)
     serialize(s, base(62,n))
 end
 
-
 function serialize(s, n::BigFloat)
-    Serializer.serialize_type(s, BigFloat)
+    serialize_type(s, BigFloat)
     serialize(s, string(n))
 end
 
-function serialize(s, e::Expr)
-    l = length(e.args)
+function serialize(s, ex::Expr)
+    l = length(ex.args)
     if l <= 255
-        writetag(s, Expr)
+        writetag(s, EXPR_TAG)
         write(s, UInt8(l))
     else
-        writetag(s, LongExpr)
+        writetag(s, LONGEXPR_TAG)
         write(s, Int32(l))
     end
-    serialize(s, e.head)
-    serialize(s, e.typ)
-    for a = e.args
+    serialize(s, ex.head)
+    serialize(s, ex.typ)
+    for a = ex.args
         serialize(s, a)
     end
 end
@@ -214,7 +239,6 @@ function serialize(s, t::Dict)
     end
 end
 
-
 function serialize_mod_names(s, m::Module)
     p = module_parent(m)
     if m !== p
@@ -224,14 +248,13 @@ function serialize_mod_names(s, m::Module)
 end
 
 function serialize(s, m::Module)
-    writetag(s, Module)
+    writetag(s, MODULE_TAG)
     serialize_mod_names(s, m)
-    serialize(s, ())
-    nothing
+    writetag(s, EMPTYTUPLE_TAG)
 end
 
 function serialize(s, f::Function)
-    writetag(s, Function)
+    writetag(s, FUNCTION_TAG)
     name = false
     if isgeneric(f)
         name = f.env.name
@@ -239,7 +262,7 @@ function serialize(s, f::Function)
         name = f.env
     end
     if isa(name,Symbol)
-        if isdefined(Base,name) && is(f,eval(Base,name))
+        if isdefined(Base,name) && is(f,getfield(Base,name))
             write(s, UInt8(0))
             serialize(s, name)
             return
@@ -251,7 +274,7 @@ function serialize(s, f::Function)
             mod = f.env.defs.func.code.module
         end
         if mod !== ()
-            if isdefined(mod,name) && is(f,eval(mod,name))
+            if isdefined(mod,name) && is(f,getfield(mod,name))
                 # toplevel named func
                 write(s, UInt8(2))
                 serialize(s, mod)
@@ -286,7 +309,7 @@ function lambda_number(l::LambdaStaticData)
 end
 
 function serialize(s, linfo::LambdaStaticData)
-    writetag(s, LambdaStaticData)
+    writetag(s, LAMBDASTATICDATA_TAG)
     serialize(s, lambda_number(linfo))
     serialize(s, uncompressed_ast(linfo))
     if isdefined(linfo.def, :roots)
@@ -308,7 +331,7 @@ function serialize(s, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    writetag(s, Task)
+    writetag(s, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
     serialize(s, t.state == :queued || t.state == :waiting ? (:runnable) : t.state)
@@ -322,7 +345,7 @@ function serialize_type_data(s, t)
     mod = t.name.module
     serialize(s, mod)
     if length(t.parameters) > 0
-        if isdefined(mod,tname) && is(t,eval(mod,tname))
+        if isdefined(mod,tname) && is(t,getfield(mod,tname))
             serialize(s, svec())
         else
             serialize(s, t.parameters)
@@ -331,23 +354,23 @@ function serialize_type_data(s, t)
 end
 
 function serialize(s, t::DataType)
-    if haskey(ser_tag,t)
-        write_as_tag(s, t)
-    else
-        writetag(s, DataType)
-        write(s, UInt8(0))
-        serialize_type_data(s, t)
+    tag = sertag(t)
+    if tag > 0
+        return write_as_tag(s, tag)
     end
+    writetag(s, DATATYPE_TAG)
+    write(s, UInt8(0))
+    serialize_type_data(s, t)
 end
 
 function serialize_type(s, t::DataType)
-    if haskey(ser_tag,t)
-        writetag(s, t)
-    else
-        writetag(s, DataType)
-        write(s, UInt8(1))
-        serialize_type_data(s, t)
+    tag = sertag(t)
+    if tag > 0
+        return writetag(s, tag)
     end
+    writetag(s, DATATYPE_TAG)
+    write(s, UInt8(1))
+    serialize_type_data(s, t)
 end
 
 function serialize(s, n::Int)
@@ -355,14 +378,14 @@ function serialize(s, n::Int)
         write(s, UInt8(ZERO_TAG+n))
         return
     end
-    write(s, UInt8(INT_TAG))
+    writetag(s, INT_TAG)
     write(s, n)
-    nothing
 end
 
 function serialize(s, x)
-    if haskey(ser_tag,x)
-        return write_as_tag(s, x)
+    tag = sertag(x)
+    if tag > 0
+        return write_as_tag(s, tag)
     end
     t = typeof(x)
     nf = nfields(t)
@@ -374,7 +397,7 @@ function serialize(s, x)
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
             else
-                writetag(s, UndefRefTag)
+                writetag(s, UNDEFREF_TAG)
             end
         end
     end
@@ -382,15 +405,14 @@ end
 
 ## deserializing values ##
 
-function deserialize(s)
+deserialize(s) =
     handle_deserialize(s, Int32(read(s, UInt8)))
-end
 
 function handle_deserialize(s, b)
     if b == 0
-        return deser_tag[Int32(read(s, UInt8))]
+        return desertag(Int32(read(s, UInt8)))
     end
-    tag = deser_tag[b]
+    tag = desertag(b)
     if b >= VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
@@ -422,7 +444,7 @@ function deserialize(s, ::Type{Module})
             if !isdefined(m,mname)
                 warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
             end
-            m = eval(m,mname)::Module
+            m = getfield(m,mname)::Module
         end
     else
         mname = path
@@ -430,7 +452,7 @@ function deserialize(s, ::Type{Module})
             if !isdefined(m,mname)
                 warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
             end
-            m = eval(m,mname)::Module
+            m = getfield(m,mname)::Module
             mname = deserialize(s)
         end
     end
@@ -446,14 +468,14 @@ function deserialize(s, ::Type{Function})
         if !isdefined(Base,name)
             return (args...)->error("function $name not defined on process $(myid())")
         end
-        return eval(Base,name)::Function
+        return getfield(Base,name)::Function
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
         if !isdefined(mod,name)
             return (args...)->error("function $name not defined on process $(myid())")
         end
-        return eval(mod,name)::Function
+        return getfield(mod,name)::Function
     elseif b==3
         env = deserialize(s)
         return ccall(:jl_new_gf_internal, Any, (Any,), env)::Function
@@ -525,7 +547,7 @@ function deserialize(s, ::Type{Array})
     A = Array(elty, dims)
     for i = 1:length(A)
         tag = Int32(read(s, UInt8))
-        if tag==0 || !is(deser_tag[tag], UndefRefTag)
+        if tag==0 || !is(desertag(tag), UndefRefTag)
             A[i] = handle_deserialize(s, tag)
         end
     end
@@ -553,7 +575,7 @@ function deserialize(s, ::Type{DataType})
     form = read(s, UInt8)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
-    ty = eval(mod,name)
+    ty = getfield(mod,name)
     if length(ty.parameters) == 0
         t = ty
     else
@@ -606,7 +628,7 @@ function deserialize(s, t::DataType)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         for i in 1:nf
             tag = Int32(read(s, UInt8))
-            if tag==0 || !is(deser_tag[tag], UndefRefTag)
+            if tag==0 || !is(desertag(tag), UndefRefTag)
                 ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
