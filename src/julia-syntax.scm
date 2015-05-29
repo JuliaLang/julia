@@ -3232,11 +3232,7 @@ So far only the second case can actually occur.
                     (vinf  (var-info-for vname vi)))
                (if (and vinf
                         (not (and (pair? code)
-                                  (equal? (car code) `(newvar ,vname))))
-                        ;; TODO: remove the following expression to re-null
-                        ;; all variables when they are allocated. see issue #1571
-                        (vinfo:capt vinf)
-                        )
+                                  (equal? (car code) `(newvar ,vname)))))
                    (emit `(newvar ,vname))
                    #f)))
             ((newvar)
@@ -3246,9 +3242,40 @@ So far only the second case can actually occur.
                  #f))
             (else  (emit (goto-form e))))))
     (compile e '())
-    (cons 'body (reverse! code))))
+    (let* ((stmts (reverse! code))
+	   (di    (definitely-initialized-vars stmts vi)))
+      (cons 'body (filter (lambda (e)
+			    (not (and (pair? e) (eq? (car e) 'newvar)
+				      (has? di (cadr e)))))
+			  stmts)))))
 
 (define to-goto-form goto-form)
+
+;; find newvar nodes that are unnecessary because (1) the variable is not
+;; captured, and (2) the variable is assigned before any branches.
+;; this is used to remove newvar nodes that are not needed for re-initializing
+;; variables to undefined (see issue #11065). it doesn't look for variable
+;; *uses*, because any variables used-before-def that also pass this test
+;; are *always* used undefined, and therefore don't need to be *re*-initialized.
+(define (definitely-initialized-vars stmts vi)
+  (let ((vars (table))
+	(di   (table)))
+    (let loop ((stmts stmts))
+      (if (null? stmts)
+	  di
+	  (begin
+	    (let ((e (car stmts)))
+	      (cond ((and (pair? e) (eq? (car e) 'newvar))
+		     (let ((vinf (var-info-for (cadr e) vi)))
+		       (if (not (vinfo:capt vinf))
+			   (put! vars (cadr e) #t))))
+		    ((and (pair? e) (eq? (car e) '=))
+		     (if (has? vars (cadr e))
+			 (begin (del! vars (cadr e))
+				(put! di (cadr e) #t))))
+		    ((and (pair? e) (memq (car e) '(goto gotoifnot)))
+		     (set! vars (table)))))
+	    (loop (cdr stmts)))))))
 
 ;; macro expander
 
