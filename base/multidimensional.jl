@@ -856,7 +856,7 @@ end
 @generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
-        I = ntuple($N, x->Array(Int, nnzB))
+        I = ntuple(x->Array(Int, nnzB), $N)
         if nnzB > 0
             count = 1
             @nloops $N i B begin

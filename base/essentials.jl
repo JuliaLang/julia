@@ -226,3 +226,7 @@ end
 type Colon
 end
 const (:) = Colon()
+
+# For passing constants through type inference
+immutable Val{T}
+end

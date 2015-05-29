@@ -220,7 +220,7 @@ All Objects
 
    Construct a tuple of the given objects.
 
-.. function:: ntuple(n, f::Function)
+.. function:: ntuple(f::Function, n)
 
    Create a tuple of length ``n``, computing each element as ``f(i)``, where ``i`` is the index of the element.
 
