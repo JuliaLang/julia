@@ -2913,3 +2913,15 @@ end
 # issue #11366
 f11366{T}(x::Type{Ref{T}}) = Ref{x}
 @test !isleaftype(Base.return_types(f11366, (Any,))[1])
+
+# issue #11065, #1571
+function f11065()
+    for i = 1:2
+        if i == 1
+            z = "z is defined"
+        elseif i == 2
+            print(z)
+        end
+    end
+end
+@test_throws UndefVarError f11065()
