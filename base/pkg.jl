@@ -37,7 +37,7 @@ clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,pkg)
 checkout(pkg::AbstractString, branch::AbstractString="master"; merge::Bool=true, pull::Bool=true) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
-free(pkg::AbstractString) = cd(Entry.free,pkg)
+free(pkg) = cd(Entry.free,pkg)
 
 pin(pkg::AbstractString) = cd(Entry.pin,pkg)
 pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
