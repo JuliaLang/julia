@@ -359,10 +359,11 @@ type Dict{K,V} <: Associative{K,V}
     vals::Array{V,1}
     ndel::Int
     count::Int
+    dirty::Bool
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -446,6 +447,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
+    h.dirty = true
     if h.count == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
@@ -512,6 +514,7 @@ function empty!{K,V}(h::Dict{K,V})
     resize!(h.vals, sz)
     h.ndel = 0
     h.count = 0
+    h.dirty = true
     return h
 end
 
@@ -583,6 +586,7 @@ function _setindex!(h::Dict, v, key, index)
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
+    h.dirty = true
 
     sz = length(h.keys)
     # Rehash now if necessary
@@ -636,8 +640,17 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
 
     index > 0 && return h.vals[index]
 
+    h.dirty = false
     v = convert(V,  default())
-    _setindex!(h, v, key, -index)
+    if h.dirty
+        index = ht_keyindex2(h, key)
+    end
+    if index > 0
+        h.keys[index] = key
+        h.vals[index] = v
+    else
+        _setindex!(h, v, key, -index)
+    end
     return v
 end
 
@@ -708,6 +721,7 @@ function _delete!(h::Dict, index)
     ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
+    h.dirty = true
     h
 end
 
