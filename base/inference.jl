@@ -315,7 +315,7 @@ const getfield_tfunc = function (A, s0, name)
         i::Int = A[2]
         nf = s.types.length
         if isvatuple(s) && i >= nf
-            return s.types[nf].parameters[1], false
+            return unwrapva(s.types[nf]), false
         end
         if i < 1 || i > nf
             return Bottom, true

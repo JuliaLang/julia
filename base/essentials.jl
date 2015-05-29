@@ -65,9 +65,9 @@ end
     T.parameters[1]
 end
 
-isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
+isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name) || isa(t,TypeVar) && isvarargtype(t.ub)
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
-unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
+unwrapva(t::ANY) = isvarargtype(t) ? (isa(t,TypeVar) ? unwrapva(t.ub) : t.parameters[1]) : t
 
 @generated function tuple_type_tail{T<:Tuple}(::Type{T})
     if isvatuple(T) && length(T.parameters) == 1
