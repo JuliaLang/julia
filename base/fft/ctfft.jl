@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # 1d Cooley-Tukey FFTs, using an FFTW-like (version 1) approach: automatic
 # generation of fixed-size FFT kernels (with and without twiddle factors)
 # which are combined to make arbitrary-size FFTs (plus generic base
@@ -37,7 +39,7 @@ size(p::CTPlan) = (p.n,)
 
 # unscaled inverse:
 invCT{T,forward,Tt,Tn}(p::CTPlan{T,forward,Tt,Tn}) =
-    CTPlan{T,!forward,map(inv,Tt),inv(Tn)}(p.n, map(inv, p.tsteps), inv(p.nstep))
+    CTPlan{T,!forward,Tuple{map(inv,Tt.parameters)...},inv(Tn)}(p.n, map(inv, p.tsteps), inv(p.nstep))
 
 plan_inv{T}(p::CTPlan{T}) =
     ScaledPlan(invCT(p), normalization(real(T), p.n, 1))
@@ -99,7 +101,7 @@ function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
     @assert m == factors[end]
     tsteps_ = tuple(tsteps...)
     nt = Nontwiddle(T, m, forward)
-    CTPlan{T,forward,map(typeof,tsteps_),typeof(nt)}(n, tsteps_, nt)
+    CTPlan{T,forward,Tuple{map(typeof,tsteps_)...},typeof(nt)}(n, tsteps_, nt)
 end
 
 plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =

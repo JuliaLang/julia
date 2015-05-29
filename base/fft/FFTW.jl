@@ -4,7 +4,7 @@ module FFTW
 
 import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
 
-import Base: show, *, convert, size, strides, ndims, pointer, A_mul_B!
+import Base: show, *, convert, unsafe_convert, size, strides, ndims, pointer, A_mul_B!
 
 export r2r, r2r!, plan_r2r, plan_r2r!
 
@@ -80,7 +80,7 @@ end
 size(a::FakeArray) = a.sz
 strides(a::FakeArray) = a.st
 ndims(a::FakeArray) = length(a.sz)
-convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+unsafe_convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 FakeArray(T, sz::Dims) = FakeArray{T}(sz, colmajorstrides(sz))
 FakeArray(T, sz::Int...) = FakeArray(T, sz)
@@ -226,7 +226,7 @@ end
 
 size(p::FFTWPlan) = p.sz
 
-convert(::Type{PlanPtr}, p::FFTWPlan) = p.plan
+unsafe_convert(::Type{PlanPtr}, p::FFTWPlan) = p.plan
 
 destroy_plan{T<:fftwDouble}(plan::FFTWPlan{T}) =
     ccall((:fftw_destroy_plan,libfftw), Void, (PlanPtr,), plan)

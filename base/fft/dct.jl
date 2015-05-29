@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # (This is part of the FFTW module.)
 
 export dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!

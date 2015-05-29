@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module DFT
 
 # DFT plan where the inputs are an array of eltype T
@@ -188,7 +190,7 @@ include("fft/fftn.jl")
 ##############################################################################
 
 # FFTW module (may move to an external package at some point):
-if USE_GPL_LIBS
+if Base.USE_GPL_LIBS
     include("fft/FFTW.jl")
     importall .FFTW
     export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!

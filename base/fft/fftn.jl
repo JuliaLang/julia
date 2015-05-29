@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Multi-dimensional FFTs based on the 1d FFTs in ctfft.jl
 
 type MultiDimPlan{T,forward} <: Plan{T}

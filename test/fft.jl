@@ -41,8 +41,8 @@ for A in (Array,SubArray)
     for f in (:fft,:ifft,:plan_fft,:plan_ifft)
         f_ = symbol(string(f, "_"))
         @eval begin
-            $f_{T,N}(x::$A{T,N}) = invoke($f, (AbstractArray{T,N},), x)
-            $f_{T,N,R}(x::$A{T,N},r::R) = invoke($f,(AbstractArray{T,N},R),x,r)
+            $f_{T,N}(x::$A{T,N}) = invoke($f, Tuple{AbstractArray{T,N}}, x)
+            $f_{T,N,R}(x::$A{T,N},r::R) = invoke($f,Tuple{AbstractArray{T,N},R},x,r)
         end
     end
 end
@@ -230,7 +230,7 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
 end
 
 import Base.rand
-rand(::Type{Complex{BigFloat}}) = big(rand(Complex128))
+rand(::Type{Complex{BigFloat}}) = Complex{BigFloat}(rand(Complex128))
 function rand(::Type{Complex{BigFloat}}, n)
     a = Array(Complex{BigFloat}, n)
     for i = 1:n
@@ -248,7 +248,7 @@ function fft_test{T<:Complex}(p::Base.DFT.Plan{T}, ntrials=4,
                               tol=1e5 * eps(real(T)))
     ndims(p) == 1 || throw(ArgumentError("not a 1d FFT"))
     n = length(p)
-    twopi_i = (-2 * convert(real(T), π)/n * [0:n-1]) * im
+    twopi_i = (-2 * convert(real(T), π)/n * (0:n-1)) * im
     for trial = 1:ntrials
         # linearity:
         x = rand(T, n)
@@ -278,20 +278,20 @@ function fft_test{T<:Complex}(p::Base.DFT.Plan{T}, ntrials=4,
 end
 
 for T in (Complex64, Complex128)
-    for n in [1:100, 121, 143, 1000, 1024, 1031, 2000, 2048]
+    for n in [1:100; 121; 143; 1000; 1024; 1031; 2000; 2048]
         x = zeros(T, n)
         fft_test(plan_fft(x))
         fft_test(plan_fft_(x))
     end
 end
-for n in [1:32]
+for n in 1:32
     x = zeros(Complex{BigFloat}, n)
     fft_test(plan_fft(x))
 end
 
 # test inversion, scaling, and pre-allocated variants
 for T in (Complex128, Complex{BigFloat})
-    for x in (T[1:100], reshape(T[1:200], 20,10))
+    for x in (T[1:100;], reshape(T[1:200;], 20,10))
         y = similar(x)
         for planner in (plan_fft, plan_fft_, plan_ifft, plan_ifft_)
             p = planner(x)
