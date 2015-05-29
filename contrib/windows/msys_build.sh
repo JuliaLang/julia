@@ -91,10 +91,10 @@ for i in bin/*.dll Git/bin/msys-1.0.dll Git/bin/msys-perl5_8.dll Git/bin/*.exe; 
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
-for i in share/julia/base/pcre_h.jl; do
-  $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
-done
-sed -i 's/int32/Int32/g' base/pcre_h.jl
+# for i in share/julia/base/pcre_h.jl; do
+#   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
+# done
+# sed -i 's/int32/Int32/g' base/pcre_h.jl
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
