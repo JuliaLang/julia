@@ -352,7 +352,7 @@ function valid_tparam(x::ANY)
 end
 
 function extract_simple_tparam(Ai)
-    if isa(Ai,Int) || isa(Ai,Bool)
+    if !isa(Ai,Symbol) && valid_tparam(Ai)
         return Ai
     elseif isa(Ai,QuoteNode) && valid_tparam(Ai.value)
         return Ai.value
