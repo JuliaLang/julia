@@ -59,7 +59,7 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(len, i->0x1)
+    lt = ntuple(i->0x1, len)
     serialize(s, lt)
 
     serialize(s, Tuple{})
