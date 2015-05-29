@@ -120,6 +120,7 @@ Command line option changes
   * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
 
   * New option --handle-signals={yes|no} to disable Julia's signal handlers.
+    For embedding use, see `enable_handlers` argument to `jl_init_with_image`.
 
 Compiler improvements
 ---------------------

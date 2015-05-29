@@ -33,20 +33,25 @@ int jl_is_initialized(void) { return jl_main_module!=NULL; }
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir. The default
 // is something like ../lib/julia/sys.ji
-DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path)
+// Third argument determines whether to install Julia's signal handlers
+DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+                                  const char *image_relative_path,
+                                  int enable_handlers)
 {
     if (jl_is_initialized()) return;
     libsupport_init();
     jl_options.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
+    if (enable_handlers == 0)
+        jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }
 
 DLLEXPORT void jl_init(const char *julia_home_dir)
 {
-    jl_init_with_image(julia_home_dir, NULL);
+    jl_init_with_image(julia_home_dir, NULL, 1);
 }
 
 DLLEXPORT void *jl_eval_string(const char *str)
