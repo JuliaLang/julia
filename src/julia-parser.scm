@@ -926,6 +926,14 @@
                      (else                 (list op (parse-unary-prefix s)))))
         (parse-atom s))))
 
+(define (parse-atom-or-interpolate s)
+  (if (eq? (peek-token s) '$)
+      (begin (take-token s)
+             (if (let ((op (peek-token s)))
+                   (or (newline? op) (closing-token? op)))
+                 '$ (list '$ (parse-atom s))))
+      (parse-atom s)))
+
 ;; parse function call, indexing, dot, and transpose expressions
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
@@ -1250,7 +1258,7 @@
                  body))))
     ((export)
      (let ((es (map macrocall-to-atsym
-                    (parse-comma-separated s parse-unary-prefix))))
+                    (parse-comma-separated s parse-atom-or-interpolate))))
        (if (not (every symbol-or-interpolate? es))
            (error "invalid \"export\" statement"))
        `(export ,@es)))
@@ -1332,7 +1340,7 @@
            (begin (take-token s)
                   (loop (list* '|.| '|.| '|.| '|.| l) (peek-token s))))
           (else
-           (cons (macrocall-to-atsym (parse-unary-prefix s)) l)))))
+           (cons (macrocall-to-atsym (parse-atom-or-interpolate s)) l)))))
 
 (define (parse-import s word)
   (let loop ((path (parse-import-dots s)))
@@ -1342,7 +1350,7 @@
       (cond
        ((eq? nxt '|.|)
         (take-token s)
-        (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
+        (loop (cons (macrocall-to-atsym (parse-atom-or-interpolate s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
         `(,word ,@(reverse path)))
