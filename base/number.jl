@@ -13,7 +13,12 @@ length(x::Number) = 1
 endof(x::Number) = 1
 getindex(x::Number) = x
 getindex(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
-getindex(x::Number, I::Integer...) = all([i == 1 for i in I]) ? x : throw(BoundsError())
+function getindex(x::Number, I::Integer...)
+    for i in I
+        i == 1 || throw(BoundsError())
+    end
+    x
+end
 getindex(x::Number, I::Real...) = getindex(x, to_index(I)...)
 first(x::Number) = x
 last(x::Number) = x

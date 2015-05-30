@@ -990,10 +990,11 @@
                      ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
                      ((vcat)
                       (loop (list* 'typed_vcat ex (cdr al))))
-                     ((comprehension)
-                      (loop (list* 'typed_comprehension ex (cdr al))))
-                     ((dict_comprehension)
-                      (loop (list* 'typed_dict_comprehension ex (cdr al))))
+                     ((macrocall) ; comprehensions
+                      (case (cadadr al)
+                        ((@comprehension) (loop (list* 'macrocall '(top @typed_comprehension) ex (cddr al))))
+                        ((@dict_comprehension) (loop (list* 'macrocall '(top @typed_dict_comprehension) ex (cddr al))))
+                        (else (error "unknown parse-comprehension result (internal error)"))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|) (take-token s)
              (loop
@@ -1481,12 +1482,12 @@
     (if (not (eqv? (require-token s) closer))
         (error (string "expected " closer))
         (take-token s))
-    `(comprehension ,first ,@r)))
+    `(macrocall (top ,(symbol "@comprehension")) ,first ,@r)))
 
 (define (parse-dict-comprehension s first closer)
   (let ((c (parse-comprehension s first closer)))
-    (if (dict-literal? (cadr c))
-        `(dict_comprehension ,@(cdr c))
+    (if (dict-literal? (caddr c))
+        `(macrocall (top ,(symbol "@dict_comprehension")) ,@(cddr c))
         (error "invalid dict comprehension"))))
 
 (define (parse-matrix s first closer gotnewline)

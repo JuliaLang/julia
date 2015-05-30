@@ -305,7 +305,7 @@ end
 
 function rangetype(T1, T2)
     rt = return_types(getindex, Tuple{T1, T2})
-    length(rt) == 1 || error("Can't infer return type")
+    length(rt) == 1 && isleaftype(rt[1]) || error("Can't infer return type")
     rt[1]
 end
 

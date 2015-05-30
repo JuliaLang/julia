@@ -41,7 +41,15 @@ function binding_module(m::Module, var::Symbol)
     mod
 end
 
-fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
+function fieldnames(t::DataType)
+    n = length(t.name.names)
+    A = Array(Symbol, n)
+    for i=1:n
+        A[i] = t.name.names[i]
+    end
+    A
+end
+
 function fieldnames(v)
     t = typeof(v)
     if !isa(t,DataType)
@@ -122,7 +130,7 @@ end
 tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
 
 code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
-methods(f::Function,t::ANY) = (t=to_tuple_type(t); Any[m[3] for m in _methods(f,t,-1)])
+methods(f::Function,t::ANY) = (t=to_tuple_type(t); map(m->m[3], _methods(f,t,-1)))
 methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
     if isa(t,Type)

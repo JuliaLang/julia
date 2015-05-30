@@ -3,7 +3,7 @@
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(map(x->tc(x...), [zip(r1,r2)...]))
 tc{N}(r1::BitArray{N}, r2::Union(BitArray{N},Array{Bool,N})) = true
 tc{T}(r1::T, r2::T) = true
-tc(r1,r2) = false
+tc(r1,r2) = isempty(r1) && isempty(r2)
 
 function check_bitop(ret_type, func, args...)
     r1 = func(args...)

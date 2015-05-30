@@ -9,8 +9,6 @@ symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
 symbol(x...) = symbol(string(x...))
 
-gensym() = ccall(:jl_gensym, Any, ())::Symbol
-
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
@@ -39,7 +37,7 @@ copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 # copy parts of an AST that the compiler mutates
 astcopy(x::Union(SymbolNode,Expr)) = copy(x)
-astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
+astcopy(x::Array{Any,1}) = map(a->astcopy(a),x)
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args

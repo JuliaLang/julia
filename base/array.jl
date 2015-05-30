@@ -101,6 +101,10 @@ end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
+function copy(a::Array{Union()})
+    a
+end
+
 function copy(a::Array)
     b = similar(a)
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), b, a, sizeof(a))
@@ -132,6 +136,14 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(nel)"))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
+function reinterpret{T,N}(::Type{T}, a::Array{Union()}, dims::NTuple{N,Int})
+    if length(a) == 0 && prod(dims) == 0
+        Array(T, dims)
+    else
+        error("cannot reinterpret non-empty Union() array")
+    end
 end
 
 # reshaping to same # of dimensions
@@ -319,15 +331,15 @@ function getindex(A::Array, I::UnitRange{Int})
     return X
 end
 
-function getindex{T<:Real}(A::Array, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
+function getindex{T<:Real,R}(A::Array{R}, I::AbstractVector{T})
+    return R[ A[i] for i in to_index(I) ]
 end
-function getindex{T<:Real}(A::Range, I::AbstractVector{T})
-    return [ A[i] for i in to_index(I) ]
+function getindex{T<:Real,R}(A::Range{R}, I::AbstractVector{T})
+    return R[ A[i] for i in to_index(I) ]
 end
-function getindex(A::Range, I::AbstractVector{Bool})
+function getindex{R}(A::Range{R}, I::AbstractVector{Bool})
     checkbounds(A, I)
-    return [ A[i] for i in to_index(I) ]
+    return R[ A[i] for i in to_index(I) ]
 end
 
 

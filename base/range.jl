@@ -314,7 +314,16 @@ maximum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empt
 minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
-ctranspose(r::Range) = [x for _=1, x=r]
+
+function ctranspose(r::Range)
+    res = Array{eltype(r), 2}
+    i = 1
+    for x in r
+        res[i] = x
+        i += 1
+    end
+    res
+end
 transpose(r::Range) = r'
 
 # Ranges are immutable
@@ -623,23 +632,6 @@ convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
 
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
-
-## non-linear operations on ranges and fallbacks for non-real numbers ##
-
-.+(x::Number, r::Range) = [ x+y for y=r ]
-.+(r::Range, y::Number) = [ x+y for x=r ]
-
-.-(x::Number, r::Range) = [ x-y for y=r ]
-.-(r::Range, y::Number) = [ x-y for x=r ]
-
-.*(x::Number, r::Range) = [ x*y for y=r ]
-.*(r::Range, y::Number) = [ x*y for x=r ]
-
-./(x::Number, r::Range) = [ x/y for y=r ]
-./(r::Range, y::Number) = [ x/y for x=r ]
-
-.^(x::Number, r::Range) = [ x^y for y=r ]
-.^(r::Range, y::Number) = [ x^y for x=r ]
 
 ## concatenation ##
 
