@@ -742,7 +742,14 @@ const jl_value_t * jl_to_ptx() {
     const char *LibDeviceDir = NULL;
     bool isDir = false;
     for (int i = 0; i < 2; i++) {
-        llvm::error_code ec = sys::fs::is_directory(LibDeviceDirs[i], isDir);
+        if (LibDeviceDirs[i] == NULL)
+            continue;
+#if defined(LLVM35) || defined(LLVM36)
+        std::error_code ec;
+#else
+        llvm::error_code ec;
+#endif
+        ec = sys::fs::is_directory(LibDeviceDirs[i], isDir);
         if (!ec && isDir) {
             LibDeviceDir = LibDeviceDirs[i];
             break;
@@ -784,6 +791,7 @@ const jl_value_t * jl_to_ptx() {
     if (Linker::LinkModules(M, M2))
         jl_error("Could not link device library");
 #else
+    std::string Error;
     if (Linker::LinkModules(M, M2, Linker::DestroySource, &Error))
         jl_errorf("could not link device library: %s", Error.c_str());
 #endif
