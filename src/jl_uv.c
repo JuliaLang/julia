@@ -188,7 +188,8 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
                        uv_handle_type stderr_type, uv_pipe_t *stderr_pipe,
-                       int detach, char **env, char *cwd, uv_exit_cb cb)
+                       int detach, int verbatimargument, char **env, char *cwd,
+                       uv_exit_cb cb)
 {
     uv_process_options_t opts;
     uv_stdio_container_t stdio[3];
@@ -204,6 +205,8 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     opts.args = argv;
     if (detach)
         opts.flags |= UV_PROCESS_DETACHED;
+    if (verbatimargument)
+        opts.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS;
     opts.stdio = stdio;
     opts.stdio_count = 3;
     stdio[0].type = stdin_type;

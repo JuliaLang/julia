@@ -165,3 +165,76 @@ end
 print_shell_escaped(io::IO) = nothing
 
 shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
+
+# Functions for Windows shell escaping (mode can be :cmd or :powershell)
+function print_cmdshell_word(io::IO, word::AbstractString, mode=:cmd)
+    if mode == :cmd && (in('\n', word) || in('\r', word))
+        throw(ArgumentError("cannot escape newline characters"))
+    end
+    if isempty(word)
+        print(io, "\"\"")
+    end
+    if length(word)==1 && in(word[1], "|<>")
+        print(io, word)   # don't escape single pipe character
+        return
+    end
+    if mode == :cmd
+        special_dq   = " \t,;="  # delimiters can't be quoted with "^"
+        special_esc  = "\"^&|<>()"
+        special_desc = ""
+        esc_char     = '^'
+    elseif mode == :powershell
+        special_dq   = "&^"
+        special_esc  = "`#'\" (){},;]"
+        special_desc = "["       # needs double escape
+        esc_char     = '`'
+    else
+        throw(ArgumentError("Unknown cmdshell mode"))
+    end
+    dq_mode = false
+    for c in word
+        if in(c, special_dq)
+            if ~dq_mode
+                print(io, '"')
+                dq_mode = true
+            end
+        elseif dq_mode
+            print(io, '"')
+            dq_mode = false
+        end
+        if in(c, special_esc)
+            print(io, esc_char, c)
+        elseif in(c, special_desc)
+            print(io, esc_char, esc_char, c)
+        else
+            print(io, c)
+        end
+    end
+    if dq_mode
+      print(io, '"')
+    end
+end
+
+function print_cmdshell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
+    print_cmdshell_word(io, cmd)
+    for arg in args
+        print(io, ' ')
+        print_cmdshell_word(io, arg)
+    end
+end
+
+print_cmdshell_escaped(io::IO) = nothing
+
+cmdshell_escape(args::AbstractString...) = sprint(print_cmdshell_escaped, args...)
+
+function print_powershell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
+    print_cmdshell_word(io, cmd, :powershell)
+    for arg in args
+        print(io, ' ')
+        print_cmdshell_word(io, arg, :powershell)
+    end
+end
+
+print_powershell_escaped(io::IO) = nothing
+
+powershell_escape(args::AbstractString...) = sprint(print_powershell_escaped, args...)

@@ -6,9 +6,10 @@ type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
+    verbatimargument::Bool
     env::Union{Array{ByteString},Void}
     dir::UTF8String
-    Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
+    Cmd(exec::Vector{ByteString}) = new(exec, false, false, false, nothing, "")
 end
 
 type OrCmds <: AbstractCmd
@@ -216,10 +217,13 @@ function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
     disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Int32,
+         Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
         cmd, argv, loop, proc, pp, uvtype(in),
         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-        pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
+        pp.cmd.detach, pp.cmd.verbatimargument,
+        pp.cmd.env === nothing ? C_NULL : pp.cmd.env,
+        isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
         uv_jl_return_spawn::Ptr{Void})
     if error != 0
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)

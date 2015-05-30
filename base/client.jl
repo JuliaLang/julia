@@ -40,7 +40,8 @@ exit() = exit(0)
 quit() = exit()
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL",
+            @windows ? "cmd" : "/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
     if Base.basename(shell[1]) == "fish"
@@ -71,6 +72,17 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
+        @windows_only begin
+            cmdbuf = IOBuffer()
+            if lowercase(shell[1]) == "cmd"
+                print_cmdshell_escaped(cmdbuf, cmd.exec...)
+                cmd.exec = ["cmd"; "/s /c \"$(bytestring(cmdbuf))\""]
+                cmd.verbatimargument = true
+            elseif lowercase(shell[1]) == "powershell"
+                print_powershell_escaped(cmdbuf, cmd.exec...)
+                cmd.exec = ["powershell"; "-command"; "$(bytestring(cmdbuf))"]
+            end
+        end
         run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
     nothing
