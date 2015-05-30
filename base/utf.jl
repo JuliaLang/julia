@@ -23,10 +23,10 @@ const errMsgs = [
     "invalid UTF-8 sequence starting at index <<1>> (0x<<2>>) missing one or more continuation bytes)",
     "invalid UTF-8 sequence starting at index <<1>> (0x<<2>> is not a continuation byte)",
     "invalid UTF-8 sequence, overlong encoding starting at index <<1>> (0x<<2>>)",
-    "not a leading Unicode surrogate character at index <<1>> (0x<<2>>)",
-    "not a trailing Unicode surrogate character at index <<1>> (0x<<2>>)",
-    "not a valid Unicode surrogate character at index <<1>> (0x<<2>>",
-    "missing trailing Unicode surrogate character after index <<1>> (0x<<2>>)",
+    "not a leading Unicode surrogate codepoint at index <<1>> (0x<<2>>)",
+    "not a trailing Unicode surrogate codepoint at index <<1>> (0x<<2>>)",
+    "not a valid Unicode surrogate codepoint at index <<1>> (0x<<2>>",
+    "missing trailing Unicode surrogate codepoint after index <<1>> (0x<<2>>)",
     "invalid Unicode character starting at index <<1>> (0x<<2>> > 0x10ffff)",
     "surrogate encoding not allowed in UTF-8 or UTF-32, at index <<1>> (0x<<2>>)",
     "UTF16String data must be NULL-terminated",
@@ -87,7 +87,7 @@ const empty_utf32 = UTF32String(UInt32[0])
 
 is_surrogate_lead(c::Unsigned) = ((c & ~0x003ff) == 0xd800)
 is_surrogate_trail(c::Unsigned) = ((c & ~0x003ff) == 0xdc00)
-is_surrogate_char(c::Unsigned) = ((c & ~0x007ff) == 0xd800)
+is_surrogate_codepoint(c::Unsigned) = ((c & ~0x007ff) == 0xd800)
 is_valid_continuation(c) = ((c & 0xc0) == 0x80)
 
 function length(s::UTF16String)
@@ -105,14 +105,14 @@ function endof(s::UTF16String)
     d = s.data
     i = length(d) - 1
     i == 0 && return i
-    return is_surrogate_char(d[i]) ? i-1 : i
+    return is_surrogate_codepoint(d[i]) ? i-1 : i
 end
 
 get_supplementary(lead::Unsigned, trail::Unsigned) = (UInt32(lead-0xd7f7)<<10 + trail)
 
 function next(s::UTF16String, i::Int)
     ch = s.data[i]
-    !is_surrogate_char(ch) && return (Char(ch), i+1)
+    !is_surrogate_codepoint(ch) && return (Char(ch), i+1)
     # check length, account for terminating \0
     i >= (length(s.data)-1) && utf_errfunc(UTF_ERR_MISSING_SURROGATE, i, UInt32(ch))
     !is_surrogate_lead(ch) && utf_errfunc(UTF_ERR_NOT_LEAD, i, ch)
@@ -160,15 +160,14 @@ const UTF_UNICODE4 = 16         # non-BMP characters present
 const UTF_SURROGATE = 32        # surrogate pairs present
 
 # Get a UTF-8 continuation byte, give error if invalid, and update position and character value
-@inline function get_continuation(ch::UInt32, str, pos)
-    byt::UInt8 = str[pos += 1]
+@inline function get_continuation(ch::UInt32, byt::UInt8, pos)
     !is_valid_continuation(byt) && utf_errfunc(UTF_ERR_CONT, pos, byt)
-    (ch << 6) | (byt & 0x3f), pos
+    (ch << 6) | (byt & 0x3f)
 end
 
 #=
 @doc """
-@brief      Validates and calculates number of characters in a string
+@brief      Validates and calculates number of characters in a UTF-8 encoded vector of UInt8
 
 @param[in]  str     Vector of UInt8
 @param[in]  options flags to determine error handling (default 0)
@@ -178,9 +177,9 @@ end
 """ ->
 =#
 function check_string_utf8(dat::Vector{UInt8}, options::Integer=0)
-    local byt::UInt8
-    local ch::UInt32, surr::UInt32
-    local totalchar=0, num2byte=0, num3byte=0, num4byte=0, flags::UInt=0
+    local byt::UInt8, ch::UInt32, surr::UInt32
+    flags::UInt = 0
+    totalchar = num2byte = num3byte = num4byte = 0
     pos = 0
     len = sizeof(dat)
     @inbounds while pos < len
@@ -191,7 +190,7 @@ function check_string_utf8(dat::Vector{UInt8}, options::Integer=0)
             if ch < 0xe0
                 # 2-byte UTF-8 sequence (i.e. characters 0x80-0x7ff)
                 (pos == len) && utf_errfunc(UTF_ERR_SHORT, pos, ch)
-                ch, pos = get_continuation(ch & 0x3f, dat, pos)
+                ch = get_continuation(ch & 0x3f, dat[pos += 1], pos)
                 if ch > 0x7f
                     num2byte += 1
                     flags |= (ch > 0xff) ? UTF_UNICODE2 : UTF_LATIN1
@@ -205,16 +204,17 @@ function check_string_utf8(dat::Vector{UInt8}, options::Integer=0)
              elseif ch < 0xf0
                 # 3-byte UTF-8 sequence (i.e. characters 0x800-0xffff)
                 (pos + 2 > len) && utf_errfunc(UTF_ERR_SHORT, pos, ch)
-                ch, pos = get_continuation(ch & 0x0f, dat, pos)
-                ch, pos = get_continuation(ch, dat, pos)
+                ch = get_continuation(ch & 0x0f, dat[pos += 1], pos)
+                ch = get_continuation(ch, dat[pos += 1], pos)
                 # check for surrogate pairs, make sure correct
-                if is_surrogate_char(ch)
+                if is_surrogate_codepoint(ch)
                     !is_surrogate_lead(ch) && utf_errfunc(UTF_ERR_NOT_LEAD, pos-2, ch)
                     # next character *must* be a trailing surrogate character
                     (pos + 3 > len) && utf_errfunc(UTF_ERR_MISSING_SURROGATE, pos-2, ch)
-                    byt = dat[pos += 1] ; (byt != 0xed) && utf_errfunc(UTF_ERR_NOT_TRAIL, pos, byt)
-                    surr, pos = get_continuation(0x0000d, dat, pos)
-                    surr, pos = get_continuation(surr, dat, pos)
+                    byt = dat[pos += 1]
+                    (byt != 0xed) && utf_errfunc(UTF_ERR_NOT_TRAIL, pos, byt)
+                    surr = get_continuation(0x0000d, dat[pos += 1], pos)
+                    surr = get_continuation(surr, dat[pos += 1], pos)
                     !is_surrogate_trail(surr) && utf_errfunc(UTF_ERR_NOT_TRAIL, pos-2, surr)
                     (options & UTF_NO_SURROGATES) != 0 && utf_errfunc(UTF_ERR_SURROGATE, pos-2, surr)
                     flags |= UTF_SURROGATE
@@ -230,14 +230,14 @@ function check_string_utf8(dat::Vector{UInt8}, options::Integer=0)
             elseif ch < 0xf5
                 # 4-byte UTF-8 sequence (i.e. characters > 0xffff)
                 (pos + 3 > len) && utf_errfunc(UTF_ERR_SHORT, pos, ch)
-                ch, pos = get_continuation(ch & 0x07, dat, pos)
-                ch, pos = get_continuation(ch, dat, pos)
-                ch, pos = get_continuation(ch, dat, pos)
+                ch = get_continuation(ch & 0x07, dat[pos += 1], pos)
+                ch = get_continuation(ch, dat[pos += 1], pos)
+                ch = get_continuation(ch, dat[pos += 1], pos)
                 if ch > 0x10ffff
                     utf_errfunc(UTF_ERR_INVALID, pos-3, ch)
                 elseif ch > 0xffff
                     num4byte += 1
-                elseif is_surrogate_char(ch)
+                elseif is_surrogate_codepoint(ch)
                     utf_errfunc(UTF_ERR_SURROGATE, pos-3, ch)
                 elseif (options & UTF_ACCEPT_LONG) != 0
                     # This is an overly long encode character
@@ -255,12 +255,14 @@ function check_string_utf8(dat::Vector{UInt8}, options::Integer=0)
             end
         end
     end
-    totalchar, flags | (num3byte == 0 ? 0 : UTF_UNICODE3) | (num4byte == 0 ? 0 : UTF_UNICODE4), num4byte, num3byte, num2byte
+    num3byte != 0 && (flags |= UTF_UNICODE3)
+    num4byte != 0 && (flags |= UTF_UNICODE4)
+    return totalchar, flags, num4byte, num3byte, num2byte
 end
 
 #=
 @doc """
-@brief      Validates and calculates number of characters in a UTF-16 string
+@brief      Validates and calculates number of characters in a UTF-16 encoded vector of UInt16
 
 @param[in]  dat     Vector{UInt16}
 @param[in]  options flags to determine error handling (default 0)
@@ -271,8 +273,9 @@ end
 =#
 function check_string_utf16(dat::Vector{UInt16}, len::Int)
     local ch::UInt32
-    local totalchar=0, num2byte=0, num3byte=0, num4byte=0, flags::UInt=0
-    local pos = 0
+    flags::UInt = 0
+    totalchar = num2byte = num3byte = num4byte = 0
+    pos = 0
     @inbounds while pos < len
         ch = dat[pos += 1]
         totalchar += 1
@@ -283,7 +286,7 @@ function check_string_utf16(dat::Vector{UInt16}, len::Int)
             elseif ch < 0x800
                 num2byte += 1
                 flags |= UTF_UNICODE2
-            elseif !is_surrogate_char(ch)
+            elseif !is_surrogate_codepoint(ch)
                 num3byte += 1
             elseif is_surrogate_lead(ch)
                 pos == len && utf_errfunc(UTF_ERR_MISSING_SURROGATE, pos, ch)
@@ -296,12 +299,14 @@ function check_string_utf16(dat::Vector{UInt16}, len::Int)
             end
         end
     end
-    totalchar, flags | (num3byte == 0 ? 0 : UTF_UNICODE3) | (num4byte == 0 ? 0 : UTF_UNICODE4), num4byte, num3byte, num2byte
+    num3byte != 0 && (flags |= UTF_UNICODE3)
+    num4byte != 0 && (flags |= UTF_UNICODE4)
+    return totalchar, flags, num4byte, num3byte, num2byte
 end
 
 #=
 @doc """
-@brief      Validates and calculates number of characters in a UTF-32 string
+@brief      Validates and calculates number of characters in a UTF-32 encoded vector of UInt32
 
 @param[in]  dat     Vector{UInt32}
 @param[in]  options flags to determine error handling (default 0)
@@ -312,8 +317,9 @@ end
 =#
 function check_string_utf32(dat::Vector{UInt32}, len::Int, options::Integer=0)
     local ch::UInt32
-    local totalchar=0, num2byte=0, num3byte=0, num4byte=0, flags::UInt=0
-    local pos = 0
+    flags::UInt = 0
+    totalchar = num2byte = num3byte = num4byte = 0
+    pos = 0
     @inbounds while pos < len
         ch = dat[pos += 1]
         totalchar += 1
@@ -327,7 +333,7 @@ function check_string_utf32(dat::Vector{UInt32}, len::Int, options::Integer=0)
             elseif ch > 0xffff
                 (ch > 0x10ffff) && utf_errfunc(UTF_ERR_INVALID, pos, ch)
                 num4byte += 1
-            elseif !is_surrogate_char(ch)
+            elseif !is_surrogate_codepoint(ch)
                 num3byte += 1
             elseif is_surrogate_lead(ch)
                 pos == len && utf_errfunc(UTF_ERR_MISSING_SURROGATE, pos, ch)
@@ -342,14 +348,17 @@ function check_string_utf32(dat::Vector{UInt32}, len::Int, options::Integer=0)
             end
         end
     end
-    totalchar, flags | (num3byte == 0 ? 0 : UTF_UNICODE3) | (num4byte == 0 ? 0 : UTF_UNICODE4), num4byte, num3byte, num2byte
+    num3byte != 0 && (flags |= UTF_UNICODE3)
+    num4byte != 0 && (flags |= UTF_UNICODE4)
+    return totalchar, flags, num4byte, num3byte, num2byte
 end
 
 function check_string_abs(str::AbstractString, options::Integer=0)
     local ch::UInt32
-    local totalchar=0, num2byte=0, num3byte=0, num4byte=0, flags::UInt=0
-    local pos = start(str)
-    local len = endof(str)
+    flags::UInt = 0
+    totalchar = num2byte = num3byte = num4byte = 0
+    pos = start(str)
+    len = endof(str)
     @inbounds while pos < len
         ch, pos = next(str, pos)
         totalchar += 1
@@ -363,7 +372,7 @@ function check_string_abs(str::AbstractString, options::Integer=0)
             elseif ch > 0xffff
                 (ch > 0x10ffff) && utf_errfunc(UTF_ERR_INVALID, pos, ch)
                 num4byte += 1
-            elseif !is_surrogate_char(ch)
+            elseif !is_surrogate_codepoint(ch)
                 num3byte += 1
             elseif is_surrogate_lead(ch)
                 pos == len && utf_errfunc(UTF_ERR_MISSING_SURROGATE, pos, ch)
@@ -378,84 +387,39 @@ function check_string_abs(str::AbstractString, options::Integer=0)
             end
         end
     end
-    totalchar, flags | (num3byte == 0 ? 0 : UTF_UNICODE3) | (num4byte == 0 ? 0 : UTF_UNICODE4), num4byte, num3byte, num2byte
+    num3byte != 0 && (flags |= UTF_UNICODE3)
+    num4byte != 0 && (flags |= UTF_UNICODE4)
+    return totalchar, flags, num4byte, num3byte, num2byte
 end
 
 # Quickly copy and set trailing \0
-macro return_fast_utf_copy(T1, T2, len, dat)
-    quote
-        @inbounds return $(esc(T1))(setindex!(copy!(Vector{$(esc(T2))}($(esc(len))), $(esc(dat))), 0, $(esc(len))))
-    end
+@inline function fast_utf_copy(T::Type{UInt16}, len, dat)
+    @inbounds return UTF16String(setindex!(copy!(Vector{T}(len), dat), 0, len))
+end
+@inline function fast_utf_copy(T::Type{Char}, len, dat)
+    @inbounds return UTF32String(setindex!(copy!(Vector{T}(len), dat), 0, len))
 end
 
-# Get rest of character ch from 2-byte UTF-8 sequence in str, update pos and return character
-macro get_utf8_2!(str, pos, ch)
-    quote
-        (($(esc(ch)) & 0x1f) << 6) | ($(esc(str))[$(esc(pos)) += 1] & 0x3f)
-    end
+# Get rest of character ch from 3-byte UTF-8 sequence in str
+@inline function get_utf8_3(dat, pos, ch)
+    @inbounds return ((ch & 0xf) << 12) | (UInt32(dat[pos-1] & 0x3f) << 6) | (dat[pos] & 0x3f)
 end
 
-# Get rest of character ch from 3-byte UTF-8 sequence in str, update pos and return character
-macro get_utf8_3!(str, pos, ch)
-    quote
-        ($(esc(pos)) += 2 ;
-         (($(esc(ch)) & 0xf) << 12)
-          | (UInt32($(esc(str))[$(esc(pos))-1] & 0x3f) << 6)
-          | ($(esc(str))[$(esc(pos))] & 0x3f))
-    end
+# Get rest of character ch from 4-byte UTF-8 sequence in dat, update pos and return character
+@inline function get_utf8_4(dat, pos, ch)
+    @inbounds return (((ch & 0x7) << 18)
+                        | (UInt32(dat[pos-2] & 0x3f) << 12)
+                        | (UInt32(dat[pos-1] & 0x3f) << 6)
+                        | (dat[pos] & 0x3f))
 end
 
-# Get rest of character ch from 4-byte UTF-8 sequence in str, update pos and return character
-macro get_utf8_4!(str, pos, ch)
-    quote
-        ($(esc(pos)) += 3 ;
-         (($(esc(ch)) & 0x7) << 18)
-          | (UInt32($(esc(str))[$(esc(pos))-2] & 0x3f) << 12)
-          | (UInt32($(esc(str))[$(esc(pos))-1] & 0x3f) << 6)
-          | ($(esc(str))[$(esc(pos))] & 0x3f))
-    end
-end
-
-# Get the trailing surrogate character in UTF-8 from an array, update the position
-macro get_utf8_surr!(str, pos)
-    quote
-        ($(esc(pos)) += 3 ;
-         ((UInt32($(esc(str))[$(esc(pos))-2] & 0xf) << 12)
-          | (UInt32($(esc(str))[$(esc(pos))-1] & 0x3f) << 6)
-          | ($(esc(str))[$(esc(pos))] & 0x3f)))
-    end
-end
-
-# Output a character as a 2-byte UTF-8 sequence, update the position
-macro output_utf8_2!(buf, out, ch)
-    quote
-        $(esc(buf))[$(esc(out)) += 1] = 0xc0 | ($(esc(ch)) >>> 6)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | ($(esc(ch)) & 0x3f)
-    end
-end
-# Output a character as a 3-byte UTF-8 sequence, update the position
-macro output_utf8_3!(buf, out, ch)
-    quote
-        $(esc(buf))[$(esc(out)) += 1] = 0xe0 | (($(esc(ch)) >>> 12) & 0x3f)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | (($(esc(ch)) >>> 6) & 0x3f)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | ($(esc(ch)) & 0x3f)
-    end
-end
 # Output a character as a 4-byte UTF-8 sequence, update the position
-macro output_utf8_4!(buf, out, ch)
-    quote
-        $(esc(buf))[$(esc(out)) += 1] = 0xf0 | ($(esc(ch)) >>> 18)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | (($(esc(ch)) >>> 12) & 0x3f)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | (($(esc(ch)) >>> 6) & 0x3f)
-        $(esc(buf))[$(esc(out)) += 1] = 0x80 | ($(esc(ch)) & 0x3f)
-    end
-end
-
-# Output a UTF-16 surrogate pair, update the position
-macro output_utf16_surr!(buf, out, ch)
-    quote
-        $(esc(buf))[$(esc(out)) += 1] = UInt16(0xd7c0 + ($(esc(ch)) >>> 10))
-        $(esc(buf))[$(esc(out)) += 1] = UInt16(0xdc00 + ($(esc(ch)) & 0x3ff))
+@inline function output_utf8_4(buf, out, ch)
+    @inbounds begin
+        buf[out + 1] = 0xf0 | (ch >>> 18)
+        buf[out + 2] = 0x80 | ((ch >>> 12) & 0x3f)
+        buf[out + 3] = 0x80 | ((ch >>> 6) & 0x3f)
+        buf[out + 4] = 0x80 | (ch & 0x3f)
     end
 end
 
@@ -475,11 +439,13 @@ function convert(::Type{UTF16String}, str::AbstractString)
     buf = Vector{UInt16}(len+num4byte+1)
     out = 0
     @inbounds for ch in str
-        c = reinterpret(UInt32, ch)
+        c = UInt32(ch)
         if c < 0x10000
             buf[out += 1] = UInt16(c)
         else
-            @output_utf16_surr!(buf, out, c)
+            # output surrogate pair
+            buf[out += 1] = UInt16(0xd7c0 + (ch >>> 10))
+            buf[out += 1] = UInt16(0xdc00 + (ch & 0x3ff))
         end
     end
     @inbounds buf[out + 1] = 0 # NULL termination
@@ -508,9 +474,10 @@ end
 
 #=
 @doc """
-@brief      Converts a UTF-8 encoded string to UTF-16 encoding
+@brief      Converts a UTF8String to a UTF16String
 
-@param[in]  str::Vector{UInt8}
+@param[in]  ::Type{UTF16String}
+@param[in]  str::UTF8String
 
 @return     ::UTF16String
 @throws     ArgumentError
@@ -524,11 +491,11 @@ function convert(::Type{UTF16String}, str::UTF8String)
     len, flags, num4byte = check_string_utf8(dat)
     len += num4byte
     buf = Vector{UInt16}(len+1)
-    buf[len+1] = 0
+    @inbounds buf[len+1] = 0
     # Optimize case where no characters > 0x7f
     flags == 0 && @inbounds return UTF16String(copy!(buf, dat))
-    out::UInt = 0
-    pos::UInt = 0
+    out = 0
+    pos = 0
     @inbounds while out < len
         ch::UInt32 = dat[pos += 1]
         # Handle ASCII characters
@@ -536,14 +503,18 @@ function convert(::Type{UTF16String}, str::UTF8String)
             buf[out += 1] = ch
         # Handle range 0x80-0x7ff
         elseif ch < 0xe0
-            buf[out += 1] = @get_utf8_2!(dat, pos, ch)
+            buf[out += 1] = ((ch & 0x1f) << 6) | (dat[pos += 1] & 0x3f)
         # Handle range 0x800-0xffff
         elseif ch < 0xf0
-            buf[out += 1] = @get_utf8_3!(dat, pos, ch)
+            pos += 2
+            buf[out += 1] = get_utf8_3(dat, pos, ch)
         # Handle range 0x10000-0x10ffff
         else
-            ch = @get_utf8_4!(dat, pos, ch)
-            @output_utf16_surr!(buf, out, ch)
+            pos += 3
+            ch = get_utf8_4(dat, pos, ch)
+            # output surrogate pair
+            buf[out += 1] = UInt16(0xd7c0 + (ch >>> 10))
+            buf[out += 1] = UInt16(0xdc00 + (ch & 0x3ff))
         end
     end
     UTF16String(buf)
@@ -551,9 +522,10 @@ end
 
 #=
 @doc """
-@brief      Reencodes a UTF-16 or UTF-32 encoded string using UTF-8 encoding
+@brief      Converts a UTF-16 encoded vector of UInt16 to a UTF8String
 
-@param[in]  str::Union(Vector{UInt16}, Vector{UInt32})
+@param[in]  ::Type{UTF8String}
+@param[in]  dat::Vector{UInt16}
 
 @return     ::UTF8String
 @throws     ArgumentError
@@ -573,6 +545,7 @@ end
 @doc """
 @brief      Converts a UTF16String to a UTF8String
 
+@param[in]  ::Type{UTF8String}
 @param[in]  str::UTF16String
 
 @return     ::UTF8String
@@ -592,8 +565,9 @@ end
 
 #=
 @doc """
-@brief      Encodes a vector of UInt32 to a UTF8String
+@brief      Encodes a UTF-32 encoded vector of UInt32 to a UTF8String
 
+@param[in]  ::Type{UTF8String}
 @param[in]  dat::Vector{UInt32}
 
 @return     ::UTF8String
@@ -614,6 +588,7 @@ end
 @doc """
 @brief      Converts a UTF32String to a UTF8String
 
+@param[in]  ::Type{UTF8String}
 @param[in]  str::UTF32String
 
 @return     ::UTF8String
@@ -633,7 +608,7 @@ end
 
 #=
 @doc """
-@brief      Encodes an already validated vector of UInt16 or UInt32 as UTF-8
+@brief      Converts an already validated vector of UInt16 or UInt32 to a UTF8String
 
 @param[in]  T           type (UInt16 or UInt32)
 @param[in]  dat         Vector{T}
@@ -644,8 +619,8 @@ end
 =#
 function encode_to_utf8{T<:Union(UInt16, UInt32)}(::Type{T}, dat, len)
     buf = Vector{UInt8}(len)
-    out::UInt = 0
-    pos::UInt = 0
+    out = 0
+    pos = 0
     @inbounds while out < len
         ch::UInt32 = dat[pos += 1]
         # Handle ASCII characters
@@ -653,17 +628,21 @@ function encode_to_utf8{T<:Union(UInt16, UInt32)}(::Type{T}, dat, len)
             buf[out += 1] = ch
         # Handle 0x80-0x7ff
         elseif ch < 0x800
-            @output_utf8_2!(buf, out, ch)
+            buf[out += 1] = 0xc0 | (ch >>> 6)
+            buf[out += 1] = 0x80 | (ch & 0x3f)
         # Handle 0x10000-0x10ffff (if input is UInt32)
         elseif T == UInt32 && ch > 0xffff
-            @output_utf8_4!(buf, out, ch)
+            output_utf8_4(buf, out, ch)
+            out += 4
         # Handle surrogate pairs
-        elseif is_surrogate_char(ch)
-            ch = get_supplementary(ch, dat[pos += 1])
-            @output_utf8_4!(buf, out, ch)
+        elseif is_surrogate_codepoint(ch)
+            output_utf8_4(buf, out, get_supplementary(ch, dat[pos += 1]))
+            out += 4
         # Handle 0x800-0xd7ff, 0xe000-0xffff UCS-2 characters
         else
-            @output_utf8_3!(buf, out, ch)
+            buf[out += 1] = 0xe0 | ((ch >>> 12) & 0x3f)
+            buf[out += 1] = 0x80 | ((ch >>> 6) & 0x3f)
+            buf[out += 1] = 0x80 | (ch & 0x3f)
         end
     end
     UTF8String(buf)
@@ -671,9 +650,10 @@ end
 
 #=
 """
-@brief      Converts a UTF-8 encoded string to UTF-32 encoding
+@brief      Converts a UTF8String to a UTF32String
 
-@param[in]  dat::Vector{UInt8}
+@param[in]  ::Type{UTF32String}
+@param[in]  str::UTF8String
 
 @return     ::UTF32String
 @throws     ArgumentError
@@ -687,11 +667,11 @@ function convert(::Type{UTF32String}, str::UTF8String)
     len, flags = check_string_utf8(dat)
     # Optimize case where no characters > 0x7f
     totlen = len+1
-    flags == 0 && @return_fast_utf_copy(UTF32String, Char, totlen, dat)
+    flags == 0 && return fast_utf_copy(Char, totlen, dat)
     # has multi-byte UTF-8 sequences
     buf = Vector{Char}(totlen)
     @inbounds buf[totlen] = 0 # NULL termination
-    local ch::UInt32
+    local ch::UInt32, surr::UInt32
     out = 0
     pos = 0
     @inbounds while out < len
@@ -701,19 +681,25 @@ function convert(::Type{UTF32String}, str::UTF8String)
             buf[out += 1] = ch
         # Handle range 0x80-0x7ff
         elseif ch < 0xe0
-            buf[out += 1] = @get_utf8_2!(dat, pos, ch)
+            buf[out += 1] = ((ch & 0x1f) << 6) | (dat[pos += 1] & 0x3f)
         # Handle range 0x800-0xffff
         elseif ch < 0xf0
-            ch = @get_utf8_3!(dat, pos, ch)
+            pos += 2
+            ch = get_utf8_3(dat, pos, ch)
             # Handle surrogate pairs (should have been encoded in 4 bytes)
             if is_surrogate_lead(ch)
                 # Build up 32-bit character from ch and trailing surrogate in next 3 bytes
-                ch = get_supplementary(ch, @get_utf8_surr!(dat, pos))
+                pos += 3
+                surr = ((UInt32(dat[pos-2] & 0xf) << 12)
+                        | (UInt32(dat[pos-1] & 0x3f) << 6)
+                        | (dat[pos] & 0x3f))
+                ch = get_supplementary(ch, surr)
             end
             buf[out += 1] = ch
         # Handle range 0x10000-0x10ffff
         else
-            buf[out += 1] = @get_utf8_4!(dat, pos, ch)
+            pos += 3
+            buf[out += 1] = get_utf8_4(dat, pos, ch)
         end
     end
     UTF32String(buf)
@@ -723,6 +709,7 @@ end
 """
 @brief      Converts a UTF16String to UTF32String
 
+@param[in]  ::Type{UTF32String}
 @param[in]  str::UTF16String
 
 @return     ::UTF32String
@@ -753,8 +740,9 @@ end
 
 #=
 """
-@brief      Converts a Vector of UInt32 to a UTF16String
+@brief      Converts a UTF-32 encoded vector of UInt32 to a UTF16String
 
+@param[in]  ::Type{UTF16String}
 @param[in]  dat::Vector{UInt32}
 
 @return     ::UTF16String
@@ -769,7 +757,7 @@ function convert(::Type{UTF16String}, dat::Vector{UInt32})
     len, flags, num4byte = check_string_utf32(dat, len>>>2)
     len += num4byte + 1
     # optimized path, no surrogates
-    num4byte == 0 && @return_fast_utf_copy(UTF16String, UInt16, len, dat)
+    num4byte == 0 && return fast_utf_copy(UInt16, len, dat)
     return encode_to_utf16(dat, len)
 end
 
@@ -777,6 +765,7 @@ end
 """
 @brief      Converts a UTF32String to UTF16String
 
+@param[in]  ::Type{UTF16String}
 @param[in]  str::UTF32String
 
 @return     ::UTF16String
@@ -797,10 +786,10 @@ end
 
 #=
 @doc """
-@brief      Encodes an already validated Vector of UInt32 as UTF-16
+@brief      Converts an already validated UTF-32 encoded vector of UInt32 to a UTF16String
 
-@param[in]  dat         Vector{UInt32}
-@param[in]  len         length of output in 16-bit words
+@param[in]  dat::Vector{UInt32} UTF-32 encoded data
+@param[in]  len                 length of output in 16-bit words
 
 @return     ::UTF16String
 """ ->
@@ -828,14 +817,12 @@ utf16(x) = convert(UTF16String, x)
 
 function convert(::Type{UTF16String}, str::ASCIIString)
     dat = str.data
-    len = length(dat)+1
-    @return_fast_utf_copy(UTF16String, UInt16, len, dat)
+    fast_utf_copy(UInt16, length(dat)+1, dat)
 end
 
 function convert(::Type{UTF32String}, str::ASCIIString)
     dat = str.data
-    len = length(dat)+1
-    @return_fast_utf_copy(UTF32String, Char, len, dat)
+    fast_utf_copy(Char, length(dat)+1, dat)
 end
 
 convert(::Type{UTF16String}, str::UTF16String)    = str
@@ -860,13 +847,13 @@ function isvalid(::Type{UTF16String}, data::AbstractArray{UInt16})
     @inbounds while i < n # check for unpaired surrogates
         if is_surrogate_lead(data[i]) && is_surrogate_trail(data[i+1])
             i += 2
-        elseif is_surrogate_char(data[i])
+        elseif is_surrogate_codepoint(data[i])
             return false
         else
             i += 1
         end
     end
-    return i > n || !is_surrogate_char(data[i])
+    return i > n || !is_surrogate_codepoint(data[i])
 end
 
 function convert(::Type{UTF16String}, data::AbstractVector{UInt16})
@@ -931,8 +918,8 @@ function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
     convert(T, takebuf_string(s))
 end
 
-convert(::Type{Array{Char,1}}, s::UTF32String) = s.data
-convert(::Type{Array{Char}},   s::UTF32String) = s.data
+convert(::Type{Vector{Char}}, str::UTF32String) = str.data
+convert(::Type{Array{Char}},  str::UTF32String) = str.data
 
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
@@ -961,7 +948,7 @@ end
 
 function isvalid(::Type{UTF32String}, str::Union(Vector{Char}, Vector{UInt32}))
     for i=1:length(str)
-        @inbounds if !isvalid(Char, reinterpret(UInt32, str[i])) ; return false ; end
+        @inbounds if !isvalid(Char, UInt32(str[i])) ; return false ; end
     end
     return true
 end
