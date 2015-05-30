@@ -736,12 +736,13 @@ const jl_value_t * jl_to_ptx() {
     // TODO: use cuLinkAddData for incremental kernel linking?
     // TODO: only read the file once for every compilation?
     // TODO: read the capabilities (in user-code?), don't hardcode compute_20
-    const char* LibDeviceDirs[2] = {
+    const char* LibDeviceDirs[3] = {
             "/usr/lib/nvidia-cuda-toolkit/libdevice",
+            "/opt/cuda/nvvm/libdevice",
             getenv("NVVMIR_LIBRARY_DIR") };
     const char *LibDeviceDir = NULL;
     bool isDir = false;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         if (LibDeviceDirs[i] == NULL)
             continue;
 #if defined(LLVM35) || defined(LLVM36)
