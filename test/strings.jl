@@ -673,6 +673,10 @@ end
 @test lowercase("AbC") == "abc"
 @test lowercase('A') == 'a'
 @test lowercase('a') == 'a'
+@test uppercase('α') == '\u0391'
+@test lowercase('Δ') == 'δ'
+@test lowercase('\U118bf') == '\U118df'
+@test uppercase('\U1044d') == '\U10425'
 @test ucfirst("Abc") == "Abc"
 @test ucfirst("abc") == "Abc"
 @test lcfirst("ABC") == "aBC"
