@@ -124,22 +124,34 @@ end
 @enum WorkerState W_RUNNING W_TERMINATING W_TERMINATED
 type Worker
     id::Int
-    r_stream::AsyncStream
-    w_stream::AsyncStream
-    manager::ClusterManager
-    config::WorkerConfig
-
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
     state::WorkerState
 
-    Worker(id, r_stream, w_stream, manager, config) =
-        new(id, r_stream, buffer_writes(w_stream), manager, config, [], [], false, W_RUNNING)
+    r_stream::AsyncStream
+    w_stream::AsyncStream
+    manager::ClusterManager
+    config::WorkerConfig
+
+    function Worker(id, r_stream, w_stream, manager, config)
+        w = Worker(id)
+        w.r_stream = r_stream
+        w.w_stream = buffer_writes(w_stream)
+        w.manager = manager
+        w.config = config
+        w
+    end
+
+    function Worker(id)
+        if haskey(map_pid_wrkr, id)
+            return map_pid_wrkr[id]
+        end
+        new(id, [], [], false, W_RUNNING)
+    end
 end
 
 Worker(id, r_stream, w_stream, manager) = Worker(id, r_stream, w_stream, manager, WorkerConfig())
-
 
 
 function send_msg_now(w::Worker, kind, args...)
@@ -151,6 +163,9 @@ function send_msg(w::Worker, kind, args...)
 end
 
 function flush_gc_msgs(w::Worker)
+    if !isdefined(w, :w_stream)
+        return
+    end
     w.gcflag = false
     msgs = copy(w.add_msgs)
     if !isempty(msgs)
@@ -317,15 +332,16 @@ function worker_from_id(pg::ProcessGroup, i)
     if in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
-    if myid()==1 && !haskey(map_pid_wrkr,i)
-        error("no process with id $i exists")
+    if !haskey(map_pid_wrkr,i)
+        if myid() == 1
+            error("no process with id $i exists")
+        end
+        w = Worker(i)
+        map_pid_wrkr[i] = w
+    else
+        w = map_pid_wrkr[i]
     end
-    start = time()
-    while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
-        sleep(0.1)
-        yield()
-    end
-    map_pid_wrkr[i]
+    w
 end
 
 function worker_id_from_socket(s)
