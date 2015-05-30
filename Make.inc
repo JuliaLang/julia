@@ -505,8 +505,8 @@ ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
 LLVM_ASSERTIONS=1
-LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-LLVM_VER=3.6.0
+#LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
+LLVM_VER=3.6.1
 
 USE_BLAS64=0
 OPENBLAS_DYNAMIC_ARCH=0
