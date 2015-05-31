@@ -530,7 +530,7 @@ struct jl_gcinfo_t {
     Instruction *last_gcframe_inst;
     std::vector<Instruction*> gc_frame_pops;
     std::vector<std::pair<Instruction*, int> > gc_frame_geps;
-    std::vector<std::pair<jl_gcinfo_t, int> > child_frames;
+    std::vector<jl_gcinfo_t> child_frames;
 };
 
 namespace std {
@@ -616,19 +616,25 @@ static void finalize_gc_frame(jl_codectx_t *ctx);
 class LocalGCFrame {
     jl_codectx_t *ctx;
     jl_gcinfo_t gc;
+    int depth;
     bool frame_swapped;
 
     LocalGCFrame(const LocalGCFrame&); // = delete;
 public:
-    LocalGCFrame(jl_codectx_t *_ctx, bool create=true)
+    LocalGCFrame(jl_codectx_t *_ctx, bool enabled=true)
         : ctx(_ctx),
           gc(),
+          depth(-1),
           frame_swapped(false)
     {
-        if (create && ctx->gc.argSpaceOffs + ctx->gc.maxDepth == 0) {
+        if (!enabled)
+            return;
+        if (ctx->gc.argSpaceOffs + ctx->gc.maxDepth == 0) {
             std::swap(gc, ctx->gc);
             allocate_gc_frame(0, builder.GetInsertBlock(), ctx);
             frame_swapped = true;
+        } else {
+            depth = ctx->gc.argDepth;
         }
     }
     void
@@ -639,8 +645,8 @@ public:
             finalize_gc_frame(ctx);
             std::swap(gc, ctx->gc);
             if (gc.argSpaceOffs + gc.maxDepth != 0) {
-                ctx->gc.child_frames.push_back(std::make_pair(jl_gcinfo_t(), 0));
-                std::swap(ctx->gc.child_frames.back().first, gc);
+                ctx->gc.child_frames.push_back(jl_gcinfo_t());
+                std::swap(ctx->gc.child_frames.back(), gc);
             } else if (gc.child_frames.size()) {
                 ctx->gc.child_frames.reserve(gc.child_frames.size());
                 ctx->gc.child_frames.insert(ctx->gc.child_frames.end(),
@@ -648,6 +654,9 @@ public:
                                             gc.child_frames.end());
             }
             frame_swapped = false;
+        } else if (depth >= 0) {
+            ctx->gc.argDepth = depth;
+            depth = -1;
         }
     }
     ~LocalGCFrame()
@@ -3620,9 +3629,8 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     else {
         // Merge child frames if necessary
         for (size_t i = 0;i < gc->child_frames.size();i++) {
-            jl_gcinfo_t &cld = gc->child_frames[i].first;
-            int offset = gc->child_frames[i].second;
-            merge_gc_frame(ctx, &cld, offset);
+            jl_gcinfo_t &cld = gc->child_frames[i];
+            merge_gc_frame(ctx, &cld, 0);
         }
         gc->child_frames.clear();
         // n_frames++;
