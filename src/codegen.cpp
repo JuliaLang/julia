@@ -1526,11 +1526,16 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 
 // --- gc root utils ---
 
+static Value*
+emit_local_slot(int slot, jl_codectx_t *ctx)
+{
+    return builder.CreateConstGEP1_32(ctx->gc.argTemp, slot);
+}
+
 static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
 {
     uint64_t slot = ctx->gc.argSpaceOffs + ctx->gc.argDepth;
-    Value *froot = builder.CreateGEP(ctx->gc.argTemp,
-                                     ConstantInt::get(T_size,slot));
+    Value *froot = emit_local_slot(slot, ctx);
     builder.CreateStore(v, froot);
 #ifdef LLVM36
     if (var != NULL) {
@@ -1801,8 +1806,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
-    Value *myargs = builder.CreateGEP(ctx->gc.argTemp,
-                                      ConstantInt::get(T_size, argStart+ctx->gc.argSpaceOffs));
+    Value *myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(jlgetfield_func), {V_null, myargs,
                                         ConstantInt::get(T_int32,2)});
@@ -2412,8 +2416,7 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
     // call
     Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
     if (ctx->gc.argTemp != NULL && nargs > 0) {
-        myargs = builder.CreateGEP(ctx->gc.argTemp,
-                                   ConstantInt::get(T_size, argStart+ctx->gc.argSpaceOffs));
+        myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
     }
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
@@ -2604,8 +2607,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         // is function
         Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
         if (ctx->gc.argTemp != NULL && nargs > 0) {
-            myargs = builder.CreateGEP(ctx->gc.argTemp,
-                                       ConstantInt::get(T_size, argStart+1+ctx->gc.argSpaceOffs));
+            myargs = emit_local_slot(argStart + 1 + ctx->gc.argSpaceOffs, ctx);
         }
         theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
 #ifdef LLVM37
@@ -2619,8 +2621,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         ctx->f->getBasicBlockList().push_back(elseBB1);
         builder.SetInsertPoint(elseBB1);
         // not function
-        myargs = builder.CreateGEP(ctx->gc.argTemp,
-                                   ConstantInt::get(T_size, argStart+ctx->gc.argSpaceOffs));
+        myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
 #ifdef LLVM37
         Value *r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
                                         {literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
@@ -3405,11 +3406,10 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 
 #ifdef JL_GC_MARKSWEEP
     // allocate gc frame
-    gc->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                        ConstantInt::get(T_int32,n_roots+2));
-    gc->gcframe = (Instruction*)gc->argTemp;
+    gc->gcframe = (Instruction*)builder.CreateAlloca(
+        jl_pvalue_llvmt, ConstantInt::get(T_int32,n_roots + 2));
     gc->first_gcframe_inst = BasicBlock::iterator(gc->gcframe);
-    gc->argTemp = (Instruction*)builder.CreateConstGEP1_32(gc->argTemp, 2);
+    gc->argTemp = (Instruction*)builder.CreateConstGEP1_32(gc->gcframe, 2);
     gc->storeFrameSize =
         builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
                             builder.CreateBitCast(builder.CreateConstGEP1_32(gc->gcframe, 0), T_psize));
@@ -3425,7 +3425,7 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 #endif
     // initialize local variable stack roots to null
     for(size_t i=0; i < (size_t)gc->argSpaceOffs; i++) {
-        Value *varSlot = builder.CreateConstGEP1_32(gc->argTemp,i);
+        Value *varSlot = emit_local_slot(i, ctx);
         linst = builder.CreateStore(V_null, varSlot);
     }
     gc->last_gcframe_inst = BasicBlock::iterator(linst);
@@ -4364,7 +4364,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             // nothing
         }
         else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
-            Value *av = builder.CreateConstGEP1_32(ctx.gc.argTemp, varnum);
+            Value *av = emit_local_slot(varnum, &ctx);
             varnum++;
             ctx.vars[s].memvalue = av;
         }
@@ -4375,7 +4375,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             // nothing
         }
         else if (ctx.vars[s].hasGCRoot) {
-            Value *lv = builder.CreateConstGEP1_32(ctx.gc.argTemp, varnum);
+            Value *lv = emit_local_slot(varnum, &ctx);
             varnum++;
             ctx.vars[s].memvalue = lv;
         }
@@ -4390,7 +4390,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             // nothing
         }
         else {
-            lv = builder.CreateConstGEP1_32(ctx.gc.argTemp, varnum);
+            lv = emit_local_slot(varnum, &ctx);
             varnum++;
             ctx.gensym_SAvalues.at(i) = lv;
         }
