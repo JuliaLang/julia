@@ -770,7 +770,7 @@ function string(x::BigFloat)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     if 84 <= lng <= 127
         return bytestring(pointer(buf), 1 <= x < 10 || x == 0 ? lng - 4 : lng)
-    if lng < 84 # print at least 78 decimal places
+    elseif lng < 84 # print at least 78 decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.78Re", &x)
     else
         buf = Array(UInt8, lng + 1)
