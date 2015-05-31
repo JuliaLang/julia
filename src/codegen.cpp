@@ -530,6 +530,26 @@ struct jl_gcinfo_t {
     std::vector<Instruction*> gc_frame_pops;
 };
 
+namespace std {
+
+template<>
+void
+swap(jl_gcinfo_t &lhs, jl_gcinfo_t &rhs)
+{
+    swap(lhs.argTemp, rhs.argTemp);
+    swap(lhs.argDepth, rhs.argDepth);
+    swap(lhs.maxDepth, rhs.maxDepth);
+    swap(lhs.argSpaceOffs, rhs.argSpaceOffs);
+    swap(lhs.gcframe, rhs.gcframe);
+#ifdef JL_GC_MARKSWEEP
+    swap(lhs.storeFrameSize, rhs.storeFrameSize);
+#endif
+    swap(lhs.last_gcframe_inst, rhs.last_gcframe_inst);
+    swap(lhs.gc_frame_pops, rhs.gc_frame_pops);
+}
+
+}
+
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 typedef struct {
@@ -587,6 +607,40 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
 static void emit_gcpop(jl_codectx_t *ctx);
 static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx);
 static void finalize_gc_frame(jl_codectx_t *ctx);
+
+class LocalGCFrame {
+    jl_codectx_t *ctx;
+    jl_gcinfo_t gc;
+    bool frame_swapped;
+
+    LocalGCFrame(const LocalGCFrame&); // = delete;
+public:
+    LocalGCFrame(jl_codectx_t *_ctx, bool create=true)
+        : ctx(_ctx),
+          gc(),
+          frame_swapped(false)
+    {
+        if (create && ctx->gc.argSpaceOffs + ctx->gc.maxDepth == 0) {
+            std::swap(gc, ctx->gc);
+            allocate_gc_frame(0, builder.GetInsertBlock(), ctx);
+            frame_swapped = true;
+        }
+    }
+    void
+    restore()
+    {
+        if (frame_swapped) {
+            emit_gcpop(ctx);
+            finalize_gc_frame(ctx);
+            std::swap(gc, ctx->gc);
+            frame_swapped = false;
+        }
+    }
+    ~LocalGCFrame()
+    {
+        restore();
+    }
+};
 
 // NoopType
 static Type *NoopType;
@@ -2139,9 +2193,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_throw && nargs==1) {
+        LocalGCFrame local_gc_frame(ctx);
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
-        JL_GC_POP();
         raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
+        local_gc_frame.restore();
+        JL_GC_POP();
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
