@@ -158,13 +158,20 @@ vecnormp(x, p) = generic_vecnormp(x, p)
 
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
-    p == 2 && return vecnorm2(itr)
-    p == 1 && return vecnorm1(itr)
-    p == Inf && return vecnormInf(itr)
-    p == 0 && return convert(typeof(float(real(zero(eltype(itr))))),
-                             countnz(itr))
-    p == -Inf && return vecnormMinusInf(itr)
-    vecnormp(itr,p)
+    if p == 2
+        return vecnorm2(itr)
+    elseif p == 1
+        return vecnorm1(itr)
+    elseif p == Inf
+        return vecnormInf(itr)
+    elseif p == 0
+        return convert(typeof(float(real(zero(eltype(itr))))),
+               countnz(itr))
+    elseif p == -Inf
+        return vecnormMinusInf(itr)
+    else
+        vecnormp(itr,p)
+    end
 end
 vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 
@@ -209,10 +216,15 @@ function normInf{T}(A::AbstractMatrix{T})
     return convert(Tnorm, nrm)
 end
 function norm{T}(A::AbstractMatrix{T}, p::Real=2)
-    p == 2 && return norm2(A)
-    p == 1 && return norm1(A)
-    p == Inf && return normInf(A)
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    if p == 2
+        return norm2(A)
+    elseif p == 1
+        return norm1(A)
+    elseif p == Inf
+        return normInf(A)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
 end
 
 norm(x::Number, p::Real=2) =
@@ -220,7 +232,9 @@ norm(x::Number, p::Real=2) =
 
 function vecdot(x::AbstractVector, y::AbstractVector)
     lx = length(x)
-    lx==length(y) || throw(DimensionMismatch())
+    if lx != length(y)
+        throw(DimensionMismatch("Vector x has length $lx, but vector y has length $(length(y))"))
+    end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
@@ -234,21 +248,29 @@ end
 function vecdot(x, y) # arbitrary iterables
     ix = start(x)
     if done(x, ix)
-        isempty(y) || throw(DimensionMismatch())
+        if !isempty(y)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+        end
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
     iy = start(y)
-    done(y, iy) && throw(DimensionMismatch())
+    if done(y, iy)
+        throw(DimensionMismatch("x and y are of different lengths!"))
+    end
     (vx, ix) = next(x, ix)
     (vy, iy) = next(y, iy)
     s = dot(vx, vy)
     while !done(x, ix)
-        done(y, iy) && throw(DimensionMismatch())
+        if done(y, iy)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+        end
         (vx, ix) = next(x, ix)
         (vy, iy) = next(y, iy)
         s += dot(vx, vy)
     end
-    !done(y, iy) && throw(DimensionMismatch())
+    if !done(y, iy)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+    end
     return s
 end
 
@@ -286,7 +308,9 @@ function inv{T}(A::AbstractMatrix{T})
 end
 
 function \{T}(A::AbstractMatrix{T}, B::AbstractVecOrMat{T})
-    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    if size(A,1) != size(B,1)
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    end
     factorize(A)\B
 end
 function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
@@ -310,7 +334,9 @@ condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = no
 
 function issym(A::AbstractMatrix)
     m, n = size(A)
-    m==n || return false
+    if m != n
+        return false
+    end
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != transpose(A[j,i])
             return false
@@ -323,7 +349,9 @@ issym(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
-    m==n || return false
+    if m != n
+        return false
+    end
     for i = 1:n, j = i:n
         if A[i,j] != ctranspose(A[j,i])
             return false
@@ -397,14 +425,18 @@ end
 #                                          for BlasFloat Arrays)
 function axpy!(alpha, x::AbstractArray, y::AbstractArray)
     n = length(x)
-    n==length(y) || throw(DimensionMismatch())
+    if n != length(y)
+        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+    end
     for i = 1:n
         @inbounds y[i] += alpha * x[i]
     end
     y
 end
 function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    length(x)==length(y) || throw(DimensionMismatch())
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y) || length(rx) != length(ry)
         throw(BoundsError())
     end
@@ -417,8 +449,12 @@ end
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
-    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
+    if !(1 <= col <= n)
+        throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    end
     @inbounds begin
         ξ1 = A[row,col]
         normu = abs2(ξ1)
@@ -438,9 +474,15 @@ function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
 end
 function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
-    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
-    row <= col || error("col cannot be larger than row")
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
+    if !(1 <= col <= n)
+        throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    end
+    if row > col
+        throw(ArgumentError("row cannot be larger than col"))
+    end
     @inbounds begin
         ξ1 = A[row,col]
         normu = abs2(ξ1)
@@ -460,7 +502,9 @@ function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
 end
 function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
     @inbounds begin
         ξ1 = A[row,row]
         normu = abs2(A[row,row])
