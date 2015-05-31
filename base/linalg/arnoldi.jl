@@ -18,19 +18,25 @@ function eigs(A, B;
     isgeneral = B !== I
     sym = issym(A) && !iscmplx
     nevmax=sym ? n-1 : n-2
-    nevmax > 0 || throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
+    if nevmax <= 0
+        throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
+    end
     if nev > nevmax
         warn("Adjusting nev from $nev to $nevmax")
         nev = nevmax
     end
-    nev > 0 || throw(ArgumentError("requested number of eigenvalues (nev) must be ≥ 1, got $nev"))
+    if nev <= 0
+        throw(ArgumentError("requested number of eigenvalues (nev) must be ≥ 1, got $nev"))
+    end
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
         warn("Adjusting ncv from $ncv to $ncvmin")
         ncv = ncvmin
     end
     ncv = blas_int(min(ncv, n))
-    isgeneral && !isposdef(B) && throw(PosDefException(0))
+    if isgeneral && !isposdef(B)
+        throw(PosDefException(0))
+    end
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
 
@@ -42,7 +48,9 @@ function eigs(A, B;
         which != :LI && which != :SI && which != :BE)
        throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
     end
-    which != :BE || sym || throw(ArgumentError("which=:BE only possible for real symmetric problem"))
+    if which == :BE && !sym
+        throw(ArgumentError("which=:BE only possible for real symmetric problem"))
+    end
     isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
 
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
@@ -57,8 +65,12 @@ function eigs(A, B;
     sigma = isshift ? convert(T,sigma) : zero(T)
 
     if !isempty(v0)
-        length(v0)==n || throw(DimensionMismatch())
-        eltype(v0)==T || throw(ArgumentError("starting vector must have element type $T, got $(eltype(v0))"))
+        if length(v0) != n
+            throw(DimensionMismatch())
+        end
+        if eltype(v0) != T
+            throw(ArgumentError("starting vector must have element type $T, got $(eltype(v0))"))
+        end
     end
 
     whichstr = "LM"
@@ -72,10 +84,18 @@ function eigs(A, B;
         whichstr = (!sym ? "SR" : "SA")
     end
     if which == :LI
-        whichstr = (!sym ? "LI" : throw(ArgumentError("largest imaginary is meaningless for symmetric eigenvalue problems")))
+        if !sym
+            whichstr = "LI"
+        else
+            throw(ArgumentError("largest imaginary is meaningless for symmetric eigenvalue problems"))
+        end
     end
     if which == :SI
-        whichstr = (!sym ? "SI" : throw(ArgumentError("smallest imaginary is meaningless for symmetric eigenvalue problems")))
+        if !sym
+            whichstr = "SI"
+        else
+            throw(ArgumentError("smallest imaginary is meaningless for symmetric eigenvalue problems"))
+        end
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
