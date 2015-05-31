@@ -119,18 +119,20 @@ function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
         L = tril!(A.factors[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
-    end
-    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :p && return ipiv2perm(A.ipiv, m)
-    if d == :P
+    elseif d == :U
+        return triu!(A.factors[1:min(m,n), 1:n])
+    elseif d == :p
+        return ipiv2perm(A.ipiv, m)
+    elseif d == :P
         p = A[:p]
         P = zeros(T, m, m)
         for i in 1:m
             P[i,p[i]] = one(T)
         end
         return P
+    else
+        throw(KeyError(d))
     end
-    throw(KeyError(d))
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
@@ -167,7 +169,9 @@ end
 
 function logdet{T<:Real,S}(A::LU{T,S})
     d,s = logdet2(A)
-    s>=0 || error("DomainError: determinant is negative")
+    if s < 0
+        throw(DomainError("Determinant is negative"))
+    end
     d
 end
 
@@ -260,7 +264,9 @@ factorize(A::Tridiagonal) = lufact(A)
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch())
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
@@ -289,7 +295,9 @@ end
 
 function At_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch(""))
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
@@ -322,7 +330,9 @@ end
 # Ac_ldiv_B!{T<:Real}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) = At_ldiv_B!(A,B)
 function Ac_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch(""))
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
