@@ -575,6 +575,9 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static bool might_need_root(jl_value_t *ex);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
+static void emit_gcpop(jl_codectx_t *ctx);
+static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx);
+static void finalize_gc_frame(jl_codectx_t *ctx);
 
 // NoopType
 static Type *NoopType;
@@ -3396,7 +3399,7 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 #ifdef JL_GC_MARKSWEEP
     // allocate gc frame
     ctx->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                       ConstantInt::get(T_int32,n_roots+2));
+                                        ConstantInt::get(T_int32,n_roots+2));
     ctx->gcframe = (Instruction*)ctx->argTemp;
     ctx->first_gcframe_inst = BasicBlock::iterator(ctx->gcframe);
     ctx->argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx->argTemp, 2);
@@ -3507,6 +3510,21 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         ReplaceInstWithInst(ctx->argTemp->getParent()->getInstList(), bbi,
                             newgcframe);
     }
+#endif
+}
+
+static void
+emit_gcpop(jl_codectx_t *ctx)
+{
+#ifdef JL_GC_MARKSWEEP
+    Instruction *gcpop =
+        (Instruction*)builder.CreateConstGEP1_32(ctx->gcframe, 1);
+    ctx->gc_frame_pops.push_back(gcpop);
+    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false),
+                                              jl_ppvalue_llvmt),
+                        prepare_global(jlpgcstack_var));
+#else
+    (void)ctx;
 #endif
 }
 
@@ -3685,12 +3703,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // gc pop. Usually this is done when we encounter the return statement
     // but here we have to do it manually
-#ifdef JL_GC_MARKSWEEP
-    Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
-    ctx.gc_frame_pops.push_back(gcpop);
-    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
-                        prepare_global(jlpgcstack_var));
-#endif
+    emit_gcpop(&ctx);
     finalize_gc_frame(&ctx);
 
     if (isref&1) {
@@ -3791,12 +3804,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     // gc pop. Usually this is done when we encounter the return statement
     // but here we have to do it manually
-#ifdef JL_GC_MARKSWEEP
-    Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
-    ctx.gc_frame_pops.push_back(gcpop);
-    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
-                        prepare_global(jlpgcstack_var));
-#endif
+    emit_gcpop(&ctx);
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
 
@@ -4655,12 +4663,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             else {
                 retval = emit_expr(jl_exprarg(ex,0), &ctx, false);
             }
-#ifdef JL_GC_MARKSWEEP
-            Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
-            ctx.gc_frame_pops.push_back(gcpop);
-            builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
-                                prepare_global(jlpgcstack_var));
-#endif
+            emit_gcpop(&ctx);
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
