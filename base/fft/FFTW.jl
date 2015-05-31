@@ -56,7 +56,7 @@ const RODFT11 = 10
 
 let k2s = Dict{Int,ASCIIString}(R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT", REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10", REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01", RODFT10 => "RODFT10", RODFT11 => "RODFT11")
     global kind2string
-    kind2string(k::Integer) = k2s[int(k)]
+    kind2string(k::Integer) = k2s[Int(k)]
 end
 
 # FFTW floating-point types:
@@ -528,7 +528,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return r2rFFTWPlan(plan, flags, R, X, Y, tuple(int(knd)...))
+        return r2rFFTWPlan(plan, flags, R, X, Y, tuple(map(Int,knd)...))
     end
 
     # support r2r transforms of complex = transforms of real & imag parts
@@ -552,7 +552,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return r2rFFTWPlan(plan, flags, R, X, Y, tuple(int(knd)...))
+        return r2rFFTWPlan(plan, flags, R, X, Y, tuple(map(Int,knd)...))
     end
 
 end

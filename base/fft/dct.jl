@@ -34,7 +34,7 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
         r = [1:n for n in size(X)]
         nrm = sqrt(0.5^length(region) * normalization(X,region))
         DCTPlan{T,$K,$inplace}($pfr(X, $K, region; kws...), r, nrm,
-                               ntuple(length(region), i -> int(region[i])))
+                               ntuple(length(region), i -> Int(region[i])))
     end
 end
 
