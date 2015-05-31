@@ -3431,49 +3431,54 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     gc->last_gcframe_inst = BasicBlock::iterator(linst);
 }
 
+static void clear_gc_frame(jl_gcinfo_t *gc)
+{
+    // replace instruction uses with Undef first to avoid LLVM assertion failures
+    BasicBlock::iterator bbi = gc->first_gcframe_inst;
+    while (1) {
+        Instruction &iii = *bbi;
+        Type *ty = iii.getType();
+        if (ty != T_void)
+            iii.replaceAllUsesWith(UndefValue::get(ty));
+        if (bbi == gc->last_gcframe_inst) break;
+        bbi++;
+    }
+    for (size_t i=0; i < gc->gc_frame_pops.size(); i++) {
+        Instruction *pop = gc->gc_frame_pops[i];
+        BasicBlock::iterator pi(pop);
+        for(size_t j=0; j < 4; j++) {
+            Instruction &iii = *pi;
+            Type *ty = iii.getType();
+            if (ty != T_void)
+                iii.replaceAllUsesWith(UndefValue::get(ty));
+            pi++;
+        }
+    }
+
+    BasicBlock::InstListType &il = gc->gcframe->getParent()->getInstList();
+    il.erase(gc->first_gcframe_inst, gc->last_gcframe_inst);
+    // erase() erases up *to* the end point; erase last inst too
+    il.erase(gc->last_gcframe_inst);
+    for(size_t i=0; i < gc->gc_frame_pops.size(); i++) {
+        Instruction *pop = gc->gc_frame_pops[i];
+        BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
+        BasicBlock::iterator pi(pop);
+        for(size_t j=0; j < 4; j++) {
+            pi = il2.erase(pi);
+        }
+    }
+}
+
 static void finalize_gc_frame(jl_codectx_t *ctx)
 {
     jl_gcinfo_t *gc = &ctx->gc;
 #ifdef JL_GC_MARKSWEEP
     if (gc->argSpaceOffs + gc->maxDepth == 0) {
         // 0 roots; remove gc frame entirely
-        // replace instruction uses with Undef first to avoid LLVM assertion failures
-        BasicBlock::iterator bbi = gc->first_gcframe_inst;
-        while (1) {
-            Instruction &iii = *bbi;
-            Type *ty = iii.getType();
-            if (ty != T_void)
-                iii.replaceAllUsesWith(UndefValue::get(ty));
-            if (bbi == gc->last_gcframe_inst) break;
-            bbi++;
-        }
-        for(size_t i=0; i < gc->gc_frame_pops.size(); i++) {
-            Instruction *pop = gc->gc_frame_pops[i];
-            BasicBlock::iterator pi(pop);
-            for(size_t j=0; j < 4; j++) {
-                Instruction &iii = *pi;
-                Type *ty = iii.getType();
-                if (ty != T_void)
-                    iii.replaceAllUsesWith(UndefValue::get(ty));
-                pi++;
-            }
-        }
-
-        BasicBlock::InstListType &il = gc->gcframe->getParent()->getInstList();
-        il.erase(gc->first_gcframe_inst, gc->last_gcframe_inst);
-        // erase() erases up *to* the end point; erase last inst too
-        il.erase(gc->last_gcframe_inst);
-        for(size_t i=0; i < gc->gc_frame_pops.size(); i++) {
-            Instruction *pop = gc->gc_frame_pops[i];
-            BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
-            BasicBlock::iterator pi(pop);
-            for(size_t j=0; j < 4; j++) {
-                pi = il2.erase(pi);
-            }
-        }
+        clear_gc_frame(gc);
     }
     else {
-        //n_frames++;
+        // n_frames++;
         BasicBlock::iterator bbi(gc->gcframe);
         AllocaInst *newgcframe =
             new AllocaInst(jl_pvalue_llvmt,
