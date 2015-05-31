@@ -169,6 +169,7 @@ void *mach_profile_listener(void *arg)
 {
     (void)arg;
     int max_size = 512;
+    attach_exception_port();
     mach_profiler_thread = mach_thread_self();
     mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
     while (1) {

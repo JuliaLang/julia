@@ -154,6 +154,9 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 DLLEXPORT void jl_raise_debugger(void);
+#ifdef _OS_DARWIN_
+DLLEXPORT void attach_exception_port(void);
+#endif
 
 // timers
 // Returns time in nanosec
