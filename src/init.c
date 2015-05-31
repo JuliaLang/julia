@@ -955,6 +955,15 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.load = abspath(jl_options.load);
 }
 
+#ifdef _OS_DARWIN_
+void attach_exception_port()
+{
+    kern_return_t ret;
+    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
+}
+#endif
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     libsupport_init();
@@ -1140,8 +1149,7 @@ void jl_install_default_signal_handlers(void)
     }
     pthread_attr_destroy(&attr);
 
-    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
+    attach_exception_port();
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
