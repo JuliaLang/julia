@@ -280,7 +280,7 @@ function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     dims == size(B) && return B
-    Br = BitArray{N}(ntuple(N,i->0)...)
+    Br = BitArray{N}(ntuple(i->0,N)...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
     N != 1 && (Br.dims = dims)
@@ -1710,7 +1710,7 @@ function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
     (ndimsB == length(perm) && isperm(perm)) || throw(ArgumentError("no valid permutation of dimensions"))
-    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
+    dimsP = ntuple(i->dimsB[perm[i]], ndimsB)::typeof(dimsB)
     P = similar(B, dimsP)
     permutedims!(P, B, perm)
 end
@@ -1831,7 +1831,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         end
     end
 
-    cat_ranges = ntuple(nargs, i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1))
+    cat_ranges = ntuple(i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1), nargs)
 
     function compute_dims(d)
         if d == catdim
@@ -1844,7 +1844,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::Tuple{Vararg{Int}}
+    dimsC = ntuple(compute_dims, ndimsC)::Tuple{Vararg{Int}}
     typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
     if !has_integer || typeC == Bool
         C = BitArray(dimsC)
@@ -1855,8 +1855,8 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     range = 1
     for k = 1:nargs
         nextrange = range + cat_ranges[k]
-        cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     (1:dimsC[i]) : (range:nextrange-1) ))
+        cat_one = ntuple(i->(i != catdim ? (1:dimsC[i]) : (range:nextrange-1)),
+                         ndimsC)
         # note: when C and X are BitArrays, this calls
         #       the special assign with ranges
         C[cat_one...] = X[k]
