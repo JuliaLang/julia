@@ -601,7 +601,7 @@ static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t
     Value *preffunc =
         jl_Module->getOrInsertFunction("jl_pointerref",
                                        FunctionType::get(jl_pvalue_llvmt, two_pvalue_llvmt, false));
-    int ldepth = ctx->argDepth;
+    int ldepth = ctx->gc.argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
 #ifdef LLVM37
@@ -609,7 +609,7 @@ static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t
 #else
     Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
 #endif
-    ctx->argDepth = ldepth;
+    ctx->gc.argDepth = ldepth;
     return ret;
 }
 
@@ -661,7 +661,7 @@ static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *
     Value *psetfunc =
         jl_Module->getOrInsertFunction("jl_pointerset",
                                        FunctionType::get(T_void, three_pvalue_llvmt, false));
-    int ldepth = ctx->argDepth;
+    int ldepth = ctx->gc.argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
@@ -670,7 +670,7 @@ static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *
 #else
     builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
 #endif
-    ctx->argDepth = ldepth;
+    ctx->gc.argDepth = ldepth;
     return parg;
 }
 
@@ -880,7 +880,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Type *llt1 = julia_type_to_llvm(t1);
         jl_value_t *t2 = expr_type(args[3], ctx);
         Type *llt2 = julia_type_to_llvm(t2);
-        int argStart = ctx->argDepth;
+        int argStart = ctx->gc.argDepth;
         Value *ifelse_result;
         if (llt1 == jl_pvalue_llvmt && llt2 == jl_pvalue_llvmt) {
             Value *arg1 = emit_expr(args[3], ctx, false);
@@ -903,7 +903,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                  arg1,
                                                  boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx)));
         }
-        ctx->argDepth = argStart;
+        ctx->gc.argDepth = argStart;
         return ifelse_result;
     }
     default: ;
