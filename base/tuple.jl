@@ -28,7 +28,6 @@ eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
 
-ntuple(n::Integer, f::Function) = ntuple(f, n) # TODO: deprecate this?
 ntuple(f::Function, n::Integer) =
     n<=0 ? () :
     n==1 ? (f(1),) :
@@ -36,7 +35,18 @@ ntuple(f::Function, n::Integer) =
     n==3 ? (f(1),f(2),f(3),) :
     n==4 ? (f(1),f(2),f(3),f(4),) :
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-    tuple(ntuple(n-2,f)..., f(n-1), f(n))
+    tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
+
+ntuple(f, ::Type{Val{0}}) = ()
+ntuple(f, ::Type{Val{1}}) = (f(1),)
+ntuple(f, ::Type{Val{2}}) = (f(1),f(2))
+ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
+ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
+ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
+@generated function ntuple{N}(f, ::Type{Val{N}})
+    M = N-5
+    :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
+end
 
 # 0 argument function
 map(f) = f()

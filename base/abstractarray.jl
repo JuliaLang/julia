@@ -81,7 +81,7 @@ function stride(a::AbstractArray, i::Integer)
     return s
 end
 
-strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
+strides(a::AbstractArray) = ntuple(i->stride(a,i), ndims(a))::Dims
 
 function isassigned(a::AbstractArray, i::Int...)
     # TODO
@@ -738,7 +738,7 @@ function hvcat(nbc::Integer, as...)
         throw(ArgumentError("all rows must have the same number of block columns"))
     end
     nbr = div(n,nbc)
-    hvcat(ntuple(nbr, i->nbc), as...)
+    hvcat(ntuple(i->nbc, nbr), as...)
 end
 
 function hvcat{T}(rows::Tuple{Vararg{Int}}, as::AbstractMatrix{T}...)
@@ -1049,7 +1049,7 @@ end
 
 function ind2sub{N,T<:Integer}(dims::NTuple{N,Integer}, ind::AbstractVector{T})
     M = length(ind)
-    t = NTuple{N,Vector{T}}(ntuple(N,n->Array{T}(M)))
+    t = NTuple{N,Vector{T}}(ntuple(n->Array{T}(M),N))
     copy!(t[1],ind)
     for j = 1:N-1
         d = dims[j]

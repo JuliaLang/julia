@@ -425,7 +425,7 @@ function handle_deserialize(s, b)
     return deserialize(s, tag)
 end
 
-deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
+deserialize_tuple(s, len) = ntuple(i->deserialize(s), len)
 
 deserialize(s, ::Type{Symbol}) = symbol(read(s, UInt8, Int32(read(s, UInt8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, UInt8, read(s, Int32)))
