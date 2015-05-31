@@ -1076,6 +1076,7 @@ indexes = collect(R)
 @test indexes[12] == CartesianIndex{2}(5,5)
 @test length(indexes) == 12
 @test length(R) == 12
+@test ndims(R) == 2
 
 r = 2:3
 itr = eachindex(r)
