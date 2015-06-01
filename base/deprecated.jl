@@ -330,12 +330,12 @@ for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32
               (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
               (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
     @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parseint($t,s) for s in a]
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
     end
 end
 for (f,t) in ((:float32, Float32), (:float64, Float64))
     @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parsefloat($t,s) for s in a]
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
     end
 end
 
@@ -367,6 +367,8 @@ end
 @deprecate ldltfact(A::AbstractMatrix, β::Number) ldltfact(A, shift=β)
 
 @deprecate with_env(f::Function, key::AbstractString, val) withenv(f, key=>val)
+
+@deprecate ntuple(n::Integer, f::Function) ntuple(f, n)
 
 # 0.4 discontinued functions
 

@@ -1833,10 +1833,43 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(ceil(-123.456,1), -123.4)
 @test approx_eq(floor(123.456,1), 123.4)
 @test approx_eq(floor(-123.456,1), -123.5)
+# rounding with too much (or too few) precision
+for x in (12345.6789, 0, -12345.6789)
+    y = float(x)
+    @test y == trunc(x, 1000)
+    @test y == round(x, 1000)
+    @test y == floor(x, 1000)
+    @test y == ceil(x, 1000)
+end
+x = 12345.6789
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test Inf == ceil(x, -1000)
+x = -12345.6789
+@test -0.0 == trunc(x, -1000)
+@test -0.0 == round(x, -1000)
+@test -Inf == floor(x, -1000)
+@test -0.0 == ceil(x, -1000)
+x = 0.0
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test 0.0 == ceil(x, -1000)
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
 @test approx_eq(round(pi,3,5), 3.144)
+# vectorized trunc/round/floor/ceil with digits/base argument
+a = rand(2, 2, 2)
+for f in (trunc, round, floor, ceil)
+    @test f(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+    @test f(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+    @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
+    @test f(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+    @test f(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+    @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
+ end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
 @test approx_eq(signif(123.456,1), 100.)
@@ -2457,4 +2490,11 @@ end
 for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
     @test_throws InexactError T(big(typemax(T))+1)
     @test_throws InexactError T(big(typemin(T))-1)
+end
+
+for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
+    @test typeof(big(d)) == Complex{B}
+    @test big(d) == d
+    @test typeof(big([d])) == Vector{Complex{B}}
+    @test big([d]) == [d]
 end

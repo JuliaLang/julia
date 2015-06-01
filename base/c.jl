@@ -67,7 +67,7 @@ containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cin
 function unsafe_convert(::Type{Cstring}, s::ByteString)
     p = unsafe_convert(Ptr{Cchar}, s)
     if containsnul(p, sizeof(s))
-        throw(ArgumentError("embedded NUL chars are not allowed in C strings"))
+        throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
     end
     return Cstring(p)
 end

@@ -3226,7 +3226,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     builder.CreateLoad(prepare_global(jlexc_var), true)),
                 resetstkoflw_blk, handlr);
         builder.SetInsertPoint(resetstkoflw_blk);
-        builder.CreateCall(prepare_call(resetstkoflw_func));
+        builder.CreateCall(prepare_call(resetstkoflw_func)
+#                          ifdef LLVM37
+                           , {}
+#                          endif
+                           );
         builder.CreateBr(handlr);
 #else
         builder.CreateCondBr(isz, tryblk, handlr);
@@ -5527,7 +5531,9 @@ extern "C" void jl_init_codegen(void)
 #if defined(JL_DEBUG_BUILD) && !defined(LLVM37)
     options.JITEmitDebugInfo = true;
 #endif
+#ifndef LLVM37
     options.NoFramePointerElim = true;
+#endif
 #ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
 #endif

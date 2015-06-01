@@ -221,13 +221,17 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
 end
 
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
+    if i1 >= i2
+        throw(ArgumentError("second index must be larger than the first"))
+    end
     c, s, r = givensAlgorithm(f, g)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
+    if i1 >= i2
+        throw(ArgumentError("second index must be larger than the first"))
+    end
     c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
@@ -237,7 +241,9 @@ getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ?
 A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
 function A_mul_B!(G::Givens, A::AbstractMatrix)
     m, n = size(A)
-    G.i2 <= m || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    if G.i2 > m
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:n
         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
         A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
@@ -247,7 +253,9 @@ function A_mul_B!(G::Givens, A::AbstractMatrix)
 end
 function A_mul_Bc!(A::AbstractMatrix, G::Givens)
     m, n = size(A)
-    G.i2 <= n || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    if G.i2 > n
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:m
         tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]

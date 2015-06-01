@@ -882,12 +882,12 @@ A = [NaN]; B = [NaN]
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
-    args = ntuple(N, d->UnitRange{Int})
+    args = ntuple(d->UnitRange{Int}, N)
     @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
     @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
     @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
     # Indexing with (UnitRange, UnitRange, Float64)
-    args = ntuple(N, d->d<N ? UnitRange{Int} : Float64)
+    args = ntuple(d->d<N ? UnitRange{Int} : Float64, N)
     N > 1 && @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N-1}]
     N > 1 && @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == [BitArray{N-1}]
     N > 1 && @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
@@ -995,7 +995,7 @@ for i = 1:10
     @test mdsum(A) == 15
     @test mdsum2(A) == 15
     AA = reshape(aa, tuple(2, shp...))
-    B = sub(AA, 1:1, ntuple(i, i->Colon())...)
+    B = sub(AA, 1:1, ntuple(i->Colon(), i)...)
     @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
     @test mdsum(B) == 15
     @test mdsum2(B) == 15
@@ -1008,7 +1008,7 @@ for i = 2:10
     A = reshape(a, tuple(shp...))
     @test mdsum(A) == 55
     @test mdsum2(A) == 55
-    B = sub(A, ntuple(i, i->Colon())...)
+    B = sub(A, ntuple(i->Colon(), i)...)
     @test mdsum(B) == 55
     @test mdsum2(B) == 55
     insert!(shp, 2, 1)
@@ -1076,6 +1076,7 @@ indexes = collect(R)
 @test indexes[12] == CartesianIndex{2}(5,5)
 @test length(indexes) == 12
 @test length(R) == 12
+@test ndims(R) == 2
 
 r = 2:3
 itr = eachindex(r)

@@ -166,10 +166,11 @@ void SymbolTable::createSymbols()
         name << "L" << addr;
 #ifdef LLVM37
         MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
+        symb->setVariableValue(MCConstantExpr::create(addr, Ctx));
 #else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
-#endif
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+#endif
         isymb->second = symb;
     }
 }
