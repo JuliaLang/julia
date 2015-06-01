@@ -303,7 +303,7 @@ function show{T,K,inplace}(io::IO, p::r2rFFTWPlan{T,K,inplace})
     print(io, inplace ? "FFTW in-place r2r " : "FFTW r2r ")
     if isempty(K)
         print(io, "0-dimensional")
-    elseif K == ntuple(length(K), i -> K[1])
+    elseif K == ntuple(i -> K[1], length(K))
         print(io, kind2string(K[1]))
         if length(K) > 1
             print(io, "^", length(K))

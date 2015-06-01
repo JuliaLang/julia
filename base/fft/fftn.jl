@@ -21,7 +21,7 @@ function show(io::IO, p::MultiDimPlan)
           join(map(string, p.p), "\n"))
 end
 
-size(p::MultiDimPlan) = ntuple(length(p.p), n -> p.p[n].n)
+size(p::MultiDimPlan) = ntuple(n -> p.p[n].n, length(p.p))
 
 function plan_inv{T,forward}(p::MultiDimPlan{T,forward})
     sz = filter(n -> n != 0, map(P -> P.n, p.p))
