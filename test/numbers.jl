@@ -2481,3 +2481,10 @@ for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
     @test_throws InexactError T(big(typemax(T))+1)
     @test_throws InexactError T(big(typemin(T))-1)
 end
+
+for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
+    @test typeof(big(d)) == Complex{B}
+    @test big(d) == d
+    @test typeof(big([d])) == Vector{Complex{B}}
+    @test big([d]) == [d]
+end
