@@ -792,7 +792,9 @@ const jl_value_t * jl_to_ptx() {
     if (Linker::LinkModules(M, M2))
         jl_error("Could not link device library");
 #else
+#ifdef LLVM35
     std::string Error;
+#endif
     if (Linker::LinkModules(M, M2, Linker::DestroySource, &Error))
         jl_errorf("could not link device library: %s", Error.c_str());
 #endif
