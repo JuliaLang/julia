@@ -493,6 +493,28 @@ precompile(Base.string, (ASCIIString, UTF8String, Char))
 precompile(Base.string, (ASCIIString, ASCIIString, Int))
 precompile(Base.vect, (Base.LineEdit.Prompt, ASCIIString))
 
+
+# Speeding up addprocs for LocalManager
+precompile(Base.start_worker, ())
+precompile(Base.start_worker, (Base.TTY,))
+precompile(Base.process_messages, (Base.TCPSocket, Base.TCPSocket))
+precompile(Base.process_messages, (Base.TCPSocket, Base.TCPSocket, Void))
+precompile(Base.process_tcp_streams, (Base.TCPSocket, Base.TCPSocket, Void))
+
+precompile(Base.message_handler_loop, (Base.TCPSocket, Base.TCPSocket, Void))
+
+precompile(Base.connect_to_peer, (Base.LocalManager, Int64, Base.WorkerConfig))
+precompile(Base.connect, (Base.LocalManager, Int64, Base.WorkerConfig))
+precompile(Base.connect_w2w, (Int64, Base.WorkerConfig))
+
+precompile(Base.connect_to_worker, (UTF8String, Int64))
+
+precompile(Base.addprocs, (Base.LocalManager, ))
+precompile(Base.addprocs, (Int, ))
+precompile(Base.setup_launched_worker, (Base.LocalManager, Dict, Base.WorkerConfig, Array{Int,1}))
+precompile(Base.create_worker, (Base.LocalManager, Dict, Base.WorkerConfig))
+precompile(Base.launch, (Base.LocalManager, Dict, Array{Base.WorkerConfig, 1}, Base.Condition))
+
 # Speed up repl help
 if Base.USE_GPL_LIBS
     sprint(Markdown.term, @doc fft)

@@ -259,6 +259,7 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
             catch e
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
+                print("w_in_remote : $w_in_remote\n")
                 print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
                 rethrow(e)
             end
@@ -296,8 +297,8 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", 9)], sshflags))
-    @test length(new_pids) == 9
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", num_workers)], sshflags))
+    @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
 
 end
