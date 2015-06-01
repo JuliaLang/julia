@@ -13,24 +13,22 @@
 # @kmsquire, 2013-11-29
 #
 
-Pkg.add("DataStructures")
-
-using DataStructures
-using HTTPClient.HTTPC
-
 include("../perfutil.jl")
 
 words(text) = eachmatch(r"[a-z]+", lowercase(text))
 
 function train(features)
-    model = DefaultDict(AbstractString, Int, 1)
+    model = Dict{AbstractString, Int}()
     for f in features
-        model[f.match] += 1
+        model[f.match] = 2
     end
     return model
 end
 
-const NWORDS = train(words(bytestring(get("http://norvig.com/big.txt").body)))
+if !isfile("big.txt")
+    download("http://norvig.com/big.txt", "big.txt")
+end
+const NWORDS = train(words(readall("big.txt")))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -76,7 +74,7 @@ function spelltest(tests; bias=0, verbose=false)
     n, bad, unknown, start = 0, 0, 0, tic()
     if bias > 0
         for target in keys(tests)
-            NWORDS[target] += bias
+            NWORDS[target] = get(NWORDS, target, 1) + bias
         end
     end
     for (target,wrongs) in tests
@@ -94,7 +92,7 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>Int(100. - 100.*bad/n),
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100.*bad/n),
                 "unknown"=>unknown, "secs"=>toc())
 end
 
