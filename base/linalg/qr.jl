@@ -75,22 +75,33 @@ convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
 function getindex(A::QR, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return getq(A)
-    throw(KeyError(d))
+    if d == :R
+        return triu!(A.factors[1:min(m,n), 1:n])
+    elseif d == :Q
+        return getq(A)
+    else
+        throw(KeyError(d))
+    end
 end
 function getindex(A::QRCompactWY, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return getq(A)
-    throw(KeyError(d))
+    if d == :R
+        return triu!(A.factors[1:min(m,n), 1:n])
+    elseif d == :Q
+        return getq(A)
+    else
+        throw(KeyError(d))
+    end
 end
 function getindex{T}(A::QRPivoted{T}, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return getq(A)
-    d == :p && return A.jpvt
-    if d == :P
+    if d == :R
+        return triu!(A.factors[1:min(m,n), 1:n])
+    elseif d == :Q
+        return getq(A)
+    elseif d == :p
+        return A.jpvt
+    elseif d == :P
         p = A[:p]
         n = length(p)
         P = zeros(T, n, n)
@@ -98,8 +109,9 @@ function getindex{T}(A::QRPivoted{T}, d::Symbol)
             P[p[i],i] = one(T)
         end
         return P
+    else
+        throw(KeyError(d))
     end
-    throw(KeyError(d))
 end
 
 # Type-stable interface to get Q
@@ -146,7 +158,9 @@ A_mul_B!{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('
 function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
-    mA == mB || throw(DimensionMismatch())
+    if mA != mB
+        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
+    end
     Afactors = A.factors
     @inbounds begin
         for k = min(mA,nA):-1:1
@@ -199,7 +213,9 @@ Ac_mul_B!{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr
 function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
-    mA == mB || throw(DimensionMismatch())
+    if mA != mB
+        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
+    end
     Afactors = A.factors
     @inbounds begin
         for k = 1:min(mA,nA)
@@ -229,7 +245,9 @@ A_mul_B!(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.ormqr!('R', 'N', B.factors, 
 function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
-    nA == mQ || throw(DimensionMismatch())
+    if nA != mQ
+        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
+    end
     Qfactors = Q.factors
     @inbounds begin
         for k = 1:min(mQ,nQ)
@@ -262,7 +280,9 @@ A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr
 function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
-    nA == mQ || throw(DimensionMismatch())
+    if nA != mQ
+        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
+    end
     Qfactors = Q.factors
     @inbounds begin
         for k = min(mQ,nQ):-1:1
@@ -290,7 +310,7 @@ function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPacke
     elseif size(A,2) == size(B.factors,2)
         return A_mul_Bc!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], BB)
     else
-        throw(DimensionMismatch())
+        throw(DimensionMismatch("Matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
 

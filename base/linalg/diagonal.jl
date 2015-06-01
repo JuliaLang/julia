@@ -14,14 +14,22 @@ convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
 convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
-    d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
+    if d[1] != d[2]
+        throw(ArgumentError("Diagonal matrix must be square"))
+    end
     return Diagonal{T}(Array(T,d[1]))
 end
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
-size(D::Diagonal,d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(D.diag) : 1)
+
+function size(D::Diagonal,d::Integer)
+    if d<1
+        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    end
+    return d<=2 ? length(D.diag) : 1
+end
 
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
@@ -64,19 +72,27 @@ Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
-    length(v)==length(D.diag) || throw(DimensionMismatch())
+    if length(v) != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
+    end
     for i=1:length(D.diag)
         d = D.diag[i]
-        d==zero(T) && throw(SingularException(i))
+        if d == zero(T)
+            throw(SingularException(i))
+        end
         v[i] *= inv(d)
     end
     v
 end
 function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
-    size(V,1)==length(D.diag) || throw(DimensionMismatch())
+    if size(V,1) != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
+    end
     for i=1:length(D.diag)
         d = D.diag[i]
-        d==zero(T) && throw(SingularException(i))
+        if d == zero(T)
+            throw(SingularException(i))
+        end
         V[i,:] *= inv(d)
     end
     V
@@ -103,12 +119,16 @@ sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
-    m == length(D.diag) || throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+    if m != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+    end
     (m == 0 || n == 0) && return B
     for j = 1:n
         for i = 1:m
             di = D.diag[i]
-            di == 0 && throw(SingularException(i))
+            if di == 0
+                throw(SingularException(i))
+            end
             B[i,j] /= di
         end
     end
@@ -121,7 +141,9 @@ end
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag)
     for i = 1:length(D.diag)
-        D.diag[i] == zero(T) && throw(SingularException(i))
+        if D.diag[i] == zero(T)
+            throw(SingularException(i))
+        end
         Di[i] = inv(D.diag[i])
     end
     Diagonal(Di)
