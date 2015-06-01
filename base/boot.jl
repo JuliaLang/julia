@@ -136,7 +136,7 @@ export
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, OutOfMemoryError, OverflowError,
-    StackOverflowError, UndefRefError, UndefVarError,
+    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GlobalRef, NewvarNode, GenSym,
@@ -218,6 +218,7 @@ immutable DomainError        <: Exception end
 immutable OverflowError      <: Exception end
 immutable InexactError       <: Exception end
 immutable OutOfMemoryError   <: Exception end
+immutable SegmentationFault  <: Exception end
 immutable StackOverflowError <: Exception end
 immutable UndefRefError      <: Exception end
 immutable UndefVarError      <: Exception

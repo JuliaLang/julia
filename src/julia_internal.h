@@ -180,6 +180,10 @@ DLLEXPORT void jl_atexit_hook();
 #define HAVE_CPUID
 #endif
 
+#ifdef SEGV_EXCEPTION
+extern DLLEXPORT jl_value_t *jl_segv_exception;
+#endif
+
 #ifdef __cplusplus
 }
 #endif
