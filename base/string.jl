@@ -1722,7 +1722,7 @@ wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
 # to have WString
 function unsafe_convert(::Type{Cwstring}, s::WString)
     if containsnul(s)
-        throw(ArgumentError("embedded NUL chars are not allowed in C strings"))
+        throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
     end
     return Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
 end
