@@ -290,9 +290,18 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_memory_exception);
     }
+#ifdef SEGV_EXCEPTION
+    else {
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_throw(jl_segv_exception);
+    }
+#else
     else {
         sigdie_handler(sig, info, context);
     }
+#endif
 }
 #endif
 
@@ -747,6 +756,17 @@ void *mach_segv_listener(void *arg)
     }
 }
 
+#ifdef SEGV_EXCEPTION
+
+void darwin_segv_handler(unw_context_t *uc)
+{
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_exception_in_transit = jl_segv_exception;
+    jl_rethrow();
+}
+
+#endif
+
 void darwin_stack_overflow_handler(unw_context_t *uc)
 {
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
@@ -799,8 +819,12 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
+#ifdef SEGV_EXCEPTION
+    if (1) {
+#else
     if (is_addr_on_stack((void*)fault_addr) ||
         ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)) {
+#endif
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -823,6 +847,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         state.__rdi = (uint64_t)uc;
         if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
             state.__rip = (uint64_t)darwin_accerr_handler;
+#ifdef SEGV_EXCEPTION
+        else if (!is_addr_on_stack((void*)fault_addr))
+            state.__rip = (uint64_t)darwin_segv_handler;
+#endif
         else
             state.__rip = (uint64_t)darwin_stack_overflow_handler;
 
@@ -1340,6 +1368,10 @@ void jl_get_builtin_hooks(void)
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
+
+#ifdef SEGV_EXCEPTION
+    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
+#endif
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
