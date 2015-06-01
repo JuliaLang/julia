@@ -272,13 +272,13 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-#if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
+#if defined(__linux__) || defined(__FreeBSD__)
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if (sig == SIGSEGV && (in_jl_ || is_addr_on_stack(info->si_addr))) { // stack overflow
+    if (sig == SIGSEGV && is_addr_on_stack(info->si_addr))) { // stack overflow
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -290,18 +290,20 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_memory_exception);
     }
+    else if ( (sig == SIGSEGV && in_jl_) ||
 #ifdef SEGV_EXCEPTION
-    else {
+        (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL)
+#endif
+        )
+     {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_segv_exception);
     }
-#else
     else {
         sigdie_handler(sig, info, context);
     }
-#endif
 }
 #endif
 
@@ -756,16 +758,12 @@ void *mach_segv_listener(void *arg)
     }
 }
 
-#ifdef SEGV_EXCEPTION
-
 void darwin_segv_handler(unw_context_t *uc)
 {
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
     jl_exception_in_transit = jl_segv_exception;
     jl_rethrow();
 }
-
-#endif
 
 void darwin_stack_overflow_handler(unw_context_t *uc)
 {
@@ -819,12 +817,20 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
-#ifdef SEGV_EXCEPTION
-    if (1) {
-#else
-    if (is_addr_on_stack((void*)fault_addr) ||
-        ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)) {
+
+    uint64_t rip = 0;
+        if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
+            state.__rip = (uint64_t)darwin_accerr_handler;
+        else if (!is_addr_on_stack((void*)fault_addr))
+            state.__rip = (uint64_t)darwin_stack_overflow_handler;
+        else {
+#ifndef SEGV_EXCEPTION
+            if (in_jl_)
 #endif
+            state.__rip = (uint64_t)darwin_segv_handler;
+        }
+
+    if (rip != 0) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -845,15 +851,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         memset(uc,0,sizeof(unw_context_t));
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
-        if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
-            state.__rip = (uint64_t)darwin_accerr_handler;
-#ifdef SEGV_EXCEPTION
-        else if (!is_addr_on_stack((void*)fault_addr))
-            state.__rip = (uint64_t)darwin_segv_handler;
-#endif
-        else
-            state.__rip = (uint64_t)darwin_stack_overflow_handler;
-
+        state.__rip = rip;
         state.__rbp = state.__rsp;
         ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
         HANDLE_MACH_ERROR("thread_set_state",ret);
@@ -1359,6 +1357,7 @@ void jl_get_builtin_hooks(void)
     jl_signed_type = (jl_datatype_t*)core("Signed");
 
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
+    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
     jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
@@ -1368,10 +1367,6 @@ void jl_get_builtin_hooks(void)
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
-
-#ifdef SEGV_EXCEPTION
-    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
-#endif
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
