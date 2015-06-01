@@ -53,7 +53,15 @@ ctranspose(M::SymTridiagonal) = conj(M)
 
 function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
     absn = abs(n)
-    absn==0 ? M.dv : absn==1 ? M.ev : absn<size(M,1) ? zeros(T,size(M,1)-absn) : throw(BoundsError())
+    if absn == 0
+        return M.dv
+    elseif absn==1
+        return M.ev
+    elseif absn<size(M,1)
+        return zeros(T,size(M,1)-absn)
+    else
+        throw(BoundsError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+    end
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
@@ -65,8 +73,12 @@ end
 
 function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
-    m == size(S, 1) == size(C, 1) || throw(DimensionMismatch())
-    n == size(C, 2) || throw(DimensionMismatch())
+    if !(m == size(S, 1) == size(C, 1))
+        throw(DimensionMismatch("A has first dimension $(size(A,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
+    end
+    if n != size(C, 2)
+        throw(DimensionMismatch("Second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
+    end
 
     α = S.dv
     β = S.ev
@@ -166,7 +178,9 @@ end
 function det_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
     n = length(b)
     θa = one(T)
-    n==0 && return θa
+    if n == 0
+        return θa
+    end
     θb = b[1]
     for i=2:n
         θb, θa = b[i]*θb-a[i-1]*c[i-1]*θa, θb
@@ -178,8 +192,18 @@ inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
 function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
-    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
-    i==j ? A.dv[i] : i==j+1 ? A.ev[j] : i+1==j ? A.ev[i] : zero(T)
+    if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
+        throw(BoundsError("(i,j) = ($i,$j) not within matrix of size $(size(A))"))
+    end
+    if i == j
+        return A.dv[i]
+    elseif i == j + 1
+        return A.ev[j]
+    elseif i + 1 == j
+        return A.ev[i]
+    else
+        return zero(T)
+    end
 end
 
 ## Tridiagonal matrices ##
@@ -201,7 +225,15 @@ function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
-size(M::Tridiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension d must be ≥ 1, got $d")) : (d<=2 ? length(M.d) : 1)
+function size(M::Tridiagonal, d::Integer)
+    if d < 1
+        throw(ArgumentError("dimension d must be ≥ 1, got $d"))
+    elseif d <= 2
+        return length(M.d)
+    else
+        return 1
+    end
+end
 
 full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
@@ -243,8 +275,18 @@ ctranspose(M::Tridiagonal) = conj(transpose(M))
 
 diag{T}(M::Tridiagonal{T}, n::Integer=0) = n==0 ? M.d : n==-1 ? M.dl : n==1 ? M.du : abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : throw(BoundsError())
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
-    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
-    i==j ? A.d[i] : i==j+1 ? A.dl[j] : i+1==j ? A.du[i] : zero(T)
+    if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
+        throw(BoundsError("(i,j) = ($i,$j) not within matrix of size $(size(A))"))
+    end
+    if i == j
+        return A.d[i]
+    elseif i == j + 1
+        return A.dl[j]
+    elseif i + 1 == j
+        return A.du[i]
+    else
+        return zero(T)
+    end
 end
 
 ###################
@@ -279,8 +321,14 @@ convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiag
 convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
-    size(C,1) == size(B,1) == (nA = size(A,1)) || throw(DimensionMismatch())
-    size(C,2) == (nB = size(B,2)) || throw(DimensionMismatch())
+    nA = size(A,1)
+    nB = size(B,2)
+    if !(size(C,1) == size(B,1) == nA)
+        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
+    end
+    if size(C,2) != nB
+        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
+    end
     l = A.dl
     d = A.d
     u = A.du
