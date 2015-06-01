@@ -3,7 +3,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid
+import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
 
 export isgraphemebreak
 
@@ -120,6 +120,12 @@ end
 ############################################################################
 
 charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+
+# faster x+y that does no overflow checking
+fastplus(x::Char, y::UInt32) = reinterpret(Char, reinterpret(UInt32, x) + y)
+
+lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? fastplus(c,0x00000020) : c) : ccall(:utf8proc_tolower, Char, (UInt32,), c)
+uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? fastplus(c,0xffffffe0) : c) : ccall(:utf8proc_toupper, Char, (UInt32,), c)
 
 ############################################################################
 
