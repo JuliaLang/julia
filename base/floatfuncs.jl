@@ -153,15 +153,9 @@ for f in (:round, :ceil, :floor, :trunc)
                 if digits > 0
                     return x
                 elseif x > 0
-                    if ceil == $f
-                        return convert(eltype(x), Inf)
-                    end
-                    return zero(x)
+                    return $(:ceil == f ? :(convert(eltype(x), Inf)) : :(zero(x)))
                 elseif x < 0
-                    if floor == $f
-                        return -convert(eltype(x), Inf)
-                    end
-                    return -zero(x)
+                    return $(:floor == f ? :(-convert(eltype(x), Inf)) : :(-zero(x)))
                 else
                     return x
                 end
