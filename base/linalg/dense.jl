@@ -56,7 +56,9 @@ function mapreduce_seq_impl{T<:BlasComplex}(::Abs2Fun, ::AddFun, a::Union(Array{
 end
 
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
-    (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
+    if minimum(rx) < 1 || maximum(rx) > length(x)
+        throw(BoundsError())
+    end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
@@ -168,8 +170,9 @@ kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    isinteger(p) && return A^Integer(real(p))
-
+    if isinteger(p)
+        return A^Integer(real(p))
+    end
     chksquare(A)
     v, X = eig(A)
     any(v.<0) && (v = complex(v))
@@ -276,7 +279,9 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
 end
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
-    issym(A) && return sqrtm(Symmetric(A))
+    if issym(A)
+        return sqrtm(Symmetric(A))
+    end
     n = chksquare(A)
     SchurF = schurfact(complex(A))
     R = full(sqrtm(UpperTriangular(SchurF[:T])))
@@ -284,7 +289,9 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
-    ishermitian(A) && return sqrtm(Hermitian(A))
+    if ishermitian(A)
+        return sqrtm(Hermitian(A))
+    end
     n = chksquare(A)
     SchurF = schurfact(A)
     R = full(sqrtm(UpperTriangular(SchurF[:T])))

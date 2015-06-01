@@ -85,7 +85,9 @@ function chol{T}(A::AbstractMatrix{T}, uplo::Union(Type{Val{:L}}, Type{Val{:U}})
 end
 function chol!(x::Number, uplo)
     rx = real(x)
-    rx == abs(x) || throw(DomainError())
+    if rx != abs(x)
+        throw(DomainError("x must be positive semidefinite"))
+    end
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
