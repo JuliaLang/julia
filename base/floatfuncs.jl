@@ -77,6 +77,15 @@ for f in (:trunc,:floor,:ceil,:round)
         function ($f){T}(::Type{T}, x::AbstractArray)
             reshape([ ($f)(T, x[i])::T for i in eachindex(x) ], size(x))
         end
+        function ($f){R}(x::AbstractArray{R,1}, digits::Integer, base::Integer=10)
+            [ ($f)(x[i], digits, base) for i = 1:length(x) ]
+        end
+        function ($f){R}(x::AbstractArray{R,2}, digits::Integer, base::Integer=10)
+            [ ($f)(x[i,j], digits, base) for i = 1:size(x,1), j = 1:size(x,2) ]
+        end
+        function ($f)(x::AbstractArray, digits::Integer, base::Integer=10)
+            reshape([ ($f)(x[i], digits, base) for i in eachindex(x) ], size(x))
+        end
     end
 end
 
@@ -135,7 +144,7 @@ end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x, digits::Integer, base::Integer=10)
+        function ($f)(x::Real, digits::Integer, base::Integer=10)
             x = float(x)
             og = convert(eltype(x),base)^digits
             r = ($f)(x * og) / og
