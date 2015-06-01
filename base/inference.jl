@@ -352,7 +352,7 @@ function valid_tparam(x::ANY)
 end
 
 function extract_simple_tparam(Ai)
-    if isa(Ai,Int) || isa(Ai,Bool)
+    if !isa(Ai,Symbol) && valid_tparam(Ai)
         return Ai
     elseif isa(Ai,QuoteNode) && valid_tparam(Ai.value)
         return Ai.value
@@ -743,26 +743,18 @@ function invoke_tfunc(f, types, argtype)
     if is(argtype,Bottom)
         return Bottom
     end
-    applicable = _methods(f, types, -1)
-    if isempty(applicable)
-        return Any
-    end
-    for (m::SimpleVector) in applicable
-        local linfo
-        try
-            linfo = func_for_method(m[3],types,m[2])
-        catch
+    try
+        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
+        if is(meth, nothing)
             return Any
         end
-        if typeseq(m[1],types)
-            tvars = m[2][1:2:end]
-            (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
-                              argtype, m[1], tvars)::SimpleVector
-            (_tree,rt) = typeinf(linfo, ti, env, linfo)
-            return rt
-        end
+        (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                          argtype, meth.sig, meth.tvars)::SimpleVector
+        linfo = func_for_method(meth, types, env)
+        return typeinf(linfo, ti, env, linfo)[2]
+    catch
+        return Any
     end
-    return Any
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -1879,7 +1871,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
             # builtins.c:jl_trampoline. However if jl_trampoline is changed then
             # this code will need to be restored.
             #na = length(a.args[1])
-            #li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
+            #li.ast, _ = typeinf(li, ntuple(i->(i>na ? (Tuple)[1] : Any), na+1),
             #                    li.sparams, li, false)
         end
     end

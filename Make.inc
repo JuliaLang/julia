@@ -505,8 +505,8 @@ ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
 LLVM_ASSERTIONS=1
-LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-LLVM_VER=3.6.0
+#LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
+LLVM_VER=3.6.1
 
 USE_BLAS64=0
 OPENBLAS_DYNAMIC_ARCH=0
@@ -562,9 +562,17 @@ else
 PCRE_CONFIG = $(build_bindir)/pcre2-config
 endif
 
-# Use 64-bit libraries by default on 64-bit architectures
+# Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 USE_BLAS64 ?= 1
+else # non MKL system blas is most likely LP64
+USE_BLAS64 ?= 0
+endif
+else
+USE_BLAS64 ?= 1
+endif
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)

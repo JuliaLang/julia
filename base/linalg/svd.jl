@@ -31,11 +31,17 @@ function svd(A::Union(Number, AbstractArray); thin::Bool=true)
 end
 
 function getindex(F::SVD, d::Symbol)
-    d == :U && return F.U
-    d == :S && return F.S
-    d == :Vt && return F.Vt
-    d == :V && return F.Vt'
-    throw(KeyError(d))
+    if d == :U
+        return F.U
+    elseif d == :S
+        return F.S
+    elseif d == :Vt
+        return F.Vt
+    elseif d == :V
+        return F.Vt'
+    else
+        throw(KeyError(d))
+    end
 end
 
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
@@ -85,21 +91,26 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
 end
 
 function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
-    d == :U && return obj.U
-    d == :V && return obj.V
-    d == :Q && return obj.Q
-    (d == :alpha || d == :a) && return obj.a
-    (d == :beta || d == :b) && return obj.b
-    (d == :vals || d == :S) && return obj.a[1:obj.k + obj.l] ./ obj.b[1:obj.k + obj.l]
-    if d == :D1
+    if d == :U
+        return obj.U
+    elseif d == :V
+        return obj.V
+    elseif d == :Q
+        return obj.Q
+    elseif d == :alpha || d == :a
+        return obj.a
+    elseif d == :beta || d == :b
+        return obj.b
+    elseif d == :vals || d == :S
+        return obj.a[1:obj.k + obj.l] ./ obj.b[1:obj.k + obj.l]
+    elseif d == :D1
         m = size(obj.U, 1)
         if m - obj.k - obj.l >= 0
             return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) diagm(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
         else
             return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
         end
-    end
-    if d == :D2
+    elseif d == :D2
         m = size(obj.U, 1)
         p = size(obj.V, 1)
         if m - obj.k - obj.l >= 0
@@ -107,13 +118,14 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
         else
             return [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
         end
-    end
-    d == :R && return obj.R
-    if d == :R0
+    elseif d == :R
+        return obj.R
+    elseif d == :R0
         n = size(obj.Q, 1)
         return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
+    else
+        throw(KeyError(d))
     end
-    throw(KeyError(d))
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})

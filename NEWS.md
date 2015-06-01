@@ -119,6 +119,8 @@ Command line option changes
 
   * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
 
+  * New option --handle-signals={yes|no} to disable Julia's signal handlers.
+
 Compiler improvements
 ---------------------
 
@@ -166,6 +168,8 @@ Library improvements
     * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
     * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
+
+    * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
 
   * Strings
 
@@ -1433,3 +1437,4 @@ Too numerous to mention.
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
+[#11067]: https://github.com/JuliaLang/julia/issues/11067

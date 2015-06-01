@@ -48,6 +48,7 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 #define JL_CALLABLE(name) \
@@ -154,6 +155,9 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 DLLEXPORT void jl_raise_debugger(void);
+#ifdef _OS_DARWIN_
+DLLEXPORT void attach_exception_port(void);
+#endif
 
 // timers
 // Returns time in nanosec
@@ -174,6 +178,10 @@ DLLEXPORT void jl_atexit_hook();
 
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define HAVE_CPUID
+#endif
+
+#ifdef SEGV_EXCEPTION
+extern DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
 #ifdef __cplusplus

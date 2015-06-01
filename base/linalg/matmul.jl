@@ -9,7 +9,9 @@ arithtype(::Type{Bool}) = Int
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
     p, q = size(C)
-    n == length(b) && p == m && q == n || throw(DimensionMismatch())
+    if n != length(b) || p != m || q != n
+        throw(DimensionMismatch())
+    end
     @inbounds for j = 1:n
         bj = b[j]
         for i = 1:m
@@ -22,7 +24,9 @@ end
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
     p, q = size(C)
-    m == length(b) && p == m && q == n || throw(DimensionMismatch())
+    if m != length(b) || p != m || q != n
+        throw(DimensionMismatch())
+    end
     @inbounds for j = 1:n, i = 1:m
         C[i,j] = A[i,j]*b[i]
     end
@@ -33,8 +37,8 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 # Dot products
 
-dot{T<:BlasReal}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dot(x, y)
-dot{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dotc(x, y)
+vecdot{T<:BlasReal}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dot(x, y)
+vecdot{T<:BlasComplex}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dotc(x, y)
 function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
@@ -49,19 +53,7 @@ function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},
     end
     BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot(x::AbstractVector, y::AbstractVector)
-    lx = length(x)
-    lx==length(y) || throw(DimensionMismatch())
-    if lx == 0
-        return zero(eltype(x))*zero(eltype(y))
-    end
-    s = conj(x[1])*y[1]
-    @inbounds for i = 2:lx
-        s += conj(x[i])*y[i]
-    end
-    s
-end
-dot(x::Number, y::Number) = conj(x) * y
+
 Ac_mul_B(x::AbstractVector, y::AbstractVector) = [dot(x, y)]
 At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = [dot(x, y)]
 At_mul_B{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = [BLAS.dotu(x, y)]
@@ -209,10 +201,18 @@ end
 
 function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedVector{T})
     mA, nA = lapack_size(tA, A)
-    nA == length(x) || throw(DimensionMismatch())
-    mA == length(y) || throw(DimensionMismatch())
-    mA == 0 && return y
-    nA == 0 && return fill!(y,0)
+    if nA != length(x)
+        throw(DimensionMismatch())
+    end
+    if mA != length(y)
+        throw(DimensionMismatch())
+    end
+    if mA == 0
+        return y
+    end
+    if nA == 0
+        return fill!(y,0)
+    end
     stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
     return generic_matvecmul!(y, tA, A, x)
 end
@@ -226,16 +226,26 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
         (mA, nA) = size(A,1), size(A,2)
         tAt = 'T'
     end
-    nC == mA || throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
-    if mA == 0 || nA == 0; return fill!(C,0); end
-    if mA == 2 && nA == 2; return matmul2x2!(C,tA,tAt,A,A); end
-    if mA == 3 && nA == 3; return matmul3x3!(C,tA,tAt,A,A); end
+    if nC != mA
+        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+    end
+    if mA == 0 || nA == 0
+        return fill!(C,0)
+    end
+    if mA == 2 && nA == 2
+        return matmul2x2!(C,tA,tAt,A,A)
+    end
+    if mA == 3 && nA == 3
+        return matmul3x3!(C,tA,tAt,A,A)
+    end
 
-    stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
+    if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+        return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
+    end
     return generic_matmatmul!(C, tA, tAt, A, A)
 end
 
-function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T})
+function herk_wrapper!{T<:BlasReal}(C::Union(StridedMatrix{T}, StridedMatrix{Complex{T}}), tA::Char, A::Union(StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}))
     nC = chksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
@@ -244,15 +254,25 @@ function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
         (mA, nA) = size(A,1), size(A,2)
         tAt = 'C'
     end
-    nC == mA || throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
-    if mA == 0 || nA == 0; return fill!(C,0); end
-    if mA == 2 && nA == 2; return matmul2x2!(C,tA,tAt,A,A); end
-    if mA == 3 && nA == 3; return matmul3x3!(C,tA,tAt,A,A); end
+    if nC != mA
+        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+    end
+    if mA == 0 || nA == 0
+        return fill!(C,0)
+    end
+    if mA == 2 && nA == 2
+        return matmul2x2!(C,tA,tAt,A,A)
+    end
+    if mA == 3 && nA == 3
+        return matmul3x3!(C,tA,tAt,A,A)
+    end
 
     # Result array does not need to be initialized as long as beta==0
     #    C = Array(T, mA, mA)
 
-    stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
+    if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+        return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
+    end
     return generic_matmatmul!(C,tA, tAt, A, A)
 end
 
@@ -271,16 +291,26 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
-    nA==mB || throw(DimensionMismatch("*"))
+    if nA != mB
+        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
+    end
 
     if mA == 0 || nA == 0 || nB == 0
-        size(C) == (mA, nB) || throw(DimensionMismatch())
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
         return fill!(C,0)
     end
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2!(C,tA,tB,A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3!(C,tA,tB,A,B); end
+    if mA == 2 && nA == 2 && nB == 2
+        return matmul2x2!(C,tA,tB,A,B)
+    end
+    if mA == 3 && nA == 3 && nB == 3
+        return matmul3x3!(C,tA,tB,A,B)
+    end
 
-    stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && return BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
+    if stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1)
+        return BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
+    end
     generic_matmatmul!(C, tA, tB, A, B)
 end
 
@@ -317,8 +347,12 @@ end
 function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat{T}, B::AbstractVector{S})
     mB = length(B)
     mA, nA = lapack_size(tA, A)
-    mB==nA || throw(DimensionMismatch("*"))
-    mA==length(C) || throw(DimensionMismatch("*"))
+    if mB != nA
+        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA), vector B has length $mB"))
+    end
+    if mA != length(C)
+        throw(DimensionMismatch("Result C has length $(length(C)), needs length $mA"))
+    end
     z = zero(R)
 
     Astride = size(A, 1)
@@ -369,11 +403,19 @@ const Cbuf = Array(UInt8, tilebufsize)
 function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    mB==nA || throw(DimensionMismatch("*"))
-    if size(C,1) != mA || size(C,2) != nB; throw(DimensionMismatch("*")); end
+    if mB != nA
+        throw(DimensionMismatch("Matrix A has dimensions ($mA, $nB), matrix B has dimensions ($mB, $nB)"))
+    end
+    if size(C,1) != mA || size(C,2) != nB
+        throw(DimensionMismatch("Result C has dimensions $(size(C)), needs ($mA, $nB)"))
+    end
 
-    if mA == nA == nB == 2; return matmul2x2!(C, tA, tB, A, B); end
-    if mA == nA == nB == 3; return matmul3x3!(C, tA, tB, A, B); end
+    if mA == nA == nB == 2
+        return matmul2x2!(C, tA, tB, A, B)
+    end
+    if mA == nA == nB == 3
+        return matmul3x3!(C, tA, tB, A, B)
+    end
 
     @inbounds begin
     if isbits(R)

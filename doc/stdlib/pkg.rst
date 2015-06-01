@@ -105,6 +105,9 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    It calls ``Pkg.resolve()`` to determine optimal package versions after.
    This is an inverse for both ``Pkg.checkout`` and ``Pkg.pin``.
 
+   You can also supply an iterable collection of package names, e.g.,
+   ``Pkg.free(("Pkg1", "Pkg2"))`` to free multiple packages at once.
+
 .. function:: build()
 
    Run the build scripts for all installed packages in depth-first recursive order.
@@ -142,4 +145,3 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: test(pkgs...)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
-

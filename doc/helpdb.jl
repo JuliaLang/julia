@@ -1904,7 +1904,7 @@ Any[
 
       julia> @enum FRUIT apple=1 orange=2 kiwi=3
 
-      julia> f(x::FRUIT) = \"I'm a FRUIT with value: \$(int(x))\"
+      julia> f(x::FRUIT) = \"I'm a FRUIT with value: \$(Int(x))\"
       f (generic function with 1 method)
 
       julia> f(apple)
@@ -2299,8 +2299,25 @@ Any[
 ("Base","@time","@time()
 
    A macro to execute an expression, printing the time it took to
-   execute and the total number of bytes its execution caused to be
-   allocated, before returning the value of the expression.
+   execute, the number of allocations, and the total number of bytes
+   its execution caused to be allocated, before returning the value of
+   the expression.
+
+"),
+
+("Base","@timev","@timev()
+
+   This is a verbose version of the \"@time\" macro, it first prints
+   the same information as \"@time\", then any non-zero memory
+   allocation counters, and then returns the value of the expression.
+
+"),
+
+("Base","@timed","@timed()
+
+   A macro to execute an expression, and return the value of the
+   expression, elapsed time, total bytes allocated, garbage collection
+   time, and an object with various memory allocation counters.
 
 "),
 
@@ -2316,7 +2333,12 @@ Any[
 
    A macro to evaluate an expression, discarding the resulting value,
    instead returning the total number of bytes allocated during
-   evaluation of the expression.
+   evaluation of the expression. Note: the expression is evaluated
+   inside a local function, instead of the current context, in order
+   to eliminate the effects of compilation, however, there still may
+   be some allocations due to JIT compilation.  This also makes the
+   results inconsistent with the \"@time\" macros, which do not try to
+   adjust for the effects of compilation.
 
 "),
 
@@ -5261,10 +5283,10 @@ Millisecond(v)
 
 "),
 
-("Base","mv","mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
+("Base","mv","mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
 
    Move the file, link, or directory from *src* to *dest*.
-   \"remove_destination=true\" will first remove an existing `dst`.
+   \"remove_destination=true\" will first remove an existing *dst*.
 
 "),
 
@@ -5295,16 +5317,18 @@ Millisecond(v)
 
 "),
 
-("Base","mktemp","mktemp()
+("Base","mktemp","mktemp([parent=tempdir()])
 
    Returns \"(path, io)\", where \"path\" is the path of a new
-   temporary file and \"io\" is an open file object for this path.
+   temporary file in \"parent\" and \"io\" is an open file object for
+   this path.
 
 "),
 
-("Base","mktempdir","mktempdir()
+("Base","mktempdir","mktempdir([parent=tempdir()])
 
-   Create a temporary directory and return its path.
+   Create a temporary directory in the \"parent\" directory and return
+   its path.
 
 "),
 
@@ -5352,6 +5376,12 @@ Millisecond(v)
 
    Returns \"true\" if \"path\" is a symbolic link, \"false\"
    otherwise.
+
+"),
+
+("Base","ismount","ismount(path) -> Bool
+
+   Returns \"true\" if \"path\" is a mount point, \"false\" otherwise.
 
 "),
 
@@ -6199,8 +6229,8 @@ base64encode(args...)
 
 ("Base","base64decode","base64decode(string)
 
-   Decodes the base64-encoded \"string\" and returns the obtained
-   bytes.
+   Decodes the base64-encoded \"string\" and returns a
+   \"Vector{UInt8}\" of the decoded bytes.
 
 "),
 
@@ -6898,6 +6928,15 @@ popdisplay(d::Display)
 
    Compute the dot product. For complex vectors, the first vector is
    conjugated.
+
+"),
+
+("Base","vecdot","vecdot(x, y)
+
+   For any iterable containers \"x\" and \"y\" (including arrays of
+   any dimension) of numbers (or any element type for which \"dot\" is
+   defined), compute the Euclidean dot product (the sum of
+   \"dot(x[i],y[i])\") as if they were vectors.
 
 "),
 
@@ -7715,8 +7754,9 @@ popdisplay(d::Display)
 ("Base","vecnorm","vecnorm(A[, p])
 
    For any iterable container \"A\" (including arrays of any
-   dimension) of numbers, compute the \"p\"-norm (defaulting to
-   \"p=2\") as if \"A\" were a vector of the corresponding length.
+   dimension) of numbers (or any element type for which \"norm\" is
+   defined), compute the \"p\"-norm (defaulting to \"p=2\") as if
+   \"A\" were a vector of the corresponding length.
 
    For example, if \"A\" is a matrix and \"p=2\", then this is
    equivalent to the Frobenius norm.
@@ -11539,8 +11579,8 @@ golden
 
 ("Base","@task","@task()
 
-   Wrap an expression in a Task executing it, and return the Task.
-   This only creates a task, and does not run it.
+   Wrap an expression in a Task without executing it, and return the
+   Task. This only creates a task, and does not run it.
 
 "),
 
@@ -12143,6 +12183,10 @@ golden
    versions after. This is an inverse for both \"Pkg.checkout\" and
    \"Pkg.pin\".
 
+   You can also supply an iterable collection of package names, e.g.,
+   \"Pkg.free((\"Pkg1\", \"Pkg2\"))\" to free multiple packages at
+   once.
+
 "),
 
 ("Base.Pkg","build","build()
@@ -12508,9 +12552,27 @@ golden
 
 "),
 
+("Base","ascii","ascii(::Ptr{UInt8}[, length])
+
+   Create an ASCII string from the address of a C (0-terminated)
+   string encoded in ASCII. A copy is made; the ptr can be safely
+   freed. If \"length\" is specified, the string does not have to be
+   0-terminated.
+
+"),
+
 ("Base","utf8","utf8(::Array{UInt8, 1})
 
    Create a UTF-8 string from a byte array.
+
+"),
+
+("Base","utf8","utf8(::Ptr{UInt8}[, length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string
+   encoded in UTF-8. A copy is made; the ptr can be safely freed. If
+   \"length\" is specified, the string does not have to be
+   0-terminated.
 
 "),
 
@@ -12584,24 +12646,24 @@ golden
 
 "),
 
-("Base","is_valid_ascii","is_valid_ascii(s) -> Bool
+("Base","isvalid","isvalid(value) -> Bool
 
-   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
-   byte vector) is valid ASCII, false otherwise.
-
-"),
-
-("Base","is_valid_utf8","is_valid_utf8(s) -> Bool
-
-   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
-   byte vector) is valid UTF-8, false otherwise.
+   Returns true if the given value is valid for its type, which
+   currently can be one of \"Char\", \"ASCIIString\", \"UTF8String\",
+   \"UTF16String\", or \"UTF32String\"
 
 "),
 
-("Base","is_valid_char","is_valid_char(c) -> Bool
+("Base","isvalid","isvalid(T, value) -> Bool
 
-   Returns true if the given char or integer is a valid Unicode code
-   point.
+   Returns true if the given value is valid for that type. Types
+   currently can be \"Char\", \"ASCIIString\", \"UTF8String\",
+   \"UTF16String\", or \"UTF32String\" Values for \"Char\" can be of
+   type \"Char\" or \"UInt32\" Values for \"ASCIIString\" and
+   \"UTF8String\" can be of that type, or \"Vector{UInt8}\" Values for
+   \"UTF16String\" can be \"UTF16String\" or \"Vector{UInt16}\" Values
+   for \"UTF32String\" can be \"UTF32String\", \"Vector{Char}\" or
+   \"Vector{UInt32}\"
 
 "),
 
@@ -13038,30 +13100,23 @@ golden
 
 "),
 
-("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
-
-   Returns true if the argument (\"UTF16String\" or \"UInt16\" array)
-   is valid UTF-16.
-
-"),
-
 ("Base","utf32","utf32(s)
 
-   Create a UTF-32 string from a byte array, array of \"UInt32\", or
-   any other string type.  (Conversions of byte arrays check for a
-   byte-order marker in the first four bytes, and do not include it in
-   the resulting string.)
+   Create a UTF-32 string from a byte array, array of \"Char\" or
+   \"UInt32\", or any other string type.  (Conversions of byte arrays
+   check for a byte-order marker in the first four bytes, and do not
+   include it in the resulting string.)
 
    Note that the resulting \"UTF32String\" data is terminated by the
    NUL codepoint (32-bit zero), which is not treated as a character in
    the string (so that it is mostly invisible in Julia); this allows
    the string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   *utf32(s)* conversion function.  If you have a \"UInt32\" array
-   \"A\" that is already NUL-terminated UTF-32 data, then you can
-   instead use *UTF32String(A)`* to construct the string without
-   making a copy of the data and treating the NUL as a terminator
-   rather than as part of the string.
+   *utf32(s)* conversion function.  If you have a \"Char\" or
+   \"UInt32\" array \"A\" that is already NUL-terminated UTF-32 data,
+   then you can instead use *UTF32String(A)`* to construct the string
+   without making a copy of the data and treating the NUL as a
+   terminator rather than as part of the string.
 
 "),
 

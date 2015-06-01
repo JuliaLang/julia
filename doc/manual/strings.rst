@@ -640,7 +640,7 @@ which to start the search. For example:
 You can extract the following info from a :obj:`RegexMatch` object:
 
 -  the entire substring matched: ``m.match``
--  the captured substrings as a tuple of strings: ``m.captures``
+-  the captured substrings as an array of strings: ``m.captures``
 -  the offset at which the whole match begins: ``m.offset``
 -  the offsets of the captured substrings as a vector: ``m.offsets``
 
@@ -691,8 +691,8 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
      0
      2
 
-It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables::
+It is convenient to have captures returned as an array so that one can
+use destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"

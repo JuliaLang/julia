@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex
+import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
@@ -143,6 +143,8 @@ end
     :(CartesianRange($I($(startargs...)), I))
 end
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
+
+ndims(R::CartesianRange) = length(R.start)
 
 @generated function eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     startargs = fill(1, N)
@@ -856,7 +858,7 @@ end
 @generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
-        I = ntuple($N, x->Array(Int, nnzB))
+        I = ntuple(x->Array(Int, nnzB), $N)
         if nnzB > 0
             count = 1
             @nloops $N i B begin

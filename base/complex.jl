@@ -725,6 +725,9 @@ float{T<:FloatingPoint}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 @vectorize_1arg Complex float
 
+big{T<:FloatingPoint}(z::Complex{T}) = Complex{BigFloat}(z)
+big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
+
 ## Array operations on complex numbers ##
 
 complex{T<:Complex}(x::AbstractArray{T}) = x
@@ -737,6 +740,7 @@ function complex(A::AbstractArray)
     map_promote(cnv, A)
 end
 
+big{T<:Integer,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigInt},N}, x)
 big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
 
 ## promotion to complex ##

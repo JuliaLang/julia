@@ -793,10 +793,6 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
 ## uppercase and lowercase transformations ##
-
-uppercase(c::Char) = convert(Char, ccall(:towupper, Cwchar_t, (Cwchar_t,), c))
-lowercase(c::Char) = convert(Char, ccall(:towlower, Cwchar_t, (Cwchar_t,), c))
-
 uppercase(s::AbstractString) = map(uppercase, s)
 lowercase(s::AbstractString) = map(lowercase, s)
 
@@ -1726,7 +1722,7 @@ wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
 # to have WString
 function unsafe_convert(::Type{Cwstring}, s::WString)
     if containsnul(s)
-        throw(ArgumentError("embedded NUL chars are not allowed in C strings"))
+        throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
     end
     return Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
 end

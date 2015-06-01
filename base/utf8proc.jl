@@ -3,7 +3,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid
+import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
 
 export isgraphemebreak
 
@@ -121,6 +121,12 @@ end
 
 charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 
+# faster x+y that does no overflow checking
+fastplus(x::Char, y::UInt32) = reinterpret(Char, reinterpret(UInt32, x) + y)
+
+lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? fastplus(c,0x00000020) : c) : ccall(:utf8proc_tolower, Char, (UInt32,), c)
+uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? fastplus(c,0xffffffe0) : c) : ccall(:utf8proc_toupper, Char, (UInt32,), c)
+
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
@@ -155,8 +161,9 @@ iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
-# 0x85 is the Unicode Next Line (NEL) character
-isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == Char(0x85) || category_code(c)==UTF8PROC_CATEGORY_ZS
+# \u85 is the Unicode Next Line (NEL) character
+# the check for \ufffd allows for branch removal on ASCIIStrings
+@inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && c != '\ufffd' && category_code(c)==UTF8PROC_CATEGORY_ZS
 
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 

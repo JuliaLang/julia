@@ -17,10 +17,15 @@ function schurfact{T}(A::StridedMatrix{T})
 end
 
 function getindex(F::Schur, d::Symbol)
-    (d == :T || d == :Schur) && return F.T
-    (d == :Z || d == :vectors) && return F.Z
-    d == :values && return F.values
-    throw(KeyError(d))
+    if d == :T || d == :Schur
+        return F.T
+    elseif d == :Z || d == :vectors
+        return F.Z
+    elseif d == :values
+        return F.values
+    else
+        throw(KeyError(d))
+    end
 end
 
 function schur(A::StridedMatrix)
@@ -57,14 +62,23 @@ ordschur!{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union(Vector{Bool
 ordschur{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union(Vector{Bool},BitVector)) = ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
 
 function getindex(F::GeneralizedSchur, d::Symbol)
-    d == :S && return F.S
-    d == :T && return F.T
-    d == :alpha && return F.alpha
-    d == :beta && return F.beta
-    d == :values && return F.alpha./F.beta
-    (d == :Q || d == :left) && return F.Q
-    (d == :Z || d == :right) && return F.Z
-    throw(KeyError(d))
+    if d == :S
+        return F.S
+    elseif d == :T
+        return F.T
+    elseif d == :alpha
+        return F.alpha
+    elseif d == :beta
+        return F.beta
+    elseif d == :values
+        return F.alpha./F.beta
+    elseif d == :Q || d == :left
+        return F.Q
+    elseif d == :Z || d == :right
+        return F.Z
+    else
+        throw(KeyError(d))
+    end
 end
 
 function schur(A::StridedMatrix, B::StridedMatrix)

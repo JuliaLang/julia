@@ -15,6 +15,7 @@ call(T::Type{OverflowError}) = Core.call(T)
 call(T::Type{InexactError}) = Core.call(T)
 call(T::Type{OutOfMemoryError}) = Core.call(T)
 call(T::Type{StackOverflowError}) = Core.call(T)
+call(T::Type{SegmentationFault}) = Core.call(T)
 call(T::Type{UndefRefError}) = Core.call(T)
 call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
 call(T::Type{InterruptException}) = Core.call(T)
@@ -226,3 +227,7 @@ end
 type Colon
 end
 const (:) = Colon()
+
+# For passing constants through type inference
+immutable Val{T}
+end

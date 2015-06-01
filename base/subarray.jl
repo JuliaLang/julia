@@ -31,7 +31,7 @@ parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
 
 parent(a::AbstractArray) = a
-parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
+parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)

@@ -1172,11 +1172,12 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
-x[1] = 1.0
-x[2] = 2.0
-x[3] = 3.0
-foo(x) == [1.0, 2.0, 3.0]
+let x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
+    x[1] = 1.0
+    x[2] = 2.0
+    x[3] = 3.0
+    @test foo(x) == [1.0, 2.0, 3.0]
+end
 
 # TODO!!
 # issue #4115
@@ -2912,3 +2913,15 @@ end
 # issue #11366
 f11366{T}(x::Type{Ref{T}}) = Ref{x}
 @test !isleaftype(Base.return_types(f11366, (Any,))[1])
+
+# issue #11065, #1571
+function f11065()
+    for i = 1:2
+        if i == 1
+            z = "z is defined"
+        elseif i == 2
+            print(z)
+        end
+    end
+end
+@test_throws UndefVarError f11065()

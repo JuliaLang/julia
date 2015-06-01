@@ -53,7 +53,8 @@ static const char opts[]  =
     " -H, --home <dir>          Set location of julia executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
     " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
-    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n\n"
+    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"
+    " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
@@ -110,7 +111,8 @@ void parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_math_mode,
            opt_worker,
-           opt_bind_to
+           opt_bind_to,
+           opt_handle_signals
     };
     static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
     static struct option longopts[] = {
@@ -143,6 +145,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
         { "math-mode",       required_argument, 0, opt_math_mode },
+        { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
         { "build",           required_argument, 0, 'b' },
         { "worker",          no_argument,       0, opt_worker },
@@ -348,6 +351,14 @@ void parse_opts(int *argcp, char ***argvp)
         case opt_bind_to:
             jl_options.bindto = strdup(optarg);
             break;
+        case opt_handle_signals:
+            if (!strcmp(optarg,"yes"))
+                jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
+            else
+                jl_errorf("julia: invalid argument to --handle-signals (%s)\n", optarg);
+            break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.\n", c);
@@ -461,7 +472,7 @@ static int true_main(int argc, char *argv[])
             ios_puts("\njulia> ", ios_stdout);
             ios_flush(ios_stdout);
             line = ios_readline(ios_stdin);
-            jl_value_t *val = jl_eval_string(line);
+            jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
                 jl_static_show(JL_STDERR, jl_exception_in_transit);

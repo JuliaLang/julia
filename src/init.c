@@ -113,6 +113,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // bindto
+                            JL_OPTIONS_HANDLE_SIGNALS_ON,
 };
 
 int jl_boot_file_loaded = 0;
@@ -289,9 +290,18 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_memory_exception);
     }
+#ifdef SEGV_EXCEPTION
+    else {
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_throw(jl_segv_exception);
+    }
+#else
     else {
         sigdie_handler(sig, info, context);
     }
+#endif
 }
 #endif
 
@@ -746,6 +756,17 @@ void *mach_segv_listener(void *arg)
     }
 }
 
+#ifdef SEGV_EXCEPTION
+
+void darwin_segv_handler(unw_context_t *uc)
+{
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_exception_in_transit = jl_segv_exception;
+    jl_rethrow();
+}
+
+#endif
+
 void darwin_stack_overflow_handler(unw_context_t *uc)
 {
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
@@ -798,8 +819,12 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
+#ifdef SEGV_EXCEPTION
+    if (1) {
+#else
     if (is_addr_on_stack((void*)fault_addr) ||
         ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)) {
+#endif
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -822,6 +847,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         state.__rdi = (uint64_t)uc;
         if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
             state.__rip = (uint64_t)darwin_accerr_handler;
+#ifdef SEGV_EXCEPTION
+        else if (!is_addr_on_stack((void*)fault_addr))
+            state.__rip = (uint64_t)darwin_segv_handler;
+#endif
         else
             state.__rip = (uint64_t)darwin_stack_overflow_handler;
 
@@ -953,6 +982,15 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.load)
         jl_options.load = abspath(jl_options.load);
 }
+
+#ifdef _OS_DARWIN_
+void attach_exception_port()
+{
+    kern_return_t ret;
+    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
+}
+#endif
 
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
@@ -1090,6 +1128,22 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_current_module = jl_main_module;
     jl_root_task->current_module = jl_current_module;
 
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handlers();
+
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_enable();
+#endif
+
+    if (jl_options.image_file)
+        jl_init_restored_modules();
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_sigint_handler();
+}
+
+void jl_install_default_signal_handlers(void)
+{
 #ifndef _OS_WINDOWS_
     signal_stack = malloc(sig_stack_size);
     struct sigaction actf;
@@ -1123,8 +1177,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     pthread_attr_destroy(&attr);
 
-    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
+    attach_exception_port();
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
@@ -1187,18 +1240,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     SetUnhandledExceptionFilter(exception_handler);
 #endif
-
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_enable();
-#endif
-
-    if (jl_options.image_file)
-        jl_init_restored_modules();
-
-    jl_install_sigint_handler();
 }
 
-DLLEXPORT void jl_install_sigint_handler()
+DLLEXPORT void jl_install_sigint_handler(void)
 {
 #ifdef _OS_WINDOWS_
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
@@ -1324,6 +1368,10 @@ void jl_get_builtin_hooks(void)
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
+
+#ifdef SEGV_EXCEPTION
+    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
+#endif
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");

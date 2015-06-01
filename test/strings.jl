@@ -673,6 +673,10 @@ end
 @test lowercase("AbC") == "abc"
 @test lowercase('A') == 'a'
 @test lowercase('a') == 'a'
+@test uppercase('α') == '\u0391'
+@test lowercase('Δ') == 'δ'
+@test lowercase('\U118bf') == '\U118df'
+@test uppercase('\U1044d') == '\U10425'
 @test ucfirst("Abc") == "Abc"
 @test ucfirst("abc") == "Abc"
 @test lcfirst("ABC") == "aBC"
@@ -1432,6 +1436,24 @@ for byt = 0xfc:0xfd
 end
 # Check seven-byte sequences, should be invalid
 @test isvalid(UTF8String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+
+# 11482
+
+# isvalid
+let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
+    bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
+
+    @test !isvalid(bad32)
+    @test !isvalid(badch)
+    @test isvalid(s)
+    @test isvalid(u8)
+    @test isvalid(u16)
+    @test isvalid(u32)
+    @test isvalid(ASCIIString, s)
+    @test isvalid(UTF8String,  u8)
+    @test isvalid(UTF16String, u16)
+    @test isvalid(UTF32String, u32)
+end
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'

@@ -59,10 +59,6 @@ type AssertionError <: Exception
     AssertionError(msg) = new(msg)
 end
 
-# For passing constants through type inference
-immutable Val{T}
-end
-
 ccall(:jl_get_system_hooks, Void, ())
 
 

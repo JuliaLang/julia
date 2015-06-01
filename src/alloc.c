@@ -62,6 +62,9 @@ jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
+#ifdef SEGV_EXCEPTION
+jl_value_t *jl_segv_exception;
+#endif
 jl_value_t *jl_diverror_exception;
 jl_value_t *jl_domain_exception;
 jl_value_t *jl_overflow_exception;
