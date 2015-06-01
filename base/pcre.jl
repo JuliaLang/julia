@@ -80,26 +80,25 @@ end
 
 function get_ovec(match_data)
     ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
-          (Ptr{Void},), match_data)
+                (Ptr{Void},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Void},), match_data)
     pointer_to_array(ptr, 2n, false)
 end
 
 function compile(pattern::AbstractString, options::Integer)
-    errno = Ref{Int32}(0)
-    erroff = Ref{UInt32}(0)
+    errno = Ref{Cint}(0)
+    erroff = Ref{Csize_t}(0)
     re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Void},
-                    (Cstring, UInt32, UInt32, Ref{Int32}, Ref{UInt32}, Ptr{Void}),
-    pattern, sizeof(pattern), options, errno, erroff, C_NULL)
+                   (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Void}),
+                   pattern, sizeof(pattern), options, errno, erroff, C_NULL)
     re_ptr == C_NULL && error("PCRE compilation error: $(err_message(errno[])) at offset $(erroff[])")
     re_ptr
 end
 
 function jit_compile(regex::Ptr{Void})
-    errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), UInt32,
-                  (Ptr{Void}, Int32),
-                  regex, JIT_COMPLETE)
+    errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
+                  (Ptr{Void}, UInt32), regex, JIT_COMPLETE)
     errno == 0 || error("PCRE JIT error: $(err_message(errno))")
 end
 
@@ -118,13 +117,13 @@ free_match_context(context) =
 function err_message(errno)
   buffer = Array(UInt8, 256)
   ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
-        (Int32, Ptr{UInt8}, UInt32), errno, buffer, sizeof(buffer))
+        (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
   bytestring(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
-               (Ptr{Void}, Cstring, Csize_t, Csize_t, Cuint, Ptr{Void}, Ptr{Void}),
+               (Ptr{Void}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Void}, Ptr{Void}),
                re, subject, sizeof(subject), offset, options, match_data, MATCH_CONTEXT)
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
@@ -140,6 +139,5 @@ function substring_number_from_name(re, name)
   ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
         (Ptr{Void}, Cstring), re, name)
 end
-
 
 end # module
