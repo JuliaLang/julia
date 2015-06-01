@@ -295,7 +295,11 @@ public:
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
+#if defined(LLVM37)
+            Size = sym_iter.getSize();
+#else
             sym_iter.getSize(Size);
+#endif
             sym_iter.getAddress(Addr);
             sym_iter.getSection(Section);
             if (Section == EndSection) continue;
