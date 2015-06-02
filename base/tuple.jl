@@ -22,10 +22,13 @@ indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
-# eltype
-
-eltype(::Type{Tuple{}}) = Bottom
-eltype{T,_}(::Type{NTuple{_,T}}) = T
+# Tuple Types with a defined length are iterable (but not indexable)
+length{N}(::Type{NTuple{N}}) = N
+isempty(::Type{Tuple{}}) = true
+isempty{N}(::Type{NTuple{N}}) = false
+start{N}(T::Type{NTuple{N}}) = start(T.parameters)
+next{N}(T::Type{NTuple{N}}, i) = next(T.parameters, i)
+done{N}(T::Type{NTuple{N}}, i) = done(T.parameters, i)
 
 ## mapping ##
 
