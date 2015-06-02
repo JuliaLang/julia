@@ -467,8 +467,7 @@ end
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = open(cmd, "r", stdin)
     !success(pc) && pipeline_error(pc)
-    wait_close(out)
-    return takebuf_array(out.buffer)
+    return readbytes(out)
 end
 
 function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
