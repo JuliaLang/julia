@@ -20,67 +20,40 @@ const RTLD_NOLOAD    = 0x00000010
 const RTLD_DEEPBIND  = 0x00000020
 const RTLD_FIRST     = 0x00000040
 
-type DLHandle
-    ptr::Ptr{Void}
+function dlsym(hnd::Ptr, s::Union(Symbol,AbstractString))
+    hnd == C_NULL && error("NULL library handle")
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
-==(hnd1::DLHandle, hnd2::DLHandle) = hnd1.ptr == hnd2.ptr
-
-isopen(hnd::DLHandle) = hnd.ptr != C_NULL
-
-function dlsym(hnd::DLHandle, s::Union(Symbol,AbstractString))
-    isopen(hnd) || error("NULL library handle")
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd.ptr, s)
-end
-
-function dlsym_e(hnd::DLHandle, s::Union(Symbol,AbstractString))
-    isopen(hnd) || error("NULL library handle")
-    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd.ptr, s)
+function dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString))
+    hnd == C_NULL && error("NULL library handle")
+    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen(string(s), flags)
 
-function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND)
-    hnd = DLHandle(ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags))
-    finalizer(hnd, finalize_dlhandle)
-    return hnd
-end
+dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
 
-function dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND)
-    hnd = DLHandle(ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags))
-    finalizer(hnd, finalize_dlhandle)
-    return hnd
-end
+dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
 
 dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen_e(string(s), flags)
 
-function finalize_dlhandle(hnd::DLHandle)
-    if hnd.ptr != C_NULL
-        Libc.free(hnd.ptr)
-        hnd.ptr = C_NULL
-    end
-end
-
-function dlclose(hnd::DLHandle)
-    if hnd.ptr != C_NULL
-        ccall(:uv_dlclose,Void,(Ptr{Void},),hnd.ptr)
-        Libc.free(hnd.ptr)
-        hnd.ptr = C_NULL
-    end
-end
+dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); Libc.free(p); end
 
 function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
             p = dlopen_e(l, RTLD_LAZY)
-            if isopen(p)
+            if p != C_NULL
                 dlclose(p)
                 return l
             end
         end
         p = dlopen_e(lib, RTLD_LAZY)
-        if isopen(p)
+        if p != C_NULL
             dlclose(p)
             return lib
         end
@@ -88,8 +61,8 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
     return ""
 end
 
-function dlpath(handle::DLHandle)
-    p = ccall( :jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle.ptr )
+function dlpath( handle::Ptr{Void} )
+    p = ccall( :jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle )
     s = bytestring(p)
     @windows_only Libc.free(p)
     return s
@@ -101,17 +74,6 @@ function dlpath(libname::Union(AbstractString, Symbol))
     dlclose(handle)
     return path
 end
-
-# For now we support the old API that used a raw uv_lib_t* as the
-# handle.  In particular, BinDeps currently relies on this API.
-# TODO: Deprecate these methods.
-dlsym(hnd::Ptr, s::Union(Symbol,AbstractString)) = dlsym(DLHandle(hnd), s)
-dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString)) = dlsym_e(DLHandle(hnd), s)
-dlclose(hnd::Ptr) = dlclose(DLHandle(hnd))
-dlpath(hnd::Ptr) = dlpath(DLHandle(hnd))
-# (Typically used for comparison with C_NULL)
-==(hnd::DLHandle, ptr::Ptr{Void}) = hnd.ptr == ptr
-==(ptr::Ptr{Void}, hnd::DLHandle) = hnd.ptr == ptr
 
 if OS_NAME === :Darwin
     const dlext = "dylib"
