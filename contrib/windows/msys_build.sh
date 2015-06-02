@@ -92,10 +92,9 @@ for i in bin/*.dll Git/bin/msys-1.0.dll Git/bin/msys-perl5_8.dll Git/bin/*.exe; 
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
-# for i in share/julia/base/pcre_h.jl; do
-#   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
-# done
-# sed -i 's/int32/Int32/g' base/pcre_h.jl
+for i in share/julia/base/pcre_h.jl; do
+  $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
+done
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
@@ -172,7 +171,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
 fi
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
-    GMP MPFR LIBUNWIND RMATH OPENSPECFUN; do
+    GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
 echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
@@ -184,7 +183,7 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = libuv pcre' >> Make.user
+echo 'override STAGE1_DEPS = libuv' >> Make.user
 echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 make -C deps get-libuv
