@@ -24,6 +24,7 @@ indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state
 
 # eltype
 
+eltype(::Type{Tuple{}}) = Bottom
 eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
@@ -132,7 +133,12 @@ prod(x::Tuple{}) = 1
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 
 all(x::Tuple{}) = true
-all(x::Tuple{Any, Vararg{Any}}) = (&)(x...)
+all(x::Tuple{Bool}) = x[1]
+all(x::Tuple{Bool, Bool}) = x[1]&x[2]
+all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
+# use generic reductions for the rest
 
 any(x::Tuple{}) = false
-any(x::Tuple{Any, Vararg{Any}}) = |(x...)
+any(x::Tuple{Bool}) = x[1]
+any(x::Tuple{Bool, Bool}) = x[1]|x[2]
+any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
