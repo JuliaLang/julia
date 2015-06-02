@@ -602,7 +602,8 @@ let stagedcache=Dict{Any,Any}()
                 # don't call staged functions on abstract types.
                 # (see issues #8504, #10230)
                 # we can't guarantee that their type behavior is monotonic.
-                error()
+                error("cannot call @generated function `", m.func.code.name, "` ",
+                      "with abstract argument types: ", tt)
             end
             f = ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
             stagedcache[(m,tt,env)] = f
