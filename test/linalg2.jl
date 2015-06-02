@@ -256,7 +256,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
         # Against vectorized versions
         @test_approx_eq norm(x,-Inf) minimum(abs(x))
-        @test_approx_eq norm(x,-1) inv(sum(1./abs(x)))
+        @test_approx_eq norm(x,-1) inv(sum(1 ./ abs(x)))
         @test_approx_eq norm(x,0) sum(x .!= 0)
         @test_approx_eq norm(x,1) sum(abs(x))
         @test_approx_eq norm(x) sqrt(sum(abs2(x)))
@@ -388,7 +388,7 @@ T = LowerTriangular(randn(3,3))
 ## Issue related tests
 # issue #1447
 let
-    A = [1.+0.im 0; 0 1]
+    A = [1.0+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
         @test_approx_eq A[i] B[i]

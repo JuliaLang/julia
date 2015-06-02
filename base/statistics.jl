@@ -497,7 +497,7 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     i = find(index .> lo)
     r = float(v[lo])
     h = (index.-lo)[i]
-    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
+    r[i] = (1 .- h).*r[i] + h.*v[hi[i]]
     return r
 end
 quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
