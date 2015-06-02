@@ -562,69 +562,69 @@ DLLEXPORT void jl_atexit_hook()
 
     uv_loop_t *loop = jl_global_event_loop();
 
-    if (loop == NULL) {
-        return;
-    }
-
-    struct uv_shutdown_queue queue = {NULL, NULL};
-    uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
-    // close stdout and stderr last, since we like being
-    // able to show stuff (incl. printf's)
-    if (JL_STDOUT != (void*) STDOUT_FILENO)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDOUT, &queue);
-    if (JL_STDERR != (void*) STDERR_FILENO)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDERR, &queue);
-    //uv_unref((uv_handle_t*)JL_STDOUT);
-    //uv_unref((uv_handle_t*)JL_STDERR);
-    struct uv_shutdown_queue_item *item = queue.first;
-    while (item) {
-        JL_TRY {
-            while (item) {
-                uv_handle_t *handle = item->h;
-                if (handle->type != UV_FILE && uv_is_closing(handle)) {
+    if (loop) {
+        struct uv_shutdown_queue queue = {NULL, NULL};
+        uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+        // close stdout and stderr last, since we like being
+        // able to show stuff (incl. printf's)
+        if (JL_STDOUT != (void*) STDOUT_FILENO)
+            jl_uv_exitcleanup_add((uv_handle_t*)JL_STDOUT, &queue);
+        if (JL_STDERR != (void*) STDERR_FILENO)
+            jl_uv_exitcleanup_add((uv_handle_t*)JL_STDERR, &queue);
+        //uv_unref((uv_handle_t*)JL_STDOUT);
+        //uv_unref((uv_handle_t*)JL_STDERR);
+        struct uv_shutdown_queue_item *item = queue.first;
+        while (item) {
+            JL_TRY {
+                while (item) {
+                    uv_handle_t *handle = item->h;
+                    if (handle->type != UV_FILE && uv_is_closing(handle)) {
+                        item = next_shutdown_queue_item(item);
+                        continue;
+                    }
+                    switch(handle->type) {
+                    case UV_TTY:
+                    case UV_UDP:
+                    case UV_TCP:
+                    case UV_NAMED_PIPE:
+                    case UV_POLL:
+                    case UV_TIMER:
+                    case UV_ASYNC:
+                    case UV_FS_EVENT:
+                    case UV_FS_POLL:
+                    case UV_IDLE:
+                    case UV_PREPARE:
+                    case UV_CHECK:
+                    case UV_SIGNAL:
+                    case UV_PROCESS:
+                    case UV_FILE:
+                        // These will be shutdown as appropriate by jl_close_uv
+                        jl_close_uv(handle);
+                        break;
+                    case UV_HANDLE:
+                    case UV_STREAM:
+                    case UV_UNKNOWN_HANDLE:
+                    case UV_HANDLE_TYPE_MAX:
+                    case UV_RAW_FD:
+                    case UV_RAW_HANDLE:
+                    default:
+                        assert(0);
+                    }
                     item = next_shutdown_queue_item(item);
-                    continue;
                 }
-                switch(handle->type) {
-                case UV_TTY:
-                case UV_UDP:
-                case UV_TCP:
-                case UV_NAMED_PIPE:
-                case UV_POLL:
-                case UV_TIMER:
-                case UV_ASYNC:
-                case UV_FS_EVENT:
-                case UV_FS_POLL:
-                case UV_IDLE:
-                case UV_PREPARE:
-                case UV_CHECK:
-                case UV_SIGNAL:
-                case UV_PROCESS:
-                case UV_FILE:
-                    // These will be shutdown as appropriate by jl_close_uv
-                    jl_close_uv(handle);
-                    break;
-                case UV_HANDLE:
-                case UV_STREAM:
-                case UV_UNKNOWN_HANDLE:
-                case UV_HANDLE_TYPE_MAX:
-                case UV_RAW_FD:
-                case UV_RAW_HANDLE:
-                default:
-                    assert(0);
-                }
+            }
+            JL_CATCH {
+                //error handling -- continue cleanup, as much as possible
+                uv_unref(item->h);
+                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
+                jl_static_show(JL_STDERR, jl_exception_in_transit);
                 item = next_shutdown_queue_item(item);
             }
         }
-        JL_CATCH {
-            //error handling -- continue cleanup, as much as possible
-            uv_unref(item->h);
-            jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
-            item = next_shutdown_queue_item(item);
-        }
+        uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
     }
-    uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
+
+    jl_ccall_cleanup();
 }
 
 void jl_get_builtin_hooks(void);

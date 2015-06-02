@@ -127,6 +127,8 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 DLLEXPORT void jl_read_sonames(void);
 #endif
 
+void jl_ccall_cleanup(void);
+
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
