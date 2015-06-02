@@ -671,11 +671,7 @@ function readbytes(stream::AsyncStream)
 end
 
 function readall(stream::AsyncStream)
-    while isopen(stream)
-        start_reading(stream)
-        stream_wait(stream, stream.readnotify)
-    end
-    return takebuf_string(stream.buffer)
+    return bytestring(readbytes(stream))
 end
 
 function read!{T}(s::AsyncStream, a::Array{T})
