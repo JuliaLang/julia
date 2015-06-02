@@ -164,7 +164,14 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test_approx_eq full(A1*A2') full(A1)*full(A2)'
                 @test_approx_eq full(A1'A2') full(A1)'full(A2)'
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
-
+                if elty2 != BigFloat
+                    @test_throws DimensionMismatch eye(n+1)/A2
+                    @test_throws DimensionMismatch eye(n+1)/A2'
+                    @test_throws DimensionMismatch eye(n+1)*A2
+                    @test_throws DimensionMismatch eye(n+1)*A2'
+                    @test_throws DimensionMismatch A2'*eye(n+1)
+                    @test_throws DimensionMismatch A2*eye(n+1)
+                end
             end
         end
 
