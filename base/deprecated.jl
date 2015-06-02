@@ -481,3 +481,11 @@ export float32_isvalid, float64_isvalid
 # 11379
 
 @deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
+
+# 10862
+
+function chol(A::AbstractMatrix, uplo::Symbol)
+    depwarn(string("chol(a::AbstractMatrix, uplo::Symbol) is deprecated, ",
+        "use chol(a::AbstractMatrix, uplo::Union(Val{:L},Val{:U})) instead"), :chol)
+    chol(A, Val{uplo})
+end
