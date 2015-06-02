@@ -662,6 +662,14 @@ function stop_reading(stream::AsyncStream)
     end
 end
 
+function readbytes(stream::AsyncStream)
+    while isopen(stream)
+        start_reading(stream)
+        stream_wait(stream, stream.readnotify)
+    end
+    return takebuf_array(stream.buffer)
+end
+
 function readall(stream::AsyncStream)
     while isopen(stream)
         start_reading(stream)
