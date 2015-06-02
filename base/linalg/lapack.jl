@@ -7,7 +7,7 @@ const liblapack = Base.liblapack_name
 
 import Base.blasfunc
 
-import ..LinAlg: BlasFloat, Char, BlasInt, blas_int, LAPACKException,
+import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
 #Generic LAPACK error handlers
@@ -173,7 +173,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             tauq  = similar(A, $elty, k)
             taup  = similar(A, $elty, k)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(gebrd)), liblapack), Void,
@@ -185,7 +185,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -199,11 +199,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         function gelqf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
-            m     = blas_int(size(A, 1))
-            n     = blas_int(size(A, 2))
-            lda   = blas_int(max(1,stride(A, 2)))
+            m     = BlasInt(size(A, 1))
+            n     = BlasInt(size(A, 2))
+            lda   = BlasInt(max(1,stride(A, 2)))
             if length(tau) != min(m,n) throw(DimensionMismatch("gelqf!")) end
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(gelqf)), liblapack), Void,
@@ -212,7 +212,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       &m, &n, A, &lda, tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -226,11 +226,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         function geqlf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
-            m     = blas_int(size(A, 1))
-            n     = blas_int(size(A, 2))
-            lda   = blas_int(max(1,stride(A, 2)))
+            m     = BlasInt(size(A, 1))
+            n     = BlasInt(size(A, 2))
+            lda   = BlasInt(max(1,stride(A, 2)))
             if length(tau) != min(m,n) throw(DimensionMismatch("geqlf!")) end
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(geqlf)), liblapack), Void,
@@ -239,7 +239,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       &m, &n, A, &lda, tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -258,7 +258,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lda   = stride(A,2)
             if lda == 0 return A, tau, jpvt end # Early exit
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
@@ -282,7 +282,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                 end
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
                 end
             end
@@ -336,7 +336,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             m, n  = size(A)
             if length(tau) != min(m,n) throw(DimensionMismatch("geqrf!")) end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(geqrf)), liblapack), Void,
@@ -345,7 +345,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -361,7 +361,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             info  = Array(BlasInt, 1)
             m, n  = size(A)
             if length(tau) != min(m,n) throw(DimensionMismatch("gerqf!")) end
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             work  = Array($elty, 1)
             for i in 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(gerqf)), liblapack), Void,
@@ -370,7 +370,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -443,7 +443,7 @@ for (tzrzf, ormrz, elty) in
                     &m, &n, A, &lda,
                     tau, work, &lwork, info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -479,7 +479,7 @@ for (tzrzf, ormrz, elty) in
                     tau, C, &ldc, work,
                     &lwork, info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -508,7 +508,7 @@ for (gels, gesv, getrs, getri, elty) in
             if size(B,1) != (btrn ? n : m)  throw(DimensionMismatch("gels!")) end
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             for i in 1:2
                 ccall(($(blasfunc(gels)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -518,7 +518,7 @@ for (gels, gesv, getrs, getri, elty) in
                       B, &max(1,stride(B,2)), work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -594,7 +594,7 @@ for (gels, gesv, getrs, getri, elty) in
                       &n, A, &lda, ipiv, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
                 end
             end
@@ -735,7 +735,7 @@ for (gelsd, gelsy, elty) in
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(gelsd)), liblapack), Void,
@@ -747,7 +747,7 @@ for (gelsd, gelsy, elty) in
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     iwork = Array(BlasInt, iwork[1])
                 end
@@ -790,7 +790,7 @@ for (gelsd, gelsy, elty) in
                     &rcond, rnk, work, &lwork,
                     info)
                 if i == 1
-                    lwork = blas_int(work[1])
+                    lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                 end
             end
@@ -823,7 +823,7 @@ for (gelsd, gelsy, elty, relty) in
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             rwork = Array($relty, 1)
             iwork = Array(BlasInt, 1)
             for i in 1:2
@@ -836,9 +836,9 @@ for (gelsd, gelsy, elty, relty) in
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
-                    rwork = Array($relty, blas_int(rwork[1]))
+                    rwork = Array($relty, BlasInt(rwork[1]))
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
@@ -881,7 +881,7 @@ for (gelsd, gelsy, elty, relty) in
                     &rcond, rnk, work, &lwork,
                     rwork, info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -915,7 +915,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             X = zeros($elty, n)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             for i in 1:2
                 ccall(($(blasfunc(gglse)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -926,7 +926,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                       work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -966,7 +966,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 WI    = similar(A, $elty, n)
             end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i = 1:2
                 if cmplx
@@ -988,7 +988,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 end
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1022,7 +1022,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 VT = similar(A, $elty, (n, 0))
             end
             work   = Array($elty, 1)
-            lwork  = blas_int(-1)
+            lwork  = BlasInt(-1)
             S      = similar(A, $relty, minmn)
             cmplx  = iseltype(A,Complex)
             if cmplx
@@ -1051,7 +1051,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 end
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1074,7 +1074,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             work   = Array($elty, 1)
             cmplx  = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 5minmn); end
-            lwork  = blas_int(-1)
+            lwork  = BlasInt(-1)
             info   = Array(BlasInt, 1)
             for i in 1:2
                 if cmplx
@@ -1096,7 +1096,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 end
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1273,7 +1273,7 @@ for (geevx, ggev, elty) in
                     vr, &ldvr, work, &lwork,
                     info)
                 if i == 1
-                    lwork = blas_int(work[1])
+                    lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                 end
             end
@@ -1379,7 +1379,7 @@ for (geevx, ggev, elty, relty) in
                     &ldvr, work, &lwork, rwork,
                     info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1543,7 +1543,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m = min(n, size(A, 1))
             if k > m throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(orglq)), liblapack), Void,
@@ -1552,7 +1552,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1573,7 +1573,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             n = min(m, size(A, 2))
             if k > n throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(orgqr)), liblapack), Void,
@@ -1584,7 +1584,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1611,7 +1611,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             if side == 'R' && n != nA throw(DimensionMismatch()) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(ormlq)), liblapack), Void,
@@ -1622,7 +1622,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       C, &max(1,stride(C,2)), work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1645,7 +1645,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             if side == 'R' && n != mA throw(DimensionMismatch()) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(ormqr)), liblapack), Void,
@@ -1659,7 +1659,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2288,7 +2288,7 @@ for (stev, stebz, stegr, stein, elty) in
                     Z, &ldz, isuppz, work,
                     &lwork, iwork, &liwork, info)
                 if i == 1
-                    lwork = blas_int(work[1])
+                    lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -2396,7 +2396,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             if n != size(B,1) throw(DimensionMismatch("sysv!")) end
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(sysv)), liblapack), Void,
@@ -2407,7 +2407,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 @assertargsok
                 @assertnonsingular
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2427,7 +2427,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             ipiv  = similar(A, BlasInt, n)
             n==0 && return A, ipiv
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(sytrf)), liblapack), Void,
@@ -2437,7 +2437,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 @assertargsok
                 @assertnonsingular
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2455,7 +2455,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #             n = chksquare(A)
 #             @chkuplo
 #             work  = Array($elty, 1)
-#             lwork = blas_int(-1)
+#             lwork = BlasInt(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
 #                 ccall(($(blasfunc(sytri)), liblapack), Void,
@@ -2465,7 +2465,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #                 @assertargsok
 #                 @assertnonsingular
 #                 if lwork < 0
-#                     lwork = blas_int(real(work[1]))
+#                     lwork = BlasInt(real(work[1]))
 #                     work = Array($elty, lwork)
 #                 end
 #             end
@@ -2559,7 +2559,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             if n != size(B,1) throw(DimensionMismatch("hesv!")) end
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(hesv)), liblapack), Void,
@@ -2569,7 +2569,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                       work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2589,7 +2589,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             @chkuplo
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(hetrf)), liblapack), Void,
@@ -2599,7 +2599,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 @assertargsok
                 @assertnonsingular
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2618,7 +2618,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #             n = chksquare(A)
 #             @chkuplo
 #             work  = Array($elty, 1)
-#             lwork = blas_int(-1)
+#             lwork = BlasInt(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
 #                 ccall(($(blasfunc(hetri)), liblapack), Void,
@@ -2627,7 +2627,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 @lapackerror
 #                 if lwork < 0
-#                     lwork = blas_int(real(work[1]))
+#                     lwork = BlasInt(real(work[1]))
 #                     work = Array($elty, lwork)
 #                 end
 #             end
@@ -2697,7 +2697,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             if n != size(B,1) throw(DimensionMismatch("sysv!")) end
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(sysv)), liblapack), Void,
@@ -2708,7 +2708,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 @assertargsok
                 @assertnonsingular
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2728,7 +2728,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             @chkuplo
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(sytrf)), liblapack), Void,
@@ -2738,7 +2738,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 @assertargsok
                 @assertnonsingular
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2757,7 +2757,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #             n = chksquare(A)
 #             @chkuplo
 #             work  = Array($elty, 1)
-#             lwork = blas_int(-1)
+#             lwork = BlasInt(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
 #                 ccall(($(blasfunc(sytri)), liblapack), Void,
@@ -2766,7 +2766,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 @lapackerror
 #                 if lwork < 0
-#                     lwork = blas_int(real(work[1]))
+#                     lwork = BlasInt(real(work[1]))
 #                     work = Array($elty, lwork)
 #                 end
 #             end
@@ -2834,7 +2834,7 @@ for (syev, syevr, sygvd, elty) in
             n = chksquare(A)
             W     = similar(A, $elty, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(syev)), liblapack), Void,
@@ -2843,7 +2843,7 @@ for (syev, syevr, sygvd, elty) in
                       &jobz, &uplo, &n, A, &max(1,stride(A,2)), W, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2881,9 +2881,9 @@ for (syev, syevr, sygvd, elty) in
             end
             isuppz = similar(A, BlasInt, 2*n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = blas_int(-1)
+            liwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
@@ -2901,7 +2901,7 @@ for (syev, syevr, sygvd, elty) in
                     info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -2943,7 +2943,7 @@ for (syev, syevr, sygvd, elty) in
                     w, work, &lwork, iwork,
                     &liwork, info)
                 if i == 1
-                    lwork = blas_int(work[1])
+                    lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -2973,7 +2973,7 @@ for (syev, syevr, sygvd, elty, relty) in
             n = chksquare(A)
             W     = similar(A, $relty, n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             rwork = Array($relty, max(1, 3n-2))
             info  = Array(BlasInt, 1)
             for i in 1:2
@@ -2983,7 +2983,7 @@ for (syev, syevr, sygvd, elty, relty) in
                       &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3023,11 +3023,11 @@ for (syev, syevr, sygvd, elty, relty) in
             end
             isuppz = similar(A, BlasInt, 2*n)
             work  = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             rwork = Array($relty, 1)
-            lrwork = blas_int(-1)
+            lrwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = blas_int(-1)
+            liwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
@@ -3045,9 +3045,9 @@ for (syev, syevr, sygvd, elty, relty) in
                     iwork, &liwork, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
-                    lrwork = blas_int(rwork[1])
+                    lrwork = BlasInt(rwork[1])
                     rwork = Array($relty, lrwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -3097,11 +3097,11 @@ for (syev, syevr, sygvd, elty, relty) in
                     w, work, &lwork, rwork,
                     &lrwork, iwork, &liwork, info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
-                    lrwork = blas_int(rwork[1])
+                    lrwork = BlasInt(rwork[1])
                     rwork = Array($relty, lrwork)
                 end
             end
@@ -3305,7 +3305,7 @@ for (gehrd, elty) in
             n = chksquare(A)
             tau = similar(A, $elty, max(0,n - 1))
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(gehrd)), liblapack), Void,
@@ -3317,7 +3317,7 @@ for (gehrd, elty) in
                     info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3344,7 +3344,7 @@ for (orghr, elty) in
             n = chksquare(A)
             if n - length(tau) != 1 throw(DimensionMismatch()) end
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(orghr)), liblapack), Void,
@@ -3356,7 +3356,7 @@ for (orghr, elty) in
                     info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3386,7 +3386,7 @@ for (gees, gges, elty) in
             ldvs = jobvs == 'V' ? n : 1
             vs = similar(A, $elty, ldvs, n)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(gees)), liblapack), Void,
@@ -3400,7 +3400,7 @@ for (gees, gges, elty) in
                         &lwork, C_NULL, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3419,7 +3419,7 @@ for (gees, gges, elty) in
             chkstride1(A, B)
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices are not of same size"))
-            sdim = blas_int(0)
+            sdim = BlasInt(0)
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
@@ -3428,7 +3428,7 @@ for (gees, gges, elty) in
             ldvsr = jobvsr == 'V' ? n : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(gges)), liblapack), Void,
@@ -3445,7 +3445,7 @@ for (gees, gges, elty) in
                     &ldvsr, work, &lwork, C_NULL,
                     info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3470,12 +3470,12 @@ for (gees, gges, elty, relty) in
             chkstride1(A)
             n = chksquare(A)
             sort = 'N'
-            sdim = blas_int(0)
+            sdim = BlasInt(0)
             w = similar(A, $elty, n)
             ldvs = jobvs == 'V' ? n : 1
             vs = similar(A, $elty, ldvs, n)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
             for i = 1:2
@@ -3490,7 +3490,7 @@ for (gees, gges, elty, relty) in
                         rwork, C_NULL, info)
                 @lapackerror
                 if lwork < 0
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3510,7 +3510,7 @@ for (gees, gges, elty, relty) in
             chkstride1(A, B)
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices are not of same size"))
-            sdim = blas_int(0)
+            sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
             ldvsl = jobvsl == 'V' ? n : 1
@@ -3518,7 +3518,7 @@ for (gees, gges, elty, relty) in
             ldvsr = jobvsr == 'V' ? n : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             rwork = Array($relty, 8n)
             info = Array(BlasInt, 1)
             for i = 1:2
@@ -3536,7 +3536,7 @@ for (gees, gges, elty, relty) in
                     work, &lwork, rwork, C_NULL,
                     info)
                 if i == 1
-                    lwork = blas_int(real(work[1]))
+                    lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -3568,9 +3568,9 @@ for (trsen, tgsen, elty) in
             wi = similar(T, $elty, n)
             m = sum(select)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = blas_int(-1)
+            liwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
 
@@ -3588,8 +3588,8 @@ for (trsen, tgsen, elty) in
                     info)
                 @lapackerror
                 if i == 1 # only estimated optimal lwork, liwork
-                    lwork  = blas_int(real(work[1]))
-                    liwork = blas_int(real(iwork[1]))
+                    lwork  = BlasInt(real(work[1]))
+                    liwork = BlasInt(real(iwork[1]))
                     work   = Array($elty, lwork)
                     iwork  = Array(BlasInt, liwork)
                 end
@@ -3622,9 +3622,9 @@ for (trsen, tgsen, elty) in
             alphai = similar(T, $elty, n)
             alphar = similar(T, $elty, n)
             beta = similar(T, $elty, n)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             work = Array($elty, 1)
-            liwork = blas_int(-1)
+            liwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
@@ -3647,9 +3647,9 @@ for (trsen, tgsen, elty) in
                     info)
                 @lapackerror
                 if i == 1 # only estimated optimal lwork, liwork
-                    lwork  = blas_int(real(work[1]))
+                    lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
-                    liwork = blas_int(real(iwork[1]))
+                    liwork = BlasInt(real(iwork[1]))
                     iwork = Array(BlasInt, liwork)
                 end
             end
@@ -3678,7 +3678,7 @@ for (trsen, tgsen, elty) in
             w = similar(T, $elty, n)
             m = sum(select)
             work = Array($elty, 1)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
 
@@ -3696,7 +3696,7 @@ for (trsen, tgsen, elty) in
                     info)
                 @lapackerror
                 if i == 1 # only estimated optimal lwork, liwork
-                    lwork  = blas_int(real(work[1]))
+                    lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
                 end
             end
@@ -3727,9 +3727,9 @@ for (trsen, tgsen, elty) in
             m = sum(select)
             alpha = similar(T, $elty, n)
             beta = similar(T, $elty, n)
-            lwork = blas_int(-1)
+            lwork = BlasInt(-1)
             work = Array($elty, 1)
-            liwork = blas_int(-1)
+            liwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
@@ -3752,9 +3752,9 @@ for (trsen, tgsen, elty) in
                     info)
                 @lapackerror
                 if i == 1 # only estimated optimal lwork, liwork
-                    lwork  = blas_int(real(work[1]))
+                    lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
-                    liwork = blas_int(real(iwork[1]))
+                    liwork = BlasInt(real(iwork[1]))
                     iwork = Array(BlasInt, liwork)
                 end
             end

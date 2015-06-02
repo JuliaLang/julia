@@ -33,7 +33,7 @@ function eigs(A, B;
         warn("Adjusting ncv from $ncv to $ncvmin")
         ncv = ncvmin
     end
-    ncv = blas_int(min(ncv, n))
+    ncv = BlasInt(min(ncv, n))
     if isgeneral && !isposdef(B)
         throw(PosDefException(0))
     end
