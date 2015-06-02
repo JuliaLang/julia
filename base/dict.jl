@@ -351,6 +351,17 @@ end
 
 copy(o::ObjectIdDict) = ObjectIdDict(o)
 
+# SerializationState type needed as soon as ObjectIdDict is available
+
+type SerializationState{I<:IO}
+    io::I
+    counter::Int
+    table::ObjectIdDict
+    SerializationState(io::I) = new(io, 0, ObjectIdDict())
+end
+
+SerializationState(io::IO) = SerializationState{typeof(io)}(io)
+
 # dict
 
 type Dict{K,V} <: Associative{K,V}
