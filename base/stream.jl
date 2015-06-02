@@ -663,8 +663,10 @@ function stop_reading(stream::AsyncStream)
 end
 
 function readall(stream::AsyncStream)
-    start_reading(stream)
-    wait_close(stream)
+    while isopen(stream)
+        start_reading(stream)
+        stream_wait(stream, stream.readnotify)
+    end
     return takebuf_string(stream.buffer)
 end
 
