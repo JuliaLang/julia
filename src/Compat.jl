@@ -274,6 +274,11 @@ function _compat(ex::Expr)
             ex = Expr(:call, calltypes[ex.args[2]], ex.args[3:end]...)
         elseif VERSION < v"0.4.0-dev+1419" && isexpr(f, :curly) && f.args[1] == :Ptr && length(ex.args) == 2 && ex.args[2] == 0
             ex = Expr(:call, :zero, f)
+        elseif VERSION < v"0.4.0-dev+4356" && f == :chol
+            s = ex.args[3]
+            if isexpr(s, :curly) && s.args[1] == :Val
+                ex = Expr(:call, :chol, ex.args[2], s.args[2])
+            end
         end
     elseif ex.head == :curly
         f = ex.args[1]
