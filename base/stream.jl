@@ -402,6 +402,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
             # close function won't work and libuv will fail with an assertion failure
             ccall(:jl_forceclose_uv,Void,(Ptr{Void},),stream.handle)
             notify_error(stream.readnotify, UVError("readcb",nread))
+            notify_error(stream.closenotify, UVError("readcb",nread))
         else
             if isa(stream,TTY)
                 stream.status = StatusEOF
