@@ -469,6 +469,47 @@ end
 @test search("foo,bar,baz", "az") == 10:11
 @test search("foo,bar,baz", "az", 12) == 0:-1
 
+# issue #9365
+# string search with a two-char UTF-8 (2 byte) string literal
+@test search("ééé", "éé") == 1:3
+@test search("ééé", "éé", 1) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test search("€€€", "€€") == 1:4
+@test search("€€€", "€€", 1) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test search("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 1:5
+@test search("\U1f596\U1f596\U1f596", "\U1f596\U1f596", 1) == 1:5
+
+# string search with a two-char UTF-8 (2 byte) string literal
+@test search("éé", "éé") == 1:3
+@test search("éé", "éé", 1) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test search("€€", "€€") == 1:4
+@test search("€€", "€€", 1) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test search("\U1f596\U1f596", "\U1f596\U1f596") == 1:5
+@test search("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1:5
+
+# string rsearch with a two-char UTF-8 (2 byte) string literal
+@test rsearch("ééé", "éé") == 3:5
+@test rsearch("ééé", "éé", endof("ééé")) == 3:5
+# string rsearch with a two-char UTF-8 (3 byte) string literal
+@test rsearch("€€€", "€€") == 4:7
+@test rsearch("€€€", "€€", endof("€€€")) == 4:7
+# string rsearch with a two-char UTF-8 (4 byte) string literal
+@test rsearch("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 5:9
+@test rsearch("\U1f596\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5:9
+
+# string rsearch with a two-char UTF-8 (2 byte) string literal
+@test rsearch("éé", "éé") == 1:3        # should really be 1:4!
+@test rsearch("éé", "éé", endof("ééé")) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test rsearch("€€", "€€") == 1:4        # should really be 1:6!
+@test rsearch("€€", "€€", endof("€€€")) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test rsearch("\U1f596\U1f596", "\U1f596\U1f596") == 1:5        # should really be 1:8!
+@test rsearch("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1:5
+
 # string rsearch with a two-char string literal
 @test rsearch("foo,bar,baz", "xx") == 0:-1
 @test rsearch("foo,bar,baz", "fo") == 1:2
@@ -500,6 +541,46 @@ end
 @test search("foo,bar,baz", r",b", 10) == 0:-1
 @test search("foo,bar,baz", r"az") == 10:11
 @test search("foo,bar,baz", r"az", 12) == 0:-1
+
+# string searchindex with a two-char UTF-8 (2 byte) string literal
+@test searchindex("ééé", "éé") == 1
+@test searchindex("ééé", "éé", 1) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test searchindex("€€€", "€€") == 1
+@test searchindex("€€€", "€€", 1) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
+
+# string searchindex with a two-char UTF-8 (2 byte) string literal
+@test searchindex("éé", "éé") == 1
+@test searchindex("éé", "éé", 1) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test searchindex("€€", "€€") == 1
+@test searchindex("€€", "€€", 1) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
+
+# string rsearchindex with a two-char UTF-8 (2 byte) string literal
+@test rsearchindex("ééé", "éé") == 3
+@test rsearchindex("ééé", "éé", endof("ééé")) == 3
+# string rsearchindex with a two-char UTF-8 (3 byte) string literal
+@test rsearchindex("€€€", "€€") == 4
+@test rsearchindex("€€€", "€€", endof("€€€")) == 4
+# string rsearchindex with a two-char UTF-8 (4 byte) string literal
+@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 5
+@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5
+
+# string rsearchindex with a two-char UTF-8 (2 byte) string literal
+@test rsearchindex("éé", "éé") == 1
+@test rsearchindex("éé", "éé", endof("ééé")) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test rsearchindex("€€", "€€") == 1
+@test rsearchindex("€€", "€€", endof("€€€")) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 # split
 @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])

@@ -35,7 +35,7 @@ string(s::AbstractString) = s
 string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
-bytestring(s::Array{UInt8,1}) = bytestring(pointer(s),length(s))
+bytestring(s::Vector{UInt8}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
@@ -49,10 +49,10 @@ function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
     ccall(:jl_pchar_to_string, ByteString, (Ptr{UInt8},Int), p, len)
 end
 
-convert(::Type{Array{UInt8,1}}, s::AbstractString) = bytestring(s).data
+convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{ByteString}, s::AbstractString) = bytestring(s)
-convert(::Type{Array{Char,1}}, s::AbstractString) = collect(s)
+convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = symbol(s)
 
 ## generic supplied functions ##
@@ -301,21 +301,25 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-searchindex(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
+typealias ByteArray Union(Vector{UInt8},Vector{Int8})
+
+searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
 searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
 searchindex(s::AbstractString, c::Char) = searchindex(s,c,start(s))
 
 function searchindex(s::ByteString, t::ByteString, i::Integer=1)
-    if length(t) == 1
+    # Check for fast case of a single byte
+    # (for multi-byte UTF-8 sequences, use searchindex on byte arrays instead)
+    if endof(t) == 1
         search(s, t[1], i)
     else
         searchindex(s.data, t.data, i)
     end
 end
 
-function search(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i)
+function search(s::ByteArray, t::ByteArray, i)
     idx = searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -333,7 +337,13 @@ function search(s::AbstractString, t::AbstractString, i::Integer=start(s))
     end
 end
 
-function rsearch(s::AbstractString, c::Chars, i::Integer=endof(s))
+function rsearch(s::AbstractString, c::Chars)
+    j = search(RevString(s), c)
+    j == 0 && return 0
+    endof(s)-j+1
+end
+
+function rsearch(s::AbstractString, c::Chars, i::Integer)
     e = endof(s)
     j = search(RevString(s), c, e-i+1)
     j == 0 && return 0
@@ -435,27 +445,37 @@ function _rsearchindex(s::Array, t::Array, k)
     0
 end
 
-rsearchindex(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
+rsearchindex(s::ByteArray,t::ByteArray,i) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
 function rsearchindex(s::ByteString, t::ByteString)
-    if length(t) == 1
+    # Check for fast case of a single byte
+    # (for multi-byte UTF-8 sequences, use rsearchindex instead)
+    if endof(t) == 1
         rsearch(s, t[1])
     else
-        rsearchindex(s.data, t.data, length(s.data))
+        _rsearchindex(s.data, t.data, length(s.data))
     end
 end
 
 function rsearchindex(s::ByteString, t::ByteString, i::Integer)
-    if length(t) == 1
+    # Check for fast case of a single byte
+    # (for multi-byte UTF-8 sequences, use rsearchindex instead)
+    if endof(t) == 1
         rsearch(s, t[1], i)
+    elseif endof(t) != 0
+        _rsearchindex(s.data, t.data, nextind(s, i)-1)
+    elseif i > sizeof(s)
+        return 0
+    elseif i == 0
+        return 1
     else
-        rsearchindex(s.data, t.data, i)
+        return i
     end
 end
 
-function rsearch(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i)
+function rsearch(s::ByteArray, t::ByteArray, i::Integer)
     idx = rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -536,7 +556,7 @@ cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
-startswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
+startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
@@ -957,15 +977,15 @@ unescape_string(s::AbstractString) = sprint(endof(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(data::Array{UInt8,1}) =
+byte_string_classify(data::Vector{UInt8}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
 byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
 
-isvalid(::Type{ASCIIString}, s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) == 1
-isvalid(::Type{UTF8String}, s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) != 0
+isvalid(::Type{ASCIIString}, s::Union(Vector{UInt8},ByteString)) = byte_string_classify(s) == 1
+isvalid(::Type{UTF8String}, s::Union(Vector{UInt8},ByteString)) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 
@@ -1631,8 +1651,6 @@ float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(flo
 
 # find the index of the first occurrence of a value in a byte array
 
-typealias ByteArray Union(Array{UInt8,1},Array{Int8,1})
-
 function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     if i < 1
         throw(BoundsError(a, i))
@@ -1645,6 +1663,13 @@ function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : Int(q-p+1)
 end
+function search(a::Vector{UInt8}, b::Char, i::Integer)
+    if isascii(b)
+        search(a,UInt8(b),i)
+    else
+        search(a,string(b).data,i).start
+    end
+end
 function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         search(a,UInt8(b),i)
@@ -1654,7 +1679,7 @@ function search(a::ByteArray, b::Char, i::Integer)
 end
 search(a::ByteArray, b::Union(Int8,UInt8,Char)) = search(a,b,1)
 
-function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i::Integer)
+function rsearch(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
@@ -1697,7 +1722,7 @@ function hex2bytes(s::ASCIIString)
     return arr
 end
 
-bytes2hex{T<:UInt8}(arr::Array{T,1}) = join([hex(i,2) for i in arr])
+bytes2hex{T<:UInt8}(arr::Vector{T}) = join([hex(i,2) for i in arr])
 
 function repr(x)
     s = IOBuffer()
