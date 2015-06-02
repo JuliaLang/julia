@@ -166,6 +166,14 @@ let T1 = TypeVar(:T, Integer, true), T2 = TypeVar(:T, Integer, true)
     @test !args_morespecific(b2, a)
 end
 
+# issue #11534
+let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
+    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
+    t2 = Tuple{Array, T}
+    @test !args_morespecific(t1, t2)
+    @test  args_morespecific(t2, t1)
+end
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,AbstractString) === Any
