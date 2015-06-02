@@ -266,9 +266,9 @@ Base.wait_readnb(master,1)
 write(master,"1\nquit()\n")
 
 wait(p)
+output = bytestring(readavailable(master))
 
 ccall(:close,Cint,(Cint,),fds)
-output = readall(master)
 if ccall(:jl_running_on_valgrind,Cint,()) == 0
     @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
 end
