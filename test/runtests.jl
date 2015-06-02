@@ -320,3 +320,10 @@ let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
     @test isvalid(UTF16String, u16)
     @test isvalid(UTF32String, u32)
 end
+
+# chol
+let A = rand(2,2)
+    B = A'*A
+    U = @compat chol(B, Val{:U})
+    @test_approx_eq U'*U B
+end
