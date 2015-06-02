@@ -58,7 +58,7 @@ export
 
 const libblas = Base.libblas_name
 
-import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, blas_int, DimensionMismatch, chksquare, axpy!
+import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, chksquare, axpy!
 
 # Level 1
 ## copy
