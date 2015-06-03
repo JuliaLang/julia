@@ -1374,6 +1374,9 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
 
     results = Dict{Int,Any}()
 
+    busy_workers = fill(false, length(pids))
+    busy_workers_ntfy = Condition()
+
     retryqueue = []
     task_in_err = false
     is_task_in_error() = task_in_err
@@ -1393,17 +1396,29 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
             return (getnextidx(), nxtvals)
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
+        elseif err_retry
+            # Handles the condition where we have finished processing the requested lsts as well
+            # as any retryqueue entries, but there are still some jobs active that may result
+            # in an error and have to be retried.
+            while any(busy_workers)
+                wait(busy_workers_ntfy)
+                if !isempty(retryqueue)
+                    return shift!(retryqueue)
+                end
+            end
+            return nothing
         else
             return nothing
         end
     end
 
     @sync begin
-        for wpid in pids
+        for (pididx, wpid) in enumerate(pids)
             @async begin
                 tasklet = getnext_tasklet()
                 while (tasklet != nothing)
                     (idx, fvals) = tasklet
+                    busy_workers[pididx] = true
                     try
                         result = remotecall_fetch(wpid, f, fvals...)
                         if isa(result, Exception)
@@ -1418,8 +1433,15 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
                             results[idx] = ex
                         end
                         set_task_in_error()
+
+                        busy_workers[pididx] = false
+                        notify(busy_workers_ntfy; all=true)
+
                         break # remove this worker from accepting any more tasks
                     end
+
+                    busy_workers[pididx] = false
+                    notify(busy_workers_ntfy; all=true)
 
                     tasklet = getnext_tasklet()
                 end
