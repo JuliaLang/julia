@@ -49,11 +49,19 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         bc1 = factorize(asym)
         @test_approx_eq inv(bc1) * asym eye(n)
         @test_approx_eq_eps asym * (bc1\b) b 1000ε
-
+        @test_approx_eq inv(a.' + a) * (a.' + a) eye(n)
+        @test size(bc1) == size(bc1.LD)
+        @test size(bc1,1) == size(bc1.LD,1)
+        @test size(bc1,2) == size(bc1.LD,2)
+        if eltya <: BlasReal
+            @test_throws ArgumentError bkfact(a)
+        end
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
         @test_approx_eq inv(bc2) * apd eye(n)
         @test_approx_eq_eps apd * (bc2\b) b 150000ε
+        @test ishermitian(bc2) == !issym(bc2)
+
     end
 
 debug && println("QR decomposition (without pivoting)")
