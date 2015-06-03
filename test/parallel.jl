@@ -4,7 +4,7 @@
 require("testdefs.jl")
 
 if nworkers() < 3
-    remotecall_fetch(1, () -> addprocs(3))
+    remotecall_fetch(1, () -> addprocs(3 - nworkers()))
 end
 
 id_me = myid()
@@ -224,25 +224,29 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
+    pmappids = remotecall_fetch(1, () -> addprocs(4))
+
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
-    @test length(res) < length(ups)
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true, pids=pmappids);
+    @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
     # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
-    @test length(res) < length(ups)
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true, pids=pmappids);
+    @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
     # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
+    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
+
+    remotecall_fetch(1, p->rmprocs(p), pmappids)
 
     print("\n\nPassed all pmap tests that print errors.\n")
 
