@@ -4,6 +4,8 @@
 
 import Core.Intrinsics: cglobal, box, unbox
 
+const OS_NAME = ccall(:jl_get_OS_NAME, Any, ())
+
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Any, ())

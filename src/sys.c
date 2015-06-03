@@ -657,6 +657,22 @@ DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
+DLLEXPORT jl_sym_t* jl_get_OS_NAME()
+{
+#if defined(_OS_WINDOWS_)
+    return jl_symbol("Windows");
+#elif defined(_OS_LINUX_)
+    return jl_symbol("Linux");
+#elif defined(_OS_FREEBSD_)
+    return jl_symbol("FreeBSD");
+#elif defined(_OS_DARWIN_)
+    return jl_symbol("Darwin");
+#else
+#warning OS_NAME is Unknown
+    return jl_symbol("Unknown");
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif

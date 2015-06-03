@@ -149,7 +149,6 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/abstractarray.jl \
 		base/array.jl \
 		base/bool.jl \
-		base/build_h.jl \
 		base/dict.jl \
 		base/error.jl \
 		base/essentials.jl \
