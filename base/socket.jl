@@ -254,14 +254,14 @@ type TCPSocket <: Socket
     handle::Ptr{Void}
     status::Int
     line_buffered::Bool
-    buffer::IOBuffer
+    buffer::SimpleIOBuffer
     readcb::Callback
     readnotify::Condition
     ccb::Callback
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    sendbuf::Nullable{IOBuffer}
+    sendbuf::Nullable{SimpleIOBuffer}
     lock::ReentrantLock
 
     TCPSocket(handle) = new(
