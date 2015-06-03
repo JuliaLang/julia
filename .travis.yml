@@ -62,4 +62,5 @@ script:
     - /tmp/julia/bin/julia-debug -e 'versioninfo()'
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
+    - dmesg
     - echo "Ready for packaging..."
