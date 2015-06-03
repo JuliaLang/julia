@@ -740,7 +740,7 @@ PCRE_SRC_TARGET = pcre2-$(PCRE_VER)/.libs/libpcre2-8.$(SHLIB_EXT)
 PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
 pcre2-$(PCRE_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre2/$(PCRE_VER)/$@/download
+	$(JLDOWNLOAD) $@ ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
 pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
