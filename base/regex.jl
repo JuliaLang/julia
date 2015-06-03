@@ -15,8 +15,8 @@ type Regex
     extra::Ptr{Void}
     ovec::Vector{Csize_t}
     match_data::Ptr{Void}
-    capture_name_to_idx::Dict{ASCIIString, Int}
-    idx_to_capture_name::Dict{Int, ASCIIString}
+    capture_name_to_idx::Dict{Symbol, Int}
+    idx_to_capture_name::Dict{Int, Symbol}
 
 
     function Regex(pattern::AbstractString, compile_options::Integer,
@@ -32,7 +32,7 @@ type Regex
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
                          C_NULL, Csize_t[], C_NULL,
-                         Dict{ASCIIString, Int}(), Dict{Int, ASCIIString}()))
+                         Dict{Symbol, Int}(), Dict{Int, Symbol}()))
         finalizer(re, re->begin
                               re.regex == C_NULL || PCRE.free_re(re.regex)
                               re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
@@ -60,9 +60,9 @@ function compile(regex::Regex)
         PCRE.jit_compile(regex.regex)
         regex.match_data = PCRE.create_match_data(regex.regex)
         regex.ovec = PCRE.get_ovec(regex.match_data)
-        regex.idx_to_capture_name = PCRE.capture_names(regex.regex)
-        for (i, name) in regex.idx_to_capture_name
-            regex.capture_name_to_idx[name] = i
+        for (idx, name) in PCRE.capture_names(regex.regex)
+            regex.capture_name_to_idx[Symbol(name)] = idx
+            regex.idx_to_capture_name[idx] = Symbol(name)
         end
     end
     regex
@@ -123,9 +123,10 @@ end
 
 # Capture group extraction
 getindex(m::RegexMatch, idx::Int) = m.captures[idx]
-function getindex(m::RegexMatch, name::AbstractString)
+function getindex(m::RegexMatch, name::Symbol)
     m[m.regex.capture_name_to_idx[name]]
 end
+getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
