@@ -327,3 +327,12 @@ let A = rand(2,2)
     U = @compat chol(B, Val{:U})
     @test_approx_eq U'*U B
 end
+
+# @generated
+let
+    @compat @generated function foo(x)
+        T = x
+        :(return $T)
+    end
+    @test foo(5) == Int
+end

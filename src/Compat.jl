@@ -293,6 +293,14 @@ function _compat(ex::Expr)
                 Expr(:tuple, args...)
             end
         end
+    elseif ex.head == :macrocall
+        f = ex.args[1]
+        if f == symbol("@generated") && VERSION < v"0.4.0-dev+4387"
+            f = ex.args[2]
+            if isexpr(f, :function)
+                ex = Expr(:stagedfunction, f.args...)
+            end
+        end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
