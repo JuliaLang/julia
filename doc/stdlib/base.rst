@@ -886,6 +886,10 @@ Errors
 
    An operation allocated too much memory for either the system or the garbage collector to handle properly.
 
+.. function:: ReadOnlyMemoryError()
+
+   An operation tried to write to memory that is read-only.
+
 .. function:: OverflowError()
 
    The result of an expression is too large for the specified type and will cause a wraparound.
