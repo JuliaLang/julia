@@ -20,7 +20,6 @@ print(a::ANY...) = for x=a; print(x); end
 ## Load essential files and libraries
 include("essentials.jl")
 include("reflection.jl")
-include("build_h.jl")
 include("options.jl")
 
 # core operations & types
