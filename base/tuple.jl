@@ -22,13 +22,34 @@ indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
-# Tuple Types with a defined length are iterable (but not indexable)
-length{N}(::Type{NTuple{N}}) = N
+# Tuple Types with a defined length are iterable
+length(::Type{Tuple{}}) = 0
+@generated function length{T<:Tuple}(::Type{T})
+    if isvatuple(T) || T===Tuple || T===NTuple
+        :(throw(ArgumentError("length of $T is undefined")))
+    else
+        length(T.parameters)
+    end
+end
+
 isempty(::Type{Tuple{}}) = true
-isempty{N}(::Type{NTuple{N}}) = false
-start{N}(T::Type{NTuple{N}}) = start(T.parameters)
-next{N}(T::Type{NTuple{N}}, i) = next(T.parameters, i)
-done{N}(T::Type{NTuple{N}}, i) = done(T.parameters, i)
+@generated function isempty{T<:Tuple}(::Type{T})
+    if (isvatuple(T) && length(T.parameters) == 1) || T===Tuple || T===NTuple
+        :(throw(ArgumentError("emptiness of $T is undefined")))
+    else
+        false
+    end
+end
+
+@generated function start{T<:Tuple}(::Type{T})
+    if isvatuple(T) || T===Tuple || T===NTuple
+        :(throw(ArgumentError("elements of $T are undefined")))
+    else
+        T
+    end
+end
+next{T<:Tuple,S<:Tuple}(::Type{T}, ::Type{S}) = (tuple_type_head(S), tuple_type_tail(S))
+done{T<:Tuple,S<:Tuple}(::Type{T}, ::Type{S}) = S <: Tuple{}
 
 ## mapping ##
 
