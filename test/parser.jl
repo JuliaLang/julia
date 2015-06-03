@@ -1,5 +1,21 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+function parseall(str)
+    pos = start(str)
+    exs = []
+    while !done(str, pos)
+        ex, pos = parse(str, pos)
+        push!(exs, ex)
+    end
+    if length(exs) == 0
+        throw(ParseError("end of input"))
+    elseif length(exs) == 1
+        return exs[1]
+    else
+        return Expr(:block, exs...)
+    end
+end
+
 # issue #9684
 let
     for (ex1, ex2) in [("5.≠x", "5.!=x"),
@@ -120,3 +136,14 @@ macro test999_str(args...); args; end
 @test parse("using \$a: \$b, \$c.\$d") ==
     Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
          Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))
+
+# fix pr #11338 and test for #11497
+@test parseall("using \$\na") == Expr(:block, Expr(:using, :$), :a)
+@test parseall("using \$,\na") == Expr(:toplevel, Expr(:using, :$),
+                                       Expr(:using, :a))
+@test parseall("using &\na") == Expr(:block, Expr(:using, :&), :a)
+
+@test parseall("a = &\nb") == Expr(:block, Expr(:(=), :a, :&), :b)
+@test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
+@test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
+@test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
