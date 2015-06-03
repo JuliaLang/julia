@@ -194,8 +194,7 @@ function serialize(s::SerializationState, S::SharedArray)
     Serializer.serialize_type(s, typeof(S))
     for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
-            Serializer.writetag(s.io,
-                Serializer.sertag(Serializer.UndefRefTag))
+            Serializer.writetag(s.io, Serializer.UNDEFREF_TAG)
         else
             serialize(s, getfield(S, n))
         end

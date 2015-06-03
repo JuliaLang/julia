@@ -8,25 +8,20 @@ export serialize, deserialize
 
 ## serializing values ##
 
-# type Serializer  # defined in dict.jl
-
-# dummy types to tell number of bytes used to store length (4 or 1)
-abstract LongSymbol
-abstract LongTuple
-abstract LongExpr
-abstract UndefRefTag
-abstract BackrefTag
+# type SerializationState  # defined in dict.jl
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
     Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
     DataType, UnionType, Function,
-    Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+    Tuple, Array, Expr,
+    #LongSymbol, LongTuple, LongExpr,
+    Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, SymbolNode, LabelNode, GotoNode,
     QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-    Module, UndefRefTag, Task, ASCIIString, UTF8String,
+    Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
-    SimpleVector, BackrefTag, :reserved11, :reserved12,
+    SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
 
     (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
     :Array, :TypeVar, :Box,
@@ -46,20 +41,13 @@ const TAGS = Any[
 ]
 
 const ser_version = 2 # do not make changes without bumping the version #!
-const SER_TAG = ObjectIdDict()
-let i = 2
-    for t = TAGS
-        SER_TAG[t] = Int32(i)
-        i += 1
-    end
-end
 
 const NTAGS = length(TAGS)
 
 function sertag(v::ANY)
     ptr = pointer_from_objref(v)
     ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
-    @inbounds @simd for i = 1:NTAGS
+    @inbounds for i = 1:NTAGS
         ptr == unsafe_load(ptags,i) && return (i+1)%Int32
     end
     return Int32(-1)
@@ -67,27 +55,27 @@ end
 desertag(i::Int32) = TAGS[i-1]
 
 # tags >= this just represent themselves, their whole representation is 1 byte
-const VALUE_TAGS = SER_TAG[()]
-const ZERO_TAG = SER_TAG[0]
-const TRUE_TAG = SER_TAG[true]
-const FALSE_TAG = SER_TAG[false]
-const EMPTYTUPLE_TAG = SER_TAG[()]
-const TUPLE_TAG = SER_TAG[Tuple]
-const LONGTUPLE_TAG = SER_TAG[LongTuple]
-const SIMPLEVECTOR_TAG = SER_TAG[SimpleVector]
-const SYMBOL_TAG = SER_TAG[Symbol]
-const LONGSYMBOL_TAG = SER_TAG[LongSymbol]
-const ARRAY_TAG = SER_TAG[Array]
-const UNDEFREF_TAG = SER_TAG[UndefRefTag]
-const BACKREF_TAG = SER_TAG[BackrefTag]
-const EXPR_TAG = SER_TAG[Expr]
-const LONGEXPR_TAG = SER_TAG[LongExpr]
-const MODULE_TAG = SER_TAG[Module]
-const FUNCTION_TAG = SER_TAG[Function]
-const LAMBDASTATICDATA_TAG = SER_TAG[LambdaStaticData]
-const TASK_TAG = SER_TAG[Task]
-const DATATYPE_TAG = SER_TAG[DataType]
-const INT_TAG = SER_TAG[Int]
+const VALUE_TAGS = sertag(())
+const ZERO_TAG = sertag(0)
+const TRUE_TAG = sertag(true)
+const FALSE_TAG = sertag(false)
+const EMPTYTUPLE_TAG = sertag(())
+const TUPLE_TAG = sertag(Tuple)
+const LONGTUPLE_TAG = Int32(sertag(Expr)+2)
+const SIMPLEVECTOR_TAG = sertag(SimpleVector)
+const SYMBOL_TAG = sertag(Symbol)
+const LONGSYMBOL_TAG = Int32(sertag(Expr)+1)
+const ARRAY_TAG = sertag(Array)
+const UNDEFREF_TAG = Int32(sertag(Module)+1)
+const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
+const EXPR_TAG = sertag(Expr)
+const LONGEXPR_TAG = Int32(sertag(Expr)+3)
+const MODULE_TAG = sertag(Module)
+const FUNCTION_TAG = sertag(Function)
+const LAMBDASTATICDATA_TAG = sertag(LambdaStaticData)
+const TASK_TAG = sertag(Task)
+const DATATYPE_TAG = sertag(DataType)
+const INT_TAG = sertag(Int)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -455,15 +443,12 @@ function handle_deserialize(s::SerializationState, b::Int32)
     if b == 0
         return desertag(Int32(read(s.io, UInt8)::UInt8))
     end
-    tag = desertag(b)
     if b >= VALUE_TAGS
-        return tag
+        return desertag(b)
     elseif b == TUPLE_TAG
-        len = Int32(read(s.io, UInt8)::UInt8)
-        return deserialize_tuple(s, len)
+        return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == LONGTUPLE_TAG
-        len = read(s.io, Int32)::Int32
-        return deserialize_tuple(s, len)
+        return deserialize_tuple(s, Int(read(s.io, Int32)::Int32))
     elseif b == BACKREF_TAG
         id = read(s.io, Int)::Int
         return s.table[id]
@@ -471,14 +456,19 @@ function handle_deserialize(s::SerializationState, b::Int32)
         return deserialize_array(s)
     elseif b == DATATYPE_TAG
         return deserialize_datatype(s)
+    elseif b == SYMBOL_TAG
+        return symbol(read(s.io, UInt8, Int(read(s.io, UInt8)::UInt8)))
+    elseif b == LONGSYMBOL_TAG
+        return symbol(read(s.io, UInt8, Int(read(s.io, Int32)::Int32)))
+    elseif b == EXPR_TAG
+        return deserialize_expr(s, Int(read(s.io, UInt8)::UInt8))
+    elseif b == LONGEXPR_TAG
+        return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
     end
-    return deserialize(s, tag)
+    return deserialize(s, desertag(b))
 end
 
 deserialize_tuple(s::SerializationState, len) = ntuple(i->deserialize(s), len)
-
-deserialize(s::SerializationState, ::Type{Symbol}) = symbol(read(s.io, UInt8, Int32(read(s.io, UInt8)::UInt8)))
-deserialize(s::SerializationState, ::Type{LongSymbol}) = symbol(read(s.io, UInt8, read(s.io, Int32)::Int32))
 
 function deserialize(s::SerializationState, ::Type{SimpleVector})
     n = read(s.io, Int32)
@@ -606,15 +596,12 @@ function deserialize_array(s::SerializationState)
     deserialize_cycle(s, A)
     for i = 1:length(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
-        if tag==0 || !is(desertag(tag), UndefRefTag)
+        if tag != UNDEFREF_TAG
             A[i] = handle_deserialize(s, tag)
         end
     end
     return A
 end
-
-deserialize(s::SerializationState, ::Type{Expr})     = deserialize_expr(s, Int32(read(s.io, UInt8)::UInt8))
-deserialize(s::SerializationState, ::Type{LongExpr}) = deserialize_expr(s, read(s.io, Int32)::Int32)
 
 function deserialize_expr(s::SerializationState, len)
     hd = deserialize(s)::Symbol
@@ -691,7 +678,7 @@ function deserialize(s::SerializationState, t::DataType)
         t.mutable && deserialize_cycle(s, x)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
-            if tag==0 || !is(desertag(tag), UndefRefTag)
+            if tag != UNDEFREF_TAG
                 ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
