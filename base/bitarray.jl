@@ -347,6 +347,7 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
     @inbounds r = (Bc[i1] & u) != 0
     return r
 end
+@inline unsafe_getindex(v::BitArray, ind::Int) = unsafe_bitgetindex(v.chunks, ind)
 
 @inline function getindex(B::BitArray, i::Int)
     1 <= i <= length(B) || throw(BoundsError(B, i))
@@ -356,6 +357,19 @@ end
 getindex(B::BitArray, i::Real) = getindex(B, to_index(i))
 
 getindex(B::BitArray) = getindex(B, 1)
+
+function unsafe_getindex(B::BitArray, I0::UnitRange{Int})
+    X = BitArray(length(I0))
+    copy_chunks!(X.chunks, 1, B.chunks, first(I0), length(I0))
+    return X
+end
+
+function getindex(B::BitArray, I0::UnitRange{Int})
+    checkbounds(B, I0)
+    return unsafe_getindex(B, I0)
+end
+
+getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
 # 0d bitarray
 getindex(B::BitArray{0}) = unsafe_bitgetindex(B.chunks, 1)
@@ -416,6 +430,7 @@ end
         end
     end
 end
+@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (unsafe_bitsetindex!(v.chunks, x, ind); v)
 
 setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x), 1)
 
@@ -425,6 +440,21 @@ function setindex!(B::BitArray, x::Bool, i::Int)
     return B
 end
 
+function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
+    l0 = length(I0)
+    l0 == 0 && return B
+    f0 = first(I0)
+    copy_chunks!(B.chunks, f0, X.chunks, 1, l0)
+    return B
+end
+
+function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
+    l0 = length(I0)
+    l0 == 0 && return B
+    f0 = first(I0)
+    fill_chunks!(B.chunks, x, f0, l0)
+    return B
+end
 # logical indexing
 # (when the indexing is provided as an Array{Bool} or a BitArray we can be
 # sure about the behaviour and use unsafe_getindex; in the general case
@@ -468,7 +498,7 @@ function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Ic = I.chunks
     @assert length(Bc) == length(Ic)
     lc = length(Bc)
-    last_chunk_len = Base._mod64(length(B)-1)+1
+    last_chunk_len = _mod64(length(B)-1)+1
 
     c = 1
     for i = 1:lc
@@ -805,7 +835,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractA
     i_f = first(r)
     i_l = last(r)
 
-    1 <= i_f <= n+1 || throw(BoundsError(B, i_f))
+    1 <= i_f || throw(BoundsError(B, i_f))
     i_l <= n || throw(BoundsError(B, n+1))
 
     Bins = convert(BitArray, ins)

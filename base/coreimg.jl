@@ -56,6 +56,7 @@ include("functors.jl")
 include("reduce.jl")
 
 ## core structures
+include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("iterator.jl")

@@ -237,11 +237,9 @@ using .IteratorsMD
     end
 end
 
-@inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 
 @inline unsafe_setindex!{T}(v::Array{T}, x::T, ind::Int) = (@inbounds v[ind] = x; v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
-@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
@@ -588,19 +586,6 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_getindex(B::BitArray, I0::UnitRange{Int})
-    X = BitArray(length(I0))
-    copy_chunks!(X.chunks, 1, B.chunks, first(I0), length(I0))
-    return X
-end
-
-function getindex(B::BitArray, I0::UnitRange{Int})
-    checkbounds(B, I0)
-    return unsafe_getindex(B, I0)
-end
-
-getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
-
 @generated function unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
@@ -710,22 +695,6 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-
-function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
-    l0 = length(I0)
-    l0 == 0 && return B
-    f0 = first(I0)
-    copy_chunks!(B.chunks, f0, X.chunks, 1, l0)
-    return B
-end
-
-function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
-    l0 = length(I0)
-    l0 == 0 && return B
-    f0 = first(I0)
-    fill_chunks!(B.chunks, x, f0, l0)
-    return B
-end
 
 @generated function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
