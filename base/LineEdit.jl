@@ -7,7 +7,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict
+import Base: ensureroom, peek, show, AnyDict, SimpleIOBuffer
 
 abstract TextInterface
 abstract ModeState
@@ -56,7 +56,7 @@ end
 type PromptState <: ModeState
     terminal::TextTerminal
     p::Prompt
-    input_buffer::IOBuffer
+    input_buffer::SimpleIOBuffer
     ias::InputAreaState
     indent::Int
 end
@@ -996,8 +996,8 @@ type SearchState <: ModeState
     histprompt
     #rsearch (true) or ssearch (false)
     backward::Bool
-    query_buffer::IOBuffer
-    response_buffer::IOBuffer
+    query_buffer::SimpleIOBuffer
+    response_buffer::SimpleIOBuffer
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
     parent
@@ -1049,7 +1049,7 @@ type PrefixSearchState <: ModeState
     terminal
     histprompt
     prefix::ByteString
-    response_buffer::IOBuffer
+    response_buffer::SimpleIOBuffer
     ias::InputAreaState
     indent::Int
     #The prompt whose input will be replaced by the matched history
