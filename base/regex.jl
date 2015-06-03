@@ -15,6 +15,8 @@ type Regex
     extra::Ptr{Void}
     ovec::Vector{Csize_t}
     match_data::Ptr{Void}
+    capture_name_to_idx::Dict{ASCIIString, Int}
+    idx_to_capture_name::Dict{Int, ASCIIString}
 
 
     function Regex(pattern::AbstractString, compile_options::Integer,
@@ -29,7 +31,8 @@ type Regex
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
-                         C_NULL, Csize_t[], C_NULL))
+                         C_NULL, Csize_t[], C_NULL,
+                         Dict{ASCIIString, Int}(), Dict{Int, ASCIIString}()))
         finalizer(re, re->begin
                               re.regex == C_NULL || PCRE.free_re(re.regex)
                               re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
@@ -57,6 +60,10 @@ function compile(regex::Regex)
         PCRE.jit_compile(regex.regex)
         regex.match_data = PCRE.create_match_data(regex.regex)
         regex.ovec = PCRE.get_ovec(regex.match_data)
+        regex.idx_to_capture_name = PCRE.capture_names(regex.regex)
+        for (i, name) in regex.idx_to_capture_name
+            regex.capture_name_to_idx[name] = i
+        end
     end
     regex
 end
@@ -92,6 +99,7 @@ immutable RegexMatch
     captures::Vector{Union(Void,SubString{UTF8String})}
     offset::Int
     offsets::Vector{Int}
+    regex::Regex
 end
 
 function show(io::IO, m::RegexMatch)
@@ -100,7 +108,10 @@ function show(io::IO, m::RegexMatch)
     if !isempty(m.captures)
         print(io, ", ")
         for i = 1:length(m.captures)
-            print(io, i, "=")
+            # If the capture group is named, show the name.
+            # Otherwise show its index.
+            capture_name = get(m.regex.idx_to_capture_name, i, i)
+            print(io, capture_name, "=")
             show(io, m.captures[i])
             if i < length(m.captures)
                 print(io, ", ")
@@ -108,6 +119,12 @@ function show(io::IO, m::RegexMatch)
         end
     end
     print(io, ")")
+end
+
+# Capture group extraction
+getindex(m::RegexMatch, idx::Int) = m.captures[idx]
+function getindex(m::RegexMatch, name::AbstractString)
+    m[m.regex.capture_name_to_idx[name]]
 end
 
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
@@ -136,7 +153,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32
     cap = Union(Void,SubString{UTF8String})[
             ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
-    RegexMatch(mat, cap, ovec[1]+1, off)
+    RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
 match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::UInt32=UInt32(0)) =
