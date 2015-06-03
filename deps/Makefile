@@ -233,7 +233,7 @@ endef
 #
 # also, define a Makefile variable VARNAME_GIT_URL to use as the clone origin
 # and a Makefile variable VARNAME_TAR_URL to use as the clone origin when NO_GIT is set
-# this will pass along the VARNAME_BRANCH target in $1 for its use
+# this will pass along the VARNAME_SHA1 target in $1 for its use
 #
 # this defines rules for:
 #   VARNAME_SRC_DIR = source directory for the output
@@ -250,7 +250,7 @@ $1:
 	touch -c $1/$3
 $1/$3: $1.version | $1
 	cd $1 && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $1 && git checkout -q --detach remotes/origin/$$($2_BRANCH)
+	cd $1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
 # also allow backwards compatibility with an existing git-submodule:
@@ -263,7 +263,7 @@ endif
 else # NO_GIT
 $2_SRC_DIR = $1-$$($2_BRANCH)
 $$($2_SRC_DIR).tar.gz:
-	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_BRANCH))
+	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $$($2_SRC_DIR)/$3: $$($2_SRC_DIR).tar.gz
 	$$(JLCHECKSUM) $$($2_SRC_DIR).tar.gz
 	mkdir -p $$($2_SRC_DIR) && \
