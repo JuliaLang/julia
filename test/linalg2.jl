@@ -3,7 +3,7 @@
 debug = false
 
 import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, UnitUpperTriangular, UnitLowerTriangular
 
 # basic tridiagonal operations
 n = 5
@@ -62,6 +62,11 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     x = Tlu\v
     @test_approx_eq x invFv
     @test_approx_eq det(T) det(F)
+
+    @test_approx_eq T * UnitUpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UnitLowerTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * LowerTriangular(eye(n)) F*eye(n)
 
     # symmetric tridiagonal
     if elty <: Real
