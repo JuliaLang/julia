@@ -94,12 +94,10 @@ macro enum(T,syms...)
         end
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        Base.length(x::Type{$(esc(typename))}) = $(length(vals))
-        Base.start(::Type{$(esc(typename))}) = 1
-        Base.next(x::Type{$(esc(typename))},s) = ($(esc(typename))($values[s]),s+1)
-        Base.done(x::Type{$(esc(typename))},s) = s > $(length(values))
-        Base.names(x::Type{$(esc(typename))}) = [$(map(x->Expr(:quote, (x[1])), vals)...)]
         Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless(x.val, y.val)
+        let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
+            Base.instances(::Type{$(esc(typename))}) = insts
+        end
         function Base.print(io::IO,x::$(esc(typename)))
             for (sym, i) in $vals
                 if i == x.val
