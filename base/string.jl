@@ -1663,13 +1663,6 @@ function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : Int(q-p+1)
 end
-function search(a::Vector{UInt8}, b::Char, i::Integer)
-    if isascii(b)
-        search(a,UInt8(b),i)
-    else
-        search(a,string(b).data,i).start
-    end
-end
 function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         search(a,UInt8(b),i)
