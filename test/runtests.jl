@@ -329,10 +329,12 @@ let A = rand(2,2)
 end
 
 # @generated
-let
-    @compat @generated function foo(x)
-        T = x
-        :(return $T)
+if VERSION > v"0.3.99"
+    let
+        @compat @generated function foo(x)
+            T = x
+            :(return $T)
+        end
+        @test foo(5) == Int
     end
-    @test foo(5) == Int
 end
