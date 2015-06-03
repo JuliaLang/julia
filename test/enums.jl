@@ -27,13 +27,6 @@ using Base.Test
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
 @test_throws MethodError Fruit(0.0)
-@test start(Fruit) == 1
-@test next(Fruit,1) == (apple,2)
-@test next(Fruit,2) == (orange,3)
-@test next(Fruit,3) == (kiwi,4)
-@test !done(Fruit,3)
-@test done(Fruit,4)
-@test length(Fruit) == 3
 @test typemin(Fruit) == apple
 @test typemax(Fruit) == kiwi
 @test convert(Fruit,0) == apple
@@ -49,7 +42,7 @@ using Base.Test
 @test convert(Bool,apple) == false
 @test convert(Bool,orange) == true
 @test_throws InexactError convert(Bool,kiwi)
-@test names(Fruit) == [:apple, :orange, :kiwi]
+@test instances(Fruit) == (apple, orange, kiwi)
 
 f(x::Fruit) = "hey, I'm a Fruit"
 @test f(apple) == "hey, I'm a Fruit"
@@ -59,12 +52,12 @@ d = Dict(apple=>"apple",orange=>"orange",kiwi=>"kiwi")
 @test d[orange] == "orange"
 @test d[kiwi] == "kiwi"
 vals = [apple,orange,kiwi]
-for (i,enum) in enumerate(Fruit)
+for (i,enum) in enumerate(instances(Fruit))
     @test enum == vals[i]
 end
 
 @enum(QualityofFrenchFood, ReallyGood)
-@test length(QualityofFrenchFood) == 1
+@test length(instances(QualityofFrenchFood)) == 1
 @test typeof(ReallyGood) <: QualityofFrenchFood <: Enum
 @test Int(ReallyGood) == 0
 
@@ -95,7 +88,7 @@ end
 @enum Test3 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
 @test typeof(_one_Test3.val) <: UInt8
 @test _one_Test3.val === 0x01
-@test length(Test3) == 3
+@test length(instances(Test3)) == 3
 
 @enum Test4 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
 @test _one_Test4.val === 0x0001
