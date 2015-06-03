@@ -40,4 +40,4 @@ show(buf, r"")
 
 # Named subpatterns
 m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
-@test (m["a"], m[2], m["b"]) == ("x", "y", "z")
+@test (m[:a], m[2], m["b"]) == ("x", "y", "z")
