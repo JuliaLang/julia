@@ -2440,7 +2440,7 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t clenr,
         if (cseq && !pseq)
             break;
         if (ci >= clenf) {
-            result = pi >= plenf || (pseq && !invariant);
+            result = pi >= plenf || pseq;
             break;
         }
         if (pi >= plenf && !pseq)
