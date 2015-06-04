@@ -263,6 +263,7 @@ type TCPSocket <: Socket
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
+    throttle::Int
 
     TCPSocket(handle) = new(
         handle,
@@ -273,7 +274,8 @@ type TCPSocket <: Socket
         false, Condition(),
         false, Condition(),
         nothing,
-        ReentrantLock()
+        ReentrantLock(),
+        DEFAULT_READ_BUFFER_SZ
     )
 end
 function TCPSocket()

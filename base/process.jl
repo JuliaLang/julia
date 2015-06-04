@@ -434,7 +434,6 @@ eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
-        start_reading(out)
         (out, processes)
     elseif mode == "w"
         processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdio,STDERR))
@@ -467,8 +466,7 @@ end
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = open(cmd, "r", stdin)
     !success(pc) && pipeline_error(pc)
-    wait_close(out)
-    return takebuf_array(out.buffer)
+    return readbytes(out)
 end
 
 function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)

@@ -52,9 +52,6 @@ show(io::IO, b::AbstractIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "ptr=",      b.ptr, ", ",
                                       "mark=",     b.mark, ")")
 
-is_maxsize_unlimited(io::AbstractIOBuffer) = (io.maxsize == typemax(Int))
-maxsize(io::AbstractIOBuffer) = io.maxsize
-
 read!(from::AbstractIOBuffer, a::Array) = read_sub(from, a, 1, length(a))
 
 function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)

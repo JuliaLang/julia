@@ -16,7 +16,7 @@ function fake_repl()
     Base.link_pipe(stderr_read,true,stderr_write,true)
 
     repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
-    stdin_write, stdout_read, stdout_read, repl
+    stdin_write, stdout_read, stderr_read, repl
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
@@ -28,7 +28,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
-stdin_write, stdout_read, stdout_read, repl = fake_repl()
+stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 repl.history_file = false
@@ -261,17 +261,19 @@ master = Base.TTY(RawFD(fdm); readable = true)
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
 p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-Base.start_reading(master)
-Base.wait_readnb(master,1)
+output = readuntil(master,"julia> ")
+if ccall(:jl_running_on_valgrind,Cint,()) == 0
+    # If --trace-children=yes is passed to valgrind, we will get a
+    # valgrind banner here, not just the prompt.
+    @test output == "julia> "
+end
 write(master,"1\nquit()\n")
 
 wait(p)
-
-ccall(:close,Cint,(Cint,),fds)
-output = readall(master)
-if ccall(:jl_running_on_valgrind,Cint,()) == 0
-    @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
-end
+output = readuntil(master,' ')
+@test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+@test nb_available(master) == 0
+ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
 close(master)
 
 end
