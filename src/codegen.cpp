@@ -517,13 +517,12 @@ struct jl_gcinfo_t {
     int argDepth;
     int maxDepth;
     int argSpaceOffs;
+    Instruction *gcframe; /* This should always be the first instruction to
+                           * create the GC frame */
 #ifdef JL_GC_MARKSWEEP
-    Instruction *gcframe;
-    Instruction *argSpaceInits;
     StoreInst *storeFrameSize;
 #endif
-    BasicBlock::iterator first_gcframe_inst;
-    BasicBlock::iterator last_gcframe_inst;
+    Instruction *last_gcframe_inst;
     std::vector<Instruction*> gc_frame_pops;
 };
 
@@ -3422,8 +3421,7 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 #ifdef JL_GC_MARKSWEEP
     // allocate gc frame
     gc->gcframe = (Instruction*)builder.CreateAlloca(
-        jl_pvalue_llvmt, ConstantInt::get(T_int32,n_roots + 2));
-    gc->first_gcframe_inst = BasicBlock::iterator(gc->gcframe);
+        jl_pvalue_llvmt, ConstantInt::get(T_int32, n_roots + 2));
     gc->argTemp = (Instruction*)builder.CreateConstGEP1_32(gc->gcframe, 2);
     gc->storeFrameSize =
         builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
@@ -3431,11 +3429,10 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     builder.CreateStore(builder.CreateLoad(prepare_global(jlpgcstack_var), false),
                         builder.CreateBitCast(builder.CreateConstGEP1_32(gc->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     Instruction *linst = builder.CreateStore(gc->gcframe, prepare_global(jlpgcstack_var), false);
-    gc->argSpaceInits = &b0->back();
 #else
     gc->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
                                        ConstantInt::get(T_int32, n_roots));
-    gc->first_gcframe_inst = BasicBlock::iterator(gc->argTemp);
+    gc->gcframe = gc->argTemp;
     Instruction *linst = gc->argTemp;
 #endif
     // initialize local variable stack roots to null
@@ -3443,19 +3440,20 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
         Value *varSlot = emit_local_slot(i, ctx);
         linst = builder.CreateStore(V_null, varSlot);
     }
-    gc->last_gcframe_inst = BasicBlock::iterator(linst);
+    gc->last_gcframe_inst = linst;
 }
 
 static void clear_gc_frame(jl_gcinfo_t *gc)
 {
     // replace instruction uses with Undef first to avoid LLVM assertion failures
-    BasicBlock::iterator bbi = gc->first_gcframe_inst;
+    BasicBlock::iterator bbi(gc->gcframe);
+    BasicBlock::iterator last_gcframe_inst(gc->last_gcframe_inst);
     while (1) {
         Instruction &iii = *bbi;
         Type *ty = iii.getType();
         if (ty != T_void)
             iii.replaceAllUsesWith(UndefValue::get(ty));
-        if (bbi == gc->last_gcframe_inst) break;
+        if (bbi == last_gcframe_inst) break;
         bbi++;
     }
     for (size_t i=0; i < gc->gc_frame_pops.size(); i++) {
@@ -3471,9 +3469,9 @@ static void clear_gc_frame(jl_gcinfo_t *gc)
     }
 
     BasicBlock::InstListType &il = gc->gcframe->getParent()->getInstList();
-    il.erase(gc->first_gcframe_inst, gc->last_gcframe_inst);
+    il.erase(BasicBlock::iterator(gc->gcframe), last_gcframe_inst);
     // erase() erases up *to* the end point; erase last inst too
-    il.erase(gc->last_gcframe_inst);
+    il.erase(last_gcframe_inst);
     for(size_t i=0; i < gc->gc_frame_pops.size(); i++) {
         Instruction *pop = gc->gc_frame_pops[i];
         BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
@@ -3501,6 +3499,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
                                                       gc->maxDepth + 2)));
         ReplaceInstWithInst(gc->gcframe->getParent()->getInstList(), bbi,
                             newgcframe);
+        gc->gcframe = newgcframe;
 
         BasicBlock::iterator bbi2(gc->storeFrameSize);
         StoreInst *newFrameSize =
@@ -3509,9 +3508,10 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
                           gc->storeFrameSize->getPointerOperand());
         ReplaceInstWithInst(gc->storeFrameSize->getParent()->getInstList(), bbi2,
                             newFrameSize);
+        gc->storeFrameSize = newFrameSize;
 
-        BasicBlock::InstListType &instList = gc->argSpaceInits->getParent()->getInstList();
-        Instruction *after = gc->argSpaceInits;
+        Instruction *after = gc->last_gcframe_inst;
+        BasicBlock::InstListType &instList = after->getParent()->getInstList();
 
         for (int i = 0;i < gc->maxDepth;i++) {
             int offset = i + gc->argSpaceOffs;
@@ -3520,6 +3520,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
         }
+        gc->last_gcframe_inst = after;
     }
 #else
     if (gc->maxDepth != 0) {
