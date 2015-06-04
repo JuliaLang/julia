@@ -1525,12 +1525,25 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 
 // --- gc root utils ---
 
+// ---- Get Element Pointer (GEP) instructions within the GC frame ----
+
+// Emit GEP for the @slot-th slot in the GC frame
 static Value*
 emit_local_slot(int slot, jl_codectx_t *ctx)
 {
     return builder.CreateConstGEP1_32(ctx->gc.argTemp, slot);
 }
 
+// Emit GEP for the @slot-th temporary variable in the GC frame.
+// The temporary variables are after all local variables in the GC frame.
+static Value*
+emit_temp_slot(int slot, jl_codectx_t *ctx)
+{
+    return emit_local_slot(slot + ctx->gc.argSpaceOffs, ctx);
+}
+
+// Create a GEP instruction for the @slot-th slot in the GC frame.
+// (without inserting it)
 static Instruction*
 create_local_slot(int slot, jl_codectx_t *ctx)
 {
@@ -1546,16 +1559,25 @@ create_local_slot(int slot, jl_codectx_t *ctx)
     return ins;
 }
 
+// Create a GEP instruction for the @slot-th temporary variable in the
+// GC frame. (without inserting it)
+// The temporary variables are after all local variables in the GC frame.
+static Instruction*
+create_temp_slot(int slot, jl_codectx_t *ctx)
+{
+    return create_local_slot(slot + ctx->gc.argSpaceOffs, ctx);
+}
+
 static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
 {
-    uint64_t slot = ctx->gc.argSpaceOffs + ctx->gc.argDepth;
-    Value *froot = emit_local_slot(slot, ctx);
+    Value *froot = emit_temp_slot(ctx->gc.argDepth, ctx);
     builder.CreateStore(v, froot);
 #ifdef LLVM36
     if (var != NULL) {
         std::map<jl_sym_t *, jl_varinfo_t>::iterator it = ctx->vars.find(var);
         if (it != ctx->vars.end() && ((llvm::MDNode*)it->second.dinfo) != NULL) {
             if (ctx->debug_enabled) {
+                uint64_t slot = ctx->gc.argSpaceOffs + ctx->gc.argDepth;
                 SmallVector<int64_t, 9> addr;
                 addr.push_back(llvm::dwarf::DW_OP_plus);
                 addr.push_back(slot * sizeof(void*));
@@ -1820,7 +1842,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
-    Value *myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
+    Value *myargs = emit_temp_slot(argStart, ctx);
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(jlgetfield_func), {V_null, myargs,
                                         ConstantInt::get(T_int32,2)});
@@ -2430,7 +2452,7 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
     // call
     Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
     if (ctx->gc.argTemp != NULL && nargs > 0) {
-        myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
+        myargs = emit_temp_slot(argStart, ctx);
     }
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
@@ -2621,7 +2643,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         // is function
         Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
         if (ctx->gc.argTemp != NULL && nargs > 0) {
-            myargs = emit_local_slot(argStart + 1 + ctx->gc.argSpaceOffs, ctx);
+            myargs = emit_temp_slot(argStart + 1, ctx);
         }
         theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
 #ifdef LLVM37
@@ -2635,7 +2657,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         ctx->f->getBasicBlockList().push_back(elseBB1);
         builder.SetInsertPoint(elseBB1);
         // not function
-        myargs = emit_local_slot(argStart + ctx->gc.argSpaceOffs, ctx);
+        myargs = emit_temp_slot(argStart, ctx);
 #ifdef LLVM37
         Value *r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
                                         {literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
@@ -3420,6 +3442,9 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 
 #ifdef JL_GC_MARKSWEEP
     // allocate gc frame
+    // gc->gcframe is assumed to be the first instruction creating the gc frame
+    // in finalize_gc_frame.
+    // (Add back first_gcframe_inst if this is not true anymore)
     gc->gcframe = (Instruction*)builder.CreateAlloca(
         jl_pvalue_llvmt, ConstantInt::get(T_int32, n_roots + 2));
     gc->argTemp = (Instruction*)builder.CreateConstGEP1_32(gc->gcframe, 2);
@@ -3430,6 +3455,8 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
                         builder.CreateBitCast(builder.CreateConstGEP1_32(gc->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     Instruction *linst = builder.CreateStore(gc->gcframe, prepare_global(jlpgcstack_var), false);
 #else
+    // gc->gcframe is assumed to be the first instruction creating the gc frame
+    // in finalize_gc_frame
     gc->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
                                        ConstantInt::get(T_int32, n_roots));
     gc->gcframe = gc->argTemp;
@@ -3468,11 +3495,15 @@ static void clear_gc_frame(jl_gcinfo_t *gc)
         }
     }
 
+    // Remove GC frame creation
+    // (instructions from gc->gcframe to gc->last_gcframe_inst)
     BasicBlock::InstListType &il = gc->gcframe->getParent()->getInstList();
     il.erase(BasicBlock::iterator(gc->gcframe), last_gcframe_inst);
     // erase() erases up *to* the end point; erase last inst too
     il.erase(last_gcframe_inst);
-    for(size_t i=0; i < gc->gc_frame_pops.size(); i++) {
+    // Remove GC pops
+    // (4 instructions from each element in the gc->gc_frame_pops)
+    for (size_t i=0; i < gc->gc_frame_pops.size(); i++) {
         Instruction *pop = gc->gc_frame_pops[i];
         BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
         BasicBlock::iterator pi(pop);
@@ -3492,6 +3523,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     }
     else {
         // n_frames++;
+        // Fix the size of the GC frame created
         BasicBlock::iterator bbi(gc->gcframe);
         AllocaInst *newgcframe =
             new AllocaInst(jl_pvalue_llvmt,
@@ -3513,9 +3545,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         Instruction *after = gc->last_gcframe_inst;
         BasicBlock::InstListType &instList = after->getParent()->getInstList();
 
+        // Initialize the slots for temporary variables to NULL
         for (int i = 0;i < gc->maxDepth;i++) {
-            int offset = i + gc->argSpaceOffs;
-            Instruction *argTempi = create_local_slot(offset, ctx);
+            Instruction *argTempi = create_temp_slot(i, ctx);
             instList.insertAfter(after, argTempi);
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
@@ -3539,6 +3571,7 @@ static void
 emit_gcpop(jl_codectx_t *ctx)
 {
 #ifdef JL_GC_MARKSWEEP
+    // finalize_gc_frame assumes each frame pop takes 4 instructions.
     Instruction *gcpop =
         (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
     ctx->gc.gc_frame_pops.push_back(gcpop);
