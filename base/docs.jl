@@ -150,7 +150,7 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(ex::Expr) = namify(ex.args[1])
+namify(ex::Expr) = isexpr(ex, :.)? ex : namify(ex.args[1])
 namify(sy::Symbol) = sy
 
 function mdify(ex)
