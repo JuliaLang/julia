@@ -17,8 +17,7 @@ import Base:
     Display,
     display,
     writemime,
-    AnyDict,
-    SimpleIOBuffer
+    AnyDict
 
 import ..LineEdit:
     CompletionProvider,
@@ -299,7 +298,7 @@ type REPLHistoryProvider <: HistoryProvider
     history_file
     cur_idx::Int
     last_idx::Int
-    last_buffer::SimpleIOBuffer
+    last_buffer::IOBuffer
     last_mode
     mode_mapping
     modes::Array{Symbol,1}

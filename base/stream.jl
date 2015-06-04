@@ -94,7 +94,7 @@ uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void}
 type Pipe <: AsyncStream
     handle::Ptr{Void}
     status::Int
-    buffer::SimpleIOBuffer
+    buffer::IOBuffer
     line_buffered::Bool
     readcb::Callback
     readnotify::Condition
@@ -102,7 +102,7 @@ type Pipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    sendbuf::Nullable{SimpleIOBuffer}
+    sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
 
     Pipe(handle) = new(
@@ -175,12 +175,12 @@ type TTY <: AsyncStream
     handle::Ptr{Void}
     status::Int
     line_buffered::Bool
-    buffer::SimpleIOBuffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
-    sendbuf::Nullable{SimpleIOBuffer}
+    sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
     @windows_only ispty::Bool
     function TTY(handle)
@@ -360,7 +360,7 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::SimpleIOBuffer, recommended_size::UInt)
+function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
@@ -371,7 +371,7 @@ function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::UInt)
     (buf,UInt(size))
 end
 
-function notify_filled(buffer::SimpleIOBuffer, nread::Int, base::Ptr{Void}, len::UInt)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::UInt)
     if buffer.append
         buffer.size += nread
     else
@@ -969,9 +969,9 @@ unmark(x::AsyncStream)   = unmark(x.buffer)
 reset(x::AsyncStream)    = reset(x.buffer)
 ismarked(x::AsyncStream) = ismarked(x.buffer)
 
-# BufferStream's are non-OS streams, backed by a regular SimpleIOBuffer
+# BufferStream's are non-OS streams, backed by a regular IOBuffer
 type BufferStream <: AsyncStream
-    buffer::SimpleIOBuffer
+    buffer::IOBuffer
     r_c::Condition
     close_c::Condition
     is_open::Bool

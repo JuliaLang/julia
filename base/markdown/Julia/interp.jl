@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function Base.parse(stream::IOBuffer; greedy::Bool = true, raise::Bool = true)
+function Base.parse(stream::IO; greedy::Bool = true, raise::Bool = true)
     pos = position(stream)
     ex, Δ = Base.parse(readall(stream), 1, greedy = greedy, raise = raise)
     seek(stream, pos + Δ - 1)

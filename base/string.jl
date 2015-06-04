@@ -607,7 +607,7 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
+write{T<:ByteString}(to::AbstractIOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset + 1, nextind(s, s.endof) - 1)
 
 sizeof(s::SubString{ASCIIString}) = s.endof
