@@ -298,3 +298,6 @@ end
 
 # fma and muladd
 @test fma(3,4,5) == 3*4+5 == muladd(3,4,5)
+
+# finalize
+@test finalize(1) == nothing

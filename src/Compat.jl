@@ -400,4 +400,9 @@ if VERSION < v"0.4.0-dev+2861"
     export muladd
 end
 
+if VERSION < v"0.4.0-dev+1969"
+    finalize(x) = nothing
+    export finalize
+end
+
 end # module
