@@ -146,7 +146,6 @@ copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S))   = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array(Tv, length(S.nzval)))
-similar{Tv,Ti,TvNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{Ti}) = similar(S, TvNew)
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array(TvNew, length(S.nzval)))
 similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::NTuple{Integer}) = spzeros(Tv, d...)
 
@@ -1225,7 +1224,6 @@ function rangesearch(haystack::Range, needle)
     (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : 0
 end
 
-getindex(A::SparseMatrixCSC, i::Integer) = isempty(A) ? throw(BoundsError()) : getindex(A, ind2sub(size(A),i))
 getindex(A::SparseMatrixCSC, I::Tuple{Integer,Integer}) = getindex(A, I[1], I[2])
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
@@ -1239,6 +1237,12 @@ end
 
 getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = getindex(A,I,[j])
 getindex{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = getindex(A,[i],J)
+
+# Colon translation (this could be done more efficiently)
+getindex(A::SparseMatrixCSC, ::Colon)          = getindex(A, 1:length(A))
+getindex(A::SparseMatrixCSC, ::Colon, ::Colon) = getindex(A, 1:size(A, 1), 1:size(A, 2))
+getindex(A::SparseMatrixCSC, ::Colon, j)       = getindex(A, 1:size(A, 1), j)
+getindex(A::SparseMatrixCSC, i, ::Colon)       = getindex(A, i, 1:size(A, 2))
 
 function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     # for indexing whole columns
@@ -1681,8 +1685,6 @@ end
 
 
 ## setindex!
-setindex!(A::SparseMatrixCSC, v, i::Integer) = setindex!(A, v, ind2sub(size(A),i)...)
-
 function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     i0 = convert(Ti, i0)
     i1 = convert(Ti, i1)
@@ -1722,6 +1724,12 @@ setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T
 
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{T}) = setindex!(A, x, [i], J)
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, I::AbstractVector{T}, j::Integer) = setindex!(A, x, I, [j])
+
+# Colon translation
+setindex!(A::SparseMatrixCSC, x, ::Colon)          = setindex!(A, x, 1:length(A))
+setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1), 1:size(A,2))
+setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union(Integer, AbstractVector)) = setindex!(A, x, 1:size(A, 1), j)
+setindex!(A::SparseMatrixCSC, x, i::Union(Integer, AbstractVector), ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
 setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
     (0 == x) ? spdelete!(A, I, J) : spset!(A, convert(Tv,x), I, J)

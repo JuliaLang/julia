@@ -2,7 +2,8 @@
 
 module CHOLMOD
 
-import Base: (*), convert, copy, eltype, getindex, show, size
+import Base: (*), convert, copy, eltype, getindex, show, size,
+             linearindexing, LinearFast, LinearSlow
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
@@ -935,19 +936,14 @@ function size(F::Factor, i::Integer)
     return 1
 end
 
+linearindexing(::Dense) = LinearFast()
 function getindex(A::Dense, i::Integer)
     s = unsafe_load(A.p)
     0 < i <= s.nrow*s.ncol || throw(BoundsError())
     unsafe_load(s.x, i)
 end
-function getindex(A::Dense, i::Integer, j::Integer)
-    s = unsafe_load(A.p)
-    0 < i <= s.nrow || throw(BoundsError())
-    0 < j <= s.ncol || throw(BoundsError())
-    unsafe_load(s.x, i + (j - 1)*s.d)
-end
 
-getindex(A::Sparse, i::Integer) = getindex(A, ind2sub(size(A),i)...)
+linearindexing(::Sparse) = LinearSlow()
 function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     s = unsafe_load(A.p)
     !(1 <= i0 <= s.nrow && 1 <= i1 <= s.ncol) && throw(BoundsError())

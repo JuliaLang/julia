@@ -107,7 +107,6 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
     B
 end
 
-getindex(A::AbstractTriangular, i::Integer) = ((m, n) = divrem(i - 1, size(A, 1)); A[n + 1, m + 1])
 getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[i,j]))
 getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[i,j])
 getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
