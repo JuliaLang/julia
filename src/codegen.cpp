@@ -1532,6 +1532,21 @@ emit_local_slot(int slot, jl_codectx_t *ctx)
     return builder.CreateConstGEP1_32(ctx->gc.argTemp, slot);
 }
 
+static Instruction*
+create_local_slot(int slot, jl_codectx_t *ctx)
+{
+    jl_gcinfo_t *gc = &ctx->gc;
+#ifdef LLVM37
+    Instruction *ins =
+        GetElementPtrInst::Create(NULL, gc->argTemp,
+                                  ConstantInt::get(T_int32, slot));
+#else
+    Instruction *ins =
+        GetElementPtrInst::Create(gc->argTemp, ConstantInt::get(T_int32, slot));
+#endif
+    return ins;
+}
+
 static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
 {
     uint64_t slot = ctx->gc.argSpaceOffs + ctx->gc.argDepth;
@@ -3484,7 +3499,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             new AllocaInst(jl_pvalue_llvmt,
                            ConstantInt::get(T_int32, (gc->argSpaceOffs +
                                                       gc->maxDepth + 2)));
-        ReplaceInstWithInst(gc->argTemp->getParent()->getInstList(), bbi,
+        ReplaceInstWithInst(gc->gcframe->getParent()->getInstList(), bbi,
                             newgcframe);
 
         BasicBlock::iterator bbi2(gc->storeFrameSize);
@@ -3498,16 +3513,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         BasicBlock::InstListType &instList = gc->argSpaceInits->getParent()->getInstList();
         Instruction *after = gc->argSpaceInits;
 
-        for(size_t i=0; i < (size_t)gc->maxDepth; i++) {
-#ifdef LLVM37
-            Instruction *argTempi =
-                GetElementPtrInst::Create(NULL,newgcframe,
-                                          ConstantInt::get(T_int32, i+gc->argSpaceOffs+2));
-#else
-            Instruction *argTempi =
-                GetElementPtrInst::Create(newgcframe,
-                                          ConstantInt::get(T_int32, i+gc->argSpaceOffs+2));
-#endif
+        for (int i = 0;i < gc->maxDepth;i++) {
+            int offset = i + gc->argSpaceOffs;
+            Instruction *argTempi = create_local_slot(offset, ctx);
             instList.insertAfter(after, argTempi);
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
