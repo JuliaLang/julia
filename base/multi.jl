@@ -1007,7 +1007,7 @@ function start_worker(out::IO)
         # To prevent hanging processes on remote machines, newly launched workers exit if the
         # master process does not connect in time.
         # TODO : Make timeout configurable.
-        check_master_connect(60.0)
+        check_master_connect(parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0")))
         while true; wait(); end
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")

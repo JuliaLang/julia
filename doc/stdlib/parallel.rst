@@ -158,6 +158,13 @@ General Parallel Computing Support
 
    ``exeflags`` :  additional flags passed to the worker processes.
 
+   Environment variables :
+
+   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
+   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
+   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
+   the number of seconds a newly launched worker waits for connection establishment.
+
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
@@ -165,6 +172,10 @@ General Parallel Computing Support
 
    For example Beowulf clusters are  supported via a custom cluster manager implemented
    in  package ``ClusterManagers``.
+
+   The number of seconds a newly launched worker waits for connection establishment from the master can be
+   specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when
+   using TCP/IP as transport.
 
 
 .. function:: nprocs()
