@@ -369,6 +369,21 @@ str = "1.00000000000000000000000000000000000000000000000000000000000000000000000
 with_bigfloat_precision(406) do
     @test string(nextfloat(BigFloat(1))) == str
 end
+with_bigfloat_precision(21) do
+    @test string(zero(BigFloat)) == "0.0000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+end
+with_bigfloat_precision(40) do
+    @test string(zero(BigFloat)) == "0.0000000000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+end
+with_bigfloat_precision(123) do
+    @test string(zero(BigFloat)) == "0.00000000000000000000000000000000000000"
+    @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
+end
 
 # eps
 x = eps(BigFloat)
