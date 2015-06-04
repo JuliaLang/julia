@@ -471,7 +471,7 @@ can be called via the following Julia code::
 Struct Type correspondences
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Composite types, aka ``struct`` in C or ``STRUCTURE`` / ``RECORD`` in Fortran),
+Composite types, aka ``struct`` in C or ``TYPE`` in Fortran),
 can be mirrored in Julia by creating a ``type`` or ``immutable``
 definition with the same field layout.
 
