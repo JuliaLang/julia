@@ -2798,6 +2798,10 @@ function inlining_pass(e::Expr, sv, ast)
         elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)
             i0 = 5
             isccall = false
+        elseif is_known_call(e, Core.throw, sv)
+            # Do not inline throw (or it's arguments). They should not be
+            # in the hot path and they can cause code inflation
+            return (e, ())
         else
             i0 = 1
             isccall = false
