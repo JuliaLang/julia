@@ -2933,3 +2933,9 @@ function f11065()
     end
 end
 @test_throws UndefVarError f11065()
+
+# issue #11295
+function f11295(x...)
+    call = Expr(x...)
+end
+@test isa(f11295(:a,:b), Expr)
