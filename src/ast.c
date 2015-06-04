@@ -264,15 +264,12 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             return jl_false;
         return (jl_value_t*)scmsym_to_julia(e);
     }
-    if (fl_isstring(e)) {
+    if (fl_isstring(e))
         return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
-    }
-    if (e == FL_F) {
+    if (e == FL_F)
         return jl_false;
-    }
-    if (e == FL_T) {
+    if (e == FL_T)
         return jl_true;
-    }
     if (e == FL_NIL) {
         assert(0 && "Jeff doesn't think this is supposed to happen");
     }
@@ -430,9 +427,8 @@ static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
 
 static value_t julia_to_scm_(jl_value_t *v)
 {
-    if (jl_is_symbol(v)) {
+    if (jl_is_symbol(v))
         return symbol(((jl_sym_t*)v)->name);
-    }
     if (jl_is_gensym(v)) {
         size_t idx = ((jl_gensym_t*)v)->id;
         size_t i;
@@ -446,15 +442,12 @@ static value_t julia_to_scm_(jl_value_t *v)
         arraylist_push(&jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
         return flv;
     }
-    if (v == jl_true) {
+    if (v == jl_true)
         return FL_T;
-    }
-    if (v == jl_false) {
+    if (v == jl_false)
         return FL_F;
-    }
-    if (v == jl_nothing) {
+    if (v == jl_nothing)
         return fl_cons(fl_null_sym, FL_NIL);
-    }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = FL_NIL;
@@ -465,27 +458,20 @@ static value_t julia_to_scm_(jl_value_t *v)
         fl_free_gc_handles(1);
         return scmv;
     }
-    if (jl_typeis(v, jl_linenumbernode_type)) {
+    if (jl_typeis(v, jl_linenumbernode_type))
         return julia_to_list2((jl_value_t*)line_sym, jl_fieldref(v,0));
-    }
-    if (jl_typeis(v, jl_labelnode_type)) {
+    if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2((jl_value_t*)label_sym, jl_fieldref(v,0));
-    }
-    if (jl_typeis(v, jl_gotonode_type)) {
+    if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2((jl_value_t*)goto_sym, jl_fieldref(v,0));
-    }
-    if (jl_typeis(v, jl_quotenode_type)) {
+    if (jl_typeis(v, jl_quotenode_type))
         return julia_to_list2((jl_value_t*)inert_sym, jl_fieldref(v,0));
-    }
-    if (jl_typeis(v, jl_newvarnode_type)) {
+    if (jl_typeis(v, jl_newvarnode_type))
         return julia_to_list2((jl_value_t*)newvar_sym, jl_fieldref(v,0));
-    }
-    if (jl_typeis(v, jl_topnode_type)) {
+    if (jl_typeis(v, jl_topnode_type))
         return julia_to_list2((jl_value_t*)top_sym, jl_fieldref(v,0));
-    }
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v))) {
+    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
-    }
     value_t opaque = cvalue(jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;
@@ -498,7 +484,6 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
-
     return scm_to_julia(e,0);
 }
 
@@ -514,12 +499,10 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     JL_GC_PUSH2(&expr, &pos1);
 
     value_t e = car_(p);
-    if (e == FL_EOF) {
+    if (e == FL_EOF)
         expr = jl_nothing;
-    }
-    else {
+    else
         expr = scm_to_julia(e,0);
-    }
 
     pos1 = jl_box_long(tosize(cdr_(p),"parse"));
     jl_value_t *result = (jl_value_t*)jl_svec2(expr, pos1);
@@ -576,8 +559,7 @@ jl_value_t *jl_load_file_string(const char *text, size_t len,
     t = cvalue_static_cstrn(text, len);
     fl_gc_handle(&t);
     f = cvalue_static_cstrn(filename, namelen);
-    fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
-              t, f);
+    fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")), t, f);
     fl_free_gc_handles(1);
     return jl_parse_eval_all(filename, namelen);
 }
@@ -724,9 +706,8 @@ int jl_lam_vars_captured(jl_expr_t *ast)
 {
     jl_array_t *vinfos = jl_lam_vinfo(ast);
     for(int i=0; i < jl_array_len(vinfos); i++) {
-        if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
+        if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i)))
             return 1;
-        }
     }
     return 0;
 }
@@ -757,7 +738,7 @@ int jl_is_rest_arg(jl_value_t *ex)
     if (((jl_expr_t*)atype)->head == dots_sym)
         return 1;
     if (atype->head != call_sym || jl_array_len(atype->args) < 3 || jl_array_len(atype->args) > 4)
-         return 0;
+        return 0;
     return ((jl_sym_t*)jl_exprarg(atype,1)) == vararg_sym;
 }
 
@@ -927,8 +908,7 @@ jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t)
     size_t i;
     for(i=0; i < jl_svec_len(s); i+=2) {
         assert(jl_is_typevar(jl_svecref(t,i)));
-        jl_svecset(s, i,
-                    (jl_value_t*)((jl_tvar_t*)jl_svecref(t,i))->name);
+        jl_svecset(s, i, (jl_value_t*)((jl_tvar_t*)jl_svecref(t,i))->name);
         jl_svecset(s, i+1, jl_svecref(t,i+1));
     }
     return s;
@@ -938,8 +918,7 @@ jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t)
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
 // this tree can then be further mutated by optimization passes.
-DLLEXPORT
-jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
+DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
 {
     jl_svec_t *spenv = NULL;
     jl_value_t *ast = li->ast;
@@ -968,17 +947,18 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
     return ast;
 }
 
-DLLEXPORT int jl_is_operator(char *sym) {
-     return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym))
-             == FL_T;
+DLLEXPORT int jl_is_operator(char *sym)
+{
+    return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym)) == FL_T;
 }
 
-DLLEXPORT int jl_operator_precedence(char *sym) {
-     return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")),
-                             symbol(sym)));
+DLLEXPORT int jl_operator_precedence(char *sym)
+{
+    return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")), symbol(sym)));
 }
 
-jl_value_t* skip_meta(jl_array_t *body) {
+jl_value_t *skip_meta(jl_array_t *body)
+{
     jl_value_t *body1 = jl_cellref(body,0);
     if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == meta_sym
         && jl_array_len(body) > 1)
