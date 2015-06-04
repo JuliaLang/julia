@@ -43,6 +43,10 @@ isnot(x,y) = !is(x,y)
 @test isa(Complex,Type{Complex})
 @test !(Type{Ptr{Bottom}} <: Type{Ptr})
 @test !(Type{Rational{Int}} <: Type{Rational})
+@test Tuple{} <: Tuple{Vararg}
+@test Tuple{} <: NTuple{TypeVar(:N,true)}
+@test Type{Tuple{}} <: Type{Tuple{Vararg}}
+@test Type{Tuple{}} <: Type{NTuple{TypeVar(:N,true)}}
 let T = TypeVar(:T,true)
     @testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
     @testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
