@@ -326,6 +326,17 @@ if VERSION < v"0.4.0-dev+3864"
         r = Array(T,1)
         float64_isvalid(s, r) ? Nullable(r[1]) : Nullable{Float64}()
     end
+
+    function tryparse{T<:Integer}(::Type{T}, s)
+        local ret
+        try
+            val = parse(T, s)
+            ret = Nullable{T}(val)
+        catch
+            ret = Nullable{T}()
+        end
+        return ret
+    end
     export tryparse
 end
 
