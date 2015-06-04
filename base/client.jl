@@ -132,14 +132,6 @@ function eval_user_input(ast::ANY, show_value)
     isa(STDIN,TTY) && println()
 end
 
-function repl_callback(ast::ANY, show_value)
-    global _repl_enough_stdin = true
-    Base.stop_reading(STDIN)
-    put!(repl_channel, (ast, show_value))
-end
-
-_repl_start = Condition()
-
 syntax_deprecation_warnings(warn::Bool) =
     ccall(:jl_parse_depwarn, Cint, (Cint,), warn)!=0
 
