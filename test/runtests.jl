@@ -299,5 +299,45 @@ end
 # fma and muladd
 @test fma(3,4,5) == 3*4+5 == muladd(3,4,5)
 
+# is_valid_utf32
+s = utf32("abc")
+@test is_valid_utf32(s)
+s = utf32(UInt32[65,0x110000])
+@test !is_valid_utf32(s)
+
+# isvalid
+let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
+    bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
+
+    @test !isvalid(bad32)
+    @test !isvalid(badch)
+    @test isvalid(s)
+    @test isvalid(u8)
+    @test isvalid(u16)
+    @test isvalid(u32)
+    @test isvalid(ASCIIString, s)
+    @test isvalid(UTF8String,  u8)
+    @test isvalid(UTF16String, u16)
+    @test isvalid(UTF32String, u32)
+end
+
+# chol
+let A = rand(2,2)
+    B = A'*A
+    U = @compat chol(B, Val{:U})
+    @test_approx_eq U'*U B
+end
+
+# @generated
+if VERSION > v"0.3.99"
+    let
+        @compat @generated function foo(x)
+            T = x
+            :(return $T)
+        end
+        @test foo(5) == Int
+    end
+end
+
 # finalize
 @test finalize(1) == nothing

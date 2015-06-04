@@ -44,6 +44,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Tuple{foo, bar}` - Julia 0.4-style tuple types.
 
+* `@compat chol(A, Val{:U})` - Julia 0.4 type-stable cholesky factorizations (will not be type-stable on 0.3)
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
@@ -59,13 +61,15 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## New functions
 
-* `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator. 
- 
+* `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator.
+
 * `isdiag`, which tests whether a matrix is diagonal, can be used in julia 0.3.
 
 * `keytype` and `valtype`, which return key and value type of Associative type, can be used in julia 0.3.
 
 * `fma(x,y,z)` and `muladd(x,y,z)` can be used in Julia 0.3 for `x*y+z`.
+
+* `finalize(x)` is a no-op on Julia 0.3; in 0.4 it forces a registered finalizer to run on `x`
 
 ## Renamed functions
 
