@@ -261,7 +261,7 @@ ifeq (exists, $$(shell [ -d $$(JULIAHOME)/.git/modules/deps/$1 ] && echo exists 
 $1/$4: $$(JULIAHOME)/.git/modules/deps/$1/HEAD
 endif
 else # NO_GIT
-$2_SRC_DIR = $1-$$($2_BRANCH)
+$2_SRC_DIR = $1-$$($2_SHA1)
 $$($2_SRC_DIR).tar.gz:
 	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $$($2_SRC_DIR)/$3: $$($2_SRC_DIR).tar.gz
