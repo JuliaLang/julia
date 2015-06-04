@@ -34,14 +34,8 @@ end
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
-getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
-
-function getindex(D::Diagonal, i::Integer)
-    n = length(D.diag)
-    id = div(i-1, n)
-    id + id * n == i-1 && return D.diag[id+1]
-    zero(eltype(D.diag))
-end
+getindex(D::Diagonal, i::Int, j::Int) = i == j ? D.diag[i] : zero(eltype(D.diag))
+unsafe_getindex(D::Diagonal, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(eltype(D.diag))
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
 ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))

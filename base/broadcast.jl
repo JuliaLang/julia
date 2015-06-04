@@ -273,7 +273,7 @@ end
             X = x
             # To call setindex_shape_check, we need to create fake 1-d indexes of the proper size
             @nexprs $N d->(fakeI_d = 1:shape_d)
-            Base.setindex_shape_check(X, (@ntuple $N fakeI)...)
+            @ncall $N Base.setindex_shape_check X shape
             k = 1
             @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
                 @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
