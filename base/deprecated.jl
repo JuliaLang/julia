@@ -501,8 +501,8 @@ end
 
 # 11554
 
-read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, Int(nb))
-function read!(from::IOBuffer, p::Ptr, nb::Int)
+read!(from::AbstractIOBuffer, p::Ptr, nb::Integer) = read!(from, p, Int(nb))
+function read!(from::AbstractIOBuffer, p::Ptr, nb::Int)
     depwarn("read!(::IOBuffer, ::Ptr) is unsafe and therefore deprecated", :read!)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
