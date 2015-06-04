@@ -165,6 +165,7 @@ export
     SystemError,
     TypeError,
     AssertionError,
+    UnicodeError,
 
 # Global constants and variables
     ARGS,
