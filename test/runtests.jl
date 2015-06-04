@@ -199,6 +199,10 @@ end
 @test isa(tryparse(Float64, "1.1"), Nullable)
 @test get(tryparse(Float64, "1.1")) == 1.1
 @test isa(tryparse(Float64, "a"), Nullable{Float64})
+@test get(tryparse(Int32, "1")) == 1
+@test isa(tryparse(Int32, "a"), Nullable{Int32})
+@test get(tryparse(Int64, "1")) == 1
+@test isa(tryparse(Int64, "a"), Nullable{Int64})
 
 # Make sure exports from Libc and Libdl are defined
 for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:MS_SYNC,:munmap,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:MS_INVALIDATE,:MS_ASYNC,:time,:strerror,:gethostname,:free,:mmap]
