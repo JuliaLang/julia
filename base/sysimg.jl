@@ -87,6 +87,7 @@ include("osutils.jl")
 # strings & printing
 include("utferror.jl")
 include("utftypes.jl")
+include("utfcheck.jl")
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
