@@ -1539,7 +1539,7 @@
                                 `((quote ,(cadr a)) ,(caddr a)))
                               keys))))
      (if (null? restkeys)
-         `(call (top kwcall) call ,(length keys) ,@keyargs
+         `(call (top kwcall) (|.| ,(current-julia-module) 'call) ,(length keys) ,@keyargs
                 ,f (call (top Array) (top Any) ,(* 2 (length keys)))
                 ,@pa)
          (let ((container (make-jlgensym)))
@@ -1559,7 +1559,7 @@
                           `(block (= (tuple ,k ,v) ,rk)
                                   ,push-expr))))
                   restkeys)
-             ,(let ((kw-call `(call (top kwcall) call ,(length keys) ,@keyargs
+             ,(let ((kw-call `(call (top kwcall) (|.| ,(current-julia-module) 'call) ,(length keys) ,@keyargs
                                     ,f ,container ,@pa)))
                 (if (not (null? keys))
                     kw-call
@@ -1810,7 +1810,7 @@
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
-                     `(call (top _apply) call ,f ,@(tuple-wrap argl '())))))
+                     `(call (top _apply) (|.| ,(current-julia-module) 'call) ,f ,@(tuple-wrap argl '())))))
 
                  ((and (eq? (cadr e) '*) (length= e 4))
                   (expand-transposed-op
