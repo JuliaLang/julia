@@ -215,7 +215,7 @@ $(build_prefix): | $(DIRS)
 MAKE_DESTDIR = DESTDIR="$(build_staging)/$1"
 define make-install
 	rm -rf $(build_staging)/$1
-	$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
+	+$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
 	mkdir -p $(build_prefix)
 	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
 endef
@@ -647,8 +647,7 @@ endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS))
+	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH)
 	touch -c $@
 
 reinstall-llvm:
