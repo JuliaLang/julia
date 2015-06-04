@@ -590,6 +590,9 @@ add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 end
 
 function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
+    if !isleaftype(Type{types})
+        return Any
+    end
     argtype = typeintersect(types,limit_tuple_type(argtype))
     if is(argtype,Bottom)
         return Bottom
