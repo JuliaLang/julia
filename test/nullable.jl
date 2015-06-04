@@ -40,6 +40,23 @@ for T in types
     @test eltype(x) === T
 end
 
+# Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
+for T in types
+    x = Nullable{T}(zero(T),false)
+    @test x.isnull === false
+    @test isa(x.value, T)
+    @test x.value === zero(T)
+    @test eltype(x) === T
+
+    x = Nullable{T}(zero(T),true)
+    @test x.isnull === true
+    @test isa(x.value, T)
+    @test eltype(Nullable{T}) === T
+    @test eltype(x) === T
+end
+
+
+
 # immutable NullException <: Exception
 @test isa(NullException(), NullException)
 @test_throws NullException throw(NullException())
