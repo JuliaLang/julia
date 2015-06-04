@@ -244,7 +244,7 @@ function show(io::IO, r::LinSpace)
     print(io, ')')
 end
 
-logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer=50) = 10 .^ linspace(start, stop, n)
 
 ## interface implementations
 

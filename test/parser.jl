@@ -18,9 +18,9 @@ end
 
 # issue #9684
 let
-    for (ex1, ex2) in [("5.≠x", "5.!=x"),
-                       ("5.≥x", "5.>=x"),
-                       ("5.≤x", "5.<=x")]
+    for (ex1, ex2) in [("5 .≠ x", "5 .!= x"),
+                       ("5 .≥ x", "5 .>= x"),
+                       ("5 .≤ x", "5 .<= x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
         @test ex1.head === :comparison && (ex1.head === ex2.head)
         @test ex1.args[1] === 5 && ex2.args[1] === 5

@@ -280,7 +280,7 @@
     (if (eqv? (peek-char port) #\.)
         (begin (read-char port)
                (if (dot-opchar? (peek-char port))
-                   (io.ungetc port #\.)
+                   (error "add disambiguating space between numeric literal and infix dot operator")
                    (begin (write-char #\. str)
                           (read-digs #f)
                           (if (eq? pred char-hex?)

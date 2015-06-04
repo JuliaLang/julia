@@ -14,22 +14,22 @@ b = a+a
 @test length((1,)) == 1
 @test length((1,2)) == 2
 
-@test isequal(1.+[1,2,3], [2,3,4])
-@test isequal([1,2,3].+1, [2,3,4])
-@test isequal(1.-[1,2,3], [0,-1,-2])
-@test isequal([1,2,3].-1, [0,1,2])
+@test isequal(1 .+ [1,2,3], [2,3,4])
+@test isequal([1,2,3] .+ 1, [2,3,4])
+@test isequal(1 .- [1,2,3], [0,-1,-2])
+@test isequal([1,2,3] .- 1, [0,1,2])
 
-@test isequal(5*[1,2,3], [5,10,15])
-@test isequal([1,2,3]*5, [5,10,15])
-@test isequal(1./[1,2,5], [1.0,0.5,0.2])
-@test isequal([1,2,3]/5, [0.2,0.4,0.6])
+@test isequal(5 * [1,2,3], [5,10,15])
+@test isequal([1,2,3] * 5, [5,10,15])
+@test isequal(1 ./ [1,2,5], [1.0,0.5,0.2])
+@test isequal([1,2,3] / 5, [0.2,0.4,0.6])
 
-@test isequal(1.<<[1,2,5], [2,4,32])
-@test isequal(128.>>[1,2,5], [64,32,4])
-@test isequal(2.>>1, 1)
-@test isequal(1.<<1, 2)
-@test isequal([1,2,5].<<[1,2,5], [2,8,160])
-@test isequal([10,20,50].>>[1,2,5], [5,5,1])
+@test isequal(1 .<< [1,2,5], [2,4,32])
+@test isequal(128 .>> [1,2,5], [64,32,4])
+@test isequal(2 .>> 1, 1)
+@test isequal(1 .<< 1, 2)
+@test isequal([1,2,5] .<< [1,2,5], [2,8,160])
+@test isequal([10,20,50] .>> [1,2,5], [5,5,1])
 
 
 a = ones(2,2)
@@ -792,7 +792,7 @@ for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:
 end
 a = [1:10;]
 @test deleteat!(a, 11:10) == [1:10;]
-@test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
+@test deleteat!(a, [1,3,5,(7:10)...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
 @test_throws ArgumentError deleteat!(a, [5,3])
@@ -813,8 +813,8 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
-@test_throws DomainError (10.^[-1])[1] == 0.1
-@test (10.^[-1.])[1] == 0.1
+@test_throws DomainError (10 .^ [-1])[1] == 0.1
+@test (10 .^ [-1.])[1] == 0.1
 
 # reverse
 @test reverse([2,3,1]) == [1,3,2]
