@@ -647,7 +647,7 @@ endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH)
+	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH")
 	touch -c $@
 
 reinstall-llvm:
