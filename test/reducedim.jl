@@ -3,7 +3,7 @@
 # main tests
 
 function safe_mapslices(op, A, region)
-    newregion = intersect(region, 1:ndims(A))
+    newregion = intersect(1:ndims(A), region)
     return isempty(newregion) ? A : mapslices(op, A, newregion)
 end
 safe_sum{T}(A::Array{T}, region) = safe_mapslices(sum, A, region)

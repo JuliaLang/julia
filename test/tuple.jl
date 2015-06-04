@@ -49,16 +49,6 @@
 @test_throws BoundsError next((5,6,7), 0)
 @test_throws BoundsError next((), 1)
 
-
-
-## eltype ##
-@test eltype((1,2,3)) === Int
-@test eltype((1.0,2.0,3.0)) <: FloatingPoint
-@test eltype((true, false)) === Bool
-@test eltype((1,2.0, false)) === Any
-@test eltype(()) === Union()
-
-
 ## mapping ##
 foo() = 2
 foo(x) = 2x
@@ -135,3 +125,35 @@ foo(x, y, z) = x + y + z
 
 @test @inferred(ntuple(Base.Abs2Fun(), Val{2})) == (1, 4)
 @test @inferred(ntuple(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
+
+# Tuple Type iteration
+let T123 = Tuple{1,2,3}
+    @test first(T123) == 1
+    @test isempty(Tuple{})
+    @test !isempty(T123)
+    @test (T123...) == (1,2,3)
+    for N=0:10
+        ni = NTuple{N,Int}
+        n1 = Tuple{(1:N)...}
+        @test length(ni) == N
+        @test length(n1) == N
+        @test isempty(ni) == (N == 0)
+        @test (ni...) == ntuple(x->Int, N)
+        @test (n1...) == ntuple(x->x, N)
+        @test collect(ni) == Any[Int for _=1:N]
+        @test collect(n1) == collect(1:N)
+    end
+
+    @test_throws ArgumentError length(NTuple)
+    @test_throws ArgumentError length(Tuple{Vararg{Int}})
+    @test_throws ArgumentError length(Tuple{Int,Bool,String,Vararg{Int}})
+    @test_throws ArgumentError isempty(NTuple)
+    @test_throws ArgumentError isempty(Tuple{Vararg{Int}})
+    @test !isempty(Tuple{Int,Bool,String,Vararg{Int}})
+    @test_throws ArgumentError start(NTuple)
+    @test_throws ArgumentError start(Tuple{Vararg{Int}})
+    @test_throws ArgumentError start(Tuple{Int,Bool,String,Vararg{Int}})
+    @test_throws ArgumentError collect(NTuple)
+    @test_throws ArgumentError collect(Tuple{Vararg{Int}})
+    @test_throws ArgumentError collect(Tuple{Int,Bool,String,Vararg{Int}})
+end
