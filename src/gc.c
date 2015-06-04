@@ -840,10 +840,8 @@ static inline int gc_debug_check_other()
     return gc_debug_alloc_check(&gc_debug_env.other);
 }
 
-static inline void gc_debug_print()
+void gc_debug_print_status()
 {
-    if (!gc_debug_alloc_check(&gc_debug_env.print))
-        return;
     uint64_t pool_count = gc_debug_env.pool.num;
     uint64_t other_count = gc_debug_env.other.num;
     jl_printf(JL_STDOUT,
@@ -851,6 +849,13 @@ static inline void gc_debug_print()
               "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
               pool_count + other_count, pool_count, other_count,
               n_pause);
+}
+
+static inline void gc_debug_print()
+{
+    if (!gc_debug_alloc_check(&gc_debug_env.print))
+        return;
+    gc_debug_print_status();
 }
 
 #else

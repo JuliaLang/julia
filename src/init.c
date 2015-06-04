@@ -221,6 +221,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
         bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
         jlbacktrace();
+        gc_debug_print_status();
         raise(sig);
     }
 }
@@ -269,6 +270,7 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (ucontext_t*)context);
 #endif
     jlbacktrace();
+    gc_debug_print_status();
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
         sig != SIGILL &&
