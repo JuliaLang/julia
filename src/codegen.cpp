@@ -91,6 +91,7 @@
 #include <set>
 #include <cstdio>
 #include <cassert>
+#include <utility>
 using namespace llvm;
 #if LLVM37
 using namespace llvm::legacy;
@@ -528,6 +529,8 @@ struct jl_gcinfo_t {
 #endif
     Instruction *last_gcframe_inst;
     std::vector<Instruction*> gc_frame_pops;
+    std::vector<std::pair<Instruction*, int> > gc_frame_geps;
+    std::vector<std::pair<jl_gcinfo_t, int> > child_frames;
 };
 
 namespace std {
@@ -546,6 +549,8 @@ swap(jl_gcinfo_t &lhs, jl_gcinfo_t &rhs)
 #endif
     swap(lhs.last_gcframe_inst, rhs.last_gcframe_inst);
     swap(lhs.gc_frame_pops, rhs.gc_frame_pops);
+    swap(lhs.gc_frame_geps, rhs.gc_frame_geps);
+    swap(lhs.child_frames, rhs.child_frames);
 }
 
 }
@@ -633,6 +638,15 @@ public:
             emit_gcpop(ctx);
             finalize_gc_frame(ctx);
             std::swap(gc, ctx->gc);
+            if (gc.argSpaceOffs + gc.maxDepth != 0) {
+                ctx->gc.child_frames.push_back(std::make_pair(jl_gcinfo_t(), 0));
+                std::swap(ctx->gc.child_frames.back().first, gc);
+            } else if (gc.child_frames.size()) {
+                ctx->gc.child_frames.reserve(gc.child_frames.size());
+                ctx->gc.child_frames.insert(ctx->gc.child_frames.end(),
+                                            gc.child_frames.begin(),
+                                            gc.child_frames.end());
+            }
             frame_swapped = false;
         }
     }
@@ -1586,9 +1600,15 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 
 // Emit GEP for the @slot-th slot in the GC frame
 static Value*
-emit_local_slot(int slot, jl_codectx_t *ctx)
+emit_local_slot(int slot, jl_codectx_t *ctx, bool record=true)
 {
-    return builder.CreateConstGEP1_32(ctx->gc.argTemp, slot);
+    jl_gcinfo_t *gc = &ctx->gc;
+    Instruction *ins =
+        (Instruction*)builder.CreateConstGEP1_32(gc->argTemp, slot);
+    if (record) {
+        gc->gc_frame_geps.push_back(std::make_pair(ins, slot));
+    }
+    return ins;
 }
 
 // Emit GEP for the @slot-th temporary variable in the GC frame.
@@ -1602,7 +1622,7 @@ emit_temp_slot(int slot, jl_codectx_t *ctx)
 // Create a GEP instruction for the @slot-th slot in the GC frame.
 // (without inserting it)
 static Instruction*
-create_local_slot(int slot, jl_codectx_t *ctx)
+create_local_slot(int slot, jl_codectx_t *ctx, bool record=true)
 {
     jl_gcinfo_t *gc = &ctx->gc;
 #ifdef LLVM37
@@ -1613,6 +1633,9 @@ create_local_slot(int slot, jl_codectx_t *ctx)
     Instruction *ins =
         GetElementPtrInst::Create(gc->argTemp, ConstantInt::get(T_int32, slot));
 #endif
+    if (record) {
+        gc->gc_frame_geps.push_back(std::make_pair(ins, slot));
+    }
     return ins;
 }
 
@@ -3520,7 +3543,7 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     Instruction *linst = gc->argTemp;
 #endif
     // initialize local variable stack roots to null
-    for(size_t i=0; i < (size_t)gc->argSpaceOffs; i++) {
+    for (int i = 0; i < gc->argSpaceOffs;i++) {
         Value *varSlot = emit_local_slot(i, ctx);
         linst = builder.CreateStore(V_null, varSlot);
     }
@@ -3570,6 +3593,22 @@ static void clear_gc_frame(jl_gcinfo_t *gc)
     }
 }
 
+static void merge_gc_frame(jl_codectx_t *ctx, jl_gcinfo_t *from, int offset)
+{
+    for (size_t i = 0;i < from->gc_frame_geps.size();i++) {
+        Instruction *gep = from->gc_frame_geps[i].first;
+        BasicBlock::iterator bbi(gep);
+        int slot = from->gc_frame_geps[i].second;
+        Instruction *new_gep = create_local_slot(slot + offset, ctx);
+        ReplaceInstWithInst(gep->getParent()->getInstList(), bbi, new_gep);
+    }
+    from->gc_frame_geps.clear();
+    if (ctx->gc.maxDepth < offset + from->maxDepth) {
+        ctx->gc.maxDepth = offset + from->maxDepth;
+    }
+    clear_gc_frame(from);
+}
+
 static void finalize_gc_frame(jl_codectx_t *ctx)
 {
     jl_gcinfo_t *gc = &ctx->gc;
@@ -3579,6 +3618,13 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         clear_gc_frame(gc);
     }
     else {
+        // Merge child frames if necessary
+        for (size_t i = 0;i < gc->child_frames.size();i++) {
+            jl_gcinfo_t &cld = gc->child_frames[i].first;
+            int offset = gc->child_frames[i].second;
+            merge_gc_frame(ctx, &cld, offset);
+        }
+        gc->child_frames.clear();
         // n_frames++;
         // Fix the size of the GC frame created
         BasicBlock::iterator bbi(gc->gcframe);
