@@ -114,3 +114,30 @@ end
 
 #isposdef
 @test !isposdef(Diagonal(-1.0 * rand(n)))
+
+# Indexing
+let d = randn(n), D = Diagonal(d)
+    for i=1:n
+        @test D[i,i] == d[i]
+    end
+    for i=1:n
+        for j=1:n
+            @test D[i,j] == (i==j ? d[i] : 0)
+        end
+    end
+    D2 = copy(D)
+    for i=1:n
+        D2[i,i] = i
+    end
+    for i=1:n
+        for j=1:n
+            if i == j
+                @test D2[i,j] == i
+            else
+                @test D2[i,j] == 0
+                D2[i,j] = 0
+                @test_throws ArgumentError (D2[i,j] = 1)
+            end
+        end
+    end
+end
