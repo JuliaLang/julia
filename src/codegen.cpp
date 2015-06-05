@@ -638,10 +638,11 @@ public:
         }
     }
     void
-    restore()
+    restore(bool unreachable=false)
     {
         if (frame_swapped) {
-            emit_gcpop(ctx);
+            if (!unreachable)
+                emit_gcpop(ctx);
             finalize_gc_frame(ctx);
             std::swap(gc, ctx->gc);
             if (gc.argSpaceOffs + gc.maxDepth != 0) {
@@ -2228,7 +2229,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         LocalGCFrame local_gc_frame(ctx);
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
         raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
-        local_gc_frame.restore();
+        // Update GC frame creation. The GC pop instructions should be removed
+        // by LLVM anyway but not emitting those instructions save us some work
+        local_gc_frame.restore(true); // unreachable=true
         JL_GC_POP();
         return V_null;
     }
