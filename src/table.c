@@ -138,6 +138,7 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
     if (bp == NULL || *bp == NULL)
         return deflt;
     jl_value_t *val = (jl_value_t*)*bp;
+    *(bp-1) = jl_nothing; // clear the key
     *bp = NULL;
     return val;
 }
