@@ -34,8 +34,20 @@ end
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
+
 getindex(D::Diagonal, i::Int, j::Int) = i == j ? D.diag[i] : zero(eltype(D.diag))
 unsafe_getindex(D::Diagonal, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(eltype(D.diag))
+
+import Base: unsafe_setindex!
+setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
+function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
+    if i == j
+        unsafe_setindex!(D.diag, v, i)
+    else
+        v == 0 || throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
+    end
+    D
+end
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
 ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
