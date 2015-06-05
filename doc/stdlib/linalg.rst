@@ -104,12 +104,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the Cholesky factorization of a sparse positive definite
+   matrix ``A``. A fill-reducing permutation is used.  ``F =
+   cholfact(A)`` is most frequently used to solve systems of equations
+   with ``F\b``, but also the methods ``diag``, ``det``, ``logdet``
+   are defined for ``F``.  You can also extract individual factors
+   from ``F``, using ``F[:L]``.  However, since pivoting is on by
+   default, the factorization is internally represented as ``A ==
+   P'*L*L'*P`` with a permutation matrix ``P``; using just ``L``
+   without accounting for ``P`` will give incorrect answers.  To
+   include the effects of permutation, it's typically preferable to
+   extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of
+   ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).
 
    Setting optional ``shift`` keyword argument computes the factorization
    of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
    it should be a permutation of `1:size(A,1)` giving the ordering to use
    (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
@@ -121,12 +135,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the LDLt factorization of a sparse symmetric or Hermitian
+   matrix ``A``. A fill-reducing permutation is used.  ``F =
+   ldltfact(A)`` is most frequently used to solve systems of equations
+   with ``F\b``, but also the methods ``diag``, ``det``, ``logdet``
+   are defined for ``F``. You can also extract individual factors from
+   ``F``, using ``F[:L]``.  However, since pivoting is on by default,
+   the factorization is internally represented as ``A == P'*L*D*L'*P``
+   with a permutation matrix ``P``; using just ``L`` without
+   accounting for ``P`` will give incorrect answers.  To include the
+   effects of permutation, it's typically preferable to extact
+   "combined" factors like ``PtL = F[:PtL]`` (the equivalent of
+   ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).  The
+   complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD,
+   :DU, :PtLD, :DUP``.
 
    Setting optional ``shift`` keyword argument computes the factorization
    of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
    it should be a permutation of `1:size(A,1)` giving the ordering to use
    (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
