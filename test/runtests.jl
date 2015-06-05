@@ -342,6 +342,3 @@ if VERSION > v"0.3.99"
         @test foo(5) == Int
     end
 end
-
-# finalize
-@test finalize(1) == nothing

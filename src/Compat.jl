@@ -450,9 +450,4 @@ if VERSION < v"0.4.0-dev+4939"
     export isvalid
 end
 
-if VERSION < v"0.4.0-dev+1969"
-    finalize(x) = nothing
-    export finalize
-end
-
 end # module
