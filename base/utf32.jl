@@ -1,19 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## UTF-32 in the native byte order, i.e. plain old character arrays ##
-
-immutable UTF32String <: DirectIndexString
-    data::Vector{Char} # includes 32-bit NULL termination after string chars
-
-    function UTF32String(a::Vector{Char})
-        if length(a) < 1 || a[end] != Char(0)
-            throw(ArgumentError("UTF32String data must be NULL-terminated"))
-        end
-        new(a)
-    end
-end
-UTF32String(data::Vector{UInt32}) = UTF32String(reinterpret(Char, data))
-
 next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
@@ -65,7 +51,7 @@ unsafe_convert{T<:Union(Int32,UInt32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return UTF32String(Char[0])
-    length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
+    length(bytes) & 3 != 0 && throw(UnicodeError(UTF_ERR_ODD_BYTES_32,0,0))
     data = reinterpret(Char, bytes)
     # check for byte-order mark (BOM):
     if data[1] == Char(0x0000feff) # native byte order
@@ -91,8 +77,6 @@ function isvalid(::Type{UTF32String}, str::Union(Vector{Char}, Vector{UInt32}))
     return true
 end
 isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
-isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(str::T) = isvalid(T, str.data)
-isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(::Type{T}, str::T) = isvalid(T, str.data)
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
@@ -110,7 +94,7 @@ function map(f, s::UTF32String)
     for i = 1:(length(d)-1)
         c2 = f(d[i])
         if !isa(c2, Char)
-            throw(ArgumentError("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead"))
+            throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
         end
         out[i] = (c2::Char)
     end

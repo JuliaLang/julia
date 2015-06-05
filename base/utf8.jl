@@ -72,7 +72,7 @@ function next(s::UTF8String, i::Int)
         end
         if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
             # b is a continuation byte of a valid UTF-8 character
-            throw(ArgumentError("invalid UTF-8 character index"))
+            throw(UnicodeError(UTF_ERR_CONT, i, d[j]))
         end
         # move past 1 byte in case the data is actually Latin-1
         return '\ufffd', i+1
@@ -198,7 +198,7 @@ function reverse(s::UTF8String)
     out = similar(s.data)
     if ccall(:u8_reverse, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
              out, s.data, length(out)) == 1
-        throw(ArgumentError("invalid UTF-8 data"))
+        throw(UnicodeError(UTF_ERR_INVALID_8,0,0))
     end
     UTF8String(out)
 end
@@ -212,7 +212,7 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{UInt8,1}) = isvalid(UTF8String, a) ? UTF8String(a) : throw(ArgumentError("invalid UTF-8 sequence"))
+convert(::Type{UTF8String}, a::Array{UInt8,1}) = isvalid(UTF8String, a) ? UTF8String(a) : throw(UnicodeError(UTF_ERR_INVALID_8))
 function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractString)
     l = length(a)
     idx = 1

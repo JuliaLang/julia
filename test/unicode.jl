@@ -10,7 +10,8 @@ u16 = utf16(u8)
 @test collect(u8) == collect(u16)
 @test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(UInt8, 18), 1, reinterpret(UInt8, u16.data), 1, 18))
 @test u8 == utf16(pointer(u16)) == utf16(convert(Ptr{Int16}, pointer(u16)))
-@test_throws ArgumentError utf16(utf32(Char(0x120000)))
+@test_throws UnicodeError utf16(utf32(Char(0x120000)))
+@test_throws UnicodeError utf16(UInt8[1,2,3])
 
 # UTF32
 u32 = utf32(u8)
@@ -21,6 +22,7 @@ u32 = utf32(u8)
 @test collect(u8) == collect(u32)
 @test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(UInt8, 20), 1, reinterpret(UInt8, u32.data), 1, 20))
 @test u8 == utf32(pointer(u32)) == utf32(convert(Ptr{Int32}, pointer(u32)))
+@test_throws UnicodeError utf32(UInt8[1,2,3])
 
 # Wstring
 w = wstring(u8)
