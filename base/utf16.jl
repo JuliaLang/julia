@@ -1,15 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable UTF16String <: AbstractString
-    data::Array{UInt16,1} # includes 16-bit NULL termination after string chars
-    function UTF16String(data::Vector{UInt16})
-        if length(data) < 1 || data[end] != 0
-            throw(ArgumentError("UTF16String data must be NULL-terminated"))
-        end
-        new(data)
-    end
-end
-
 utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
 utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
 utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
@@ -39,7 +29,7 @@ function next(s::UTF16String, i::Int)
     elseif length(s.data)-1 > i && utf16_is_lead(s.data[i]) && utf16_is_trail(s.data[i+1])
         return utf16_get_supplementary(s.data[i], s.data[i+1]), i+2
     end
-    throw(ArgumentError("invalid UTF-16 character index"))
+    throw(UnicodeError(UTF_ERR_INVALID_INDEX,0,0))
 end
 
 function reverseind(s::UTF16String, i::Integer)
@@ -74,7 +64,7 @@ function encode16(s::AbstractString)
             push!(buf, UInt16(0xd7c0 + (c>>10)))
             push!(buf, UInt16(0xdc00 + (c & 0x3ff)))
         else
-            throw(ArgumentError("invalid Unicode character (0x$(hex(c)) > 0x10ffff)"))
+            throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, ch))
         end
     end
     push!(buf, 0) # NULL termination
@@ -111,7 +101,7 @@ function isvalid(::Type{UTF16String}, data::AbstractArray{UInt16})
 end
 
 function convert(::Type{UTF16String}, data::AbstractVector{UInt16})
-    !isvalid(UTF16String, data) && throw(ArgumentError("invalid UTF16 data"))
+    !isvalid(UTF16String, data) && throw(UnicodeError(UTF_ERR_INVALID_16,0,0))
     len = length(data)
     d = Array(UInt16, len + 1)
     d[end] = 0 # NULL terminate
@@ -126,7 +116,7 @@ convert(T::Type{UTF16String}, data::AbstractArray{Int16}) =
 
 function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return UTF16String(UInt16[0])
-    isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
+    isodd(length(bytes)) && throw(UnicodeError(UTF_ERR_ODD_BYTES_16, length(bytes), 0))
     data = reinterpret(UInt16, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0xfeff        # native byte order
@@ -142,7 +132,7 @@ function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
         copy!(d,1, data,1, length(data)) # assume native byte order
     end
     d[end] = 0 # NULL terminate
-    !isvalid(UTF16String, d) && throw(ArgumentError("invalid UTF16 data"))
+    !isvalid(UTF16String, d) && throw(UnicodeError(UTF_ERR_INVALID_16,0,0))
     UTF16String(d)
 end
 
