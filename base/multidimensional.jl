@@ -94,10 +94,14 @@ ndims(R::CartesianRange) = length(R.start)
     :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
 
-@generated function eachindex{S,T,M,N}(::LinearSlow, A::AbstractArray{S,M}, B::AbstractArray{T,N})
-    K = max(M,N)
+@generated function eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...)
+    K = max(ndims(A), map(ndims, B)...)
     startargs = fill(1, K)
-    stopargs = [:(max(size(A,$i),size(B,$i))) for i=1:K]
+    stopargs = Array(Expr, K)
+    for i = 1:K
+        Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]
+        stopargs[i] = :(max(size(A,$i),$(Bargs...)))
+    end
     meta = Expr(:meta, :inline)
     :($meta; CartesianRange(CartesianIndex{$K}($(startargs...)), CartesianIndex{$K}($(stopargs...))))
 end
