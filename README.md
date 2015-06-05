@@ -69,8 +69,6 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `fma(x,y,z)` and `muladd(x,y,z)` can be used in Julia 0.3 for `x*y+z`.
 
-* `finalize(x)` is a no-op on Julia 0.3; in 0.4 it forces a registered finalizer to run on `x`
-
 ## Renamed functions
 
 * `itrunc`, `iround`, `iceil`, `ifloor` are now accessed via `trunc(T, x)`, etc. [#9133](https://github.com/JuliaLang/julia/pull/9133)
