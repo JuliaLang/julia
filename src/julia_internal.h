@@ -108,6 +108,7 @@ void jl_init_types(void);
 void jl_init_box_caches(void);
 void jl_init_frontend(void);
 void jl_init_primitives(void);
+void jl_init_llvm(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void);

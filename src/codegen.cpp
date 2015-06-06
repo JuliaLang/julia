@@ -5727,12 +5727,11 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_llvm(void)
 {
-    // TODO: move the common LLVM stuff from jl_init_codegen to here
-
-    LLVMInitializeNVPTXTarget();
-    LLVMInitializeNVPTXTargetInfo();
-    LLVMInitializeNVPTXTargetMC();
-    LLVMInitializeNVPTXAsmPrinter();
+    InitializeAllTargets();
+    InitializeAllTargetInfos();
+    InitializeAllTargetMCs();
+    InitializeAllAsmPrinters();
+    InitializeAllAsmParsers();
 }
 
 extern "C" DLLEXPORT
@@ -5834,10 +5833,6 @@ extern "C" void jl_init_codegen(void)
     // this option disables LLVM's signal handlers
     llvm::DisablePrettyStackTrace = true;
 #endif
-
-    InitializeNativeTarget();
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
 
     Module *m, *engine_module;
 
