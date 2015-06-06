@@ -6,6 +6,16 @@ typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
 
+# The real @inline macro is not available until after array.jl, so this
+# internal macro splices the meta Expr directly into the function body.
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
+
+
 # constructors for Core types in boot.jl
 call(T::Type{BoundsError}) = Core.call(T)
 call(T::Type{BoundsError}, args...) = Core.call(T, args...)
@@ -53,7 +63,7 @@ cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
 macro generated(f)
     isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if is(f.head, :function) || isdefined(:length) && is(f.head, :(=)) && length(f.args) == 2 && f.args[1].head == :call
+    if is(f.head, :function) || (isdefined(:length) && is(f.head, :(=)) && length(f.args) == 2 && f.args[1].head == :call)
         f.head = :stagedfunction
         return Expr(:escape, f)
     else

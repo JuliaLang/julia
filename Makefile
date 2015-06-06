@@ -168,8 +168,6 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/range.jl \
 		base/reduce.jl \
 		base/reflection.jl \
-		base/subarray.jl \
-		base/subarray2.jl \
 		base/tuple.jl
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
