@@ -133,8 +133,12 @@ function status(io::IO; pkgname::AbstractString = "")
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
-            ver,fix = pop!(instd,pkg)
-            showpkg(pkg) && status(io,pkg,ver,fix)
+            if !haskey(instd, pkg)
+                showpkg(pkg) && status(io,pkg,"not found")
+            else
+                ver,fix = pop!(instd,pkg)
+                showpkg(pkg) && status(io,pkg,ver,fix)
+            end
         end
     end
     additional = sort!(collect(keys(instd)))
@@ -178,6 +182,12 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     else
         print(io, "non-repo (unregistered)")
     end
+    println(io)
+end
+
+function status(io::IO, pkg::AbstractString, msg::AbstractString)
+    @printf io " - %-29s " pkg
+    @printf io "%-19s" msg
     println(io)
 end
 
