@@ -2008,8 +2008,6 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     ndt->size = 0;
     ndt->alignment = 1;
 
-    if (cacheable) jl_cache_type_(ndt);
-
     if (istuple)
         ndt->super = jl_any_type;
     else
@@ -2047,6 +2045,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->ninitialized = ntp;
     else
         ndt->ninitialized = dt->ninitialized;
+
+    if (cacheable)
+        jl_cache_type_(ndt);
+
     JL_GC_POP();
     return (jl_value_t*)ndt;
 }
