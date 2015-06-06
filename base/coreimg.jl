@@ -40,9 +40,11 @@ include("pointer.jl")
 
 # core array operations
 include("abstractarray.jl")
-include("subarray.jl")
+typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}} DenseArray{T,N}
+typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  DenseArray{T,1}
+typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  DenseArray{T,2}
+typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 include("array.jl")
-include("subarray2.jl")
 
 #TODO: eliminate Dict from inference
 include("hashing.jl")
