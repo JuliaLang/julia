@@ -6,7 +6,7 @@ import Base: (*), convert, copy, eltype, getindex, show, size,
              linearindexing, LinearFast, LinearSlow
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
+                 cholfact, det, diag, ishermitian, isposdef,
                  issym, ldltfact, logdet
 
 import Base.SparseMatrix: sparse, nnz
@@ -132,10 +132,10 @@ end
 # Type definitions #
 ####################
 
-# The three core data types for CHOLMOD: Dense, Sparse and Factor. CHOLMOD
-# manages the memory, so the Julia versions only wrap a pointer to a struct.
-# Therefore finalizers should be registret each time a pointer is returned from
-# CHOLMOD.
+# The three core data types for CHOLMOD: Dense, Sparse and Factor.
+# CHOLMOD manages the memory, so the Julia versions only wrap a
+# pointer to a struct.  Therefore finalizers should be registered each
+# time a pointer is returned from CHOLMOD.
 
 # Dense
 immutable C_Dense{T<:VTypes}
@@ -272,6 +272,28 @@ end
 type Factor{Tv,Ti} <: Factorization{Tv}
     p::Ptr{C_Factor{Tv,Ti}}
 end
+
+# FactorComponent, for encoding particular factors from a factorization
+type FactorComponent{Tv,Ti,S} <: AbstractMatrix{Tv}
+    F::Factor{Tv,Ti}
+
+    function FactorComponent(F::Factor{Tv,Ti})
+        s = unsafe_load(F.p)
+        if s.is_ll != 0
+            S == :L || S == :U || S == :PtL || S == :UP || throw(CHOLMODException(string(S, " not supported for sparse LLt matrices; try :L, :U, :PtL, or :UP")))
+        else
+            S == :L || S == :U || S == :PtL || S == :UP ||
+            S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP ||
+            throw(CHOLMODException(string(S, " not supported for sparse LDLt matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
+        end
+        new(F)
+    end
+end
+function FactorComponent{Tv,Ti}(F::Factor{Tv,Ti}, sym::Symbol)
+    FactorComponent{Tv,Ti,sym}(F)
+end
+
+Factor(FC::FactorComponent) = Factor(FC.F)
 
 #################
 # Thin wrappers #
@@ -478,7 +500,7 @@ for Ti in IndexTypes
             s
         end
 
-        function transpose{Tv<:VTypes}(A::Sparse{Tv,$Ti}, values::Integer)
+        function transpose_{Tv<:VTypes}(A::Sparse{Tv,$Ti}, values::Integer)
             s = Sparse(ccall((@cholmod_name("transpose", $Ti),:libcholmod), Ptr{C_Sparse{Tv,$Ti}},
                     (Ptr{C_Sparse{Tv,$Ti}}, Cint, Ptr{UInt8}),
                         A.p, values, common($Ti)))
@@ -637,6 +659,12 @@ for Ti in IndexTypes
             finalizer(f, free!)
             f
         end
+        function factorize!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, F::Factor{Tv,$Ti}, cmmn::Vector{UInt8})
+            @isok ccall((@cholmod_name("factorize", $Ti),:libcholmod), Cint,
+                    (Ptr{C_Sparse{Tv,$Ti}}, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
+                        A.p, F.p, cmmn)
+            F
+        end
         function factorize_p!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, β::Real, F::Factor{Tv,$Ti}, cmmn::Vector{UInt8})
             # note that β is passed as a complex number (double beta[2]),
             # but the CHOLMOD manual says that only beta[0] (real part) is used
@@ -690,6 +718,13 @@ for Ti in IndexTypes
         end
     end
 end
+
+function get_perm(F::Factor)
+    s = unsafe_load(F.p)
+    p = pointer_to_array(s.Perm, s.n, false)
+    p+1
+end
+get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 
 #########################
 # High level interfaces #
@@ -879,8 +914,36 @@ function sparse{Ti}(A::Sparse{Complex{Float64},Ti}) # Notice! Cannot be type sta
     end
     return convert(Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, A)
 end
-sparse(L::Factor)   = sparse(Sparse(L))
+function sparse(F::Factor)
+    s = unsafe_load(F.p)
+    if s.is_ll != 0
+        L = Sparse(F)
+        A = sparse(L*L')
+    else
+        LD = sparse(F[:LD])
+        L, d = getLd!(LD)
+        A = scale(L, d)*L'
+    end
+    p = get_perm(F)
+    if p != [1:s.n;]
+        pinv = Array(Int, length(p))
+        for k = 1:length(p)
+            pinv[p[k]] = k
+        end
+        A = A[pinv,pinv]
+    end
+    A
+end
+
 sparse(D::Dense)    = sparse(Sparse(D))
+
+function sparse{Tv,Ti}(FC::FactorComponent{Tv,Ti,:L})
+    F = Factor(FC)
+    s = unsafe_load(F.p)
+    s.is_ll != 0 || throw(CHOLMODException("sparse: supported only for :LD on LDLt factorizations"))
+    sparse(Sparse(F))
+end
+sparse{Tv,Ti}(FC::FactorComponent{Tv,Ti,:LD}) = sparse(Sparse(Factor(FC)))
 
 # Calculate the offset into the stype field of the cholmod_sparse_struct and
 # change the value
@@ -905,13 +968,24 @@ eltype{T<:VTypes}(A::Sparse{T}) = T
 nnz(F::Factor) = nnz(Sparse(F))
 
 function show(io::IO, F::Factor)
-    s = unsafe_load(F.p)
     println(io, typeof(F))
+    showfactor(io, F)
+end
+
+function show(io::IO, FC::FactorComponent)
+    println(io, typeof(FC))
+    showfactor(io, Factor(FC))
+end
+
+function showfactor(io::IO, F::Factor)
+    s = unsafe_load(F.p)
     @printf(io, "type: %12s\n", s.is_ll!=0 ? "LLt" : "LDLt")
     @printf(io, "method: %10s\n", s.is_super!=0 ? "supernodal" : "simplicial")
     @printf(io, "maxnnz: %10d\n", Int(s.nzmax))
     @printf(io, "nnz: %13d\n", nnz(F))
 end
+
+
 
 isvalid(A::Dense) = check_dense(A)
 isvalid(A::Sparse) = check_sparse(A)
@@ -936,7 +1010,22 @@ function size(F::Factor, i::Integer)
     return 1
 end
 
+
 linearindexing(::Dense) = LinearFast()
+
+size(FC::FactorComponent, i::Integer) = size(FC.F, i)
+size(FC::FactorComponent) = size(FC.F)
+
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:L}) = FactorComponent{Tv,Ti,:U}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:U}) = FactorComponent{Tv,Ti,:L}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PtL}) = FactorComponent{Tv,Ti,:UP}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:UP}) = FactorComponent{Tv,Ti,:PtL}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:D}) = FC
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:LD}) = FactorComponent{Tv,Ti,:DU}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:DU}) = FactorComponent{Tv,Ti,:LD}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PtLD}) = FactorComponent{Tv,Ti,:DUP}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:DUP}) = FactorComponent{Tv,Ti,:PtLD}(FC.F)
+
 function getindex(A::Dense, i::Integer)
     s = unsafe_load(A.p)
     0 < i <= s.nrow*s.ncol || throw(BoundsError())
@@ -957,6 +1046,27 @@ function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     ((r1 > r2) || (unsafe_load(s.i, r1) + 1 != i0)) ? zero(T) : unsafe_load(s.x, r1)
 end
 
+function getindex(F::Factor, sym::Symbol)
+    sym == :p && return get_perm(F)
+    FactorComponent(F, sym)
+end
+
+function getLd!(S::SparseMatrixCSC)
+    d = Array(eltype(S), size(S, 1))
+    fill!(d, 0)
+    col = 1
+    for k = 1:length(S.nzval)
+        while k >= S.colptr[col+1]
+            col += 1
+        end
+        if S.rowval[k] == col
+            d[col] = S.nzval[k]
+            S.nzval[k] = 1
+        end
+    end
+    S, d
+end
+
 ## Multiplication
 (*)(A::Sparse, B::Sparse) = ssmult(A, B, 0, true, true)
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
@@ -966,7 +1076,7 @@ function A_mul_Bc{Tv<:VRealTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, B::Sparse{Tv,Ti})
     cm = common(Ti)
 
     if !is(A,B)
-        aa1 = transpose(B, 2)
+        aa1 = transpose_(B, 2)
         ## result of ssmult will have stype==0, contain numerical values and be sorted
         return ssmult(A, aa1, 0, true, true)
     end
@@ -984,7 +1094,7 @@ function A_mul_Bc{Tv<:VRealTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, B::Sparse{Tv,Ti})
 end
 
 function Ac_mul_B(A::Sparse, B::Sparse)
-    aa1 = transpose(A, 2)
+    aa1 = transpose_(A, 2)
     if is(A,B)
         return A_mul_Bc(aa1, aa1)
     end
@@ -1070,6 +1180,57 @@ end
 update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}; kws...) = update!(F, Sparse(A); kws...)
 
 ## Solvers
+
+for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
+    @eval begin
+        # Solve Lx = b and L'x=b where A = L*L'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:L}, B::$T)
+            ($f)(CHOLMOD_L, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:U}, B::$T)
+            ($f)(CHOLMOD_Lt, Factor(L), B)
+        end
+        # Solve PLx = b and L'P'x=b where A = P*L*L'*P'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:PtL}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_L, F, ($f)(CHOLMOD_P, F, B))  # Confusingly, CHOLMOD_P solves P'x = b
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:UP}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_Lt, F, B))
+        end
+        # Solve various equations for A = L*D*L' and A = P*L*D*L'*P'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:D}, B::$T)
+            ($f)(CHOLMOD_D, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:LD}, B::$T)
+            ($f)(CHOLMOD_LD, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:DU}, B::$T)
+            ($f)(CHOLMOD_DLt, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:PtLD}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_LD, F, ($f)(CHOLMOD_P, F, B))
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:DUP}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_DLt, F, B))
+        end
+    end
+end
+
+function (\)(L::FactorComponent, b::Vector)
+    reshape(convert(Matrix, L\Dense(b)), length(b))
+end
+function (\)(L::FactorComponent, B::Matrix)
+    convert(Matrix, L\Dense(B))
+end
+function (\)(L::FactorComponent, B::SparseMatrixCSC)
+    sparse(L\Sparse(B,0))
+end
+
+Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 
 (\)(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor, b::Vector) = reshape(convert(Matrix, solve(CHOLMOD_A, L, Dense(b))), length(b))

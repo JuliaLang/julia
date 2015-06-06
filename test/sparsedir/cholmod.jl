@@ -468,3 +468,121 @@ for elty in (Float64, Complex{Float64})
 
     @test CHOLMOD.Sparse(CHOLMOD.Dense(A1Sparse)) == A1Sparse
 end
+
+
+Af = float([4 12 -16; 12 37 -43; -16 -43 98])
+As = sparse(Af)
+Lf = float([2 0 0; 6 1 0; -8 5 3])
+LDf = float([4 0 0; 3 1 0; -4 5 9])  # D is stored along the diagonal
+L_f = float([1 0 0; 3 1 0; -4 5 1])  # L by itself in LDLt of Af
+D_f = float([4 0 0; 0 1 0; 0 0 9])
+
+# cholfact, no permutation
+Fs = cholfact(As, perm=[1:3;])
+@test Fs[:p] == [1:3;]
+@test_approx_eq sparse(Fs[:L]) Lf
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b Lf\b
+@test_approx_eq Fs[:U]\b Lf'\b
+@test_approx_eq Fs[:L]'\b Lf'\b
+@test_approx_eq Fs[:U]'\b Lf\b
+@test_approx_eq Fs[:PtL]\b Lf\b
+@test_approx_eq Fs[:UP]\b Lf'\b
+@test_approx_eq Fs[:PtL]'\b Lf'\b
+@test_approx_eq Fs[:UP]'\b Lf\b
+@test_throws CHOLMOD.CHOLMODException Fs[:D]
+@test_throws CHOLMOD.CHOLMODException Fs[:LD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DU]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+
+# cholfact, with permutation
+p = [2,3,1]
+p_inv = [3,1,2]
+Fs = cholfact(As, perm=p)
+@test Fs[:p] == p
+Afp = Af[p,p]
+Lfp = cholfact(Afp)[:L]
+@test_approx_eq sparse(Fs[:L]) Lfp
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b Lfp\b
+@test_approx_eq Fs[:U]'\b Lfp\b
+@test_approx_eq Fs[:U]\b Lfp'\b
+@test_approx_eq Fs[:L]'\b Lfp'\b
+@test_approx_eq Fs[:PtL]\b Lfp\b[p]
+@test_approx_eq Fs[:UP]\b (Lfp'\b)[p_inv]
+@test_approx_eq Fs[:PtL]'\b (Lfp'\b)[p_inv]
+@test_approx_eq Fs[:UP]'\b Lfp\b[p]
+@test_throws CHOLMOD.CHOLMODException Fs[:PL]
+@test_throws CHOLMOD.CHOLMODException Fs[:UPt]
+@test_throws CHOLMOD.CHOLMODException Fs[:D]
+@test_throws CHOLMOD.CHOLMODException Fs[:LD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DU]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+
+# ldltfact, no permutation
+Fs = ldltfact(As, perm=[1:3;])
+@test Fs[:p] == [1:3;]
+@test_approx_eq sparse(Fs[:LD]) LDf
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
+@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b L_f\b
+@test_approx_eq Fs[:U]\b L_f'\b
+@test_approx_eq Fs[:L]'\b L_f'\b
+@test_approx_eq Fs[:U]'\b L_f\b
+@test_approx_eq Fs[:PtL]\b L_f\b
+@test_approx_eq Fs[:UP]\b L_f'\b
+@test_approx_eq Fs[:PtL]'\b L_f'\b
+@test_approx_eq Fs[:UP]'\b L_f\b
+@test_approx_eq Fs[:D]\b D_f\b
+@test_approx_eq Fs[:D]'\b D_f\b
+@test_approx_eq Fs[:LD]\b D_f\(L_f\b)
+@test_approx_eq Fs[:DU]'\b D_f\(L_f\b)
+@test_approx_eq Fs[:LD]'\b L_f'\(D_f\b)
+@test_approx_eq Fs[:DU]\b L_f'\(D_f\b)
+@test_approx_eq Fs[:PtLD]\b D_f\(L_f\b)
+@test_approx_eq Fs[:DUP]'\b D_f\(L_f\b)
+@test_approx_eq Fs[:PtLD]'\b L_f'\(D_f\b)
+@test_approx_eq Fs[:DUP]\b L_f'\(D_f\b)
+
+# ldltfact, with permutation
+Fs = ldltfact(As, perm=p)
+@test Fs[:p] == p
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+Asp = As[p,p]
+LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
+# LDp = sparse(Fs[:LD])
+Lp, dp = Base.SparseMatrix.CHOLMOD.getLd!(copy(LDp))
+Dp = spdiagm(dp)
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
+@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b Lp\b
+@test_approx_eq Fs[:U]\b Lp'\b
+@test_approx_eq Fs[:L]'\b Lp'\b
+@test_approx_eq Fs[:U]'\b Lp\b
+@test_approx_eq Fs[:PtL]\b Lp\b[p]
+@test_approx_eq Fs[:UP]\b (Lp'\b)[p_inv]
+@test_approx_eq Fs[:PtL]'\b (Lp'\b)[p_inv]
+@test_approx_eq Fs[:UP]'\b Lp\b[p]
+@test_approx_eq Fs[:LD]\b Dp\(Lp\b)
+@test_approx_eq Fs[:DU]'\b Dp\(Lp\b)
+@test_approx_eq Fs[:LD]'\b Lp'\(Dp\b)
+@test_approx_eq Fs[:DU]\b Lp'\(Dp\b)
+@test_approx_eq Fs[:PtLD]\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:DUP]'\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:PtLD]'\b (Lp'\(Dp\b))[p_inv]
+@test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[p_inv]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]
