@@ -113,10 +113,10 @@ linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
 linearindexing{T<:Range}(::Type{T}) = LinearFast()
 
-*(::LinearFast, ::LinearFast) = LinearFast()
-*(::LinearSlow, ::LinearFast) = LinearSlow()
-*(::LinearFast, ::LinearSlow) = LinearSlow()
-*(::LinearSlow, ::LinearSlow) = LinearSlow()
+linearindexing(A::AbstractArray, B::AbstractArray) = linearindexing(linearindexing(A), linearindexing(B))
+linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearindexing(A), linearindexing(B...))
+linearindexing(::LinearFast, ::LinearFast) = LinearFast()
+linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
 # The real @inline macro is not available this early in the bootstrap, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -385,9 +385,14 @@ eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
 
 function eachindex(A::AbstractArray, B::AbstractArray)
     @_inline_meta
-    eachindex(linearindexing(A)*linearindexing(B), A, B)
+    eachindex(linearindexing(A,B), A, B)
+end
+function eachindex(A::AbstractArray, B::AbstractArray...)
+    @_inline_meta
+    eachindex(linearindexing(A,B...), A, B...)
 end
 eachindex(::LinearFast, A::AbstractArray, B::AbstractArray) = 1:max(length(A),length(B))
+eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...) = 1:max(length(A), map(length, B)...)
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
