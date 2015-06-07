@@ -477,9 +477,9 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGSV(llvmcall, 3)
-    jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
+    jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     jl_svec_t *stt = NULL;
-    JL_GC_PUSH4(&ir, &rt, &at, &stt);
+    JL_GC_PUSH5(&ir, &rt, &at, &stt, &decl);
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -514,7 +514,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     if (ir == NULL) {
         jl_error("Cannot statically evaluate first argument to llvmcall");
     }
-    jl_value_t *decl = NULL;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
         if (jl_nfields(ir) != 2)
