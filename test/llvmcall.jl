@@ -70,11 +70,17 @@ end
         Int32(1), Int32(2))) == 3
 
 # Test whether declarations work properly
+# These tests only work properly for llvm 3.5+
+if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
+
 function undeclared_ceil(x::Float64)
     llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
         ret double %2""", Float64, Tuple{Float64}, x)
 end
 @test_throws ErrorException undeclared_ceil(4.2)
+
+end
+
 # KNOWN ISSUE: although the llvmcall in undeclare_ceil did error(), the LLVM
 # module contains the generated IR referencing the ceil intrinsic. At some
 # point, a declaration for that intrinsic is added, breaking any future
@@ -87,6 +93,7 @@ function declared_floor(x::Float64)
     Float64, Tuple{Float64}, x)
 end
 @test_approx_eq declared_floor(4.2) 4.
+
 function doubly_declared_floor(x::Float64)
     llvmcall(
         ("""declare double @llvm.floor.f64(double)""",
