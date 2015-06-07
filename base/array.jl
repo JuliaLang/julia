@@ -239,6 +239,14 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     end
 end
 
+function eye!(a::Matrix{T})
+    m, n = size(a)
+    fill!(a, zero(T))
+    for i = 1:min(m,n)
+        a[i,i] = one(T)
+    end
+end
+
 function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
