@@ -40,7 +40,7 @@ $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 ifneq ($(USEMSVC), 1)
