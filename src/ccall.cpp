@@ -617,7 +617,20 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             char *declstr = jl_string_data(decl);
             u_int64_t declhash = memhash(declstr, strlen(declstr));
             if (llvmcallDecls.count(declhash) == 0) {
-                ir_stream << "; Declarations\n" << declstr << "\n";
+                // Find name of declaration
+                char *declcopy = (char*) malloc(strlen(declstr) + 1);
+                strcpy(declcopy, declstr);
+                // Find '@'
+                char *declname = (char*) strchr(declcopy, '@') + 1;
+                // Insert null byte at the end of the function name
+                ((char*) strchr(declname, '('))[0] = 0;
+
+                // Check if declaration already present in module
+                if(jl_Module->getNamedValue(declname) == NULL) {
+                    ir_stream << "; Declarations\n" << declstr << "\n";
+                }
+
+                free(declcopy);
                 llvmcallDecls.insert(declhash);
             }
         }
