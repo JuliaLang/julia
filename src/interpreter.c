@@ -235,7 +235,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_module_t *m = jl_current_module;
         if (jl_is_globalref(sym)) {
             m = jl_globalref_mod(sym);
-            sym = jl_globalref_name(sym);
+            sym = (jl_value_t*)jl_globalref_name(sym);
         }
         assert(jl_is_symbol(sym));
         JL_GC_PUSH1(&rhs);
