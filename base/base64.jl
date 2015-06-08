@@ -61,8 +61,8 @@ for (val, ch) in enumerate(b64chars)
     revb64chars[UInt8(ch)] = UInt8(val - 1)
 end
 
-#Decode a block of at least 2 and at most 4 bytes, received in encvec
-#Returns the first decoded byte and stores up to two more in cache
+# Decode a block of at least 2 and at most 4 bytes, received in encvec
+# Returns the first decoded byte and stores up to two more in cache
 function b64decode!(encvec::Vector{UInt8}, cache::Vector{UInt8})
     if length(encvec) < 2
         throw(ArgumentError("incorrect base64 format, block must be at least 2 and at most 4 bytes"))

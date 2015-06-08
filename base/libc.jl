@@ -10,7 +10,7 @@ include("errno.jl")
 
 ## RawFD ##
 
-#Wrapper for an OS file descriptor (on both Unix and Windows)
+# Wrapper for an OS file descriptor (on both Unix and Windows)
 immutable RawFD
     fd::Int32
     RawFD(fd::Integer) = new(fd)
