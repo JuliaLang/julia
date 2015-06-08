@@ -221,20 +221,25 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             if (genid >= ngensym || genid < 0)
                 jl_error("assignment to invalid GenSym location");
             locals[nl*2 + genid] = rhs;
-            gc_wb(jl_current_module, rhs); // not sure about jl_current_module
             return rhs;
         }
-        assert(jl_is_symbol(sym));
-        size_t i;
-        for (i=0; i < nl; i++) {
-            if (locals[i*2] == sym) {
-                locals[i*2+1] = rhs;
-                gc_wb(jl_current_module, rhs); // not sure about jl_current_module
-                return rhs;
+        if (jl_is_symbol(sym)) {
+            size_t i;
+            for (i=0; i < nl; i++) {
+                if (locals[i*2] == sym) {
+                    locals[i*2+1] = rhs;
+                    return rhs;
+                }
             }
         }
+        jl_module_t *m = jl_current_module;
+        if (jl_is_globalref(sym)) {
+            m = jl_globalref_mod(sym);
+            sym = jl_globalref_name(sym);
+        }
+        assert(jl_is_symbol(sym));
         JL_GC_PUSH1(&rhs);
-        jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
+        jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
         jl_checked_assignment(b, rhs);
         JL_GC_POP();
         return rhs;
@@ -270,8 +275,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_binding_t *b=NULL;
         jl_value_t *gf=NULL;
         int kw=0;
-        if (jl_is_expr(fname)) {
-            if (((jl_expr_t*)fname)->head == kw_sym) {
+        if (jl_is_expr(fname) || jl_is_globalref(fname)) {
+            if (jl_is_expr(fname) && ((jl_expr_t*)fname)->head == kw_sym) {
                 kw = 1;
                 fname = (jl_sym_t*)jl_exprarg(fname, 0);
             }

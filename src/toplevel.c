@@ -233,7 +233,8 @@ int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
         ((jl_is_symbol(e0) && is_intrinsic(m,(jl_sym_t*)e0)) ||
-         (jl_is_topnode(e0) && is_intrinsic(jl_base_relative_to(m),(jl_sym_t*)jl_fieldref(e0,0)))))
+         (jl_is_topnode(e0) && is_intrinsic(jl_base_relative_to(m),(jl_sym_t*)jl_fieldref(e0,0))) ||
+         (jl_is_globalref(e0) && is_intrinsic(jl_globalref_mod(e0), jl_globalref_name(e0)))))
         return 1;
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
