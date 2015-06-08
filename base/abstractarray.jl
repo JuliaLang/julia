@@ -123,6 +123,14 @@ macro _noinline_meta()
 end
 
 ## Bounds checking ##
+@generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
+    ex = :(size(A, $n))
+    for m = n+1:N
+        ex = :($ex * size(A, $m))
+    end
+    Expr(:block, Expr(:meta, :inline), ex)
+end
+
 _checkbounds(sz, i::Integer) = 1 <= i <= sz
 _checkbounds(sz, i::Real) = 1 <= to_index(i) <= sz
 _checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
@@ -149,17 +157,14 @@ function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray,Colon), J::U
 end
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray,Colon), J::Union(Real,AbstractArray,Colon))
     @_inline_meta
-    (_checkbounds(size(A,1), I) && _checkbounds(trailingsize(A,2), J)) || throw_boundserror(A, (I, J))
+    (_checkbounds(size(A,1), I) && _checkbounds(trailingsize(A,Val{2}), J)) || throw_boundserror(A, (I, J))
 end
-function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray,Colon)...)
-    @_inline_meta
-    n = length(I)
-    if n > 0
-        for dim = 1:(n-1)
-            _checkbounds(size(A,dim), I[dim]) || throw_boundserror(A, I)
-        end
-        _checkbounds(trailingsize(A,n), I[n]) || throw_boundserror(A, I)
-    end
+@generated function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray,Colon)...)
+    meta = Expr(:meta, :inline)
+    N = length(I)
+    args = Expr[:(_checkbounds(size(A,$dim), I[$dim]) || throw_boundserror(A, I)) for dim in 1:N-1]
+    push!(args, :(_checkbounds(trailingsize(A,Val{$N}), I[$N]) || throw_boundserror(A, I)))
+    Expr(:block, meta, args...)
 end
 
 ## Bounds-checking without errors ##
