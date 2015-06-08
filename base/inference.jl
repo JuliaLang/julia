@@ -2570,7 +2570,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             end
         end
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,Bottom)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2)) ||
+        if ((occ==0 && is(aeitype,Bottom)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2_000)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied by occ!=0
                 if !islocal
