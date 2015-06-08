@@ -218,6 +218,13 @@ endif
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
+# flag for disabling assertions
+ifeq ($(FORCE_ASSERTIONS), 1)
+DISABLE_ASSERTIONS =
+else
+DISABLE_ASSERTIONS = -DNDEBUG
+endif
+
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
