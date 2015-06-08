@@ -78,22 +78,22 @@ function showerror(io::IO, ex::TypeError)
     end
 end
 
-function showerror(io::IO, ex, bt)
+function showerror(io::IO, ex, bt; backtrace=true)
     try
         showerror(io, ex)
     finally
-        show_backtrace(io, bt)
+        backtrace && show_backtrace(io, bt)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt)
+function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
-    showerror(io, ex.error, bt)
+    showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError, bt)
+function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
@@ -108,7 +108,8 @@ function showerror(io::IO, ex::DomainError, bt)
             break
         end
     end
-    show_backtrace(io, bt)
+    backtrace && show_backtrace(io, bt)
+    nothing
 end
 
 showerror(io::IO, ex::SystemError) = print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
