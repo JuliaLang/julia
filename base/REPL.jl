@@ -800,11 +800,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
                     terminal = LineEdit.terminal(s)
-                    Base.stop_reading(terminal)
                     raw!(terminal, false) && disable_bracketed_paste(terminal)
                     LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
                     raw!(terminal, true) && enable_bracketed_paste(terminal)
-                    Base.start_reading(terminal)
                 else
                     break
                 end

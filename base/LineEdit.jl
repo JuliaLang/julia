@@ -1569,7 +1569,6 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     raw!(term, true)
     enable_bracketed_paste(term)
     try
-        Base.start_reading(term)
         activate(prompt, s, term)
         while true
             map = keymap(s, prompt)
@@ -1585,14 +1584,11 @@ function prompt!(term, prompt, s = init_state(term, prompt))
                 state = :done
             end
             if state == :abort
-                Base.stop_reading(term)
                 return buffer(s), false, false
             elseif state == :done
-                Base.stop_reading(term)
                 return buffer(s), true, false
             elseif state == :suspend
                 @unix_only begin
-                    Base.stop_reading(term)
                     return buffer(s), true, true
                 end
             else
