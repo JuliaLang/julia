@@ -301,15 +301,15 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 
                 value_t ee = car_(e);
                 jl_array_t *vinf = jl_alloc_cell_1d(4);
-                jl_cellset(vinf, 0, full_list(car_(ee),eo));
+                jl_cellset(vinf, 0, full_list_of_lists(car_(ee),eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 1, full_list_of_lists(car_(ee),eo));
                 ee = cdr_(ee);
-                jl_cellset(vinf, 2, full_list_of_lists(car_(ee),eo));
+                jl_cellset(vinf, 2, isfixnum(car_(ee)) ?
+                           jl_box_long(numval(car_(ee))) :
+                           full_list(car_(ee),eo));
                 ee = cdr_(ee);
-                jl_cellset(vinf, 3, isfixnum(car_(ee)) ?
-                        jl_box_long(numval(car_(ee))) :
-                        full_list(car_(ee),eo));
+                jl_cellset(vinf, 3, full_list(car_(ee),eo));
                 assert(!iscons(cdr_(ee)));
                 jl_cellset(ex->args, 1, vinf);
                 e = cdr_(e);
@@ -319,8 +319,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     jl_cellset(ex->args, i, scm_to_julia_(car_(e), eo));
                     e = cdr_(e);
                 }
-                return
-                    (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec);
+                return (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec);
             }
 
             e = cdr_(e);
@@ -620,8 +619,8 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     vi = (jl_value_t*)jl_alloc_cell_1d(4);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
-    jl_cellset(vi, 2, mt);
-    jl_cellset(vi, 3, jl_box_long(jl_max_jlgensym_in(expr)+1));
+    jl_cellset(vi, 2, jl_box_long(jl_max_jlgensym_in(expr)+1));
+    jl_cellset(vi, 3, mt);
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -659,24 +658,13 @@ jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
     return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
 }
 
-// get array of local var symbols
-jl_array_t *jl_lam_locals(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_array(le));
-    jl_value_t *ll = jl_cellref(le, 0);
-    assert(jl_is_array(ll));
-    return (jl_array_t*)ll;
-}
-
-// get array of var info records
+// get array of var info records (for args and locals)
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
-    jl_value_t *ll = jl_cellref(le, 1);
+    jl_value_t *ll = jl_cellref(le, 0);
     assert(jl_is_array(ll));
     return (jl_array_t*)ll;
 }
@@ -687,19 +675,30 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
-    jl_value_t *ll = jl_cellref(le, 2);
+    jl_value_t *ll = jl_cellref(le, 1);
     assert(jl_is_array(ll));
     return (jl_array_t*)ll;
 }
 
-// get array of types for GenSym vars, or it's length (if not type-inferred)
+// get array of types for GenSym vars, or its length (if not type-inferred)
 jl_value_t *jl_lam_gensyms(jl_expr_t *l)
 {
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
     assert(jl_array_len(le) == 4);
-    return jl_cellref(le, 3);
+    return jl_cellref(le, 2);
+}
+
+// get array of static parameter symbols
+jl_array_t *jl_lam_staticparams(jl_expr_t *l)
+{
+    assert(jl_is_expr(l));
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_array(le));
+    assert(jl_array_len(le) == 4);
+    assert(jl_is_array(jl_cellref(le, 3)));
+    return (jl_array_t*)jl_cellref(le, 3);
 }
 
 int jl_lam_vars_captured(jl_expr_t *ast)

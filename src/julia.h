@@ -1246,10 +1246,10 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);
-jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_value_t *jl_lam_gensyms(jl_expr_t *l);
+jl_array_t *jl_lam_staticparams(jl_expr_t *l);
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);

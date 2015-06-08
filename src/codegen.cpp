@@ -3906,8 +3906,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int n_gensyms = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_gensym(gensym_types));
     jl_array_t *largs = jl_lam_args(ast);
     size_t largslen = jl_array_dim0(largs);
-    jl_array_t *lvars = jl_lam_locals(ast);
-    size_t lvarslen = jl_array_dim0(lvars);
+    jl_array_t *vinfos = jl_lam_vinfo(ast);
+    size_t vinfoslen = jl_array_dim0(vinfos);
+    jl_array_t *captvinfos = jl_lam_capt(ast);
+    size_t captvinfoslen = jl_array_dim0(captvinfos);
     size_t nreq = largslen;
     int va = 0;
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
@@ -3927,8 +3929,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
         ctx.vars[ctx.vaName].isArgument = true;
     }
 
-    jl_array_t *vinfos = jl_lam_vinfo(ast);
-    size_t vinfoslen = jl_array_dim0(vinfos);
     for(i=0; i < vinfoslen; i++) {
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
@@ -3946,11 +3946,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (!jl_is_type(varinfo.declType))
             varinfo.declType = (jl_value_t*)jl_any_type;
     }
-    vinfos = jl_lam_capt(ast);
-    vinfoslen = jl_array_dim0(vinfos);
-    bool hasCapt = (vinfoslen > 0);
-    for(i=0; i < vinfoslen; i++) {
-        jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
+    bool hasCapt = (captvinfoslen > 0);
+    for(i=0; i < captvinfoslen; i++) {
+        jl_array_t *vi = (jl_array_t*)jl_cellref(captvinfos, i);
         assert(jl_is_array(vi));
         jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
         assert(jl_is_symbol(vname));
@@ -4245,9 +4243,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 0,                      // Flags (TODO: Do we need any)
                 nreq + 1);              // Argument number (1-based)
         }
-        for(i=0; i < lvarslen; i++) {
-            jl_sym_t *s = (jl_sym_t*)jl_cellref(lvars,i);
+        for(i=0; i < vinfoslen; i++) {
+            jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
             jl_varinfo_t &varinfo = ctx.vars[s];
+            if (varinfo.isArgument)
+                continue;
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_auto_variable,    // Tag
                 SP,                     // Scope (current function will be fill in later)
@@ -4259,10 +4259,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 0,                      // Flags (TODO: Do we need any)
                 0);                   // Argument number (1-based)
         }
-        vinfos = jl_lam_capt(ast);
-        vinfoslen = jl_array_dim0(vinfos);
-        for(i=0; i < vinfoslen; i++) {
-            jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
+        for(i=0; i < captvinfoslen; i++) {
+            jl_array_t *vi = (jl_array_t*)jl_cellref(captvinfos, i);
             assert(jl_is_array(vi));
             jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
             assert(jl_is_symbol(vname));
@@ -4346,14 +4344,16 @@ static Function *emit_function(jl_lambda_info_t *lam)
         }
         maybe_alloc_arrayvar(s, &ctx);
     }
-    for(i=0; i < lvarslen; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(lvars,i);
+    for(i=0; i < vinfoslen; i++) {
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
         assert(jl_is_symbol(s));
+        jl_varinfo_t &vi = ctx.vars[s];
+        if (vi.isArgument)
+            continue;
         if (store_unboxed_p(s, &ctx)) {
             alloc_local(s, &ctx);
         }
         else {
-            jl_varinfo_t &vi = ctx.vars[s];
             if (!vi.used) {
                 vi.hasGCRoot = false;
                 continue;
@@ -4414,8 +4414,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
             ctx.vars[s].memvalue = av;
         }
     }
-    for(i=0; i < lvarslen; i++) {
-        jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
+    for(i=0; i < vinfoslen; i++) {
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
+        if (ctx.vars[s].isArgument)
+            continue;
         if (store_unboxed_p(s, &ctx)) {
             // nothing
         }
@@ -4444,15 +4446,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // step 9. create boxes for boxed locals
     // now handled by explicit :newvar nodes
-    /*
-    for(i=0; i < lvarslen; i++) {
-        jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
-        if (isBoxed(s, &ctx)) {
-            Value *lv = ctx.vars[s].memvalue;
-            builder.CreateStore(builder.CreateCall(prepare_call(jlbox_func), V_null), lv);
-        }
-    }
-    */
 
     // step 10. allocate space for exception handler contexts
     size_t stmtslen = jl_array_dim0(stmts);

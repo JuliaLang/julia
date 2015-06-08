@@ -106,6 +106,11 @@
 #    name::Symbol
 #end
 
+#immutable GlobalRef
+#    mod::Module
+#    name::Symbol
+#end
+
 # type Task
 #     parent::Task
 #     last::Task
@@ -235,11 +240,6 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
-immutable GlobalRef
-    mod::Module
-    name::Symbol
-end
-
 immutable ASCIIString <: DirectIndexString
     data::Array{UInt8,1}
 end
@@ -285,6 +285,7 @@ _new(:TopNode, :Symbol)
 _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
+eval(:(Core.call(::Type{GlobalRef}, m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
 

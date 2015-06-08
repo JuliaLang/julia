@@ -2000,7 +2000,6 @@ void jl_init_serializer(void)
                      jl_box_int32(42), jl_box_int32(43), jl_box_int32(44),
                      jl_box_int32(45), jl_box_int32(46), jl_box_int32(47),
                      jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
-                     jl_box_int32(51), jl_box_int32(52),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2020,7 +2019,6 @@ void jl_init_serializer(void)
                      jl_box_int64(42), jl_box_int64(43), jl_box_int64(44),
                      jl_box_int64(45), jl_box_int64(46), jl_box_int64(47),
                      jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
-                     jl_box_int64(51), jl_box_int64(52),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
@@ -2032,6 +2030,7 @@ void jl_init_serializer(void)
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
+                     jl_globalref_type,
 
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
@@ -2044,6 +2043,7 @@ void jl_init_serializer(void)
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,
+                     jl_globalref_type->name,
 
                      jl_root_task, jl_bottom_func,
 
