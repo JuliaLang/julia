@@ -161,14 +161,14 @@ else
     typealias BlasInt Int32
 end
 
-#Check that stride of matrix/vector is 1
+# Check that stride of matrix/vector is 1
 function chkstride1(A::StridedVecOrMat...)
     for a in A
         stride(a,1)== 1 || error("matrix does not have contiguous columns")
     end
 end
 
-#Check that matrix is square
+# Check that matrix is square
 function chksquare(A::AbstractMatrix)
     m,n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square"))
@@ -184,7 +184,7 @@ function chksquare(A...)
     length(A)==1 ? sizes[1] : sizes
 end
 
-#Check that upper/lower (for special matrices) is correctly specified
+# Check that upper/lower (for special matrices) is correctly specified
 macro chkuplo()
    :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
 
