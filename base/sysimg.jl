@@ -55,7 +55,6 @@ include("refpointer.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
-include("subarray2.jl")
 
 # numeric operations
 include("hashing.jl")
@@ -64,6 +63,8 @@ importall .Rounding
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
+include("abstractarraymath.jl")
+include("arraymath.jl")
 
 # SIMD loops
 include("simdloop.jl")
