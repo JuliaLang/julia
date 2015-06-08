@@ -66,6 +66,29 @@ body.args = ast.args[3].args
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
 
+metaex = Expr(:meta, :foo)
+ex1 = quote
+    $metaex
+    x*x+1
+end
+metaex = Expr(:meta, :foo)
+ex2 = quote
+    y = x
+    $metaex
+    y*y+1
+end
+metaex = Expr(:block, Expr(:meta, :foo))
+ex3 = quote
+    y = x
+    $metaex
+    x*x+1
+end
+
+@test popmeta!(ex1, :foo)[1]
+@test popmeta!(ex2, :foo)[1]
+@test popmeta!(ex3, :foo)[1]
+@test !(popmeta!(:(x*x+1), :foo)[1])
+
 end
 
 
