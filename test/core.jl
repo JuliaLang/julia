@@ -2153,11 +2153,11 @@ f9534d(x) = (a=(1,2,4,6,7); a[x])
 @test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
 @test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
 f9534e(x) = (a=IOBuffer(); a.(x) = 3)
-@test try; f9534e(-2) catch ex; is((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
+@test try; f9534e(-2) catch ex; is((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
 f9534f() = (a=IOBuffer(); a.(-2))
 f9534f(x) = (a=IOBuffer(); a.(x))
-@test try; f9534f() catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
-@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == typemin(Int)+2; end
+@test try; f9534f() catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
+@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == typemin(Int)+2; end
 x9634 = 3
 @test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
 @test try; throw(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end

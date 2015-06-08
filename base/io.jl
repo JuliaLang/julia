@@ -37,18 +37,20 @@ write(io::IO, xs...) = for x in xs write(io, x) end
 if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
         sz = sizeof(x)
+        local written::Int = 0
         for n = sz:-1:1
-            write(s, (x>>>((n-1)<<3))%UInt8)
+            written += write(s, (x>>>((n-1)<<3))%UInt8)
         end
-        sz
+        return written
     end
 else
     function write(s::IO, x::Integer)
         sz = sizeof(x)
+        local written::Int = 0
         for n = 1:sz
-            write(s, (x>>>((n-1)<<3))%UInt8)
+            written += write(s, (x>>>((n-1)<<3))%UInt8)
         end
-        sz
+        return written
     end
 end
 
@@ -62,44 +64,41 @@ function write(s::IO, a::AbstractArray)
     for i in eachindex(a)
         nb += write(s, a[i])
     end
-    nb
+    return nb
 end
 
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
     if c < 0x80
-        write(s, c%UInt8)
-        return 1
+        return write(s, c%UInt8)
     elseif c < 0x800
-        write(s, (( c >> 6          ) | 0xC0)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 2
+        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x10000
-        write(s, (( c >> 12         ) | 0xE0)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 3
+        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x110000
-        write(s, (( c >> 18         ) | 0xF0)%UInt8)
-        write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 4
+        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
+               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     else
         return write(s, '\ufffd')
     end
 end
 
 function write(s::IO, p::Ptr, n::Integer)
+    local written::Int = 0
     for i=1:n
-        write(s, unsafe_load(p, i))
+        written += write(s, unsafe_load(p, i))
     end
-    n
+    return written
 end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    return write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 
 # all subtypes should implement this
