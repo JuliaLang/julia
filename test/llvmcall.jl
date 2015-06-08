@@ -116,3 +116,27 @@ function doubly_declared2_trunc(x::Float64)
     a + b
 end
 @test_approx_eq doubly_declared2_trunc(4.2) 8.
+
+# Test for single line
+function declared_ceil(x::Float64)
+    llvmcall(
+        ("declare double @llvm.ceil.f64(double)",
+         """%2 = call double @llvm.ceil.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x)
+end
+
+@test_approx_eq declared_ceil(4.2) 5.0
+
+# Test for multiple lines
+function ceilfloor(x::Float64)
+    llvmcall(
+        ("""declare double @llvm.ceil.f64(double)
+            declare double @llvm.floor.f64(double)""",
+         """%2 = call double @llvm.ceil.f64(double %0)
+            %3 = call double @llvm.floor.f64(double %2)
+            ret double %3"""),
+    Float64, Tuple{Float64}, x)
+end
+
+@test_approx_eq ceilfloor(7.4) 8.0
