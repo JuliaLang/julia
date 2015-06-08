@@ -257,7 +257,7 @@ function get_bind_addr(w::Worker)
             w.config.bind_addr = remotecall_fetch(w.id, get_bind_addr, w.id)
         end
     end
-    w.config.bind_addr
+    get(w.config.bind_addr)
 end
 
 myid() = LPROC.id
