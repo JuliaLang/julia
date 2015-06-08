@@ -1876,7 +1876,7 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
             return mark_julia_type(strct,ty);
         }
         Value *f1 = NULL;
-        int fieldStart = ctx->argDepth;
+        int fieldStart = ctx->gc.argDepth;
         bool needroots = false;
         for (size_t i = 1;i < nargs;i++) {
             if (might_need_root(args[i])) {
@@ -1903,7 +1903,7 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
             if (!jl_subtype(expr_type(args[1],ctx), jl_field_type(sty,0), 0))
                 emit_typecheck(f1, jl_field_type(sty,0), "new", ctx);
             emit_setfield(sty, strct, 0, f1, ctx, false, false);
-            ctx->argDepth = fieldStart;
+            ctx->gc.argDepth = fieldStart;
             if (nf > 1 && needroots)
                 make_gcroot(strct, ctx);
         }
@@ -1935,7 +1935,7 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
                 need_wb = true;
             emit_setfield(sty, strct, i-1, rhs, ctx, false, need_wb);
         }
-        ctx->argDepth = fieldStart;
+        ctx->gc.argDepth = fieldStart;
         return strct;
     }
     else {

@@ -1161,7 +1161,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // save argument depth until after we're done emitting arguments
-    int last_depth = ctx->argDepth;
+    int last_depth = ctx->gc.argDepth;
 
     // number of parameters to the c function
     bool needStackRestore = false;
@@ -1322,7 +1322,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                      Intrinsic::stackrestore),
                            stacksave);
     }
-    ctx->argDepth = last_depth;
+    ctx->gc.argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx->f->addFnAttr(Attribute::StackProtectReq);
     }
