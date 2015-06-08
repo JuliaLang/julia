@@ -3328,6 +3328,11 @@ void jl_init_types(void)
                         jl_svec(2, jl_symbol("name"), jl_symbol("parent")),
                         jl_svec(2, jl_sym_type, jl_any_type), 0, 1, 2);
 
+    jl_globalref_type =
+        jl_new_datatype(jl_symbol("GlobalRef"), jl_any_type, jl_emptysvec,
+                        jl_svec(2, jl_symbol("mod"), jl_symbol("name")),
+                        jl_svec(2, jl_module_type, jl_sym_type), 0, 0, 2);
+
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
 
     jl_lambda_info_type =

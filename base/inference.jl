@@ -1423,8 +1423,8 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     args = f_argnames(ast)
     la = length(args)
     assert(is(ast.head,:lambda))
-    locals = (ast.args[2][1])::Array{Any,1}
-    vars = append_any(args, locals)
+    vinflist = ast.args[2][1]::Array{Any,1}
+    vars = map(vi->vi[1], vinflist)
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
@@ -1491,14 +1491,13 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
 
     # types of closed vars
     cenv = ObjectIdDict()
-    for vi in (ast.args[2][3])::Array{Any,1}
+    for vi in (ast.args[2][2])::Array{Any,1}
         vi::Array{Any,1}
         vname = vi[1]
         vtype = vi[2]
         cenv[vname] = vtype
         s[1][vname] = VarState(vtype,false)
     end
-    vinflist = ast.args[2][2]::Array{Any,1}
     for vi in vinflist
         vi::Array{Any,1}
         if (vi[3]&4)!=0
@@ -1839,6 +1838,14 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
     ast.args[3].typ = rettype
 
     # add declarations for variables that are always the same type
+    for vi in ast.args[2][1]::Array{Any,1}
+        if (vi[3]&4)==0
+            vi[2] = get(decls, vi[1], vi[2])
+        end
+        if haskey(undefs, vi[1])
+            vi[3] |= 32
+        end
+    end
     for vi in ast.args[2][2]::Array{Any,1}
         if (vi[3]&4)==0
             vi[2] = get(decls, vi[1], vi[2])
@@ -1847,21 +1854,13 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
             vi[3] |= 32
         end
     end
-    for vi in ast.args[2][3]::Array{Any,1}
-        if (vi[3]&4)==0
-            vi[2] = get(decls, vi[1], vi[2])
-        end
-        if haskey(undefs, vi[1])
-            vi[3] |= 32
-        end
-    end
-    ast.args[2][4] = sv.gensym_types
+    ast.args[2][3] = sv.gensym_types
 
     for (li::LambdaStaticData) in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
-            for vi in a.args[2][3]::Array{Any,1}
+            for vi in a.args[2][2]::Array{Any,1}
                 if (vi[3]&4)==0
                     vi[2] = get(decls, vi[1], vi[2])
                 end
@@ -2184,6 +2183,20 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
     return false
 end
 
+function ast_localvars(ast)
+    args = ObjectIdDict()
+    for argname in (ast.args[1]::Array{Any,1})
+        args[argname] = true
+    end
+    locals = Any[]
+    for vi in (ast.args[2][1]::Array{Any,1})
+        if !haskey(args, vi[1])
+            push!(locals, vi[1])
+        end
+    end
+    locals
+end
+
 # inline functions whose bodies "inline_worthy"
 # where the function body doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
@@ -2311,7 +2324,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         needcopy = false
     end
     ast = ast::Expr
-    vinflist = ast.args[2][2]::Array{Any,1}
+    vinflist = ast.args[2][1]::Array{Any,1}
     for vi in vinflist
         if (vi[3]&1)!=0
             # captures variables (TODO)
@@ -2360,9 +2373,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     end
 
     spnames = Any[ sp[i].name for i=1:2:length(sp) ]
-    enc_vinflist = enclosing_ast.args[2][2]::Array{Any,1}
-    enc_locllist = enclosing_ast.args[2][1]::Array{Any,1}
-    locllist = ast.args[2][1]::Array{Any,1}
+    enc_vinflist = enclosing_ast.args[2][1]::Array{Any,1}
+    enc_locllist = ast_localvars(enclosing_ast)
+    locllist = ast_localvars(ast)
 
     # check for vararg function
     args = f_argnames(ast)
@@ -2438,7 +2451,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     # annotate variables in the body expression with their module
     if need_mod_annotate
         mfrom = linfo.module; mto = (inference_stack::CallStack).mod
-        enc_capt = enclosing_ast.args[2][3]
+        enc_capt = enclosing_ast.args[2][2]
         if !isempty(enc_capt)
             # add captured var names to list of locals
             enc_vars = vcat(enc_locllist, map(vi->vi[1], enc_capt))
@@ -2600,17 +2613,17 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     end
 
     # re-number the GenSyms and copy their type-info to the new ast
-    gensym_types = ast.args[2][4]
+    gensym_types = ast.args[2][3]
     if gensym_types != 0
         if (isa(gensym_types,Integer))
-            gensym_types = Any[Any for i = 1:ast.args[2][4]]
+            gensym_types = Any[Any for i = 1:ast.args[2][3]]
         end
         if !isempty(gensym_types)
             incr = length(sv.gensym_types)
             if incr != 0
                 body = gensym_increment(body, incr)
             end
-            append!(sv.gensym_types, ast.args[2][4])
+            append!(sv.gensym_types, ast.args[2][3])
         end
     end
 
@@ -2927,9 +2940,7 @@ end
 
 function add_variable(ast, name, typ, is_sa)
     vinf = Any[name, typ, 2+16*is_sa]
-    locllist = ast.args[2][1]::Array{Any,1}
-    vinflist = ast.args[2][2]::Array{Any,1}
-    push!(locllist, name)
+    vinflist = ast.args[2][1]::Array{Any,1}
     push!(vinflist, vinf)
 end
 
@@ -2946,7 +2957,7 @@ function contains_is1(vinflist::Array{Any,1}, x::Symbol)
     return false
 end
 function unique_name(ast)
-    locllist = ast.args[2][2]::Array{Any,1}
+    locllist = ast.args[2][1]::Array{Any,1}
     for g in some_names
         if !contains_is1(locllist, g)
             return g
@@ -2959,8 +2970,8 @@ function unique_name(ast)
     g
 end
 function unique_name(ast1, ast2)
-    locllist1 = ast1.args[2][2]::Array{Any,1}
-    locllist2 = ast2.args[2][2]::Array{Any,1}
+    locllist1 = ast1.args[2][1]::Array{Any,1}
+    locllist2 = ast2.args[2][1]::Array{Any,1}
     for g in some_names
         if !contains_is1(locllist1, g) &&
            !contains_is1(locllist2, g)
@@ -2977,7 +2988,7 @@ end
 
 function unique_names(ast, n)
     ns = []
-    locllist = ast.args[2][2]::Array{Any,1}
+    locllist = ast.args[2][1]::Array{Any,1}
     for g in some_names
         if !contains_is1(locllist, g)
             push!(ns, g)
@@ -3013,7 +3024,7 @@ function is_known_call_p(e::Expr, pred::Function, sv)
 end
 
 function is_var_assigned(ast, v)
-    for vi in ast.args[2][2]
+    for vi in ast.args[2][1]
         if symequal(vi[1], v) && (vi[3]&2)!=0
             return true
         end
@@ -3023,8 +3034,7 @@ end
 
 function delete_var!(ast, v)
     if !isa(v, GenSym)
-        filter!(vi->!symequal(vi[1],v), ast.args[2][2])
-        filter!(x->!symequal(x,v), ast.args[2][1])
+        filter!(vi->!symequal(vi[1],v), ast.args[2][1])
     end
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  symequal(x.args[1],v)),
@@ -3036,8 +3046,8 @@ end
 # and not assigned.
 # "sa" is the result of find_sa_vars
 function remove_redundant_temp_vars(ast, sa)
-    varinfo = ast.args[2][2]
-    gensym_types = ast.args[2][4]
+    varinfo = ast.args[2][1]
+    gensym_types = ast.args[2][3]
     for (v,init) in sa
         if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
             any(vi->symequal(vi[1],init), varinfo) &&
@@ -3087,7 +3097,8 @@ function find_sa_vars(ast)
     body = ast.args[3].args
     av = ObjectIdDict()
     av2 = ObjectIdDict()
-    vnames = ast.args[2][1]
+    vinfos = ast.args[2][1]::Array{Any,1}
+    args = ast.args[1]
     for i = 1:length(body)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
@@ -3098,7 +3109,7 @@ function find_sa_vars(ast)
                 av2[(lhs::SymbolNode).name] = true
             else
                 lhs = lhs::Symbol
-                if contains_is(vnames, lhs)  # exclude globals
+                if contains_is1(vinfos,lhs) && !contains_is(args,lhs) # exclude globals & args
                     if !haskey(av, lhs)
                         av[lhs] = e.args[2]
                     else
@@ -3109,7 +3120,7 @@ function find_sa_vars(ast)
         end
     end
     filter!((var,_)->!haskey(av2,var), av)
-    for vi in ast.args[2][2]
+    for vi in vinfos
         if (vi[3]&1)!=0
             # remove captured vars
             delete!(av, vi[1])
@@ -3255,7 +3266,7 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
                 val = val::SymbolNode
                 if a.typ <: val.typ && !typeseq(a.typ,val.typ)
                     val.typ = a.typ
-                    for vi in ast.args[2][2]::Array{Any,1}
+                    for vi in ast.args[2][1]::Array{Any,1}
                         if vi[1] === val.name
                             vi[2] = a.typ
                             break

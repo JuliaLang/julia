@@ -450,6 +450,11 @@
           ((eq? (car lhs) 'kw) (cadr lhs))
           (else                lhs))))
 
+(define (method-expr-static-parameters m)
+  (if (eq? (car (cadr (caddr m))) 'lambda)
+      (cadr (cadr (caddr m)))
+      '()))
+
 (define (sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) '|.|)
@@ -2885,35 +2890,23 @@ So far only the second case can actually occur.
 (define (make-var-info name) (list name 'Any 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
+(define (vinfo:set-type! v t) (set-car! (cdr v) t))
+
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
 (define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
 (define (vinfo:const v) (< 0 (logand (caddr v) 8)))
-(define (vinfo:set-type! v t) (set-car! (cdr v) t))
+(define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
-(define (vinfo:set-capt! v c) (set-car! (cddr v)
-                                        (if c
-                                            (logior (caddr v) 1)
-                                            (logand (caddr v) -2))))
+(define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
 ;; whether var is assigned
-(define (vinfo:set-asgn! v a) (set-car! (cddr v)
-                                        (if a
-                                            (logior (caddr v) 2)
-                                            (logand (caddr v) -3))))
+(define (vinfo:set-asgn! v a)  (set-car! (cddr v) (set-bit (caddr v) 2 a)))
 ;; whether var is assigned by an inner function
-(define (vinfo:set-iasg! v a) (set-car! (cddr v)
-                                        (if a
-                                            (logior (caddr v) 4)
-                                            (logand (caddr v) -5))))
+(define (vinfo:set-iasg! v a)  (set-car! (cddr v) (set-bit (caddr v) 4 a)))
 ;; whether var is const
-(define (vinfo:set-const! v a) (set-car! (cddr v)
-                                         (if a
-                                             (logior (caddr v) 8)
-                                             (logand (caddr v) -9))))
+(define (vinfo:set-const! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
 ;; whether var is assigned once
-(define (vinfo:set-sa! v a) (set-car! (cddr v)
-                                      (if a
-                                          (logior (caddr v) 16)
-                                          (logand (caddr v) -17))))
+(define (vinfo:set-sa! v a)    (set-car! (cddr v) (set-bit (caddr v) 16 a)))
+;; occurs undef: mask 32
 
 (define var-info-for assq)
 
@@ -2943,7 +2936,7 @@ So far only the second case can actually occur.
 ; convert each lambda's (locals ...) to
 ;   ((localvars...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
-(define (analyze-vars e env captvars)
+(define (analyze-vars e env captvars sp)
   (if (or (atom? e) (quoted? e))
       e
       (case (car e)
@@ -2957,7 +2950,7 @@ So far only the second case can actually occur.
                  (vinfo:set-asgn! vi #t)
                  (if (assq (car vi) captvars)
                      (vinfo:set-iasg! vi #t)))))
-         `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars)))
+         `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars sp)))
         #;((or (eq? (car e) 'local) (eq? (car e) 'local!))
          '(null))
         ((typeassert)
@@ -3014,12 +3007,12 @@ So far only the second case can actually occur.
                                            (not (memq (vinfo:name v) allv))
                                            (not (memq (vinfo:name v) glo))))
                                         env))
-                        cv)))
+                        cv sp)))
            ;; mark all the vars we capture as captured
            (for-each (lambda (v) (vinfo:set-capt! v #t))
                      cv)
            `(lambda ,args
-              (,(cdaddr e) ,vi ,cv ,gensym_types)
+              (,vi ,cv ,gensym_types ,sp)
               ,bod)))
         ((localize)
          ;; special feature for @spawn that wraps a piece of code in a "let"
@@ -3033,7 +3026,7 @@ So far only the second case can actually occur.
              (analyze-vars
               `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
                      ,@vs)
-              env captvars))))
+              env captvars sp))))
         ((method)
          (let ((vi (var-info-for (method-expr-name e) env)))
            (if vi
@@ -3046,14 +3039,16 @@ So far only the second case can actually occur.
 	 (if (length= e 2)
 	     `(method ,(cadr e))
 	     `(method ,(cadr e)
-		      ,(analyze-vars (caddr  e) env captvars)
-		      ,(analyze-vars (cadddr e) env captvars)
+		      ,(analyze-vars (caddr  e) env captvars sp)
+		      ,(analyze-vars (cadddr e) env captvars
+				     (delete-duplicates
+				      (append sp (method-expr-static-parameters e))))
 		      ,(caddddr e))))
         (else (cons (car e)
-                    (map (lambda (x) (analyze-vars x env captvars))
+                    (map (lambda (x) (analyze-vars x env captvars sp))
                          (cdr e)))))))
 
-(define (analyze-variables e) (analyze-vars e '() '()))
+(define (analyze-variables e) (analyze-vars e '() '() '()))
 
 (define (not-bool e)
   (cond ((memq e '(true #t))  'false)
@@ -3071,8 +3066,8 @@ So far only the second case can actually occur.
   (cond ((or (not (pair? e)) (quoted? e)) e)
         ((eq? (car e) 'lambda)
          `(lambda ,(cadr e) ,(caddr e)
-                  ,(compile-body (cadddr e) (append (cadr (caddr e))
-                                                    (caddr (caddr e))))))
+                  ,(compile-body (cadddr e) (append (car (caddr e))
+                                                    (cadr (caddr e))))))
         (else (cons (car e)
                     (map goto-form (cdr e))))))
 

@@ -210,7 +210,7 @@ function code_warntype(io::IO, f, t::ANY)
     show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = true
     for ast in ct
         println(io, "Variables:")
-        vars = ast.args[2][2]
+        vars = ast.args[2][1]
         for v in vars
             print(io, "  ", v[1])
             show_expr_type(io, v[2])

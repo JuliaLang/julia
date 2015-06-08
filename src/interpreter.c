@@ -602,9 +602,9 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_array_t *stmts = jl_lam_body(ast)->args;
-    jl_array_t *l = jl_lam_locals(ast);
-    size_t llength = jl_array_len(l);
-    jl_value_t **names = &((jl_value_t**)l->data)[0];
+    size_t nargs = jl_array_len(jl_lam_args(ast));
+    jl_array_t *l = jl_lam_vinfo(ast);
+    size_t llength = jl_array_len(l) - nargs;
     nl += llength;
     jl_value_t **locals;
     jl_value_t *gensym_types = jl_lam_gensyms(ast);
@@ -613,7 +613,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
     jl_value_t *r = (jl_value_t*)jl_nothing;
     size_t i=0;
     for(i=0; i < llength; i++) {
-        locals[i*2]   = names[i];
+        locals[i*2]   = jl_cellref(jl_cellref(l,i+nargs),0);
         //locals[i*2+1] = NULL;   // init'd by JL_GC_PUSHARGS
     }
     for(; i < nl; i++) {
