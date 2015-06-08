@@ -96,13 +96,13 @@ for T in IntTypes
         (|)(x::$T, y::$T) = box($T, or_int(unbox($T,x),unbox($T,y)))
         ($)(x::$T, y::$T) = box($T,xor_int(unbox($T,x),unbox($T,y)))
 
-        <<(x::$T,  y::Int32) = box($T, shl_int(unbox($T,x),unbox(Int32,y)))
-        >>>(x::$T, y::Int32) = box($T,lshr_int(unbox($T,x),unbox(Int32,y)))
+        <<(x::$T,  y::Int) = box($T, shl_int(unbox($T,x),unbox(Int,y)))
+        >>>(x::$T, y::Int) = box($T,lshr_int(unbox($T,x),unbox(Int,y)))
     end
     if issubtype(T,Unsigned)
-        @eval >>(x::$T, y::Int32) = box($T,lshr_int(unbox($T,x),unbox(Int32,y)))
+        @eval >>(x::$T, y::Int) = box($T,lshr_int(unbox($T,x),unbox(Int,y)))
     else
-        @eval >>(x::$T, y::Int32) = box($T,ashr_int(unbox($T,x),unbox(Int32,y)))
+        @eval >>(x::$T, y::Int) = box($T,ashr_int(unbox($T,x),unbox(Int,y)))
     end
 end
 
@@ -348,8 +348,8 @@ typemin(::Type{UInt64}) = UInt64(0)
 typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{UInt128}) = $(UInt128(0))
 @eval typemax(::Type{UInt128}) = $(box(UInt128,unbox(Int128,convert(Int128,-1))))
-@eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<Int32(127))
-@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>Int32(1))))
+@eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<127)
+@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>1)))
 
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
@@ -373,7 +373,7 @@ widemul(x::Number,y::Bool) = x*y
 
 ## wide multiplication, Int128 multiply and divide ##
 
-if WORD_SIZE==32
+if WORD_SIZE == 32
     function widemul(u::Int64, v::Int64)
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::Int64, v1::Int64, w1::UInt64, w2::Int64, t::UInt64
@@ -434,12 +434,12 @@ if WORD_SIZE==32
 
     mod(x::Int128, y::Int128) = Int128(mod(BigInt(x),BigInt(y)))
 
-    << (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
-    << (x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int32,y)))
-    >> (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int32,y)))
-    >> (x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int32,y)))
-    >>>(x::Int128,  y::Int32) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int32,y)))
-    >>>(x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int32,y)))
+    << (x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
+    << (x::UInt128, y::Int) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int,y)))
+    >> (x::Int128,  y::Int) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int,y)))
+    >> (x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
+    >>>(x::Int128,  y::Int) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int,y)))
+    >>>(x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
 else
     *(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
     *(x::UInt128, y::UInt128) = box(UInt128,mul_int(unbox(UInt128,x),unbox(UInt128,y)))
@@ -491,13 +491,13 @@ for T in (Int8,UInt8)
 end
 
 if WORD_SIZE == 32
-for T in (Int64,UInt64)
-    @eval function checked_mul(x::$T, y::$T)
-        xy = Int128(x)*Int128(y)
-        (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
-        return xy % $T
+    for T in (Int64,UInt64)
+        @eval function checked_mul(x::$T, y::$T)
+            xy = Int128(x)*Int128(y)
+            (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
+            return xy % $T
+        end
     end
-end
 else
     checked_mul(x::Int64, y::Int64)   = box(Int64,checked_smul(unbox(Int64,x),unbox(Int64,y)))
     checked_mul(x::UInt64, y::UInt64) = box(UInt64,checked_umul(unbox(UInt64,x),unbox(UInt64,y)))
