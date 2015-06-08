@@ -2873,14 +2873,18 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         return;
     }
     jl_sym_t *s = NULL;
+    jl_binding_t *bnd=NULL;
+    Value *bp=NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
     else if (jl_is_symbolnode(l))
         s = jl_symbolnode_sym(l);
+    else if (jl_is_globalref(l))
+        bp = global_binding_pointer(jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     else
         assert(false);
-    jl_binding_t *bnd=NULL;
-    Value *bp = var_binding_pointer(s, &bnd, true, ctx);
+    if (bp == NULL)
+        bp = var_binding_pointer(s, &bnd, true, ctx);
     if (bnd) {
         Value *rval = boxed(emit_expr(r, ctx, true),ctx);
 #ifdef LLVM37
@@ -3096,8 +3100,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_value_t *mn = args[0];
         bool iskw = false;
         Value *theF = NULL;
-        if (jl_is_expr(mn)) {
-            if (((jl_expr_t*)mn)->head == kw_sym) {
+        if (jl_is_expr(mn) || jl_is_globalref(mn)) {
+            if (jl_is_expr(mn) && ((jl_expr_t*)mn)->head == kw_sym) {
                 iskw = true;
                 mn = jl_exprarg(mn,0);
             }
