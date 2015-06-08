@@ -22,7 +22,7 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
+        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR LIBUNWIND OPENLIBM RMATH; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
@@ -40,7 +40,7 @@ before_install:
         brew rm --force $(brew deps --HEAD julia);
         brew update;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
+        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
@@ -59,9 +59,9 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
-    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
-    - /tmp/julia/bin/julia-debug -e 'versioninfo()'
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
+    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && rm local.ji
+    - /tmp/julia/bin/julia -e 'versioninfo()'
+    - export JULIA_CPU_CORES=6 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
     - dmesg
     - echo "Ready for packaging..."
