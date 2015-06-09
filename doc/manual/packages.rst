@@ -717,7 +717,8 @@ This creates a commit in the ``~/.julia/v0.4/METADATA`` repo::
 This commit is only locally visible, however.  In order to make it visible to
 the world, you need to merge your local ``METADATA`` upstream into the official
 repo.  The :func:`Pkg.publish` command will fork the ``METADATA`` repository on
-GitHub, push your changes to your fork, and open a pull request::
+GitHub, push your changes to your fork, and open a pull request (the
+first time this is run, it will ask you for your GitHub password)::
 
     julia> Pkg.publish()
     INFO: Validating METADATA
@@ -738,7 +739,7 @@ GitHub, push your changes to your fork, and open a pull request::
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/applications>`_ and try again.
+    <https://github.com/settings/tokens>`_ and try again.
 
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
