@@ -356,7 +356,7 @@ public:
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size
 #ifdef LLVM37
-                ,L.clone()
+                ,L.clone().release()
 #elif defined(LLVM36)
                 ,(size_t)SectionAddr
 #endif
@@ -474,30 +474,38 @@ static obfiletype objfilemap;
 #ifdef _OS_DARWIN_
 bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 {
-#ifdef LLVM35
+
+# ifdef LLVM37
+    for (auto Load : obj->load_commands ()) {
+# else
+#  ifdef LLVM35
     uint32_t LoadCommandCount = obj->getHeader().ncmds;
-#else
+#  else
     uint32_t LoadCommandCount = obj->getHeader().NumLoadCommands;
-#endif
+#  endif
     llvm::object::MachOObjectFile::LoadCommandInfo Load = obj->getFirstLoadCommandInfo();
     for (unsigned I = 0; ; ++I) {
+# endif
         if (
-#ifdef LLVM35
+# ifdef LLVM35
             Load.C.cmd == LC_UUID
-#else
+# else
             Load.C.Type == LC_UUID
-#endif
+# endif
             ) {
             memcpy(uuid,((MachO::uuid_command*)Load.Ptr)->uuid,16);
             return true;
         }
+# ifndef LLVM37
         else if (I == LoadCommandCount - 1) {
             return false;
         }
         else {
             Load = obj->getNextLoadCommandInfo(Load);
         }
+# endif
     }
+    return false;
 }
 #endif
 
