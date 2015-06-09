@@ -112,9 +112,9 @@ const .≠ = .!=
 <<(x,y::Int)  = no_op_err("<<", typeof(x))
 >>(x,y::Int)  = no_op_err(">>", typeof(x))
 >>>(x,y::Int) = no_op_err(">>>", typeof(x))
-<<(x,y::Integer)  = x << convert(Int,y)
->>(x,y::Integer)  = x >> convert(Int,y)
->>>(x,y::Integer) = x >>> convert(Int,y)
+<<(x,y::Integer)  = typemax(Int) < y ? zero(x) : x <<  (y % Int)
+>>(x,y::Integer)  = typemax(Int) < y ? zero(x) : x >>  (y % Int)
+>>>(x,y::Integer) = typemax(Int) < y ? zero(x) : x >>> (y % Int)
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
