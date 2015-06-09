@@ -86,8 +86,9 @@ static const char opts[]  =
     " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n\n"
 
     // compiler output options
-    " --build name              Generate a system image with the given name (without extension)\n"
-    " --dump-bitcode={yes|no}   Dump bitcode for the system image\n\n"
+    " --output-o name           Generate an object file (including system image data)\n"
+    " --output-ji name          Generate a system image data file (.ji)\n"
+    " --output-bc name          Generate LLVM bitcode (.bc)\n\n"
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
@@ -106,13 +107,15 @@ void parse_opts(int *argcp, char ***argvp)
            opt_code_coverage,
            opt_track_allocation,
            opt_check_bounds,
-           opt_dump_bitcode,
+           opt_output_bc,
            opt_depwarn,
            opt_inline,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
-           opt_handle_signals
+           opt_handle_signals,
+           opt_output_o,
+           opt_output_ji
     };
     static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
     static struct option longopts[] = {
@@ -141,13 +144,14 @@ void parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        no_argument,       0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
-        { "dump-bitcode",    required_argument, 0, opt_dump_bitcode },
+        { "output-bc",       required_argument, 0, opt_output_bc },
+        { "output-o",        required_argument, 0, opt_output_o },
+        { "output-ji",       required_argument, 0, opt_output_ji },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
-        { "build",           required_argument, 0, 'b' },
         { "worker",          no_argument,       0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       &lisp_prompt, 1 },
@@ -307,11 +311,17 @@ void parse_opts(int *argcp, char ***argvp)
             else
                 jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)\n", optarg);
             break;
-        case opt_dump_bitcode:
-            if (!strcmp(optarg,"yes"))
-                jl_options.dumpbitcode = JL_OPTIONS_DUMPBITCODE_ON;
-            else if (!strcmp(optarg,"no"))
-                jl_options.dumpbitcode = JL_OPTIONS_DUMPBITCODE_OFF;
+        case opt_output_bc:
+            jl_options.outputbc = optarg;
+            if (!imagepathspecified) jl_options.image_file = NULL;
+            break;
+        case opt_output_o:
+            jl_options.outputo = optarg;
+            if (!imagepathspecified) jl_options.image_file = NULL;
+            break;
+        case opt_output_ji:
+            jl_options.outputji = optarg;
+            if (!imagepathspecified) jl_options.image_file = NULL;
             break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))
@@ -339,11 +349,6 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
                 jl_errorf("julia: invalid argument to --math-mode (%s)\n", optarg);
-            break;
-        case 'b': // build
-            jl_options.build_path = strdup(optarg);
-            if (!imagepathspecified)
-                jl_options.image_file = NULL;
             break;
         case opt_worker:
             jl_options.worker = 1;
