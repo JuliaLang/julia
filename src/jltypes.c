@@ -1951,6 +1951,26 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
                            jl_typestack_t *stack, int check);
 
+static jl_value_t*
+lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
+                  jl_value_t **iparams)
+{
+    // if an identical instantiation is already in process somewhere
+    // up the stack, return it. this computes a fixed point for
+    // recursive types.
+    jl_typename_t *tn = tt->name;
+    while (stack != NULL) {
+        if (stack->tt->name == tn &&
+            ntp == jl_svec_len(stack->tt->parameters) &&
+            typekey_eq(stack->tt, iparams, ntp)) {
+            jl_value_t *lkup = (jl_value_t*)stack->tt;
+            return lkup == tn->primary ? NULL : lkup;
+        }
+        stack = stack->prev;
+    }
+    return NULL;
+}
+
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                  int cacheable, int isabstract, jl_typestack_t *stack,
                                  jl_value_t **env, size_t n)
@@ -1964,6 +1984,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
         if (lkup != NULL)
             return lkup;
+    }
+    jl_value_t *stack_lkup = lookup_type_stack(stack, dt, ntp, iparams);
+    if (stack_lkup) {
+        return stack_lkup;
     }
 
     // always use original type constructor
@@ -2215,25 +2239,8 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
 
-    // if an identical instantiation is already in process somewhere
-    // up the stack, return it. this computes a fixed point for
-    // recursive types.
-    jl_typestack_t *tmp = stack;
-    jl_value_t *lkup = NULL;
-    while (tmp != NULL) {
-        if (tmp->tt->name==tn && ntp==jl_svec_len(tmp->tt->parameters) &&
-            typekey_eq(tmp->tt, iparams, ntp)) {
-            lkup = (jl_value_t*)tmp->tt;
-            break;
-        }
-        tmp = tmp->prev;
-    }
-    if (lkup != NULL && lkup != (jl_value_t*)tc) {
-        JL_GC_POP();
-        return lkup;
-    }
-    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, NULL, iparams, ntp, cacheable, isabstract,
-                                       stack, env, n);
+    jl_value_t *result = inst_datatype(tt, NULL, iparams, ntp, cacheable,
+                                       isabstract, stack, env, n);
     JL_GC_POP();
     return result;
 }
