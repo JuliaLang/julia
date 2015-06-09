@@ -1047,6 +1047,7 @@ export
     promote_rule,
     promote_type,
     subtypes,
+    instances,
     super,
     typeintersect,
     typejoin,

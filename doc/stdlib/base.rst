@@ -482,6 +482,11 @@ Types
       julia> f(apple)
       "I'm a FRUIT with value: 1"
 
+.. function:: instances(T::Type)
+
+   Return a collection of all instances of the given type, if applicable.
+   Mostly used for enumerated types (see ``@enum``).
+
 Generic Functions
 -----------------
 
