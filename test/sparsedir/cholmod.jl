@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+srand(123)
 using Base.Test
 
 using Base.SparseMatrix.CHOLMOD
