@@ -450,3 +450,13 @@ sA = sub(A, 1:2, 1:3)
 sub(sA, 1:2, 1:2)
 @test_throws BoundsError sub(A, 17:23)
 sub(A, 17:20)
+
+# Linear indexing by one multidimensional array:
+A = reshape(1:120, 3, 5, 8)
+sA = sub(A, :, :, :)
+@test sA[[72 17; 107 117]] == [72 17; 107 117]
+@test sA[[99 38 119 14 76 81]] == [99 38 119 14 76 81]
+@test sA[[ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]] == [ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]
+sA = sub(A, 1:2, 2:3, 3:4)
+@test sA[(1:8)'] == [34 35 37 38 49 50 52 53]
+@test sA[[1 2 4 4; 6 1 1 4]] == [34 35 38 38; 50 34 34 38]
