@@ -331,8 +331,6 @@ unquoted(ex::Expr)       = ex.args[1]
 ## AST printing helpers ##
 
 const indent_width = 4
-may_show_expr_type_emphasize = false
-show_expr_type_emphasize = false
 
 function show_expr_type(io::IO, ty)
     if is(ty, Function)
@@ -340,7 +338,8 @@ function show_expr_type(io::IO, ty)
     elseif is(ty, IntrinsicFunction)
         print(io, "::I")
     else
-        if show_expr_type_emphasize::Bool && !isleaftype(ty)
+        emph = get(task_local_storage(), :TYPEEMPHASIZE, false)::Bool
+        if emph && !isleaftype(ty)
             emphasize(io, "::$ty")
         else
             if !is(ty, Any)
@@ -468,9 +467,7 @@ end
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     show_type = true
-    global show_expr_type_emphasize
-    state = show_expr_type_emphasize::Bool
-
+    emphstate = get(task_local_storage(), :TYPEEMPHASIZE, false)
     # dot (i.e. "x.y")
     if is(head, :(.))
         show_unquoted(io, args[1], indent + indent_width)
@@ -519,7 +516,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         func_args = args[2:end]
 
         if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
-            show_expr_type_emphasize::Bool = show_type = false
+            show_type = task_local_storage(:TYPEEMPHASIZE, false)
         end
 
         # scalar multiplication (i.e. "100x")
@@ -607,10 +604,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # block with argument
     elseif head in (:for,:while,:function,:if) && nargs==2
-        show_block(io, head, args[1], args[2], indent); print(io, "end")
+        show_block(io, head, args[1], args[2], indent)
+        print(io, "end")
 
     elseif is(head, :module) && nargs==3 && isa(args[1],Bool)
-        show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent); print(io, "end")
+        show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
+        print(io, "end")
 
     # type declaration
     elseif is(head, :type) && nargs==3
@@ -741,7 +740,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # print anything else as "Expr(head, args...)"
     else
         show_type = false
-        show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool && in(ex.head, (:lambda, :method))
+        emph = get(task_local_storage(), :TYPEEMPHASIZE, false)::Bool &&
+               (ex.head === :lambda || ex.head == :method)
+        task_local_storage(:TYPEEMPHASIZE, emph)
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -750,16 +751,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-
-    if ex.head in (:(=), :boundscheck, :gotoifnot, :return)
+    if (ex.head == :(=) ||
+        ex.head == :boundscheck ||
+        ex.head == :gotoifnot ||
+        ex.head == :return)
         show_type = false
     end
-
-    if show_type
-        show_expr_type(io, ex.typ)
-    end
-
-    show_expr_type_emphasize::Bool = state
+    show_type && show_expr_type(io, ex.typ)
+    task_local_storage(:TYPEEMPHASIZE, emphstate)
 end
 
 function ismodulecall(ex::Expr)
