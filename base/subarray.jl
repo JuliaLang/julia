@@ -533,9 +533,9 @@ getindex(V::SubArray, I::Int...) = (@_inline_meta; checkbounds(V, I...); unsafe_
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
         meta = Expr(:meta, :inline)
         if iscontiguous(V)
-            return :($meta; V.parent[V.first_index + I[1] - 1])
+            return :($meta; unsafe_getindex(V.parent, V.first_index + I[1] - 1))
         end
-        return :($meta; V.parent[V.first_index + V.stride1*(I[1]-1)])
+        return :($meta; unsafe_getindex(V.parent, V.first_index + V.stride1*(I[1]-1)))
     end
     Isyms = [:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
@@ -550,9 +550,9 @@ setindex!(V::SubArray, v, I::Int...) = (@_inline_meta; checkbounds(V, I...); uns
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
         meta = Expr(:meta, :inline)
         if iscontiguous(V)
-            return :($meta; V.parent[V.first_index + I[1] - 1] = v)
+            return :($meta; unsafe_setindex!(V.parent, v, V.first_index + I[1] - 1))
         end
-        return :($meta; V.parent[V.first_index + V.stride1*(I[1]-1)] = v)
+        return :($meta; unsafe_setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
     end
     Isyms = [:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
