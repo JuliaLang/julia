@@ -108,13 +108,13 @@ end
 const .≤ = .<=
 const .≠ = .!=
 
-# core << >> and >>> takes Int32 as second arg
-<<(x,y::Int32)    = no_op_err("<<", typeof(x))
->>(x,y::Int32)    = no_op_err(">>", typeof(x))
->>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
-<<(x,y::Integer)  = x << convert(Int32,y)
->>(x,y::Integer)  = x >> convert(Int32,y)
->>>(x,y::Integer) = x >>> convert(Int32,y)
+# core << >> and >>> takes Int as second arg
+<<(x,y::Int)  = no_op_err("<<", typeof(x))
+>>(x,y::Int)  = no_op_err(">>", typeof(x))
+>>>(x,y::Int) = no_op_err(">>>", typeof(x))
+<<(x,y::Integer)  = x << convert(Int,y)
+>>(x,y::Integer)  = x >> convert(Int,y)
+>>>(x,y::Integer) = x >>> convert(Int,y)
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
