@@ -527,7 +527,30 @@ function parentdims(s::SubArray)
 end
 
 ## Scalar indexing
-getindex(V::SubArray, I::Int...) = (@_inline_meta; checkbounds(V, I...); unsafe_getindex(V, I...))
+
+# While it'd be nice to explicitly check bounds against the SubArray dimensions,
+# the lack of an extensible @inbounds mechanism makes it difficult for users to
+# avoid the cost of the bounds check without rewriting their syntax to use the
+# unwieldy unsafe_getindex/unsafe_setindex! function calls. So instead we define
+# getindex to rely upon the bounds checks in the parent array. It's still
+# advantageous to define the unsafe_ variants without any bounds checks since
+# the abstract indexing fallbacks can make use of them.
+@generated function getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; getindex(V.parent, V.first_index + I[1] - 1))
+        end
+        return :($meta; getindex(V.parent, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        getindex(V.parent, $(idxs...))
+    end
+end
 @generated function unsafe_getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
     ni = length(I)
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
@@ -544,7 +567,22 @@ getindex(V::SubArray, I::Int...) = (@_inline_meta; checkbounds(V, I...); unsafe_
         unsafe_getindex(V.parent, $(idxs...))
     end
 end
-setindex!(V::SubArray, v, I::Int...) = (@_inline_meta; checkbounds(V, I...); unsafe_setindex!(V, v, I...))
+@generated function setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; setindex!(V.parent, v, V.first_index + I[1] - 1))
+        end
+        return :($meta; setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        setindex!(V.parent, v, $(idxs...))
+    end
+end
 @generated function unsafe_setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
     ni = length(I)
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
