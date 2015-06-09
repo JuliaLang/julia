@@ -255,7 +255,7 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type, bool toju
             if (v->getType() != ptarget_type) {
                 v = builder.CreatePointerCast(v, ptarget_type);
             }
-            return builder.CreateLoad(v);
+            return builder.CreateAlignedLoad(v, 1); // unknown alignment from C
         }
     }
     else {
@@ -267,10 +267,11 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type, bool toju
         }
 
         if (v->getType() != from_type) { // this is already be a pointer in the codegen
+            unsigned align = v->getType() == jl_pvalue_llvmt ? 16 : 0;
             if (v->getType() != ptarget_type) {
                 v = builder.CreatePointerCast(v, ptarget_type);
             }
-            return builder.CreateLoad(v);
+            return builder.CreateAlignedLoad(v, align);
         }
     }
     assert(v->getType() == from_type);
@@ -340,7 +341,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     if (vt != jl_pvalue_llvmt) {
         // argument value is unboxed
         if (vt != jv->getType())
-            jv = builder.CreateLoad(jv);
+            jv = builder.CreateLoad(jv); // something stack allocated
         if (addressOf || (byRef && inReg)) {
             if (ty->isPointerTy() && ty->getContainedType(0) == vt) {
                 // pass the address of an alloca'd thing, not a box
@@ -1409,7 +1410,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             Value *newst = emit_new_struct(rt,1,NULL,ctx);
             assert(newst != NULL && "Type was not concrete");
             assert(newst->getType()->isPointerTy());
-            builder.CreateStore(result, builder.CreateBitCast(newst, prt->getPointerTo()));
+            // julia gc is aligned 16, otherwise use default alignment for alloca pointers
+            builder.CreateAlignedStore(result, builder.CreateBitCast(newst, prt->getPointerTo()), newst->getType()==jl_pvalue_llvmt ? 16 : 0);
             result = newst;
         }
         else {
@@ -1430,7 +1432,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else {
         if (result->getType() != jl_pvalue_llvmt && !lrt->isAggregateType())
-            result = builder.CreateLoad(result);
+            result = builder.CreateLoad(result); // something alloca'd above
     }
 
     return mark_or_box_ccall_result(result, args[2], rt, static_rt, ctx);

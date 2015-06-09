@@ -3718,7 +3718,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             else {
                 Type *t = julia_type_to_llvm(jargty);
                 val = builder.CreatePointerCast(val, t->getPointerTo());
-                val = builder.CreateLoad(val, false);
+                val = builder.CreateAlignedLoad(val, 1); // make no alignment assumption about pointer from C
             }
         }
         else {
@@ -3742,7 +3742,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     Value *mem = emit_allocobj(jl_datatype_size(jargty));
                     builder.CreateStore(literal_pointer_val((jl_value_t*)jargty),
                                         emit_typeptr_addr(mem));
-                    builder.CreateStore(val, builder.CreateBitCast(mem, val->getType()->getPointerTo()));
+                    builder.CreateAlignedStore(val, builder.CreateBitCast(mem, val->getType()->getPointerTo()), 16); // julia's gc gives 16-byte aligned addresses
                     val = mem;
                 }
                 if (specsig)
