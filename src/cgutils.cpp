@@ -1107,6 +1107,8 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //    elt = data;
     //}
     //else {
+        if (data->getType()->getContainedType(0)->isVectorTy() && !alignment)
+            alignment = ((jl_datatype_t*)jltype)->alignment; // prevent llvm from assuming 32 byte alignment of vectors
         Instruction *load = builder.CreateAlignedLoad(data, alignment, false);
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
@@ -1150,6 +1152,8 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
+    if (data->getType()->getContainedType(0)->isVectorTy() && !alignment)
+        alignment = ((jl_datatype_t*)jltype)->alignment; // prevent llvm from assuming 32 byte alignment of vectors
     Instruction *store = builder.CreateAlignedStore(rhs, builder.CreateGEP(data, idx_0based), alignment);
     if (tbaa)
         tbaa_decorate(tbaa, store);
@@ -1570,7 +1574,7 @@ static Value *tpropagate(Value *a, Value *b)
 static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 {
     builder.CreateStore(jt, builder.CreateBitCast(emit_typeptr_addr(newv), jl_ppvalue_llvmt));
-    builder.CreateStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)));
+    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)), 16); // Julia's gc-alignment is 16-bytes
     return newv;
 }
 

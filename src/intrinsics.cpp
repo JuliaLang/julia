@@ -266,7 +266,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
     }
     if (ty != jl_pvalue_llvmt) {
         if (to->isAggregateType()) {
-            x = builder.CreateLoad(x);
+            x = builder.CreateLoad(x); // something stack allocated
             ty = x->getType();
         }
         else {
@@ -287,12 +287,12 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         }
         return x;
     }
-    Value *p = data_pointer(x);
+    Value *p = x;
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1
         return builder.CreateTrunc(builder.
                                    CreateLoad(builder.
-                                              CreateBitCast(p, T_pint8), false),
+                                              CreateBitCast(p, T_pint8)),
                                    T_int1);
     }
     if (to->isStructTy() && !to->isSized()) {
@@ -300,7 +300,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         assert(to != T_void);
         return UndefValue::get(to);
     }
-    return builder.CreateLoad(builder.CreateBitCast(p, to->getPointerTo()), false);
+    return builder.CreateAlignedLoad(builder.CreateBitCast(p, to->getPointerTo()), 16); // julia's gc gives 16-byte aligned addresses
 }
 
 // unbox trying to determine type automatically
@@ -488,7 +488,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 
     // dynamically-determined type; evaluate.
     if (llvmt->isAggregateType()) {
-        vx = builder.CreateLoad(vx);
+        vx = builder.CreateLoad(vx); // something stack allocated
     }
     return allocate_box_dynamic(emit_expr(targ, ctx), ConstantInt::get(T_size,nb), vx);
 }
