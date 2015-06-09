@@ -227,10 +227,11 @@ let reqarg = Set(UTF8String["--home",          "-H",
                             "--startup-file",
                             "--compile",
                             "--check-bounds",
-                            "--dump-bitcode",
                             "--depwarn",
                             "--inline",
-                            "--build",        "-b",
+                            "--output-o",
+                            "--output-ji",
+                            "--output-bc",
                             "--bind-to"])
     global process_options
     function process_options(opts::JLOptions, args::Vector{UTF8String})
