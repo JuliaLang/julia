@@ -1177,28 +1177,23 @@ end
 
 reverse(v::BitVector) = reverse!(copy(v))
 
-function (<<)(B::BitVector, i::Int64)
+function (<<)(B::BitVector, i::Int)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
     i < n && copy_chunks!(A.chunks, 1, B.chunks, i+1, n-i)
     return A
 end
-(<<)(B::BitVector, i::Int32) = B << Int64(i)
-(<<)(B::BitVector, i::Integer) = B << Int64(i)
 
-function (>>>)(B::BitVector, i::Int64)
+function (>>>)(B::BitVector, i::Int)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
     i < n && copy_chunks!(A.chunks, i+1, B.chunks, 1, n-i)
     return A
 end
-(>>>)(B::BitVector, i::Int32) = B >>> Int64(i)
-(>>>)(B::BitVector, i::Integer) = B >>> Int64(i)
 
-(>>)(B::BitVector, i::Int32) = B >>> i
-(>>)(B::BitVector, i::Integer) = B >>> i
+(>>)(B::BitVector, i::Int) = B >>> i
 
 function rol!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
