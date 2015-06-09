@@ -104,6 +104,18 @@ for T in IntTypes
     else
         @eval >>(x::$T, y::Int) = box($T,ashr_int(unbox($T,x),unbox(Int,y)))
     end
+    for S in IntTypes
+        (S === Int128 || S === UInt128) && continue
+        @eval begin
+            <<(x::$T,  y::$S) = box($T, shl_int(unbox($T,x),unbox($S,y)))
+            >>>(x::$T, y::$S) = box($T,lshr_int(unbox($T,x),unbox($S,y)))
+        end
+        if issubtype(T,Unsigned)
+            @eval >>(x::$T, y::$S) = box($T,lshr_int(unbox($T,x),unbox($S,y)))
+        else
+            @eval >>(x::$T, y::$S) = box($T,ashr_int(unbox($T,x),unbox($S,y)))
+        end
+    end
 end
 
 bswap(x::Int8)    = x
