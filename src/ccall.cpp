@@ -380,7 +380,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         emit_error("ccall: argument type did not match declaration", ctx);
     }
 
-    // argument value is boxed
+    // argument value is boxed (jl_value_t*)
     if (jl_is_tuple(jt)) {
         emit_error("ccall: unimplemented: boxed tuple argument type", ctx);
         return jv; // TODO: this is wrong
@@ -411,7 +411,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             *needStackRestore = true;
             AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
             ai->setAlignment(16);
-            builder.CreateMemCpy(ai, builder.CreateBitCast(jv, T_pint8), nbytes, 0);
+            builder.CreateMemCpy(ai, builder.CreateBitCast(jv, T_pint8), nbytes, 16);
             return builder.CreateBitCast(ai, ty);
         }
         // emit maybe copy
@@ -437,7 +437,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        builder.CreateMemCpy(ai, builder.CreatePointerCast(jv, T_pint8), nbytes, 0);
+        builder.CreateMemCpy(ai, builder.CreatePointerCast(jv, T_pint8), nbytes, 16);
         Value *p2 = builder.CreatePointerCast(ai, ty);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);

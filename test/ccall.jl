@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.copy, Base.==
-const verbose = false
+const verbose = true
 ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
