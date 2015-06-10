@@ -3768,7 +3768,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     // Create the call
     Value *r;
     if (specsig) {
-        r = builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args));
+        r = emit_reg2mem(builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args)), &ctx);
     }
     else {
         r = emit_jlcall(theFptr, literal_pointer_val((jl_value_t*)ff), 0, nargs, &ctx);
@@ -3783,10 +3783,10 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
     }
     else if (!type_is_ghost(crt)) {
-        Value *v = julia_to_native(crt, jlrettype, r, jlrettype, false, false, false, false, true, 0, &ctx, NULL);
-        bool issigned = jl_signed_type && jl_subtype(jlrettype, (jl_value_t*)jl_signed_type, 0);
         if (sret)
             prt = fargt_sig[0];
+        Value *v = julia_to_native(crt, jlrettype, r, jlrettype, false, false, false, false, false, 0, &ctx, NULL);
+        bool issigned = jl_signed_type && jl_subtype(jlrettype, (jl_value_t*)jl_signed_type, 0);
         r = llvm_type_rewrite(v, crt, prt, false, false, issigned, &ctx);
         if (sret)
             builder.CreateStore(r, sretPtr);
