@@ -465,8 +465,9 @@ end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = open(cmd, "r", stdin)
+    bytes = readbytes(out)
     !success(pc) && pipeline_error(pc)
-    return readbytes(out)
+    return bytes
 end
 
 function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
