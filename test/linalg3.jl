@@ -246,6 +246,13 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
+@test_throws DimensionMismatch dot([1.0,2.0,3.0], 1:2, [3.5,4.5,5.5], 1:3)
+@test_throws BoundsError dot([1.0,2.0,3.0], 1:4, [3.5,4.5,5.5], 1:4)
+@test_throws BoundsError dot([1.0,2.0,3.0], 1:3, [3.5,4.5,5.5], 2:4)
+@test_throws DimensionMismatch dot(Complex128[1.0,2.0,3.0], 1:2, Complex128[3.5,4.5,5.5], 1:3)
+@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:4, Complex128[3.5,4.5,5.5], 1:4)
+@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:3, Complex128[3.5,4.5,5.5], 2:4)
+
 # issue #7181
 A = [ 1  5  9
       2  6 10
