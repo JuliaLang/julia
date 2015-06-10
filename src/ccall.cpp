@@ -246,17 +246,68 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #  include "abi_llvm.cpp"
 #endif
 
-Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)
+Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type, bool tojulia, bool byref, bool issigned, jl_codectx_t *ctx)
 {
-    if (preferred_llvm_type(ty,isret) == NULL || target_type == NULL || target_type == v->getType())
+    Type *ptarget_type = PointerType::get(target_type, 0);
+
+    if (tojulia) {
+        if (byref) {
+            if (v->getType() != ptarget_type) {
+                v = builder.CreatePointerCast(v, ptarget_type);
+            }
+            return builder.CreateLoad(v);
+        }
+    }
+    else {
+        if (byref) { // client is supposed to have already done the alloca and store
+            if (v->getType() != target_type) {
+                v = builder.CreatePointerCast(v, target_type);
+            }
+            return v;
+        }
+
+        if (v->getType() != from_type) { // this is already be a pointer in the codegen
+            if (v->getType() != ptarget_type) {
+                v = builder.CreatePointerCast(v, ptarget_type);
+            }
+            return builder.CreateLoad(v);
+        }
+    }
+    assert(v->getType() == from_type);
+
+    if (target_type == from_type) {
         return v;
+    }
 
-    assert(!v->getType()->isPointerTy());
+    if ((target_type->isIntegerTy() && from_type->isIntegerTy()) ||
+        (target_type->isFloatingPointTy() && from_type->isFloatingPointTy()) ||
+        (target_type->isPointerTy() && from_type->isPointerTy())) {
+        if (target_type->isPointerTy()) {
+            return builder.CreatePointerCast(v, target_type);
+        }
+        if (target_type->isFloatingPointTy()) {
+            if (target_type->getPrimitiveSizeInBits() > from_type->getPrimitiveSizeInBits()) {
+                return builder.CreateFPExt(v, target_type);
+            }
+            else if (target_type->getPrimitiveSizeInBits() < from_type->getPrimitiveSizeInBits()) {
+                return builder.CreateFPTrunc(v, target_type);
+            }
+            else {
+                return v;
+            }
+        }
+        assert(target_type->isIntegerTy());
+        if (issigned)
+            return builder.CreateSExtOrTrunc(v, target_type);
+        else
+            return builder.CreateZExtOrTrunc(v, target_type);
+    }
 
+    // Vector or non-Aggregate types
     // LLVM doesn't allow us to cast values directly, so
     // we need to use this alloca trick
-    Value *mem = builder.CreateAlloca(target_type);
-    builder.CreateStore(v,builder.CreatePointerCast(mem,v->getType()->getPointerTo()));
+    Value *mem = emit_static_alloca(target_type, ctx);
+    builder.CreateStore(v, builder.CreatePointerCast(mem, from_type->getPointerTo()));
     return builder.CreateLoad(mem);
 }
 
@@ -265,27 +316,36 @@ Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *aty, bool addressOf,
                               bool byRef, bool inReg,
-                              bool needCopy,
+                              bool needCopy, bool tojulia,
                               int argn, jl_codectx_t *ctx,
                               bool *needStackRestore)
 {
     Type *vt = jv->getType();
 
-    // We're passing any
+    // We're passing Any
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv,ctx);
     }
+
+    if (!tojulia && julia_type_to_llvm(aty)->isAggregateType()) {
+        // this value is expected to be a pointer in the julia codegen,
+        // so it needs to be extracted first if not tojulia
+        vt = vt->getContainedType(0);
+    }
+
     if (ty == vt && !addressOf && !byRef) {
         return jv;
     }
+
     if (vt != jl_pvalue_llvmt) {
         // argument value is unboxed
+        if (vt != jv->getType())
+            jv = builder.CreateLoad(jv);
         if (addressOf || (byRef && inReg)) {
-            if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
+            if (ty->isPointerTy() && ty->getContainedType(0) == vt) {
                 // pass the address of an alloca'd thing, not a box
                 // since those are immutable.
-                *needStackRestore = true;
-                Value *slot = builder.CreateAlloca(vt);
+                Value *slot = emit_static_alloca(vt, ctx);
                 builder.CreateStore(jv, slot);
                 return builder.CreateBitCast(slot, ty);
             }
@@ -299,29 +359,30 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                     return builder.CreateBitCast(jv, ty);
                 }
                 else {
-                    *needStackRestore = true;
-                    Value *mem = builder.CreateAlloca(ty);
+                    Value *mem = emit_static_alloca(ty, ctx);
                     builder.CreateStore(jv,builder.CreateBitCast(mem,vt->getPointerTo()));
                     return mem;
                 }
             }
         }
         else if (vt->isStructTy()) {
-            if (!byRef) {
-                return jv;
+            if (byRef) {
+                Value *mem = emit_static_alloca(vt, ctx);
+                builder.CreateStore(jv, mem);
+                return mem;
             }
             else {
-                *needStackRestore = true;
-                Value *mem = builder.CreateAlloca(vt);
-                builder.CreateStore(jv,mem);
-                return mem;
+                return jv;
             }
         }
 
         emit_error("ccall: argument type did not match declaration", ctx);
     }
+
+    // argument value is boxed (jl_value_t*)
     if (jl_is_tuple(jt)) {
-        return emit_unbox(ty,jv,jt);
+        emit_error("ccall: unimplemented: boxed tuple argument type", ctx);
+        return jv; // TODO: this is wrong
     }
     if (jl_is_cpointer_type(jt) && addressOf) {
         assert(ty->isPointerTy());
@@ -349,7 +410,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             *needStackRestore = true;
             AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
             ai->setAlignment(16);
-            builder.CreateMemCpy(ai, builder.CreateBitCast(jv, T_pint8), nbytes, 1);
+            builder.CreateMemCpy(ai, builder.CreateBitCast(jv, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
             return builder.CreateBitCast(ai, ty);
         }
         // emit maybe copy
@@ -375,7 +436,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        builder.CreateMemCpy(ai, builder.CreatePointerCast(jv, T_pint8), nbytes, 1);
+        builder.CreateMemCpy(ai, builder.CreatePointerCast(jv, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
         Value *p2 = builder.CreatePointerCast(ai, ty);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -393,21 +454,19 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         msg << argn;
         emit_typecheck(jv, jt, msg.str(), ctx);
     }
-    Value *p = data_pointer(jv);
-    Value *pjv = builder.CreatePointerCast(p, PointerType::get(ty,0));
+    Value *pjv = builder.CreatePointerCast(jv, PointerType::get(ty,0));
     if (byRef) {
         if (!needCopy) {
             return pjv;
         }
         else {
-            *needStackRestore = true;
-            Value *mem = builder.CreateAlloca(ty);
-            builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)((jl_datatype_t*)jt)->alignment);
+            Value *mem = emit_static_alloca(ty, ctx);
+            builder.CreateMemCpy(mem, pjv, (uint64_t)jl_datatype_size(jt), (uint64_t)((jl_datatype_t*)jt)->alignment);
             return mem;
         }
     }
     else {
-        return builder.CreateLoad(pjv,false);
+        return pjv; // lazy load by llvm_type_rewrite
     }
 }
 
@@ -661,7 +720,9 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             make_gcroot(arg, ctx);
         }
 #endif
-        argvals[i] = julia_to_native(t, tti, arg, expr_type(argi, ctx), false, false, false, false, i, ctx, NULL);
+        Value *v = julia_to_native(t, tti, arg, expr_type(argi, ctx), false, false, false, false, false, i, ctx, NULL);
+        bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
+        argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
     }
 
     Function *f;
@@ -762,7 +823,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
 
-    return mark_julia_type(inst,rtt);
+    return mark_julia_type(emit_reg2mem(inst, ctx), rtt);
 }
 
 // --- code generator for ccall itself ---
@@ -786,6 +847,7 @@ typedef AttributeSet attr_type;
 
 static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         std::vector<Type *> &fargt, std::vector<Type *> &fargt_sig,
+        Type *&fargt_vasig,
         std::vector<bool> &inRegList,
         std::vector<bool> &byRefList, attr_type &attributes,
         jl_value_t *rt, jl_svec_t *tt)
@@ -805,7 +867,7 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         *prt = *lrt = T_void;
     }
     else {
-        *prt = preferred_llvm_type(rt,true);
+        *prt = preferred_llvm_type(rt, true);
         if (*prt == NULL)
             *prt = *lrt;
 
@@ -892,7 +954,7 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 
         fargt.push_back(t);
 
-        Type *pat = preferred_llvm_type(tti,false);
+        Type *pat = preferred_llvm_type(tti, false);
         if (pat != NULL)
             t = pat;
         else if (byRef)
@@ -900,6 +962,9 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 
         if (!current_isVa) {
             fargt_sig.push_back(t);
+        }
+        else {
+            fargt_vasig = t;
         }
     }
 
@@ -1128,12 +1193,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     std::vector<Type*> fargt(0);
     std::vector<Type*> fargt_sig(0);
+    Type *fargt_vasig = NULL;
     std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
     attr_type attrs;
     Type *prt = NULL;
     int sret = 0;
-    std::string err_msg = generate_func_sig(&lrt, &prt, sret, fargt, fargt_sig, inRegList, byRefList, attrs, rt, tt);
+    std::string err_msg = generate_func_sig(&lrt, &prt, sret, fargt, fargt_sig, fargt_vasig, inRegList, byRefList, attrs, rt, tt);
     if (!err_msg.empty()) {
         JL_GC_POP();
         emit_error(err_msg,ctx);
@@ -1143,19 +1209,21 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // emit arguments
     Value **argvals = (Value**) alloca(((nargs-3)/2 + sret)*sizeof(Value*));
     Value *result = NULL;
+    bool needStackRestore = false;
 
     // First, if the ABI requires us to provide the space for the return
     // argument, allocate the box and store that as the first argument type
     if (sret) {
-        result = emit_new_struct(rt,1,NULL,ctx);
+        result = emit_new_struct(rt,1,NULL,ctx); // TODO: is it valid to be creating an incomplete type this way?
         assert(result != NULL && "Type was not concrete");
         if (!result->getType()->isPointerTy()) {
-            Value *mem = builder.CreateAlloca(lrt);
+            Value *mem = emit_static_alloca(lrt, ctx);
             builder.CreateStore(result, mem);
             result = mem;
             argvals[0] = result;
         }
         else {
+            // XXX: result needs a GC root here if result->getType() == jl_pvalue_llvmt
             argvals[0] = builder.CreateBitCast(result, fargt_sig[0]);
         }
     }
@@ -1164,7 +1232,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     int last_depth = ctx->gc.argDepth;
 
     // number of parameters to the c function
-    bool needStackRestore = false;
     for(i=4; i < nargs+1; i+=2) {
         // Current C function parameter
         size_t ai = (i-4)/2;
@@ -1238,11 +1305,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
 
         bool nSR=false;
+        bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
         argvals[ai + sret] = llvm_type_rewrite(
                 julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, byRefList[ai], inRegList[ai],
-                    need_private_copy(jargty, byRefList[ai]), ai + 1, ctx, &nSR),
-                fargt_sig.size() > ai + sret ? fargt_sig[ai + sret] : preferred_llvm_type(jargty, false),
-                jargty, false);
+                    need_private_copy(jargty, byRefList[ai]), false, ai + 1, ctx, &nSR),
+                largty, ai + sret < fargt_sig.size() ? fargt_sig[ai + sret] : fargt_vasig,
+                false, byRefList[ai], issigned, ctx);
         needStackRestore |= nSR;
     }
 
@@ -1330,7 +1398,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_GC_POP();
     // Finally we need to box the result into julia type
     // However, if we have already created a box for the return
-    // type because we the ABI required us to pass a pointer (sret),
+    // type because the ABI required us to pass a pointer (sret),
     // then we do not need to do this.
     if (!sret) {
         if (lrt == T_void)
@@ -1338,32 +1406,30 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else if (lrt->isStructTy()) {
             //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
             assert(jl_is_structtype(rt));
-
             Value *newst = emit_new_struct(rt,1,NULL,ctx);
             assert(newst != NULL && "Type was not concrete");
-            if (newst->getType()->isPointerTy()) {
-                builder.CreateStore(result,builder.CreateBitCast(newst, prt->getPointerTo()));
-                result = newst;
-            }
-            else if (lrt != prt) {
-                result = llvm_type_rewrite(result,lrt,rt,true);
-            }
-            // otherwise it's fine to pass this by value. Technically we could do alloca/store/load,
-            // but why should we?
+            assert(newst->getType()->isPointerTy());
+            builder.CreateStore(result, builder.CreateBitCast(newst, prt->getPointerTo()));
+            result = newst;
         }
         else {
             if (prt->getPrimitiveSizeInBits() == lrt->getPrimitiveSizeInBits()) {
                 result = builder.CreateBitCast(result,lrt);
             }
             else {
-                Value *rloc = builder.CreateAlloca(prt);
-                builder.CreateStore(result, rloc);
-                result = builder.CreateLoad(builder.CreatePointerCast(rloc, PointerType::get(lrt,0)));
+                Value *rloc = emit_static_alloca(lrt, ctx);
+                builder.CreateStore(result, builder.CreatePointerCast(rloc, PointerType::get(prt,0)));
+                if (lrt->isAggregateType()) {
+                    result = rloc;
+                }
+                else {
+                    result = builder.CreateLoad(rloc);
+                }
             }
         }
     }
     else {
-        if (result->getType() != jl_pvalue_llvmt)
+        if (result->getType() != jl_pvalue_llvmt && !lrt->isAggregateType())
             result = builder.CreateLoad(result);
     }
 
