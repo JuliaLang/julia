@@ -198,8 +198,7 @@ static jl_value_t *full_list_of_lists(value_t e, int expronly)
 static jl_value_t *scm_to_julia(value_t e, int expronly)
 {
 #ifdef JL_GC_MARKSWEEP
-    int en = jl_gc_is_enabled();
-    jl_gc_disable();
+    int en = jl_gc_enable(0);
 #endif
     jl_value_t *v;
     JL_TRY {
@@ -212,7 +211,7 @@ static jl_value_t *scm_to_julia(value_t e, int expronly)
         v = (jl_value_t*)ex;
     }
 #ifdef JL_GC_MARKSWEEP
-    if (en) jl_gc_enable();
+    jl_gc_enable(en);
 #endif
     return v;
 }

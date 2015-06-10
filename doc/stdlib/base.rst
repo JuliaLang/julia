@@ -1009,15 +1009,13 @@ Internals
 
    Perform garbage collection. This should not generally be used.
 
-.. function:: gc_disable()
+.. function:: gc_enable(on::Bool)
 
-   Disable garbage collection. This should be used only with extreme
-   caution, as it can cause memory use to grow without bound.
+   Control whether garbage collection is enabled using a boolean argument (true for
+   enabled, false for disabled).
    Returns previous GC state.
-
-.. function:: gc_enable()
-
-   Re-enable garbage collection after calling :func:`gc_disable`. Returns previous GC state.
+   Disabling garbage collection should be used only with extreme caution,
+   as it can cause memory use to grow without bound.
 
 .. function:: macroexpand(x)
 
