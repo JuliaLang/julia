@@ -45,7 +45,7 @@ function show(io::IO, x::ANY)
     else
         nb = t.size
         print(io, "0x")
-        p = data_pointer_from_objref(x)
+        p = Base.data_pointer_from_objref(x)
         for i=nb-1:-1:0
             print(io, hex(unsafe_load(convert(Ptr{UInt8}, p+i)), 2))
         end
@@ -141,7 +141,7 @@ end
 
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
-    show(io, uncompressed_ast(l))
+    show(io, Base.uncompressed_ast(l))
     print(io, ")")
 end
 
@@ -1012,7 +1012,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
+                      sz::Tuple{Integer, Integer} = (s = Base.tty_size(); (s[1]-4, s[2])),
                       pre::AbstractString = " ",
                       sep::AbstractString = "  ",
                       post::AbstractString = "",
@@ -1186,7 +1186,7 @@ end
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
                    header::Bool=true, limit::Bool=_limit_output,
-                   sz = (s = tty_size(); (s[1]-4, s[2])), repr=false)
+                   sz = (s = Base.tty_size(); (s[1]-4, s[2])), repr=false)
     rows, cols = sz
     header && print(io, summary(X))
     if !isempty(X)
@@ -1234,7 +1234,7 @@ function with_output_limit(thk, lim=true)
     end
 end
 
-showall(x) = showall(STDOUT, x)
+showall(x) = showall(Base.STDOUT, x)
 function showall(io::IO, x)
     if _limit_output==false
         show(io, x)

@@ -15,8 +15,10 @@ export  CPU_CORES,
         free_memory,
         total_memory
 
-import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
-import ..Base: show, uv_error
+using Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
+using Base.Streams: uv_error
+
+import Base: show
 
 global CPU_CORES
 

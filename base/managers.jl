@@ -1,6 +1,15 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Built-in SSH and Local Managers
+module Managers
+
+using Base.Multiprocessing: ClusterManager, WorkerConfig
+
+import Base.Streams: connect
+import Base.Processes: kill
+import Base.Multiprocessing: addprocs
+
+export launch, manage
 
 immutable SSHManager <: ClusterManager
     machines::Dict
@@ -102,7 +111,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     tval = haskey(ENV, "JULIA_WORKER_TIMEOUT") ? `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"]);` : ``
 
     cmd = `cd $dir && $tval $exename $exeflags` # launch julia
-    cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
+    cmd = `sh -l -c $(Base.Strings.shell_escape(cmd))` # shell to launch under
     cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
 
     # launch
@@ -189,7 +198,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 
     for i in 1:manager.np
         io, pobj = open(detach(
-            setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.Multiprocessing.LPROC.bind_addr) --worker`, dir=dir)), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
@@ -219,7 +228,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if !isnull(config.io)
-        (bind_addr, port) = read_worker_host_port(get(config.io))
+        (bind_addr, port) = Base.Multiprocessing.read_worker_host_port(get(config.io))
         pubhost=get(config.host, bind_addr)
         config.host = pubhost
         config.port = port
@@ -258,7 +267,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if !isnull(config.io)
         let pid = pid
-            redirect_worker_output(pid, get(config.io))
+            Base.Multiprocessing.redirect_worker_output(pid, get(config.io))
         end
     end
 
@@ -284,7 +293,7 @@ end
 
 function connect_to_worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
-    if host == string(LPROC.bind_addr)
+    if host == string(Base.Multiprocessing.LPROC.bind_addr)
         s = connect("127.0.0.1", UInt16(port))
     else
         s = connect(host, UInt16(port))
@@ -311,9 +320,9 @@ function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port
 end
 
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    remote_do(pid, exit) # For TCP based transports this will result in a close of the socket
+    Base.Multiprocessing.remote_do(pid, exit) # For TCP based transports this will result in a close of the socket
                        # at our end, which will result in a cleanup of the worker.
     nothing
 end
-
+end # module
 

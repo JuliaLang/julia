@@ -33,7 +33,7 @@ function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
     editor != nothing ||
         error("set the EDITOR environment variable to an edit command")
-    editor = Base.shell_split(editor)
+    editor = Base.Strings.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
     reqsʹ = Reqs.parse("REQUIRE")
@@ -632,7 +632,7 @@ end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
     cols = Base.tty_size()[2]
-    warn(prefix="", Base.cpad(label,cols,"="))
+    warn(prefix="", Base.Strings.cpad(label,cols,"="))
     println(STDERR)
     warn(prefix=prefix, msg...)
     println(STDERR)

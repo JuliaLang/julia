@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Primes
 # Sieve of Atkin for generating primes:
 #     http://en.wikipedia.org/wiki/Sieve_of_Atkin
 # Code very loosely based on this:
 #     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
 #     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
 #
+
+export factor, isprime, primes
+
 function primesmask(s::AbstractVector{Bool})
     n = length(s)
     n < 2 && return s; s[2] = true
@@ -143,3 +147,4 @@ function pollardfactors!{T<:Integer,K<:Integer}(n::T, h::Dict{K,Int})
         end
     end
 end
+end # module

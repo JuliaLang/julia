@@ -1,5 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Sockets
+
+using Base.Streams: AsyncStream, BACKLOG_DEFAULT, Callback, DEFAULT_READ_BUFFER_SZ,
+    UVError, Pipe, PipeServer, StatusClosed, StatusInit, StatusOpen, StatusUninit,
+    TTY, UVServer, associate_julia_struct, disassociate_julia_struct, eventloop,
+    uv_error, uv_status_string, _sizeof_uv_udp
+using Base.Strings
+
+import Base: isreadable, iswritable, print, show
+import Base.Streams: accept, accept_nonblock, bind, connect, connect!, listen,
+    uvfinalize, _uv_hook_alloc_buf, _uv_hook_close
+
+export @ip_str, IPv4, IPv6, TCPSocket, UDPSocket, getaddrinfo, getipaddr,
+    listenany, parseip, recv, recvfrom, send
+
 ## IP ADDRESS HANDLING ##
 abstract IPAddr
 
@@ -279,7 +294,7 @@ type TCPSocket <: Socket
     )
 end
 function TCPSocket()
-    this = TCPSocket(Libc.malloc(_sizeof_uv_tcp))
+    this = TCPSocket(Libc.malloc(Base.Streams._sizeof_uv_tcp))
     associate_julia_struct(this.handle,this)
     finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
@@ -310,7 +325,7 @@ type TCPServer <: UVServer
     )
 end
 function TCPServer()
-    this = TCPServer(Libc.malloc(_sizeof_uv_tcp))
+    this = TCPServer(Libc.malloc(Base.Streams._sizeof_uv_tcp))
     associate_julia_struct(this.handle, this)
     finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
@@ -323,12 +338,6 @@ function TCPServer()
     end
     this.status = StatusInit
     this
-end
-
-function uvfinalize(uv)
-    close(uv)
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
 end
 
 isreadable(io::TCPSocket) = true
@@ -407,7 +416,7 @@ function _uv_hook_close(sock::UDPSocket)
     sock.status = StatusClosed
     notify(sock.closenotify)
     notify(sock.sendnotify)
-    notify_error(sock.recvnotify,EOFError())
+    Base.notify_error(sock.recvnotify,EOFError())
 end
 
 # Disables dual stack mode. Only available when using ipv6 binf
@@ -498,7 +507,7 @@ function recvfrom(sock::UDPSocket)
         error("UDPSocket is not initialized and open")
     end
     _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Tuple{Union(IPv4, IPv6), Vector{UInt8}}
+    Base.Streams.stream_wait(sock,sock.recvnotify)::Tuple{Union(IPv4, IPv6), Vector{UInt8}}
 end
 
 
@@ -506,7 +515,7 @@ function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_siz
     # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
         Libc.free(buf_addr)
-        notify_error(sock.recvnotify,"Partial message received")
+        Base.notify_error(sock.recvnotify,"Partial message received")
     end
 
     # need to check the address type in order to convert to a Julia IPAddr
@@ -537,13 +546,13 @@ function send(sock::UDPSocket,ipaddr,port,msg)
         error("UDPSocket is not initialized and open")
     end
     uv_error("send",_send(sock,ipaddr,UInt16(port),msg))
-    stream_wait(sock,sock.sendnotify)
+    Base.Streams.stream_wait(sock,sock.sendnotify)
     nothing
 end
 
 function _uv_hook_send(sock::UDPSocket,status::Cint)
     if status < 0
-        notify_error(sock.sendnotify,UVError("UDP send failed",status))
+        Base.notify_error(sock.sendnotify,UVError("UDP send failed",status))
     end
     notify(sock.sendnotify)
 end
@@ -639,7 +648,7 @@ function connect!(sock::TCPSocket, host::IPv4, port::Integer)
     end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16),
                  sock.handle,hton(host.host),hton(UInt16(port))))
-    sock.status = StatusConnecting
+    sock.status = Base.Streams.StatusConnecting
 end
 
 function connect!(sock::TCPSocket, host::IPv6, port::Integer)
@@ -651,7 +660,7 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16),
                  sock.handle,&hton(host.host),hton(UInt16(port))))
-    sock.status = StatusConnecting
+    sock.status = Base.Streams.StatusConnecting
 end
 
 # Default Host to localhost
@@ -672,18 +681,18 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     ipaddr = getaddrinfo(host)
     sock.status = StatusInit
     connect!(sock,ipaddr,port)
-    sock.status = StatusConnecting
+    sock.status = Base.Streams.StatusConnecting
     sock
 end
 
 ##
 
-listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_listen(sock;backlog=backlog)); sock)
+listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",Base.Streams._listen(sock;backlog=backlog)); sock)
 
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TCPServer()
     !bind(sock,addr) && error("cannot bind to port; may already be in use or access denied")
-    uv_error("listen",_listen(sock;backlog=backlog))
+    uv_error("listen",Base.Streams._listen(sock;backlog=backlog))
     sock
 end
 listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0)),port;backlog=backlog)
@@ -716,7 +725,7 @@ function listenany(default_port)
     addr = InetAddr(IPv4(UInt32(0)),default_port)
     while true
         sock = TCPServer()
-        if bind(sock,addr) && _listen(sock) == 0
+        if bind(sock,addr) && Base.Streams._listen(sock) == 0
             return (addr.port,sock)
         end
         close(sock)
@@ -726,3 +735,4 @@ function listenany(default_port)
         end
     end
 end
+end # module

@@ -143,7 +143,7 @@ function popdisplay(d::Display)
 end
 function reinit_displays()
     empty!(displays)
-    pushdisplay(TextDisplay(STDOUT))
+    pushdisplay(TextDisplay(Base.Streams.STDOUT))
 end
 
 macro try_display(expr)

@@ -21,7 +21,9 @@ import
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, get_rounding,
-        set_rounding, maxintfloat, widen, significand, frexp, tryparse
+        set_rounding, maxintfloat, widen, significand, frexp
+
+import Base.Strings: tryparse
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 

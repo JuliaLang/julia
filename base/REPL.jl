@@ -2,10 +2,11 @@
 
 module REPL
 
+using Base.Streams: AsyncStream, reseteof, start_reading
 using Base.Meta
-using ..Terminals
-using ..LineEdit
-using ..REPLCompletions
+using Base.Terminals
+using Base.LineEdit
+using Base.REPLCompletions
 
 export
     BasicREPL,
@@ -13,13 +14,12 @@ export
     StreamREPL
 
 import Base:
-    AsyncStream,
     Display,
     display,
     writemime,
     AnyDict
 
-import ..LineEdit:
+import Base.LineEdit:
     CompletionProvider,
     HistoryProvider,
     add_history,
@@ -183,7 +183,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     hit_eof = false
     while true
-        Base.reseteof(repl.terminal)
+        reseteof(repl.terminal)
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
@@ -765,8 +765,8 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
             input = replace(input, '\r', '\n')
             if position(LineEdit.buffer(s)) == 0
-                indent = Base.indentation(input)[1]
-                input = Base.unindent(lstrip(input), indent)
+                indent = Base.Strings.indentation(input)[1]
+                input = Base.Strings.unindent(lstrip(input), indent)
             end
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)

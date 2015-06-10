@@ -52,7 +52,7 @@ end
 
 # general machinery for parsing REQUIRE files
 
-function read(readable::Union(IO,Base.AbstractCmd))
+function read(readable::Union(IO,Base.Processes.AbstractCmd))
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)

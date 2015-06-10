@@ -21,7 +21,7 @@ dlls = Libdl.dllist()
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     for dl in dlls
         if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
-            @test Base.samefile(Libdl.dlpath(dl), dl)
+            @test Base.Stat.samefile(Libdl.dlpath(dl), dl)
         end
     end
 end

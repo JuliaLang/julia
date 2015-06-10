@@ -57,6 +57,20 @@
 # * aggregate GC messages
 # * dynamically adding nodes (then always start with 1 and grow)
 
+module Multiprocessing
+
+using Base: AnyDict, localize_vars
+using Base.Streams: AsyncStream, accept_nonblock
+using Base.Sockets: TCPServer, TCPSocket
+using Base.Processes: Cmd, Process
+
+import Base: deserialize, serialize, wait
+
+export @everywhere, @fetch, @fetchfrom, @parallel, @spawn, @spawnat, ClusterManager,
+    ProcessGroup, RemoteRef, WorkerConfig, addprocs, atexit, fetch, init_worker,
+    isready, myid, nprocs, nworkers, pmap, procs, put!, remotecall, remotecall_fetch,
+    remotecall_wait, rmprocs, take!, timedwait, workers
+
 ## workers and message i/o ##
 
 function send_msg_unknown(s::IO, kind, args)
@@ -137,7 +151,7 @@ type Worker
     function Worker(id, r_stream, w_stream, manager, config)
         w = Worker(id)
         w.r_stream = r_stream
-        w.w_stream = buffer_writes(w_stream)
+        w.w_stream = Base.Streams.buffer_writes(w_stream)
         w.manager = manager
         w.config = config
         w
@@ -271,8 +285,8 @@ end
 procs() = Int[x.id for x in PGRP.workers]
 function procs(pid::Integer)
     if myid() == 1
-        if (pid == 1) || (isa(map_pid_wrkr[pid].manager, LocalManager))
-            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), PGRP.workers)]
+        if (pid == 1) || (isa(map_pid_wrkr[pid].manager, Base.Managers.LocalManager))
+            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, Base.Managers.LocalManager)), PGRP.workers)]
         else
             ipatpid = get_bind_addr(pid)
             Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
@@ -402,7 +416,7 @@ function deregister_worker(pg, pid)
 
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
-        notify_error(rv.full, ProcessExitedException())
+        Base.notify_error(rv.full, ProcessExitedException())
         delete!(pg.refs, id)
     end
 end
@@ -605,7 +619,7 @@ function run_work_thunk(thunk)
         result = thunk()
     catch err
         print(STDERR, "exception on ", myid(), ": ")
-        display_error(err,catch_backtrace())
+        Base.display_error(err,catch_backtrace())
         result = err
     end
     result
@@ -780,7 +794,7 @@ function deliver_result(sock::IO, msg, oid, value)
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
         print(STDERR, "fatal error on ", myid(), ": ")
-        display_error(e, catch_backtrace())
+        Base.display_error(e, catch_backtrace())
         wid = worker_id_from_socket(sock)
         close(sock)
         if myid()==1
@@ -811,10 +825,10 @@ end
 function process_messages(r_stream::TCPSocket, w_stream::TCPSocket; kwargs...)
     @schedule begin
         disable_nagle(r_stream)
-        wait_connected(r_stream)
+        Base.Streams.wait_connected(r_stream)
         if r_stream != w_stream
             disable_nagle(w_stream)
-            wait_connected(w_stream)
+            Base.Streams.wait_connected(w_stream)
         end
         create_message_handler_loop(r_stream, w_stream; kwargs...)
     end
@@ -936,7 +950,7 @@ function create_message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStrea
             if iderr == 1
                 if isopen(w_stream)
                     print(STDERR, "fatal error on ", myid(), ": ")
-                    display_error(e, catch_backtrace())
+                    Base.display_error(e, catch_backtrace())
                 end
                 exit(1)
             end
@@ -970,7 +984,7 @@ end
 # The entry point for julia worker processes. does not return. Used for TCP transport.
 # Cluster managers implementing their own transport will provide their own.
 # Argument is descriptor to write listening port # to.
-start_worker() = start_worker(STDOUT)
+start_worker() = start_worker(Base.STDOUT)
 function start_worker(out::IO)
     # we only explicitly monitor worker STDOUT on the console, so redirect
     # stderr to stdout so we can see the output.
@@ -978,7 +992,6 @@ function start_worker(out::IO)
     # files instead.
     # Currently disabled since this caused processes to spin instead of
     # exit when process 1 shut down. Don't yet know why.
-    #redirect_stderr(STDOUT)
 
     init_worker()
     if LPROC.bind_port == 0
@@ -1055,7 +1068,7 @@ function parse_connection_info(str)
     end
 end
 
-function init_worker(manager::ClusterManager=DefaultClusterManager())
+function init_worker(manager::ClusterManager=Base.Managers.DefaultClusterManager())
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -1098,7 +1111,7 @@ end
 
 default_addprocs_params() = AnyDict(
     :dir      => pwd(),
-    :exename  => joinpath(JULIA_HOME,julia_exename()),
+    :exename  => joinpath(JULIA_HOME,Base.julia_exename()),
     :exeflags => ``)
 
 
@@ -1255,8 +1268,8 @@ function setup_worker(pg::ProcessGroup, w)
     #   - each worker sends a :identify_socket to all workers less than its pid
     #   - each worker then sends a :join_complete back to the master along with its OS_PID and NUM_CORES
     # - once master receives a :join_complete it triggers rr_join (signifies that worker setup is complete)
-    all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), pg.workers)
-    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager))
+    all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, Base.Managers.LocalManager)) : ((), x.id, true), pg.workers)
+    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, Base.Managers.LocalManager))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     rr_join
@@ -1313,7 +1326,7 @@ let nextidx = 0
     end
 end
 
-spawnat(p, thunk) = sync_add(remotecall(p, thunk))
+spawnat(p, thunk) = Base.sync_add(remotecall(p, thunk))
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
@@ -1342,7 +1355,7 @@ end
 
 function at_each(f, args...)
     for w in PGRP.workers
-        sync_add(remotecall(w.id, f, args...))
+        Base.sync_add(remotecall(w.id, f, args...))
     end
 end
 
@@ -1631,7 +1644,7 @@ function check_same_host(pids)
         # We checkfirst if all test pids have been started using the local manager,
         # else we check for the same bind_to addr. This handles the special case
         # where the local ip address may change - as during a system sleep/awake
-        if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
+        if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, Base.Managers.LocalManager)), pids)
             return true
         else
             first_bind_addr = get(map_pid_wrkr[pids[1]].config.bind_addr)
@@ -1658,3 +1671,4 @@ function terminate_all_workers()
         end
     end
 end
+end # module

@@ -384,7 +384,7 @@ function shell_completions(string, pos)
     scs = string[1:pos]
     local args, last_parse
     try
-        args, last_parse = Base.shell_parse(scs, true)
+        args, last_parse = Base.Strings.shell_parse(scs, true)
     catch
         return UTF8String[], 0:-1, false
     end

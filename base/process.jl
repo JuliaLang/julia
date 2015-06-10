@@ -1,5 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Processes
+
+export @cmd, Cmd, DevNull, detach, ignorestatus, kill, run, pipe, readandwrite,
+    setenv, spawn, success
+
+using Base.Streams: AsyncStream, Callback, Pipe, UVHandle, UVStream, close_pipe_sync,
+    eventloop, link_pipe, _sizeof_uv_named_pipe
+using Base.FS: File
+using Base.Strings: shell_parse
+
+import Base: open, readall, readbytes, show, wait
+import Base.Strings: shell_escape
+import Base.Streams: uvfinalize, uvhandle, uvtype, _uv_hook_close
+
 abstract AbstractCmd
 
 type Cmd <: AbstractCmd
@@ -84,14 +98,14 @@ const DevNull = DevNullStream()
 copy(::DevNullStream) = DevNull
 uvhandle(::DevNullStream) = C_NULL
 uvhandle(x::Ptr) = x
-uvtype(::Ptr) = UV_STREAM
-uvtype(::DevNullStream) = UV_STREAM
+uvtype(::Ptr) = Base.Streams.UV_STREAM
+uvtype(::DevNullStream) = Base.Streams.UV_STREAM
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
-uvtype(x::RawFD) = UV_RAW_FD
+uvtype(x::RawFD) = Base.Streams.UV_RAW_FD
 
-typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
+typealias Redirectable Union(UVStream, File, FileRedirect, DevNullStream, IOStream, RawFD)
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -212,25 +226,26 @@ typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
-    proc = Libc.malloc(_sizeof_uv_process)
+    proc = Libc.malloc(Base.Streams._sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}),
          cmd, argv, loop, proc, pp, uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
+    ccall(:jl_breakpoint, Void, (Any,), error)
     if error != 0
-        disassociate_julia_struct(proc)
+        Base.Streams.disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
-        throw(UVError("could not spawn "*string(pp.cmd), error))
+        throw(Base.Streams.UVError("could not spawn "*string(pp.cmd), error))
     end
-    associate_julia_struct(proc, pp)
+    Base.Streams.associate_julia_struct(proc, pp)
     return proc
 end
 
 function uvfinalize(proc::Process)
     proc.handle != C_NULL && ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
-    disassociate_julia_struct(proc)
+    Base.Streams.disassociate_julia_struct(proc)
     proc.handle = C_NULL
 end
 
@@ -255,8 +270,8 @@ function spawn(pc::ProcessChainOrNot, redirect::CmdRedirect, stdios::StdIOSet, e
 end
 
 function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    out_pipe = Base.box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    in_pipe = Base.box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
@@ -277,8 +292,8 @@ function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Ca
 end
 
 function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    out_pipe = Base.box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    in_pipe = Base.box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
@@ -309,30 +324,30 @@ macro setup_stdio()
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[1], FileRedirect)
-            in = FS.open(stdios[1].filename, JL_O_RDONLY)
+            in = Base.FS.open(stdios[1].filename, Base.FS.JL_O_RDONLY)
             close_in = true
         elseif isa(stdios[1], IOStream)
-            in = FS.File(RawFD(fd(stdios[1])))
+            in = Base.FS.File(RawFD(fd(stdios[1])))
         end
         if isa(stdios[2], Pipe)
             if stdios[2].handle == C_NULL
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[2], FileRedirect)
-            out = FS.open(stdios[2].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[2].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+            out = Base.FS.open(stdios[2].filename, Base.FS.JL_O_WRONLY | Base.FS.JL_O_CREAT | (stdios[2].append?JL_O_APPEND:Base.FS.JL_O_TRUNC), Base.FS.S_IRUSR | Base.FS.S_IWUSR | Base.FS.S_IRGRP | Base.FS.S_IROTH)
             close_out = true
         elseif isa(stdios[2], IOStream)
-            out = FS.File(RawFD(fd(stdios[2])))
+            out = Base.FS.File(RawFD(fd(stdios[2])))
         end
         if isa(stdios[3], Pipe)
             if stdios[3].handle == C_NULL
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[3], FileRedirect)
-            err = FS.open(stdios[3].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[3].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+            err = Base.FS.open(stdios[3].filename, Base.FS.JL_O_WRONLY | Base.FS.JL_O_CREAT | (stdios[3].append?JL_O_APPEND:Base.FS.JL_O_TRUNC), Base.FS.S_IRUSR | Base.FS.S_IWUSR | Base.FS.S_IRGRP | Base.FS.S_IROTH)
             close_err = true
         elseif isa(stdios[3], IOStream)
-            err = FS.File(RawFD(fd(stdios[3])))
+            err = Base.FS.File(RawFD(fd(stdios[3])))
         end
     end)
 end
@@ -380,7 +395,7 @@ end
 # \ A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An AsyncStream to be passed to the child
 #   | - DevNull to pass /dev/null
-#   | - An FS.File object to redirect the output to
+#   | - An Base.FS.File object to redirect the output to
 #   \ - An ASCIIString specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
@@ -490,7 +505,7 @@ function test_success(proc::Process)
     assert(process_exited(proc))
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
-        throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
+        throw(Base.Streams.UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
     proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
@@ -606,7 +621,8 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str)[1])))
 end
 
-wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
+wait(x::Process)      = if !process_exited(x); Base.Streams.stream_wait(x, x.exitnotify); end
 wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
+end # module

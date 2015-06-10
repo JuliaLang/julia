@@ -2086,7 +2086,7 @@ for T in [Int,BigInt], n = [1:1000;1000000]
     prime = n!=1 && length(f)==1 && get(f,n,0)==1
     @test isprime(n) == prime
 
-    s = Base.primesmask(n)
+    s = Base.Primes.primesmask(n)
     for k = 1:n
         @test s[k] == isprime(k)
     end

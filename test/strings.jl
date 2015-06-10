@@ -261,7 +261,7 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 # ascii search
-for str in [astr, Base.GenericString(astr)]
+for str in [astr, Base.Strings.GenericString(astr)]
     @test search(str, 'x') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -296,7 +296,7 @@ for str in [astr]
 end
 
 # utf-8 search
-for str in (u8str, Base.GenericString(u8str))
+for str in (u8str, Base.Strings.GenericString(u8str))
     @test search(str, 'z') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -1628,8 +1628,8 @@ tstr = tstStringType("12");
 @test_throws ErrorException endof(tstr)
 @test_throws ErrorException next(tstr, Bool(1))
 
-gstr = Base.GenericString("12");
-@test typeof(string(gstr))==Base.GenericString
+gstr = Base.Strings.GenericString("12");
+@test typeof(string(gstr))==Base.Strings.GenericString
 @test bytestring()==""
 
 @test convert(Array{UInt8}, gstr) ==[49;50]
@@ -1644,7 +1644,7 @@ gstr = Base.GenericString("12");
 
 @test_throws ErrorException sizeof(gstr)
 
-@test length(Base.GenericString(""))==0
+@test length(Base.Strings.GenericString(""))==0
 
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 

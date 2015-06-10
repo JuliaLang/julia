@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Combinatorics
+
+import Base: done, factorial, length, next, start
+
+export combinations, invperm, ipermute!, isperm, levicivita, nextprod, nthperm,
+    nthperm!, parity, partitions, permutations, permute!, prevprod
+
 const _fact_table64 =
     Int64[1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,
           87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,
@@ -643,3 +650,4 @@ function parity{T<:Integer}(p::AbstractVector{T})
     epsilon == 0 && throw(ArgumentError("Not a permutation"))
     epsilon == 1 ? 0 : 1
 end
+end # module

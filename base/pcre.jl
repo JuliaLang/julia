@@ -4,6 +4,8 @@
 
 module PCRE
 
+using Base.Strings: SubString
+
 include("pcre_h.jl")
 
 const PCRE_LIB = "libpcre2-8"
