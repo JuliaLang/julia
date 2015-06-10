@@ -69,6 +69,7 @@ with_system_pcre=no
 with_system_rmath=no
 with_system_suitesparse=no
 with_system_utf8proc=no
+with_system_zlib=no
 
 case $uname_s:$uname_r in
     CYGWIN*)
@@ -155,6 +156,7 @@ Optional Packages:
   --with-system-rmath
   --with-system-suitesparse
   --with-system-utf8proc
+  --with-system-zlib
 
 Some influential environment variables:
   CC          C compiler command
@@ -240,7 +242,8 @@ handle_long_opt() {
         with-system-pcre|\
         with-system-rmath|\
         with-system-suitesparse|\
-        with-system-utf8proc)
+        with-system-utf8proc|\
+        with-system-zlib)
             case "$val" in
                 yes|no) eval "${key//-/_}=$val" ;;
                 *) error "bad argument: --$key=$val" ;;

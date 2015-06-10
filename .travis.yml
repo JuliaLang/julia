@@ -23,8 +23,8 @@ notifications:
 before_install:
     - CONFIGOPTS=
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1";
-        for lib in llvm zlib suitesparse arpack blas fftw lapack gmp mpfr libunwind openlibm rmath; do
+        BUILDOPTS="LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1 USE_SYSTEM_OPENLIBM=1";
+        for lib in llvm zlib suitesparse arpack blas fftw lapack gmp mpfr libunwind rmath; do
             export CONFIGOPTS="$CONFIGOPTS --with-system-$lib";
         done;
         sudo add-apt-repository ppa:staticfloat/julia-deps -y;
