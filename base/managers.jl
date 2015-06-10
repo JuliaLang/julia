@@ -36,7 +36,7 @@ end
 
 function check_addprocs_args(kwargs)
     for keyname in kwargs
-        !(keyname[1] in [:dir, :exename, :exeflags]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+        !(keyname[1] in [:dir, :exename, :exeflags, :topology]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
     end
 end
 
