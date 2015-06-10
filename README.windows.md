@@ -134,7 +134,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
   3. Specify the location where you installed CMake
 
      ```
-    echo 'override CMAKE=/C/path/to/CMake/bin/cmake.exe' > Make.user
+    ./configure CMAKE=/C/path/to/CMake/bin/cmake.exe
 ```
 
   4. Start the build
@@ -182,15 +182,15 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
      *Tips:*
      - If you get an `error: cannot fork() for fetch-pack: Resource temporarily unavailable` from git, add `alias git="env PATH=/usr/bin git"` to `~/.bashrc` and restart Cygwin.
 
-  2. Set the `XC_HOST` variable in `Make.user` to indicate MinGW-w64 cross compilation
+  2. Run configure to indicate MinGW-w64 cross compilation
 
      For 32 bit Julia
      ```
-    echo 'XC_HOST = i686-w64-mingw32' > Make.user
+    ./configure --host=i686-w64-mingw32
 ```
      For 64 bit Julia
      ```
-    echo 'XC_HOST = x86_64-w64-mingw32' > Make.user
+    ./configure --host=x86_64-w64-mingw32
 ```
 
   3. Start the build
@@ -277,13 +277,13 @@ Note: for systems that support rpm-based package managers, the OpenSUSE build se
 Finally, the build and install process for Julia:
 
 1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
-2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
+2. `./configure --host=i686-w64-mingw32`
 3. `make`
 4. `make win-extras` (Necessary before running `make binary-dist`p)
 5. `make binary-dist`
 6. move the julia-* directory / zip file to the target machine
 
-If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
+If you are building for 64-bit windows, the steps are essentially the same. Just replace `--host=i686-...` with `--host=x86_64...`. (note: on Mac, wine only runs in 32-bit mode)
 
 ## Windows Build Debugging
 
