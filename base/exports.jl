@@ -1098,7 +1098,6 @@ export
     finalizer,
     finalize,
     gc,
-    gc_disable,
     gc_enable,
     precompile,
 

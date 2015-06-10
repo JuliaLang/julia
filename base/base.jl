@@ -76,8 +76,7 @@ end
 finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
-gc_enable() = ccall(:jl_gc_enable, Cint, ())!=0
-gc_disable() = ccall(:jl_gc_disable, Cint, ())!=0
+gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
 
 bytestring(str::ByteString) = str
 
