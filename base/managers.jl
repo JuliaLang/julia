@@ -211,6 +211,8 @@ end
 immutable DefaultClusterManager <: ClusterManager
 end
 
+const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.connect_at)
         # this is a worker-to-worker setup call.
@@ -245,8 +247,18 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     end
 
     if tunnel
+        if !haskey(tunnel_hosts_map, pubhost)
+            tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
+        end
+        sem = tunnel_hosts_map[pubhost]
+
         sshflags = get(config.sshflags)
-        (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        acquire(sem)
+        try
+            (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        finally
+            release(sem)
+        end
     else
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
