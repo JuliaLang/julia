@@ -102,12 +102,12 @@ slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Bas
 slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)
-    endind = first(search(x,df.trans[slot.i],cursor+1))
+    endind = first(search(x,df.trans[slot.i],nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
         return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.period))
     end
-    return endind+1, slotparse(slot,x[cursor:(endind-1)])
+    return nextind(x,endind), slotparse(slot,x[cursor:(endind-1)])
 end
 getslot(x,slot,df,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)]))
 

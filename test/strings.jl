@@ -262,6 +262,8 @@ u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 # ascii search
 for str in [astr, Base.GenericString(astr)]
+    @test_throws BoundsError search(str, 'z', 0)
+    @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'x') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -275,6 +277,8 @@ for str in [astr, Base.GenericString(astr)]
     @test search(str, ',', 7) == 0
     @test search(str, '\n') == 14
     @test search(str, '\n', 15) == 0
+    @test_throws BoundsError search(str, 'ε', nextind(str,endof(str))+1)
+    @test_throws BoundsError search(str, 'a', nextind(str,endof(str))+1)
 end
 
 # ascii rsearch
@@ -297,23 +301,32 @@ end
 
 # utf-8 search
 for str in (u8str, Base.GenericString(u8str))
+    @test_throws BoundsError search(str, 'z', 0)
+    @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'z') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
     @test search(str, '∄') == 0
     @test search(str, '∀') == 1
-    @test search(str, '∀', 2) == 0
+    @test_throws UnicodeError search(str, '∀', 2)
+    @test search(str, '∀', 4) == 0
     @test search(str, '∃') == 13
-    @test search(str, '∃', 14) == 0
+    @test_throws UnicodeError search(str, '∃', 15)
+    @test search(str, '∃', 16) == 0
     @test search(str, 'x') == 26
     @test search(str, 'x', 27) == 43
     @test search(str, 'x', 44) == 0
     @test search(str, 'δ') == 17
-    @test search(str, 'δ', 18) == 33
-    @test search(str, 'δ', 34) == 0
+    @test_throws UnicodeError search(str, 'δ', 18)
+    @test search(str, 'δ', nextind(str,17)) == 33
+    @test search(str, 'δ', nextind(str,33)) == 0
     @test search(str, 'ε') == 5
-    @test search(str, 'ε', 6) == 54
-    @test search(str, 'ε', 55) == 0
+    @test search(str, 'ε', nextind(str,5)) == 54
+    @test search(str, 'ε', nextind(str,54)) == 0
+    @test search(str, 'ε', nextind(str,endof(str))) == 0
+    @test search(str, 'a', nextind(str,endof(str))) == 0
+    @test_throws BoundsError search(str, 'ε', nextind(str,endof(str))+1)
+    @test_throws BoundsError search(str, 'a', nextind(str,endof(str))+1)
 end
 
 # utf-8 rsearch
