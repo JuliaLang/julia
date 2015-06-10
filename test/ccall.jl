@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.copy, Base.==
-const verbose  = false
+const verbose = false
 ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
@@ -115,7 +115,7 @@ b = ccall((:test_big, "./libccalltest"), Struct_Big, (Struct_Big,), a)
 @test b.y == sbig.y - 2
 @test b.z == sbig.z - Int('A')
 
-verbose && flush_cstdio()
+verbose && Libc.flush_cstdio()
 verbose && println("Testing cfunction roundtrip: ")
 # cfunction roundtrip
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
@@ -184,7 +184,13 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         if ($(t).mutable)
             @test !(b === a)
         end
+        b = ccall(cfunction($fname,Any,(Ref{$t},)),Any,(Ref{$t},),$v)
+        verbose && println("C: ",b)
+        @test b == $v
+        @test b === c
+        if ($(t).mutable)
+            @test !(b === a)
+        end
         #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
-        #b = ccall(cfunction($fname,Any,(Ref{$t},)),Any,(Ref{$t},),$v) # broken due to #2818
     end
 end
