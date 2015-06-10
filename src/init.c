@@ -1060,7 +1060,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
-    jl_gc_disable();
+    jl_gc_enable(0);
 #endif
     jl_init_frontend();
     jl_init_types();
@@ -1132,7 +1132,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_install_default_signal_handlers();
 
 #ifdef JL_GC_MARKSWEEP
-    jl_gc_enable();
+    jl_gc_enable(1);
 #endif
 
     if (jl_options.image_file)
