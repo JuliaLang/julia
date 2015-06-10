@@ -514,3 +514,6 @@ function read!(from::AbstractIOBuffer, p::Ptr, nb::Int)
     end
     p
 end
+
+@deprecate gc_enable() gc_enable(true)
+@deprecate gc_disable() gc_enable(false)

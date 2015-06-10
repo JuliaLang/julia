@@ -542,8 +542,7 @@ extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
 
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
-DLLEXPORT int jl_gc_enable(void);
-DLLEXPORT int jl_gc_disable(void);
+DLLEXPORT int jl_gc_enable(int on);
 DLLEXPORT int jl_gc_is_enabled(void);
 DLLEXPORT int64_t jl_gc_total_bytes(void);
 DLLEXPORT uint64_t jl_gc_total_hrtime(void);
@@ -634,8 +633,7 @@ DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 int64_t diff_gc_total_bytes(void);
 #define sync_gc_total_bytes()
 #define jl_gc_collect(arg);
-#define jl_gc_enable() (0)
-#define jl_gc_disable() (0)
+#define jl_gc_enable(on) (0)
 #define jl_gc_is_enabled() (0)
 #define jl_gc_track_malloced_array(a)
 #define jl_gc_count_allocd(sz)

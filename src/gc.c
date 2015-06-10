@@ -2085,16 +2085,10 @@ static void gc_verify(void)
 // collector entry point and control
 
 static int is_gc_enabled = 1;
-DLLEXPORT int jl_gc_enable(void)
+DLLEXPORT int jl_gc_enable(int on)
 {
     int prev = is_gc_enabled;
-    is_gc_enabled = 1;
-    return prev;
-}
-DLLEXPORT int jl_gc_disable(void)
-{
-    int prev = is_gc_enabled;
-    is_gc_enabled = 0;
+    is_gc_enabled = (on!=0);
     return prev;
 }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
