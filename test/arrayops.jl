@@ -951,6 +951,13 @@ a = Array(Float64, 9,8,7,6,5,4,3,2,1)
 @test size(a,4) == 6
 @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
 
+# Cartesian
+function cartesian_foo()
+    Base.@nexprs 2 d->(a_d_d = d)
+    a_2_2
+end
+@test cartesian_foo() == 2
+
 # Multidimensional iterators
 for a in ([1:5;], reshape([2]))
     counter = 0

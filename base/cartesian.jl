@@ -187,7 +187,7 @@ function lreplace!(str::AbstractString, r::LReplace)
         if matching && done(pat, j)
             if done(str, i) || next(str, i)[1] == '_'
                 # We have a match
-                return string(str[1:prevind(str, istart)], r.val, str[i:end])
+                return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
             end
             matching = false
             j = start(pat)
