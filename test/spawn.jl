@@ -99,7 +99,8 @@ end
 @test readall(setenv(`sh -c "echo \$TEST"`,"TEST"=>"Hello World")) == "Hello World\n"
 @test (withenv("TEST"=>"Hello World") do
        readall(`sh -c "echo \$TEST"`); end) == "Hello World\n"
-@test readall(setenv(`sh -c "pwd -P"`;dir="..")) == readall(setenv(`sh -c "cd .. && pwd -P"`))
+@test Base.samefile(readall(setenv(`sh -c "pwd -P"`;dir="..")),
+                    readall(setenv(`sh -c "cd .. && pwd -P"`)))
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
