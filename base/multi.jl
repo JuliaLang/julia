@@ -1533,15 +1533,14 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
         catch e
             put!(done, :error)
         finally
-            isready(done) && stop_timer(aw)
+            isready(done) && close(aw)
         end
     end
 
     if !testcb()
-        t = Timer(timercb)
-        start_timer(t, pollint, pollint)
+        t = Timer(timercb, pollint, pollint)
         ret = fetch(done)
-        stop_timer(t)
+        close(t)
     else
         ret = :ok
     end

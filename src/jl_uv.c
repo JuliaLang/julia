@@ -68,6 +68,7 @@ enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_UINT32, CB_INT64, CB_UINT64 };
     XX(connectcb) \
     XX(connectioncb) \
     XX(asynccb) \
+    XX(timercb) \
     XX(getaddrinfo) \
     XX(pollcb) \
     XX(fspollcb) \
@@ -228,6 +229,11 @@ DLLEXPORT void jl_uv_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addr
 DLLEXPORT void jl_uv_asynccb(uv_handle_t *handle)
 {
     JULIA_CB(asynccb,handle->data,0);
+}
+
+DLLEXPORT void jl_uv_timercb(uv_handle_t *handle)
+{
+    JULIA_CB(timercb,handle->data,0);
 }
 
 DLLEXPORT void jl_uv_pollcb(uv_poll_t *handle, int status, int events)
