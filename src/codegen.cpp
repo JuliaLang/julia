@@ -269,6 +269,10 @@ static GlobalVariable *jldll_var;
 extern JITMemoryManager* createJITMemoryManagerWin();
 #endif
 #endif //_OS_WINDOWS_
+#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
+#define CUSTOM_MEMORY_MANAGER 1
+extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
+#endif
 
 // important functions
 static Function *jlnew_func;
@@ -5623,6 +5627,8 @@ extern "C" void jl_init_codegen(void)
     eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
+#elif defined(CUSTOM_MEMORY_MANAGER)
+        .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManagerOSX()}))
 #endif
         .setTargetOptions(options)
         .setRelocationModel(Reloc::PIC_)
