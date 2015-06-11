@@ -1109,8 +1109,10 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
         if isa(lhs,SymbolNode)
             lhs = lhs.name
         end
-        assert(isa(lhs,Symbol) || isa(lhs,GenSym))
-        return StateUpdate(lhs, VarState(t,false), vtypes)
+        if isa(lhs,Symbol) || isa(lhs,GenSym)
+            # don't bother for GlobalRef
+            return StateUpdate(lhs, VarState(t,false), vtypes)
+        end
     elseif is(e.head,:call) || is(e.head,:call1)
         abstract_eval(e, vtypes, sv)
     elseif is(e.head,:gotoifnot)
@@ -1896,16 +1898,17 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
     end
     e = e::Expr
     if e.head === :(=)
-        # remove_redundant_temp_vars can only handle Symbols
-        # on the LHS of assignments, so we make sure not to put
-        # something else there
-        @assert length(e.args) == 2
-        s = e.args[1]::Union(Symbol,GenSym)
-        e2 = _sym_repl(s, from1, from2, to1, to2, s)
-        if isa(e2, SymbolNode)
-            e2 = e2.name
+        s = e.args[1]
+        if isa(s, Symbol) || isa(s, GenSym)
+            e2 = _sym_repl(s, from1, from2, to1, to2, s)
+            # remove_redundant_temp_vars can only handle Symbols
+            # on the LHS of assignments, so we make sure not to put
+            # something else there
+            if isa(e2, SymbolNode)
+                e2 = e2.name
+            end
+            e.args[1] = e2::Union(Symbol,GenSym)
         end
-        e.args[1] = e2::Union(Symbol,GenSym)
         e.args[2] = sym_replace(e.args[2], from1, from2, to1, to2)
     elseif e.head !== :line
         for i=1:length(e.args)
@@ -3107,7 +3110,7 @@ function find_sa_vars(ast)
                 av[lhs] = e.args[2]
             elseif isa(lhs,SymbolNode)
                 av2[(lhs::SymbolNode).name] = true
-            else
+            elseif isa(lhs, Symbol)
                 lhs = lhs::Symbol
                 if contains_is1(vinfos,lhs) && !contains_is(args,lhs) # exclude globals & args
                     if !haskey(av, lhs)

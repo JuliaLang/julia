@@ -1399,8 +1399,7 @@ static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l, int
                 if (jl_is_symbolnode(ar)) {
                     ar = (jl_value_t*)jl_symbolnode_sym(ar);
                 }
-                if (!jl_is_gensym(ar)) {
-                    assert(jl_is_symbol(ar));
+                if (jl_is_symbol(ar)) {
                     av.insert((jl_sym_t*)ar);
                 }
             }
