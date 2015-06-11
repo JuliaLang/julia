@@ -747,6 +747,7 @@ pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 pcre2-$(PCRE_VER)/config.status: pcre2-$(PCRE_VER)/configure
 	cd pcre2-$(PCRE_VER) && \
 	./configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir)
+	patch -p0 pcre2-10.10/RunTest < pcre2_RunTest.patch
 	touch -c $@
 $(PCRE_SRC_TARGET): pcre2-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD)
