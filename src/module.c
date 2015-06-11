@@ -70,8 +70,8 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
-    b->type = (jl_value_t*)jl_any_type;
     b->owner = NULL;
+    b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
     b->imported = 0;
@@ -218,6 +218,19 @@ DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
     if (b == NULL)
         jl_undefined_var_error(var);
     return b;
+}
+
+DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND) {
+        return jl_new_struct(jl_globalref_type, m, var);
+    }
+    if (b->globalref == NULL) {
+        b->globalref = jl_new_struct(jl_globalref_type, m, var);
+        jl_gc_wb(m, b->globalref);
+    }
+    return b->globalref;
 }
 
 static int eq_bindings(jl_binding_t *a, jl_binding_t *b)

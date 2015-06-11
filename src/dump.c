@@ -73,7 +73,8 @@ static jl_fptr_t id_to_fptrs[] = {
   NULL };
 
 // pointers to non-AST-ish objects in a compressed tree
-static jl_array_t *tree_literal_values=NULL; // (only used in MODE_AST)
+static jl_array_t *tree_literal_values=NULL;    // (only used in MODE_AST)
+static jl_module_t *tree_enclosing_module=NULL; // (only used in MODE_AST)
 
 static const ptrint_t LongSymbol_tag   = 23;
 static const ptrint_t LongSvec_tag     = 24;
@@ -85,6 +86,7 @@ static const ptrint_t Int32_tag        = 29;
 static const ptrint_t Array1d_tag      = 30;
 static const ptrint_t Singleton_tag    = 31;
 static const ptrint_t CommonSym_tag    = 32;
+static const ptrint_t NearbyGlobal_tag = 33;  // a GlobalRef pointing to tree_enclosing_module
 static const ptrint_t Null_tag         = 253;
 static const ptrint_t ShortBackRef_tag = 254;
 static const ptrint_t BackRef_tag      = 255;
@@ -489,7 +491,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             if (b->owner == m || m != jl_main_module) {
                 jl_serialize_value(s, b->name);
                 jl_serialize_value(s, b->value);
-                jl_serialize_value(s, b->type);
+                jl_serialize_value(s, b->globalref);
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
                 jl_serialize_gv(s, (jl_value_t*)b);
@@ -619,6 +621,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             write_int32(s, l);
         }
         ios_write(s, ((jl_sym_t*)v)->name, l);
+    }
+    else if (jl_is_globalref(v) && mode == MODE_AST && jl_globalref_mod(v) == tree_enclosing_module) {
+        writetag(s, (jl_value_t*)NearbyGlobal_tag);
+        jl_serialize_value(s, jl_globalref_name(v));
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
@@ -1241,8 +1247,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             b->value = jl_deserialize_value(s, &b->value);
             jl_gc_wb_buf(m, b);
             if (b->value != NULL) jl_gc_wb(m, b->value);
-            b->type = jl_deserialize_value(s, &b->type);
-            jl_gc_wb(m, b->type);
+            b->globalref = jl_deserialize_value(s, &b->globalref);
+            if (b->globalref != NULL) jl_gc_wb(m, b->globalref);
             b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
             if (b->owner != NULL) jl_gc_wb(m, b->owner);
             int8_t flags = read_int8(s);
@@ -1276,6 +1282,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (usetable)
             arraylist_push(&backref_list, v);
         return v;
+    }
+    else if (vtag == (jl_value_t*)NearbyGlobal_tag) {
+        assert(tree_enclosing_module != NULL);
+        jl_value_t *sym = jl_deserialize_value(s, NULL);
+        return jl_module_globalref(tree_enclosing_module, (jl_sym_t*)sym);
     }
     else if (vtag == (jl_value_t*)jl_datatype_type) {
         int pos = backref_list.len;
@@ -1326,9 +1337,14 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 backref_list.items[pos] = v;
         }
         else {
+            if (mode == MODE_AST && dt == jl_globalref_type) {
+                jl_value_t *mod = jl_deserialize_value(s, NULL);
+                jl_value_t *var = jl_deserialize_value(s, NULL);
+                return jl_module_globalref((jl_module_t*)mod, (jl_sym_t*)var);
+            }
             v = jl_new_struct_uninit(dt);
             if (usetable)
-               backref_list.items[pos] = v;
+                backref_list.items[pos] = v;
             char *data = (char*)jl_data_ptr(v);
             for(i=0; i < nf; i++) {
                 jl_set_nth_field(v, i, jl_deserialize_value(s,
@@ -1647,8 +1663,7 @@ void jl_init_restored_modules()
     }
 }
 
-DLLEXPORT
-jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
+DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
@@ -1670,14 +1685,14 @@ jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     return rt;
 }
 
-DLLEXPORT
-jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
+DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;
     ios_mem(&dest, 0);
     jl_array_t *last_tlv = tree_literal_values;
+    jl_module_t *last_tem = tree_enclosing_module;
     int en = jl_gc_enable(0);
 
     if (li->module->constant_table == NULL) {
@@ -1685,6 +1700,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
         jl_gc_wb(li->module, li->module->constant_table);
     }
     tree_literal_values = li->module->constant_table;
+    tree_enclosing_module = li->module;
     li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
     jl_gc_wb(li, li->capt);
     if (jl_array_len(li->capt) == 0)
@@ -1699,18 +1715,19 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
         li->module->constant_table = NULL;
     }
     tree_literal_values = last_tlv;
+    tree_enclosing_module = last_tem;
     jl_gc_enable(en);
     mode = last_mode;
     return v;
 }
 
-DLLEXPORT
-jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
+DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     jl_array_t *bytes = (jl_array_t*)data;
     tree_literal_values = li->module->constant_table;
+    tree_enclosing_module = li->module;
     ios_t src;
     ios_mem(&src, 0);
     ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
@@ -1720,12 +1737,12 @@ jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
     jl_value_t *v = jl_deserialize_value(&src, NULL);
     jl_gc_enable(en);
     tree_literal_values = NULL;
+    tree_enclosing_module = NULL;
     mode = last_mode;
     return v;
 }
 
-DLLEXPORT
-int jl_save_new_module(const char *fname, jl_module_t *mod)
+DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
@@ -1773,8 +1790,7 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_function_t *method);
 
-DLLEXPORT
-jl_module_t *jl_restore_new_module(const char *fname)
+DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
@@ -1928,7 +1944,7 @@ void jl_init_serializer(void)
                      (void*)SmallInt64_tag, (void*)UNUSED_tag,
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
-                     (void*)CommonSym_tag,
+                     (void*)CommonSym_tag, (void*)NearbyGlobal_tag,
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
