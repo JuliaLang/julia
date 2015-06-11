@@ -44,19 +44,36 @@ function choosetests(choices = [])
     # parallel tests depend on other workers - do them last
     push!(testnames, "parallel")
 
-    tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
+    tests = []
+    skip_tests = []
 
-    if "linalg" in tests
+    for (i, t) in enumerate(choices)
+        if t == "--skip"
+            skip_tests = choices[i + 1:end]
+            break
+        else
+            push!(tests, t)
+        end
+    end
+
+    if tests == ["all"] || isempty(tests)
+        tests = testnames
+    end
+
+    linalgtests = ["linalg1", "linalg2", "linalg3", "linalg4",
+                   "linalg/lapack", "linalg/triangular", "linalg/tridiag",
+                   "linalg/bidiag", "linalg/diagonal",
+                   "linalg/pinv", "linalg/givens", "linalg/cholesky",
+                   "linalg/lu", "linalg/symmetric"]
+    if Base.USE_GPL_LIBS
+        push!(linalgtests, "linalg/arnoldi")
+    end
+
+    if "linalg" in skip_tests
+        filter!(x -> (x != "linalg" && !(x in linalgtests)), tests)
+    elseif "linalg" in tests
         # specifically selected case
         filter!(x -> x != "linalg", tests)
-        linalgtests = ["linalg1", "linalg2", "linalg3", "linalg4",
-                       "linalg/lapack", "linalg/triangular", "linalg/tridiag",
-                       "linalg/bidiag", "linalg/diagonal",
-                       "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
-                       "linalg/symmetric"]
-        if Base.USE_GPL_LIBS
-            push!(linalgtests, "linalg/arnoldi")
-        end
         prepend!(tests, linalgtests)
     end
 
@@ -77,6 +94,8 @@ function choosetests(choices = [])
     if !net_on
         filter!(x -> !(x in net_required_for), tests)
     end
+
+    filter!(x -> !(x in skip_tests), tests)
 
     tests, net_on
 end
