@@ -109,11 +109,11 @@ end
 
 
 # test gc_enable/disable
-@test gc_enable()
-@test gc_disable()
-@test gc_disable() == false
-@test gc_enable() == false
-@test gc_enable()
+@test gc_enable(true)
+@test gc_enable(false)
+@test gc_enable(false) == false
+@test gc_enable(true) == false
+@test gc_enable(true)
 
 # test methodswith
 immutable NoMethodHasThisType end
