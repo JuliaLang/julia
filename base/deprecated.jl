@@ -517,3 +517,13 @@ end
 
 @deprecate gc_enable() gc_enable(true)
 @deprecate gc_disable() gc_enable(false)
+
+@deprecate stop_timer close
+
+function Timer(f::Function)
+    error("Timer(f) is deprecated. Use Timer(f, delay, repeat) instead.")
+end
+
+function start_timer(t, d, r)
+    error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
+end
