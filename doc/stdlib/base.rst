@@ -926,21 +926,20 @@ Errors
 Events
 ------
 
-.. function:: Timer(f::Function)
+.. function:: Timer(callback::Function, delay, repeat=0)
 
-   Create a timer to call the given callback function. The callback
-   is passed one argument, the timer object itself. The timer can be
-   started and stopped with ``start_timer`` and ``stop_timer``.
-
-.. function:: start_timer(t::Timer, delay, repeat)
-
-   Start invoking the callback for a ``Timer`` after the specified initial
-   delay, and then repeating with the given interval. Times are in seconds.
+   Create a timer to call the given callback function.
+   The callback is passed one argument, the timer object itself.
+   The callback will be invoked after the specified initial delay,
+   and then repeating with the given ``repeat`` interval.
    If ``repeat`` is ``0``, the timer is only triggered once.
+   Times are in seconds.
+   A timer is stopped and has its resources freed by calling ``close`` on it.
 
-.. function:: stop_timer(t::Timer)
+.. function:: Timer(delay, repeat=0)
 
-   Stop invoking the callback for a timer.
+   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on
+   the timer object) at a specified interval.
 
 Reflection
 ----------
