@@ -842,6 +842,77 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 }
 
 
+#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
+
+/*
+ * We use a custom unwinder, so we need to make sure that when registering dynamic
+ * frames, we do so with our unwinder rather than with the system one. If LLVM is
+ * statically linked everything works out fine, but if it's dynamically linked
+ * it would usually pick up the system one, so we need to do the registration
+ * ourselves to ensure the right one gets picked.
+ */
+
+#include "llvm/ExecutionEngine/SectionMemoryManager.h"
+class RTDyldMemoryManagerOSX : public SectionMemoryManager
+{
+  RTDyldMemoryManagerOSX(const RTDyldMemoryManagerOSX&) = delete;
+  void operator=(const RTDyldMemoryManagerOSX&) = delete;
+
+public:
+    RTDyldMemoryManagerOSX() {};
+    ~RTDyldMemoryManagerOSX() override {};
+    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size);
+};
+
+extern "C" void __register_frame(void*);
+extern "C" void __deregister_frame(void*);
+
+static const char *processFDE(const char *Entry, bool isDeregister) {
+  const char *P = Entry;
+  uint32_t Length = *((const uint32_t *)P);
+  P += 4;
+  uint32_t Offset = *((const uint32_t *)P);
+  if (Offset != 0) {
+    if (isDeregister)
+      __deregister_frame(const_cast<char *>(Entry));
+    else
+      __register_frame(const_cast<char *>(Entry));
+  }
+  return P + Length;
+}
+
+// This implementation handles frame registration for local targets.
+// Memory managers for remote targets should re-implement this function
+// and use the LoadAddr parameter.
+void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
+                                           uint64_t LoadAddr,
+                                           size_t Size) {
+  // On OS X OS X __register_frame takes a single FDE as an argument.
+  // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
+  const char *P = (const char *)Addr;
+  const char *End = P + Size;
+  do  {
+    P = processFDE(P, false);
+  } while(P != End);
+}
+
+void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
+                                           uint64_t LoadAddr,
+                                           size_t Size) {
+  const char *P = (const char *)Addr;
+  const char *End = P + Size;
+  do  {
+    P = processFDE(P, true);
+  } while(P != End);
+}
+
+RTDyldMemoryManager* createRTDyldMemoryManagerOSX() {
+    return new RTDyldMemoryManagerOSX();
+}
+
+#endif
+
 #if defined(_OS_WINDOWS_)
 #ifdef USE_MCJIT
 extern "C"
