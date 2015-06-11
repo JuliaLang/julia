@@ -740,7 +740,6 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #endif
 #else
         DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
-        pointer -= (*it).second.slide;
 #endif
 #endif
         lookup_pointer(context, name, line, filename, pointer, 1, fromC);
