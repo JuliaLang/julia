@@ -286,6 +286,7 @@ end
 
 function reinit_stdio()
     global uv_jl_asynccb = cglobal(:jl_uv_asynccb)
+    global uv_jl_timercb = cglobal(:jl_uv_timercb)
     global uv_jl_alloc_buf = cglobal(:jl_uv_alloc_buf)
     global uv_jl_readcb = cglobal(:jl_uv_readcb)
     global uv_jl_connectioncb = cglobal(:jl_uv_connectioncb)
@@ -467,13 +468,22 @@ function reseteof(x::TTY)
     nothing
 end
 
+function _uv_hook_close(uv::Union(AsyncStream,UVServer))
+    uv.handle = C_NULL
+    uv.status = StatusClosed
+    if isa(uv.closecb, Function)
+        uv.closecb(uv)
+    end
+    notify(uv.closenotify)
+    try notify(uv.readnotify) end
+    try notify(uv.connectnotify) end
+end
+
 ##########################################
-# Async Workers
+# Async Worker
 ##########################################
 
-abstract AsyncWork
-
-type SingleAsyncWork <: AsyncWork
+type SingleAsyncWork
     handle::Ptr{Void}
     cb::Function
     function SingleAsyncWork(cb::Function)
@@ -485,50 +495,11 @@ type SingleAsyncWork <: AsyncWork
     end
 end
 
-type Timer <: AsyncWork
-    handle::Ptr{Void}
-    cb::Function
-    function Timer(cb::Function)
-        this = new(Libc.malloc(_sizeof_uv_timer), cb)
-        # We don't want to set a julia struct, but we also
-        # want to make sure there's no garbage data in the
-        # ->data field
-        disassociate_julia_struct(this.handle)
-        err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
-        if err != 0
-            #TODO: this codepath is currently not tested
-            Libc.free(this.handle)
-            this.handle = C_NULL
-            throw(UVError("uv_make_timer",err))
-        end
-        finalizer(this,uvfinalize)
-        this
-    end
-end
+close(t::SingleAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-close(t::AsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-
-function _uv_hook_close(uv::Union(AsyncStream,UVServer))
-    uv.handle = C_NULL
-    uv.status = StatusClosed
-    if isa(uv.closecb, Function)
-        uv.closecb(uv)
-    end
-    notify(uv.closenotify)
-    try notify(uv.readnotify) end
-    try notify(uv.connectnotify) end
-end
-_uv_hook_close(uv::Timer) = (uv.handle = C_NULL; nothing)
 _uv_hook_close(uv::SingleAsyncWork) = (uv.handle = C_NULL; unpreserve_handle(uv); nothing)
 
-# This serves as a common callback for all async classes
-function _uv_hook_asynccb(async::AsyncWork)
-    if isa(async, Timer)
-        if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Void},), async.handle) == 0
-            # timer is stopped now
-            disassociate_julia_struct(async.handle)
-        end
-    end
+function _uv_hook_asynccb(async::SingleAsyncWork)
     try
         async.cb(async)
     catch
@@ -536,40 +507,83 @@ function _uv_hook_asynccb(async::AsyncWork)
     nothing
 end
 
-function start_timer(timer::Timer, timeout::Real, repeat::Real)
-    timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
-    repeat ≥ 0 || throw(ArgumentError("timer cannot repeat $repeat times"))
+##########################################
+# Timer
+##########################################
 
-    associate_julia_struct(timer.handle, timer)
-    preserve_handle(timer)
-    ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
-    ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},UInt64,UInt64),
-          timer.handle, uv_jl_asynccb::Ptr{Void}, UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
+type Timer
+    handle::Ptr{Void}
+    cond::Condition
+    isopen::Bool
+
+    function Timer(timeout::Real, repeat::Real=0.0)
+        timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
+        repeat ≥ 0 || throw(ArgumentError("timer cannot repeat $repeat times"))
+
+        this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
+        err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
+        if err != 0
+            #TODO: this codepath is currently not tested
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(UVError("uv_make_timer",err))
+        end
+
+        associate_julia_struct(this.handle, this)
+        preserve_handle(this)
+
+        ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
+        ccall(:uv_timer_start, Cint, (Ptr{Void},Ptr{Void},UInt64,UInt64),
+              this.handle, uv_jl_timercb::Ptr{Void},
+              UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
+        this
+    end
 end
 
-function stop_timer(timer::Timer)
-    # ignore multiple calls to stop_timer
-    !haskey(uvhandles, timer) && return
-    timer.handle == C_NULL && return
+wait(t::Timer) = wait(t.cond)
 
-    ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
-    disassociate_julia_struct(timer.handle)
-    unpreserve_handle(timer)
+isopen(t::Timer) = t.isopen
+
+function close(t::Timer)
+    if t.handle != C_NULL
+        t.isopen = false
+        ccall(:uv_timer_stop, Cint, (Ptr{Void},), t.handle)
+        ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
+    end
+end
+
+function _uv_hook_close(t::Timer)
+    unpreserve_handle(t)
+    disassociate_julia_struct(t)
+    t.handle = C_NULL
+    nothing
+end
+
+function _uv_hook_timercb(t::Timer)
+    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Void},), t.handle) == 0
+        # timer is stopped now
+        close(t)
+    end
+    notify(t.cond)
+    nothing
 end
 
 function sleep(sec::Real)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    w = Condition()
-    timer = Timer(function (tmr)
-        notify(w)
-    end)
-    start_timer(timer, float(sec), 0)
-    try
-        stream_wait(timer, w)
-    finally
-        stop_timer(timer)
-    end
+    wait(Timer(sec))
     nothing
+end
+
+# timer with repeated callback
+function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
+    t = Timer(timeout, repeat)
+    @schedule begin
+        while isopen(t)
+            wait(t)
+            cb(t)
+        end
+    end
+    t
 end
 
 ## event loop ##

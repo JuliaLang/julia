@@ -1177,8 +1177,6 @@ export
     serialize,
     skip,
     skipchars,
-    start_timer,
-    stop_timer,
     takebuf_array,
     takebuf_string,
     truncate,

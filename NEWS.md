@@ -289,7 +289,7 @@ Library improvements
 
     * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
-    * The `gc_enable` and `gc_disable` functions now return the previous GC state.
+    * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 
     * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
 
@@ -398,6 +398,8 @@ Deprecated or removed
     of type `Vector{UInt8}`, `Vector{UInt16}`, `Vector{UInt32}`, and `Vector{Char}` ([#11241]).
 
   * Instead of `utf32(64,123,...)` use `utf32(UInt32[64,123,...])` ([#11379]).
+
+  * `start_timer` and `stop_timer` are replaced by `Timer` and `close`.
 
 Julia v0.3.0 Release Notes
 ==========================
