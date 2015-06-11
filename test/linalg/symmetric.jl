@@ -89,11 +89,13 @@ let n=10
             @test_approx_eq Hermitian(asym) * a asym * a
             @test_approx_eq a * Hermitian(asym) a * asym
             @test_approx_eq Hermitian(asym) * Hermitian(asym) asym*asym
+            @test_throws DimensionMismatch Hermitian(asym) * ones(eltya,n+1)
         end
         if eltya <: Real && eltya != Int
             @test_approx_eq Symmetric(asym) * Symmetric(asym) asym*asym
             @test_approx_eq Symmetric(asym) * a asym * a
             @test_approx_eq a * Symmetric(asym) a * asym
+            @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
         end
 
         # solver
