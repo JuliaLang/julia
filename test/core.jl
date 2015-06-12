@@ -2951,3 +2951,13 @@ let x = T11675{Union()}()
     end
     @test_throws UndefRefError f11675(x)
 end
+
+# issue #7864
+module M7864
+export x7864
+x7864 = 1
+end
+
+@test_throws UndefVarError x7864
+using M7864
+@test x7864 == 1
