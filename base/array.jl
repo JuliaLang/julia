@@ -343,6 +343,20 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     end
     return A
 end
+function setindex!(A::Array, x, ::Colon)
+    for i in 1:length(A)
+        @inbounds A[i] = x
+    end
+    return A
+end
+function setindex!(A::Array, X::AbstractArray, ::Colon)
+    setindex_shape_check(X, length(A))
+    i = 0
+    for x in X
+        @inbounds A[i+=1] = x
+    end
+    return A
+end
 
 # Faster contiguous setindex! with copy!
 setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_setindex!(A, X, I))
@@ -363,7 +377,6 @@ function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
     end
     return A
 end
-
 
 # efficiently grow an array
 

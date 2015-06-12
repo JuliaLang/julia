@@ -301,18 +301,17 @@
 (define (expand-compare-chain e)
   (car (expand-vector-compare e)))
 
-;; last = is this last index?
+;; return the appropriate computation for an `end` symbol for indexing
+;; the array `a` in the `n`th index.
+;; `tuples` are a list of the splatted arguments that precede index `n`
+;; `last` = is this last index?
+;; returns a call to endof(a), trailingsize(a,n), or size(a,n)
 (define (end-val a n tuples last)
   (if (null? tuples)
       (if last
           (if (= n 1)
               `(call (top endof) ,a)
               `(call (top trailingsize) ,a ,n))
-              #;`(call (top div)
-                     (call (top length) ,a)
-                     (call (top *)
-                           ,@(map (lambda (d) `(call (top size) ,a ,(1+ d)))
-                                  (iota (- n 1)))))
           `(call (top size) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
@@ -321,8 +320,7 @@
             `(call (top trailingsize) ,a ,dimno)
             `(call (top size) ,a ,dimno)))))
 
-; replace end inside ex with (call (top size) a n)
-; affects only the closest ref expression, so doesn't go inside nested refs
+; replace `end` for the closest ref expression, so doesn't go inside nested refs
 (define (replace-end ex a n tuples last)
   (cond ((eq? ex 'end)                (end-val a n tuples last))
         ((or (atom? ex) (quoted? ex)) ex)
@@ -335,29 +333,7 @@
                (map (lambda (x) (replace-end x a n tuples last))
                     (cdr ex))))))
 
-; translate index x from colons to ranges
-(define (expand-index-colon x)
-  (cond ((eq? x ':) `(call colon 1 end))
-        ((and (pair? x)
-              (eq? (car x) ':))
-         (cond ((length= x 3)
-                (if (eq? (caddr x) ':)
-                    ;; (: a :) a:
-                    `(call colon ,(cadr x) end)
-                    ;; (: a b)
-                    `(call colon ,(cadr x) ,(caddr x))))
-               ((length= x 4)
-                (if (eq? (cadddr x) ':)
-                    ;; (: a b :) a:b:
-                    `(call colon ,(cadr x) ,(caddr x) end)
-                    ;; (: a b c)
-                    `(call colon ,@(cdr x))))
-               (else x)))
-        (else x)))
-
-;; : inside indexing means 1:end
-;; expand end to size(a,n),
-;;     or div(length(a), prod(size(a)[1:(n-1)])) for the last index
+;; go through indices and replace the `end` symbol
 ;; a = array being indexed, i = list of indexes
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
@@ -386,8 +362,7 @@
                           (cons `(... ,g) ret))))
               (loop (cdr lst) (+ n 1)
                     stmts tuples
-                    (cons (replace-end (expand-index-colon idx) a n tuples last)
-                          ret)))))))
+                    (cons (replace-end idx a n tuples last) ret)))))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 

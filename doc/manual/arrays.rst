@@ -222,9 +222,10 @@ The general syntax for indexing into an n-dimensional array A is::
 where each ``I_k`` may be:
 
 1. A scalar integer
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
 The result ``X`` generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
@@ -286,10 +287,11 @@ The general syntax for assigning values in an n-dimensional array A is::
 
 where each ``I_k`` may be:
 
-1. A scalar value
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+1. A scalar integer
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
 If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
 and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
