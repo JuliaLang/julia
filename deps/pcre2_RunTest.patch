@@ -1,0 +1,11 @@
+290c290,297
+<   test2stack="-S 16"
+---
+>   # Attempt to auto-detect the maximum stack size:
+>   MAX_STACK=$(( $(ulimit -H -s)/1024 ))
+> 
+>   # if that fails, default to 16MB
+>   if [ "$MAX_STACK" -eq 0 ]; then
+>     MAX_STACK=16
+>   fi
+>   test2stack="-S $MAX_STACK"
