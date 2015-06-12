@@ -356,8 +356,9 @@ This variable has a moderate effect on indent performance if set too
 high.")
 
 (defun julia-paren-indent ()
-  "Return the column position of the innermost containing paren
-before point. Returns nil if we're not within nested parens."
+  "Return the column position of the first non-blank character
+after the innermost containing paren before point. Returns nil if
+we're not within nested parens."
   (save-excursion
     (let ((min-pos (max (- (point) julia-max-paren-lookback)
                         (point-min)))
@@ -375,7 +376,10 @@ before point. Returns nil if we're not within nested parens."
         (julia--safe-backward-char))
 
       (if (plusp open-count)
-          (+ (current-column) 2)
+          (progn (forward-char 2)
+                 (while (looking-at (rx blank))
+                   (forward-char))
+                 (current-column))
         nil))))
 
 (defun julia-indent-line ()
