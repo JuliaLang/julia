@@ -926,7 +926,42 @@ end
 .<{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(<, spzeros( Bool, promote_type(Ti1, Ti2), broadcast_shape(A_1, A_2)...), A_1, A_2)
 .!={Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(!=, spzeros( Bool, promote_type(Ti1, Ti2), broadcast_shape(A_1, A_2)...), A_1, A_2)
 
-
+## full equality
+function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
+    size(A1)!=size(A2) && return false
+    vals1, vals2 = nonzeros(A1), nonzeros(A2)
+    rows1, rows2 = rowvals(A1), rowvals(A2)
+    m, n = size(A1)
+    @inbounds for i = 1:n
+        nz1,nz2 = nzrange(A1,i), nzrange(A2,i)
+        j1,j2 = first(nz1), first(nz2)
+        # step through the rows of both matrices at once:
+        while j1<=last(nz1) && j2<=last(nz2)
+            r1,r2 = rows1[j1], rows2[j2]
+            if r1==r2
+                vals1[j1]!=vals2[j2] && return false
+                j1+=1
+                j2+=1
+            else
+                if r1<r2
+                    vals1[j1]!=0 && return false
+                    j1+=1
+                else
+                    vals2[j2]!=0 && return false
+                    j2+=1
+                end
+            end
+        end
+        # finish off any left-overs:
+        for j = j1:last(nz1)
+            vals1[j]!=0 && return false
+        end
+        for j = j2:last(nz2)
+            vals2[j]!=0 && return false
+        end
+    end
+    return true
+end
 
 ## Reductions
 
