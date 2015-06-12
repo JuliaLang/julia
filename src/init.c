@@ -634,7 +634,7 @@ DLLEXPORT void jl_atexit_hook()
 
 void jl_get_builtin_hooks(void);
 
-uv_lib_t *jl_dl_handle;
+DLLEXPORT uv_lib_t *jl_dl_handle;
 uv_lib_t _jl_RTLD_DEFAULT_handle;
 uv_lib_t *jl_RTLD_DEFAULT_handle=&_jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
@@ -644,12 +644,13 @@ uv_lib_t _jl_kernel32_handle;
 uv_lib_t _jl_crtdll_handle;
 uv_lib_t _jl_winsock_handle;
 
+DLLEXPORT uv_lib_t *jl_exe_handle=&_jl_exe_handle;
 uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
-uv_lib_t *jl_exe_handle=&_jl_exe_handle;
 uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
 uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
 uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
+
 uv_loop_t *jl_io_loop;
 
 void *init_stdio_handle(uv_file fd,int readable)
