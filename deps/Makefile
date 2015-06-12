@@ -365,9 +365,9 @@ LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
 else
 LLVM_FLAGS += --enable-optimized
 endif # LLVM_DEBUG
-ifeq ($(USE_LIBCPP), 1)
+ifeq ($(cxx_stdlib_vendor), libc++)
 LLVM_FLAGS += --enable-libcpp
-endif # USE_LIBCPP
+endif # cxx_stdlib_vendor
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
 # turn off shared LLVM on Windows unless explicitly requested
@@ -396,9 +396,9 @@ LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
-ifeq ($(ARCH), ppc64)
+ifeq ($(ARCH), powerpc64)
 LLVM_CXXFLAGS += -mminimal-toc
-endif # ARCH == ppc64
+endif # ARCH == powerpc64
 
 
 ifeq ($(LLVM_SANITIZE),1)
@@ -473,7 +473,7 @@ llvm-$(LLVM_VER)/python2_path:
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python" && \
 	ln -sf /usr/bin/python2-config "llvm-$(LLVM_VER)/python2_path/python-config"
-LLVM_FLAGS += --with-python="$(shell ./find_python2)"
+LLVM_FLAGS += --with-python="$(shell which $(PYTHON2))"
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 ifeq ($(BUILD_LLDB),1)
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
@@ -1194,7 +1194,7 @@ ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
 ARPACK_CFLAGS =
 
 ifeq ($(USE_BLAS64), 1)
-ifeq ($(USEIFC),1)
+ifeq ($(fc_vendor),intel)
 ARPACK_FFLAGS += -i8
 else
 ARPACK_FFLAGS += -fdefault-integer-8
@@ -1305,7 +1305,7 @@ FFTW_DOUBLE_OBJ_TARGET = $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-threads
 ifneq (,$(findstring arm,$(ARCH)))
   FFTW_CONFIG +=
-else ifeq ($(ARCH), ppc)
+else ifeq ($(ARCH), powerpc)
   FFTW_CONFIG += --enable-altivec
 else ifeq ($(ARCH), x86_64)
   FFTW_CONFIG += --enable-sse2 --enable-fma
@@ -1605,7 +1605,7 @@ endif
 #todo: libunwind tests known to fail
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	$(call make-install,libunwind-$(UNWIND_VER),)
-ifeq ($(ARCH), ppc64)
+ifeq ($(ARCH), powerpc64)
 	# workaround for configure script bug
 	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
 endif
@@ -1882,7 +1882,7 @@ LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(WINDRES)`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif

@@ -53,7 +53,7 @@ julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVERi=`echo $$JLVER | perl -nle \
 		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
 		print int $$1,",",int $$2,",0,",int $$3'` && \
-	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
+	$(WINDRES) $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 $(build_bindir)/julia$(EXE): julia_res.o
 $(build_bindir)/julia-debug$(EXE): julia_res.o
 endif

@@ -1,0 +1,669 @@
+#!/usr/bin/env bash
+# Julia configure script. License is MIT: http://julialang.org/license
+
+set -e -u
+shopt -s extglob
+
+message() {
+    echo "configure: $@"
+}
+error() {
+    message "error: $@"
+    exit 1
+}
+trap '[ $? = 0 ] || message failed' EXIT
+
+unset ${!USE_SYSTEM_@}
+unset ${!with_system_@}
+
+# ---------------------------------------------------------------------------
+# defaults
+
+uname_r=`uname -r`
+uname_s=`uname -s`
+
+default_AR=ar
+default_AS=as
+default_CC=gcc
+default_CFLAGS=
+default_CMAKE=cmake
+default_CPP='$(CC) -E'
+default_CPPFLAGS=
+default_CXX=g++
+default_CXXFLAGS=
+default_FC=gfortran
+default_FFLAGS=
+default_LD=ld
+default_LDFLAGS=
+default_PERL=perl
+default_PYTHON2=python
+default_RANLIB=ranlib
+default_TAR=tar
+default_WINDRES=windres
+
+build=$MACHTYPE
+build_os=$uname_s
+cross_compiling=no
+dryrun=no
+enable_fftw_threads=maybe
+prefix=/usr/local
+quiet=no
+system_libm=libm
+with_mkl=no
+with_mkl_fftw=no
+with_system_arpack=no
+with_system_blas=no
+with_system_dsfmt=no
+with_system_fftw=no
+with_system_gmp=no
+with_system_lapack=no
+with_system_libgit2=no
+with_system_libm=no
+with_system_libunwind=no
+with_system_libuv=no
+with_system_llvm=no
+with_system_mpfr=no
+with_system_openspecfun=no
+with_system_patchelf=no
+with_system_pcre=no
+with_system_rmath=no
+with_system_suitesparse=no
+with_system_utf8proc=no
+with_system_zlib=no
+
+case $uname_s:$uname_r in
+    CYGWIN*)
+        ;;
+    Darwin:*)
+        default_CC=clang
+        default_CXX=clang++
+        ;;
+    FreeBSD:[1-9].*) ;;
+    FreeBSD:*)
+        default_CC=clang
+        default_CXX=clang++
+        ;;
+    Linux:*)
+        ;;
+    MINGW*|MSYS*)
+        build_os=WINNT
+        ;;
+    OpenBSD:*)
+        default_TAR=gtar
+        ;;
+esac
+
+# ---------------------------------------------------------------------------
+# usage
+
+usage="Usage: configure [OPTION]... [VAR=VALUE]...
+
+To assign environment variables (e.g., CC, CFLAGS...), specify them as
+VAR=VALUE.  See below for descriptions of some of the useful variables.
+
+Defaults for the options are specified in brackets.
+
+Configuration:
+  -h, --help              display this help and exit
+  -q, --quiet, --silent   do not print 'checking ...' messages
+  -n, --no-create         do not create output files
+
+Installation directories:
+  --prefix=PREFIX         install architecture-independent files in PREFIX
+                          [$prefix]
+  --exec-prefix=EPREFIX   install architecture-dependent files in EPREFIX
+                          [PREFIX]
+
+Fine tuning of the installation directories:
+  --bindir=DIR            user executables [EPREFIX/bin]
+  --libexecdir=DIR        program executables [EPREFIX/libexec]
+  --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
+  --libdir=DIR            object code libraries [EPREFIX/lib]
+  --includedir=DIR        C header files [PREFIX/include]
+  --datarootdir=DIR       read-only arch.-independent data root [PREFIX/share]
+  --mandir=DIR            man documentation [DATAROOTDIR/man]
+  --docdir=DIR            documentation root [DATAROOTDIR/doc/julia]
+
+System types:
+  --build=BUILD     configure for building on BUILD [guessed]
+  --host=HOST       cross-compile to build programs to run on HOST [BUILD]
+
+Optional Features:
+  --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
+  --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --disable-fftw-threads  do not link to threaded FFTW libs
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-mkl[=ROOT]       use Intel MKL BLAS and LAPACK [default=no]
+  --with-mkl-fftw         use Intel MKL FFTW [default=no]
+  --with-system-arpack
+  --with-system-blas
+  --with-system-dsfmt
+  --with-system-fftw
+  --with-system-gmp
+  --with-system-lapack
+  --with-system-libgit2
+  --with-system-libm
+  --with-system-libunwind
+  --with-system-libuv
+  --with-system-llvm
+  --with-system-mpfr
+  --with-system-openspecfun
+  --with-system-patchelf
+  --with-system-pcre
+  --with-system-rmath
+  --with-system-suitesparse
+  --with-system-utf8proc
+  --with-system-zlib
+
+Some influential environment variables:
+  CC          C compiler command
+  CFLAGS      C compiler flags
+  CPPFLAGS    C/C++ preprocessor flags, e.g. -I<include dir> if you have
+              headers in a nonstandard directory <include dir>
+  CXX         C++ compiler command
+  FC          Fortran compiler command
+  FFLAGS      Fortran compiler flags
+  LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
+              nonstandard directory <lib dir>
+
+Use these variables to override the choices made by 'configure' or to help
+it to find libraries and programs with nonstandard names/locations.
+
+Report bugs to <https://github.com/JuliaLang/julia/issues>."
+
+# ---------------------------------------------------------------------------
+# options
+
+handle_with_yesno_or_value() {
+    case "$1" in
+        yes|no) eval "$2=$1" ;;
+        *)
+            eval "$2=yes"
+            eval "$3=\"\$1\""
+            ;;
+    esac
+}
+
+handle_long_opt() {
+    local key="$1"
+    local val="$2"
+    case $key in
+        disable-*)
+            # convert to --enable-... equivalent
+            case "$val" in
+                yes) handle_long_opt enable-${key:8} no ;;
+                no) handle_long_opt enable-${key:8} yes ;;
+                *) error "bad argument: --$key=$val" ;;
+            esac
+            ;;
+        without-*)
+            # convert to --with-... equivalent
+            case "$val" in
+                yes) handle_long_opt with-${key:8} no ;;
+                no) handle_long_opt with-${key:8} yes ;;
+                *) error "bad argument: --$key=$val" ;;
+            esac
+            ;;
+        bindir|\
+        build|\
+        datarootdir|\
+        docdir|\
+        exec-prefix|\
+        includedir|\
+        libdir|\
+        libexecdir|\
+        mandir|\
+        prefix|\
+        sysconfdir)
+            eval "${key//-/_}=\"\$val\""
+            ;;
+        host)
+            cross_compiling=yes
+            host="$val"
+            ;;
+        enable-fftw-threads|\
+        with-mkl-fftw|\
+        with-system-arpack|\
+        with-system-blas|\
+        with-system-dsfmt|\
+        with-system-fftw|\
+        with-system-gmp|\
+        with-system-lapack|\
+        with-system-libgit2|\
+        with-system-libunwind|\
+        with-system-libuv|\
+        with-system-llvm|\
+        with-system-mpfr|\
+        with-system-openspecfun|\
+        with-system-patchelf|\
+        with-system-pcre|\
+        with-system-rmath|\
+        with-system-suitesparse|\
+        with-system-utf8proc|\
+        with-system-zlib)
+            case "$val" in
+                yes|no) eval "${key//-/_}=$val" ;;
+                *) error "bad argument: --$key=$val" ;;
+            esac
+            ;;
+        with-mkl)
+            handle_with_yesno_or_value "$val" with_mkl MKLROOT
+            ;;
+        with-system-libm)
+            handle_with_yesno_or_value "$val" with_system_libm system_libm
+            ;;
+        *)
+            error "unrecognized option: --$key"
+            ;;
+    esac
+}
+
+parse_options() {
+    for opt in "$@"; do
+        case $opt in
+            -h|--help) echo "$usage"; exit 0 ;;
+            -n|--no-create) dryrun=yes ;;
+            -q|--quiet|--silent) quiet=yes ;;
+            --+([a-z0-9-])=*)
+                local opt2="${opt:2}"
+                local key="${opt2%%=*}"
+                local val="${opt2#*=}"
+                handle_long_opt $key "$val"
+                ;;
+            --+([a-z0-9-]))
+                handle_long_opt ${opt:2} yes
+                ;;
+            +([A-Z_])=*)
+                local key="${opt%%=*}"
+                local val="${opt#*=}"
+                eval "$key=\"\$val\""
+                ;;
+            *)
+                error "unrecognized option: $opt"
+                ;;
+        esac
+    done
+}
+
+parse_options "$@"
+
+# ---------------------------------------------------------------------------
+# defaults that depend on options
+
+if [ $cross_compiling = yes ]; then
+    default_AS=$host-$default_AS
+    default_AR=$host-$default_AR
+    default_CC=$host-$default_CC
+    default_CXX=$host-$default_CXX
+    default_FC=$host-$default_FC
+    default_LD=$host-$default_LD
+    default_RANLIB=$host-$default_RANLIB
+    default_WINDRES=$host-$default_WINDRES
+fi
+
+# ---------------------------------------------------------------------------
+# done figuring out defaults, so set variables
+
+setvar2() {
+    eval "$1=\${$1-\$$2}"
+}
+setvar() {
+    setvar2 $1 default_$1
+}
+
+setvar AR
+setvar AS
+setvar CC
+setvar CFLAGS
+setvar CMAKE
+setvar CPP
+setvar CPPFLAGS
+setvar CXX
+setvar CXXFLAGS
+setvar FC
+setvar FFLAGS
+setvar LD
+setvar LDFLAGS
+setvar PERL
+setvar PYTHON2
+setvar RANLIB
+setvar TAR
+setvar WINDRES
+
+setvar2 host        build
+setvar2 exec_prefix prefix
+setvar2 sysconfdir  prefix/etc
+setvar2 includedir  prefix/include
+setvar2 libexecdir  prefix/libexec
+setvar2 datarootdir prefix/share
+setvar2 bindir      exec_prefix/bin
+setvar2 libdir      exec_prefix/lib
+setvar2 docdir      datarootdir/doc/julia
+setvar2 mandir      datarootdir/man
+
+# ---------------------------------------------------------------------------
+# check inputs
+
+case $host in
+    mingw32*)
+        error "the mingw32 compiler you are using fails the openblas testsuite; please see the README.windows document for a replacement"
+        ;;
+    *-cygwin)
+        error "cannot build julia with cygwin-target compilers; set --host to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile"
+        ;;
+    *-msys)
+        error "cannot build julia with msys-target compilers; please see the README.windows document for instructions on setting up mingw-w64 compilers"
+        ;;
+esac
+
+# ---------------------------------------------------------------------------
+# set dependent variables
+
+build_arch=${build%%-*}
+host_arch=${host%%-*}
+
+if [ $cross_compiling = yes ]; then
+    XC_HOST=$host
+    case $host in
+        *-cygwin*)   host_os=CYGWIN ;;
+        *-darwin*)   host_os=Darwin ;;
+        *-freebsd*)  host_os=FreeBSD ;;
+        *-linux*)    host_os=Linux ;;
+        *-mingw*)    host_os=WINNT ;;
+        *-openbsd*)  host_os=OpenBSD ;;
+    esac
+else
+    XC_HOST=
+    host_os=$build_os
+fi
+
+ISX86=0
+case $host_arch in
+    i[3-6]86|x86_64)
+        ISX86=1
+        ;;
+esac
+
+# convert 'with_system_x=yes|no' -> 'USE_SYSTEM_X=1|0'
+for with in ${!with_system_@}; do
+    use=USE`echo ${with:4} | tr a-z A-Z`
+    if [ ${!with} = yes ]; then
+        eval "$use=1"
+    else
+        eval "$use=0"
+    fi
+done
+
+if [ $enable_fftw_threads = maybe ]; then
+    if [ $host_os = WINNT ]; then
+        enable_fftw_threads=no
+    else
+        enable_fftw_threads=yes
+    fi
+fi
+
+if [ $with_mkl = yes ]; then
+    USE_SYSTEM_BLAS=1
+    USE_SYSTEM_LAPACK=1
+    LIBBLASNAME=libmkl_rt
+    LIBLAPACKNAME=libmkl_rt
+fi
+
+if [ $with_mkl_fftw = yes ]; then
+    USE_SYSTEM_FFTW=1
+    LIBFFTWNAME=libmkl_rt
+    LIBFFTWFNAME=libmkl_rt
+elif [ $enable_fftw_threads = yes ]; then
+    if [ $host_os = WINNT ]; then
+        error "FFTW threads not supported on Windows"
+    fi
+    LIBFFTWNAME=libfftw3_threads
+    LIBFFTWFNAME=libfftw3f_threads
+else
+    LIBFFTWNAME=libfftw3
+    LIBFFTWFNAME=libfftw3f
+fi
+
+if [ $with_system_libm = yes ]; then
+    LIBM="-l${system_libm:3}"
+    LIBMNAME=$system_libm
+else
+    LIBM=-lopenlibm
+    LIBMNAME=libopenlibm
+fi
+
+# ---------------------------------------------------------------------------
+# run tests
+
+case $uname_s in
+    Darwin) tmpdir=`mktemp -d -t jlconf`;;
+    *)      tmpdir=`mktemp -d`;;
+esac
+cd "$tmpdir"
+
+checking() {
+    [ $quiet = yes ] || echo -n "checking $@... "
+}
+result() {
+    [ $quiet = yes ] || echo "$@"
+}
+
+runtest() {
+    echo "$1" > test.in
+    $BASH test.in &>test.out && return
+    result FAILED
+    cat test.in
+    cat test.out
+    [ $# = 2 ] && echo "$2"
+    exit 1
+}
+
+CC_COMPILE="$CC $CPPFLAGS $CFLAGS"
+CXX_COMPILE="$CXX $CPPFLAGS $CXXFLAGS"
+FC_COMPILE="$FC $FFLAGS"
+
+doescompile() {
+    case $1 in
+        c)   local compile="$CC_COMPILE" ;;
+        cxx) local compile="$CXX_COMPILE";;
+        F90) local compile="$FC_COMPILE" ;;
+        *)   error "oops, internal error";;
+    esac
+    echo "$2" > test.$1
+    $compile test.$1 $LDFLAGS &>/dev/null
+}
+
+isdefined() {
+    doescompile $1 "${3:-}
+#ifndef $2
+#error
+#endif
+int main(void) {return 0;}"
+}
+
+isdefined_F90() {
+    doescompile F90 "${2:-}
+program main
+#ifndef $1
+#error
+#endif
+end program"
+}
+
+checking "build system type"
+result $build
+
+checking "host system type"
+result $host
+
+checking "whether we are cross compiling"
+result $cross_compiling
+
+checking "whether C compiler works"
+runtest "echo 'int main(void) {return 0;}' > test.c
+$CC_COMPILE test.c"
+result yes
+
+checking "whether C++ compiler works"
+runtest "echo 'int main(void) {return 0;}' > test.cxx
+$CC_COMPILE test.cxx"
+result yes
+
+checking "whether Fortran compiler works"
+runtest "echo $'program main\nend program' > test.F90
+$FC_COMPILE test.F90"
+result yes
+
+checking "C compiler vendor"
+if isdefined c __clang__ ; then
+    cc_vendor=clang
+elif isdefined c __INTEL_COMPILER ; then
+    cc_vendor=intel
+elif isdefined c _MSC_VER ; then
+    cc_vendor=microsoft
+elif isdefined c __GNUC__ ; then
+    cc_vendor=gnu
+else
+    result FAILED
+    error "who made this C compiler?"
+fi
+result $cc_vendor
+
+checking "C++ compiler vendor"
+if isdefined cxx __clang__ ; then
+    cxx_vendor=clang
+elif isdefined cxx __INTEL_COMPILER ; then
+    cxx_vendor=intel
+elif isdefined cxx _MSC_VER ; then
+    cxx_vendor=microsoft
+elif isdefined cxx __GNUC__ ; then
+    cxx_vendor=gnu
+else
+    result FAILED
+    error "who made this C++ compiler?"
+fi
+result $cxx_vendor
+
+checking "C++ standard library vendor"
+if isdefined cxx _LIBCPP_VERSION "#include <ciso646>" ; then
+    cxx_stdlib_vendor=libc++
+elif isdefined cxx __GLIBCXX__ "#include <limits>" ; then
+    cxx_stdlib_vendor=libstdc++
+else
+    result FAILED
+    error "who made this C++ standard library?"
+fi
+result $cxx_stdlib_vendor
+
+checking "Fortran compiler vendor"
+if isdefined_F90 __INTEL_COMPILER ; then
+    fc_vendor=intel
+elif isdefined_F90 __GFORTRAN__ ; then
+    fc_vendor=gnu
+else
+    result FAILED
+    error "who made this Fortran compiler?"
+fi
+result $fc_vendor
+
+checking "32- or 64-bit"
+BINARY=32
+for d in _LP64 __x86_64__ _M_X64 ; do
+    if isdefined c $d ; then
+        BINARY=64
+        break
+    fi
+done
+result $BINARY
+
+checking "python version"
+runtest "echo 'import sys
+assert sys.version_info.major == 2
+assert sys.version_info.minor >= 5' > test.py
+$PYTHON2 test.py"
+result ok
+
+checking "for GNU tar or bsdtar"
+runtest "$TAR --help 2>&1 | egrep 'bsdtar|strip-components'"
+result ok
+
+if [ $with_mkl = yes ]; then
+    checking "MKL directory"
+    runtest "test -d $MKLROOT"
+    result ok
+fi
+
+cd $OLDPWD
+
+# ---------------------------------------------------------------------------
+# write config.mk
+
+[ $dryrun = yes ] && exit 0
+
+message "writing config.mk"
+echo -n > config.mk
+
+writemk() {
+    echo "$@" >> config.mk
+}
+setmkvar() {
+    writemk "$1 = ${!1}"
+}
+
+writemk "# julia config.mk (`date`)"
+writemk "# generated by $0 $@"
+writemk
+setmkvar AR
+setmkvar AS
+setmkvar CC
+setmkvar CFLAGS
+setmkvar CMAKE
+setmkvar CPP
+setmkvar CPPFLAGS
+setmkvar CXX
+setmkvar CXXFLAGS
+setmkvar FC
+setmkvar FFLAGS
+setmkvar LD
+setmkvar LDFLAGS
+setmkvar PERL
+setmkvar PYTHON2
+setmkvar RANLIB
+setmkvar TAR
+setmkvar WINDRES
+writemk
+setmkvar prefix
+setmkvar exec_prefix
+setmkvar bindir
+setmkvar docdir
+setmkvar includedir
+setmkvar libdir
+setmkvar libexecdir
+setmkvar mandir
+setmkvar sysconfdir
+writemk
+writemk "ARCH = $host_arch"
+setmkvar BINARY
+writemk "BUILD_MACHINE = $build"
+writemk "BUILD_OS = $build_os"
+setmkvar ISX86
+setmkvar LIBFFTWFNAME
+setmkvar LIBFFTWNAME
+setmkvar LIBM
+setmkvar LIBMNAME
+[ $with_mkl = yes ] && setmkvar MKLROOT
+writemk "OS = $host_os"
+for use in ${!USE_SYSTEM_@}; do
+    setmkvar $use
+done
+setmkvar XC_HOST
+setmkvar cc_vendor
+setmkvar cxx_stdlib_vendor
+setmkvar cxx_vendor
+setmkvar fc_vendor
+setmkvar with_mkl
+
+exit 0

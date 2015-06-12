@@ -1,5 +1,7 @@
 # -*- mode: makefile-gmake -*-
 
+include $(JULIAHOME)/config.mk
+
 ## Note:
 ##   It is generally preferable to change these options, for
 ##   your local machine, in a file named `Make.user` in this directory
@@ -16,57 +18,18 @@ OPENBLAS_DYNAMIC_ARCH=1
 endif
 OPENBLAS_USE_THREAD=1
 
-# Use libraries available on the system instead of building them
-USE_SYSTEM_LLVM=0
-USE_SYSTEM_LIBUNWIND=0
-USE_SYSTEM_PCRE=0
-USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 UNTRUSTED_SYSTEM_LIBM=0
-USE_SYSTEM_OPENSPECFUN=0
-USE_SYSTEM_DSFMT=0
-USE_SYSTEM_BLAS=0
-USE_SYSTEM_LAPACK=0
-USE_SYSTEM_FFTW=0
-USE_SYSTEM_GMP=0
-USE_SYSTEM_MPFR=0
-USE_SYSTEM_ARPACK=0
-USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_RMATH=0
-USE_SYSTEM_LIBUV=0
-USE_SYSTEM_UTF8PROC=0
-USE_SYSTEM_LIBGIT2=0
-USE_SYSTEM_PATCHELF=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
 
 ## Settings for various Intel tools
-# Set to 1 to use MKL
-USE_INTEL_MKL ?= 0
-# Set to 1 to use MKL FFT
-USE_INTEL_MKL_FFT ?= 0
-# Set to 1 to use Intel LIBM
-USE_INTEL_LIBM ?= 0
 # Set to 1 to enable profiling with Intel VTune Amplifier
 USE_INTEL_JITEVENTS ?= 0
-# Set to 1 to use Intel C, C++, and FORTRAN compilers
-USEICC  ?= 0
-USEIFC  ?= 0
-
-ifeq ($(USE_MKL), 1)
-$(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
-USE_INTEL_MKL = 1
-endif
-
-# libc++ is standard on OS X 10.9, but not for earlier releases
-USE_LIBCPP = 0
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP = 0
-
-# Prevent picking up $ARCH from the environment variables
-ARCH=
 
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -94,17 +57,8 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
-bindir = $(prefix)/bin
-libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
-libexecdir = $(prefix)/libexec
-datarootdir = $(prefix)/share
-docdir = $(datarootdir)/doc/julia
-mandir = $(datarootdir)/man
 man1dir = $(mandir)/man1
-includedir = $(prefix)/include
-sysconfdir = $(prefix)/etc
 
 # Directories where things get built into
 build_prefix = $(JULIAHOME)/usr
@@ -133,13 +87,6 @@ sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysco
 INSTALL_F = $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M = $(JULIAHOME)/contrib/install.sh 755
 
-# This used for debian packaging, to conform to library layout guidelines
-ifeq ($(MULTIARCH_INSTALL), 1)
-MULTIARCH = $(shell gcc -print-multiarch)
-private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
-libdir = $(prefix)/lib/$(MULTIARCH)/
-endif
-
 # LLVM Options
 LLVMROOT = $(build_prefix)
 LLVM_ASSERTIONS = 0
@@ -150,59 +97,22 @@ BUILD_LLVM_CLANG = 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB = 0
 
-# Cross-compile
-#XC_HOST = i686-w64-mingw32
-#XC_HOST = x86_64-w64-mingw32
-
-# Path to cmake (override in Make.user if needed)
-CMAKE ?= cmake
-
-# Figure out OS and architecture
-BUILD_OS := $(shell uname)
-
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-XC_HOST ?= $(shell uname -m)-w64-mingw32
-endif
-
 ifeq ($(XC_HOST),)
-CROSS_COMPILE=
 HOSTCC = $(CC)
 else
 HOSTCC = gcc
 override OPENBLAS_DYNAMIC_ARCH = 1
-override CROSS_COMPILE=$(XC_HOST)-
-ifneq (,$(findstring mingw,$(XC_HOST)))
-override OS := WINNT
 ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//" -e "s!/lib/!/bin/!g")
-export STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//" -e "s!/lib/!/bin/!g")
+export STD_LIB_PATH := $(shell $(CC) -print-search-dirs | grep programs | sed -e "s/^programs: =//" -e "s!/lib/!/bin/!g")
+export STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CC) -print-search-dirs | grep libraries | sed -e "s/^libraries: =//" -e "s!/lib/!/bin/!g")
 else
-export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-endif
-else
-$(error "unknown XC_HOST variable set")
+export STD_LIB_PATH := $(shell $(CC) -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CC) -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
 endif
 endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
 JLCHECKSUM = $(JULIAHOME)/deps/jlchecksum
-
-# Figure out OS and architecture
-OS := $(BUILD_OS)
-
-ifneq (,$(findstring MINGW,$(OS)))
-override OS := WINNT
-endif
-ifneq (,$(findstring MINGW,$(BUILD_OS)))
-override BUILD_OS := WINNT
-endif
-ifneq (,$(findstring MSYS,$(OS)))
-override OS := WINNT
-endif
-ifneq (,$(findstring MSYS,$(BUILD_OS)))
-override BUILD_OS := WINNT
-endif
 
 ifeq ($(OS), WINNT)
 fPIC =
@@ -227,64 +137,27 @@ endif
 
 # Compiler specific stuff
 
-ifeq ($(USEMSVC), 1)
-USEGCC = 0
 USECLANG = 0
-USEICC = 0
-else
-ifeq ($(USECLANG), 1)
 USEGCC = 0
 USEICC = 0
-else
-ifeq ($(USEICC), 1)
-USEGCC = 0
-USECLANG = 0
-else  # default to gcc
-USEGCC = 1
-USECLANG = 0
-USEICC = 0
-endif
-endif
-endif
-
-ifeq ($(USEIFC), 1)
-FC = ifort
-else
-FC = $(CROSS_COMPILE)gfortran
+USEMSVC = 0
+ifeq ($(cc_vendor),clang)
+  USECLANG = 1
+else ifeq ($(cc_vendor),gnu)
+  USEGCC = 1
+else ifeq ($(cc_vendor),intel)
+  USEINTEL = 1
+else ifeq ($(cc_vendor),microsoft)
+  USEMSVC = 1
 endif
 
-STDLIBCPP_FLAG =
-
-ifeq ($(OS), Darwin)
-DARWINVER := $(shell uname -r | cut -b 1-2)
-DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
-USEGCC = 1
-USECLANG = 0
-OPENBLAS_TARGET_ARCH=NEHALEM
-OPENBLAS_DYNAMIC_ARCH=0
-USE_SYSTEM_LIBUNWIND=1
-else
-ifeq ($(DARWINVER_GTE13),1)
-USE_LIBCPP = 1
-STDLIBCPP_FLAG = -stdlib=libstdc++
-else
-USE_LIBCPP = 0
-endif
-USEGCC = 0
-USECLANG = 1
-endif
+ifeq ($(USECLANG),0)
+  ifeq ($(SANITIZE),1)
+    $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+  endif
 endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
-ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
-endif
-CC = $(CROSS_COMPILE)gcc
-CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -293,35 +166,17 @@ SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
-CC = $(CROSS_COMPILE)clang
-CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
-else
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
 ifeq ($(USEICC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
-ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
-endif
-CC  = icc
-CXX = icpc
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -359,10 +214,6 @@ endif
 JFFLAGS = -O2 $(fPIC)
 JF2CFLAGS = -ff2c -fno-second-underscore
 ifneq ($(USEMSVC),1)
-CPP = $(CC) -E
-AR := $(CROSS_COMPILE)ar
-AS := $(CROSS_COMPILE)as
-LD := $(CROSS_COMPILE)ld
 else #USEMSVC
 CPP = $(CC) -EP
 AR := lib
@@ -373,7 +224,6 @@ AS := ml
 endif #ARCH
 LD := link
 endif #USEMSVC
-RANLIB := $(CROSS_COMPILE)ranlib
 
 
 # if not absolute, then relative to the directory of the julia executable
@@ -403,53 +253,17 @@ DEPS_CFLAGS += $(SANITIZE_OPTS)
 DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
-TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
-TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
-ifeq (,$(findstring components,$(TAR_TEST)))
-ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
-$(error "please install either GNU tar or bsdtar")
-endif
-endif
-
 # ===========================================================================
 
-# Select the cpu architecture to target, or automatically detects the user's compiler
-# ARCH is the first element of the triple, and gives the CPU class (e.g. x86_64)
-# MARCH is the CPU type, and accepts anything that can be passed to the gcc -march flag
-#    it is set equal to ARCH (for cases where the two are the same, such as i686)
-#    it can be set to native to optimize all code for the user's machine (not just the JIT code)
-#    if MARCH is set newer than the native processor, be forewarned that the compile might fail
-# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
-#    since it is set equal to MARCH by default
-BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
-ifeq ($(ARCH),)
-override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
-ifeq ($(ARCH),mingw32)
-$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
-else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
-$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
-else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
-$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
-endif
-ifeq ($(BUILD_OS),Darwin)
-## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
-## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
-ifeq ($(ARCH),x86_64)
-override ARCH = i686
-else ifeq ($(ARCH),i386)
-override ARCH = i686
-endif
-ifeq ($(ARCH),i686)
-ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
-override ARCH = x86_64
-endif
-BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-endif
-endif
-else
-XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-MARCH = $(ARCH)
-endif
+# Select the cpu architecture to target
+#
+# MARCH is the CPU type, and accepts anything that can be passed to the
+# gcc -march flag. It can be set to native to optimize all code for the
+# user's machine (not just the JIT code). If MARCH is set newer than the
+# native processor, be forewarned that the compile might fail.
+#
+# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it
+# explicitly is not generally necessary.
 
 ifneq ($(MARCH),)
 CC += -march=$(MARCH)
@@ -473,39 +287,6 @@ endif
 endif
 
 JULIA_CPU_TARGET ?= native
-
-# We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
-ifeq ($(ARCH),amd64)
-override ARCH = x86_64
-endif
-
-ifeq ($(ARCH),i386)
-BINARY=32
-ISX86=1
-else ifeq ($(ARCH),i387)
-BINARY=32
-ISX86=1
-else ifeq ($(ARCH),i486)
-BINARY=32
-ISX86=1
-else ifeq ($(ARCH),i586)
-BINARY=32
-ISX86=1
-else ifeq ($(ARCH),i686)
-BINARY=32
-ISX86=1
-else ifeq ($(ARCH),x86_64)
-BINARY=64
-ISX86=1
-else ifneq (,$(findstring arm,$(ARCH)))
-ISX86=0
-else ifneq (,$(findstring powerpc,$(ARCH)))
-ISX86=0
-else ifneq (,$(findstring ppc,$(ARCH)))
-ISX86=0
-else
-$(error "unknown word-size for arch: $(ARCH)")
-endif
 
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
@@ -610,22 +391,6 @@ else
 LIBLAPACK = -L$(build_shlibdir) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
-endif
-
-ifeq ($(OS), WINNT)
-LIBFFTWNAME = libfftw3
-LIBFFTWFNAME = libfftw3f
-else
-LIBFFTWNAME = libfftw3_threads
-LIBFFTWFNAME = libfftw3f_threads
-endif
-
-ifeq ($(USE_SYSTEM_LIBM), 1)
-LIBM = -lm
-LIBMNAME = libm
-else
-LIBM = -lopenlibm
-LIBMNAME = libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
@@ -756,23 +521,13 @@ endif
 
 # Intel libraries
 
-ifeq ($(USE_INTEL_LIBM), 1)
-USE_SYSTEM_LIBM = 1
-LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
-LIBMNAME = libimf
-endif
-
-ifeq ($(USE_INTEL_MKL), 1)
+ifeq ($(with_mkl), yes)
 ifeq ($(USE_BLAS64), 1)
 export MKL_INTERFACE_LAYER := ILP64
 MKLLIB = $(MKLROOT)/lib/intel64
 else
 MKLLIB = $(MKLROOT)/lib/ia32
 endif
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-LIBBLASNAME = libmkl_rt
-LIBLAPACKNAME = libmkl_rt
 MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
@@ -783,12 +538,6 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 LIBBLAS   = $(MKL_LDFLAGS)
 LIBLAPACK = $(MKL_LDFLAGS)
-endif
-
-ifeq ($(USE_INTEL_MKL_FFT), 1)
-USE_SYSTEM_FFTW = 1
-LIBFFTWNAME = libmkl_rt
-LIBFFTWFNAME = libmkl_rt
 endif
 
 ifeq ($(HAVE_SSP),1)
