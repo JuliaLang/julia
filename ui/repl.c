@@ -506,9 +506,40 @@ int main(int argc, char *argv[])
 {
     uv_setup_args(argc, argv); // no-op on Windows
 #else
+static void lock_low32() {
+#if defined(_P64) && defined(JL_DEBUG_BUILD)
+    // block usage of the 32-bit address space on win64, to catch pointer cast errors
+    char *const max32addr = (char*)0xffffffffL;
+    SYSTEM_INFO info;
+    MEMORY_BASIC_INFORMATION meminfo;
+    GetNativeSystemInfo(&info);
+    memset(&meminfo, 0, sizeof(meminfo));
+    meminfo.BaseAddress = info.lpMinimumApplicationAddress;
+    while ((char*)meminfo.BaseAddress < max32addr) {
+        VirtualQuery(meminfo.BaseAddress, &meminfo, sizeof(meminfo));
+        if (meminfo.State == MEM_FREE) { // reserve all free pages in the first 4GB of memory
+            char *first = (char*)meminfo.BaseAddress;
+            char *last = first + meminfo.RegionSize;
+            char *p;
+            if (last > max32addr)
+                last = max32addr;
+            // adjust first up to the first allocation granularity boundary
+            // adjust last down to the last allocation granularity boundary
+            first = (char*)(((long long)first + info.dwAllocationGranularity - 1) & ~(info.dwAllocationGranularity - 1));
+            last = (char*)((long long)last & ~(info.dwAllocationGranularity - 1));
+            if (last != first) {
+                p = VirtualAlloc(first, last - first, MEM_RESERVE, PAGE_NOACCESS); // reserve all memory in between
+                assert(p == first);
+            }
+        }
+        meminfo.BaseAddress += meminfo.RegionSize;
+    }
+#endif
+}
 int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
 {
     int i;
+    lock_low32();
     for (i=0; i<argc; i++) { // write the command line to UTF8
         wchar_t *warg = argv[i];
         size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
