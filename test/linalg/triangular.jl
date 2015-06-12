@@ -171,6 +171,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                     @test_throws DimensionMismatch eye(n+1)*A2'
                     @test_throws DimensionMismatch A2'*eye(n+1)
                     @test_throws DimensionMismatch A2*eye(n+1)
+                    @test_throws DimensionMismatch A2*ones(n+1)
                 end
             end
         end

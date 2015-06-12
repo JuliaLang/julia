@@ -18,40 +18,66 @@ for elty in [Float32, Float64, Complex64, Complex128]
     v14 = convert(Vector{elty}, [1:4;])
     v41 = convert(Vector{elty}, [4:-1:1;])
 
-    # dot
-    if elty <: Real
-        x1 = convert(Vector{elty}, randn(10))
-        x2 = convert(Vector{elty}, randn(10))
-        @test_approx_eq BLAS.dot(x1,x2) sum(x1.*x2)
-        @test_throws DimensionMismatch BLAS.dot(x1,rand(elty,11))
-    else
-        z1 = convert(Vector{elty}, complex(randn(10),randn(10)))
-        z2 = convert(Vector{elty}, complex(randn(10),randn(10)))
-        @test_approx_eq BLAS.dotc(z1,z2) sum(conj(z1).*z2)
-        @test_approx_eq BLAS.dotu(z1,z2) sum(z1.*z2)
-        @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty,11))
-        @test_throws DimensionMismatch BLAS.dotu(z1,rand(elty,11))
-    end
+    let n = 10
+        # dot
+        if elty <: Real
+            x1 = convert(Vector{elty}, randn(n))
+            x2 = convert(Vector{elty}, randn(n))
+            @test_approx_eq BLAS.dot(x1,x2) sum(x1.*x2)
+            @test_throws DimensionMismatch BLAS.dot(x1,rand(elty, n + 1))
+        else
+            z1 = convert(Vector{elty}, complex(randn(n),randn(n)))
+            z2 = convert(Vector{elty}, complex(randn(n),randn(n)))
+            @test_approx_eq BLAS.dotc(z1,z2) sum(conj(z1).*z2)
+            @test_approx_eq BLAS.dotu(z1,z2) sum(z1.*z2)
+            @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty, n + 1))
+            @test_throws DimensionMismatch BLAS.dotu(z1,rand(elty, n + 1))
+        end
 
-    # axpy
-    if elty <: Real
-        x1 = convert(Vector{elty}, randn(10))
-        x2 = convert(Vector{elty}, randn(10))
-        α  = rand(elty)
-        @test_approx_eq BLAS.axpy!(α,copy(x1),copy(x2)) x2 + α*x1
-        @test_throws DimensionMismatch BLAS.axpy!(α,copy(x1),rand(elty,11))
-        @test_throws DimensionMismatch BLAS.axpy!(α,copy(x1),1:5,copy(x2),1:6)
-        @test_throws BoundsError BLAS.axpy!(α,copy(x1),0:5,copy(x2),1:6)
-        @test_throws BoundsError BLAS.axpy!(α,copy(x1),1:7,copy(x2),0:6)
-    else
-        z1 = convert(Vector{elty}, complex(randn(10),randn(10)))
-        z2 = convert(Vector{elty}, complex(randn(10),randn(10)))
-        α  = rand(elty)
-        @test_approx_eq BLAS.axpy!(α,copy(z1),copy(z2)) z2 + α*z1
-        @test_throws DimensionMismatch BLAS.axpy!(α,copy(z1),rand(elty,11))
-        @test_throws DimensionMismatch BLAS.axpy!(α,copy(z1),1:5,copy(z2),1:6)
-        @test_throws BoundsError BLAS.axpy!(α,copy(z1),0:5,copy(z2),1:6)
-        @test_throws BoundsError BLAS.axpy!(α,copy(z1),1:7,copy(z2),0:6)
+        #iamax
+        if elty <: Real
+            x = convert(Vector{elty}, randn(n))
+            @test BLAS.iamax(x) == indmax(abs(x))
+        else
+            z = convert(Vector{elty}, complex(randn(n),randn(n)))
+            @test BLAS.iamax(z) == indmax(map(x -> abs(real(x)) + abs(imag(x)), z))
+        end
+
+        # axpy
+        if elty <: Real
+            x1 = convert(Vector{elty}, randn(n))
+            x2 = convert(Vector{elty}, randn(n))
+                α  = rand(elty)
+            @test_approx_eq BLAS.axpy!(α,copy(x1),copy(x2)) x2 + α*x1
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), rand(elty, n + 1))
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
+            @test_throws BoundsError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
+            @test_throws BoundsError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
+        else
+            z1 = convert(Vector{elty}, complex(randn(n), randn(n)))
+            z2 = convert(Vector{elty}, complex(randn(n), randn(n)))
+            α  = rand(elty)
+            @test_approx_eq BLAS.axpy!(α, copy(z1), copy(z2)) z2 + α * z1
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), rand(elty, n + 1))
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), 1:div(n, 2), copy(z2), 1:(div(n, 2) + 1))
+            @test_throws BoundsError BLAS.axpy!(α, copy(z1), 0:div(n,2), copy(z2), 1:(div(n, 2) + 1))
+            @test_throws BoundsError BLAS.axpy!(α, copy(z1), 1:div(n,2), copy(z2), 0:(div(n, 2) - 1))
+        end
+
+        # trsv
+        A = triu(rand(elty,n,n))
+        x = rand(elty,n)
+        @test_approx_eq A\x BLAS.trsv('U','N','N',A,x)
+        @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
+
+        # copy
+        x1 = convert(Vector{elty}, randn(n))
+        x2 = convert(Vector{elty}, randn(n))
+        BLAS.copy!(x2, 1:n, x1, 1:n)
+        @test x2 == x1
+        @test_throws DimensionMismatch BLAS.copy!(x2, 1:n, x1, 1:(n - 1))
+        @test_throws BoundsError BLAS.copy!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
+        @test_throws BoundsError BLAS.copy!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
     end
 
     # gemv
@@ -124,4 +150,5 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test all(Base.LinAlg.copytri!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
         @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty),eye(elty,5),one(elty),eye(elty,6))
     end
+
 end
