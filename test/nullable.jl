@@ -272,3 +272,6 @@ end
 @test isnull(convert(Nullable, nothing))
 @test isnull(convert(Nullable{Int}, nothing))
 @test isa(convert(Nullable{Int}, nothing), Nullable{Int})
+
+# issue #11675
+@test repr(Nullable()) == "Nullable{Union()}()"

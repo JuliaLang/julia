@@ -2939,3 +2939,15 @@ function f11295(x...)
     call = Expr(x...)
 end
 @test isa(f11295(:a,:b), Expr)
+
+# issue #11675
+immutable T11675{T}
+    x::T
+    T11675() = new()
+end
+let x = T11675{Union()}()
+    function f(x)
+        x.x + 1
+    end
+    @test_throws UndefRefError f(x)
+end

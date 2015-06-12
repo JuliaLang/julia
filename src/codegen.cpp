@@ -2142,13 +2142,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
         JL_GC_POP();
-#ifdef LLVM37
-        builder.CreateCall(prepare_call(jlthrow_line_func), {arg1,
-                            ConstantInt::get(T_int32, ctx->lineno)});
-#else
-        builder.CreateCall2(prepare_call(jlthrow_line_func), arg1,
-                            ConstantInt::get(T_int32, ctx->lineno));
-#endif
+        raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {

@@ -1287,6 +1287,10 @@ static Value *emit_getfield_knownidx(Value *strct, unsigned idx, jl_datatype_t *
     jl_value_t *jfty = jl_field_type(jt,idx);
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
+    if (jfty == jl_bottom_type) {
+        raise_exception_unless(ConstantInt::get(T_int1,0), prepare_global(jlundeferr_var), ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
+    }
     if (elty == T_void)
         return ghostValue(jfty);
     Value *fldv = NULL;
