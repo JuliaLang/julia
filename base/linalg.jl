@@ -3,7 +3,8 @@
 module LinAlg
 
 importall Base
-import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix, transpose!
+import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring,
+             print_matrix, transpose!, unsafe_getindex, unsafe_setindex!
 
 export
 # Modules

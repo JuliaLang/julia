@@ -142,4 +142,12 @@ let d = randn(n), D = Diagonal(d)
             end
         end
     end
+    @test_throws BoundsError D[0, 0]
+    @test_throws BoundsError (D[0, 0] = 0)
+    @test_throws BoundsError D[-1,-2]
+    @test_throws BoundsError (D[-1,-2] = 0)
+    @test_throws BoundsError D[n+1,n+1]
+    @test_throws BoundsError (D[n+1,n+1] = 0)
+    @test_throws BoundsError D[n,n+1]
+    @test_throws BoundsError (D[n,n+1] = 0)
 end
