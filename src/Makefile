@@ -114,6 +114,9 @@ julia_version.h: ../VERSION
 
 ifneq ($(USEMSVC), 1)
 CXXLD = $(CXX) -shared
+ifeq ($(OS),WINNT)
+CXXLD += -Wl,--out-implib,$(build_libdir)/$(notdir $@).a
+endif
 else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
