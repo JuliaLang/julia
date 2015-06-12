@@ -291,7 +291,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         jl_throw(jl_memory_exception);
     }
 #ifdef SEGV_EXCEPTION
-    else {
+    else if (sig == SIGSEGV) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -757,14 +757,12 @@ void *mach_segv_listener(void *arg)
 }
 
 #ifdef SEGV_EXCEPTION
-
 void darwin_segv_handler(unw_context_t *uc)
 {
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
     jl_exception_in_transit = jl_segv_exception;
     jl_rethrow();
 }
-
 #endif
 
 void darwin_stack_overflow_handler(unw_context_t *uc)
@@ -822,8 +820,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 #ifdef SEGV_EXCEPTION
     if (1) {
 #else
-    if (is_addr_on_stack((void*)fault_addr) ||
-        ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)) {
+    if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
 #endif
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
@@ -845,14 +842,14 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         memset(uc,0,sizeof(unw_context_t));
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
-        if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
-            state.__rip = (uint64_t)darwin_accerr_handler;
+        if (is_addr_on_stack((void*)fault_addr))
+            state.__rip = (uint64_t)darwin_stack_overflow_handler;
 #ifdef SEGV_EXCEPTION
-        else if (!is_addr_on_stack((void*)fault_addr))
+        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0)
             state.__rip = (uint64_t)darwin_segv_handler;
 #endif
         else
-            state.__rip = (uint64_t)darwin_stack_overflow_handler;
+            state.__rip = (uint64_t)darwin_accerr_handler;
 
         state.__rbp = state.__rsp;
         ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
@@ -987,6 +984,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 void attach_exception_port()
 {
     kern_return_t ret;
+    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
     ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
     HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
 }
