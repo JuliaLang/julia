@@ -1294,16 +1294,12 @@ macro fetchfrom(p, expr)
     :(remotecall_fetch($(esc(p)), $(esc(expr))))
 end
 
-function at_each(f, args...)
-    for w in PGRP.workers
-        sync_add(remotecall(w.id, f, args...))
-    end
-end
-
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval(Main,$(Expr(:quote,ex))))
+            for w in PGRP.workers
+                @async remotecall_fetch(w.id, ()->(eval(Main,$(Expr(:quote,ex))); nothing))
+            end
         end
     end
 end
