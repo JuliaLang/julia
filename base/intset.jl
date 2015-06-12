@@ -113,7 +113,7 @@ symdiff(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!(copy(s2), s1))
 
 function empty!(s::IntSet)
-    s.bits[:] = 0
+    fill!(s.bits, 0)
     return s
 end
 
