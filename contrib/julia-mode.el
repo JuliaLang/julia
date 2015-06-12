@@ -396,7 +396,8 @@ before point. Returns nil if we're not within nested parens."
                    (progn
                      (forward-line -1)
                      (end-of-line) (backward-char 1)
-                     (equal (char-after (point)) ?=)))
+                     (and (equal (char-after (point)) ?=)
+                          (not (julia-in-comment)))))
               (+ julia-basic-offset (current-indentation))
             nil)))
       ;; Indent according to how many nested blocks we are in.
