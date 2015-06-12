@@ -406,6 +406,7 @@ extern DLLEXPORT jl_datatype_t *jl_methoderror_type;
 extern DLLEXPORT jl_datatype_t *jl_undefvarerror_type;
 extern DLLEXPORT jl_value_t *jl_stackovf_exception;
 extern DLLEXPORT jl_value_t *jl_memory_exception;
+extern DLLEXPORT jl_value_t *jl_readonlymemory_exception;
 extern DLLEXPORT jl_value_t *jl_diverror_exception;
 extern DLLEXPORT jl_value_t *jl_domain_exception;
 extern DLLEXPORT jl_value_t *jl_overflow_exception;
