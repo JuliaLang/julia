@@ -545,6 +545,13 @@ static Value *literal_pointer_val(jl_binding_t *p)
     return julia_gv("jl_bnd#", p->name, p->owner, p);
 }
 
+static Value *julia_binding_gv(Value *bv)
+{
+    return builder.
+        CreateGEP(bv,ConstantInt::get(T_size,
+                                      offsetof(jl_binding_t,value)/sizeof(size_t)));
+}
+
 static Value *julia_binding_gv(jl_binding_t *b)
 {
     // emit a literal_pointer_val to the value field of a jl_binding_t
@@ -552,8 +559,7 @@ static Value *julia_binding_gv(jl_binding_t *b)
     Value *bv = imaging_mode ?
         builder.CreateBitCast(julia_gv("*", b->name, b->owner, b), jl_ppvalue_llvmt) :
         literal_static_pointer_val(b,jl_ppvalue_llvmt);
-    return builder.CreateGEP(bv,ConstantInt::get(T_size,
-                offsetof(jl_binding_t,value)/sizeof(size_t)));
+    return julia_binding_gv(bv);
 }
 
 // --- mapping between julia and llvm types ---
