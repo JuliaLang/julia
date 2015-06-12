@@ -66,8 +66,6 @@ static GC_Num gc_num = {0,0,0,0,0,0,0,0,0,0,0,0};
 #define total_allocd_bytes gc_num.total_allocd
 #define allocd_bytes_since_sweep gc_num.since_sweep
 
-static long system_page_size;
-
 // malloc wrappers, aligned allocation
 
 #if defined(_P64) || defined(__APPLE__)
@@ -672,7 +670,7 @@ static NOINLINE void *malloc_page(void)
 #ifdef _OS_WINDOWS_
             char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
-            if (GC_PAGE_SZ > system_page_size)
+            if (GC_PAGE_SZ > jl_page_size)
                 alloc_size += GC_PAGE_SZ;
             char* mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
@@ -681,7 +679,7 @@ static NOINLINE void *malloc_page(void)
                 jl_printf(JL_STDERR, "could not allocate pools\n");
                 abort();
             }
-            if (GC_PAGE_SZ > system_page_size) {
+            if (GC_PAGE_SZ > jl_page_size) {
                 // round data pointer up to the nearest GC_PAGE_DATA-aligned boundary
                 // if mmap didn't already do so
                 alloc_size += GC_PAGE_SZ;
@@ -751,11 +749,11 @@ static void free_page(void *p)
     free(region->meta[pg_idx].ages);
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
-    if (GC_PAGE_SZ < system_page_size) {
+    if (GC_PAGE_SZ < jl_page_size) {
         // ensure so we don't release more memory than intended
-        size_t n_pages = (GC_PAGE_SZ + system_page_size - 1) / GC_PAGE_SZ;
-        decommit_size = system_page_size;
-        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(system_page_size - 1)); // round down to the nearest page
+        size_t n_pages = (GC_PAGE_SZ + jl_page_size - 1) / GC_PAGE_SZ;
+        decommit_size = jl_page_size;
+        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(jl_page_size - 1)); // round down to the nearest page
         pg_idx = PAGE_INDEX(region, (char*)p+GC_PAGE_OFFSET);
         if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
         for (; n_pages--; pg_idx++) {
@@ -2546,7 +2544,6 @@ static void jl_mk_thread_heap(void) {
 // System-wide initializations
 void jl_gc_init(void)
 {
-    system_page_size = jl_getpagesize();
     jl_mk_thread_heap();
 
     arraylist_new(&finalizer_list, 0);
