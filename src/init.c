@@ -288,7 +288,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_throw(jl_memory_exception);
+        jl_throw(jl_readonlymemory_exception);
     }
 #ifdef SEGV_EXCEPTION
     else if (sig == SIGSEGV) {
@@ -396,6 +396,11 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
             case EXCEPTION_STACK_OVERFLOW:
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
+            case EXCEPTION_ACCESS_VIOLATION:
+                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
+                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
         }
         jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
@@ -775,7 +780,7 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 void darwin_accerr_handler(unw_context_t *uc)
 {
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
-    jl_exception_in_transit = jl_memory_exception;
+    jl_exception_in_transit = jl_readonlymemory_exception;
     jl_rethrow();
 }
 
@@ -1366,6 +1371,7 @@ void jl_get_builtin_hooks(void)
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
+    jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
 
 #ifdef SEGV_EXCEPTION
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
