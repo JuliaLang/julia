@@ -532,7 +532,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # unary operator (i.e. "!z")
         elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
-            if isa(func_args[1], Expr) || length(func_args) > 1
+            #for safety, always wrap a call on an operator in parens
+            arg_is_op = func_args[1] in union(uni_ops, expr_infix_any)
+            if arg_is_op || isa(func_args[1], Expr)
                 show_enclosed_list(io, '(', func_args, ",", ')', indent, func_prec)
             else
                 show_unquoted(io, func_args[1])
