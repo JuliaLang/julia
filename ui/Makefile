@@ -37,8 +37,9 @@ ifeq ($(OS),WINNT)
 JLDFLAGS += -municode
 endif
 
-release debug:
-	$(MAKE) julia-$@
+default: release
+all: release debug
+release debug :  % : julia-%
 
 %.o: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
