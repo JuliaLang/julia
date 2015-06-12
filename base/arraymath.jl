@@ -1,21 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## setindex! with Colon
-function setindex!(A::Array, x, ::Colon)
-    for i in 1:length(A)
-        @inbounds A[i] = x
-    end
-    return A
-end
-function setindex!(A::Array, X::AbstractArray, ::Colon)
-    setindex_shape_check(X, length(A))
-    i = 0
-    for x in X
-        @inbounds A[i+=1] = x
-    end
-    return A
-end
-
 ## Unary operators ##
 
 function conj!{T<:Number}(A::AbstractArray{T})
