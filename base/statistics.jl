@@ -479,7 +479,31 @@ median{T}(v::AbstractArray{T}, region) = mapslices(median, v, region)
 # see ?quantile in R -- this is type 7
 # TODO: need faster implementation (use select!?)
 #
+
+
 function quantile!(v::AbstractVector, q::AbstractVector)
+    isempty(v) && throw(ArgumentError("empty data array"))
+   isempty(q) && throw(ArgumentError("empty quantile array"))
+
+   # make sure the quantiles are in [0,1]
+   q = bound_quantiles(q)
+
+   lv = length(v)
+   lq = length(q)
+
+   index = 1 .+ (lv-1)*q
+   lo = floor(Int,index)
+   hi = ceil(Int,index)
+   sort!(v)
+   isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
+   i = find(index .> lo)
+   r = float(v[lo])
+   h = (index.-lo)[i]
+   r[i] = (1.-h).*r[i] + h.*v[hi[i]]
+   return r
+end
+
+function quantile(v::AbstractVector, q::AbstractVector) 
     isempty(v) && throw(ArgumentError("empty data array"))
     isempty(q) && throw(ArgumentError("empty quantile array"))
 
@@ -490,17 +514,16 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     lq = length(q)
 
     index = 1 .+ (lv-1)*q
-    lo = floor(Int,index)
-    hi = ceil(Int,index)
-    sort!(v)
+    lo = floor(Int, index)
+    hi = ceil(Int, index)
+    perm = sortperm(v)
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     i = find(index .> lo)
-    r = float(v[lo])
+    r = float(v[perm[lo]])
     h = (index.-lo)[i]
-    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
+    r[i] = (1.-h).*r[i] + h.*v[perm[hi[i]]]
     return r
 end
-quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
 quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 
 function bound_quantiles(qs::AbstractVector)
