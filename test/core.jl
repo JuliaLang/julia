@@ -2946,8 +2946,8 @@ immutable T11675{T}
     T11675() = new()
 end
 let x = T11675{Union()}()
-    function f(x)
+    function f11675(x)
         x.x + 1
     end
-    @test_throws UndefRefError f(x)
+    @test_throws UndefRefError f11675(x)
 end
