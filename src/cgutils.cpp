@@ -42,10 +42,45 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
 static inline void add_named_global(GlobalValue *gv, void *addr)
 {
 #ifdef USE_MCJIT
-    sys::DynamicLibrary::AddSymbol(gv->getName(),addr);
-#else
-    jl_ExecutionEngine->addGlobalMapping(gv,addr);
+
+    StringRef name = gv->getName();
+#ifdef _OS_WINDOWS_
+    std::string imp_name;
+    // setting DLLEXPORT correctly only matters when building a binary
+    if (jl_options.build_path != NULL) {
+        // add the __declspec(dllimport) attribute
+        gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+        // this will cause llvm to rename it, so we do the same
+        imp_name = Twine("__imp_", name).str();
+        name = StringRef(imp_name);
+        // __imp_ functions are jmp stubs (no additional work needed)
+        // __imp_ variables are indirection pointers, so use malloc to simulate that too
+        if (isa<GlobalVariable>(gv)) {
+            void** imp_addr = (void**)malloc(sizeof(void**));
+            *imp_addr = addr;
+            addr = (void*)imp_addr;
+        }
+    }
 #endif
+    addComdat(gv);
+    sys::DynamicLibrary::AddSymbol(name, addr);
+
+#else // USE_MCJIT
+
+#ifdef _OS_WINDOWS_
+    // setting DLLEXPORT correctly only matters when building a binary
+    if (jl_options.build_path != NULL) {
+        if (gv->getLinkage() == GlobalValue::ExternalLinkage)
+            gv->setLinkage(GlobalValue::DLLImportLinkage);
+        // the following is correct by observation,
+        // as long as everything stays within a 32-bit offset :/
+        void** imp_addr = (void**)malloc(sizeof(void**));
+        *imp_addr = addr;
+        addr = (void*)imp_addr;
+    }
+#endif // _OS_WINDOWS_
+    jl_ExecutionEngine->addGlobalMapping(gv, addr);
+#endif // USE_MCJIT
 }
 
 // --- string constants ---
