@@ -356,9 +356,9 @@ This variable has a moderate effect on indent performance if set too
 high.")
 
 (defun julia-paren-indent ()
-  "Return the column position of the first non-blank character
-after the innermost containing paren before point. Returns nil if
-we're not within nested parens."
+  "Return the column of the text following the innermost
+containing paren before point, so we can align succeeding code
+with it. Returns nil if we're not within nested parens."
   (save-excursion
     (let ((min-pos (max (- (point) julia-max-paren-lookback)
                         (point-min)))
@@ -513,7 +513,7 @@ end"
 end"))
 
   (ert-deftest julia--test-indent-paren ()
-    "We should indent to line up with open parens."
+    "We should indent to line up with the text after an open paren."
     (julia--should-indent
      "
 foobar(bar,
@@ -521,6 +521,17 @@ baz)"
      "
 foobar(bar,
        baz)"))
+
+  (ert-deftest julia--test-indent-paren-space ()
+    "We should indent to line up with the text after an open
+paren, even if there are additional spaces."
+    (julia--should-indent
+     "
+foobar( bar,
+baz )"
+     "
+foobar( bar,
+        baz )"))
 
   (ert-deftest julia--test-indent-equals ()
     "We should increase indent on a trailing =."
