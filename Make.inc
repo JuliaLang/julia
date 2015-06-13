@@ -474,6 +474,12 @@ endif
 
 JULIA_CPU_TARGET ?= native
 
+# Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
+ifneq ($(findstring $(JULIA_CPU_TARGET),i386 i486 i586 i686 pentium pentium2 pentium3),)
+$(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binary, \
+pass 'MARCH=i686 JULIA_CPU_TARGET=pentium4', or 'MARCH=pentium4' if not building any dependencies.)
+endif
+
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
 override ARCH = x86_64
