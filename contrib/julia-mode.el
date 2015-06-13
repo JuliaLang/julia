@@ -542,6 +542,18 @@ if foo
     bar
 end"))
 
+  (ert-deftest julia--test-indent-comment-equal ()
+    "`=` at the end of comment should not increase indent level."
+    (julia--should-indent
+     "
+# a =
+# b =
+c"
+     "
+# a =
+# b =
+c"))
+
   (defun julia--run-tests ()
     (interactive)
     (ert-run-tests-interactively "julia--test")))
