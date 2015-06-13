@@ -375,9 +375,8 @@ Any[
 
 ("Base","slice","slice(A, inds...)
 
-   Returns a view of the given indexes of array \"A\" with the given
-   indices like \"sub()\", but drops all dimensions indexed with
-   scalars.
+   Returns a view of array \"A\" with the given indices like
+   \"sub()\", but drops all dimensions indexed with scalars.
 
 "),
 
