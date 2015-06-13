@@ -1490,9 +1490,19 @@ typedef struct {
     uv_file file;
 } jl_uv_file_t;
 
-DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
-DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
-DLLEXPORT void jl_safe_printf(const char *str, ...);
+#ifdef __GNUC__
+#define _JL_FORMAT_ATTR(type, str, arg) \
+    __attribute__((format(type, str, arg)))
+#else
+#define _JL_FORMAT_ATTR(type, str, arg)
+#endif
+
+DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+    _JL_FORMAT_ATTR(printf, 2, 3);
+DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+    _JL_FORMAT_ATTR(printf, 2, 0);
+DLLEXPORT void jl_safe_printf(const char *str, ...)
+    _JL_FORMAT_ATTR(printf, 1, 2);
 
 extern DLLEXPORT JL_STREAM *JL_STDIN;
 extern DLLEXPORT JL_STREAM *JL_STDOUT;
