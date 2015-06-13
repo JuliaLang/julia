@@ -88,7 +88,7 @@ for i in $toinstall; do
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')
   rm $href
-  7z e -y $cpiofile
+  7z x -y $cpiofile
   rm $cpiofile
 done
 rmdir --ignore-fail-on-non-empty noarch

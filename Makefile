@@ -453,7 +453,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1 \
-	"mingw32-libexpat1 mingw32-zlib1"
+	"mingw32-libexpat1 mingw32-zlib1" && \
+	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -461,7 +462,8 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1 \
-	"mingw64-libexpat1 mingw64-zlib1"
+	"mingw64-libexpat1 mingw64-zlib1" && \
+	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
