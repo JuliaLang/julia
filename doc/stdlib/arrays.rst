@@ -223,11 +223,11 @@ Indexing, Assignment, and Concatenation
 
 .. function:: getindex(A, inds...)
 
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
 .. function:: sub(A, inds...)
 
-   Returns a SubArray, which stores the input ``A`` and ``inds`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
+   Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
 .. function:: parent(A)
 
@@ -243,8 +243,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: slice(A, inds...)
 
-   Create a view of the given indexes of array ``A``, dropping dimensions indexed with
-   scalars.
+   Returns a view of the given indexes of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 
 .. function:: setindex!(A, X, inds...)
 

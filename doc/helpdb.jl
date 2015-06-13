@@ -37,7 +37,7 @@ Any[
 
 "),
 
-("Base","eachindex","eachindex(A)
+("Base","eachindex","eachindex(A...)
 
    Creates an iterable object for visiting each index of an
    AbstractArray \"A\" in an efficient manner. For array types that
@@ -336,15 +336,18 @@ Any[
 ("Base","getindex","getindex(A, inds...)
 
    Returns a subset of array \"A\" as specified by \"inds\", where
-   each \"ind\" may be an \"Int\", a \"Range\", or a \"Vector\".
+   each \"ind\" may be an \"Int\", a \"Range\", or a \"Vector\". See
+   the manual section on *array indexing* for details.
 
 "),
 
 ("Base","sub","sub(A, inds...)
 
-   Returns a SubArray, which stores the input \"A\" and \"inds\"
-   rather than computing the result immediately. Calling \"getindex\"
-   on a SubArray computes the indices on the fly.
+   Like \"getindex()\", but returns a view into the parent array \"A\"
+   with the given indices instead of making a copy.  Calling
+   \"getindex()\" or \"setindex!()\" on the returned \"SubArray\"
+   computes the indices to the parent array on the fly without
+   checking bounds.
 
 "),
 
@@ -372,8 +375,9 @@ Any[
 
 ("Base","slice","slice(A, inds...)
 
-   Create a view of the given indexes of array \"A\", dropping
-   dimensions indexed with scalars.
+   Returns a view of the given indexes of array \"A\" with the given
+   indices like \"sub()\", but drops all dimensions indexed with
+   scalars.
 
 "),
 
@@ -1529,7 +1533,7 @@ Any[
 
 "),
 
-("Base","ntuple","ntuple(n, f::Function)
+("Base","ntuple","ntuple(f::Function, n)
 
    Create a tuple of length \"n\", computing each element as \"f(i)\",
    where \"i\" is the index of the element.
@@ -1909,6 +1913,13 @@ Any[
 
       julia> f(apple)
       \"I'm a FRUIT with value: 1\"
+
+"),
+
+("Base","instances","instances(T::Type)
+
+   Return a collection of all instances of the given type, if
+   applicable. Mostly used for enumerated types (see \"@enum\").
 
 "),
 
@@ -2534,6 +2545,12 @@ Any[
 
 "),
 
+("Base","ReadOnlyMemoryError","ReadOnlyMemoryError()
+
+   An operation tried to write to memory that is read-only.
+
+"),
+
 ("Base","OverflowError","OverflowError()
 
    The result of an expression is too large for the specified type and
@@ -2588,26 +2605,21 @@ Any[
 
 "),
 
-("Base","Timer","Timer(f::Function)
+("Base","Timer","Timer(callback::Function, delay, repeat=0)
 
    Create a timer to call the given callback function. The callback is
-   passed one argument, the timer object itself. The timer can be
-   started and stopped with \"start_timer\" and \"stop_timer\".
+   passed one argument, the timer object itself. The callback will be
+   invoked after the specified initial delay, and then repeating with
+   the given \"repeat\" interval. If \"repeat\" is \"0\", the timer is
+   only triggered once. Times are in seconds. A timer is stopped and
+   has its resources freed by calling \"close\" on it.
 
 "),
 
-("Base","start_timer","start_timer(t::Timer, delay, repeat)
+("Base","Timer","Timer(delay, repeat=0)
 
-   Start invoking the callback for a \"Timer\" after the specified
-   initial delay, and then repeating with the given interval. Times
-   are in seconds. If \"repeat\" is \"0\", the timer is only triggered
-   once.
-
-"),
-
-("Base","stop_timer","stop_timer(t::Timer)
-
-   Stop invoking the callback for a timer.
+   Create a timer that wakes up tasks waiting for it (by calling
+   \"wait\" on the timer object) at a specified interval.
 
 "),
 
@@ -2704,18 +2716,12 @@ Any[
 
 "),
 
-("Base","gc_disable","gc_disable()
+("Base","gc_enable","gc_enable(on::Bool)
 
-   Disable garbage collection. This should be used only with extreme
-   caution, as it can cause memory use to grow without bound. Returns
-   previous GC state.
-
-"),
-
-("Base","gc_enable","gc_enable()
-
-   Re-enable garbage collection after calling \"gc_disable()\".
-   Returns previous GC state.
+   Control whether garbage collection is enabled using a boolean
+   argument (true for enabled, false for disabled). Returns previous
+   GC state. Disabling garbage collection should be used only with
+   extreme caution, as it can cause memory use to grow without bound.
 
 "),
 
@@ -7070,17 +7076,26 @@ popdisplay(d::Display)
 ("Base","cholfact","cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite
-   matrix \"A\". A fill-reducing permutation is used.  The main
-   application of this type is to solve systems of equations with
-   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
-   defined. The function calls the C library CHOLMOD and many other
-   functions from the library are wrapped but not exported.
+   matrix \"A\". A fill-reducing permutation is used.  \"F =
+   cholfact(A)\" is most frequently used to solve systems of equations
+   with \"F\\b\", but also the methods \"diag\", \"det\", \"logdet\"
+   are defined for \"F\".  You can also extract individual factors
+   from \"F\", using \"F[:L]\".  However, since pivoting is on by
+   default, the factorization is internally represented as \"A ==
+   P'*L*L'*P\" with a permutation matrix \"P\"; using just \"L\"
+   without accounting for \"P\" will give incorrect answers.  To
+   include the effects of permutation, it's typically preferable to
+   extact \"combined\" factors like \"PtL = F[:PtL]\" (the equivalent
+   of \"P'*L\") and \"LtP = F[:UP]\" (the equivalent of \"L'*P\").
 
    Setting optional \"shift\" keyword argument computes the
    factorization of \"A+shift*I\" instead of \"A\".  If the \"perm\"
    argument is nonempty, it should be a permutation of *1:size(A,1)*
    giving the ordering to use (instead of CHOLMOD's default AMD
    ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 "),
 
@@ -7105,17 +7120,28 @@ popdisplay(d::Display)
 ("Base","ldltfact","ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian
-   matrix \"A\". A fill-reducing permutation is used.  The main
-   application of this type is to solve systems of equations with
-   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
-   defined. The function calls the C library CHOLMOD and many other
-   functions from the library are wrapped but not exported.
+   matrix \"A\". A fill-reducing permutation is used.  \"F =
+   ldltfact(A)\" is most frequently used to solve systems of equations
+   with \"F\\b\", but also the methods \"diag\", \"det\", \"logdet\"
+   are defined for \"F\". You can also extract individual factors from
+   \"F\", using \"F[:L]\".  However, since pivoting is on by default,
+   the factorization is internally represented as \"A == P'*L*D*L'*P\"
+   with a permutation matrix \"P\"; using just \"L\" without
+   accounting for \"P\" will give incorrect answers.  To include the
+   effects of permutation, it's typically preferable to extact
+   \"combined\" factors like \"PtL = F[:PtL]\" (the equivalent of
+   \"P'*L\") and \"LtP = F[:UP]\" (the equivalent of \"L'*P\").  The
+   complete list of supported factors is \":L, :PtL, :D, :UP, :U, :LD,
+   :DU, :PtLD, :DUP\".
 
    Setting optional \"shift\" keyword argument computes the
    factorization of \"A+shift*I\" instead of \"A\".  If the \"perm\"
    argument is nonempty, it should be a permutation of *1:size(A,1)*
    giving the ordering to use (instead of CHOLMOD's default AMD
    ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 "),
 
@@ -11672,6 +11698,16 @@ golden
 
    \"exeflags\" :  additional flags passed to the worker processes.
 
+   Environment variables :
+
+   If the master process fails to establish a connection with a newly
+   launched worker within 60.0 seconds, the worker treats it a fatal
+   situation and terminates. This timeout can be controlled via
+   environment variable \"JULIA_WORKER_TIMEOUT\". The value of
+   \"JULIA_WORKER_TIMEOUT\" on the master process, specifies the
+   number of seconds a newly launched worker waits for connection
+   establishment.
+
 "),
 
 ("Base","addprocs","addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
@@ -11680,6 +11716,11 @@ golden
 
    For example Beowulf clusters are  supported via a custom cluster
    manager implemented in  package \"ClusterManagers\".
+
+   The number of seconds a newly launched worker waits for connection
+   establishment from the master can be specified via variable
+   \"JULIA_WORKER_TIMEOUT\" in the worker process's environment.
+   Relevant only when using TCP/IP as transport.
 
 "),
 
