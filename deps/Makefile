@@ -451,6 +451,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+
 ifneq ($(USEMSVC), 1)
 UV_OPTS =
 else
@@ -592,6 +593,9 @@ install-double-conversion: $(GRISU_OBJ_TARGET)
 ## openlibm ##
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+ifeq (CYGWIN,$(findstring CYGWIN,$(BUILD_OS)))
+OPENLIBM_FLAGS += OPENLIBM_HOME="$(call cygpath_w,$(abspath $(OPENLIBM_SRC_DIR)))"
+endif
 
 OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
