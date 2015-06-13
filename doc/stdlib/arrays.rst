@@ -243,7 +243,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: slice(A, inds...)
 
-   Returns a view of the given indexes of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
+   Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 
 .. function:: setindex!(A, X, inds...)
 
