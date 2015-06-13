@@ -549,16 +549,16 @@ for (fname, elty) in ((:dsyr_,:Float64),
 end
 
 ### her
-for (fname, elty) in ((:zher_,:Complex128),
-                      (:cher_,:Complex64))
+for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
+                             (:cher_,:Complex64, :Float32))
     @eval begin
-        function her!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
+        function her!(uplo::Char, α::$relty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = chksquare(A)
-            if length(x) != A
+            if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
             ccall(($(blasfunc(fname)), libblas), Void,
-                (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  uplo, n, α, x,
                  1, A, max(1,stride(A,2)))
