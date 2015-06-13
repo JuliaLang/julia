@@ -174,6 +174,32 @@ function AddCustomMode(repl)
     foobar_mode, search_prompt
 end
 
+# Note: since the \t character matters for the REPL file history,
+# it is important not to have the """ code reindent this line,
+# possibly converting \t to spaces.
+fakehistory = """
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\tshell
+# time: 2014-06-30 17:32:59 EDT
+# mode: shell
+\tll
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\t1 + 1
+# time: 2014-06-30 17:35:39 EDT
+# mode: foobar
+\tbarfoo
+# time: 2014-06-30 18:44:29 EDT
+# mode: shell
+\tls
+# time: 2014-06-30 19:44:29 EDT
+# mode: foobar
+\tls
+# time: 2014-06-30 20:44:29 EDT
+# mode: julia
+\t2 + 2"""
+
 # Test various history related issues
 begin
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
@@ -191,29 +217,6 @@ begin
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
                                                    :help  => help_mode))
-    fakehistory =
-    """
-    # time: 2014-06-30 17:32:49 EDT
-    # mode: julia
-    \tshell
-    # time: 2014-06-30 17:32:59 EDT
-    # mode: shell
-    \tll
-    # time: 2014-06-30 17:32:49 EDT
-    # mode: julia
-    \t1 + 1
-    # time: 2014-06-30 17:35:39 EDT
-    # mode: foobar
-    \tbarfoo
-    # time: 2014-06-30 18:44:29 EDT
-    # mode: shell
-    \tls
-    # time: 2014-06-30 19:44:29 EDT
-    # mode: foobar
-    \tls
-    # time: 2014-06-30 20:44:29 EDT
-    # mode: julia
-    \t2 + 2"""
 
     REPL.hist_from_file(hp, IOBuffer(fakehistory))
     REPL.history_reset_state(hp)
