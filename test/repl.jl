@@ -122,6 +122,44 @@ function buffercontents(buf::IOBuffer)
     c
 end
 
+function AddCustomMode(repl)
+    # Custom REPL mode tests
+    foobar_mode = LineEdit.Prompt("Test";
+        prompt_prefix="\e[38;5;166m",
+        prompt_suffix=Base.text_colors[:white],
+        on_enter = s->true,
+        on_done = line->true)
+
+    main_mode = repl.interface.modes[1]
+    push!(repl.interface.modes,foobar_mode)
+
+    hp = main_mode.hist
+    hp.mode_mapping[:foobar] = foobar_mode
+    foobar_mode.hist = hp
+
+    const foobar_keymap = Dict{Any,Any}(
+        '<' => function (s,args...)
+            if isempty(s)
+                if !haskey(s.mode_state,foobar_mode)
+                    s.mode_state[foobar_mode] = LineEdit.init_state(repl.t,foobar_mode)
+                end
+                LineEdit.transition(s,foobar_mode)
+            else
+                LineEdit.edit_insert(s,'<')
+            end
+        end
+    )
+
+    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
+    mk = REPL.mode_keymap(main_mode)
+
+    b = Dict{Any,Any}[skeymap, mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    foobar_mode.keymap_dict = LineEdit.keymap(b)
+
+    main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap);
+    foobar_mode
+end
+
 # Test various history related issues
 begin
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
@@ -129,11 +167,12 @@ begin
     # gets displayed by intercepting the display
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 
-    interface = REPL.setup_interface(repl)
-    repl_mode = interface.modes[1]
-    shell_mode = interface.modes[2]
-    help_mode = interface.modes[3]
-    histp = interface.modes[4]
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+    histp = repl.interface.modes[4]
+    prefix_mode = repl.interface.modes[5]
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
@@ -168,7 +207,7 @@ begin
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
     # Some manual setup
-    s = LineEdit.init_state(repl.t, interface)
+    s = LineEdit.init_state(repl.t, repl.interface)
 
     # Test that navigating history skips invalid modes
     # (in both directions)
@@ -190,7 +229,7 @@ begin
     LineEdit.history_next(s, hp)
 
     # Test that the same holds for prefix search
-    ps = LineEdit.state(s,interface.modes[5])
+    ps = LineEdit.state(s, prefix_mode)
     LineEdit.history_prev_prefix(ps, hp, "")
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "2 + 2"
@@ -233,6 +272,25 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == cur_mode
     @test buffercontents(LineEdit.buffer(s)) == ""
+
+    # Test that new modes can be dynamically added to the REPL and will
+    # integrate nicely
+    foobar_mode = AddCustomMode(repl)
+
+    # ^R l, should now find `ls` in foobar mode
+    LineEdit.enter_search(s, histp, true)
+    ss = LineEdit.state(s, histp)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == foobar_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+
+    # Try the same for prefix search
+    LineEdit.history_next(s, hp)
+    LineEdit.history_prev_prefix(ps, hp, "l")
+    @test ps.parent == foobar_mode
+    @test LineEdit.input_string(ps) == "ls"
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)

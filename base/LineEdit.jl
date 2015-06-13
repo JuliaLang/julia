@@ -275,7 +275,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     end
 
     # Same issue as above. TODO: We should figure out
-    # how to refactor this to avoid duplcating functionality.
+    # how to refactor this to avoid duplicating functionality.
     if curs_pos == cols
         if line_pos == 0
             write(termbuf, "\n")
@@ -1052,6 +1052,8 @@ type PrefixSearchState <: ModeState
     response_buffer::IOBuffer
     ias::InputAreaState
     indent::Int
+    # The modal interface state, if present
+    mi
     #The prompt whose input will be replaced by the matched history
     parent
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
@@ -1086,8 +1088,14 @@ function reset_state(s::PrefixSearchState)
 end
 
 function transition(s::PrefixSearchState, mode)
+    if isdefined(s,:mi)
+        transition(s.mi,mode)
+    end
     s.parent = mode
     s.histprompt.parent_prompt = mode
+    if isdefined(s,:mi)
+        transition(s.mi,s.histprompt)
+    end
 end
 
 replace_line(s::PrefixSearchState, l::IOBuffer) = s.response_buffer = l
@@ -1164,6 +1172,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     pss.prefix = bytestring(pointer(buf.data), position(buf))
     copybuf!(pss.response_buffer, buf)
     pss.indent = state(s, mode(s)).indent
+    pss.mi = s
     transition(s, p)
     if backward
         history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
@@ -1490,6 +1499,9 @@ function transition(s::MIState, mode)
     if mode == :reset
         reset_state(s)
         return
+    end
+    if !haskey(s.mode_state,mode)
+        s.mode_state[mode] = init_state(terminal(s), mode)
     end
     termbuf = TerminalBuffer(IOBuffer())
     s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf)
