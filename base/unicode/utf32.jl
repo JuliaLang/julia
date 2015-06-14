@@ -16,20 +16,16 @@ convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
 "
-Converts an `AbstractString` to a `UTF16String`
-
-### Input Arguments:
-*   `::Type{UTF32String}`
-*   `str::AbstractString`
+Converts an `AbstractString` to a `UTF32String`
 
 ### Returns:
-*   `::UTF32String`
+*   `UTF32String`
 
 ### Throws:
 *   `UnicodeError`
 "
 function convert(::Type{UTF32String}, str::AbstractString)
-    len, flags = check_string(str)
+    len, flags = unsafe_checkstring(str)
     buf = Vector{Char}(len+1)
     out = 0
     @inbounds for ch in str ; buf[out += 1] = ch ; end
@@ -40,12 +36,8 @@ end
 "
 Converts a UTF-32 encoded vector of `UInt32` to a `UTF8String`
 
-### Input Arguments:
-*   `::Type{UTF8String}`
-*   `dat::Vector{UInt32}`
-
 ### Returns:
-*   `::UTF8String`
+*   `UTF8String`
 
 ### Throws:
 *   `UnicodeError`
@@ -55,7 +47,7 @@ function convert(::Type{UTF8String}, dat::Vector{UInt32})
     # handle zero length string quickly
     len == 0 && return empty_utf8
     # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = check_string(dat, len>>>2)
+    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>2)
     flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
     return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
@@ -63,12 +55,8 @@ end
 "
 Converts a `UTF32String` to a `UTF8String`
 
-### Input Arguments:
-*   `::Type{UTF8String}`
-*   `str::UTF32String`
-
 ### Returns:
-*   `::UTF8String`
+*   `UTF8String`
 
 ### Throws:
 *   `UnicodeError`
@@ -79,17 +67,13 @@ function convert(::Type{UTF8String},  str::UTF32String)
     # handle zero length string quickly
     len <= 1 && return empty_utf8
     # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = check_string(dat, len-1)
+    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len-1)
     flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
     return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
 
 "
 Converts a `UTF8String` to a `UTF32String`
-
-### Input Arguments:
-*   `::Type{UTF32String}`
-*   `str::UTF8String`
 
 ### Returns:
 *   `::UTF32String`
@@ -102,7 +86,7 @@ function convert(::Type{UTF32String}, str::UTF8String)
     # handle zero length string quickly
     sizeof(dat) == 0 && return empty_utf32
     # Validate UTF-8 encoding, and get number of words to create
-    len, flags = check_string(dat)
+    len, flags = unsafe_checkstring(dat)
     # Optimize case where no characters > 0x7f
     flags == 0 && @inbounds return fast_utf_copy(UTF32String, Char, len, dat, true)
     # has multi-byte UTF-8 sequences
@@ -145,10 +129,6 @@ end
 "
 Converts a `UTF16String` to `UTF32String`
 
-### Input Arguments:
-*   `::Type{UTF32String}`
-*   `str::UTF16String`
-
 ### Returns:
 *   `::UTF32String`
 
@@ -161,7 +141,7 @@ function convert(::Type{UTF32String}, str::UTF16String)
     # handle zero length string quickly (account for trailing \0)
     len <= 2 && return empty_utf32
     # get number of words to create
-    len, flags, num4byte = check_string(dat, len>>>1)
+    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>1)
     # No surrogate pairs, do optimized copy
     (flags & UTF_UNICODE4) == 0 && @inbounds return UTF32String(copy!(Vector{Char}(len), dat))
     local ch::UInt32
@@ -180,10 +160,6 @@ end
 "
 Converts a UTF-32 encoded vector of `UInt32` to a `UTF16String`
 
-### Input Arguments:
-*   `::Type{UTF16String}`
-*   `dat::Vector{UInt32}`
-
 ### Returns:
 *   `::UTF16String`
 
@@ -195,7 +171,7 @@ function convert(::Type{UTF16String}, dat::Vector{UInt32})
     # handle zero length string quickly
     len <= 4 && return empty_utf16
     # get number of words to allocate
-    len, flags, num4byte = check_string(dat, len>>>2)
+    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
     len += num4byte + 1
     # optimized path, no surrogates
     num4byte == 0 && @inbounds return fast_utf_copy(UTF16String, UInt16, len, dat)
@@ -204,10 +180,6 @@ end
 
 "
 Converts a `UTF32String` to `UTF16String`
-
-### Input Arguments:
-*   `::Type{UTF16String}`
-*   `str::UTF32String`
 
 ### Returns:
 *   `::UTF16String`
@@ -221,7 +193,7 @@ function convert(::Type{UTF16String}, str::UTF32String)
     # handle zero length string quickly
     len <= 4 && return empty_utf16
     # get number of words to allocate
-    len, flags, num4byte = check_string(dat, len>>>2)
+    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
     # optimized path, no surrogates
     num4byte == 0 && @inbounds return UTF16String(copy!(Vector{UInt16}(len), dat))
     return encode_to_utf16(dat, len + num4byte)
@@ -266,16 +238,6 @@ end
 
 function convert(::Type{UTF32String}, dat::AbstractVector{Char})
     @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
-end
-
-function convert(::Type{UTF32String}, data::AbstractVector{Char})
-    len = length(data)
-    @inbounds return UTF32String(setindex!(copy!(Vector{Char}(len+1),1,data,1,len),0,len+1))
-end
-
-function convert(::Type{UTF32String}, data::AbstractVector{Char})
-    len = length(data)
-    @inbounds return UTF32String(setindex!(copy!(Vector{Char}(len+1),1,data,1,len),0,len+1))
 end
 
 convert{T<:Union{Int32,UInt32}}(::Type{UTF32String}, data::AbstractVector{T}) =
