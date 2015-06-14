@@ -532,6 +532,32 @@ versus::
     println(file, f(a), f(b))
 
 
+Optimize network I/O during parallel execution
+----------------------------------------------
+
+When executing a remote function in parallel::
+
+    responses = cell(nworkers())
+    @sync begin
+        for (idx, pid) in enumerate(workers())
+            @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        end
+    end
+
+is faster than::
+
+    refs = cell(nworkers())
+    for (idx, pid) in enumerate(workers())
+        refs[idx] = @spawnat pid foo(args...)
+    end
+    responses = [fetch(r) for r in refs]
+
+The former results in a single network round-trip to every worker, while the
+latter results in two network calls - first by the ``@spawnat`` and the
+second due to the ``fetch`` (or even a ``wait``). The ``fetch``/``wait``
+is also being executed serially resulting in an overall poorer performance.
+
+
 Fix deprecation warnings
 ------------------------
 
