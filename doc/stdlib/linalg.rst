@@ -815,6 +815,18 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``a*X``.
 
+.. function:: ger!(alpha, x, y, A)
+
+   Rank-1 update of the matrix ``A`` with vectors ``x`` and
+   ``y`` as ``alpha*x*y' + A``.
+
+.. function:: syr!(uplo, alpha, x, A)
+
+   Rank-1 update of the symmetric matrix ``A`` with vector
+   ``x`` as ``alpha*x*x.' + A``.  When ``uplo`` is 'U' the
+   upper triangle of ``A`` is updated ('L' for lower triangle).
+   Returns ``A``.
+
 .. function:: syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix ``C`` as ``alpha*A*A.' +
@@ -827,6 +839,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Returns either the upper triangle or the lower triangle, according
    to ``uplo`` ('U' or 'L'), of ``alpha*A*A.'`` or ``alpha*A.'*A``,
    according to ``trans`` ('N' or 'T').
+
+.. function:: her!(uplo, alpha, x, A)
+
+   Methods for complex arrays only.  Rank-1 update of the Hermitian
+   matrix ``A`` with vector ``x`` as ``alpha*x*x' + A``.  When
+   ``uplo`` is 'U' the upper triangle of ``A`` is updated
+   ('L' for lower triangle). Returns ``A``.
 
 .. function:: herk!(uplo, trans, alpha, A, beta, C)
 
