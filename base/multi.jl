@@ -79,7 +79,7 @@ type WorkerConfig
     end
 end
 
-@enum WorkerState W_CREATED W_RUNNING W_TERMINATING W_TERMINATED
+@enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
 type Worker
     id::Int
     del_msgs::Array{Any,1}
@@ -87,6 +87,7 @@ type Worker
     gcflag::Bool
     state::WorkerState
     c_state::Condition      # wait for state changes
+    ct_time::Float64        # creation time
 
     r_stream::AsyncStream
     w_stream::AsyncStream
@@ -99,7 +100,7 @@ type Worker
         w.w_stream = buffer_writes(w_stream)
         w.manager = manager
         w.config = config
-        set_worker_state(w, W_RUNNING)
+        set_worker_state(w, W_CONNECTED)
         register_worker_streams(w)
         w
     end
@@ -108,7 +109,7 @@ type Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition())
+        w=new(id, [], [], false, W_CREATED, Condition(), time())
         register_worker(w)
         w
     end
@@ -120,7 +121,7 @@ Worker(id, r_stream, w_stream, manager) = Worker(id, r_stream, w_stream, manager
 
 function set_worker_state(w, state)
     w.state = state
-    notify(w.c_state)
+    notify(w.c_state; all=true)
 end
 
 function send_msg_now(w::Worker, kind, args...)
@@ -150,8 +151,23 @@ function flush_gc_msgs(w::Worker)
     end
 end
 
-function send_msg_(w::Worker, kind, args, now::Bool)
+function check_worker_state(w::Worker)
     #println("Sending msg $kind")
+    if w.state == W_CREATED
+        # Since higher pids connect with lower pids, the remote worker
+        # may not have connected to us yet. Wait for some time.
+        timeout =  worker_timeout() - (time() - w.ct_time)
+        timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
+
+        @schedule (sleep(timeout); notify(w.c_state; all=true))
+        wait(w.c_state)
+        w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+    end
+end
+
+
+function send_msg_(w::Worker, kind, args, now::Bool)
+    check_worker_state(w)
     io = w.w_stream
     lock(io.lock)
     try
@@ -173,7 +189,7 @@ end
 function flush_gc_msgs()
     try
         for w in (PGRP::ProcessGroup).workers
-            if isa(w,Worker) && w.gcflag && (w.state == W_RUNNING)
+            if isa(w,Worker) && w.gcflag && (w.state == W_CONNECTED)
                 flush_gc_msgs(w)
             end
         end
@@ -297,7 +313,6 @@ type ProcessExitedException <: Exception end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
-#   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
     if in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
@@ -933,11 +948,6 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         w = Worker(rpid, r_s, w_s, manager, wconfig)
         process_messages(w.r_stream, w.w_stream)
         send_msg_now(w, :identify_socket, myid())
-
-        # test connectivity with an echo
-        if remotecall_fetch(rpid, ()->:ok) != :ok
-            throw("ping test with remote peer failed")
-        end
     catch e
         println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
         exit(1)
@@ -947,6 +957,9 @@ end
 function disable_threaded_libs()
     blas_set_num_threads(1)
 end
+
+worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
+
 
 ## worker creation and setup ##
 
@@ -989,7 +1002,7 @@ function start_worker(out::IO)
         # To prevent hanging processes on remote machines, newly launched workers exit if the
         # master process does not connect in time.
         # TODO : Make timeout configurable.
-        check_master_connect(parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0")))
+        check_master_connect()
         while true; wait(); end
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
@@ -1102,9 +1115,25 @@ function addprocs(manager::ClusterManager; kwargs...)
 
     wait(t_launch)      # catches any thrown errors from the launch task
 
+    # Let all workers know the current set of valid workers. Useful
+    # for nprocs(), nworkers(), etc to return valid values on the workers.
+    # Since all worker-to-worker setups may not have completed by the time this
+    # function returns to the caller.
+    all_w = workers()
+    for pid in all_w
+        remote_do(pid, set_valid_processes, all_w)
+    end
+
     sort!(launched_q)
 end
 
+function set_valid_processes(plist::Array{Int})
+    for pid in setdiff(plist, workers())
+        if myid() != pid
+            Worker(pid)
+        end
+    end
+end
 
 default_addprocs_params() = AnyDict(
     :dir      => pwd(),
@@ -1202,7 +1231,7 @@ function create_worker(manager, wconfig)
     end
 
     # filter list to workers in a running state
-    join_list = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state==W_RUNNING), PGRP.workers)
+    join_list = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state==W_CONNECTED), PGRP.workers)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
     send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager))
@@ -1495,7 +1524,8 @@ macro parallel(args...)
 end
 
 
-function check_master_connect(timeout)
+function check_master_connect()
+    timeout = worker_timeout()
     # If we do not have at least process 1 connect to us within timeout
     # we log an error and exit, unless we're running on valgrind
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
