@@ -194,11 +194,7 @@ end
 "
 Validates and calculates number of characters in a UTF-8,UTF-16 or UTF-32 encoded vector/string
 
-<<<<<<< HEAD
 This function checks the bounds of the start and end positions
-=======
-This function checks the bounds of the start or end positions
->>>>>>> 0a652d1... Add Unicode validation function and fix UTF-16 conversion bugs
 Use `unsafe_checkstring` to avoid that overhead if the bounds have already been checked
 
 ### Input Arguments:
@@ -225,15 +221,9 @@ function checkstring end
 checkstring(dat; kwargs...) = unsafe_checkstring(dat, start(dat), endof(dat); kwargs...)
 
 # Make sure that beginning and end positions are bounds checked
-<<<<<<< HEAD
 function checkstring(dat, startpos, endpos = endof(dat); kwargs...)
     checkbounds(dat,startpos)
     checkbounds(dat,endpos)
     endpos < startpos && throw(ArgumentError("End position ($endpos) is less than start position ($startpos)"))
-=======
-function checkstring(dat, startpos = start(dat), endpos = endof(dat); kwargs...)
-    startpos < 1 && throw(BoundsError(dat, startpos))
-    (startpos <= endpos <= endof(dat)) || throw(BoundsError(dat, endpos))
->>>>>>> 0a652d1... Add Unicode validation function and fix UTF-16 conversion bugs
     unsafe_checkstring(dat, startpos, endpos; kwargs...)
 end
