@@ -342,3 +342,18 @@ if VERSION > v"0.3.99"
         @test foo(5) == Int
     end
 end
+
+# Timer
+let c = 0, f, t
+    @compat f(t::Timer) = (c += 1)
+    t = Timer(f, 0.0, 0.05)
+    sleep(0.05)
+    @test c >= 1
+    sleep(0.1)
+    @test c >= 3
+    close(t)
+    sleep(0.1)
+    val = c
+    sleep(0.1)
+    @test val == c
+end

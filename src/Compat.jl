@@ -301,6 +301,11 @@ function _compat(ex::Expr)
                 ex = Expr(:stagedfunction, f.args...)
             end
         end
+    elseif VERSION < v"0.4.0-dev+5322" && ex.head == :(::) && isa(ex.args[end], Symbol)
+        # Replace Base.Timer with Compat.Timer2 in type declarations
+        if ex.args[end] == :Timer || ex.args[end] == :(Base.Timer)
+            ex.args[end] = :(Compat.Timer2)
+        end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
@@ -448,6 +453,10 @@ if VERSION < v"0.4.0-dev+4939"
     isvalid(::Type{UTF16String}, str) = is_valid_utf16(str)
     isvalid(::Type{UTF32String}, str) = is_valid_utf32(str)
     export isvalid
+end
+
+if VERSION < v"0.4.0-dev+5322"
+    include("timer.jl")
 end
 
 end # module
