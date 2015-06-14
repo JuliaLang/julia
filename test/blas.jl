@@ -70,6 +70,29 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test_approx_eq A\x BLAS.trsv('U','N','N',A,x)
         @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
 
+        # ger, her, syr
+        A = rand(elty,n,n)
+        α = rand(elty)
+        x = rand(elty,n)
+        y = rand(elty,n)
+
+        @test_approx_eq BLAS.ger!(α,x,y,copy(A)) A + α*x*y'
+        @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))
+
+        A = rand(elty,n,n)
+        A = A + A.'
+        @test issym(A)
+        @test_approx_eq triu(BLAS.syr!('U',α,x,copy(A))) triu(A + α*x*x.')
+        @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
+
+        if elty <: Complex
+            A = rand(elty,n,n)
+            A = A + A'
+            α = real(α)
+            @test_approx_eq triu(BLAS.her!('U',α,x,copy(A))) triu(A + α*x*x')
+            @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
+        end
+
         # copy
         x1 = convert(Vector{elty}, randn(n))
         x2 = convert(Vector{elty}, randn(n))
