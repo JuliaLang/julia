@@ -47,7 +47,7 @@ override USE_SYSTEM_ARPACK=1
 The following command will install all the necessary libraries on Ubuntu.
 
 ````
-sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3 m4
+sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3 m4 libedit-dev
 ````
 
 # ARM specific build problems
@@ -61,6 +61,18 @@ The Raspberry Pi ARM CPU is not correctly detected by LLVM. Before
 starting the build, `export JULIA_CPU_ARCH=arm1176jzf-s`. This tells
 LLVM that the CPU has VFP support. See the discussion in
 [#10917](https://github.com/JuliaLang/julia/issues/10917).
+
+# Raspberry Pi 2
+
+In the case of Raspberry Pi 2, download LLVM binaries from the LLVM website, since building LLVM on our own for some reason does not produce a working build.
+
+1.  Download the [LLVM 3.6.1 binaries for ARMv7a] (http://llvm.org/releases/3.6.1/clang+llvm-3.6.1-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
+2.  For each file in the extracted `bin`, `include`, and `lib` subdirectories, create symlinks from the corresponding directory under `/usr/local`.
+3. Add the following to `Make.user`:
+```
+override USE_SYSTEM_LLVM=1
+```
+
 
 # Chromebook
 
