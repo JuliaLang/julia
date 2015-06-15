@@ -180,7 +180,7 @@ public:
                                           F->getName(),
                                           destModule);
         LazyFunctions.push_back(F);
-        VMap[F] = (Value*)NewF;
+        VMap[F] = NewF;
         return NewF;
     }
 

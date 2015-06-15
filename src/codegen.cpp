@@ -741,8 +741,8 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (imaging_mode) {
             // Copy the function out of the shadow module
             Module *m = new Module("julia", jl_LLVMContext);
-            jl_setup_module(m,true);
-            FunctionMover mover(m,shadow_module);
+            jl_setup_module(m, true);
+            FunctionMover mover(m, shadow_module);
             li->functionObject = mover.CloneFunction((Function*)li->functionObject);
             if (li->specFunctionObject != NULL)
                 li->specFunctionObject = mover.CloneFunction((Function*)li->specFunctionObject);
@@ -993,6 +993,35 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
         return (Function*)sf->linfo->functionObject;
 }
 
+#ifndef USE_MCJIT
+Function* CloneFunctionToModule(Function *F, Module *destModule)
+{
+    ValueToValueMapTy VMap;
+    Function *NewF = Function::Create(F->getFunctionType(),
+                                      Function::ExternalLinkage,
+                                      F->getName(),
+                                      destModule);
+    VMap[F] = NewF;
+
+    Function::arg_iterator DestI = NewF->arg_begin();
+    for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
+        DestI->setName(I->getName());    // Copy the name over...
+        VMap[I] = DestI++;        // Add mapping to VMap
+    }
+
+    SmallVector<ReturnInst*, 8> Returns;
+    llvm::CloneFunctionInto(NewF, F, VMap, true, Returns, "", NULL, NULL);
+    return NewF;
+}
+#else
+Function* CloneFunctionToModule(Function *F, Module *destModule)
+{
+    FunctionMover mover(destModule, F->getParent());
+    Function* f2 = mover.CloneFunction(F);
+    return f2;
+}
+#endif
+
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
@@ -1003,39 +1032,44 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!llvmf)
         jl_error("jl_dump_function_ir: Expected Function*");
 
-    if (!strip_ir_metadata || llvmf->isDeclaration()) {
-        // print the function IR as-is
+    if (llvmf->isDeclaration()) {
+        // print the function declaration plain
         llvmf->print(stream);
     }
     else {
-        // make a copy of the function and strip metadata from the copy
-        llvm::ValueToValueMapTy VMap;
-        Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
-        Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
-        // iterate over all basic blocks in the function
-        for (; f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
-            BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
-            // iterate over instructions in basic block
-            for (; f2_il != (*f2_bb).getInstList().end(); ) {
-                Instruction *inst = f2_il++;
-                // remove dbg.declare and dbg.value calls
-                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
-                    inst->eraseFromParent();
-                    continue;
-                }
+        // make a copy of the function with all module metadata
+        Module *m = new Module(llvmf->getName(), jl_LLVMContext);
+        jl_setup_module(m, false);
+        Function *f2 = CloneFunctionToModule(llvmf, m);
+        if (strip_ir_metadata) {
+            // strip metadata from the copy
+            Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
+            // iterate over all basic blocks in the function
+            for (; f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
+                BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
+                // iterate over instructions in basic block
+                for (; f2_il != (*f2_bb).getInstList().end(); ) {
+                    Instruction *inst = f2_il++;
+                    // remove dbg.declare and dbg.value calls
+                    if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                        inst->eraseFromParent();
+                        continue;
+                    }
 
-                SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
-                inst->getAllMetadata(MDForInst);
-                SmallVector<std::pair<unsigned, MDNode*>, 4>::iterator md_iter = MDForInst.begin();
+                    SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                    inst->getAllMetadata(MDForInst);
+                    SmallVector<std::pair<unsigned, MDNode*>, 4>::iterator md_iter = MDForInst.begin();
 
-                // iterate over all metadata kinds and set to NULL to remove
-                for (; md_iter != MDForInst.end(); ++md_iter) {
-                    inst->setMetadata((*md_iter).first, NULL);
+                    // iterate over all metadata kinds and set to NULL to remove
+                    for (; md_iter != MDForInst.end(); ++md_iter) {
+                        inst->setMetadata((*md_iter).first, NULL);
+                    }
                 }
             }
         }
-        f2->print(stream);
-        delete f2;
+        m->print(stream, NULL);
+        f2->eraseFromParent();
+        delete m;
     }
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
