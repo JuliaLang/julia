@@ -200,7 +200,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union(MIME,AbstractString), x)
+function redisplay(m::Union{MIME,AbstractString}, x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], m, x) &&
             @try_display return redisplay(displays[i], m, x)
@@ -210,7 +210,7 @@ end
 
 # default redisplay is simply to call display
 redisplay(d::Display, x) = display(d, x)
-redisplay(d::Display, m::Union(MIME,AbstractString), x) = display(d, m, x)
+redisplay(d::Display, m::Union{MIME,AbstractString}, x) = display(d, m, x)
 
 ###########################################################################
 

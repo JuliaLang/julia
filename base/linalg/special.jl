@@ -22,7 +22,7 @@ function convert(::Type{UnitLowerTriangular}, A::Diagonal)
     UnitLowerTriangular(full(A))
 end
 
-function convert(::Type{Diagonal}, A::Union(Bidiagonal, SymTridiagonal))
+function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
     all(A.ev .== 0) || throw(ArgumentError("Matrix cannot be represented as Diagonal"))
     Diagonal(A.dv)
 end
@@ -127,5 +127,5 @@ end
 
 A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::AbstractTriangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
 

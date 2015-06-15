@@ -252,8 +252,8 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 #   eval(parse("Set{Int64}([2,3,1])”) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
-                         LabelNode, GotoNode, TopNode)
+typealias ExprNode Union{Expr, QuoteNode, SymbolNode, LineNumberNode,
+                         LabelNode, GotoNode, TopNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax

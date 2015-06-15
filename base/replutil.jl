@@ -35,7 +35,7 @@ end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) =
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
+writemime(io::IO, ::MIME"text/plain", t::Union{KeyIterator, ValueIterator}) =
     showkv(io, t, limit=true)
 
 
@@ -241,10 +241,10 @@ function show_method_candidates(io::IO, ex::MethodError)
                 t_in = typeintersect(Tuple{sig[1:i]...}, Tuple{t_i[1:j]...})
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
-                t_in === Union() && special && i == 1 && break
+                t_in === Union{} && special && i == 1 && break
                 if use_constructor_syntax && i == 1
                     right_matches += i
-                elseif t_in === Union()
+                elseif t_in === Union{}
                     if Base.have_color
                         Base.with_output_color(:red, buf) do buf
                             print(buf, "::$sigstr")

@@ -4,11 +4,11 @@
 
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
-typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
+typealias VecOrMat{T} Union{Vector{T}, Matrix{T}}
 
 typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
-typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
+typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 
 call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
 call{T}(::Type{Vector{T}}) = Array{T}(0)
@@ -42,8 +42,8 @@ function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert{P<:Ptr,T<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array{T}) = a
-cconvert{P<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array) = Ref{P}(a)
+cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
+cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
 
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
@@ -179,12 +179,12 @@ end
 
 if _oldstyle_array_vcat_
 # T[a:b] and T[a:s:b] also construct typed ranges
-function getindex{T<:Union(Char,Number)}(::Type{T}, r::Range)
+function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
     depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
     copy!(Array(T,length(r)), r)
 end
 
-function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
+function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
     depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
@@ -198,12 +198,12 @@ function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
 end
 end #_oldstyle_array_vcat_
 
-function fill!(a::Union(Array{UInt8}, Array{Int8}), x::Integer)
+function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
     return a
 end
 
-function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
+function fill!{T<:Union{Integer,FloatingPoint}}(a::Array{T}, x)
     # note: checking bit pattern
     xT = convert(T,x)
     if isbits(T) && nfields(T)==0 &&

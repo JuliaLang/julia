@@ -25,7 +25,7 @@ end
 svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
-function svd(A::Union(Number, AbstractArray); thin::Bool=true)
+function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
 end

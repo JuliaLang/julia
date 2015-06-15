@@ -22,13 +22,13 @@ longer_tuple(x::Tuple, retx::Tuple, y::Tuple, rety::Tuple) =
     longer_tuple(droparg1(x...), retx, droparg1(y...), rety)
 longer_tuple(x::Tuple, y::Tuple) = longer_tuple(x, x, y, y)
 
-longer_size(x::Union(AbstractArray,Number)) = size(x)
-longer_size(x::Union(AbstractArray,Number), y::Union(AbstractArray,Number)...) =
+longer_size(x::Union{AbstractArray,Number}) = size(x)
+longer_size(x::Union{AbstractArray,Number}, y::Union{AbstractArray,Number}...) =
     longer_tuple(size(x), longer_size(y...))
 
 # Calculate the broadcast shape of the arguments, or error if incompatible
 broadcast_shape() = ()
-function broadcast_shape(As::Union(AbstractArray,Number)...)
+function broadcast_shape(As::Union{AbstractArray,Number}...)
     sz = longer_size(As...)
     nd = length(sz)
     bshape = ones(Int, nd)
@@ -48,7 +48,7 @@ function broadcast_shape(As::Union(AbstractArray,Number)...)
 end
 
 # Check that all arguments are broadcast compatible with shape
-function check_broadcast_shape(shape::Dims, As::Union(AbstractArray,Number)...)
+function check_broadcast_shape(shape::Dims, As::Union{AbstractArray,Number}...)
     for A in As
         if ndims(A) > length(shape)
             throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
@@ -207,9 +207,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union(Array,BitArray,Number)                   ,
+    ((BitArray                          , Union{Array,BitArray,Number}                   ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union(Array,BitArray,Number)                   ,
+     (Any                               , Union{Array,BitArray,Number}                   ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
@@ -318,8 +318,8 @@ function .\(A::AbstractArray, B::AbstractArray)
     broadcast!(\, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
-typealias RatIntT{T<:Integer} Union(Type{Rational{T}},Type{T})
-typealias CRatIntT{T<:Integer} Union(Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T})
+typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
+typealias CRatIntT{T<:Integer} Union{Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T}}
 type_rdiv{T<:Integer,S<:Integer}(::RatIntT{T}, ::RatIntT{S}) =
     Rational{promote_type(T,S)}
 type_rdiv{T<:Integer,S<:Integer}(::CRatIntT{T}, ::CRatIntT{S}) =

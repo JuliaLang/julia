@@ -272,10 +272,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         A = ones(elty,10,10)
         As = sub(A,1:5,1:5)
         @test_approx_eq norm(A, 1) 10
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(A, 2) 10
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(A, 2) 10
         @test_approx_eq norm(A, Inf) 10
         @test_approx_eq norm(As, 1) 5
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(As, 2) 5
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(As, 2) 5
         @test_approx_eq norm(As, Inf) 5
 
     for i = 1:10
@@ -293,20 +293,20 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
         # Absolute homogeneity
         @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
         @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
 
         @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
         @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
 
         # Triangle inequality
         @test norm(A + B,1) <= norm(A,1) + norm(B,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(A + B) <= norm(A) + norm(B) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
         @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
 
         @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
         @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
 
         # vecnorm:

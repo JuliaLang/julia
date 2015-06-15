@@ -38,13 +38,13 @@ bytestring() = ""
 bytestring(s::Vector{UInt8}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
-function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
+function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{UInt8},), p)
 end
 bytestring(s::Cstring) = bytestring(box(Ptr{Cchar}, unbox(Cstring,s)))
 
-function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
+function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}},len::Integer)
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{UInt8},Int), p, len)
 end
@@ -181,7 +181,7 @@ function chr2ind(s::AbstractString, i::Integer)
     end
 end
 
-typealias Chars Union(Char,AbstractVector{Char},Set{Char})
+typealias Chars Union{Char,AbstractVector{Char},Set{Char}}
 
 function search(s::AbstractString, c::Chars, i::Integer)
     if isempty(c)
@@ -300,7 +300,7 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-typealias ByteArray Union(Vector{UInt8},Vector{Int8})
+typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
 
 searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
@@ -678,7 +678,7 @@ end
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
 const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
-function hash{T<:ByteString}(s::Union(T,SubString{T}), h::UInt)
+function hash{T<:ByteString}(s::Union{T,SubString{T}}, h::UInt)
     h += memhash_seed
     # note: use pointer(s) here (see #6058).
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
@@ -758,7 +758,7 @@ isascii(s::RevString{ASCIIString}) = true
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
-reverseind(s::Union(DirectIndexString,SubString{DirectIndexString}), i::Integer) = length(s) + 1 - i
+reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 lastidx(s::AbstractString) = nextind(s, endof(s)) - 1
 lastidx(s::DirectIndexString) = length(s)
@@ -825,7 +825,7 @@ end
 ## string map, filter, has ##
 
 map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
-map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{UInt8}) = bytestring(a)
+map_result(s::Union{ASCIIString,SubString{ASCIIString}}, a::Vector{UInt8}) = bytestring(a)
 
 function map(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
@@ -983,8 +983,8 @@ byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 1: valid ASCII
     # 2: valid UTF-8
 
-isvalid(::Type{ASCIIString}, s::Union(Vector{UInt8},ByteString)) = byte_string_classify(s) == 1
-isvalid(::Type{UTF8String}, s::Union(Vector{UInt8},ByteString)) = byte_string_classify(s) != 0
+isvalid(::Type{ASCIIString}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) == 1
+isvalid(::Type{UTF8String}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 
@@ -1627,7 +1627,7 @@ parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0,
 
 ## stringifying integers more efficiently ##
 
-string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
+string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
 
 ## string to float functions ##
 
@@ -1637,7 +1637,7 @@ tryparse{T<:ByteString}(::Type{Float64}, s::SubString{T}) = ccall(:jl_try_substr
 tryparse(::Type{Float32}, s::ByteString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse{T<:ByteString}(::Type{Float32}, s::SubString{T}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
 
-tryparse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
+tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
 
 function parse{T<:FloatingPoint}(::Type{T}, s::AbstractString)
     nf = tryparse(T, s)
@@ -1650,7 +1650,7 @@ float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(flo
 
 # find the index of the first occurrence of a value in a byte array
 
-function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
+function search(a::ByteArray, b::Union{Int8,UInt8}, i::Integer)
     if i < 1
         throw(BoundsError(a, i))
     end
@@ -1669,9 +1669,9 @@ function search(a::ByteArray, b::Char, i::Integer)
         search(a,string(b).data,i).start
     end
 end
-search(a::ByteArray, b::Union(Int8,UInt8,Char)) = search(a,b,1)
+search(a::ByteArray, b::Union{Int8,UInt8,Char}) = search(a,b,1)
 
-function rsearch(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
+function rsearch(a::ByteArray, b::Union{Int8,UInt8}, i::Integer)
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
@@ -1690,7 +1690,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
         rsearch(a,string(b).data,i).start
     end
 end
-rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
+rsearch(a::ByteArray, b::Union{Int8,UInt8,Char}) = rsearch(a,b,length(a))
 
 function hex2bytes(s::ASCIIString)
     len = length(s)
@@ -1724,7 +1724,7 @@ end
 
 containsnul(s::AbstractString) = '\0' in s
 containsnul(s::ByteString) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
-containsnul(s::Union(UTF16String,UTF32String)) = findfirst(s.data, 0) != length(s.data)
+containsnul(s::Union{UTF16String,UTF32String}) = findfirst(s.data, 0) != length(s.data)
 
 if sizeof(Cwchar_t) == 2
     const WString = UTF16String
@@ -1745,13 +1745,13 @@ function unsafe_convert(::Type{Cwstring}, s::WString)
 end
 
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
-pointer(x::Union(ByteString,UTF16String,UTF32String)) = pointer(x.data)
+pointer(x::Union{ByteString,UTF16String,UTF32String}) = pointer(x.data)
 pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
 pointer(x::ByteString, i::Integer) = pointer(x.data)+(i-1)
 pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
-pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
-pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
-pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
+pointer(x::Union{UTF16String,UTF32String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
+pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
+pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
 
 # IOBuffer views of a (byte)string:
 IOBuffer(str::ByteString) = IOBuffer(str.data)

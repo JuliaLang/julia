@@ -316,7 +316,7 @@ const getfield_tfunc = function (A, s0, name)
         end
         return s.types[i], false
     else
-        return reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union(s.types...)=#, false
+        return reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union{s.types...}=#, false
     end
 end
 add_tfunc(getfield, 2, 2, (A,s,name)->getfield_tfunc(A,s,name)[1])
@@ -367,7 +367,7 @@ end
 
 has_typevars(t::ANY) = ccall(:jl_has_typevars, Cint, (Any,), t)!=0
 
-# TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
+# TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
 const apply_type_tfunc = function (A, args...)
     if !isType(args[1])
         return Any
@@ -2759,7 +2759,7 @@ function mk_tuplecall(args, sv::StaticVarInfo)
     e
 end
 
-const corenumtype = Union(Int32,Int64,Float32,Float64)
+const corenumtype = Union{Int32,Int64,Float32,Float64}
 
 function inlining_pass(e::Expr, sv, ast)
     if e.head == :method
@@ -2864,9 +2864,9 @@ function inlining_pass(e::Expr, sv, ast)
             if isdefined(Main, :Base) &&
                ((isdefined(Main.Base, :^) && is(f, Main.Base.(:^))) ||
                 (isdefined(Main.Base, :.^) && is(f, Main.Base.(:.^))))
-                if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
+                if length(e.args) == 3 && isa(e.args[3],Union{Int32,Int64})
                     a1 = e.args[2]
-                    basenumtype = Union(corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational)
+                    basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
                     if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode) || isa(a1,GenSym)) &&
                                                exprtype(a1,sv) <: basenumtype)
                         if e.args[3]==2

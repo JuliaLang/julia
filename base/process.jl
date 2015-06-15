@@ -6,7 +6,7 @@ type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
-    env::Union(Array{ByteString},Void)
+    env::Union{Array{ByteString},Void}
     dir::UTF8String
     Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
 end
@@ -49,7 +49,7 @@ function show(io::IO, cmd::Cmd)
     (print_dir || print_env) && print(io, ")")
 end
 
-function show(io::IO, cmds::Union(OrCmds,ErrOrCmds))
+function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
     print(io, "pipe(")
     show(io, cmds.a)
     print(io, ", ")
@@ -91,7 +91,7 @@ uvtype(::DevNullStream) = UV_STREAM
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
+typealias Redirectable Union{UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -116,7 +116,7 @@ end
 
 
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
-ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
+ignorestatus(cmd::Union{OrCmds,AndCmds}) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
 # like bytestring(s), but throw an error if s contains NUL, since
@@ -166,11 +166,11 @@ function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, a
 end
 
 pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
-pipe(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipe(cmd, stdin=src)
+pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdin=src)
 
 pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
+typealias RawOrBoxedHandle Union{UVHandle,UVStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -208,7 +208,7 @@ type ProcessChain
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
-typealias ProcessChainOrNot Union(Bool,ProcessChain)
+typealias ProcessChainOrNot Union{Bool,ProcessChain}
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)

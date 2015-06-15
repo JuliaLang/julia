@@ -13,7 +13,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
+function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -163,7 +163,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union(UInt8,UInt16,UInt32,UInt64))
+function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -302,11 +302,11 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
-bits(x::Union(Bool,Int8,UInt8))           = bin(reinterpret(UInt8,x),8)
-bits(x::Union(Int16,UInt16,Float16))      = bin(reinterpret(UInt16,x),16)
-bits(x::Union(Char,Int32,UInt32,Float32)) = bin(reinterpret(UInt32,x),32)
-bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
-bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
+bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
 function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
@@ -327,7 +327,7 @@ end
 
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
-function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
+function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards

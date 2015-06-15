@@ -68,9 +68,9 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-typealias Signed64 Union(Int8,Int16,Int32,Int64)
-typealias Unsigned64 Union(UInt8,UInt16,UInt32,UInt64)
-typealias Integer64 Union(Signed64,Unsigned64)
+typealias Signed64 Union{Int8,Int16,Int32,Int64}
+typealias Unsigned64 Union{UInt8,UInt16,UInt32,UInt64}
+typealias Integer64 Union{Signed64,Unsigned64}
 
 div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
 div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
@@ -246,7 +246,7 @@ convert(::Type{Unsigned}, x::Char)    = convert(UInt,x)
 convert(::Type{Unsigned}, x::Bool)    = convert(UInt,x)
 
 convert(::Type{Integer}, x::Integer) = x
-convert(::Type{Integer}, x::Union(Real,Char)) = convert(Signed,x)
+convert(::Type{Integer}, x::Union{Real,Char}) = convert(Signed,x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x

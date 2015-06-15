@@ -82,7 +82,7 @@ convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data)-1, io->for c in s; write(io,c::Char); end)
 
 sizeof(s::UTF16String) = sizeof(s.data) - sizeof(UInt16)
-unsafe_convert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
+unsafe_convert{T<:Union{Int16,UInt16}}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, pointer(s))
 
 function isvalid(::Type{UTF16String}, data::AbstractArray{UInt16})
@@ -138,7 +138,7 @@ end
 
 utf16(p::Ptr{UInt16}, len::Integer) = utf16(pointer_to_array(p, len))
 utf16(p::Ptr{Int16}, len::Integer) = utf16(convert(Ptr{UInt16}, p), len)
-function utf16(p::Union(Ptr{UInt16}, Ptr{Int16}))
+function utf16(p::Union{Ptr{UInt16}, Ptr{Int16}})
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf16(p, len)

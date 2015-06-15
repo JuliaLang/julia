@@ -4,8 +4,8 @@
 
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
-typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int}, Colon)
+typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
+typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
 
 ## Basic functions ##
 
@@ -151,15 +151,15 @@ throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
 checkbounds(A::AbstractArray, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
 checkbounds(A::AbstractArray, I) = (@_inline_meta; _checkbounds(length(A), I) || throw_boundserror(A, I))
-function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray,Colon), J::Union(Real,AbstractArray,Colon))
+function checkbounds(A::AbstractMatrix, I::Union{Real,AbstractArray,Colon}, J::Union{Real,AbstractArray,Colon})
     @_inline_meta
     (_checkbounds(size(A,1), I) && _checkbounds(size(A,2), J)) || throw_boundserror(A, (I, J))
 end
-function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray,Colon), J::Union(Real,AbstractArray,Colon))
+function checkbounds(A::AbstractArray, I::Union{Real,AbstractArray,Colon}, J::Union{Real,AbstractArray,Colon})
     @_inline_meta
     (_checkbounds(size(A,1), I) && _checkbounds(trailingsize(A,Val{2}), J)) || throw_boundserror(A, (I, J))
 end
-@generated function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray,Colon)...)
+@generated function checkbounds(A::AbstractArray, I::Union{Real,AbstractArray,Colon}...)
     meta = Expr(:meta, :inline)
     N = length(I)
     args = Expr[:(_checkbounds(size(A,$dim), I[$dim]) || throw_boundserror(A, I)) for dim in 1:N-1]
@@ -599,13 +599,13 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union(Tuple{Vararg{Union(Range, AbstractVector{Int})}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
 get(A::AbstractArray, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
 
-function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Range, AbstractVector{Int}), default::T)
+function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union{Range, AbstractVector{Int}}, default::T)
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default

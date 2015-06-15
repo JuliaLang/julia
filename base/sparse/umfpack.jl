@@ -60,13 +60,13 @@ end
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32, )
-    typealias UMFITypes Union(Int32)
+    typealias UMFITypes Union{Int32}
 else
     const UmfpackIndexTypes = (:Int32, :Int64)
-    typealias UMFITypes Union(Int32, Int64)
+    typealias UMFITypes Union{Int32, Int64}
 end
 
-typealias UMFVTypes Union(Float64,Complex128)
+typealias UMFVTypes Union{Float64,Complex128}
 
 ## UMFPACK
 

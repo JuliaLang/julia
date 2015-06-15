@@ -408,7 +408,7 @@ function _start()
         global active_repl_backend
         if repl
             if !isa(STDIN,TTY)
-                global is_interactive |= !isa(STDIN,Union(File,IOStream))
+                global is_interactive |= !isa(STDIN,Union{File,IOStream})
                 color_set || (global have_color = false)
             else
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)

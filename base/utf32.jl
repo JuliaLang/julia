@@ -25,7 +25,7 @@ function convert(::Type{UTF32String}, data::AbstractVector{Char})
     UTF32String(copy!(d,1, data,1, len))
 end
 
-convert{T<:Union(Int32,UInt32)}(::Type{UTF32String}, data::AbstractVector{T}) =
+convert{T<:Union{Int32,UInt32}}(::Type{UTF32String}, data::AbstractVector{T}) =
     convert(UTF32String, reinterpret(Char, data))
 
 convert{T<:AbstractString}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
@@ -46,7 +46,7 @@ convert(::Type{Array{Char}}, s::UTF32String) = s.data
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
 sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
-unsafe_convert{T<:Union(Int32,UInt32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
+unsafe_convert{T<:Union{Int32,UInt32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
@@ -70,7 +70,7 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     UTF32String(d)
 end
 
-function isvalid(::Type{UTF32String}, str::Union(Vector{Char}, Vector{UInt32}))
+function isvalid(::Type{UTF32String}, str::Union{Vector{Char}, Vector{UInt32}})
     for i=1:length(str)
         @inbounds if !isvalid(Char, reinterpret(UInt32, str[i])) ; return false ; end
     end
@@ -79,8 +79,8 @@ end
 isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
-utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
-function utf32(p::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32}))
+utf32(p::Union{Ptr{UInt32}, Ptr{Int32}}, len::Integer) = utf32(convert(Ptr{Char}, p), len)
+function utf32(p::Union{Ptr{Char}, Ptr{UInt32}, Ptr{Int32}})
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf32(p, len)

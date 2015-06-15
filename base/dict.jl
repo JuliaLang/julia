@@ -135,13 +135,13 @@ immutable ValueIterator{T<:Associative}
     dict::T
 end
 
-summary{T<:Union(KeyIterator,ValueIterator)}(iter::T) =
+summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union(KeyIterator,ValueIterator)) = show(io, collect(iter))
+show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
-showkv(iter::Union(KeyIterator,ValueIterator); kw...) = showkv(STDOUT, iter; kw...)
-function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Bool = false,
+showkv(iter::Union{KeyIterator,ValueIterator}; kw...) = showkv(STDOUT, iter; kw...)
+function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T; limit::Bool = false,
                                                      sz=(s = tty_size(); (s[1]-3, s[2])))
     rows, cols = sz
     print(io, summary(iter))
@@ -168,15 +168,15 @@ function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Boo
     end
 end
 
-length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
-isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
+length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
+isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)
 _tt1{A,B}(::Type{Tuple{A,B}}) = A
 _tt2{A,B}(::Type{Tuple{A,B}}) = B
 eltype{D}(::Type{KeyIterator{D}}) = _tt1(eltype(D))
 eltype{D}(::Type{ValueIterator{D}}) = _tt2(eltype(D))
 
-start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
-done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
+start(v::Union{KeyIterator,ValueIterator}) = start(v.dict)
+done(v::Union{KeyIterator,ValueIterator}, state) = done(v.dict, state)
 
 function next(v::KeyIterator, state)
     n = next(v.dict, state)

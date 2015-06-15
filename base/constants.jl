@@ -15,7 +15,7 @@ convert(::Type{Float16}, x::MathConst) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, convert(T,x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, Float64(x))
 
-@generated function call{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
+@generated function call{T<:Union{Float32,Float64},s}(t::Type{T},c::MathConst{s},r::RoundingMode)
     f = T(big(c()),r())
     :($f)
 end

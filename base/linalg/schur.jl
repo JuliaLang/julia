@@ -33,10 +33,10 @@ function schur(A::StridedMatrix)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
 
-ordschur!{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Union(Vector{Bool},BitVector)) = Schur(LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T , Q)...)
-ordschur{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Union(Vector{Bool},BitVector)) = ordschur!(copy(Q), copy(T), select)
-ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union(Vector{Bool},BitVector)) = (res=ordschur!(schur.Z, schur.T, select); schur[:values][:]=res[:values]; res)
-ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union(Vector{Bool},BitVector)) = ordschur(schur.Z, schur.T, select)
+ordschur!{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = Schur(LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T , Q)...)
+ordschur{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = ordschur!(copy(Q), copy(T), select)
+ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},BitVector}) = (res=ordschur!(schur.Z, schur.T, select); schur[:values][:]=res[:values]; res)
+ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},BitVector}) = ordschur(schur.Z, schur.T, select)
 
 immutable GeneralizedSchur{Ty<:BlasFloat, M<:AbstractMatrix} <: Factorization{Ty}
     S::M
@@ -56,10 +56,10 @@ function schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
     return schurfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
-ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union(Vector{Bool},BitVector)) = GeneralizedSchur(LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)...)
-ordschur{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union(Vector{Bool},BitVector)) = ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
-ordschur!{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union(Vector{Bool},BitVector)) = (res=ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select); gschur[:alpha][:]=res[:alpha]; gschur[:beta][:]=res[:beta]; res)
-ordschur{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union(Vector{Bool},BitVector)) = ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
+ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = GeneralizedSchur(LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)...)
+ordschur{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
+ordschur!{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union{Vector{Bool},BitVector}) = (res=ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select); gschur[:alpha][:]=res[:alpha]; gschur[:beta][:]=res[:beta]; res)
+ordschur{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union{Vector{Bool},BitVector}) = ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
 
 function getindex(F::GeneralizedSchur, d::Symbol)
     if d == :S

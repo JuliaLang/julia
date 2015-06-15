@@ -880,7 +880,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union(Function, KeyAlias, Void)), source)
+    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)
@@ -890,7 +890,7 @@ function keymap_merge(target,source)
         # We first resolve redirects in the source
         value = source[key]
         visited = Array(Any,0)
-        while isa(value, Union(Char,AbstractString))
+        while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
                 error("Eager redirection cycle detected for key " * escape_string(key))
@@ -902,7 +902,7 @@ function keymap_merge(target,source)
             value = source[value]
         end
 
-        if isa(value, Union(Char,AbstractString))
+        if isa(value, Union{Char,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
                 error("Could not find redirected value " * escape_string(source[key]))
@@ -1265,8 +1265,8 @@ function setup_search_keymap(hp)
     (p, skeymap)
 end
 
-keymap(state, p::Union(HistoryPrompt,PrefixHistoryPrompt)) = p.keymap_dict
-keymap_data(state, ::Union(HistoryPrompt, PrefixHistoryPrompt)) = state
+keymap(state, p::Union{HistoryPrompt,PrefixHistoryPrompt}) = p.keymap_dict
+keymap_data(state, ::Union{HistoryPrompt, PrefixHistoryPrompt}) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 

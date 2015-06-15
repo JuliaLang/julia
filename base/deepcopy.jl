@@ -7,15 +7,15 @@
 
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
 
-deepcopy_internal(x::Union(Symbol,LambdaStaticData,TopNode,QuoteNode,
-                           DataType,Union,Task),
+deepcopy_internal(x::Union{Symbol,LambdaStaticData,TopNode,QuoteNode,
+                           DataType,Union,Task},
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
 deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
 
 function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
-    if isa(x.env, Union(MethodTable, Symbol)) || x.env === ()
+    if isa(x.env, Union{MethodTable, Symbol}) || x.env === ()
         return x
     end
     invoke(deepcopy_internal, Tuple{Any, ObjectIdDict}, x, stackdict)

@@ -64,7 +64,7 @@ type AsyncFile <: AbstractFile
     open::Bool
 end
 
-isopen(f::Union(File,AsyncFile)) = f.open
+isopen(f::Union{File,AsyncFile}) = f.open
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)

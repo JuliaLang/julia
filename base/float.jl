@@ -289,14 +289,14 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
-==(x::Float32, y::Union(Int32,UInt32)) = Float64(x)==Float64(y)
-==(x::Union(Int32,UInt32), y::Float32) = Float64(x)==Float64(y)
+==(x::Float32, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
+==(x::Union{Int32,UInt32}, y::Float32) = Float64(x)==Float64(y)
 
-<(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<Float64(y)
-<(x::Union(Int32,UInt32), y::Float32) = Float64(x)<Float64(y)
+<(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<Float64(y)
+<(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<Float64(y)
 
-<=(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<=Float64(y)
-<=(x::Union(Int32,UInt32), y::Float32) = Float64(x)<=Float64(y)
+<=(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
+<=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
@@ -319,7 +319,7 @@ hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
 hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
 hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN $ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
 
-hash(x::Union(Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32), h::UInt) = hash(Int64(x), h)
+hash(x::Union{Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
 ## precision, as defined by the effective number of bits in the mantissa ##

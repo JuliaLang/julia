@@ -15,7 +15,7 @@ gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
-gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
+gensym(ss::Union{ASCIIString, UTF8String}...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
 
@@ -38,7 +38,7 @@ copy(e::Expr) = (n = Expr(e.head);
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union(SymbolNode,Expr)) = copy(x)
+astcopy(x::Union{SymbolNode,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 

@@ -128,7 +128,7 @@ end
 
 # Basic arithmetic
 
-FloatTypes = Union(Float32, Float64)
+FloatTypes = Union{Float32, Float64}
 
 sub_fast{T<:FloatTypes}(x::T) = box(T,Base.neg_float_fast(unbox(T,x)))
 
@@ -172,7 +172,7 @@ issubnormal_fast(x) = false
 
 # complex numbers
 
-ComplexTypes = Union(Complex64, Complex128)
+ComplexTypes = Union{Complex64, Complex128}
 
 @fastmath begin
     div_fast{T<:FloatTypes}(x::Complex{T}, y::T) =

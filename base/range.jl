@@ -272,7 +272,7 @@ length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
 length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
-function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
+function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
@@ -283,13 +283,13 @@ function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     end
 end
 
-length{T<:Union(Int,UInt,Int64,UInt64)}(r::UnitRange{T}) =
+length{T<:Union{Int,UInt,Int64,UInt64}}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
-                Union(Int8,UInt8,Int16,UInt16,Int32,UInt32) :
-                Union(Int8,UInt8,Int16,UInt16))
+                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
+                Union{Int8,UInt8,Int16,UInt16})
     global length
 
     function length{T <: smallint}(r::StepRange{T})

@@ -86,7 +86,7 @@ function diag(B::BitMatrix)
     v
 end
 
-function diagm(v::Union(BitVector,BitMatrix))
+function diagm(v::Union{BitVector,BitMatrix})
     isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
     n = length(v)
     a = falses(n, n)

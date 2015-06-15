@@ -20,12 +20,12 @@ const RTLD_NOLOAD    = 0x00000010
 const RTLD_DEEPBIND  = 0x00000020
 const RTLD_FIRST     = 0x00000040
 
-function dlsym(hnd::Ptr, s::Union(Symbol,AbstractString))
+function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
     hnd == C_NULL && error("NULL library handle")
     ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
-function dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString))
+function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
     hnd == C_NULL && error("NULL library handle")
     ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
@@ -68,7 +68,7 @@ function dlpath( handle::Ptr{Void} )
     return s
 end
 
-function dlpath(libname::Union(AbstractString, Symbol))
+function dlpath(libname::Union{AbstractString, Symbol})
     handle = dlopen(libname)
     path = dlpath(handle)
     dlclose(handle)

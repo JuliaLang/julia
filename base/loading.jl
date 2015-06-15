@@ -104,7 +104,7 @@ include_string(txt::AbstractString, fname::AbstractString) = include_string(byte
 
 include_string(txt::AbstractString) = include_string(txt, "string")
 
-function source_path(default::Union(AbstractString,Void)="")
+function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage

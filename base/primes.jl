@@ -30,7 +30,7 @@ primesmask(n::Int) = primesmask(falses(n))
 primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
     throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
-primes(n::Union(Integer,AbstractVector{Bool})) = find(primesmask(n))
+primes(n::Union{Integer,AbstractVector{Bool}}) = find(primesmask(n))
 
 const PRIMES = primes(2^16)
 
@@ -60,9 +60,9 @@ end
 #     http://primes.utm.edu/prove/merged.html
 #     http://miller-rabin.appspot.com
 #
-witnesses(n::Union(UInt8,Int8,UInt16,Int16)) = (2,3)
-witnesses(n::Union(UInt32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
-witnesses(n::Union(UInt64,Int64)) =
+witnesses(n::Union{UInt8,Int8,UInt16,Int16}) = (2,3)
+witnesses(n::Union{UInt32,Int32}) = n < 1373653 ? (2,3) : (2,7,61)
+witnesses(n::Union{UInt64,Int64}) =
         n < 1373653         ? (2,3) :
         n < 4759123141      ? (2,7,61) :
         n < 2152302898747   ? (2,3,5,7,11) :

@@ -122,7 +122,7 @@ end
 
 reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
 reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) =
+reducedim_init{T}(f::Union{AbsFun,Abs2Fun}, op::MaxFun, A::AbstractArray{T}, region) =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -131,19 +131,19 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 # specialize to make initialization more efficient for common cases
 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
-    T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
+    T = Union{[AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...}
     @eval begin
         reducedim_init(f::IdFun, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
         reducedim_init(f::IdFun, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, one($RT))
-        reducedim_init(f::Union(AbsFun,Abs2Fun), op::AddFun, A::$T, region) =
+        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, real(zero($RT)))
-        reducedim_init(f::Union(AbsFun,Abs2Fun), op::MulFun, A::$T, region) =
+        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, real(one($RT)))
     end
 end
-reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) =
+reducedim_init(f::Union{IdFun,AbsFun,Abs2Fun}, op::AddFun, A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
 
 
@@ -252,11 +252,11 @@ for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun),
 
     fname! = symbol(fname, '!')
     @eval begin
-        $(fname!)(f::Union(Function,Func{1}), r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f::Union{Function,Func{1}}, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(Op)(), initarray!(r, $(Op)(), init), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(IdFun(), r, A; init=init)
 
-        $(fname)(f::Union(Function,Func{1}), A::AbstractArray, region) =
+        $(fname)(f::Union{Function,Func{1}}, A::AbstractArray, region) =
             mapreducedim(f, $(Op)(), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(IdFun(), A, region)
     end

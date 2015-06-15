@@ -149,10 +149,10 @@ function /{T<:Real}(a::Complex{T}, b::Complex{T})
     end
 end
 
-inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
+inv{T<:Union{Float16,Float32}}(z::Complex{T}) =
     oftype(z, conj(widen(z))/abs2(widen(z)))
 
-/{T<:Union(Float16,Float32)}(z::Complex{T}, w::Complex{T}) =
+/{T<:Union{Float16,Float32}}(z::Complex{T}, w::Complex{T}) =
     oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
@@ -732,7 +732,7 @@ big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
 
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
+complex{T<:Union{Integer64,Float64,Float32,Float16}}(x::AbstractArray{T}) =
     convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
 function complex(A::AbstractArray)
@@ -745,7 +745,7 @@ big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{
 
 ## promotion to complex ##
 
-promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+promote_array_type{S<:Union{Complex, Real}, AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     if size(A) != size(B); throw(DimensionMismatch()); end

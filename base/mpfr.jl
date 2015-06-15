@@ -82,10 +82,10 @@ end
 
 BigFloat(x::Integer) = BigFloat(BigInt(x))
 
-BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
-BigFloat(x::Union(UInt8,UInt16,UInt32)) = BigFloat(convert(Culong,x))
+BigFloat(x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong,x))
+BigFloat(x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong,x))
 
-BigFloat(x::Union(Float16,Float32)) = BigFloat(Float64(x))
+BigFloat(x::Union{Float16,Float32}) = BigFloat(Float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
@@ -129,20 +129,20 @@ unsafe_cast{T<:Integer}(::Type{T}, x::BigFloat, r::RoundingMode) = unsafe_cast(T
 
 unsafe_trunc{T<:Integer}(::Type{T}, x::BigFloat) = unsafe_cast(T,x,RoundToZero)
 
-function trunc{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
-function floor{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function floor{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
-function ceil{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function ceil{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
-function round{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function round{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[end])
 end

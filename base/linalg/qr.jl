@@ -24,7 +24,7 @@ immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QRPivoted{T}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) = QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false})
+function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false})
     pivot==Val{true} && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
     m, n = size(A)
     τ = zeros(T, min(m,n))
@@ -49,19 +49,19 @@ function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Va
 end
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{false}} = Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = qrfact!(copy(A), pivot)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}) = qrfact!(copy(A), pivot)
 copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
 copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
-qrfact{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = qrfact!(copy_oftype(A, typeof(one(T)/norm(one(T)))), pivot)
+qrfact{T}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}) = qrfact!(copy_oftype(A, typeof(one(T)/norm(one(T)))), pivot)
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
-qr(A::Union(Number, AbstractMatrix), pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; thin::Bool=true) =
+qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =
     _qr(A, pivot, thin=thin)
-function _qr(A::Union(Number, AbstractMatrix), ::Type{Val{false}}; thin::Bool=true)
+function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{false}}; thin::Bool=true)
     F = qrfact(A, Val{false})
     full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
 end
-function _qr(A::Union(Number, AbstractMatrix), ::Type{Val{true}}; thin::Bool=true)
+function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{true}}; thin::Bool=true)
     F = qrfact(A, Val{true})
     full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
 end
@@ -116,7 +116,7 @@ end
 
 # Type-stable interface to get Q
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
-getq(A::Union(QR, QRPivoted)) = QRPackedQ(A.factors,A.τ)
+getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
 immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
@@ -144,12 +144,12 @@ convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
 convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
 
-size(A::Union(QR,QRCompactWY,QRPivoted), dim::Integer) = size(A.factors, dim)
-size(A::Union(QR,QRCompactWY,QRPivoted)) = size(A.factors)
-size(A::Union(QRPackedQ,QRCompactWYQ), dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
-size(A::Union(QRPackedQ,QRCompactWYQ)) = size(A, 1), size(A, 2)
+size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
+size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
+size(A::Union{QRPackedQ,QRCompactWYQ}, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
+size(A::Union{QRPackedQ,QRCompactWYQ}) = size(A, 1), size(A, 2)
 
-full{T}(A::Union(QRPackedQ{T},QRCompactWYQ{T}); thin::Bool=true) = A_mul_B!(A, thin ? eye(T, size(A.factors,1), minimum(size(A.factors))) : eye(T, size(A.factors,1)))
+full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool=true) = A_mul_B!(A, thin ? eye(T, size(A.factors,1), minimum(size(A.factors))) : eye(T, size(A.factors,1)))
 
 ## Multiplication by Q
 ### QB
@@ -180,7 +180,7 @@ function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     B
 end
 
-function (*){TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{Tb})
+function (*){TA,Tb}(A::Union{QRPackedQ{TA},QRCompactWYQ{TA}}, b::StridedVector{Tb})
     TAb = promote_type(TA, Tb)
     Anew = convert(AbstractMatrix{TAb}, A)
     if size(A.factors, 1) == length(b)
@@ -192,7 +192,7 @@ function (*){TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{T
     end
     A_mul_B!(Anew, bnew)
 end
-function (*){TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB})
+function (*){TA,TB}(A::Union{QRPackedQ{TA},QRCompactWYQ{TA}}, B::StridedMatrix{TB})
     TAB = promote_type(TA, TB)
     Anew = convert(AbstractMatrix{TAB}, A)
     if size(A.factors, 1) == size(B, 1)
@@ -234,7 +234,7 @@ function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     end
     B
 end
-function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}), B::StridedArray{TB,N})
+function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union{QRPackedQ{TQ},QRCompactWYQ{TQ}}, B::StridedArray{TB,N})
     TQB = promote_type(TQ,TB)
     return Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), copy_oftype(B, TQB))
 end
@@ -267,7 +267,7 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     A
 end
 
-function (*){TA,TQ,N}(A::StridedArray{TA,N}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
+function (*){TA,TQ,N}(A::StridedArray{TA,N}, Q::Union{QRPackedQ{TQ},QRCompactWYQ{TQ}})
     TAQ = promote_type(TA, TQ)
     return A_mul_B!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
@@ -301,8 +301,8 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-A_mul_Bc(A::AbstractTriangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
-function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
+function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union{QRCompactWYQ{TB},QRPackedQ{TB}})
     TAB = promote_type(TA,TB)
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
@@ -412,7 +412,7 @@ function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
     B[1:size(A.factors, 2),:] = sub(B, 1:size(A.factors, 2), :)[invperm(A.jpvt)]
     B
 end
-function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}), b::StridedVector{Tb})
+function \{TA,Tb}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, b::StridedVector{Tb})
     S = promote_type(TA,Tb)
     m,n = size(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
@@ -424,7 +424,7 @@ function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}), b::StridedVect
     end
     return length(x) > n ? x[1:n] : x
 end
-function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
+function \{TA,TB}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}},B::StridedMatrix{TB})
     S = promote_type(TA,TB)
     m,n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -474,7 +474,7 @@ function getindex(A::Hessenberg, d::Symbol)
 end
 
 # Also printing of QRQs
-getindex(A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), i::Integer, j::Integer) = (x = zeros(eltype(A), size(A, 1)); x[i] = 1; y = zeros(eltype(A), size(A, 2)); y[j] = 1; dot(x, A*y))
+getindex(A::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, i::Integer, j::Integer) = (x = zeros(eltype(A), size(A, 1)); x[i] = 1; y = zeros(eltype(A), size(A, 2)); y[j] = 1; dot(x, A*y))
 
 ## reconstruct the original matrix
 full(F::QR) = F[:Q] * F[:R]

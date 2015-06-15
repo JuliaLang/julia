@@ -717,7 +717,7 @@ end
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractArray = _default_bit_splice)
+function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -758,7 +758,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractA
     return v
 end
 
-function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins)
+function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins)
     Bins = BitArray(length(ins))
     i = 1
     for x in ins
@@ -1618,7 +1618,7 @@ ctranspose(B::BitArray) = transpose(B)
 
 ## Permute array dims ##
 
-function permutedims(B::Union(BitArray,StridedArray), perm)
+function permutedims(B::Union{BitArray,StridedArray}, perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
     (ndimsB == length(perm) && isperm(perm)) || throw(ArgumentError("no valid permutation of dimensions"))
@@ -1658,7 +1658,7 @@ function vcat(V::BitVector...)
     return B
 end
 
-function hcat(A::Union(BitMatrix,BitVector)...)
+function hcat(A::Union{BitMatrix,BitVector}...)
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
@@ -1708,7 +1708,7 @@ function vcat(A::BitMatrix...)
 end
 
 # general case, specialized for BitArrays and Integers
-function cat(catdim::Integer, X::Union(BitArray, Integer)...)
+function cat(catdim::Integer, X::Union{BitArray, Integer}...)
     nargs = length(X)
     # using integers results in conversion to Array{Int}
     # (except in the all-Bool case)

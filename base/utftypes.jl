@@ -30,5 +30,5 @@ immutable UTF32String <: DirectIndexString
 end
 UTF32String(data::Vector{UInt32}) = UTF32String(reinterpret(Char, data))
 
-isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(str::T) = isvalid(T, str.data)
-isvalid{T<:Union(ASCIIString,UTF8String,UTF16String,UTF32String)}(::Type{T}, str::T) = isvalid(T, str.data)
+isvalid{T<:Union{ASCIIString,UTF8String,UTF16String,UTF32String}}(str::T) = isvalid(T, str.data)
+isvalid{T<:Union{ASCIIString,UTF8String,UTF16String,UTF32String}}(::Type{T}, str::T) = isvalid(T, str.data)
