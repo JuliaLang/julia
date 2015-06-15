@@ -2745,9 +2745,15 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             builder.CreateCondBr(builder.CreateICmpNE(cachedval, initnul), have_val, not_found);
             ctx->f->getBasicBlockList().push_back(not_found);
             builder.SetInsertPoint(not_found);
+#ifdef LLVM37
+            Value *bval = builder.CreateCall(prepare_call(jlgetbindingorerror_func),
+                                              {literal_pointer_val((jl_value_t*)m),
+                                              literal_pointer_val((jl_value_t*)s)});
+#else
             Value *bval = builder.CreateCall2(prepare_call(jlgetbindingorerror_func),
                                               literal_pointer_val((jl_value_t*)m),
                                               literal_pointer_val((jl_value_t*)s));
+#endif
             builder.CreateStore(bval, bindinggv);
             builder.CreateBr(have_val);
             ctx->f->getBasicBlockList().push_back(have_val);
