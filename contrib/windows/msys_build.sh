@@ -206,11 +206,11 @@ if [ -n "$USEMSVC" ]; then
   echo 'override STAGE1_DEPS += dsfmt' >> Make.user
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
+  make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
 fi
 
-make check-whitespace
 cat Make.user
 make VERBOSE=1
 #make debug
