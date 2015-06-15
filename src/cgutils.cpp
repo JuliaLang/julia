@@ -81,7 +81,6 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
         // this will cause llvm to rename it, so we do the same
         imp_name = Twine("__imp_", name).str();
         name = StringRef(imp_name);
-#ifdef _P64
         // __imp_ functions are jmp stubs (no additional work needed)
         // __imp_ variables are indirection pointers, so use malloc to simulate that too
         if (isa<GlobalVariable>(gv)) {
@@ -89,7 +88,6 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
             *imp_addr = addr;
             addr = (void*)imp_addr;
         }
-#endif
     }
 #endif
     addComdat(gv);
