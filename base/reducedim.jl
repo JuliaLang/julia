@@ -92,7 +92,7 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
 #
-promote_union(T::UnionType) = promote_type(T.types...)
+promote_union(T::Union) = promote_type(T.types...)
 promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)

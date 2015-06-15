@@ -8,7 +8,7 @@
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
 
 deepcopy_internal(x::Union(Symbol,LambdaStaticData,TopNode,QuoteNode,
-                           DataType,UnionType,Task),
+                           DataType,Union,Task),
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
