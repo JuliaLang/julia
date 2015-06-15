@@ -651,15 +651,6 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
     return bt;
 }
 
-jl_uniontype_t *jl_new_uniontype(jl_svec_t *types)
-{
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,NWORDS(sizeof(jl_uniontype_t)));
-    // don't make unions of 1 type; Union(T)==T
-    assert(jl_svec_len(types) != 1);
-    t->types = types;
-    return t;
-}
-
 // type constructor -----------------------------------------------------------
 
 jl_typector_t *jl_new_type_ctor(jl_svec_t *params, jl_value_t *body)

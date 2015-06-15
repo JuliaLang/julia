@@ -449,8 +449,8 @@ xlate(t) = xlate(t, ObjectIdDict())
 
 xlate(t, env) = t
 
-function xlate(t::UnionType, env)
-    if t === Union()
+function xlate(t::Union, env)
+    if t === Union{}
         return BottomT
     end
     UnionT(map(x->xlate(x,env), t.types)...)
