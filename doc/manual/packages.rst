@@ -439,8 +439,8 @@ are several possible approaches, here is one that is widely used:
     without reloading all the package code; for packages that take a while to
     load, this can be much faster. With this approach, you do have to do some
     extra work to make :ref:`changes in the package code <man-workflow-tips>`.
-  + From the shell, run ``julia runtests.jl`` from within the package's
-    ``test/`` folder.
+  + From the shell, run ``julia ../test/runtests.jl`` from within the package's
+    ``src/`` folder.
 
 
 - Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
