@@ -1880,13 +1880,6 @@ Any[
 
 "),
 
-("Base","Union","Union(Ts...)
-
-   Construct a special abstract type that behaves as though all of the
-   types in \"Ts\" are its subtypes.
-
-"),
-
 ("Base","Val{c}","Val{c}()
 
    Create a \"value type\" out of \"c\", which must be an \"isbits\"
@@ -6562,7 +6555,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","bind","bind(socket::Union(UDPSocket, TCPSocket), host::IPv4, port::Integer)
+("Base","bind","bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
    Bind \"socket\" to the given \"host:port\". Note that *0.0.0.0*
    will listen on all devices.
@@ -8218,6 +8211,21 @@ popdisplay(d::Display)
 
 "),
 
+("Base.LinAlg.BLAS","ger!","ger!(alpha, x, y, A)
+
+   Rank-1 update of the matrix \"A\" with vectors \"x\" and \"y\" as
+   \"alpha*x*y' + A\".
+
+"),
+
+("Base.LinAlg.BLAS","syr!","syr!(uplo, alpha, x, A)
+
+   Rank-1 update of the symmetric matrix \"A\" with vector \"x\" as
+   \"alpha*x*x.' + A\".  When \"uplo\" is 'U' the upper triangle of
+   \"A\" is updated ('L' for lower triangle). Returns \"A\".
+
+"),
+
 ("Base.LinAlg.BLAS","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
@@ -8232,6 +8240,15 @@ popdisplay(d::Display)
    Returns either the upper triangle or the lower triangle, according
    to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
    according to \"trans\" ('N' or 'T').
+
+"),
+
+("Base.LinAlg.BLAS","her!","her!(uplo, alpha, x, A)
+
+   Methods for complex arrays only.  Rank-1 update of the Hermitian
+   matrix \"A\" with vector \"x\" as \"alpha*x*x' + A\".  When
+   \"uplo\" is 'U' the upper triangle of \"A\" is updated ('L' for
+   lower triangle). Returns \"A\".
 
 "),
 
@@ -12981,7 +12998,7 @@ golden
 
 "),
 
-("Base","isalnum","isalnum(c::Union(Char, AbstractString)) -> Bool
+("Base","isalnum","isalnum(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is alphanumeric, or whether this is true
    for all elements of a string.  A character is classified as
@@ -12991,7 +13008,7 @@ golden
 
 "),
 
-("Base","isalpha","isalpha(c::Union(Char, AbstractString)) -> Bool
+("Base","isalpha","isalpha(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is alphabetic, or whether this is true
    for all elements of a string. A character is classified as
@@ -13000,14 +13017,14 @@ golden
 
 "),
 
-("Base","isascii","isascii(c::Union(Char, AbstractString)) -> Bool
+("Base","isascii","isascii(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or
    whether this is true for all elements of a string.
 
 "),
 
-("Base","iscntrl","iscntrl(c::Union(Char, AbstractString)) -> Bool
+("Base","iscntrl","iscntrl(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is a control character, or whether this
    is true for all elements of a string.  Control characters are the
@@ -13015,14 +13032,14 @@ golden
 
 "),
 
-("Base","isdigit","isdigit(c::Union(Char, AbstractString)) -> Bool
+("Base","isdigit","isdigit(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
 
 "),
 
-("Base","isgraph","isgraph(c::Union(Char, AbstractString)) -> Bool
+("Base","isgraph","isgraph(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is printable, and not a space, or whether
    this is true for all elements of a string.  Any character that
@@ -13031,7 +13048,7 @@ golden
 
 "),
 
-("Base","islower","islower(c::Union(Char, AbstractString)) -> Bool
+("Base","islower","islower(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this is
    true for all elements of a string.  A character is classified as
@@ -13039,7 +13056,7 @@ golden
 
 "),
 
-("Base","isnumber","isnumber(c::Union(Char, AbstractString)) -> Bool
+("Base","isnumber","isnumber(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is numeric, or whether this is true for
    all elements of a string.   A character is classified as numeric if
@@ -13048,7 +13065,7 @@ golden
 
 "),
 
-("Base","isprint","isprint(c::Union(Char, AbstractString)) -> Bool
+("Base","isprint","isprint(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is printable, including spaces, but not a
    control character. For strings, tests whether this is true for all
@@ -13056,7 +13073,7 @@ golden
 
 "),
 
-("Base","ispunct","ispunct(c::Union(Char, AbstractString)) -> Bool
+("Base","ispunct","ispunct(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character belongs to the Unicode general category
    Punctuation, i.e. a character whose category code begins with 'P'.
@@ -13065,7 +13082,7 @@ golden
 
 "),
 
-("Base","isspace","isspace(c::Union(Char, AbstractString)) -> Bool
+("Base","isspace","isspace(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is any whitespace character.  Includes
    ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ',
@@ -13075,7 +13092,7 @@ golden
 
 "),
 
-("Base","isupper","isupper(c::Union(Char, AbstractString)) -> Bool
+("Base","isupper","isupper(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
    is true for all elements of a string.    A character is classified
@@ -13084,7 +13101,7 @@ golden
 
 "),
 
-("Base","isxdigit","isxdigit(c::Union(Char, AbstractString)) -> Bool
+("Base","isxdigit","isxdigit(c::Union{Char, AbstractString}) -> Bool
 
    Tests whether a character is a valid hexadecimal digit, or whether
    this is true for all elements of a string.
@@ -13132,7 +13149,7 @@ golden
 
 "),
 
-("Base","utf16","utf16(::Union(Ptr{UInt16}, Ptr{Int16})[, length])
+("Base","utf16","utf16(::Union{Ptr{UInt16}, Ptr{Int16}}[, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string.
    A copy is made; the pointer can be safely freed. If \"length\" is
@@ -13160,7 +13177,7 @@ golden
 
 "),
 
-("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32})[, length])
+("Base","utf32","utf32(::Union{Ptr{Char}, Ptr{UInt32}, Ptr{Int32}}[, length])
 
    Create a string from the address of a NUL-terminated UTF-32 string.
    A copy is made; the pointer can be safely freed. If \"length\" is

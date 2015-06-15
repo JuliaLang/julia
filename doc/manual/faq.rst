@@ -778,7 +778,7 @@ really be thought of as nothing but rather a tuple of zero values.
 
 In code written for Julia prior to version 0.4 you may occasionally see ``None``,
 which is quite different. It is the empty (or "bottom") type, a type with no values
-and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+and no subtypes (except itself). This is now written as ``Union{}`` (an empty union
 type). You will generally not need to use this type.
 
 Memory

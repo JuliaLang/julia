@@ -456,10 +456,6 @@ Types
 
    Compute a type that contains the intersection of ``T`` and ``S``. Usually this will be the smallest such type or one close to it.
 
-.. function:: Union(Ts...)
-
-   Construct a special abstract type that behaves as though all of the types in ``Ts`` are its subtypes.
-
 .. function:: Val{c}
 
    Create a "value type" out of ``c``, which must be an ``isbits``

@@ -8,7 +8,7 @@ If you've used Julia for a while, you understand the fundamental role
 that types play.  Here we try to get under the hood, focusing
 particularly on :ref:`parametric types <man-parametric-types>`.
 
-Types and sets (and ``Any`` and ``Union()``/``Bottom``)
+Types and sets (and ``Any`` and ``Union{}``/``Bottom``)
 -------------------------------------------------------
 
 It's perhaps easiest to conceive of Julia's type system in terms of
@@ -18,7 +18,7 @@ concrete types.  ``Any`` is a type that describes the entire universe
 of possible types; ``Integer`` is a subset of ``Any`` that includes
 ``Int``, ``Int8``, and other concrete types.  Internally, Julia also
 makes heavy use of another type known as ``Bottom``, or equivalently,
-``Union()``.  This corresponds to the empty set.
+``Union{}``.  This corresponds to the empty set.
 
 Julia's types support the standard operations of set theory: you can
 ask whether ``T1`` is a "subset" (subtype) of ``T2`` with ``T1 <:
@@ -29,28 +29,28 @@ union with ``typejoin``:
 .. doctest::
 
     julia> typeintersect(Int, Float64)
-    Union()
+    Union{}
 
-    julia> Union(Int, Float64)
-    Union(Int64,Float64)
+    julia> Union{Int, Float64}
+    Union{Int64,Float64}
 
     julia> typejoin(Int, Float64)
     Real
 
-    julia> typeintersect(Signed, Union(UInt8, Int8))
+    julia> typeintersect(Signed, Union{UInt8, Int8})
     Int8
 
-    julia> Union(Signed, Union(UInt8, Int8))
-    Union(Signed,UInt8)
+    julia> Union{Signed, Union{UInt8, Int8}}
+    Union{Signed,UInt8}
 
-    julia> typejoin(Signed, Union(UInt8, Int8))
+    julia> typejoin(Signed, Union{UInt8, Int8})
     Integer
 
     julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
     Tuple{Int64,Float64}
 
-    julia> Union(Tuple{Integer,Float64}, Tuple{Int,Real})
-    Union(Tuple{Integer,Float64},Tuple{Int64,Real})
+    julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
+    Union{Tuple{Integer,Float64},Tuple{Int64,Real}}
 
     julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
     Tuple{Integer,Real}
@@ -58,7 +58,7 @@ union with ``typejoin``:
 While these operations may seem abstract, they lie at the heart of
 Julia.  For example, method dispatch is implemented by stepping
 through the items in a method list until reaching one for which
-``typeintersect(args, sig)`` is not ``Union()``.  (Here, ``args`` is a
+``typeintersect(args, sig)`` is not ``Union{}``.  (Here, ``args`` is a
 tuple-type describing the types of the arguments, and ``sig`` is a
 tuple-type specifying the types in the function's signature.)  For
 this algorithm to work, it's important that methods be sorted by their
@@ -107,7 +107,7 @@ parameters:
    julia> xdump(T)
    TypeVar
      name: Symbol T
-     lb: Union()
+     lb: Union{}
      ub: Any::DataType  <: Any
      bound: Bool false
 
@@ -117,7 +117,7 @@ A :obj:`TypeVar` is one of Julia's built-in types---it's defined in
 printed when showing the object.  ``lb`` and ``ub`` stand for "lower
 bound" and "upper bound," respectively: these are the sets that
 constrain what types the TypeVar may represent.  In this case, ``T``\ 's
-lower bound is ``Union()`` (i.e., ``Bottom`` or the empty set); in
+lower bound is ``Union{}`` (i.e., ``Bottom`` or the empty set); in
 other words, this :obj:`TypeVar` is not constrained from below.  The
 upper bound is ``Any``, so neither is it constrained from above.
 
@@ -139,7 +139,7 @@ one can extract the underlying :obj:`TypeVar`:
 
    TypeVar
      name: Symbol S
-     lb: Union()
+     lb: Union{}
      ub: Integer::DataType  <: Real
      bound: Bool true
 
@@ -172,14 +172,14 @@ parameters. For example:
    julia> xdump(p1[1].parameters[1])
    TypeVar
      name: Symbol T
-     lb: Union()
+     lb: Union{}
      ub: Any::DataType  <: Any
      bound: Bool false
 
    julia> xdump(p3[1].parameters[1])
    TypeVar
      name: Symbol T
-     lb: Union()
+     lb: Union{}
      ub: Real::DataType  <: Number
      bound: Bool true
 
@@ -422,7 +422,7 @@ from a bound :obj:`TypeVar`
    T
 
    julia> typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})
-   Union()
+   Union{}
 
 Finally, it's worth noting that ``Tuple{}`` is distinct
 
@@ -435,7 +435,7 @@ Finally, it's worth noting that ``Tuple{}`` is distinct
    svec()
 
    julia> typeintersect(Tuple{}, Tuple{Int})
-   Union()
+   Union{}
 
 What is the "primary" tuple-type?
 ::
@@ -552,7 +552,7 @@ finish and keep progressing, you'll eventually get to
 ``solve_tvar_constraints``.  Roughly speaking, ``eqc`` defines ``T =
 Int64``, but ``env`` defines it as ``Int8``; this conflict is detected
 in ``solve_tvar_constraints`` and the resulting return is
-``jl_bottom_type``, aka ``Union()``.
+``jl_bottom_type``, aka ``Union{}``.
 
 
 Subtyping and method sorting
@@ -563,7 +563,7 @@ Armed with this knowledge, you may find yourself surprised by the following:
 .. doctest::
 
    julia> typeintersect(Tuple{Array{Int},Float64}, Tuple{Array{T},T})
-   Union()
+   Union{}
 
    julia> Tuple{Array{Int},Float64} <: Tuple{Array{T},T}
    true

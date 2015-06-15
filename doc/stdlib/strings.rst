@@ -275,74 +275,74 @@
 
    Gives the number of columns needed to print a string.
 
-.. function:: isalnum(c::Union(Char,AbstractString)) -> Bool
+.. function:: isalnum(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is alphanumeric, or whether this
    is true for all elements of a string.  A character is classified as alphabetic
    if it belongs to the Unicode general category Letter or Number, i.e. a character whose
    category code begins with 'L' or 'N'.
 
-.. function:: isalpha(c::Union(Char,AbstractString)) -> Bool
+.. function:: isalpha(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is alphabetic, or whether this
    is true for all elements of a string. A character is classified as alphabetic
    if it belongs to the Unicode general category Letter, i.e. a character whose
    category code begins with 'L'.
 
-.. function:: isascii(c::Union(Char,AbstractString)) -> Bool
+.. function:: isascii(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or whether this
    is true for all elements of a string.
 
-.. function:: iscntrl(c::Union(Char,AbstractString)) -> Bool
+.. function:: iscntrl(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is a control character, or whether this
    is true for all elements of a string.  Control characters are the
    non-printing characters of the Latin-1 subset of Unicode.
 
-.. function:: isdigit(c::Union(Char,AbstractString)) -> Bool
+.. function:: isdigit(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
 
-.. function:: isgraph(c::Union(Char,AbstractString)) -> Bool
+.. function:: isgraph(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is printable, and not a space, or whether this
    is true for all elements of a string.  Any character that would cause a printer
    to use ink should be classified with isgraph(c)==true.
 
-.. function:: islower(c::Union(Char,AbstractString)) -> Bool
+.. function:: islower(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this
    is true for all elements of a string.  A character is classified as lowercase
    if it belongs to Unicode category Ll, Letter: Lowercase.
 
-.. function:: isnumber(c::Union(Char,AbstractString)) -> Bool
+.. function:: isnumber(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is numeric, or whether this
    is true for all elements of a string.   A character is classified as numeric
    if it belongs to the Unicode general category Number, i.e. a character whose
    category code begins with 'N'.
 
-.. function:: isprint(c::Union(Char,AbstractString)) -> Bool
+.. function:: isprint(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.
 
-.. function:: ispunct(c::Union(Char,AbstractString)) -> Bool
+.. function:: ispunct(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.
 
-.. function:: isspace(c::Union(Char,AbstractString)) -> Bool
+.. function:: isspace(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is any whitespace character.  Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
 
-.. function:: isupper(c::Union(Char,AbstractString)) -> Bool
+.. function:: isupper(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
    is true for all elements of a string.    A character is classified as uppercase
    if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
 
-.. function:: isxdigit(c::Union(Char,AbstractString)) -> Bool
+.. function:: isxdigit(c::Union{Char,AbstractString}) -> Bool
 
    Tests whether a character is a valid hexadecimal digit, or whether this
    is true for all elements of a string.
@@ -377,7 +377,7 @@
    making a copy of the data and treating the NUL as a terminator
    rather than as part of the string.
 
-.. function:: utf16(::Union(Ptr{UInt16},Ptr{Int16}) [, length])
+.. function:: utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
 
@@ -399,7 +399,7 @@
    making a copy of the data and treating the NUL as a terminator
    rather than as part of the string.
 
-.. function:: utf32(::Union(Ptr{Char},Ptr{UInt32},Ptr{Int32}) [, length])
+.. function:: utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}} [, length])
 
    Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
 
