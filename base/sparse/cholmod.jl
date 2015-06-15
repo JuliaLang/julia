@@ -995,7 +995,7 @@ copy(A::Dense) = copy_dense(A)
 copy(A::Sparse) = copy_sparse(A)
 copy(A::Factor) = copy_factor(A)
 
-function size(A::Union(Dense,Sparse))
+function size(A::Union{Dense,Sparse})
     s = unsafe_load(A.p)
     return (Int(s.nrow), Int(s.ncol))
 end

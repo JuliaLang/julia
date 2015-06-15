@@ -34,16 +34,16 @@ end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
 factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(Int32(n))
-factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
+factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
+factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(Int64(n))
+factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
+function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0

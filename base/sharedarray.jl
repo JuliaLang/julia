@@ -214,7 +214,7 @@ getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
 getindex(S::SharedArray, I::Colon) = getindex(S.s, I)
-@generated function getindex(S::SharedArray, I::Union(Real,AbstractVector,Colon)...)
+@generated function getindex(S::SharedArray, I::Union{Real,AbstractVector,Colon}...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -226,7 +226,7 @@ setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
 setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
 setindex!(S::SharedArray, x, I::Colon) = setindex!(S.s, x, I)
-@generated function setindex!(S::SharedArray, x, I::Union(Real,AbstractVector,Colon)...)
+@generated function setindex!(S::SharedArray, x, I::Union{Real,AbstractVector,Colon}...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -266,15 +266,15 @@ end
 shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 
 # rand variant with range
-function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...)
+function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
         SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     else
         SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     end
 end
-shmem_rand(TR::Union(DataType, UnitRange), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
-shmem_rand(TR::Union(DataType, UnitRange), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
 
 shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)

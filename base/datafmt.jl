@@ -289,7 +289,7 @@ const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quo
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
-    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
+    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
         !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]

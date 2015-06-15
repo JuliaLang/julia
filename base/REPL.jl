@@ -380,7 +380,7 @@ function add_history(hist::REPLHistoryProvider, s)
     flush(hist.history_file)
 end
 
-function history_move(s::Union(LineEdit.MIState,LineEdit.PrefixSearchState), hist::REPLHistoryProvider, idx::Int, save_idx::Int = hist.cur_idx)
+function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, hist::REPLHistoryProvider, idx::Int, save_idx::Int = hist.cur_idx)
     max_idx = length(hist.history) + 1
     @assert 1 <= hist.cur_idx <= max_idx
     (1 <= idx <= max_idx) || return :none

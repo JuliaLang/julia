@@ -37,16 +37,16 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 # Dot products
 
-vecdot{T<:BlasReal}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dot(x, y)
-vecdot{T<:BlasComplex}(x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T})) = BLAS.dotc(x, y)
-function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
+vecdot{T<:BlasReal}(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) = BLAS.dot(x, y)
+vecdot{T<:BlasComplex}(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) = BLAS.dotc(x, y)
+function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}})
     length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
+function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}})
     length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
@@ -245,7 +245,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
     return generic_matmatmul!(C, tA, tAt, A, A)
 end
 
-function herk_wrapper!{T<:BlasReal}(C::Union(StridedMatrix{T}, StridedMatrix{Complex{T}}), tA::Char, A::Union(StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}))
+function herk_wrapper!{T<:BlasReal}(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::Char, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}})
     nC = chksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)

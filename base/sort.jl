@@ -115,12 +115,12 @@ function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Orderi
     end
 end
 
-select!(v::AbstractVector, k::Union(Int,OrdinalRange), o::Ordering) = select!(v,k,1,length(v),o)
-select!(v::AbstractVector, k::Union(Int,OrdinalRange);
+select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union(Int,OrdinalRange); kws...) = select!(copy(v), k; kws...)
+select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -428,7 +428,7 @@ import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
-typealias Floats Union(Float32,Float64)
+typealias Floats Union{Float32,Float64}
 
 immutable Left <: Ordering end
 immutable Right <: Ordering end

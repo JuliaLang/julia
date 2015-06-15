@@ -24,14 +24,14 @@ Base.convert{T<:Period}(::Type{T},x::Real) = T(x)
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
 Base.show(io::IO,x::Period) = print(io,string(x))
-Base.zero{P<:Period}(::Union(Type{P},P)) = P(0)
-Base.one{P<:Period}(::Union(Type{P},P)) = P(1)
+Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
+Base.one{P<:Period}(::Union{Type{P},P}) = P(1)
 Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
-default{T<:DatePeriod}(p::Union(T,Type{T})) = one(p)
-default{T<:TimePeriod}(p::Union(T,Type{T})) = zero(p)
+default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
+default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
@@ -201,7 +201,7 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::Period,y::Period) = CompoundPeriod(Period[x,-y])
 (-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
-(-)(y::Union(Period,CompoundPeriod),x::CompoundPeriod) = (-x) + y
+(-)(y::Union{Period,CompoundPeriod},x::CompoundPeriod) = (-x) + y
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(y::Period, x::CompoundPeriod) = x == y
 (==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
@@ -222,7 +222,7 @@ end
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-typealias FixedPeriod Union(Week,Day,Hour,Minute,Second,Millisecond)
+typealias FixedPeriod Union{Week,Day,Hour,Minute,Second,Millisecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x,y)
@@ -259,7 +259,7 @@ end
 Base.isless{T<:FixedPeriod,S<:FixedPeriod}(x::T,y::S) = isless(promote(x,y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
-typealias OtherPeriod Union(Month,Year)
+typealias OtherPeriod Union{Month,Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
         $vmin ≤ value(x) ≤ $vmax || throw(InexactError())

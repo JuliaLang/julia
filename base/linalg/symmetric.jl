@@ -19,8 +19,8 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
 
-typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
-typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
+typealias HermOrSym{T,S} Union{Hermitian{T,S}, Symmetric{T,S}}
+typealias RealHermSymComplexHerm{T<:Real,S} Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 
 size(A::HermOrSym, args...) = size(A.data, args...)
 getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : getindex(A.data, j, i)
@@ -102,7 +102,7 @@ end
 eigvals!{T<:BlasReal,S<:StridedMatrix}(A::HermOrSym{T,S}, B::HermOrSym{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!{T<:BlasComplex,S<:StridedMatrix}(A::Hermitian{T,S}, B::Hermitian{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
-function svdvals!{T<:Real,S}(A::Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
+function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
     vals = eigvals!(A)
     for i = 1:length(vals)
         vals[i] = abs(vals[i])

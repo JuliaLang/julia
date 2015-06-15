@@ -173,8 +173,8 @@ eltype(t::DataType) = eltype(super(t))
 eltype(x) = eltype(typeof(x))
 
 # copying immutable things
-copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
-              TopNode,QuoteNode,DataType,Union)) = x
+copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
+              TopNode,QuoteNode,DataType,Union}) = x
 
 # function pipelining
 |>(x, f::Callable) = f(x)

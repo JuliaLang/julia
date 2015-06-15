@@ -100,8 +100,8 @@ A = reshape(1:6, 3, 2)
 @test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
 
 # Heterogeneously typed arrays
-@test sum(Union(Float32, Float64)[1.0], 1) == [1.0]
-@test prod(Union(Float32, Float64)[1.0], 1) == [1.0]
+@test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
+@test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)

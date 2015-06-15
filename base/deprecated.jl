@@ -108,7 +108,7 @@ export Nothing
 const Nothing = Void
 
 export None
-const None = Union()
+const None = Union{}
 
 export apply
 function apply(f, args...)
@@ -428,7 +428,7 @@ function to_index{T<:Real}(A::AbstractArray{T})
     Int[to_index_nodep(x) for x in A]
 end
 
-function float_isvalid{T<:Union(Float32,Float64)}(s::AbstractString, out::Array{T,1})
+function float_isvalid{T<:Union{Float32,Float64}}(s::AbstractString, out::Array{T,1})
     tf = tryparse(T, s)
     isnull(tf) || (out[1] = get(tf))
     !isnull(tf)
@@ -486,7 +486,7 @@ export float32_isvalid, float64_isvalid
 
 function chol(A::AbstractMatrix, uplo::Symbol)
     depwarn(string("chol(a::AbstractMatrix, uplo::Symbol) is deprecated, ",
-        "use chol(a::AbstractMatrix, uplo::Union(Val{:L},Val{:U})) instead"), :chol)
+        "use chol(a::AbstractMatrix, uplo::Union{Val{:L},Val{:U}}) instead"), :chol)
     chol(A, Val{uplo})
 end
 
@@ -494,7 +494,7 @@ _ensure_vector(A::AbstractArray) = vec(A)
 _ensure_vector(A) = A
 _ensure_vectors() = ()
 _ensure_vectors(A, As...) = (_ensure_vector(A), _ensure_vectors(As...)...)
-function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union(Real,AbstractArray,Colon)...)
+function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
     depwarn("multidimensional indexed assignment with multidimensional arrays is deprecated, use vec to convert indices to vectors", :_unsafe_setindex!)
     _unsafe_setindex!(l, A, x, _ensure_vectors(J...)...)
 end

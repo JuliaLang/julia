@@ -394,7 +394,7 @@ function UDPSocket()
     this
 end
 
-function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket))
+function uvfinalize(uv::Union{TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket})
     if (uv.status != StatusUninit && uv.status != StatusInit)
         close(uv)
     end
@@ -417,7 +417,7 @@ const UV_UDP_IPV6ONLY = 1
 # remainder was discarded by the OS.
 const UV_UDP_PARTIAL = 2
 
-function bind(sock::Union(TCPServer,UDPSocket), host::IPv4, port::Integer)
+function bind(sock::Union{TCPServer,UDPSocket}, host::IPv4, port::Integer)
     if sock.status != StatusInit
         error("$(typeof(sock)) is not initialized")
     end
@@ -498,7 +498,7 @@ function recvfrom(sock::UDPSocket)
         error("UDPSocket is not initialized and open")
     end
     _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Tuple{Union(IPv4, IPv6), Vector{UInt8}}
+    stream_wait(sock,sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
 end
 
 

@@ -26,7 +26,7 @@ function complete_symbol(sym, ffunc)
 
     mod = context_module
     lookup_module = true
-    t = Union()
+    t = Union{}
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
@@ -237,7 +237,7 @@ function complete_methods(ex_org::Expr)
     t_in = Tuple{args_ex...} # Input types
     for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union() &&
+        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union{} &&
             push!(out,string(method))
     end
     return out

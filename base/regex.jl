@@ -89,7 +89,7 @@ end
 
 immutable RegexMatch
     match::SubString{UTF8String}
-    captures::Vector{Union(Void,SubString{UTF8String})}
+    captures::Vector{Union{Void,SubString{UTF8String}}}
     offset::Int
     offsets::Vector{Int}
 end
@@ -133,13 +133,13 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32
     ovec = re.ovec
     n = div(length(ovec),2) - 1
     mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union(Void,SubString{UTF8String})[
+    cap = Union{Void,SubString{UTF8String}}[
             ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off)
 end
 
-match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::UInt32=UInt32(0)) =
+match(re::Regex, str::Union{ByteString,SubString}, idx::Integer, add_opts::UInt32=UInt32(0)) =
     match(re, utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
@@ -180,10 +180,10 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::Union(ByteString,SubString), overlap::Bool=false) =
+matchall(re::Regex, str::Union{ByteString,SubString}, overlap::Bool=false) =
     matchall(re, utf8(str), overlap)
 
-function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
+function search(str::Union{ByteString,SubString}, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end

@@ -646,7 +646,7 @@ for x=-5:5, y=-5:5
     end
 end
 
-function _cmp_(x::Union(Int64,UInt64), y::Float64)
+function _cmp_(x::Union{Int64,UInt64}, y::Float64)
     if x==Int64(2)^53-2 && y==2.0^53-2; return  0; end
     if x==Int64(2)^53-2 && y==2.0^53-1; return -1; end
     if x==Int64(2)^53-2 && y==2.0^53  ; return -1; end

@@ -21,7 +21,7 @@ end
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
 ReverseOrdering{Fwd}(fwd::Fwd) = ReverseOrdering{Fwd}(fwd)
 
-typealias DirectOrdering Union(ForwardOrdering,ReverseOrdering{ForwardOrdering})
+typealias DirectOrdering Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 const Forward = ForwardOrdering()
 const Reverse = ReverseOrdering(Forward)

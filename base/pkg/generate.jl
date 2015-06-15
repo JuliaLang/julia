@@ -33,8 +33,8 @@ function package(
     pkg::AbstractString,
     license::AbstractString;
     force::Bool = false,
-    authors::Union(AbstractString,Array) = "",
-    years::Union(Int,AbstractString) = copyright_year(),
+    authors::Union{AbstractString,Array} = "",
+    years::Union{Int,AbstractString} = copyright_year(),
     user::AbstractString = github_user(),
     config::Dict = Dict(),
 )
@@ -103,8 +103,8 @@ function init(pkg::AbstractString, url::AbstractString=""; config::Dict=Dict())
 end
 
 function license(pkg::AbstractString, license::AbstractString,
-                 years::Union(Int,AbstractString),
-                 authors::Union(AbstractString,Array);
+                 years::Union{Int,AbstractString},
+                 authors::Union{AbstractString,Array};
                  force::Bool=false)
     genfile(pkg,"LICENSE.md",force) do io
         if !haskey(LICENSES,license)
@@ -199,7 +199,7 @@ function copyright(years::AbstractString, authors::Array)
     return text
 end
 
-mit(pkg::AbstractString, years::AbstractString, authors::Union(AbstractString,Array)) =
+mit(pkg::AbstractString, years::AbstractString, authors::Union{AbstractString,Array}) =
 """
 The $pkg.jl package is licensed under the MIT "Expat" License:
 
@@ -225,7 +225,7 @@ $(copyright(years,authors))
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-bsd(pkg::AbstractString, years::AbstractString, authors::Union(AbstractString,Array)) =
+bsd(pkg::AbstractString, years::AbstractString, authors::Union{AbstractString,Array}) =
 """
 The $pkg.jl package is licensed under the Simplified "2-clause" BSD License:
 
@@ -254,7 +254,7 @@ $(copyright(years,authors))
 > OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-asl(pkg::AbstractString, years::AbstractString, authors::Union(AbstractString,Array)) =
+asl(pkg::AbstractString, years::AbstractString, authors::Union{AbstractString,Array}) =
 """
 The $pkg.jl package is licensed under version 2.0 of the Apache License:
 

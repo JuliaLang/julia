@@ -136,9 +136,9 @@ Base.size(A::MyArray) = size(A.data)
 
 @inline Base.getindex(A::ArrayLF, i::Int) = getindex(A.data, i)
 @inline Base.getindex(A::ArrayLF, i::Int, i2::Int) = getindex(A.data, i, i2)
-@inline Base.getindex(A::Union(ArrayLS, ArrayLSLS), i::Int, j::Int) = getindex(A.data, i, j)
+@inline Base.getindex(A::Union{ArrayLS, ArrayLSLS}, i::Int, j::Int) = getindex(A.data, i, j)
 @inline Base.unsafe_getindex(A::ArrayLF, indx::Int) = unsafe_getindex(A.data, indx)
-@inline Base.unsafe_getindex(A::Union(ArrayLS, ArrayLSLS), i::Int, j::Int) = unsafe_getindex(A.data, i, j)
+@inline Base.unsafe_getindex(A::Union{ArrayLS, ArrayLSLS}, i::Int, j::Int) = unsafe_getindex(A.data, i, j)
 
 @inline Base.getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.getindex(A::ArrayStrides1, i::Real, j::Real) = getindex(A.data, i + A.stride1*(j-1))

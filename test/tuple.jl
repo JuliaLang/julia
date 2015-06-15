@@ -56,7 +56,7 @@
 @test eltype((1.0,2.0,3.0)) <: FloatingPoint
 @test eltype((true, false)) === Bool
 @test eltype((1,2.0, false)) === Any
-@test eltype(()) === Union()
+@test eltype(()) === Union{}
 
 
 ## mapping ##

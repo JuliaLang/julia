@@ -58,7 +58,7 @@ else
     bitstype 32 Cwstring
 end
 
-convert{T<:Union(Int8,UInt8)}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
+convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, unbox(Ptr{Cwchar_t}, p))
 
 # convert strings to ByteString etc. to pass as pointers
@@ -91,11 +91,11 @@ sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
 disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
 
-function ccallable(f::Function, rt::Type, argt::Type, name::Union(AbstractString,Symbol)=string(f))
+function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::Type, name::Union(AbstractString,Symbol)=string(f))
+function ccallable(f::Function, argt::Type, name::Union{AbstractString,Symbol}=string(f))
     ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Cstring), f, C_NULL, argt, name)
 end
 

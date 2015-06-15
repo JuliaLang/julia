@@ -130,13 +130,13 @@ function toprev(func::Function,dt::TimeType;step::Period=Day(-1),negate::Bool=fa
 end
 
 # Return the first TimeType that falls on dow in the Month or Year
-function tofirst(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tofirst(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? firstdayofmonth(dt) : firstdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(1),366)
 end
 
 # Return the last TimeType that falls on dow in the Month or Year
-function tolast(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tolast(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? lastdayofmonth(dt) : lastdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(-1),366)
 end

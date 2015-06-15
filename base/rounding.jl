@@ -40,11 +40,11 @@ function from_fenv(r::Integer)
     end
 end
 
-set_rounding_raw{T<:Union(Float32,Float64)}(::Type{T},i::Integer) = ccall(:fesetround, Cint, (Cint,), i)
-get_rounding_raw{T<:Union(Float32,Float64)}(::Type{T}) = ccall(:fegetround, Cint, ())
+set_rounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Cint, (Cint,), i)
+get_rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Cint, ())
 
-set_rounding{T<:Union(Float32,Float64)}(::Type{T},r::RoundingMode) = set_rounding_raw(T,to_fenv(r))
-get_rounding{T<:Union(Float32,Float64)}(::Type{T}) = from_fenv(get_rounding_raw(T))
+set_rounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = set_rounding_raw(T,to_fenv(r))
+get_rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(get_rounding_raw(T))
 
 function with_rounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
     old_rounding_raw = get_rounding_raw(T)

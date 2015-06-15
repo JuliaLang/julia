@@ -6,7 +6,7 @@ include("uv_constants.jl")
 import .Libc: RawFD, dup
 
 ## types ##
-typealias Callback Union(Function,Bool)
+typealias Callback Union{Function,Bool}
 
 abstract AsyncStream <: IO
 abstract UVServer
@@ -146,7 +146,7 @@ type PipeServer <: UVServer
         false,Condition())
 end
 
-function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
+function init_pipe!(pipe::Union{Pipe,PipeServer};readable::Bool=false,writable=false,julia_only=true)
     if pipe.handle == C_NULL
         error("failed to initialize pipe")
     elseif pipe.status != StatusUninit
@@ -218,9 +218,9 @@ end
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
-isreadable(io::Union(Pipe,TTY)) =
+isreadable(io::Union{Pipe,TTY}) =
     ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle)!=0
-iswritable(io::Union(Pipe,TTY)) =
+iswritable(io::Union{Pipe,TTY}) =
     ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle)!=0
 
 nb_available(stream::UVStream) = nb_available(stream.buffer)
@@ -298,7 +298,7 @@ function reinit_stdio()
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 
-function isopen{T<:Union(AsyncStream,UVServer)}(x::T)
+function isopen{T<:Union{AsyncStream,UVServer}}(x::T)
     if !(x.status != StatusUninit && x.status != StatusInit)
         throw(ArgumentError("$T object not initialized"))
     end
@@ -468,7 +468,7 @@ function reseteof(x::TTY)
     nothing
 end
 
-function _uv_hook_close(uv::Union(AsyncStream,UVServer))
+function _uv_hook_close(uv::Union{AsyncStream,UVServer})
     uv.handle = C_NULL
     uv.status = StatusClosed
     if isa(uv.closecb, Function)
@@ -662,7 +662,7 @@ close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),h
 
 _uv_hook_isopen(stream) = Int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
 
-function close(stream::Union(AsyncStream,UVServer))
+function close(stream::Union{AsyncStream,UVServer})
     if isopen(stream) && stream.status != StatusClosing
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
         stream.status = StatusClosing

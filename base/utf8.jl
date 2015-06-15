@@ -166,7 +166,7 @@ function string(a::ByteString...)
     UTF8String(data)
 end
 
-function string(a::Union(ByteString,Char)...)
+function string(a::Union{ByteString,Char}...)
     s = Array(UInt8,0)
     for d in a
         if isa(d,Char)

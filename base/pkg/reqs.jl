@@ -52,7 +52,7 @@ end
 
 # general machinery for parsing REQUIRE files
 
-function read(readable::Union(IO,Base.AbstractCmd))
+function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)
@@ -72,7 +72,7 @@ function write(io::IO, reqs::Requires)
         println(io, Requirement(pkg, reqs[pkg]).content)
     end
 end
-write(file::AbstractString, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
+write(file::AbstractString, r::Union{Vector{Line},Requires}) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()

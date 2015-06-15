@@ -2,7 +2,7 @@
 
 # test core language features
 
-const Bottom = Union()
+const Bottom = Union{}
 
 function testintersect(a, b, result, cmp=is)
     @test cmp(typeintersect(a, b), result)
@@ -28,8 +28,8 @@ isnot(x,y) = !is(x,y)
 @test !(Array{Any,1} <: Array{Int8,1})
 @test Array{Int8,1} <: Array{Int8,1}
 @test !(Type{Bottom} <: Type{Int32})
-@test !(Vector{Float64} <: Vector{Union(Float64,Float32)})
-testintersect(Vector{Float64}, Vector{Union(Float64,Float32)}, Bottom)
+@test !(Vector{Float64} <: Vector{Union{Float64,Float32}})
+testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
 
 @test !isa(Array,Type{Any})
 @test Type{Complex} <: DataType
@@ -57,8 +57,8 @@ let T = TypeVar(:T,true)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws MethodError f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
-    testintersect(Tuple{T,T}, Tuple{Union(Float64,Int64),Int64}, Tuple{Int64,Int64})
-    testintersect(Tuple{T,T}, Tuple{Int64,Union(Float64,Int64)}, Tuple{Int64,Int64})
+    testintersect(Tuple{T,T}, Tuple{Union{Float64,Int64},Int64}, Tuple{Int64,Int64})
+    testintersect(Tuple{T,T}, Tuple{Int64,Union{Float64,Int64}}, Tuple{Int64,Int64})
 
     TT = TypeVar(:T)
     S = TypeVar(:S,true); N = TypeVar(:N,true); SN = TypeVar(:S,Number,true)
@@ -114,10 +114,10 @@ testintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{})
 testintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}, Bottom)
 testintersect(Tuple{Bool,Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{Bool,})
 
-let T = TypeVar(:T,Union(Float32,Float64))
+let T = TypeVar(:T,Union{Float32,Float64})
     testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
-let T = TypeVar(:T,Union(Float32,Float64),true)
+let T = TypeVar(:T,Union{Float32,Float64},true)
     testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
 
@@ -143,13 +143,13 @@ end
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
-@test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
+@test Type{TypeVar(:T,Number)} <: Union{DataType,UnionType}
 @test !(Type{TypeVar(:T,Number)} <: DataType)
-@test !(Type{TypeVar(:T,Tuple)} <: Union(Tuple,UnionType))
-@test Type{TypeVar(:T,Tuple)} <: Union(DataType,UnionType)
+@test !(Type{TypeVar(:T,Tuple)} <: Union{Tuple,UnionType})
+@test Type{TypeVar(:T,Tuple)} <: Union{DataType,UnionType}
 
 # issue #2997
-let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
+let T = TypeVar(:T,Union{Float64,Array{Float64,1}},true)
     testintersect(T,Real,Float64)
 end
 
@@ -189,8 +189,8 @@ end
                    Tuple{Int8,Vararg{Signed}})
 @test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
                    Tuple{Int8,Vararg{Integer}})
-@test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
-@test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
+@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
+@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
 
 # typejoin associativity
 abstract Foo____{K}
@@ -738,10 +738,10 @@ end
 # issue #814
 begin
     local MatOrNot, my_func, M
-    typealias MatOrNot{T} Union(AbstractMatrix{T}, Vector{Union()})
+    typealias MatOrNot{T} Union{AbstractMatrix{T}, Vector{Union{}}}
     my_func{T<:Real}(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) = 0
     M = [ 2. 1. ; 1. 1. ]
-    @test my_func(Union()[], M, M) == 0
+    @test my_func(Union{}[], M, M) == 0
 end
 
 begin
@@ -1010,7 +1010,7 @@ end
 
 # issue #2365
 type B2365{T}
-     v::Union(T, Void)
+     v::Union{T, Void}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
@@ -1180,7 +1180,7 @@ function foo(x)
     end
     return ret
 end
-let x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
+let x = Array(Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1191,7 +1191,7 @@ end
 # issue #4115
 #type Foo4115
 #end
-#typealias Foo4115s NTuple{3,Union(Foo4115,Type{Foo4115})}
+#typealias Foo4115s NTuple{3,Union{Foo4115,Type{Foo4115}}}
 #baz4115(x::Foo4115s) = x
 #@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
 #                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
@@ -1273,10 +1273,10 @@ end
 type A4413 end
 type B4413 end
 type C4413 end
-f4413(::Union(A4413, B4413, C4413)) = "ABC"
-f4413(::Union(A4413, B4413)) = "AB"
-g4413(::Union(A4413, C4413)) = "AC"
-g4413(::Union(A4413, B4413, C4413)) = "ABC"
+f4413(::Union{A4413, B4413, C4413}) = "ABC"
+f4413(::Union{A4413, B4413}) = "AB"
+g4413(::Union{A4413, C4413}) = "AC"
+g4413(::Union{A4413, B4413, C4413}) = "ABC"
 
 @test f4413(A4413()) == "AB" && f4413(B4413()) == "AB"
 @test g4413(A4413()) == "AC" && g4413(C4413()) == "AC"
@@ -1314,8 +1314,8 @@ end
 @test_throws ErrorException f4528(true, Int32(12))
 
 # issue #4518
-f4518(x, y::Union(Int32,Int64)) = 0
-f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
+f4518(x, y::Union{Int32,Int64}) = 0
+f4518(x::ASCIIString, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
 # issue #4581
@@ -1696,8 +1696,8 @@ x6074 = 6074
 @test @X6074() == 6074
 
 # issue #5536
-test5536(a::Union(Real, AbstractArray)...) = "Splatting"
-test5536(a::Union(Real, AbstractArray)) = "Non-splatting"
+test5536(a::Union{Real, AbstractArray}...) = "Splatting"
+test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 @test test5536(5) == "Non-splatting"
 
 # multiline comments (#6139 and others raised in #6128) and embedded NUL chars (#10994)
@@ -1886,19 +1886,19 @@ end
 # issue #6980
 abstract A6980
 type B6980 <: A6980 end
-f6980(::Union(Int, Float64), ::A6980) = false
-f6980(::Union(Int, Float64), ::B6980) = true
+f6980(::Union{Int, Float64}, ::A6980) = false
+f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-typealias Maybe7049{T} Union(T,Void)
-function ttt7049(;init::Maybe7049{Union(AbstractString,Tuple{Int,Char})} = nothing)
+typealias Maybe7049{T} Union{T,Void}
+function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMatrix{T}) = T,
+let z{T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}}(A::StridedMatrix{T}) = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -2311,7 +2311,7 @@ f7221(::AbstractVecOrMat) = 3
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union(Float32,Float64))}, Type{TypeVar(:T2, Number)}})) == 1
+@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union{Float32,Float64})}, Type{TypeVar(:T2, Number)}})) == 1
 
 # test functionality of non-power-of-2 bitstype constants
 bitstype 24 Int24
@@ -2945,7 +2945,7 @@ immutable T11675{T}
     x::T
     T11675() = new()
 end
-let x = T11675{Union()}()
+let x = T11675{Union{}}()
     function f11675(x)
         x.x + 1
     end

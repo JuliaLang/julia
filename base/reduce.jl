@@ -5,15 +5,15 @@
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(UInt8,UInt16)
+typealias SmallSigned Union{Int8,Int16}
+typealias SmallUnsigned Union{UInt8,UInt16}
 else
-typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(UInt8,UInt16,UInt32)
+typealias SmallSigned Union{Int8,Int16,Int32}
+typealias SmallUnsigned Union{UInt8,UInt16,UInt32}
 end
 
-typealias CommonReduceResult Union(UInt64,UInt128,Int64,Int128,Float32,Float64)
-typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
+typealias CommonReduceResult Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
+typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x::WidenReduceResult) = widen(x)
@@ -186,7 +186,7 @@ sum_pairwise_blocksize(::Abs2Fun) = 4096
 mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)
+sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
@@ -217,7 +217,7 @@ end
 
 ## prod
 
-prod(f::Union(Callable,Func{1}), a) = mapreduce(f, MulFun(), a)
+prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 prod(A::AbstractArray{Bool}) =
@@ -261,8 +261,8 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union(Callable,Func{1}), a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union(Callable,Func{1}), a) = mapreduce(f, MinFun(), a)
+maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MaxFun(), a)
+minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MinFun(), a)
 
 maximum(a) = mapreduce(IdFun(), MaxFun(), a)
 minimum(a) = mapreduce(IdFun(), MinFun(), a)
@@ -333,8 +333,8 @@ end
 all(a) = mapreduce(IdFun(), AndFun(), a)
 any(a) = mapreduce(IdFun(), OrFun(), a)
 
-all(pred::Union(Callable,Func{1}), a) = mapreduce(pred, AndFun(), a)
-any(pred::Union(Callable,Func{1}), a) = mapreduce(pred, OrFun(), a)
+all(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, AndFun(), a)
+any(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, OrFun(), a)
 
 
 ## in & contains
@@ -362,7 +362,7 @@ end
 
 ## countnz & count
 
-function count(pred::Union(Callable,Func{1}), itr)
+function count(pred::Union{Callable,Func{1}}, itr)
     n = 0
     for x in itr
         pred(x) && (n += 1)
@@ -370,7 +370,7 @@ function count(pred::Union(Callable,Func{1}), itr)
     return n
 end
 
-function count(pred::Union(Callable,Func{1}), a::AbstractArray)
+function count(pred::Union{Callable,Func{1}}, a::AbstractArray)
     n = 0
     for i = 1:length(a)
         @inbounds if pred(a[i])

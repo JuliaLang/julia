@@ -51,13 +51,13 @@ const RODFT11 = Int32(10)
 
 # FFTW floating-point types:
 
-typealias fftwNumber Union(Float64,Float32,Complex128,Complex64)
-typealias fftwReal Union(Float64,Float32)
-typealias fftwComplex Union(Complex128,Complex64)
-typealias fftwDouble Union(Float64,Complex128)
-typealias fftwSingle Union(Float32,Complex64)
-typealias fftwTypeDouble Union(Type{Float64},Type{Complex128})
-typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
+typealias fftwNumber Union{Float64,Float32,Complex128,Complex64}
+typealias fftwReal Union{Float64,Float32}
+typealias fftwComplex Union{Complex128,Complex64}
+typealias fftwDouble Union{Float64,Complex128}
+typealias fftwSingle Union{Float32,Complex64}
+typealias fftwTypeDouble Union{Type{Float64},Type{Complex128}}
+typealias fftwTypeSingle Union{Type{Float32},Type{Complex64}}
 
 ## Julia wrappers around FFTW functions
 

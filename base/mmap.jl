@@ -92,7 +92,7 @@ end
 
 @windows_only begin
 # Mmapped-array constructor
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::FileOffset)
     if isa(s,IO)
         hdl = _get_osfhandle(RawFD(fd(s))).handle
         if Int(hdl) == -1

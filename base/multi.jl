@@ -46,7 +46,7 @@ type WorkerConfig
     port::Nullable{Integer}
 
     # Used when launching additional workers at a host
-    count::Nullable{Union(Int, Symbol)}
+    count::Nullable{Union{Int, Symbol}}
     exename::Nullable{AbstractString}
     exeflags::Nullable{Cmd}
 
@@ -194,7 +194,7 @@ end
 
 const LPROC = LocalProcess()
 
-const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
+const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = ObjectIdDict()
 const map_del_wrkr = Set{Int}()
 
