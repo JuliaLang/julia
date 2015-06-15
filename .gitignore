@@ -9,6 +9,7 @@
 /julia-*
 /source-dist.tmp
 /source-dist.tmp1
+/build*
 
 *.exe
 *.dll

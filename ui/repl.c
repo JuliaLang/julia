@@ -30,10 +30,6 @@
 #define WHOLE_ARCHIVE
 #include "../src/julia.h"
 
-#ifndef JL_SYSTEM_IMAGE_PATH
-#error "JL_SYSTEM_IMAGE_PATH not defined!"
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -117,7 +113,8 @@ void parse_opts(int *argcp, char ***argvp)
            opt_handle_signals,
            opt_output_o,
            opt_output_ji,
-           opt_use_precompiled
+           opt_use_precompiled,
+           opt_load_log
     };
     static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
     static struct option longopts[] = {
@@ -150,6 +147,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-ji",       required_argument, 0, opt_output_ji },
+        { "load-log",        required_argument, 0, opt_load_log },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
         { "math-mode",       required_argument, 0, opt_math_mode },
@@ -333,6 +331,9 @@ void parse_opts(int *argcp, char ***argvp)
         case opt_output_ji:
             jl_options.outputji = optarg;
             if (!imagepathspecified) jl_options.image_file = NULL;
+            break;
+        case opt_load_log:
+            jl_options.load_log = optarg;
             break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))

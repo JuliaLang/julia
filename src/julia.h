@@ -1522,6 +1522,7 @@ typedef struct {
     const char *outputbc;
     const char *outputo;
     const char *outputji;
+    const char *load_log;
 } jl_options_t;
 
 extern DLLEXPORT jl_options_t jl_options;
@@ -1565,9 +1566,6 @@ DLLEXPORT int jl_generating_output();
 
 #define JL_OPTIONS_USE_PRECOMPILED_YES 1
 #define JL_OPTIONS_USE_PRECOMPILED_NO 0
-
-// Version information
-#include "julia_version.h"
 
 DLLEXPORT extern int jl_ver_major(void);
 DLLEXPORT extern int jl_ver_minor(void);

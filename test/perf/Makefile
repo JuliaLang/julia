@@ -1,4 +1,3 @@
-JULIAHOME = $(abspath ../..)
 include ../../Make.inc
 
 all: micro kernel cat shootout blas lapack simd sort spell sparse

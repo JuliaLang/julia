@@ -226,7 +226,7 @@ io = IOBuffer()
 @test banner(io) == nothing
 @test length(takebuf_string(io)) > 50
 
-# julia_version.h version test
+# Julia C version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
 @test VERSION.minor == ccall(:jl_ver_minor, Cint, ())
 @test VERSION.patch == ccall(:jl_ver_patch, Cint, ())

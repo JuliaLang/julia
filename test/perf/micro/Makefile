@@ -1,6 +1,5 @@
 JULIAHOME = $(abspath ../../..)
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/deps/Versions.make
 
 NODEJSBIN = nodejs
 
@@ -45,7 +44,7 @@ export OMP_NUM_THREADS=1
 export GOTO_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
-perf.h: $(JULIAHOME)/deps/Versions.make
+perf.h: $(JULIAHOME)/cmake/JuliaDeps.cmake
 	echo '#include "$(BLASDIR)cblas.h"' > $@
 	echo '#include "$(DSFMTDIR)/dSFMT.c"' >> $@
 	echo '#include "$(RMATHDIR)/src/randmtzig.c"' >> $@

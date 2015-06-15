@@ -1,11 +1,10 @@
-JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) $(CFLAGS)
 
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
+override DEBUGFLAGS += $(FLAGS)
+override SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
 ifeq ($(USE_SYSTEM_LIBM),0)
@@ -38,4 +37,3 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/embedding-debug $(build_bindir)/embedding
 
 .PHONY: clean release debug
-

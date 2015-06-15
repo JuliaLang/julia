@@ -1,0 +1,73 @@
+#
+
+if(NOT WIN32)
+  string(ASCII 27 Esc)
+  set(ColourReset "${Esc}[m")
+  set(ColourBold  "${Esc}[1m")
+  set(Red         "${Esc}[31m")
+  set(Green       "${Esc}[32m")
+  set(Yellow      "${Esc}[33m")
+  set(Blue        "${Esc}[34m")
+  set(Magenta     "${Esc}[35m")
+  set(Cyan        "${Esc}[36m")
+  set(White       "${Esc}[37m")
+  set(BoldRed     "${Esc}[1;31m")
+  set(BoldGreen   "${Esc}[1;32m")
+  set(BoldYellow  "${Esc}[1;33m")
+  set(BoldBlue    "${Esc}[1;34m")
+  set(BoldMagenta "${Esc}[1;35m")
+  set(BoldCyan    "${Esc}[1;36m")
+  set(BoldWhite   "${Esc}[1;37m")
+endif()
+
+# OUTPUTS: list of output files
+# OUTPUT_DEPS: list of direct dependencies
+# AUTODEP_FILE: the file to read automatically generated dependencies list from
+# COMMAND_SPEC: arguments passed to execute_process()
+
+set(output_str)
+foreach(output ${OUTPUTS})
+  if(IS_ABSOLUTE "${output}")
+    file(RELATIVE_PATH output "${CUR_BIN_DIR}" "${output}")
+  endif()
+  set(output_str "${output_str} ${output}")
+endforeach()
+
+function(run_target)
+  message("${Blue}Generating${output_str}${ColourReset}")
+  execute_process(${COMMAND_SPEC} RESULT_VARIABLE res)
+  if(NOT "${res}" EQUAL 0)
+    file(REMOVE ${OUTPUTS})
+    message(FATAL_ERROR
+      "${BoldRed}Error while generating${output_str}${ColourReset}")
+  endif()
+  if(EXISTS "${AUTODEP_FILE}")
+    file(RENAME "${AUTODEP_FILE}" "${AUTODEP_FILE}.autodeps")
+  else()
+    execute_process(COMMAND "${CMAKE_COMMAND}"
+      -E touch "${AUTODEP_FILE}.autodeps")
+  endif()
+endfunction()
+
+set(dep_list ${OUTPUT_DEPS})
+if(NOT EXISTS "${AUTODEP_FILE}.autodeps")
+  # Use the autodeps file to check if the build succeeded last time
+  run_target()
+  return()
+endif()
+file(STRINGS "${AUTODEP_FILE}.autodeps" autodeps)
+set(dep_list ${dep_list} ${autodeps})
+
+foreach(output ${OUTPUTS})
+  if(NOT EXISTS "${output}")
+    run_target()
+    return()
+  else()
+    foreach(dep ${dep_list})
+      if("${dep}" IS_NEWER_THAN "${output}")
+        run_target()
+        return()
+      endif()
+    endforeach()
+  endif()
+endforeach()

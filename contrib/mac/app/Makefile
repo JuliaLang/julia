@@ -2,7 +2,6 @@
 # You may have to wipe your openblas build to ensure that it is built
 # with support for all architectures, or else performance may suffer.
 
-JULIAHOME = $(abspath ../../..)
 include ../../../Make.inc
 
 JULIA_PKGDIR=$(shell echo $$JULIA_PKGDIR)

@@ -1,0 +1,9 @@
+//
+
+#ifndef JULIA_CONFIG_P_H
+#define JULIA_CONFIG_P_H
+
+#define JL_SYSTEM_IMAGE_PATH "@JL_SYSTEM_IMAGE_PATH@"
+#define JL_BUILD_BASE_PATH "@CMAKE_BINARY_DIR@/base"
+
+#endif

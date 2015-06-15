@@ -3,6 +3,8 @@
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
+#include <julia/julia-config.h>
+
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
 

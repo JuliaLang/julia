@@ -1,6 +1,5 @@
 #!/usr/bin/make -f
 
-JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
 all: default
