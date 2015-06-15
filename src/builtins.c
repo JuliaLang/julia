@@ -1298,7 +1298,8 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
             jl_printf(out, "."); n += 1;
         }
         n += jl_printf(out, "%s", dv->name->name->name);
-        if (dv->parameters && (jl_value_t*)dv != dv->name->primary) {
+        if (dv->parameters && (jl_value_t*)dv != dv->name->primary &&
+            !jl_types_equal((jl_value_t*)dv, (jl_value_t*)jl_tuple_type)) {
             size_t j, tlen = jl_nparams(dv);
             if (tlen > 0) {
                 n += jl_printf(out, "{");
