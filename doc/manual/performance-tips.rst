@@ -815,7 +815,7 @@ the above example, such output is shown in all-caps.
 
 The top part of the output summarizes the type information for the different
 variables internal to the function. You can see that ``y``, one of the
-variables you created, is a ``Union(Int64,Float64)``, due to the
+variables you created, is a ``Union{Int64,Float64}``, due to the
 type-instability of ``pos``.  There is another variable, ``_var4``, which you
 can see also has the same type.
 
@@ -850,13 +850,13 @@ best tools to contain the "damage" from type instability.
 The following examples may help you interpret expressions marked as
 containing non-leaf types:
 
-- Function body ending in ``end::Union(T1,T2))``
+- Function body ending in ``end::Union{T1,T2})``
 
   + Interpretation: function with unstable return type
 
   + Suggestion: make the return value type-stable, even if you have to annotate it
 
-- ``f(x::T)::Union(T1,T2)``
+- ``f(x::T)::Union{T1,T2}``
 
   + Interpretation: call to a type-unstable function
 

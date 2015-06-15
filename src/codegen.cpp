@@ -2885,7 +2885,7 @@ static Value *emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
     jl_value_t *rt = expr_type(r,ctx);
     if (bp != NULL) {
         if ((jl_is_symbol(r) || jl_is_symbolnode(r) || jl_is_gensym(r)) && rt == jl_bottom_type) {
-            // sometimes x = y::Union() occurs
+            // sometimes x = y::Union{} occurs
             if (!jl_is_gensym(r)) {
                 jl_sym_t *s;
                 if (jl_is_symbolnode(r))
@@ -2920,7 +2920,7 @@ static Value *emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
         rval = emit_expr(r, ctx, true);
 
         // don't need to store this if it isn't used
-        // and sometimes we can get x::Union() = Expr(:tuple)::() in dead code
+        // and sometimes we can get x::Union{} = Expr(:tuple)::() in dead code
         if (!used || declType == jl_bottom_type)
             return UndefValue::get(rval->getType());
 

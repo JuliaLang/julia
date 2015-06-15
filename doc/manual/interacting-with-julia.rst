@@ -57,7 +57,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 In addition to function names, complete function calls may be entered to see which method is called for the given argument(s).  Macros, types and variables can also be queried::
 
     help> string(1)
-    string(x::Union(Int16,Int128,Int8,Int32,Int64)) at string.jl:1553
+    string(x::Union{Int16,Int128,Int8,Int32,Int64}) at string.jl:1553
 
     help> @printf
     Base.@printf([io::IOStream], "%Fmt", args...)

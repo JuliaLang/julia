@@ -721,7 +721,7 @@ Network I/O
    Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
    the file changed, a return value of false indicates a timeout.
 
-.. function:: bind(socket::Union(UDPSocket, TCPSocket), host::IPv4, port::Integer)
+.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
    Bind ``socket`` to the given ``host:port``. Note that `0.0.0.0` will listen on all devices.
 

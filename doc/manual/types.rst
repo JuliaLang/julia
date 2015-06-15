@@ -198,8 +198,8 @@ predefined abstract type that all objects are instances of and all types
 are subtypes of. In type theory, :obj:`Any` is commonly called "top"
 because it is at the apex of the type graph. Julia also has a predefined
 abstract "bottom" type, at the nadir of the type graph, which is written as
-``Union()``. It is the exact opposite of :obj:`Any`: no object is an instance
-of ``Union()`` and all types are supertypes of ``Union()``.
+``Union{}``. It is the exact opposite of :obj:`Any`: no object is an instance
+of ``Union{}`` and all types are supertypes of ``Union{}``.
 
 Let's consider some of the abstract types that make up Julia's numerical
 hierarchy::
@@ -555,8 +555,8 @@ A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 ``Union`` function::
 
-    julia> IntOrString = Union(Int,AbstractString)
-    Union(AbstractString,Int64)
+    julia> IntOrString = Union{Int,AbstractString}
+    Union{AbstractString,Int64}
 
     julia> 1 :: IntOrString
     1
@@ -565,7 +565,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(AbstractString,Int64), got Float64
+    ERROR: type: typeassert: expected Union{AbstractString,Int64}, got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer.
@@ -1193,10 +1193,10 @@ objects, they also have types, and we can ask what their types are:
     julia> typeof(Rational)
     DataType
 
-    julia> typeof(Union(Real,Float64,Rational))
+    julia> typeof(Union{Real,Float64,Rational})
     DataType
 
-    julia> typeof(Union(Real,ASCIIString))
+    julia> typeof(Union{Real,ASCIIString})
     UnionType
 
 What if we repeat the process? What is the type of a type of a type?
@@ -1234,8 +1234,8 @@ Only declared types (:obj:`DataType`) have unambiguous supertypes:
 If you apply :func:`super` to other type objects (or non-type objects), a
 :exc:`MethodError` is raised::
 
-    julia> super(Union(Float64,Int64))
-    ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
+    julia> super(Union{Float64,Int64})
+    ERROR: `super` has no method matching super(::Type{Union{Float64,Int64}})
 
 "Value types"
 -------------
