@@ -2961,3 +2961,7 @@ end
 @test_throws UndefVarError x7864
 using M7864
 @test x7864 == 1
+
+# issue #11715
+f11715(x) = (x === Tuple{Any})
+@test f11715(Tuple{Any})
