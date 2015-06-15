@@ -1878,6 +1878,12 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     if (rt1==(jl_value_t*)jl_sym_type || rt2==(jl_value_t*)jl_sym_type ||
         jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2))
         ptr_comparable = 1;
+    if (jl_subtype(rt1, (jl_value_t*)jl_type_type, 0) ||
+        jl_subtype(rt2, (jl_value_t*)jl_type_type, 0))
+        ptr_comparable = 0;
+    if ((jl_is_type_type(rt1) && jl_is_leaf_type(jl_tparam0(rt1))) ||
+        (jl_is_type_type(rt2) && jl_is_leaf_type(jl_tparam0(rt2))))
+        ptr_comparable = 1;
     int last_depth = ctx->gc.argDepth;
     bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
     bool isteq = jl_types_equal(rt1, rt2);
