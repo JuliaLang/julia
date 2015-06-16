@@ -293,7 +293,7 @@ function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     local written::Int
     if isbits(T) && isa(a,Array)
         nb = nel * sizeof(T)
-        ensureroom(to, nb)
+        ensureroom(to, Int(nb))
         ptr = (to.append ? to.size+1 : to.ptr)
         written = min(nb, length(to.data) - ptr + 1)
         copy!(to.data, ptr,
