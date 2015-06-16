@@ -47,7 +47,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 #ifdef _OS_WINDOWS_
     std::string imp_name;
     // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_options.build_path != NULL) {
+    if (jl_compileropts.build_path != NULL) {
         // add the __declspec(dllimport) attribute
         gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
         // this will cause llvm to rename it, so we do the same
@@ -71,7 +71,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 
 #ifdef _OS_WINDOWS_
     // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_options.build_path != NULL) {
+    if (jl_compileropts.build_path != NULL) {
         if (gv->getLinkage() == GlobalValue::ExternalLinkage)
             gv->setLinkage(GlobalValue::DLLImportLinkage);
 #ifdef _P64
