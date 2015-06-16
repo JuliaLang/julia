@@ -1905,7 +1905,7 @@ static int is_cacheable(jl_datatype_t *type)
 static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
 {
     assert(jl_is_datatype(type));
-    // assign uid
+    // assign uid if it hasn't been done already
     if (!jl_is_abstracttype(type) && ((jl_datatype_t*)type)->uid==0)
         ((jl_datatype_t*)type)->uid = jl_assign_type_uid();
     jl_svec_t *cache;
@@ -1962,6 +1962,24 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
                            jl_typestack_t *stack, int check);
 
+static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
+                                     jl_value_t **iparams)
+{
+    // if an identical instantiation is already in process somewhere up the
+    // stack, return it. this computes a fixed point for recursive types.
+    jl_typename_t *tn = tt->name;
+    while (stack != NULL) {
+        if (stack->tt->name == tn &&
+            ntp == jl_svec_len(stack->tt->parameters) &&
+            typekey_eq(stack->tt, iparams, ntp)) {
+            jl_value_t *lkup = (jl_value_t*)stack->tt;
+            return lkup == tn->primary ? NULL : lkup;
+        }
+        stack = stack->prev;
+    }
+    return NULL;
+}
+
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                  int cacheable, int isabstract, jl_typestack_t *stack,
                                  jl_value_t **env, size_t n)
@@ -1976,6 +1994,9 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         if (lkup != NULL)
             return lkup;
     }
+    jl_value_t *stack_lkup = lookup_type_stack(stack, dt, ntp, iparams);
+    if (stack_lkup)
+        return stack_lkup;
 
     // always use original type constructor
     if (!istuple) {
@@ -2019,7 +2040,9 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     ndt->size = 0;
     ndt->alignment = 1;
 
-    if (cacheable) jl_cache_type_(ndt);
+    // assign uid as early as possible
+    if (cacheable && !ndt->abstract && ndt->uid==0)
+        ndt->uid = jl_assign_type_uid();
 
     if (istuple)
         ndt->super = jl_any_type;
@@ -2058,6 +2081,9 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->ninitialized = ntp;
     else
         ndt->ninitialized = dt->ninitialized;
+
+    if (cacheable) jl_cache_type_(ndt);
+
     JL_GC_POP();
     return (jl_value_t*)ndt;
 }
@@ -2224,23 +2250,6 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
 
-    // if an identical instantiation is already in process somewhere
-    // up the stack, return it. this computes a fixed point for
-    // recursive types.
-    jl_typestack_t *tmp = stack;
-    jl_value_t *lkup = NULL;
-    while (tmp != NULL) {
-        if (tmp->tt->name==tn && ntp==jl_svec_len(tmp->tt->parameters) &&
-            typekey_eq(tmp->tt, iparams, ntp)) {
-            lkup = (jl_value_t*)tmp->tt;
-            break;
-        }
-        tmp = tmp->prev;
-    }
-    if (lkup != NULL && lkup != (jl_value_t*)tc) {
-        JL_GC_POP();
-        return lkup;
-    }
     jl_value_t *result = inst_datatype((jl_datatype_t*)tt, NULL, iparams, ntp, cacheable, isabstract,
                                        stack, env, n);
     JL_GC_POP();
