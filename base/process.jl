@@ -91,7 +91,7 @@ uvtype(::DevNullStream) = UV_STREAM
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union{UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
+typealias Redirectable Union{AsyncStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -170,7 +170,7 @@ pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdi
 
 pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
 
-typealias RawOrBoxedHandle Union{UVHandle,UVStream,Redirectable,IOStream}
+typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -215,10 +215,11 @@ function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
     proc = Libc.malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}),
-         cmd, argv, loop, proc, pp, uvtype(in),
-         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
+        cmd, argv, loop, proc, pp, uvtype(in),
+        uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
+        pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
+        uv_jl_return_spawn::Ptr{Void})
     if error != 0
         disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
@@ -234,12 +235,16 @@ function uvfinalize(proc::Process)
     proc.handle = C_NULL
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
+function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
+    data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
+    data == C_NULL && return
+    proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = Int32(exit_status)
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
+    nothing
 end
 
 function _uv_hook_close(proc::Process)
