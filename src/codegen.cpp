@@ -17,6 +17,15 @@
 #endif
 
 #include "platform.h"
+#include "options.h"
+#if !defined(FORCE_ELF) && defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#define FORCE_ELF // MCJIT debugging support on windows needs ELF (currently)
+#endif
+#if !defined(FORCE_ELF) && defined(_OS_WINDOWS_) && defined(_CPU_X86_) && !defined(USE_MCJIT)
+#define FORCE_ELF // trick pre-llvm36 into skipping the generation of _chkstk calls
+                  // since it has some codegen issues associated with them
+                  // see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
+#endif
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -400,8 +409,18 @@ void jl_dump_objfile(char *fname, int jit_model)
     // it uses the large code model and we may potentially
     // want less optimizations there.
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
-#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#if defined(_OS_WINDOWS_) && defined(FORCE_ELF)
+#ifdef LLVM35
     TheTriple.setObjectFormat(Triple::COFF);
+#else
+    TheTriple.setEnvironment(Triple::UnknownEnvironment);
+#endif
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+#ifdef LLVM35
+    TheTriple.setObjectFormat(Triple::MachO);
+#else
+    TheTriple.setEnvironment(Triple::MachO);
+#endif
 #endif
 #ifdef LLVM35
     std::unique_ptr<TargetMachine>
@@ -4568,8 +4587,12 @@ extern "C" void jl_init_codegen(void)
 #endif
     ;
     Triple TheTriple(sys::getProcessTriple());
-#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#if defined(FORCE_ELF)
+#ifdef LLVM35
     TheTriple.setObjectFormat(Triple::ELF);
+#else
+    TheTriple.setEnvironment(Triple::ELF);
+#endif
 #endif
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
