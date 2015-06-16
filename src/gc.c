@@ -745,7 +745,7 @@ static void push_root(jl_value_t *v, int d)
     gc_setmark(v);
 
     if (vt == (jl_value_t*)jl_weakref_type ||
-        (jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
+        (gc_typeof(vt)==(jl_value_t*)jl_datatype_type && ((jl_datatype_t*)vt)->pointerfree)) {
         return;
     }
 
