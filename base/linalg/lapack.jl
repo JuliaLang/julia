@@ -1977,11 +1977,11 @@ end
 
 ## (PT) positive-definite, symmetric, tri-diagonal matrices
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
-for (ptsv, pttrf, pttrs, elty, relty) in
-    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64,:Float64),
-     (:sptsv_,:spttrf_,:spttrs_,:Float32,:Float32),
-     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128,:Float64),
-     (:cptsv_,:cpttrf_,:cpttrs_,:Complex64,:Float32))
+for (ptsv, pttrf, elty, relty) in
+    ((:dptsv_,:dpttrf_,:Float64,:Float64),
+     (:sptsv_,:spttrf_,:Float32,:Float32),
+     (:zptsv_,:zpttrf_,:Complex128,:Float64),
+     (:cptsv_,:cpttrf_,:Complex64,:Float32))
     @eval begin
         #       SUBROUTINE DPTSV( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
