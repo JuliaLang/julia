@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
-using Base.LAPACK.bdsqr!
 
 let # syevr
     srand(123)
@@ -38,14 +37,14 @@ let # xbdsqr
     for elty in (Float32, Float64)
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
         U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
-        s, _ = bdsqr!('U', copy(d), copy(e), Vt, U, C)
+        s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
         @test_approx_eq full(Bidiagonal(d, e, true)) U*Diagonal(s)*Vt
 
-        @test_throws ArgumentError bdsqr!('A', d, e, Vt, U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, [e; 1], Vt, U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
+        @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
     end
 end
 
@@ -103,6 +102,23 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq b c
 end
 
+#sytri and sytrf
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    A = A + A.' #symmetric!
+    B = copy(A)
+    B,ipiv = LAPACK.sytrf!('U',B)
+    @test_approx_eq triu(inv(A)) triu(LAPACK.sytri!('U',B,ipiv))
+end
+
+#trtri
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    A = triu(A)
+    B = copy(A)
+    @test_approx_eq inv(A) LAPACK.trtri!('U','N',B)
+end
+
 #sysv
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
@@ -121,4 +137,51 @@ for elty in (Complex64, Complex128)
     c = A \ b
     b,A = LAPACK.hesv!('U',A,b)
     @test_approx_eq b c
+end
+
+#ptsv
+for elty in (Float32, Float64, Complex64, Complex128)
+    dv = real(ones(elty,10))
+    ev = zeros(elty,9)
+    A = SymTridiagonal(dv,ev)
+    if elty <: Complex
+        A = Tridiagonal(conj(ev),dv,ev)
+    end
+    B = rand(elty,10,10)
+    C = copy(B)
+    @test_approx_eq A\B LAPACK.ptsv!(dv,ev,C)
+end
+
+#pttrf and pttrs
+for elty in (Float32, Float64, Complex64, Complex128)
+    dv = real(ones(elty,10))
+    ev = zeros(elty,9)
+    A = SymTridiagonal(dv,ev)
+    if elty <: Complex
+        A = Tridiagonal(conj(ev),dv,ev)
+    end
+    dv,ev = LAPACK.pttrf!(dv,ev)
+    B = rand(elty,10,10)
+    C = copy(B)
+    if elty <: Complex
+        @test_approx_eq A\B LAPACK.pttrs!('U',dv,ev,C)
+    else
+        @test_approx_eq A\B LAPACK.pttrs!(dv,ev,C)
+    end
+end
+
+#posv
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    A += real(diagm(10*real(rand(elty,10))))
+    if elty <: Complex
+        A = A + A'
+    else
+        A = A + A.'
+    end
+    B = rand(elty,10,10)
+    D = copy(A)
+    C = copy(B)
+    D,C = LAPACK.posv!('U',D,C)
+    @test_approx_eq A\B C
 end
