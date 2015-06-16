@@ -12,8 +12,8 @@
 extern "C" {
 #endif
 
-jl_value_t *jl_true;
-jl_value_t *jl_false;
+DLLEXPORT jl_value_t *jl_true;
+DLLEXPORT jl_value_t *jl_false;
 
 jl_datatype_t *jl_undef_type;
 jl_tvar_t     *jl_typetype_tvar;
@@ -58,11 +58,11 @@ jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
-jl_value_t *jl_diverror_exception;
-jl_value_t *jl_domain_exception;
-jl_value_t *jl_overflow_exception;
-jl_value_t *jl_inexact_exception;
-jl_value_t *jl_undefref_exception;
+DLLEXPORT jl_value_t *jl_diverror_exception;
+DLLEXPORT jl_value_t *jl_domain_exception;
+DLLEXPORT jl_value_t *jl_overflow_exception;
+DLLEXPORT jl_value_t *jl_inexact_exception;
+DLLEXPORT jl_value_t *jl_undefref_exception;
 jl_value_t *jl_interrupt_exception;
 jl_value_t *jl_bounds_exception;
 jl_value_t *jl_memory_exception;

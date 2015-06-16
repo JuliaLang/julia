@@ -52,8 +52,8 @@ jl_datatype_t *jl_float64_type;
 jl_datatype_t *jl_floatingpoint_type;
 jl_datatype_t *jl_number_type;
 
-jl_tuple_t *jl_null;
-jl_value_t *jl_nothing;
+DLLEXPORT jl_tuple_t *jl_null=NULL;
+DLLEXPORT jl_value_t *jl_nothing=NULL;
 
 void jl_add_constructors(jl_datatype_t *t);
 
