@@ -1458,8 +1458,8 @@ void jl_save_system_image_to_stream(ios_t *f)
 
     // record reinitialization functions
     for (i = 0; i < reinit_list.len; i += 2) {
-        write_int32(f, (int)reinit_list.items[i]);
-        write_int32(f, (int)reinit_list.items[i+1]);
+        write_int32(f, (int)((uintptr_t) reinit_list.items[i]));
+        write_int32(f, (int)((uintptr_t) reinit_list.items[i+1]));
     }
     write_int32(f, -1);
 
