@@ -3052,7 +3052,6 @@ end
 function remove_redundant_temp_vars(ast, sa)
     varinfo = ast.args[2][1]
     gensym_types = ast.args[2][3]
-    body = ast.args[3]
     for (v,init) in sa
         if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
             any(vi->symequal(vi[1],init), varinfo) &&
@@ -3061,7 +3060,7 @@ function remove_redundant_temp_vars(ast, sa)
             # this transformation is not valid for vars used before def.
             # we need to preserve the point of assignment to know where to
             # throw errors (issue #4645).
-            if !occurs_undef(v, body, varinfo)
+            if !occurs_undef(v, ast.args[3], varinfo)
 
                 # the transformation is not ideal if the assignment
                 # is present for the auto-unbox functionality
@@ -3070,7 +3069,7 @@ function remove_redundant_temp_vars(ast, sa)
                 # everywhere later in the function
                 if (isa(init,SymbolNode) ? (init.typ <: (isa(v,GenSym)?gensym_types[(v::GenSym).id+1]:local_typeof(v, varinfo))) : true)
                     delete_var!(ast, v)
-                    sym_replace(body, Any[v], Void[], Any[init], Void[])
+                    sym_replace(ast.args[3], [v], [], [init], [])
                 end
             end
         end

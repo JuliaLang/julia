@@ -273,7 +273,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
     return 1;
 }
 
-int jl_egal(jl_value_t *a, jl_value_t *b) // warning: a,b may NOT have been gc-rooted by the caller
+int jl_egal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 1;
