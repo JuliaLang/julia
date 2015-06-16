@@ -342,7 +342,7 @@ show(io::IO,sock::TCPServer) = print(io,"TCPServer(",uv_status_string(sock),")")
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
 _jl_connect_raw(sock::TCPSocket,sockaddr::Ptr{Void}) =
-    ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
+    ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void},Ptr{Void}),sock.handle,sockaddr,uv_jl_connectcb::Ptr{Void})
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
     ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::UInt16) =
@@ -476,12 +476,12 @@ function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-_uv_hook_alloc_buf(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
+alloc_buf_hook(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
 
 function _recv_start(sock::UDPSocket)
     if ccall(:uv_is_active,Cint,(Ptr{Void},),sock.handle) == 0
         uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-                                        sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+                                    sock.handle,uv_jl_alloc_buf::Ptr{Void},uv_jl_recvcb::Ptr{Void}))
     end
 end
 
@@ -502,7 +502,10 @@ function recvfrom(sock::UDPSocket)
 end
 
 
-function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
+function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr{Void}, flags::Cuint)
+    sock = @handle_as handle UDPSocket
+    buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
+    buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
     # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
         Libc.free(buf_addr)
@@ -521,14 +524,17 @@ function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_siz
               end
     buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
     notify(sock.recvnotify,(addrout,buf[1:nread]))
+    nothing
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv4,port::UInt16,buf)
-    ccall(:jl_udp_send,Cint,(Ptr{Void},UInt16,UInt32,Ptr{UInt8},Csize_t),sock.handle,hton(port),hton(ipaddr.host),buf,sizeof(buf))
+    ccall(:jl_udp_send, Cint, (Ptr{Void},UInt16,UInt32,Ptr{UInt8},Csize_t,Ptr{Void}),
+          sock.handle,hton(port),hton(ipaddr.host),buf,sizeof(buf),uv_jl_sendcb::Ptr{Void})
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv6,port::UInt16,buf)
-    ccall(:jl_udp_send6,Cint,(Ptr{Void},UInt16,Ptr{UInt128},Ptr{UInt8},Csize_t),sock.handle,hton(port),&hton(ipaddr.host),buf,sizeof(buf))
+    ccall(:jl_udp_send6, Cint, (Ptr{Void},UInt16,Ptr{UInt128},Ptr{UInt8},Csize_t,Ptr{Void}),
+          sock.handle,hton(port),&hton(ipaddr.host),buf,sizeof(buf),uv_jl_sendcb::Ptr{Void})
 end
 
 function send(sock::UDPSocket,ipaddr,port,msg)
@@ -541,44 +547,52 @@ function send(sock::UDPSocket,ipaddr,port,msg)
     nothing
 end
 
-function _uv_hook_send(sock::UDPSocket,status::Cint)
+function uv_sendcb(handle::Ptr{Void}, status::Cint)
+    sock = @handle_as handle UDPSocket
     if status < 0
         notify_error(sock.sendnotify,UVError("UDP send failed",status))
     end
     notify(sock.sendnotify)
+    Libc.free(handle)
+    nothing
 end
 
 ##
 
 callback_dict = ObjectIdDict()
 
-function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
+function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
+    data = ccall(:jl_uv_getaddrinfo_data, Ptr{Void}, (Ptr{Void},), req)
+    data == C_NULL && return
+    cb = unsafe_pointer_to_objref(data)::Function
     pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
     if status != 0 || addrinfo == C_NULL
         cb(UVError("getaddrinfo callback",status))
-        return
-    end
-    freeaddrinfo = addrinfo
-    while addrinfo != C_NULL
-        sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-        if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-            cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
-            break
-        #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #    host = Array(UInt128,1)
-        #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
-        #    cb(IPv6(ntoh(host[1])))
-        #    break
+    else
+        freeaddrinfo = addrinfo
+        while addrinfo != C_NULL
+            sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+            if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
+                cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
+                break
+            #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
+            #    host = Array(UInt128,1)
+            #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
+            #    cb(IPv6(ntoh(host[1])))
+            #    break
+            end
+            addrinfo = ccall(:jl_next_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
         end
-        addrinfo = ccall(:jl_next_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+        ccall(:uv_freeaddrinfo,Void,(Ptr{Void},),freeaddrinfo)
     end
-    ccall(:uv_freeaddrinfo,Void,(Ptr{Void},),freeaddrinfo)
+    Libc.free(req)
+    nothing
 end
 
 function getaddrinfo(cb::Function, host::ASCIIString)
     callback_dict[cb] = cb
-    uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any),
-        eventloop(), host, C_NULL, cb))
+    uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
+                                 eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void}))
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
@@ -637,8 +651,8 @@ function connect!(sock::TCPSocket, host::IPv4, port::Integer)
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16),
-                 sock.handle,hton(host.host),hton(UInt16(port))))
+    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16,Ptr{Void}),
+                             sock.handle,hton(host.host),hton(UInt16(port)),uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
 end
 
@@ -649,8 +663,8 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16),
-                 sock.handle,&hton(host.host),hton(UInt16(port))))
+    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16,Ptr{Void}),
+                             sock.handle,&hton(host.host),hton(UInt16(port)),uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
 end
 
