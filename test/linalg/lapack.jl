@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
-using Base.LAPACK.bdsqr!
 
 let # syevr
     srand(123)
@@ -38,14 +37,14 @@ let # xbdsqr
     for elty in (Float32, Float64)
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
         U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
-        s, _ = bdsqr!('U', copy(d), copy(e), Vt, U, C)
+        s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
         @test_approx_eq full(Bidiagonal(d, e, true)) U*Diagonal(s)*Vt
 
-        @test_throws ArgumentError bdsqr!('A', d, e, Vt, U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, [e; 1], Vt, U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
-        @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
+        @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
+        @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
     end
 end
 
