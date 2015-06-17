@@ -746,7 +746,6 @@ pcre2-$(PCRE_VER).tar.bz2:
 pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
-	patch -p0 pcre2-$(PCRE_VER)/RunTest < pcre2_RunTest.patch
 	touch -c $@
 pcre2-$(PCRE_VER)/config.status: pcre2-$(PCRE_VER)/configure
 	cd pcre2-$(PCRE_VER) && \
