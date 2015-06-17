@@ -738,19 +738,21 @@ install-libuv: $(UV_OBJ_TARGET)
 PCRE_SRC_TARGET = pcre2-$(PCRE_VER)/.libs/libpcre2-8.$(SHLIB_EXT)
 PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
+# Force optimization for PCRE flags (Issue #11668)
+PCRE_CFLAGS = -O3
+
 pcre2-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
 pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
-	patch -p0 pcre2-$(PCRE_VER)/RunTest < pcre2_RunTest.patch
 	touch -c $@
 pcre2-$(PCRE_VER)/config.status: pcre2-$(PCRE_VER)/configure
 	cd pcre2-$(PCRE_VER) && \
 	./configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir)
 	touch -c $@
 $(PCRE_SRC_TARGET): pcre2-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD)
+	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD) CFLAGS="$(PCRE_CFLAGS)"
 	touch -c $@
 pcre2-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
