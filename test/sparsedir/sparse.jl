@@ -874,6 +874,8 @@ A = speye(5)
 @test convert(Matrix,A) == full(A)
 
 # test float
+A = sprandbool(5,5,0.0)
+@test eltype(float(A)) == Float64  # issue #11658
 A = sprandbool(5,5,0.2)
 @test float(A) == float(full(A))
 
