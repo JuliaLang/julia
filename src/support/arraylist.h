@@ -3,25 +3,31 @@
 #ifndef ARRAYLIST_H
 #define ARRAYLIST_H
 
-#define AL_N_INLINE 29
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define AL_N_INLINE     28
+
 typedef struct {
+    void *items;
     size_t len;
     size_t max;
-    void **items;
-    void *_space[AL_N_INLINE];
+    size_t elesz;
+    unsigned char _space[AL_N_INLINE*sizeof(void *)];
 } arraylist_t;
 
-arraylist_t *arraylist_new(arraylist_t *a, size_t size);
-void arraylist_free(arraylist_t *a);
+void arraylist_free(arraylist_t *arr);
+void arraylist_grow(arraylist_t *arr, size_t num);
 
-void arraylist_push(arraylist_t *a, void *elt);
-void *arraylist_pop(arraylist_t *a);
-void arraylist_grow(arraylist_t *a, size_t n);
+arraylist_t *arraylist_str(arraylist_t *arr, size_t size, size_t elesz);
+void arraylist_push_str(arraylist_t *arr, void *elt);
+void arraylist_pop_str(arraylist_t *arr, void *elt);
+void arraylist_remove(arraylist_t *arr, size_t pos);
+
+#define arraylist_new(arr, size) arraylist_str(arr, size, sizeof(void *))
+void *arraylist_pop(arraylist_t *arr);
+void arraylist_push(arraylist_t *arr, void *elt);
 
 #ifdef __cplusplus
 }

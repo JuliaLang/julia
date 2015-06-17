@@ -554,6 +554,7 @@ DLLEXPORT void jl_gc_collect(int);
 DLLEXPORT void jl_gc_preserve(jl_value_t *v);
 DLLEXPORT void jl_gc_unpreserve(void);
 DLLEXPORT int jl_gc_n_preserved_values(void);
+void jl_gc_reset_preserved_values(size_t np);
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 DLLEXPORT void jl_finalize(jl_value_t *o);

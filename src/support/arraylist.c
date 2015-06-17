@@ -13,67 +13,82 @@
 extern "C" {
 #endif
 
-arraylist_t *arraylist_new(arraylist_t *a, size_t size)
+arraylist_t *arraylist_str(arraylist_t *arr, size_t size, size_t elesz)
 {
-    a->len = 0;
-    if (size <= AL_N_INLINE) {
-        a->items = &a->_space[0];
-        a->max = AL_N_INLINE;
+    arr->elesz = elesz;
+    if (size*elesz <= sizeof(arr->_space)) {
+        arr->items = arr->_space;
+        arr->max = sizeof(arr->_space)/elesz;
     }
     else {
-        a->items = (void**)LLT_ALLOC(size*sizeof(void*));
-        a->max = size;
+        // This should probably be rounded up
+        arr->items = (void **)LLT_ALLOC(size*elesz);
+        if (arr->items == NULL) return NULL;
+        arr->max = size;
     }
-    if (a->items == NULL) return NULL;
-    return a;
+    return arr;
 }
 
-void arraylist_free(arraylist_t *a)
+void arraylist_free(arraylist_t *arr)
 {
-    if (a->items != &a->_space[0])
-        LLT_FREE(a->items);
-    a->len = 0;
-    a->max = AL_N_INLINE;
-    a->items = &a->_space[0];
+    if (arr->items != (void **)arr->_space && arr->items)
+        LLT_FREE(arr->items);
+    arr->len = 0;
+    arr->max = sizeof(arr->_space)/arr->elesz;
+    arr->items = (void **)arr->_space;
 }
 
-void arraylist_grow(arraylist_t *a, size_t n)
+void arraylist_grow(arraylist_t *arr, size_t num)
 {
-    if (a->len+n > a->max) {
-        if (a->items == &a->_space[0]) {
-            void **p = (void**)LLT_ALLOC((a->len+n)*sizeof(void*));
-            if (p == NULL) return;
-            memcpy(p, a->items, a->len*sizeof(void*));
-            a->items = p;
-            a->max = a->len+n;
+    size_t newlen = arr->len + num;
+    if (newlen > arr->max) {
+        if (arr->items == (void **)arr->_space) {
+            void *pnt = (void *)LLT_ALLOC(newlen * arr->elesz);
+            if (pnt == NULL) return;
+            memcpy(pnt, (void *)arr->items, arr->len * arr->elesz);
+            arr->max = newlen;
+            arr->items = (void **)pnt;
         }
         else {
-            size_t nm = a->max*2;
-            if (nm == 0) nm = 1;
-            while (a->len+n > nm) nm*=2;
-            void **p = (void**)LLT_REALLOC(a->items, nm*sizeof(void*));
-            if (p == NULL) return;
-            a->items = p;
-            a->max = nm;
+            size_t nm = arr->max * 2;
+            while (newlen > nm) nm *= 2;
+            void *pnt = (void *)LLT_REALLOC(arr->items, nm * arr->elesz);
+            if (pnt == NULL) return;
+            arr->max = nm;
+            arr->items = (void **)pnt;
         }
     }
-    a->len += n;
+    arr->len = newlen;
 }
 
-void arraylist_push(arraylist_t *a, void *elt)
+void arraylist_push_str(arraylist_t *arr, void *elt)
 {
-    arraylist_grow(a, 1);
-    a->items[a->len-1] = elt;
+    arraylist_grow(arr, 1);
+    memcpy((void *)arr->items + (arr->len-1) * arr->elesz, elt, arr->elesz);
 }
 
-void *arraylist_pop(arraylist_t *a)
+void arraylist_push(arraylist_t *arr, void *elt)
 {
-    if (a->len == 0) return NULL;
-    void *p = a->items[--a->len];
-    a->items[a->len] = NULL;
-    return p;
+    arraylist_grow(arr, 1);
+    ((void **)arr->items)[arr->len-1] = elt;
 }
 
+void arraylist_pop_str(arraylist_t *arr, void *elt)
+{
+    if (arr->len != 0) {
+        arr->len--;
+        memcpy(elt, (void *)arr->items + (arr->len * arr->elesz), arr->elesz);
+    }
+}
+
+// remove from this list
+void arraylist_remove(arraylist_t *arr, size_t pos)
+{
+    size_t len = --(arr->len);
+    if (pos < len) {
+        memcpy(arr->items + (pos*arr->elesz), arr->items + (len*arr->elesz), arr->elesz);
+    }
+}
 #ifdef __cplusplus
 }
 #endif
