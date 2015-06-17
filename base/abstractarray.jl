@@ -1290,28 +1290,30 @@ function map(f, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map!{F}(f::F, dest::AbstractArray, As::AbstractArray...)
+
+ith_all(i, ::Tuple{}) = ()
+ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+
+function map_n!{F}(f::F, dest::AbstractArray, As)
     n = length(As[1])
-    i = 1
-    ith = a->a[i]
     for i = 1:n
-        dest[i] = f(map(ith, As)...)
+        dest[i] = f(ith_all(i, As)...)
     end
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, As::AbstractArray...)
-    local i
-    ith = a->a[i]
+map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
+
+function map_to_n!{T,F}(f::F, offs, dest::AbstractArray{T}, As)
     @inbounds for i = offs:length(As[1])
-        el = f(map(ith, As)...)
+        el = f(ith_all(i, As)...)
         S = typeof(el)
         if (S !== T) && !(S <: T)
             R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             new[i] = el
-            return map_to!(f, i+1, new, As...)
+            return map_to_n!(f, i+1, new, As)
         end
         dest[i] = el::T
     end
@@ -1326,7 +1328,7 @@ function map(f, As::AbstractArray...)
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
     dest[1] = first
-    return map_to!(f, 2, dest, As...)
+    return map_to_n!(f, 2, dest, As)
 end
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)
