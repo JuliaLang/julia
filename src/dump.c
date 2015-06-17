@@ -1491,7 +1491,6 @@ extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
-extern void jl_get_uv_hooks();
 
 // Takes in a path of the form "usr/lib/julia/sys.{ji,so}", as passed to jl_restore_system_image()
 DLLEXPORT void jl_preload_sysimg_so(const char *fname)
@@ -1565,7 +1564,6 @@ void jl_restore_system_image_from_stream(ios_t *f)
     jl_get_builtin_hooks();
     if (jl_base_module) {
         jl_get_system_hooks();
-        jl_get_uv_hooks();
     }
     jl_boot_file_loaded = 1;
     jl_init_box_caches();
