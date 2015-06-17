@@ -453,13 +453,13 @@ exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_
 
 ## Array operations on floating point numbers ##
 
-float{T<:FloatingPoint}(x::AbstractArray{T}) = x
+float{T<:FloatingPoint}(A::AbstractArray{T}) = A
 
-float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
-
-function float(A::AbstractArray)
-    cnv(x) = convert(FloatingPoint,x)
-    map_promote(cnv, A)
+function float{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
+    convert(AbstractArray{typeof(float(zero(T)))}, A)
 end
 
 for fn in (:float,:big)
