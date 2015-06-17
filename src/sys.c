@@ -291,11 +291,6 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     return (jl_value_t*)a;
 }
 
-void jl_free2(void *p, void *hint)
-{
-    free(p);
-}
-
 // -- syscall utilities --
 
 int jl_errno(void) { return errno; }

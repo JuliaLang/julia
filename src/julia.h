@@ -1448,12 +1448,6 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
-DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                       uv_process_t *proc, jl_value_t *julia_struct,
-                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
-                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe,
-                       int detach, char **env, char *cwd);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT int jl_run_once(uv_loop_t *loop);
 DLLEXPORT int jl_process_events(uv_loop_t *loop);
@@ -1489,7 +1483,6 @@ DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT void *jl_takebuf_raw(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
-DLLEXPORT void jl_free2(void *p, void *hint);
 
 typedef struct {
     void *data;
