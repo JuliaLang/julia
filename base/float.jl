@@ -455,11 +455,12 @@ exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_
 
 float{T<:FloatingPoint}(A::AbstractArray{T}) = A
 
-float{T<:Number}(A::AbstractArray{T}) =
+function float{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
-
-float(A::AbstractArray) =
-    map_promote(FloatingPoint, A)
+end
 
 for fn in (:float,:big)
     @eval begin

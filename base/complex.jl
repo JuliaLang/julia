@@ -732,10 +732,12 @@ big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
 
 complex{T<:Complex}(A::AbstractArray{T}) = A
 
-complex{T<:Number}(A::AbstractArray{T}) =
+function complex{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
-
-complex(A::AbstractArray) = map_promote(Complex,A)
+end
 
 big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigInt},N}, A)
 big{T<:FloatingPoint,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, A)
