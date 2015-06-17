@@ -328,7 +328,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A); chkstride1(T)
             m, n = size(A); p, q = size(T)
             if m < n
-                throw(DimensionMismatch("Input matrix A has dimensions ($m,$n), but should have more columns than rows"))
+                throw(DimensionMismatch("Input matrix A has dimensions ($m,$n), but should have more rows than columns"))
             end
             if p != n || q != n
                 throw(DimensionMismatch("Block reflector T has dimensions ($p,$q), but should have dimensions ($n,$n)"))
@@ -857,7 +857,7 @@ for (gelsd, gelsy, elty, relty) in
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
-            s     = similar(A, $elty, min(m, n))
+            s     = similar(A, $relty, min(m, n))
             rcond = convert($relty, rcond)
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
@@ -896,7 +896,7 @@ for (gelsd, gelsy, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real=eps($relty))
             chkstride1(A, B)
-            m, n = size(A, 1)
+            m, n = size(A)
             nrhs = size(B, 2)
             if size(B, 1) != m
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
@@ -957,7 +957,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                 throw(DimensionMismatch("c has length $(length(c)), needs $m"))
             end
             if length(d) != p
-                throw(DimensionMismatch("d has length $(length(c)), needs $p"))
+                throw(DimensionMismatch("d has length $(length(d)), needs $p"))
             end
             X = zeros($elty, n)
             info  = Array(BlasInt, 1)
@@ -1127,7 +1127,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 if cmplx
                     ccall(($(blasfunc(gesvd)), liblapack), Void,
                           (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
-                           Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                           Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                           &jobu, &jobvt, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
@@ -1248,13 +1248,16 @@ for (geevx, ggev, elty) in
         lda = max(1,stride(A,2))
         wr = similar(A, $elty, n)
         wi = similar(A, $elty, n)
+        if balanc ∉ ['N', 'P', 'S', 'B']
+            throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+        end
         ldvl = 0
         if jobvl == 'V'
             ldvl = n
         elseif jobvl == 'N'
             ldvl = 0
         else
-            throw(ArgumentError("jobvl must be 'V' or 'N'"))
+            throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
         end
         VL = similar(A, $elty, ldvl, n)
         ldvr = 0
@@ -1263,7 +1266,7 @@ for (geevx, ggev, elty) in
         elseif jobvr == 'N'
             ldvr = 0
         else
-            throw(ArgumentError("jobvr must be 'V' or 'N'"))
+            throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
         end
         VR = similar(A, $elty, ldvr, n)
         ilo = Array(BlasInt, 1)
@@ -1280,7 +1283,7 @@ for (geevx, ggev, elty) in
         elseif sense == 'V' || sense == 'B'
             iworksize = 2*n - 2
         else
-            throw(ArgumentError("argument sense must be 'N', 'E', 'V' or 'B'"))
+            throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
         end
         iwork = Array(BlasInt, iworksize)
         info = Array(BlasInt, 1)
@@ -1326,9 +1329,23 @@ for (geevx, ggev, elty) in
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvl = jobvl == 'V' ? n : 1
+            ldvl = 0
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 1
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
             vl = similar(A, $elty, ldvl, n)
-            ldvr = jobvr == 'V' ? n : 1
+            ldvr = 0
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 1
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
             vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
@@ -1377,13 +1394,16 @@ for (geevx, ggev, elty, relty) in
         n = chksquare(A)
         lda = max(1,stride(A,2))
         w = similar(A, $elty, n)
+        if balanc ∉ ['N', 'P', 'S', 'B']
+            throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+        end
         ldvl = 0
         if jobvl == 'V'
             ldvl = n
         elseif jobvl == 'N'
             ldvl = 0
         else
-            throw(ArgumentError("jobvl must be 'V' or 'N'"))
+            throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
         end
         VL = similar(A, $elty, ldvl, n)
         ldvr = 0
@@ -1392,7 +1412,10 @@ for (geevx, ggev, elty, relty) in
         elseif jobvr == 'N'
             ldvr = 0
         else
-            throw(ArgumentError("jobvr must be 'V' or 'N'"))
+            throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+        end
+        if sense ∉ ['N','E','V','B']
+            throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
         end
         VR = similar(A, $elty, ldvr, n)
         ilo = Array(BlasInt, 1)
@@ -1447,9 +1470,23 @@ for (geevx, ggev, elty, relty) in
             ldb = max(1, stride(B, 2))
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvl = jobvl == 'V' ? n : 1
+            ldvl = 0
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 1
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
             vl = similar(A, $elty, ldvl, n)
-            ldvr = jobvr == 'V' ? n : 1
+            ldvr = 0
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 1
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
             vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
