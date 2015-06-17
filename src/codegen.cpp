@@ -2888,7 +2888,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, boo
 
 static Value *ghostValue(jl_value_t *ty)
 {
-    assert(jl_is_datatype(ty));
+    assert(ty == (jl_value_t*)jl_bottom_type || jl_is_datatype(ty));
     return mark_julia_type(UndefValue::get(NoopType),ty);
 }
 
@@ -5008,8 +5008,7 @@ static void init_julia_llvm_env(Module *m)
     T_pfloat64 = PointerType::get(T_float64, 0);
     T_void = Type::getVoidTy(jl_LLVMContext);
 
-    // This type is used to create undef Values which carry
-    // metadata.
+    // This type is used to create undef Values which carry metadata.
     NoopType = ArrayType::get(T_int1,0);
 
     // add needed base definitions to our LLVM environment
