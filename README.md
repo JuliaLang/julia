@@ -46,6 +46,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat chol(A, Val{:U})` - Julia 0.4 type-stable cholesky factorizations (will not be type-stable on 0.3)
 
+* `@compat f(t::Timer)` - mimic the Julia 0.4 Timer class
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
@@ -68,6 +70,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `keytype` and `valtype`, which return key and value type of Associative type, can be used in julia 0.3.
 
 * `fma(x,y,z)` and `muladd(x,y,z)` can be used in Julia 0.3 for `x*y+z`.
+
+* `Timer(timeout::Real, repeat::Real=0.0)` and `Timer(cb::Function, timeout::Real, repeat::Real=0.0)` allow julia 0.4-style Timers to be constructed and used.
 
 ## Renamed functions
 
