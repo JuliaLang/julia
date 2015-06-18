@@ -72,7 +72,7 @@ The mutability property of a value can be queried for with::
 
 If the object being stored is a :c:type:`jl_value_t`, the Julia garbage collector must be notified also::
 
-    void gc_wb(jl_value_t *parent, jl_value_t *ptr);
+    void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);
 
 However, the :ref:`man-embedding` section of the manual is also required reading at this point,
 
@@ -163,7 +163,7 @@ Internal to Julia, storage is typically allocated by :c:func:`newstruct` (or :fu
 And at the lowest level, memory is getting allocated by a call to the garbage collector (in ``gc.c``),
 then tagged with its type::
 
-    jl_value_t *allocobj(size_t nbytes);
+    jl_value_t *jl_gc_allocobj(size_t nbytes);
     void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
 
 .. sidebar:: :ref:`man-singleton-types`
