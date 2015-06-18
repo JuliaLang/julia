@@ -1355,7 +1355,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     }
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
-        if (e->head == call_sym || e->head == call1_sym) {
+        if (e->head == call_sym) {
             jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,sp,ast,sparams,allow_alloc);
             if (f && jl_is_function(f)) {
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
@@ -1510,7 +1510,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         esc = true;
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i;
-        if (e->head == call_sym || e->head == call1_sym || e->head == new_sym) {
+        if (e->head == call_sym || e->head == new_sym) {
             int alen = jl_array_dim0(e->args);
             jl_value_t *f = jl_exprarg(e,0);
             simple_escape_analysis(f, esc, ctx);
@@ -1701,7 +1701,7 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
         return true;
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
-        if (e->head == call_sym || e->head == call1_sym) {
+        if (e->head == call_sym) {
             jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,true,false);
             if (f && jl_is_function(f)) {
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
@@ -3247,7 +3247,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         builder.SetInsertPoint(ifso);
     }
-    else if (head == call_sym || head == call1_sym) {
+    else if (head == call_sym) {
         return emit_call(args, jl_array_dim0(ex->args), ctx, (jl_value_t*)ex);
     }
     else if (head == assign_sym) {

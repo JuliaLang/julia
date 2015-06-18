@@ -3463,7 +3463,6 @@ void jl_init_types(void)
     jl_simplevector_type->pointerfree = 0;
 
     call_sym = jl_symbol("call");
-    call1_sym = jl_symbol("call1");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");

@@ -76,7 +76,7 @@ jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
-jl_sym_t *call1_sym;   jl_sym_t *module_sym;
+jl_sym_t *module_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
