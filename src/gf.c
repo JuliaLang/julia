@@ -40,7 +40,7 @@ static jl_value_t *jl_apply_unspecialized(jl_function_t *meth, jl_value_t **args
 
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
-    jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
+    jl_methtable_t *mt = (jl_methtable_t*)jl_gc_allocobj(sizeof(jl_methtable_t));
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = name;
     mt->defs = (jl_methlist_t*)jl_nothing;
@@ -176,7 +176,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t* parent)
             nd[uid & (len*2-1)] = (jl_value_t*)ml;
         }
     }
-    gc_wb(parent, n);
+    jl_gc_wb(parent, n);
     *pa = n;
 }
 
@@ -311,7 +311,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_svec_t *sp)
     jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL);
     JL_GC_PUSH1(&nf);
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
-    gc_wb(nf, nf->linfo);
+    jl_gc_wb(nf, nf->linfo);
     JL_GC_POP();
     return nf;
 }
@@ -362,7 +362,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
             if (uid > 0) {
                 if (mt->cache_targ == (void*)jl_nothing) {
                     mt->cache_targ = jl_alloc_cell_1d(16);
-                    gc_wb(mt, mt->cache_targ);
+                    jl_gc_wb(mt, mt->cache_targ);
                 }
                 pml = mtcache_hash_bp(&mt->cache_targ, a0, 1, (jl_value_t*)mt);
                 cache_array = (jl_value_t*)mt->cache_targ;
@@ -374,7 +374,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
         if (uid > 0) {
             if (mt->cache_arg1 == (void*)jl_nothing) {
                 mt->cache_arg1 = jl_alloc_cell_1d(16);
-                gc_wb(mt, mt->cache_arg1);
+                jl_gc_wb(mt, mt->cache_arg1);
             }
             pml = mtcache_hash_bp(&mt->cache_arg1, t0, 0, (jl_value_t*)mt);
             cache_array = (jl_value_t*)mt->cache_arg1;
@@ -413,7 +413,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_fieldref(newast, 0);
-        gc_wb(li, li->ast);
+        jl_gc_wb(li, li->ast);
         li->inferred = 1;
 #endif
         li->inInference = 0;
@@ -803,15 +803,15 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 jl_instantiate_method(method, jl_emptysvec);
             if (method->env != (jl_value_t*)jl_emptysvec)
                 method->linfo->unspecialized->env = NULL;
-            gc_wb(method->linfo, method->linfo->unspecialized);
+            jl_gc_wb(method->linfo, method->linfo->unspecialized);
         }
         newmeth->linfo->unspecialized = method->linfo->unspecialized;
-        gc_wb(newmeth->linfo, newmeth->linfo->unspecialized);
+        jl_gc_wb(newmeth->linfo, newmeth->linfo->unspecialized);
     }
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
         newmeth->linfo->specTypes = type;
-        gc_wb(newmeth->linfo, type);
+        jl_gc_wb(newmeth->linfo, type);
         jl_array_t *spe = method->linfo->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);
@@ -821,7 +821,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             jl_cell_1d_push(spe, (jl_value_t*)newmeth->linfo);
         }
         method->linfo->specializations = spe;
-        gc_wb(method->linfo, method->linfo->specializations);
+        jl_gc_wb(method->linfo, method->linfo->specializations);
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
@@ -1160,14 +1160,14 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
-            gc_wb(l, l->sig);
+            jl_gc_wb(l, l->sig);
             l->tvars = tvars;
-            gc_wb(l, l->tvars);
+            jl_gc_wb(l, l->tvars);
             l->va = jl_is_va_tuple(type);
             l->isstaged = isstaged;
             l->invokes = (struct _jl_methtable_t *)jl_nothing;
             l->func = method;
-            gc_wb(l, l->func);
+            jl_gc_wb(l, l->func);
             JL_SIGATOMIC_END();
             return l;
         }
@@ -1188,7 +1188,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
         pa = (jl_value_t*)l;
         l = l->next;
     }
-    jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
+    jl_methlist_t *newrec = (jl_methlist_t*)jl_gc_allocobj(sizeof(jl_methlist_t));
     jl_set_typeof(newrec, jl_method_type);
     newrec->sig = type;
     newrec->tvars = tvars;
@@ -1200,7 +1200,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
     JL_SIGATOMIC_BEGIN();
     JL_GC_PUSH1(&newrec);
     *pl = newrec;
-    gc_wb(pa, newrec);
+    jl_gc_wb(pa, newrec);
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
     if (has_unions(type)) {
@@ -1220,11 +1220,11 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
                                          (jl_value_t*)l->sig)) {
                     // reinsert item earlier in the list
                     *pitem = next;
-                    gc_wb(item_parent, next);
+                    jl_gc_wb(item_parent, next);
                     item->next = l;
-                    gc_wb(item, item->next);
+                    jl_gc_wb(item, item->next);
                     *pl = item;
-                    gc_wb(pa, item);
+                    jl_gc_wb(pa, item);
                     pnext = pitem;
                     next_parent = item_parent;
                     break;
@@ -1277,13 +1277,13 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1,isstaged,(jl_value_t*)mt);
     // invalidate cached methods that overlap this definition
     remove_conflicting(&mt->cache, (jl_value_t*)type);
-    gc_wb(mt, mt->cache);
+    jl_gc_wb(mt, mt->cache);
     if (mt->cache_arg1 != (void*)jl_nothing) {
         for(int i=0; i < jl_array_len(mt->cache_arg1); i++) {
             jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_arg1))[i];
             if (*pl && *pl != (void*)jl_nothing) {
                 remove_conflicting(pl, (jl_value_t*)type);
-                gc_wb(mt->cache_arg1, jl_cellref(mt->cache_arg1,i));
+                jl_gc_wb(mt->cache_arg1, jl_cellref(mt->cache_arg1,i));
             }
         }
     }
@@ -1292,7 +1292,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
             jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_targ))[i];
             if (*pl && *pl != (void*)jl_nothing) {
                 remove_conflicting(pl, (jl_value_t*)type);
-                gc_wb(mt->cache_targ, jl_cellref(mt->cache_targ,i));
+                jl_gc_wb(mt->cache_targ, jl_cellref(mt->cache_targ,i));
             }
         }
     }
@@ -1462,7 +1462,7 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
     if (jl_is_lambda_info(ast)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
         li->ast = jl_prepare_ast(li, jl_emptysvec);
-        gc_wb(li, li->ast);
+        jl_gc_wb(li, li->ast);
         parameters_to_closureenv(li->ast, tvars);
         all_p2c(li->ast, tvars);
     }
@@ -1476,7 +1476,7 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
 static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, jl_svec_t *tvars)
 {
     func->linfo->specTypes = sig;
-    gc_wb(func->linfo, sig);
+    jl_gc_wb(func->linfo, sig);
     if (tvars != jl_emptysvec) {
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
@@ -1504,7 +1504,7 @@ void jl_compile_all_defs(jl_function_t *gf)
             if (func->env != (jl_value_t*)jl_emptysvec)
                 func->env = NULL;
             m->func->linfo->unspecialized = func;
-            gc_wb(m->func->linfo, func);
+            jl_gc_wb(m->func->linfo, func);
             precompile_unspecialized(func, m->sig, m->tvars);
         }
         m = m->next;
@@ -1546,7 +1546,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
                 if (func == NULL) {
                     func = jl_new_closure(li->fptr, (jl_value_t*)jl_emptysvec, li);
                     li->unspecialized = func;
-                    gc_wb(li, func);
+                    jl_gc_wb(li, func);
                 }
                 precompile_unspecialized(func, NULL, jl_emptysvec);
             }
@@ -1617,7 +1617,7 @@ JL_CALLABLE(jl_apply_generic)
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
                 if (mfunc->env != (jl_value_t*)jl_emptysvec)
                     li->unspecialized->env = NULL;
-                gc_wb(li, li->unspecialized);
+                jl_gc_wb(li, li->unspecialized);
             }
             return jl_apply_unspecialized(mfunc, args, nargs);
         }
@@ -1715,7 +1715,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
                 if (mfunc->env != (jl_value_t*)jl_emptysvec)
                     li->unspecialized->env = NULL;
-                gc_wb(li, li->unspecialized);
+                jl_gc_wb(li, li->unspecialized);
             }
             return jl_apply_unspecialized(mfunc, args, nargs);
         }
@@ -1728,7 +1728,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
         tt = arg_type_tuple(args, nargs);
         if (m->invokes == (void*)jl_nothing) {
             m->invokes = new_method_table(mt->name);
-            gc_wb(m, m->invokes);
+            jl_gc_wb(m, m->invokes);
             update_max_args(m->invokes, tt);
             // this private method table has just this one definition
             jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0,(jl_value_t*)m->invokes);
@@ -1772,7 +1772,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 {
     f->fptr = jl_apply_generic;
     f->env = (jl_value_t*)new_method_table(name);
-    gc_wb(f, f->env);
+    jl_gc_wb(f, f->env);
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)

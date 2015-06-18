@@ -152,7 +152,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             jl_lambda_info_t *li = (jl_lambda_info_t*)e;
             if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
                 li->ast = jl_compress_ast(li, li->ast);
-                gc_wb(li, li->ast);
+                jl_gc_wb(li, li->ast);
             }
             return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_emptysvec, li);
         }
@@ -192,7 +192,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                     JL_GC_PUSHARGS(ar, na*2);
                     for(int i=0; i < na; i++) {
                         ar[i*2+1] = eval(args[i+1], locals, nl, ngensym);
-                        gc_wb(ex->args, ar[i*2+1]);
+                        jl_gc_wb(ex->args, ar[i*2+1]);
                     }
                     if (na != nreq) {
                         jl_error("wrong number of arguments");
@@ -350,7 +350,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(b, dt);
+        jl_gc_wb_binding(b, dt);
         super = eval(args[2], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
@@ -380,7 +380,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(b, dt);
+        jl_gc_wb_binding(b, dt);
         super = eval(args[3], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
@@ -409,13 +409,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         // temporarily assign so binding is available for field types
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(b,dt);
+        jl_gc_wb_binding(b,dt);
 
         JL_TRY {
             // operations that can fail
             inside_typedef = 1;
             dt->types = (jl_svec_t*)eval(args[4], locals, nl, ngensym);
-            gc_wb(dt, dt->types);
+            jl_gc_wb(dt, dt->types);
             inside_typedef = 0;
             for(size_t i=0; i < jl_svec_len(dt->types); i++) {
                 jl_value_t *elt = jl_svecref(dt->types, i);
@@ -435,7 +435,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_compute_field_offsets(dt);
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_singleton(dt)) {
             dt->instance = newstruct(dt);
-            gc_wb(dt, dt->instance);
+            jl_gc_wb(dt, dt->instance);
         }
 
         b->value = temp;
@@ -459,7 +459,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
             jl_lambda_info_t *li = f->linfo;
             li->ast = jl_compress_ast(li, li->ast);
-            gc_wb(li, li->ast);
+            jl_gc_wb(li, li->ast);
             li->name = nm;
         }
         jl_set_global(jl_current_module, nm, (jl_value_t*)f);

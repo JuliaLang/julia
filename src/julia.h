@@ -546,13 +546,13 @@ DLLEXPORT int jl_gc_enable(int on);
 DLLEXPORT int jl_gc_is_enabled(void);
 DLLEXPORT int64_t jl_gc_total_bytes(void);
 DLLEXPORT uint64_t jl_gc_total_hrtime(void);
-int64_t diff_gc_total_bytes(void);
-void sync_gc_total_bytes(void);
+int64_t jl_gc_diff_total_bytes(void);
+void jl_gc_sync_total_bytes(void);
 
 DLLEXPORT void jl_gc_collect(int);
-DLLEXPORT void jl_gc_preserve(jl_value_t *v);
-DLLEXPORT void jl_gc_unpreserve(void);
-DLLEXPORT int jl_gc_n_preserved_values(void);
+void jl_gc_preserve(jl_value_t *v);
+void jl_gc_unpreserve(void);
+int jl_gc_n_preserved_values(void);
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 DLLEXPORT void jl_finalize(jl_value_t *o);
@@ -561,37 +561,37 @@ void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(void);
-DLLEXPORT jl_value_t *alloc_0w(void);
-DLLEXPORT jl_value_t *alloc_1w(void);
-DLLEXPORT jl_value_t *alloc_2w(void);
-DLLEXPORT jl_value_t *alloc_3w(void);
+DLLEXPORT jl_value_t *jl_gc_alloc_0w(void);
+DLLEXPORT jl_value_t *jl_gc_alloc_1w(void);
+DLLEXPORT jl_value_t *jl_gc_alloc_2w(void);
+DLLEXPORT jl_value_t *jl_gc_alloc_3w(void);
 void *allocb(size_t sz);
 void *reallocb(void*, size_t);
-DLLEXPORT jl_value_t *allocobj(size_t sz);
+DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
 
 DLLEXPORT void jl_clear_malloc_data(void);
 DLLEXPORT int64_t jl_gc_num_pause(void);
 DLLEXPORT int64_t jl_gc_num_full_sweep(void);
 
 // GC write barriers
-DLLEXPORT void gc_queue_root(jl_value_t *root); // root isa jl_value_t*
+DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
 
-static inline void gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
+static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
     if (__unlikely((*((uintptr_t*)bnd-1) & 1) == 1 && (*(uintptr_t*)jl_astaggedvalue(val) & 1) == 0))
         gc_queue_binding(bnd);
 }
 
-static inline void gc_wb(void *parent, void *ptr) // parent and ptr isa jl_value_t*
+static inline void jl_gc_wb(void *parent, void *ptr) // parent and ptr isa jl_value_t*
 {
     if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1 &&
                    (*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 0))
-        gc_queue_root((jl_value_t*)parent);
+        jl_gc_queue_root((jl_value_t*)parent);
 }
 
-static inline void gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
+static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
     if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1))
@@ -599,11 +599,11 @@ static inline void gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_
         gc_setmark_buf(bufptr, *(uintptr_t*)jl_astaggedvalue(parent) & 3);
 }
 
-static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
+static inline void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is marked
     if(__unlikely((*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 1)) {
-        gc_queue_root((jl_value_t*)ptr);
+        jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
 
@@ -623,30 +623,30 @@ static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 #define jl_gc_n_preserved_values() (0)
 
 #define allocb(nb)    malloc(nb)
-DLLEXPORT jl_value_t *allocobj(size_t sz);
-STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
-STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
-STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
+DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
+STATIC_INLINE jl_value_t *jl_gc_alloc_1w() { return jl_gc_allocobj(1*sizeof(void*)); }
+STATIC_INLINE jl_value_t *jl_gc_alloc_2w() { return jl_gc_allocobj(2*sizeof(void*)); }
+STATIC_INLINE jl_value_t *jl_gc_alloc_3w() { return jl_gc_allocobj(3*sizeof(void*)); }
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 
-int64_t diff_gc_total_bytes(void);
-#define sync_gc_total_bytes()
+int64_t jl_gc_diff_total_bytes(void);
+#define jl_gc_sync_total_bytes()
 #define jl_gc_collect(arg);
 #define jl_gc_enable(on) (0)
 #define jl_gc_is_enabled() (0)
 #define jl_gc_track_malloced_array(a)
 #define jl_gc_count_allocd(sz)
 
-#define gc_wb_binding(bnd, val)
-#define gc_wb(parent, ptr)
-#define gc_wb_buf(parent, bufptr)
-#define gc_wb_back(ptr)
+#define jl_gc_wb_binding(bnd, val)
+#define jl_gc_wb(parent, ptr)
+#define jl_gc_wb_buf(parent, bufptr)
+#define jl_gc_wb_back(ptr)
 
 #endif
 
-DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
-DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
+void *jl_gc_managed_malloc(size_t sz);
+void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
 
 // object accessors -----------------------------------------------------------
 
@@ -667,7 +667,7 @@ STATIC_INLINE jl_value_t *jl_svecset(void *t, size_t i, void *x)
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
     jl_svec_data(t)[i] = (jl_value_t*)x;
-    if (x) gc_wb(t, x);
+    if (x) jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
 
@@ -698,7 +698,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
         if (((jl_array_t*)a)->how == 3) {
             a = jl_array_data_owner(a);
         }
-        gc_wb(a, x);
+        jl_gc_wb(a, x);
     }
     return (jl_value_t*)x;
 }

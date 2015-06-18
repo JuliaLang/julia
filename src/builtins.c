@@ -938,7 +938,7 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
         if (!jl_in_inference) {
             if (!jl_is_expr(f->linfo->ast)) {
                 f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
-                gc_wb(f->linfo, f->linfo->ast);
+                jl_gc_wb(f->linfo, f->linfo->ast);
             }
             if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1,f->linfo->module)) {
                 jl_type_infer(f->linfo, sig, f->linfo);
@@ -952,7 +952,7 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
     jl_generate_fptr(f);
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
-        gc_wb(f->linfo, f->linfo->ast);
+        jl_gc_wb(f->linfo, f->linfo->ast);
     }
 }
 

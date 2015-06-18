@@ -182,7 +182,7 @@ static void NOINLINE save_stack(jl_task_t *t)
     // this task's stack could have been modified after
     // it was marked by an incremental collection
     // move the barrier back instead of walking it again here
-    gc_wb_back(t);
+    jl_gc_wb_back(t);
 }
 
 void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
@@ -317,7 +317,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         }
 
         t->last = jl_current_task;
-        gc_wb(t, t->last);
+        jl_gc_wb(t, t->last);
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -825,7 +825,7 @@ DLLEXPORT void jl_throw_with_superfluous_argument(jl_value_t *e, int line)
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
-    jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
+    jl_task_t *t = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(t, jl_task_type);
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
@@ -853,7 +853,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     char *stk = allocb(ssize+pagesz+(pagesz-1));
     t->stkbuf = stk;
-    gc_wb_buf(t, t->stkbuf);
+    jl_gc_wb_buf(t, t->stkbuf);
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes
@@ -922,7 +922,7 @@ void jl_init_tasks(void)
 // Initialize a root task using the given stack.
 void jl_init_root_task(void *stack, size_t ssize)
 {
-    jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
+    jl_current_task = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(jl_current_task, jl_task_type);
 #ifdef COPY_STACKS
     jl_current_task->ssize = 0;  // size of saved piece
