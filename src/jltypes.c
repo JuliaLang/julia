@@ -275,7 +275,7 @@ jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
     JL_GC_PUSH1(&types);
     jl_uniontype_t *tu = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,NWORDS(sizeof(jl_uniontype_t)));
     tu->types = types;
-    gc_wb(tu, types);
+    jl_gc_wb(tu, types);
     JL_GC_POP();
     return (jl_value_t*)tu;
 }
@@ -1922,7 +1922,7 @@ static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
             ((jl_datatype_t*)type)->name->cache = nc;
         else
             ((jl_datatype_t*)type)->name->linearcache = nc;
-        gc_wb(((jl_datatype_t*)type)->name, nc);
+        jl_gc_wb(((jl_datatype_t*)type)->name, nc);
         cache = nc;
         n = jl_svec_len(nc);
     }
@@ -2026,10 +2026,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     top.prev = stack;
     stack = &top;
     ndt->name = tn;
-    gc_wb(ndt, ndt->name);
+    jl_gc_wb(ndt, ndt->name);
     ndt->super = jl_any_type;
     ndt->parameters = p;
-    gc_wb(ndt, ndt->parameters);
+    jl_gc_wb(ndt, ndt->parameters);
     ndt->types = istuple ? p : jl_emptysvec; // to be filled in below
     ndt->mutabl = dt->mutabl;
     ndt->abstract = dt->abstract;
@@ -2048,13 +2048,13 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->super = jl_any_type;
     else
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
-    gc_wb(ndt, ndt->super);
+    jl_gc_wb(ndt, ndt->super);
     ftypes = dt->types;
     if (ftypes != NULL) {
         if (!istuple) {
             // recursively instantiate the types of the fields
             ndt->types = inst_all(ftypes, env, n, stack, 1);
-            gc_wb(ndt, ndt->types);
+            jl_gc_wb(ndt, ndt->types);
         }
         if (!isabstract) {
             if (jl_svec_len(ftypes) == 0) {
@@ -2067,7 +2067,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             }
             if (jl_is_datatype_singleton(ndt)) {
                 ndt->instance = newstruct(ndt);
-                gc_wb(ndt, ndt->instance);
+                jl_gc_wb(ndt, ndt->instance);
             }
         }
         else {
@@ -2286,9 +2286,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
         env[i*2+1] = env[i*2];
     }
     t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
-    gc_wb(t, t->super);
+    jl_gc_wb(t, t->super);
     t->types = inst_all(t->types, env, n, &top, 1);
-    gc_wb(t, t->types);
+    jl_gc_wb(t, t->types);
 }
 
 // subtype comparison

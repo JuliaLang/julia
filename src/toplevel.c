@@ -117,7 +117,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
-    gc_wb_binding(b, newm);
+    jl_gc_wb_binding(b, newm);
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
@@ -635,7 +635,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;
-    gc_wb(tt, tt->super);
+    jl_gc_wb(tt, tt->super);
     if (jl_svec_len(tt->parameters) > 0) {
         tt->name->cache = jl_emptysvec;
         tt->name->linearcache = jl_emptysvec;
@@ -691,7 +691,7 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
         *bp = gf;
-        if (bp_owner) gc_wb(bp_owner, gf);
+        if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
     return gf;
 }
@@ -740,7 +740,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                 // edit args, insert type first
                 if (!jl_is_expr(f->linfo->ast)) {
                     f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
-                    gc_wb(f->linfo, f->linfo->ast);
+                    jl_gc_wb(f->linfo, f->linfo->ast);
                 }
                 jl_array_t *al = jl_lam_args((jl_expr_t*)f->linfo->ast);
                 if (jl_array_len(al) == 0) {
@@ -799,7 +799,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
         *bp = gf;
-        if (bp_owner) gc_wb(bp_owner, gf);
+        if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
     assert(jl_is_function(f));
     assert(jl_is_tuple_type(argtypes));
@@ -810,7 +810,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
         li->ast = jl_compress_ast(li, li->ast);
-        gc_wb(li, li->ast);
+        jl_gc_wb(li, li->ast);
     }
     JL_GC_POP();
     return gf;

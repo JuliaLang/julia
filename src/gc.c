@@ -785,21 +785,21 @@ static inline int maybe_collect(void)
 
 // preserved values
 
-DLLEXPORT int jl_gc_n_preserved_values(void)
+int jl_gc_n_preserved_values(void)
 {
     FOR_CURRENT_HEAP
         return preserved_values.len;
     END
 }
 
-DLLEXPORT void jl_gc_preserve(jl_value_t *v)
+void jl_gc_preserve(jl_value_t *v)
 {
     FOR_CURRENT_HEAP
         arraylist_push(&preserved_values, (void*)v);
     END
 }
 
-DLLEXPORT void jl_gc_unpreserve(void)
+void jl_gc_unpreserve(void)
 {
     FOR_CURRENT_HEAP
         (void)arraylist_pop(&preserved_values);
@@ -810,7 +810,7 @@ DLLEXPORT void jl_gc_unpreserve(void)
 
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
-    jl_weakref_t *wr = (jl_weakref_t*)alloc_1w();
+    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
     jl_set_typeof(wr, jl_weakref_type);
     wr->value = value;
     FOR_CURRENT_HEAP
@@ -1451,7 +1451,7 @@ static void reset_remset(void)
     END
 }
 
-DLLEXPORT void gc_queue_root(jl_value_t *ptr)
+DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
     FOR_CURRENT_HEAP
         jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
@@ -1926,7 +1926,7 @@ static void post_mark(arraylist_t *list, int dryrun)
  is rare enough this may not be straightforward. If the backtracking goes well you should know
  which object and which of its slots was written to without being caught by the write
  barrier. Most times this allows you to take a guess. If this type of object is modified
- by C code directly, look for missing gc_wb() on pointer updates. Be aware that there are
+ by C code directly, look for missing jl_gc_wb() on pointer updates. Be aware that there are
  innocent looking functions which allocate (and thus trigger marking) only on special cases.
 
  If you cant find it, you can try the following :
@@ -2095,14 +2095,14 @@ DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_b
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
 DLLEXPORT GC_Num jl_gc_num(void) { return gc_num; }
 
-int64_t diff_gc_total_bytes(void)
+int64_t jl_gc_diff_total_bytes(void)
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb = jl_gc_total_bytes();
     last_gc_total_bytes = newtb;
     return newtb - oldtb;
 }
-void sync_gc_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
+void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
 #if defined(MEMPROFILE)
 static void all_pool_stats(void);
@@ -2436,7 +2436,7 @@ void *reallocb(void *b, size_t sz)
 }
 */
 
-DLLEXPORT jl_value_t *allocobj(size_t sz)
+DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (allocsz < sz) // overflow in adding offs, size was "negative"
@@ -2450,7 +2450,7 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
         return jl_valueof(alloc_big(allocsz));
 }
 
-DLLEXPORT jl_value_t *alloc_0w(void)
+DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
     const int sz = sizeof(jl_taggedvalue_t);
 #ifdef MEMDEBUG
@@ -2459,7 +2459,7 @@ DLLEXPORT jl_value_t *alloc_0w(void)
     return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
-DLLEXPORT jl_value_t *alloc_1w(void)
+DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
     const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*), 16);
 #ifdef MEMDEBUG
@@ -2468,7 +2468,7 @@ DLLEXPORT jl_value_t *alloc_1w(void)
     return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
-DLLEXPORT jl_value_t *alloc_2w(void)
+DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
     const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 2, 16);
 #ifdef MEMDEBUG
@@ -2477,7 +2477,7 @@ DLLEXPORT jl_value_t *alloc_2w(void)
     return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
-DLLEXPORT jl_value_t *alloc_3w(void)
+DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 3, 16);
 #ifdef MEMDEBUG
@@ -2679,7 +2679,7 @@ static void big_obj_stats(void)
 #endif //MEMPROFILE
 
 #else //JL_GC_MARKSWEEP
-DLLEXPORT jl_value_t *allocobj(size_t sz)
+DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
@@ -2688,13 +2688,13 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
     gc_num.alloc++;
     return jl_valueof(malloc(allocsz));
 }
-int64_t diff_gc_total_bytes(void)
+int64_t jl_gc_diff_total_bytes(void)
 {
     return 0;
 }
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
-    jl_weakref_t *wr = (jl_weakref_t*)alloc_1w();
+    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
     jl_set_typeof(wr, jl_weakref_type);
     wr->value = value;
     return wr;
