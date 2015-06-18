@@ -5,7 +5,7 @@
 % equivalent 'equilibrium' density is found, and the densities
 % relax towards that state, in a proportion governed by omega.
 %               Iain Haslam, March 2006.
-nx=24;ny=nx;nz=nx; omega=1.0; density=1.0;t1=1/3; t2=1/18; t3=1/36;
+nx=36;ny=nx;nz=nx; omega=1.0; density=1.0;t1=1/3; t2=1/18; t3=1/36;
 F=repmat(density/19,[nx ny nz 19]); FEQ=F; matsize=nx*ny*nz;
 CI=[0:matsize:matsize*19];
 BOUND=zeros(nx,ny,nz);

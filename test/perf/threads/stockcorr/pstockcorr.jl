@@ -58,13 +58,12 @@ end
 #precompile(runpath!, (Int64, Array{Float64,2}, Array{Float64,2}, Array{Float64,2}, Int64, Array{Float64, 2}, Float64, Float64, Float64, Float64)) 
 
 # Threaded version
-function pstockcorr()
+function pstockcorr(n)
 
     ## Correlated asset information
     const CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
     const Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix
     const T = 500                       # Number of days to simulate = 2years = 500days
-    const n = 1000000                     # Number of simulations
     const dt = 1/250                    # Time step (1year = 250days)
     const Div=[0.01 0.01]               # Dividend
     const Vol=[0.2 0.3]                 # Volatility
@@ -99,8 +98,7 @@ function pstockcorr()
     k22 = Vol[2]*sqrt(dt)
 
     # NOTE: this reduces reported GC allocation to 576 bytes (due to?)
-    # and gives a slight boost to performance but we shouldn't need it...
-    runpath!(1, Wiener, CorrWiener, SimulPriceA, SimulPriceB, T, UpperTriangle, k11, k12, k21, k22, rngs)
+    #runpath!(1, Wiener, CorrWiener, SimulPriceA, SimulPriceB, T, UpperTriangle, k11, k12, k21, k22, rngs)
 
     # run 
     @time runpath!(n, Wiener, CorrWiener, SimulPriceA, SimulPriceB, T, UpperTriangle, k11, k12, k21, k22, rngs)
@@ -108,6 +106,6 @@ function pstockcorr()
     return (SimulPriceA, SimulPriceB)
 end
 
-@time pstockcorr()
+@time pstockcorr(1000000)
 #ccall(:jl_threading_profile, Void, ())
 
