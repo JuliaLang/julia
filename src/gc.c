@@ -785,21 +785,21 @@ static inline int maybe_collect(void)
 
 // preserved values
 
-int jl_gc_n_preserved_values(void)
+DLLEXPORT int jl_gc_n_preserved_values(void)
 {
     FOR_CURRENT_HEAP
         return preserved_values.len;
     END
 }
 
-void jl_gc_preserve(jl_value_t *v)
+DLLEXPORT void jl_gc_preserve(jl_value_t *v)
 {
     FOR_CURRENT_HEAP
         arraylist_push(&preserved_values, (void*)v);
     END
 }
 
-void jl_gc_unpreserve(void)
+DLLEXPORT void jl_gc_unpreserve(void)
 {
     FOR_CURRENT_HEAP
         (void)arraylist_pop(&preserved_values);

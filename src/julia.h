@@ -550,9 +550,9 @@ int64_t jl_gc_diff_total_bytes(void);
 void jl_gc_sync_total_bytes(void);
 
 DLLEXPORT void jl_gc_collect(int);
-void jl_gc_preserve(jl_value_t *v);
-void jl_gc_unpreserve(void);
-int jl_gc_n_preserved_values(void);
+DLLEXPORT void jl_gc_preserve(jl_value_t *v);
+DLLEXPORT void jl_gc_unpreserve(void);
+DLLEXPORT int jl_gc_n_preserved_values(void);
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 DLLEXPORT void jl_finalize(jl_value_t *o);
@@ -645,8 +645,8 @@ int64_t jl_gc_diff_total_bytes(void);
 
 #endif
 
-void *jl_gc_managed_malloc(size_t sz);
-void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
+DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
+DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
 
 // object accessors -----------------------------------------------------------
 
