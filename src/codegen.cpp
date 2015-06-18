@@ -723,7 +723,7 @@ static void jl_setup_module(Module *m, bool add)
 #ifdef LLVM37
     if (jl_ExecutionEngine) {
         m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
-        m->setTargetTriple(jl_TargetMachine->getTargetTriple());
+        m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     }
 #elif LLVM36
     if (jl_ExecutionEngine)
@@ -1965,10 +1965,19 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
         if (at1->isPointerTy()) {
             Type *elty = julia_type_to_llvm(rt1);
             if (elty->isAggregateType()) {
+#ifdef LLVM37
+                answer = builder.CreateCall(prepare_call(memcmp_func),
+                                {
+                                builder.CreatePointerCast(varg1, T_pint8),
+                                builder.CreatePointerCast(varg2, T_pint8),
+                                builder.CreateTrunc(ConstantExpr::getSizeOf(elty), T_size)
+                                });
+#else
                 answer = builder.CreateCall3(memcmp_func,
                         builder.CreatePointerCast(varg1, T_pint8),
                         builder.CreatePointerCast(varg2, T_pint8),
                         builder.CreateTrunc(ConstantExpr::getSizeOf(elty), T_size));
+#endif
                 answer = builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
                 goto done;
             }
@@ -5821,8 +5830,8 @@ extern "C" void jl_init_codegen(void)
 #ifdef LLVM37
     m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
-    m->setTargetTriple(jl_TargetMachine->getTargetTriple());
-    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple());
+    m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
 #elif LLVM36
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
