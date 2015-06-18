@@ -924,6 +924,7 @@ function sparse(F::Factor)
         L, d = getLd!(LD)
         A = scale(L, d)*L'
     end
+    SparseMatrix.sortSparseMatrixCSC!(A)
     p = get_perm(F)
     if p != [1:s.n;]
         pinv = Array(Int, length(p))

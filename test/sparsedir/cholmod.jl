@@ -587,3 +587,6 @@ Dp = spdiagm(dp)
 @test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[p_inv]
 @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
 @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+
+# Issue 11745
+sparse(cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))); gc()
