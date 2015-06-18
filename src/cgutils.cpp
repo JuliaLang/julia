@@ -1397,7 +1397,13 @@ static Value *emit_getfield_knownidx(Value *strct, unsigned idx, jl_datatype_t *
         }
     }
     else if (strct->getType()->isPointerTy()) { // something stack allocated
+#       ifdef LLVM37
+        Value *addr = builder.CreateConstInBoundsGEP2_32(
+            cast<PointerType>(strct->getType()->getScalarType())->getElementType(),
+            strct, 0, idx);
+#       else
         Value *addr = builder.CreateConstInBoundsGEP2_32(strct, 0, idx);
+#       endif
         assert(!jt->mutabl);
         return typed_load(addr, NULL, jfty, ctx, NULL);
     }
