@@ -240,8 +240,8 @@ int main() {
     volatile int fibarg = 20; // prevent constant propagation
     for (int i=0; i<NITER; ++i) {
         t = clock_now();
-	for (int j = 0; j < 1000; j++)
-		f += fib(fibarg);
+        for (int j = 0; j < 1000; j++)
+                f += fib(fibarg);
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
@@ -294,10 +294,10 @@ int main() {
     tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
         t = clock_now();
-	for (int j = 0; j < 100; j++) {
-		mandel_sum = mandelperf();
-		mandel_sum2 += mandel_sum;
-	}
+        for (int j = 0; j < 100; j++) {
+                mandel_sum = mandelperf();
+                mandel_sum2 += mandel_sum;
+        }
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
