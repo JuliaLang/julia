@@ -1146,31 +1146,57 @@ function reverse_bits(src::UInt64)
 end
 
 function reverse!(B::BitVector)
+    # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
+    # h = 64 - k. Walk from either end (with indexes i and j) reversing chunks
+    # and seperately ORing their two blocks into place.
+    #
+    #           chunk 3                  chunk 2                  chunk 1
+    # ┌───────────────┬───────┐┌───────────────┬───────┐┌───────────────┬───────┐
+    # │000000000000000│   E   ││       D       │   C   ││       B       │   A   │
+    # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
+    #                     k            h           k            h            k
+    # yielding;
+    # ┌───────────────┬───────┐┌───────────────┬───────┐┌───────────────┬───────┐
+    # │000000000000000│  A'   ││      B'       │  C'   ││      D'       │  E'   │
+    # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
+
     n = length(B)
-    n == 0 && return B
-
-    pnc = length(B.chunks) & 1
-    hnc = (length(B.chunks) >>> 1)
-
-    aux_chunks = Array(UInt64, 1)
-
-    for i = 1:hnc
-        j = ((i - 1) << 6)
-        aux_chunks[1] = reverse_bits(B.chunks[i])
-        copy_chunks!(B.chunks, j+1, B.chunks, n-63-j, 64)
-        B.chunks[i] = reverse_bits(B.chunks[i])
-        copy_chunks!(B.chunks, n-63-j, aux_chunks, 1, 64)
+    if n == 0
+        return B
     end
 
-    pnc == 0 && return B
+    k = _mod64(n+63) + 1
+    h = 64 - k
 
-    i = hnc + 1
-    j = hnc << 6
-    l = _mod64(n+63) + 1
+    i, j = 0, length(B.chunks)
+    u = UInt64(0)
+    v = reverse_bits(B.chunks[j])
+    B.chunks[j] = 0
+    @inbounds while true
+        i += 1
+        if i == j
+            break
+        end
+        u = reverse_bits(B.chunks[i])
+        B.chunks[i] = 0
+        B.chunks[j] |= u >>> h
+        B.chunks[i] |= v >>> h
 
-    aux_chunks[1] = reverse_bits(B.chunks[i] & _msk_end(l))
-    aux_chunks[1] >>>= (64 - l)
-    copy_chunks!(B.chunks, j+1, aux_chunks, 1, l)
+        j -= 1
+        if i == j
+            break
+        end
+        v = reverse_bits(B.chunks[j])
+        B.chunks[j] = 0
+        B.chunks[i] |= v << k
+        B.chunks[j] |= u << k
+    end
+
+    if isodd(length(B.chunks))
+        B.chunks[i] |= v >>> h
+    else
+        B.chunks[i] |= u << k
+    end
 
     return B
 end
