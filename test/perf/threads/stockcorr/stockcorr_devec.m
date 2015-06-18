@@ -1,5 +1,6 @@
 %% Simulate two correlated assets
-%% Manually hoisted some computations outside the loop
+%% Manually hoisted some computations outside the loop; see ../../kernel/
+%% for the original version
 
 %% Correlated asset information
 CurrentPrice = [78 102];       %Initial Prices of the two stocks
