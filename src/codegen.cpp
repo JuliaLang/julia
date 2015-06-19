@@ -18,13 +18,14 @@
 
 #include "platform.h"
 #include "options.h"
-#if !defined(FORCE_ELF) && defined(_OS_WINDOWS_) && defined(USE_MCJIT)
-#define FORCE_ELF // MCJIT debugging support on windows needs ELF (currently)
-#endif
-#if !defined(FORCE_ELF) && defined(_OS_WINDOWS_) && defined(_CPU_X86_) && !defined(USE_MCJIT)
-#define FORCE_ELF // trick pre-llvm36 into skipping the generation of _chkstk calls
-                  // since it has some codegen issues associated with them
-                  // see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
+#if defined(_OS_WINDOWS_)
+// trick pre-llvm36 into skipping the generation of _chkstk calls
+//   since it has some codegen issues associated with them:
+//   (a) assumed to be within 32-bit offset
+//   (b) bad asm is generated for certain code patterns:
+//       see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
+// also MCJIT debugging support on windows needs ELF (currently)
+#define FORCE_ELF
 #endif
 
 #ifndef __STDC_LIMIT_MACROS
