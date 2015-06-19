@@ -119,6 +119,9 @@ Language changes
     that implement `getindex` or `setindex!` methods must also extend those
     methods to support arguments of type `Colon` ([#10331]).
 
+  * Unions of types should now be written with curly braces instead of parenthesis, i.e.
+    `Union{Type1, Type2}` instead of `Union(Type1, Type2)` ([#11432]).
+
 Command line option changes
 ---------------------------
 
@@ -1451,10 +1454,11 @@ Too numerous to mention.
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
 [#10955]: https://github.com/JuliaLang/julia/issues/10955
 [#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11067]: https://github.com/JuliaLang/julia/issues/11067
 [#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
-[#11067]: https://github.com/JuliaLang/julia/issues/11067
+[#11432]: https://github.com/JuliaLang/julia/issues/11432
