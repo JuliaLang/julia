@@ -55,7 +55,11 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 ### MSYS2 provides a robust MSYS experience.
 
-1. Install and configure [MSYS2](https://msys2.github.io), a minimal POSIX-like environment for Windows.
+1. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
+
+2. Install [CMake](http://www.cmake.org/download/).
+
+3. Install and configure [MSYS2](https://msys2.github.io), a minimal POSIX-like environment for Windows.
 
   1. Download and run the latest installer for the [32-bit](http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution. The installer will have a name like `msys2-i686-yyyymmdd.exe` or `msys2-x86_64-yyyymmdd.exe`.
 
@@ -69,12 +73,23 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
      ```
     pacman -Syu           #Update package database and full system upgrade
-    pacman -S diffutils git m4 make patch tar python2 p7zip msys/openssh
+    pacman -S diffutils git m4 make patch tar p7zip msys/openssh
 ```
 
-  4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
+  4. Configure your MSYS2 shell so Python is visible on the path:
 
-2. Build Julia and its dependencies from source.
+     ```
+    echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/C/Python27" >> ~/.bashrc
+```
+
+     *N.B.* The `export` clobbers whatever `$PATH` is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may prefer to append rather than clobber.
+
+     *N.B.* All of the path separators are unix-style. In MSYS2, `/C/` means the root of your `C:\` drive. Replace `/C/Python27` with the location where you installed Python.
+
+
+  5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
+
+4. Build Julia and its dependencies from source.
   1. Open a new MSYS2 shell and clone the Julia sources
      ```
     git clone -b release-0.3 https://github.com/JuliaLang/julia.git
@@ -100,7 +115,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-3. Setup Package Development Environment
+5. Setup Package Development Environment
   1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
