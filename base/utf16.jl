@@ -149,12 +149,14 @@ function map(fun, str::UTF16String)
     sizehint!(buf, length(str.data))
     for ch in str
         c2 = fun(ch)
-        !isa(c2, Char) &&
+        if !isa(c2, Char)
             throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
+        end
         uc = reinterpret(UInt32, c2)
         if uc < 0x10000
-            utf16_is_surrogate(uc) &&
+            if utf16_is_surrogate(UInt16(uc))
                 throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))
+            end
             push!(buf, UInt16(uc))
         elseif uc <= 0x10ffff
             push!(buf, UInt16(0xd7c0 + (uc >> 10)))

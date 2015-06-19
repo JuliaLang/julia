@@ -1899,19 +1899,21 @@ end
 @test [x for x in enumerate("ḟøøƀäṙ")] == [(1, 'ḟ'), (2, 'ø'), (3, 'ø'), (4, 'ƀ'), (5, 'ä'), (6, 'ṙ')]
 
 # issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
+str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(uppercase("abcdef")) == ASCIIString
-@test typeof(uppercase(utf8("abcdef"))) == UTF8String
-@test typeof(uppercase(utf16("abcdef"))) == UTF16String
-@test typeof(uppercase(utf32("abcdef"))) == UTF32String
+@test typeof(uppercase(utf8(str))) == UTF8String
+@test typeof(uppercase(utf16(str))) == UTF16String
+@test typeof(uppercase(utf32(str))) == UTF32String
 @test typeof(lowercase("ABCDEF")) == ASCIIString
-@test typeof(lowercase(utf8("ABCDEF"))) == UTF8String
-@test typeof(lowercase(utf16("ABCDEF"))) == UTF16String
-@test typeof(lowercase(utf32("ABCDEF"))) == UTF32String
+@test typeof(lowercase(utf8(str))) == UTF8String
+@test typeof(lowercase(utf16(str))) == UTF16String
+@test typeof(lowercase(utf32(str))) == UTF32String
 
 foomap(ch) = (ch > 65)
 foobar(ch) = Char(0xd800)
-foobaz(ch) = Char(0x20000)
-@test_throws UnicodeError map(foomap, utf16("abcdef"))
-@test_throws UnicodeError map(foobar, utf16("abcdef"))
-@test_throws UnicodeError map(foobaz, utf16("abcdef"))
+foobaz(ch) = Char(0x200000)
+@test_throws UnicodeError map(foomap, utf16(str))
+@test_throws UnicodeError map(foobar, utf16(str))
+@test_throws UnicodeError map(foobaz, utf16(str))
+
 
