@@ -95,6 +95,7 @@ tail(x::Tuple) = argtail(x...)
 
 convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
+convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::T) = x
 
 oftype(x,c) = convert(typeof(x),c)
 
