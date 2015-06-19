@@ -273,10 +273,9 @@ convert(T::Type{UTF16String}, data::AbstractArray{UInt16}) =
 convert(T::Type{UTF16String}, data::AbstractArray{Int16}) =
     convert(T, reinterpret(UInt16, data))
 
-function convert(::Type{UTF16String}, data::AbstractVector{UInt16})
-    !isvalid(UTF16String, data) && throw(UnicodeError(UTF_ERR_INVALID_16,0,0))
-    len = length(data)
-    @inbounds return UTF16String(setindex!(copy!(Vector{UInt16}(len+1),1,data,1,len),0,len+1))
+function convert(::Type{UTF16String}, dat::AbstractVector{UInt16})
+    len, flags, num4byte = unsafe_checkstring(dat)
+    @inbounds return fast_utf_copy(UTF16String, UInt16, len+num4byte, dat, true)
 end
 
 function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
