@@ -1901,3 +1901,6 @@ function f9947()
     end
 end
 @test f9947() == convert(Uint128,1)
+
+# issue #11772
+@test_throws UndefRefError zip(cell(5)...)
