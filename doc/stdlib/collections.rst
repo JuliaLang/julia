@@ -693,7 +693,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
        "bar" => 4711.0
        "baz" => 17.0
        "foo" => 0.0
-     
+
      julia> merge(b, a)
      Dict{UTF8String,Int64} with 3 entries:
        "bar" => 42
