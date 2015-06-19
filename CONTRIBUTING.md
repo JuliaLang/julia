@@ -72,7 +72,7 @@ Julia's documentation is stored in the `doc` directory, and like everything else
 - Search for the function you want to change
 - Make your changes
 - Exit Zen mode
-- Provide a title, and optionally a longer description of your change
+- Provide a title with the tag `[av skip]` included, e.g. `[av skip] document foo.jl bahaviour` (this is used in order to prevent the AppVeyor job queue from growing to large because of trivial edits) and optionally a longer description of your change
 - Submit your change
 
 Julia's documentation is built with [Sphinx](http://sphinx-doc.org/contents.html), which supports (and Julia's docs rely heavily on) [ReST directives](http://docutils.sourceforge.net/docs/ref/rst/directives.html). To build the documentation locally, run
