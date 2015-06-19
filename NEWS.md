@@ -119,7 +119,7 @@ Language changes
     that implement `getindex` or `setindex!` methods must also extend those
     methods to support arguments of type `Colon` ([#10331]).
 
-  * Unions of types should now be written with curly braces instead of parenthesis, i.e.
+  * Unions of types should now be written with curly braces instead of parentheses, i.e.
     `Union{Type1, Type2}` instead of `Union(Type1, Type2)` ([#11432]).
 
 Command line option changes
