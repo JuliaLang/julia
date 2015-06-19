@@ -61,6 +61,12 @@ let
         @test_approx_eq_eps apd*v[:,1] d[1]*bpd*v[:,1] testtol
         @test norm(v) > testtol # eigenvectors cannot be null vectors
 
+        @test_throws ArgumentError eigs(rand(elty,2,2))
+        @test_throws ArgumentError eigs(a, nev=-1)
+        @test_throws ArgumentError eigs(a, which=:Z)
+        @test_throws ArgumentError eigs(a, which=:BE)
+        @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
+        @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
     end
 end
 
@@ -164,6 +170,9 @@ let # svds test
     @test_approx_eq S3[1] [34.0, 6.0]
     S4 = svds(B, nsv=2)
     @test_approx_eq S4[2] [34.0, 6.0]
+
+    @test_throws ArgumentError svds(A,nsv=0)
+    @test_throws ArgumentError svds(A,nsv=20)
 end
 
 debug && println("complex svds")
@@ -184,4 +193,7 @@ let # complex svds test
     s1_right = abs(S1[3][:,1:2])
     s2_right = abs(S2[3][:,1:2])
     @test_approx_eq s1_right s2_right
+
+    @test_throws ArgumentError svds(A,nsv=0)
+    @test_throws ArgumentError svds(A,nsv=20)
 end
