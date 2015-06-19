@@ -187,7 +187,7 @@ uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
-function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
+function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
     t = to_tuple_type(t)
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
 
@@ -199,14 +199,14 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
         str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
     else
         str = ccall(:jl_dump_function_ir, Any,
-                    (Ptr{Void}, Bool), llvmf, strip_ir_metadata)::ByteString
+                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)::ByteString
     end
 
     return str
 end
 
-code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata=true) =
-    print(io, _dump_function(f, types, false, false, strip_ir_metadata))
+code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata=true, dump_module=false) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
 code_llvm(f::ANY, types::ANY) = code_llvm(STDOUT, f, types)
 code_llvm_raw(f::ANY, types::ANY) = code_llvm(STDOUT, f, types, false)
 code_llvm(io::IO, f::ANY, t::ANY, args...) =
@@ -214,7 +214,7 @@ code_llvm(io::IO, f::ANY, t::ANY, args...) =
               tt_cons(isa(f, Type) ? Type{f} : typeof(f), t), args...)
 
 code_native(io::IO, f::Function, types::ANY) =
-    print(io, _dump_function(f, types, true, false, false))
+    print(io, _dump_function(f, types, true, false, false, false))
 code_native(f::ANY, types::ANY) = code_native(STDOUT, f, types)
 code_native(io::IO, f::ANY, t::ANY) =
     code_native(io, call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
