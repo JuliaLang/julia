@@ -23,7 +23,7 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
             (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
-            gc_wb(*pa, ol[i+1]);
+            jl_gc_wb(*pa, ol[i+1]);
              // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
@@ -49,7 +49,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     do {
         if (tab[index+1] == NULL) {
             tab[index] = key;
-            gc_wb(a, key);
+            jl_gc_wb(a, key);
             return &tab[index+1];
         }
 
@@ -118,7 +118,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
-    gc_wb(h, val);
+    jl_gc_wb(h, val);
     return h;
 }
 
