@@ -76,6 +76,20 @@ end
 call(f::UnspecializedFun{1}, x) = f.f(x)
 call(f::UnspecializedFun{2}, x, y) = f.f(x,y)
 
+# Special purpose functors
+
+type Predicate <: Func{1}
+    f::Function
+end
+call(pred::Predicate, x) = pred.f(x)::Bool
+
+
+immutable EqX{T} <: Func{1}
+    x::T
+end
+EqX{T}(x::T) = EqX{T}(x)
+
+call(f::EqX, y) = f.x == y
 
 #### Bitwise operators ####
 

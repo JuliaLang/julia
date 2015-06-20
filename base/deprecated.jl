@@ -738,3 +738,26 @@ function complement!(s::IntSet)
 end
 complement(s::IntSet) = complement!(copy(s))
 export complement, complement!
+
+
+# 11774
+# when removing these deprecations, move them to reduce.jl, remove the depwarns and uncomment the errors.
+
+nonboolean_warning(f, op, status) = """
+
+    Using non-boolean collections with $f(itr) is $status, use reduce($op, itr) instead.
+    If you are using $f(map(f, itr)) or $f([f(x) for x in itr]), use $f(f, itr) instead.
+"""
+
+
+function nonboolean_any(itr)
+    depwarn(nonboolean_warning(:any, :|, "deprecated"), :nonboolean_any)
+    #throw(ArgumentError(nonboolean_warning(:any, :|, "not supported")))
+    reduce(|, itr)
+end
+
+function nonboolean_all(itr)
+    depwarn(nonboolean_warning(:all, :&, "deprecated"), :nonboolean_all)
+    #throw(ArgumentError(nonboolean_warning(:all, :&, "not supported")))
+    reduce(&, itr)
+end

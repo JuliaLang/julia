@@ -155,11 +155,64 @@ end
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 mapreduce(f, op, a::Number) = f(a)
 
-mapreduce(f, op::Function, A::AbstractArray) = _mapreduce(f, specialized_binary(op), A)
+mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
 
 reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
 reduce(op, itr) = mapreduce(IdFun(), op, itr)
 reduce(op, a::Number) = a
+
+### short-circuiting specializations of mapreduce
+
+## conditions and results of short-circuiting
+
+const ShortCircuiting = Union{AndFun, OrFun}
+const ReturnsBool     = Union{EqX, Predicate}
+
+shortcircuits(::AndFun, x::Bool) = !x
+shortcircuits(::OrFun,  x::Bool) =  x
+
+shorted(::AndFun) = false
+shorted(::OrFun)  = true
+
+sc_finish(::AndFun) = true
+sc_finish(::OrFun)  = false
+
+## short-circuiting (sc) mapreduce definitions
+
+function mapreduce_sc_impl(f, op, itr::AbstractArray)
+    @inbounds for x in itr
+        shortcircuits(op, f(x)) && return shorted(op)
+    end
+    return sc_finish(op)
+end
+
+function mapreduce_sc_impl(f, op, itr)
+    for x in itr
+        shortcircuits(op, f(x)) && return shorted(op)
+    end
+    return sc_finish(op)
+end
+
+# mapreduce_sc tests if short-circuiting is safe;
+# if so, mapreduce_sc_impl is called. If it's not
+# safe, call mapreduce_no_sc, which redirects to
+# non-short-circuiting definitions.
+
+mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
+mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
+
+mapreduce_sc(f::Function,    op, itr) = mapreduce_sc(specialized_unary(f), op, itr)
+mapreduce_sc(f::ReturnsBool, op, itr) = mapreduce_sc_impl(f, op, itr)
+mapreduce_sc(f::Func{1},     op, itr) = mapreduce_no_sc(f, op, itr)
+
+mapreduce_sc(f::IdFun, op, itr) =
+    eltype(itr) <: Bool?
+        mapreduce_sc_impl(f, op, itr) :
+        mapreduce_no_sc(f, op, itr)
+
+mapreduce(f, op::ShortCircuiting, n::Number) = n
+mapreduce(f, op::ShortCircuiting, itr::AbstractArray) = mapreduce_sc(f,op,itr)
+mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 
 
 ###### Specific reduction functions ######
@@ -298,53 +351,28 @@ end
 
 ## all & any
 
-function mapfoldl(f, ::AndFun, itr)
-    for x in itr
-        !f(x) && return false
-    end
-    return true
-end
+# make sure that the identity function is defined before `any` or `all` are used
+function identity end
 
-function mapfoldl(f, ::OrFun, itr)
-    for x in itr
-        f(x) && return true
-    end
-    return false
-end
+any(itr) = any(IdFun(), itr)
+all(itr) = all(IdFun(), itr)
 
-function mapreduce_impl(f, op::AndFun, A::AbstractArray{Bool}, ifirst::Int, ilast::Int)
-    while ifirst <= ilast
-        @inbounds x = A[ifirst]
-        !f(x) && return false
-        ifirst += 1
-    end
-    return true
-end
+any(f::Function, itr) = any(f === identity? IdFun() : Predicate(f), itr)
+any(f::Func{1},  itr) = mapreduce_sc_impl(f, OrFun(), itr)
+any(f::IdFun,    itr) =
+    eltype(itr) <: Bool?
+        mapreduce_sc_impl(f, OrFun(), itr) :
+        nonboolean_any(itr)
 
-function mapreduce_impl(f, op::OrFun, A::AbstractArray{Bool}, ifirst::Int, ilast::Int)
-    while ifirst <= ilast
-        @inbounds x = A[ifirst]
-        f(x) && return true
-        ifirst += 1
-    end
-    return false
-end
-
-all(a) = mapreduce(IdFun(), AndFun(), a)
-any(a) = mapreduce(IdFun(), OrFun(), a)
-
-all(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, AndFun(), a)
-any(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, OrFun(), a)
-
+all(f::Function, itr) = all(f === identity? IdFun() : Predicate(f), itr)
+all(f::Func{1},  itr) = mapreduce_sc_impl(f, AndFun(), itr)
+all(f::IdFun,    itr) =
+    eltype(itr) <: Bool?
+        mapreduce_sc_impl(f, AndFun(), itr) :
+        nonboolean_all(itr)
 
 ## in & contains
 
-immutable EqX{T} <: Func{1}
-    x::T
-end
-EqX{T}(x::T) = EqX{T}(x)
-
-call(f::EqX, y) = f.x == y
 in(x, itr) = any(EqX(x), itr)
 
 const ∈ = in
