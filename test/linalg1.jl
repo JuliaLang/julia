@@ -230,6 +230,8 @@ debug && println("singular value decomposition")
         @test_approx_eq full(usv) a
         @test_approx_eq usv[:Vt]' usv[:V]
         @test_throws KeyError usv[:Z]
+        b = rand(eltya,n)
+        @test_approx_eq usv\b a\b
     end
 
 debug && println("Generalized svd")
