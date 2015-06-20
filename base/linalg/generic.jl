@@ -109,12 +109,12 @@ function generic_vecnorm2(x)
     s = start(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
-    scale::promote_type(Float64, T) = 1/maxabs
-    y = norm(v)*scale
+    scale::promote_type(Float64, T) = maxabs
+    y = norm(v)/scale
     sum::promote_type(Float64, T) = y*y
     while !done(x, s)
         (v, s) = next(x, s)
-        y = norm(v)*scale
+        y = norm(v)/scale
         sum += y*y
     end
     return convert(T, maxabs * sqrt(sum))
@@ -130,11 +130,11 @@ function generic_vecnormp(x, p)
         (v, s) = next(x, s)
         T = typeof(maxabs)
         spp::promote_type(Float64, T) = p
-        scale::promote_type(Float64, T) = 1/maxabs
-        ssum::promote_type(Float64, T) = (norm(v)*scale)^spp
+        scale::promote_type(Float64, T) = maxabs
+        ssum::promote_type(Float64, T) = (norm(v)/scale)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            ssum += (norm(v)*scale)^spp
+            ssum += (norm(v)/scale)^spp
         end
         return convert(T, maxabs * ssum^inv(spp))
     else # -1 ≤ p ≤ 1, no need for rescaling
