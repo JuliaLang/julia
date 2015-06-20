@@ -46,6 +46,7 @@ a = randcycle(10)
 @test collect(partitions([1,2,3,4],1)) == Any[Any[[1, 2, 3, 4]]]
 @test collect(partitions([1,2,3,4],5)) == []
 
+@test length(permutations(0)) == 1
 @test length(partitions(0)) == 1
 @test length(partitions(-1)) == 0
 @test length(collect(partitions(30))) == length(partitions(30))
@@ -96,3 +97,5 @@ end
 @test map(levicivita, collect(permutations([1,2,3]))) == [1, -1, -1, 1, 1, -1]
 @test let p = [3, 4, 6, 10, 5, 2, 1, 7, 8, 9]; levicivita(p) == 1 && parity(p) == 0; end
 @test let p = [4, 3, 6, 10, 5, 2, 1, 7, 8, 9]; levicivita(p) == -1 && parity(p) == 1; end
+
+@test Base.nsetpartitions(-1) == 0
