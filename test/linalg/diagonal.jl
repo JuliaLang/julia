@@ -30,6 +30,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
         @test_approx_eq_eps A_ldiv_B!(D,copy(v)) DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
         @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
+        @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
+        b = rand(elty,n,n)
+        b = sparse(b)
+        @test_approx_eq A_ldiv_B!(D,copy(b)) full(D)\full(b)
+        b = rand(elty,n+1,n+1)
+        b = sparse(b)
+        @test_throws DimensionMismatch A_ldiv_B!(D,copy(b))
     end
 
     debug && println("Simple unary functions")
@@ -150,4 +157,9 @@ let d = randn(n), D = Diagonal(d)
     @test_throws BoundsError (D[n+1,n+1] = 0)
     @test_throws BoundsError D[n,n+1]
     @test_throws BoundsError (D[n,n+1] = 0)
+end
+
+# inv
+let d = randn(n), D = Diagonal(d)
+    @test_approx_eq inv(D) inv(full(D))
 end
