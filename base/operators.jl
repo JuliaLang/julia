@@ -320,11 +320,8 @@ to_index(i1, i2)         = to_index(i1), to_index(i2)
 to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
 to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)
 to_index(I...) = to_index(I)
-to_index(I::Tuple{Any,})            = (to_index(I[1]), )
-to_index(I::Tuple{Any,Any,})        = (to_index(I[1]), to_index(I[2]))
-to_index(I::Tuple{Any,Any,Any})     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
-to_index(I::Tuple{Any,Any,Any,Any}) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
-to_index(I::Tuple) = map(to_index, I)
+to_index(I::Tuple{}) = ()
+to_index(I::Tuple)   = (to_index(I[1]), to_index(tail(I))...)
 to_index(i) = error("invalid index: $i")
 
 # Addition/subtraction of ranges
