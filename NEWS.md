@@ -409,6 +409,21 @@ Deprecated or removed
 
   * `start_timer` and `stop_timer` are replaced by `Timer` and `close`.
 
+  * The following internal julia C functions have been renamed, in order to prevent
+    potential naming conflicts with C libraries: ([#11741])
+
+    * `gc_wb*` -> `jl_gc_wb*`
+
+    * `gc_queue_root` -> `jl_gc_queue_root`
+
+    * `allocobj` -> `jl_gc_allocobj`
+
+    * `alloc_[0-3]w` -> `jl_gc_alloc_*w`
+
+    * `diff_gc_total_bytes` -> `jl_gc_diff_total_bytes`
+
+    * `sync_gc_total_bytes` -> `jl_gc_sync_total_bytes`
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -1462,3 +1477,4 @@ Too numerous to mention.
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
+[#11741]: https://github.com/JuliaLang/julia/issues/11741

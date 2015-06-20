@@ -355,9 +355,9 @@ static std::vector<Type *> three_pvalue_llvmt;
 
 static std::map<jl_fptr_t, Function*> builtin_func_map;
 
-extern "C" DLLEXPORT void gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
+extern "C" DLLEXPORT void jl_gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
 {
-    gc_wb(parent, ptr);
+    jl_gc_wb(parent, ptr);
 }
 
 // --- code generation ---
@@ -1223,7 +1223,7 @@ static logdata_t mallocData;
 static void mallocVisitLine(std::string filename, int line)
 {
     if (filename == "" || filename == "none" || filename == "no file") {
-        sync_gc_total_bytes();
+        jl_gc_sync_total_bytes();
         return;
     }
     logdata_t::iterator it = mallocData.find(filename);
@@ -1267,7 +1267,7 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
             }
         }
     }
-    sync_gc_total_bytes();
+    jl_gc_sync_total_bytes();
 }
 
 extern "C" void jl_write_malloc_log(void)
@@ -1743,7 +1743,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     li = li->def;
     if (li->roots == NULL) {
         li->roots = jl_alloc_cell_1d(1);
-        gc_wb(li, li->roots);
+        jl_gc_wb(li, li->roots);
         jl_cellset(li->roots, 0, val);
     }
     else {
@@ -4960,9 +4960,9 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 
 extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 {
-    jl_value_t *box = (jl_value_t*)alloc_1w();
+    jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
     jl_set_typeof(box, jl_box_any_type);
-    // if (v) gc_wb(box, v); // write block not needed: box was just allocated
+    // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
     box->fieldptr[0] = v;
     return box;
 }
@@ -5335,16 +5335,16 @@ static void init_julia_llvm_env(Module *m)
 #ifdef JL_GC_MARKSWEEP
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
                                     Function::ExternalLinkage,
-                                    "gc_queue_root", m);
-    add_named_global(queuerootfun, (void*)&gc_queue_root);
+                                    "jl_gc_queue_root", m);
+    add_named_global(queuerootfun, (void*)&jl_gc_queue_root);
 
     std::vector<Type *> wbargs(0);
     wbargs.push_back(jl_pvalue_llvmt);
     wbargs.push_back(jl_pvalue_llvmt);
     wbfunc = Function::Create(FunctionType::get(T_void, wbargs, false),
                               Function::ExternalLinkage,
-                              "gc_wb_slow", m);
-    add_named_global(wbfunc, (void*)&gc_wb_slow);
+                              "jl_gc_wb_slow", m);
+    add_named_global(wbfunc, (void*)&jl_gc_wb_slow);
 #endif
 
     std::vector<Type *> exp_args(0);
@@ -5483,27 +5483,27 @@ static void init_julia_llvm_env(Module *m)
     jlallocobj_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, aoargs, false),
                          Function::ExternalLinkage,
-                         "allocobj", m);
-    add_named_global(jlallocobj_func, (void*)&allocobj);
+                         "jl_gc_allocobj", m);
+    add_named_global(jlallocobj_func, (void*)&jl_gc_allocobj);
 
     std::vector<Type*> empty_args(0);
     jlalloc1w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
-                         "alloc_1w", m);
-    add_named_global(jlalloc1w_func, (void*)&alloc_1w);
+                         "jl_gc_alloc_1w", m);
+    add_named_global(jlalloc1w_func, (void*)&jl_gc_alloc_1w);
 
     jlalloc2w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
-                         "alloc_2w", m);
-    add_named_global(jlalloc2w_func, (void*)&alloc_2w);
+                         "jl_gc_alloc_2w", m);
+    add_named_global(jlalloc2w_func, (void*)&jl_gc_alloc_2w);
 
     jlalloc3w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
-                         "alloc_3w", m);
-    add_named_global(jlalloc3w_func, (void*)&alloc_3w);
+                         "jl_gc_alloc_3w", m);
+    add_named_global(jlalloc3w_func, (void*)&jl_gc_alloc_3w);
 
     std::vector<Type*> atargs(0);
     atargs.push_back(T_size);
@@ -5544,8 +5544,8 @@ static void init_julia_llvm_env(Module *m)
     diff_gc_total_bytes_func =
         Function::Create(FunctionType::get(T_int64, false),
                          Function::ExternalLinkage,
-                         "diff_gc_total_bytes", m);
-    add_named_global(diff_gc_total_bytes_func, (void*)*diff_gc_total_bytes);
+                         "jl_gc_diff_total_bytes", m);
+    add_named_global(diff_gc_total_bytes_func, (void*)*jl_gc_diff_total_bytes);
 
     std::vector<Type *> execpoint_args(0);
     execpoint_args.push_back(T_pint8);

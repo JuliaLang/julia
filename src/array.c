@@ -81,7 +81,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         size_t doffs = tsz;
         tsz += tot;
         tsz = JL_ARRAY_ALIGN(tsz, 16); // align whole object 16
-        a = (jl_array_t*)allocobj(tsz);
+        a = (jl_array_t*)jl_gc_allocobj(tsz);
         jl_set_typeof(a, atype);
         a->how = 0;
         data = (char*)a + doffs;
@@ -91,7 +91,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
     else {
         tsz = JL_ARRAY_ALIGN(tsz, 16); // align whole object 16
-        a = (jl_array_t*)allocobj(tsz);
+        a = (jl_array_t*)jl_gc_allocobj(tsz);
         JL_GC_PUSH1(&a);
         jl_set_typeof(a, atype);
         // temporarily initialize to make gc-safe
@@ -153,7 +153,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *di
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), 16);
-    a = (jl_array_t*)allocobj(tsz);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
     a->ndims = ndims;
@@ -229,7 +229,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
 
     int ndimwords = jl_array_ndimwords(1);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
-    a = (jl_array_t*)allocobj(tsz);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
@@ -280,7 +280,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
-    a = (jl_array_t*)allocobj(tsz);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
     jl_set_typeof(a, atype);
     a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
@@ -354,7 +354,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     // TODO: check type of array?
     jl_datatype_t *string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
-    jl_value_t *s = (jl_value_t*)alloc_1w();
+    jl_value_t *s = (jl_value_t*)jl_gc_alloc_1w();
     jl_set_typeof(s, string_type);
     jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
@@ -524,7 +524,7 @@ void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
         if (a->how == 3) {
             owner = jl_array_data_owner(a);
         }
-        gc_wb(owner, rhs);
+        jl_gc_wb(owner, rhs);
     }
 }
 
@@ -598,7 +598,7 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     if (a->ptrarray || es==1)
         memset(newdata+offsnb+oldnbytes, 0, nbytes-oldnbytes-offsnb);
     if (a->how == 1)
-        gc_wb_buf(a, newdata);
+        jl_gc_wb_buf(a, newdata);
     a->maxsize = newlen;
 }
 
