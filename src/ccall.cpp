@@ -328,7 +328,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         return boxed(jv,ctx);
     }
 
-    if (!tojulia && julia_type_to_llvm(aty)->isAggregateType()) {
+    if (!tojulia && vt != jl_pvalue_llvmt && julia_type_to_llvm(aty)->isAggregateType()) {
         // this value is expected to be a pointer in the julia codegen,
         // so it needs to be extracted first if not tojulia
         vt = vt->getContainedType(0);
