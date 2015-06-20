@@ -153,7 +153,7 @@ the above function results in a runtime error
              elseif x == y
                relation = "equal to"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
     test (generic function with 1 method)
 
