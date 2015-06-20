@@ -125,7 +125,13 @@ end
 tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
 
 code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
-methods(f::Function,t::ANY) = (t=to_tuple_type(t); Any[m[3] for m in _methods(f,t,-1)])
+function methods(f::Function,t::ANY)
+    if !isgeneric(f)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    t = to_tuple_type(t)
+    Any[m[3] for m in _methods(f,t,-1)]
+end
 methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
     if isa(t,Type)
