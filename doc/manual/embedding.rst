@@ -194,11 +194,12 @@ Manipulating the Garbage Collector
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-========================= ==============================================================================
-``void jl_gc_collect()``   Force a GC run
-``void jl_gc_enable(0)``   Disable the GC
-``void jl_gc_enable(1)``   Enable the GC
-========================= ==============================================================================
+======================= =====================================================
+``jl_gc_collect()``      Force a GC run
+``jl_gc_enable(0)``      Disable the GC, return previous state as int
+``jl_gc_enable(1)``      Enable the GC,  return previous state as int
+``jl_gc_is_enabled()``   Return current state as int
+======================= =====================================================
 
 Working with Arrays
 ========================
