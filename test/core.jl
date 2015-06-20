@@ -2972,3 +2972,6 @@ abstract C11597{T<:Union(Void, Int)}
 type D11597{T} <: C11597{T} d::T end
 @test_throws TypeError D11597(1.0)
 @test_throws TypeError repr(D11597(1.0))
+
+# issue #11772
+@test_throws UndefRefError (cell(5)...)

@@ -465,8 +465,15 @@ JL_CALLABLE(jl_f_apply)
         }
         else {
             size_t al = jl_array_len(args[i]);
-            for(j=0; j < al; j++)
-                newargs[n++] = jl_cellref(args[i], j);
+            for (j = 0;j < al;j++) {
+                jl_value_t *arg = jl_cellref(args[i], j);
+                // apply with array splatting may have embedded NULL value
+                // #11772
+                if (__unlikely(arg == NULL)) {
+                    jl_throw(jl_undefref_exception);
+                }
+                newargs[n++] = arg;
+            }
         }
     }
     jl_value_t *result = jl_apply(f, newargs, n);
