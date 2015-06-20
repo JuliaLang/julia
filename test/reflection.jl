@@ -189,3 +189,5 @@ let
     @test TestMod7648==@which foo7648
     @test TestMod7648.TestModSub9475==@which a9475
 end
+
+@test_throws ArgumentError which(is, Tuple{Int, Int})
