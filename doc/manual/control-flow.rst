@@ -136,7 +136,7 @@ So, we could have defined the ``test`` function above as
              else
                relation = "greater than"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
     test (generic function with 1 method)
 
