@@ -136,7 +136,7 @@ So, we could have defined the ``test`` function above as
              else
                relation = "greater than"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
     test (generic function with 1 method)
 
@@ -153,12 +153,12 @@ the above function results in a runtime error
              elseif x == y
                relation = "equal to"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
     test (generic function with 1 method)
 
     julia> test(1,2)
-    x is less than than y.
+    x is less than y.
 
     julia> test(2,1)
     ERROR: UndefVarError: relation not defined
