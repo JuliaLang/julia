@@ -1012,7 +1012,6 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
         return (Function*)sf->linfo->functionObject;
 }
 
-#ifndef USE_MCJIT
 Function* CloneFunctionToModule(Function *F, Module *destModule)
 {
     ValueToValueMapTy VMap;
@@ -1032,17 +1031,9 @@ Function* CloneFunctionToModule(Function *F, Module *destModule)
     llvm::CloneFunctionInto(NewF, F, VMap, true, Returns, "", NULL, NULL);
     return NewF;
 }
-#else
-Function* CloneFunctionToModule(Function *F, Module *destModule)
-{
-    FunctionMover mover(destModule, F->getParent());
-    Function* f2 = mover.CloneFunction(F);
-    return f2;
-}
-#endif
 
 extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
+const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -1086,7 +1077,10 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
                 }
             }
         }
-        m->print(stream, NULL);
+        if (dump_module)
+            m->print(stream, NULL);
+        else
+            f2->print(stream);
         f2->eraseFromParent();
         delete m;
     }
