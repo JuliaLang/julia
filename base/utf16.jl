@@ -175,25 +175,6 @@ function convert(::Type{UTF16String}, str::UTF8String)
 end
 
 "
-Converts a UTF-16 encoded vector of `UInt16` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"
-function convert(::Type{UTF8String}, dat::Vector{UInt16})
-    len = sizeof(dat)
-    # handle zero length string quickly
-    len == 0 && return emtpy_utf8
-    # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>1)
-    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), dat))
-    return encode_to_utf8(UInt16, dat, len + num2byte + num3byte*2 + num4byte*3)
-end
-
-"
 Converts a `UTF16String` to a `UTF8String`
 
 ### Returns:
