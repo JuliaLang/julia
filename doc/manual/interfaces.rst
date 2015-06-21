@@ -168,9 +168,11 @@ Methods to implement                                                            
 :func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>` ``Array(S, dims)``                           Return a mutable array with the specified element type and dimensions
 ========================================================== ============================================ =======================================================================================
 
-If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of complicated behaviors including iteration and multidimensional indexing built on top of single-element access.
+If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.
 
-A key part in defining an ``AbstractArray`` subtype is :func:`Base.linearindexing`. Since indexing is such an important part of an array and often occurs in hot loops, it's important to make both indexing and indexed assignment as efficient as possible.  Array data structures are typically defined in one of two ways: either it's most efficient to access the elements using just one index (using linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.  These two modalities are identified by Julia as ``Base.LinearFast()`` and ``Base.LinearSlow()``.  Converting a linear index to multiple indexing subscripts is typically very expensive, so this provides a traits-based mechanism to enable efficient generic code for all array types.
+A key part in defining an ``AbstractArray`` subtype is :func:`Base.linearindexing`. Since indexing is such an important part of an array and often occurs in hot loops, it's important to make both indexing and indexed assignment as efficient as possible.  Array data structures are typically defined in one of two ways: either it most efficiently accesses its elements using just one index (linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.  These two modalities are identified by Julia as ``Base.LinearFast()`` and ``Base.LinearSlow()``.  Converting a linear index to multiple indexing subscripts is typically very expensive, so this provides a traits-based mechanism to enable efficient generic code for all array types.
+
+This distinction determines which scalar indexing methods the type must define. ``LinearFast()`` arrays are simple: just define :func:`getindex(A::ArrayType, i::Int) <getindex>`.  When the array is subsequently indexed with a multidimensional set of indices, the fallback :func:`getindex(A::AbstractArray, I...)` efficiently converts the indices into one linear index and then calls the above method. ``LinearSlow()`` arrays, on the other hand, require methods to be defined for each supported dimensionality with ``ndims(A)`` ``Int`` indices.  For example, the builtin ``SparseMatrix`` type only supports two dimensions, so it just defines :func:`getindex(A::SparseMatrix, i::Int, j::Int)`.  The same holds for :func:`setindex!`.
 
 Returning to our collection of squares from above, we could instead define it as a subtype of an ``AbstractArray``:
 
@@ -183,7 +185,7 @@ Returning to our collection of squares from above, we could instead define it as
            Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
            Base.getindex(S::SquaresVector, i::Int) = i*i;
 
-Note that it's very important to specify the two parameters of the ``AbstractArray``; the first defines the :func:`eltype`, and the second defines the :func:`ndims`.  But that's it takes for our squares type to be an iterable, indexable, and completely functional array:
+Note that it's very important to specify the two parameters of the ``AbstractArray``; the first defines the :func:`eltype`, and the second defines the :func:`ndims`.  That supertype and those three methods are all it takes for ``SquaresVector`` to be an iterable, indexable, and completely functional array:
 
 .. testsetup::
 
@@ -228,7 +230,7 @@ As a more complicated example, let's define our own toy N-dimensional sparse-lik
            # Define scalar indexing and indexed assignment up to 3-dimensions
            Base.getindex{T}(A::SparseArray{T,1}, i1::Int)                   = get(A.data, (i1,), zero(T))
            Base.getindex{T}(A::SparseArray{T,2}, i1::Int, i2::Int)          = get(A.data, (i1,i2), zero(T))
-           Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) =  get(A.data, (i1,i2,i3), zero(T))
+           Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) = get(A.data, (i1,i2,i3), zero(T))
            Base.setindex!{T}(A::SparseArray{T,1}, v, i1::Int)                   = (A.data[(i1,)] = v)
            Base.setindex!{T}(A::SparseArray{T,2}, v, i1::Int, i2::Int)          = (A.data[(i1,i2)] = v)
            Base.setindex!{T}(A::SparseArray{T,3}, v, i1::Int, i2::Int, i3::Int) = (A.data[(i1,i2,i3)] = v);
@@ -264,7 +266,7 @@ Since the ``SparseArray`` is mutable, we were able to override :func:`similar`. 
      1.0  4.0  7.0
      2.0  5.0  8.0
 
-And now, in addition to all the iterable and indexable methods from above, these types can interact with eachother and use all the methods defined in the standard library for ``AbstractArrays``:
+And now, in addition to all the iterable and indexable methods from above, these types can interact with each other and use all the methods defined in the standard library for ``AbstractArrays``:
 
 .. doctest::
 
