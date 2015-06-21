@@ -4,7 +4,7 @@
  Interfaces
 ************
 
-A lot of the power and extensibility in Julia comes from a collection of informal interfaces.  By extending few specific methods to work for a custom type, objects of that type not only receive those functionalities, but they are also able to be used in other methods that are written to generically build upon those behaviors.
+A lot of the power and extensibility in Julia comes from a collection of informal interfaces.  By extending a few specific methods to work for a custom type, objects of that type not only receive those functionalities, but they are also able to be used in other methods that are written to generically build upon those behaviors.
 
 Iteration
 ---------
@@ -36,46 +36,66 @@ is translated into::
       # body
     end
 
-A simple example is an iterable collection of square numbers with a defined length::
+A simple example is an iterable collection of square numbers with a defined length:
 
-    immutable Squares
-        count::Int
-    end
-    Base.start(::Squares) = 1
-    Base.next(S::Squares, state) = (state*state, state+1)
-    Base.done(S::Squares, s) = s > S.count
+.. doctest::
 
-With only those definitions, the ``Squares`` type is already pretty powerful. We can iterate over all the elements::
-
-    julia> for i in Squares(10)
-               print(i, ", ")
+    julia> immutable Squares
+               count::Int
            end
-    1, 4, 9, 16, 25, 36, 49, 64, 81, 100,
+           Base.start(::Squares) = 1
+           Base.next(S::Squares, state) = (state*state, state+1)
+           Base.done(S::Squares, s) = s > S.count;
 
-We can compute the sum of all squares up to a certain number::
+With only those definitions, the ``Squares`` type is already pretty powerful. We can iterate over all the elements:
+
+.. doctest::
+
+    julia> for i in Squares(7)
+               println(i)
+           end
+    1
+    4
+    9
+    16
+    25
+    36
+    49
+
+We can compute the sum of all squares up to a certain number:
+
+.. doctest::
 
     julia> sum(Squares(1803))
     1955361914
 
-Or even the mean and standard deviation::
+Or even the mean and standard deviation:
+
+.. doctest::
 
     julia> mean(Squares(100)), std(Squares(100))
     (3383.5,3024.355854282583)
 
-There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` collection will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our collection, so we can extend :func:`length`, too::
+There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` collection will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our collection, so we can extend :func:`length`, too:
 
-    Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
-    Base.length(S::Squares) = S.count
+.. doctest::
 
-Now, when we ask Julia to :func:`collect` all the elements into an array it can preallocate a ``Vector{Int}`` of the right size instead of blindly ``push!``\ ing each element into a ``Vector{Any}``::
+    julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
+           Base.length(S::Squares) = S.count;
+
+Now, when we ask Julia to :func:`collect` all the elements into an array it can preallocate a ``Vector{Int}`` of the right size instead of blindly ``push!``\ ing each element into a ``Vector{Any}``:
+
+.. doctest::
 
     julia> collect(Squares(100))' # transposed to save space
     1x100 Array{Int64,2}:
      1  4  9  16  25  36  49  64  81  100  …  9025  9216  9409  9604  9801  10000
 
-While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm.  For example, there's a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution::
+While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm.  For example, there's a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution:
 
-    julia> sum(S::Squares) = (n = S.count; return n*(n+1)*(2n+1)÷6)
+.. doctest::
+
+    julia> Base.sum(S::Squares) = (n = S.count; return n*(n+1)*(2n+1)÷6)
            sum(Squares(1803))
     1955361914
 
@@ -92,7 +112,9 @@ Methods to implement                   Brief description
 :func:`endof(X) <endof>`               The last index, used in ``X[end]``
 ====================================== ==================================
 
-For the ``Squares`` collection above, we can easily compute the ``i``\ th element of the collection by squaring it.  We can expose this as an indexing expression ``S[i]``.  To opt into this behavior, ``Squares`` simply needs to define :func:`getindex`::
+For the ``Squares`` collection above, we can easily compute the ``i``\ th element of the collection by squaring it.  We can expose this as an indexing expression ``S[i]``.  To opt into this behavior, ``Squares`` simply needs to define :func:`getindex`:
+
+.. doctest::
 
     julia> function Base.getindex(S::Squares, i::Int)
                1 <= i <= S.count || throw(BoundsError(S, i))
@@ -101,7 +123,9 @@ For the ``Squares`` collection above, we can easily compute the ``i``\ th elemen
            Squares(100)[23]
     529
 
-Additionally, to support the syntax ``S[end]``, we must define :func:`endof` to specify the last valid index::
+Additionally, to support the syntax ``S[end]``, we must define :func:`endof` to specify the last valid index:
+
+.. doctest::
 
     julia> Base.endof(S::Squares) = length(S)
            Squares(23)[end]
@@ -134,16 +158,24 @@ If a type is defined as a subtype of ``AbstractArray``, it inherits a very large
 
 A key part in defining an ``AbstractArray`` subtype is :func:`Base.linearindexing`. Since indexing is such an important part of an array and often occurs in hot loops, it's important to make both indexing and indexed assignment as efficient as possible.  Array data structures are typically defined in one of two ways: either it's most efficient to access the elements using just one index (using linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.  These two modalities are identified by Julia as ``Base.LinearFast()`` and ``Base.LinearSlow()``.  Converting a linear index to multiple indexing subscripts is typically very expensive, so this provides a traits-based mechanism to enable efficient generic code for all array types.
 
-Returning to our collection of squares from above, we could instead define it as a subtype of an ``AbstractArray``::
+Returning to our collection of squares from above, we could instead define it as a subtype of an ``AbstractArray``:
 
-    immutable SquaresVector <: AbstractArray{Int, 1}
-        count::Int
-    end
-    Base.size(S::SquaresVector) = (S.count,)
-    Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
-    Base.getindex(S::SquaresVector, i::Int) = i*i
+.. doctest::
 
-Note that it's very important to specify the two parameters of the ``AbstractArray``; the first defines the :func:`eltype`, and the second defines the :func:`ndims`.  But that's it takes for our squares type to be an iterable, indexable, and completely functional array::
+    julia> immutable SquaresVector <: AbstractArray{Int, 1}
+               count::Int
+           end
+           Base.size(S::SquaresVector) = (S.count,)
+           Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+           Base.getindex(S::SquaresVector, i::Int) = i*i;
+
+Note that it's very important to specify the two parameters of the ``AbstractArray``; the first defines the :func:`eltype`, and the second defines the :func:`ndims`.  But that's it takes for our squares type to be an iterable, indexable, and completely functional array:
+
+.. testsetup::
+
+    srand(1);
+
+.. doctest::
 
     julia> s = SquaresVector(7)
     7-element SquaresVector:
@@ -163,28 +195,33 @@ Note that it's very important to specify the two parameters of the ``AbstractArr
 
     julia> s \ rand(7,2)
     1x2 Array{Float64,2}:
-     0.0116789  0.0155006
+     0.0151876  0.0179393
 
-As a more complicated example, let's define our own toy N-dimensional sparse-like array type built on top of ``Dict``::
+As a more complicated example, let's define our own toy N-dimensional sparse-like array type built on top of ``Dict``:
 
-    immutable SparseArray{T,N} <: AbstractArray{T,N}
-        data::Dict{NTuple{N,Int}, T}
-        dims::NTuple{N,Int}
-    end
-    SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims)
-    SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims)
+.. doctest::
 
-    Base.size(A::SparseArray) = A.dims
-    Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
-    # Define scalar indexing and indexed assignment up to 3-dimensions
-    Base.getindex{T}(A::SparseArray{T,1}, i1::Int)                   = get(A.data, (i1,), zero(T))
-    Base.getindex{T}(A::SparseArray{T,2}, i1::Int, i2::Int)          = get(A.data, (i1,i2), zero(T))
-    Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) =  get(A.data, (i1,i2,i3), zero(T))
-    Base.setindex!{T}(A::SparseArray{T,1}, v, i1::Int)                   = (A.data[(i1,)] = v)
-    Base.setindex!{T}(A::SparseArray{T,2}, v, i1::Int, i2::Int)          = (A.data[(i1,i2)] = v)
-    Base.setindex!{T}(A::SparseArray{T,3}, v, i1::Int, i2::Int, i3::Int) = (A.data[(i1,i2,i3)] = v)
+    julia> immutable SparseArray{T,N} <: AbstractArray{T,N}
+               data::Dict{NTuple{N,Int}, T}
+               dims::NTuple{N,Int}
+           end
+           SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims)
+           SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims)
+    SparseArray{T,N}
 
-Notice that this is a ``LinearSlow`` array, so we must manually define :func:`getindex` and :func:`setindex!` for each dimensionality we'd like to support.  Unlike the ``SquaresVector``, we are able to define :func:`setindex!`, and so we can mutate the array::
+    julia> Base.size(A::SparseArray) = A.dims
+           Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
+           # Define scalar indexing and indexed assignment up to 3-dimensions
+           Base.getindex{T}(A::SparseArray{T,1}, i1::Int)                   = get(A.data, (i1,), zero(T))
+           Base.getindex{T}(A::SparseArray{T,2}, i1::Int, i2::Int)          = get(A.data, (i1,i2), zero(T))
+           Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) =  get(A.data, (i1,i2,i3), zero(T))
+           Base.setindex!{T}(A::SparseArray{T,1}, v, i1::Int)                   = (A.data[(i1,)] = v)
+           Base.setindex!{T}(A::SparseArray{T,2}, v, i1::Int, i2::Int)          = (A.data[(i1,i2)] = v)
+           Base.setindex!{T}(A::SparseArray{T,3}, v, i1::Int, i2::Int, i3::Int) = (A.data[(i1,i2,i3)] = v);
+
+Notice that this is a ``LinearSlow`` array, so we must manually define :func:`getindex` and :func:`setindex!` for each dimensionality we'd like to support.  Unlike the ``SquaresVector``, we are able to define :func:`setindex!`, and so we can mutate the array:
+
+.. doctest::
 
     julia> A = SparseArray(Float64,3,3)
     3x3 SparseArray{Float64,2}:
@@ -194,9 +231,9 @@ Notice that this is a ``LinearSlow`` array, so we must manually define :func:`ge
 
     julia> rand!(A)
     3x3 SparseArray{Float64,2}:
-     0.418674  0.0901867  0.835166
-     0.85045   0.211394   0.0715443
-     0.569111  0.0535879  0.747284
+     0.28119   0.0203749  0.0769509
+     0.209472  0.287702   0.640396
+     0.251379  0.859512   0.873544
 
     julia> A[:] = 1:length(A); A
     3x3 SparseArray{Float64,2}:
@@ -204,14 +241,18 @@ Notice that this is a ``LinearSlow`` array, so we must manually define :func:`ge
      2.0  5.0  8.0
      3.0  6.0  9.0
 
-Since the ``SparseArray`` is mutable, we were able to override :func:`similar`.  This means that when a base function needs to return an array, it's able to return a new ``SparseArray``::
+Since the ``SparseArray`` is mutable, we were able to override :func:`similar`.  This means that when a base function needs to return an array, it's able to return a new ``SparseArray``:
+
+.. doctest::
 
     julia> A[1:2,:]
     2x3 SparseArray{Float64,2}:
      1.0  4.0  7.0
      2.0  5.0  8.0
 
-And now, in addition to all the iterable and indexable methods from above, these types can interact with eachother and use all the methods defined in the standard library for ``AbstractArrays``::
+And now, in addition to all the iterable and indexable methods from above, these types can interact with eachother and use all the methods defined in the standard library for ``AbstractArrays``:
+
+.. doctest::
 
     julia> A[SquaresVector(3)]
     3-element SparseArray{Float64,1}:
