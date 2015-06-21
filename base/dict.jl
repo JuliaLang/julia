@@ -192,6 +192,7 @@ in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
                             secret_table_token)
 
 keys(a::Associative) = KeyIterator(a)
+eachindex(a::Associative) = KeyIterator(a)
 values(a::Associative) = ValueIterator(a)
 
 function copy(a::Associative)

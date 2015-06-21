@@ -1892,3 +1892,8 @@ end
 @test_throws BoundsError Base.checkstring(b"abcdef", 3, 0)
 @test_throws BoundsError Base.checkstring(b"abcdef", 3, 7)
 @test_throws ArgumentError Base.checkstring(b"abcdef", 3, 1)
+
+# iteration
+@test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
+@test [i for i in eachindex("ḟøøƀäṙ")] == [1, 4, 6, 8, 10, 12]
+@test [x for x in enumerate("ḟøøƀäṙ")] == [(1, 'ḟ'), (2, 'ø'), (3, 'ø'), (4, 'ƀ'), (5, 'ä'), (6, 'ṙ')]
