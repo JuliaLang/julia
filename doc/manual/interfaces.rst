@@ -16,27 +16,27 @@ Required methods                                           Brief description
 :func:`next(iter, state) <next>`                           Returns the current item and the next state
 :func:`done(iter, state) <done>`                           Tests if there are any items remaining
 **Important optional methods**    **Default definition**   **Brief description**
-:func:`eltype(IterType) <eltype>` ``Any``                  The container's element type
-:func:`length(iter) <length>`     (*undefined*)            The container's length
+:func:`eltype(IterType) <eltype>` ``Any``                  The type the items returned by :func:`next`
+:func:`length(iter) <length>`     (*undefined*)            The number of items, if known
 ================================= ======================== ===========================================
 
-Sequential iteration is implemented by the methods :func:`start`, :func:`done`, and :func:`next`. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The :func:`start(iter)` method returns an initial ``state`` object that gets passed along to :func:`done(iter, state)`, which tests if there are any elements remaining, and :func:`next(iter, state)`, which returns a tuple containing the current element and an updated ``state``. The ``state`` object can be anything, and is generally considered to be an implementation detail private to the iterable object.
+Sequential iteration is implemented by the methods :func:`start`, :func:`done`, and :func:`next`. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The :func:`start(iter) <start>` method returns the initial state for the iterable object ``iter``. That state gets passed along to :func:`done(iter, state) <done>`, which tests if there are any elements remaining, and :func:`next(iter, state) <next>`, which returns a tuple containing the current element and an updated ``state``. The ``state`` object can be anything, and is generally considered to be an implementation detail private to the iterable object.
 
 Any object that has these three methods appropriately defined can be used in a ``for`` loop since the syntax::
 
     for i in iter   # or  "for i = iter"
-      # body
+        # body
     end
 
 is translated into::
 
     state = start(iter)
     while !done(iter, state)
-      (i, state) = next(iter, state)
-      # body
+        (i, state) = next(iter, state)
+        # body
     end
 
-A simple example is an iterable collection of square numbers with a defined length:
+A simple example is an iterable sequence of square numbers with a defined length:
 
 .. doctest::
 
@@ -76,7 +76,7 @@ Or even the mean and standard deviation:
     julia> mean(Squares(100)), std(Squares(100))
     (3383.5,3024.355854282583)
 
-There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` collection will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our collection, so we can extend :func:`length`, too:
+There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` sequence will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend :func:`length`, too:
 
 .. doctest::
 
@@ -112,7 +112,7 @@ Methods to implement                   Brief description
 :func:`endof(X) <endof>`               The last index, used in ``X[end]``
 ====================================== ==================================
 
-For the ``Squares`` collection above, we can easily compute the ``i``\ th element of the collection by squaring it.  We can expose this as an indexing expression ``S[i]``.  To opt into this behavior, ``Squares`` simply needs to define :func:`getindex`:
+For the ``Squares`` iterable above, we can easily compute the ``i``\ th element of the sequence by squaring it.  We can expose this as an indexing expression ``S[i]``.  To opt into this behavior, ``Squares`` simply needs to define :func:`getindex`:
 
 .. doctest::
 
@@ -131,6 +131,20 @@ Additionally, to support the syntax ``S[end]``, we must define :func:`endof` to 
            Squares(23)[end]
     529
 
+Note, though, that the above *only* defines :func:`getindex` with one integer index. Indexing with anything other than an ``Int`` will throw a ``MethodError`` saying that there was no matching method.  In order to support indexing with ranges or vectors of Ints, separate methods must be written:
+
+.. doctest::
+
+    julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
+           Base.getindex(S::Squares, I) = [S[i] for i in I]
+           Squares(10)[[3,4.,5]]
+    3-element Array{Int64,1}:
+      9
+     16
+     25
+
+While this is starting to support more of the :ref:`indexing operations supported by some of the builtin types <man-array-indexing>`, there's still quite a number of behaviors missing. This ``Squares`` sequence is starting to look more and more like a vector as we've added behaviors to it. Instead of defining all these behaviors ourselves, we can officially define it as a subtype of an ``AbstractArray``.
+
 Abstract Arrays
 ---------------
 
@@ -142,10 +156,10 @@ Methods to implement                                                            
 :func:`getindex(A, i::Int) <getindex>`                                                                  (if ``LinearFast``) Linear scalar indexing
 :func:`getindex(A, i1::Int, ..., iN::Int) <getindex>`                                                   (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexing
 :func:`setindex!(A, v, i::Int) <getindex>`                                                              (if ``LinearFast``) Scalar indexed assignment
-:func:`setindex!(A, v, i1::Int, ..., iN::Int) <getindex>`                                               (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexed assignment with N ``Int`` arguments
+:func:`setindex!(A, v, i1::Int, ..., iN::Int) <getindex>`                                               (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexed assignment
 **Optional methods**                                       **Default definition**                       **Brief description**
-:func:`getindex(A, I...) <getindex>`                       defined in terms of scalar :func:`getindex`  Multidimensional and nonscalar indexing
-:func:`setindex!(A, I...) <setindex!>`                     defined in terms of scalar :func:`setindex!` Multidimensional and nonscalar indexed assignment
+:func:`getindex(A, I...) <getindex>`                       defined in terms of scalar :func:`getindex`  :ref:`Multidimensional and nonscalar indexing <man-array-indexing>`
+:func:`setindex!(A, I...) <setindex!>`                     defined in terms of scalar :func:`setindex!` :ref:`Multidimensional and nonscalar indexed assignment <man-array-indexing>`
 :func:`start`/:func:`next`/:func:`done`                    defined in terms of scalar :func:`getindex`  Iteration
 :func:`length(A) <length>`                                 ``prod(size(A))``                            Number of elements
 :func:`similar(A) <similar>`                               ``similar(A, eltype(A), size(A))``           Return a mutable array with the same shape and element type
