@@ -59,13 +59,16 @@
     (append
      ;; vars assigned at the outer level
      (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
-     ;; vars declared const outside any scope block
-     (find-decls 'const e '())
+     ;; vars declared const or global outside any scope block
+     (find-decls 'const e)
+     (find-decls 'global e)
      ;; vars assigned anywhere, if they have been defined as global
      (filter defined-julia-global (find-possible-globals e))))
    (append
-    (find-decls 'local  e '())
-    (find-decls 'local! e '()))))
+    (if (null? (find-decls 'local e))
+	'()
+	(error "local declaration in global scope"))
+    (find-decls 'local! e))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
@@ -88,7 +91,7 @@
                       (th (julia-expand1
                            `(lambda ()
                               (scope-block
-                               (block ,@(map (lambda (v) `(global ,v)) gv)
+                               (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                       ,ex))))))
                  (if (null? (car (caddr th)))
                      ;; if no locals, return just body of function

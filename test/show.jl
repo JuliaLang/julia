@@ -34,15 +34,17 @@ macro test_repr(x)
         # strings get converted to string Exprs by the first show().
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
-        local x1 = parse($x)
-        local x2 = eval(parse(repr(x1)))
-        local x3 = eval(parse(repr(x2)))
-        x3 == x1 ? nothing : error(string(
-            "repr test failed:",
-            "\noriginal: ", $x,
-            "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-        ))
+        let
+            local x1 = parse($x)
+            local x2 = eval(parse(repr(x1)))
+            local x3 = eval(parse(repr(x2)))
+            x3 == x1 ? nothing : error(string(
+                "repr test failed:",
+                "\noriginal: ", $x,
+                "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+                "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
+                ))
+        end
     end
 end
 
