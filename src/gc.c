@@ -213,7 +213,7 @@ typedef buff_t gcval_t;
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (16 - (sizeof(jl_taggedvalue_t) % 16))
+#define GC_PAGE_OFFSET (16 - (sizeof_jl_taggedvalue_t % 16))
 
 // pool page metadata
 typedef struct _gcpage_t {
@@ -631,7 +631,7 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
 static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
-    sz += sizeof(jl_taggedvalue_t);
+    sz += sizeof_jl_taggedvalue_t;
 #ifdef MEMDEBUG
     return gc_setmark_big(o, mark_mode);
 #endif
@@ -2438,7 +2438,7 @@ void *reallocb(void *b, size_t sz)
 
 DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
-    size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    size_t allocsz = sz + sizeof_jl_taggedvalue_t;
     if (allocsz < sz) // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 #ifdef MEMDEBUG
@@ -2452,7 +2452,7 @@ DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 
 DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t);
+    const int sz = sizeof_jl_taggedvalue_t;
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2461,7 +2461,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 
 DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*), 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*), 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2470,7 +2470,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 
 DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 2, 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 2, 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2479,7 +2479,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 
 DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 3, 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 3, 16);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2681,7 +2681,7 @@ static void big_obj_stats(void)
 #else //JL_GC_MARKSWEEP
 DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
-    size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    size_t allocsz = sz + sizeof_jl_taggedvalue_t;
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     allocd_bytes += allocsz;
