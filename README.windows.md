@@ -77,7 +77,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 2. Build Julia and its dependencies from source.
   1. Open a new MSYS2 shell and clone the Julia sources
      ```
-    git clone https://github.com/JuliaLang/julia.git
+    git clone -b release-0.3 https://github.com/JuliaLang/julia.git
     cd julia
 ```
 
@@ -135,7 +135,7 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
 6. Build Julia and its dependencies from source.
   1. Get the Julia sources
      ```
-    git clone --recursive https://github.com/JuliaLang/julia.git
+    git clone --recursive -b release-0.3 https://github.com/JuliaLang/julia.git
     cd julia
 ```
      *Tips:*
@@ -190,7 +190,7 @@ zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
     mingw$BITS-libstdc++6 mingw$BITS-libgfortran3 mingw$BITS-libssp0
 # opensuse packages the mingw runtime dlls under sys-root/mingw/bin, not /usr/lib64/gcc
 cp /usr/$XC_HOST/sys-root/mingw/bin/*.dll /usr/lib*/gcc/$XC_HOST/*/
-git clone git://github.com/JuliaLang/julia.git julia
+git clone -b release-0.3 git://github.com/JuliaLang/julia.git
 cd julia
 make -j4 win-extras julia-ui-release
 export WINEDEBUG=-all # suppress wine fixme's
@@ -212,12 +212,13 @@ end
 
 Finally, the build and install process for Julia:
 
-1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
-2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
-3. `make`
-4. `make win-extras` (Necessary before running `make dist`p)
-5. `make dist`
-6. move the julia-*.exe installer to the target machine
+1. `git clone -b release-0.3 https://github.com/JuliaLang/julia.git julia-win32`
+2. `cd julia-win32`
+3. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
+4. `make`
+5. `make win-extras` (Necessary before running `make dist`)
+6. `make dist`
+7. move the julia-*.exe installer to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
 
