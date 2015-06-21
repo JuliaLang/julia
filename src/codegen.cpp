@@ -5812,7 +5812,8 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
     //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
     if (!jl_ExecutionEngine) {
-        jl_printf(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
+        jl_printf(JL_STDERR, "Critical error initializing llvm: %s\n",
+                  ErrorStr.c_str());
         exit(1);
     }
 #ifdef LLVM35
