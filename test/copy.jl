@@ -21,14 +21,20 @@ for (dest, src, bigsrc, emptysrc, res) in [
     @test copy!(copy(dest), 99, src(), 99, 0) == dest
 
     @test copy!(copy(dest), 1, emptysrc()) == dest
-    @test_throws BoundsError copy!(dest, 1, emptysrc(), 1)
+    x = emptysrc()
+    exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
+    @test_throws exc copy!(dest, 1, emptysrc(), 1)
 
-    for idx in [0, 4]
+    for idx in (0, 4)
         @test_throws BoundsError copy!(dest, idx, src())
         @test_throws BoundsError copy!(dest, idx, src(), 1)
         @test_throws BoundsError copy!(dest, idx, src(), 1, 1)
-        @test_throws BoundsError copy!(dest, 1, src(), idx)
-        @test_throws BoundsError copy!(dest, 1, src(), idx, 1)
+        x = src()
+        exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
+        @test_throws exc copy!(dest, 1, x, idx)
+        x = src()
+        exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
+        @test_throws exc copy!(dest, 1, x, idx, 1)
     end
 
     @test_throws BoundsError copy!(dest, 1, src(), 1, -1)
