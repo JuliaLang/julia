@@ -1301,11 +1301,11 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        bool isglob;
+        bool isglob = true;
         if (ctx) {
             isglob = is_global(sym, ctx);
         }
-        else {
+        else if (ast) {
             isglob = !in_vinfo(sym, jl_lam_vinfo(ast)) && !in_vinfo(sym, jl_lam_capt(ast));
         }
         if (isglob) {
