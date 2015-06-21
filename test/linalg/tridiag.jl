@@ -72,6 +72,18 @@ let n = 12 #Size of matrix problem to test
             w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
             evecs = LAPACK.stein!(a, b, w, iblock, isplit)
             test_approx_eq_vecs(v, evecs)
+
+            debug && println("stegr! call with index range")
+            F = eigfact(SymTridiagonal(a, b),1:2)
+            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
+            @test_approx_eq F[:vectors] fF[:vectors]
+            @test_approx_eq F[:values] fF[:values]
+
+            debug && println("stegr! call with value range")
+            F = eigfact(SymTridiagonal(a, b),0.0,1.0)
+            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
+            @test_approx_eq F[:vectors] fF[:vectors]
+            @test_approx_eq F[:values] fF[:values]
         end
 
         debug && println("Binary operations")
@@ -92,6 +104,10 @@ let n = 12 #Size of matrix problem to test
         @test_approx_eq full(α*A) α*full(A)
         @test_approx_eq full(A*α) full(A)*α
         @test_approx_eq full(A/α) full(A)/α
+
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
     end
 
     debug && println("Tridiagonal matrices")
