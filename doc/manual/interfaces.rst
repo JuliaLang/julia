@@ -6,6 +6,8 @@
 
 A lot of the power and extensibility in Julia comes from a collection of informal interfaces.  By extending a few specific methods to work for a custom type, objects of that type not only receive those functionalities, but they are also able to be used in other methods that are written to generically build upon those behaviors.
 
+.. _man-interfaces-iteration:
+
 Iteration
 ---------
 
@@ -22,7 +24,7 @@ Required methods                                           Brief description
 
 Sequential iteration is implemented by the methods :func:`start`, :func:`done`, and :func:`next`. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The :func:`start(iter) <start>` method returns the initial state for the iterable object ``iter``. That state gets passed along to :func:`done(iter, state) <done>`, which tests if there are any elements remaining, and :func:`next(iter, state) <next>`, which returns a tuple containing the current element and an updated ``state``. The ``state`` object can be anything, and is generally considered to be an implementation detail private to the iterable object.
 
-Any object that has these three methods appropriately defined can be used in a ``for`` loop since the syntax::
+Any object defines these three methods is iterable and can be used in the :ref:`many functions that rely upon iteration <stdlib-collections-iteration>`. It can also be used directly in a ``for`` loop since the syntax::
 
     for i in iter   # or  "for i = iter"
         # body
@@ -101,6 +103,8 @@ While we can rely upon generic implementations, we can also extend specific meth
 
 This is a very common pattern throughout the Julia standard library: a small set of required methods define an informal interface that enable many fancier behaviors.  In some cases, types will want to additionally specialize those extra behaviors when they know a more efficient algorithm can be used in their specific case.
 
+.. _man-interfaces-indexing:
+
 Indexing
 --------
 
@@ -145,6 +149,8 @@ Note, though, that the above *only* defines :func:`getindex` with one integer in
 
 While this is starting to support more of the :ref:`indexing operations supported by some of the builtin types <man-array-indexing>`, there's still quite a number of behaviors missing. This ``Squares`` sequence is starting to look more and more like a vector as we've added behaviors to it. Instead of defining all these behaviors ourselves, we can officially define it as a subtype of an ``AbstractArray``.
 
+.. _man-interfaces-abstractarray:
+
 Abstract Arrays
 ---------------
 
@@ -168,13 +174,13 @@ Methods to implement                                                            
 :func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>` ``Array(S, dims)``                           Return a mutable array with the specified element type and dimensions
 ========================================================== ============================================ =======================================================================================
 
-If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.
+If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.  See the :ref:`arrays manual page <man-arrays>` and :ref:`standard library section <stdlib-arrays>` for more supported methods.
 
 A key part in defining an ``AbstractArray`` subtype is :func:`Base.linearindexing`. Since indexing is such an important part of an array and often occurs in hot loops, it's important to make both indexing and indexed assignment as efficient as possible.  Array data structures are typically defined in one of two ways: either it most efficiently accesses its elements using just one index (linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.  These two modalities are identified by Julia as ``Base.LinearFast()`` and ``Base.LinearSlow()``.  Converting a linear index to multiple indexing subscripts is typically very expensive, so this provides a traits-based mechanism to enable efficient generic code for all array types.
 
 This distinction determines which scalar indexing methods the type must define. ``LinearFast()`` arrays are simple: just define :func:`getindex(A::ArrayType, i::Int) <getindex>`.  When the array is subsequently indexed with a multidimensional set of indices, the fallback :func:`getindex(A::AbstractArray, I...)` efficiently converts the indices into one linear index and then calls the above method. ``LinearSlow()`` arrays, on the other hand, require methods to be defined for each supported dimensionality with ``ndims(A)`` ``Int`` indices.  For example, the builtin ``SparseMatrix`` type only supports two dimensions, so it just defines :func:`getindex(A::SparseMatrix, i::Int, j::Int)`.  The same holds for :func:`setindex!`.
 
-Returning to our collection of squares from above, we could instead define it as a subtype of an ``AbstractArray``:
+Returning to the sequence of squares from above, we could instead define it as a subtype of an ``AbstractArray{Int, 1}``:
 
 .. doctest::
 

@@ -4,6 +4,8 @@
  Collections and Data Structures
 *********************************
 
+.. _stdlib-collections-iteration:
+
 Iteration
 ---------
 
@@ -11,18 +13,21 @@ Sequential iteration is implemented by the methods :func:`start`, :func:`done`, 
 :func:`next`. The general ``for`` loop::
 
     for i = I   # or  "for i in I"
-      # body
+        # body
     end
 
 is translated into::
 
     state = start(I)
     while !done(I, state)
-      (i, state) = next(I, state)
-      # body
+        (i, state) = next(I, state)
+        # body
     end
 
-The ``state`` object may be anything, and should be chosen appropriately for each iterable type.
+The ``state`` object may be anything, and should be chosen appropriately for
+each iterable type. See the :ref:`manual section on the iteration interface
+<man-interfaces-iteration>` for more details about defining a custom iterable
+type.
 
 .. function:: start(iter) -> state
 
