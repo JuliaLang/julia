@@ -205,12 +205,6 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     return jl_nothing;
 }
 
-static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
-{
-    jl_value_t *v = jl_get_global(m, s);
-    return (v != NULL && jl_typeof(v)==(jl_value_t*)jl_intrinsic_type);
-}
-
 // module referenced by TopNode from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -225,21 +219,21 @@ DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
+int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
-    if (e->head == call_sym &&
-        ((jl_is_symbol(e0) && is_intrinsic(m,(jl_sym_t*)e0)) ||
-         (jl_is_topnode(e0) && is_intrinsic(jl_base_relative_to(m),(jl_sym_t*)jl_fieldref(e0,0))) ||
-         (jl_is_globalref(e0) && is_intrinsic(jl_globalref_mod(e0), jl_globalref_name(e0)))))
-        return 1;
+    if (e->head == call_sym) {
+        jl_value_t *sv = jl_static_eval(e0, NULL, m, jl_emptysvec, ast, 0, 0);
+        if (sv && jl_typeis(sv, jl_intrinsic_type))
+            return 1;
+    }
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics((jl_expr_t*)a, m))
+        if (jl_is_expr(a) && jl_has_intrinsics(ast, (jl_expr_t*)a, m))
             return 1;
     }
     return 0;
@@ -247,7 +241,7 @@ int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops, jl_module_t *m)
+int jl_eval_with_compiler_p(jl_value_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m)
 {
     assert(jl_is_expr(expr));
     if (expr->head==body_sym && compileloops) {
@@ -291,7 +285,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops, jl_module_t *m)
             }
         }
     }
-    if (jl_has_intrinsics(expr, m)) return 1;
+    if (jl_has_intrinsics(ast, expr, m)) return 1;
     return 0;
 }
 
@@ -499,7 +493,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_is_expr(thk->ast));
-        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
         if (!ewc) {
             if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
                 // interpreter doesn't handle closure environment
@@ -508,7 +502,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         }
     }
     else {
-        if (head && jl_eval_with_compiler_p((jl_expr_t*)ex, fast, jl_current_module)) {
+        if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
