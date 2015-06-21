@@ -2358,6 +2358,24 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         return 1;
     }
 
+    if (jl_is_typevar(a)) {
+        if (jl_is_typevar(b)) {
+            return
+                jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub,
+                              (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
+                jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb,
+                              (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
+        }
+        if (invariant) {
+            return 0;
+        }
+        return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0);
+    }
+    if (jl_is_typevar(b)) {
+        return jl_subtype_le(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
+            jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb, a, 0, 0);
+    }
+
     size_t i;
     if (!ta && jl_is_uniontype(a)) {
         jl_svec_t *ap = ((jl_uniontype_t*)a)->types;
@@ -2477,23 +2495,6 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         return 0;
     }
 
-    if (jl_is_typevar(a)) {
-        if (jl_is_typevar(b)) {
-            return
-                jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub,
-                              (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
-                jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb,
-                              (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
-        }
-        if (invariant) {
-            return 0;
-        }
-        return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0);
-    }
-    if (jl_is_typevar(b)) {
-        return jl_subtype_le(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
-            jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb, a, 0, 0);
-    }
     if ((jl_datatype_t*)a == jl_any_type) return 0;
 
     return jl_egal(a, b);

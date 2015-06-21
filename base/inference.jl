@@ -1120,12 +1120,12 @@ function type_too_complex(t::ANY, d)
     if d > MAX_TYPE_DEPTH
         return true
     end
-    if isa(t,Union)
+    if isa(t,TypeVar)
+        return type_too_complex(t.lb,d+1) || type_too_complex(t.ub,d+1)
+    elseif isa(t,Union)
         p = t.types
     elseif isa(t,DataType)
         p = t.parameters
-    elseif isa(t,TypeVar)
-        return type_too_complex(t.lb,d+1) || type_too_complex(t.ub,d+1)
     else
         return false
     end
