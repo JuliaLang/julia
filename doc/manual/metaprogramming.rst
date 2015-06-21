@@ -525,7 +525,7 @@ is to call the :func:`show` function within the macro body::
     julia> @showarg(1+1)
     :(1 + 1)
 
-    julia> @showarg(println("Yo!")
+    julia> @showarg(println("Yo!"))
     :(println("Yo!"))
 
 
