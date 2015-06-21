@@ -185,7 +185,7 @@ end
 function gen_broadcast_function(genbody::Function, nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
-    @eval begin
+    @eval let
         local _F_
         function _F_(B, $(As...))
             $body
@@ -197,7 +197,7 @@ end
 function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
-    @eval begin
+    @eval let
         local _F_
         function _F_(B::BitArray, $(As...))
             $body
