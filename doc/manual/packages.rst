@@ -593,13 +593,18 @@ you to support both the stable version and breaking changes found in the develop
 to use this solution, you will need to add ``Compat`` to your ``REQUIRE`` file. In this case, you will still
 have ``julia 0.x`` in your ``REQUIRE``. The ``x`` is the floor version of what your package supports.
 
-It is not recommended that you abandon support for the current version ``0.x`` but if you choose to do so, you
-can add ``julia 0.y-`` to your ``REQUIRE``. The ``-`` at the end of the version number means you support
-pre-release versions of that specific version from the very first commit. Just remember to change the
-``julia 0.y-`` to ``julia 0.y`` in your ``REQUIRE`` file once ``0.y`` is officially released. If you don't
-edit the dash cruft you are suggesting that you support both the development and stable versions of the same
-version number! That would be madness.  See the `Requirements Specification <#man-package-requirements>`_
-for the full format of ``REQUIRE``.
+You might also have no interest in supporting the development version of Julia. Just as you can add a floor
+to the version you expect your users to be on, you can set an upper bound. In this case, you would put
+``julia 0.x 0.y-`` in your ``REQUIRE`` file.  The ``-`` at the end of the version number means pre-release
+versions of that specific version from the very first commit. By setting it as the ceiling, you mean the code
+supports everything up to but not including the ceiling version.
+
+Another scenario is that you are writing the bulk of the code for your package with Julia ``0.y`` and do
+not want to support the current stable version of Julia. If you choose to do this, simply add ``julia 0.y-``
+to your ``REQUIRE``. Just remember to change the ``julia 0.y-`` to ``julia 0.y`` in your ``REQUIRE`` file once
+``0.y`` is officially released. If you don't edit the dash cruft you are suggesting that you support both the
+development and stable versions of the same version number! That would be madness.  See the
+`Requirements Specification <#man-package-requirements>`_ for the full format of ``REQUIRE``.
 
 Guidelines for naming a package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
