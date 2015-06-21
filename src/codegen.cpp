@@ -1134,8 +1134,10 @@ const jl_value_t *jl_dump_function_asm(void *f)
 
 typedef std::map<std::string,std::vector<GlobalVariable*> > logdata_t;
 static logdata_t coverageData;
+// map file => pc => line no
+static std::map<std::string,std::vector<std::set<int> > > line_map;
 
-static void coverageVisitLine(std::string filename, int line)
+static void coverageVisitLine(std::string filename, int line, int stmt)
 {
     if (filename == "" || filename == "none" || filename == "no file")
         return;
@@ -1143,15 +1145,23 @@ static void coverageVisitLine(std::string filename, int line)
     if (it == coverageData.end()) {
         coverageData[filename] = std::vector<GlobalVariable*>(0);
     }
+    std::map<std::string,std::vector<std::set<int> > >::iterator line_it = line_map.find(filename);
+    if (line_it == line_map.end()) {
+        line_map[filename] = std::vector<std::set<int> >(0);
+    }
     std::vector<GlobalVariable*> &vec = coverageData[filename];
-    if (vec.size() <= (size_t)line)
-        vec.resize(line+1, NULL);
-    if (vec[line] == NULL) {
-        vec[line] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
+    std::vector< std::set<int> > &lines = line_map[filename];
+    if (vec.size() <= (size_t)stmt)
+        vec.resize(stmt+1, NULL);
+    if (lines.size() <= (size_t)line)
+        lines.resize(line+1, std::set<int>());
+    if (vec[stmt] == NULL) {
+        vec[stmt] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
                                                  GlobalVariable::InternalLinkage,
                                                  ConstantInt::get(T_int64,0), "lcnt"));
     }
-    GlobalVariable *v = prepare_global(vec[line]);
+    lines[line].insert(stmt);
+    GlobalVariable *v = prepare_global(vec[stmt]);
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
                                           ConstantInt::get(T_int64,1)),
                         v);
@@ -1159,7 +1169,20 @@ static void coverageVisitLine(std::string filename, int line)
 
 extern "C" int isabspath(const char *in);
 
-void write_log_data(logdata_t logData, const char *extension)
+static int get_global_value(GlobalVariable* gv)
+{
+    if (gv) {
+#ifdef USE_MCJIT
+        int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress(gv->getName());
+#else
+        int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
+#endif
+        return *p;
+    }
+    return -1;
+}
+
+void write_log_data(logdata_t logData, const char *extension, bool use_linemap)
 {
     std::string base = std::string(jl_options.julia_home);
     base = base + "/../share/julia/base/";
@@ -1184,15 +1207,21 @@ void write_log_data(logdata_t logData, const char *extension)
                         inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                     }
                     int value = -1;
-                    if ((size_t)l < values.size()) {
-                        GlobalVariable *gv = values[l];
-                        if (gv) {
-#ifdef USE_MCJIT
-                            int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress(gv->getName());
-#else
-                            int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
-#endif
-                            value = *p;
+                    if (use_linemap) {
+                        if (l < line_map[filename].size()) {
+                            std::set<int> stmts = line_map[filename][l];
+                            std::set<int>::iterator it = stmts.begin();
+                            for (; it != stmts.end(); it++) {
+                                int stmt = *it;
+                                if ((size_t)stmt < values.size()) {
+                                    int val = get_global_value(values[stmt]);
+                                    value = (value == -1 || val < value) ? val : value;
+                                }
+                            }
+                        }
+                    } else {
+                        if ((size_t)l < values.size()) {
+                            value = get_global_value(values[l]);
                         }
                     }
                     outf.width(9);
@@ -1213,7 +1242,7 @@ void write_log_data(logdata_t logData, const char *extension)
 
 extern "C" void jl_write_coverage_data(void)
 {
-    write_log_data(coverageData, ".cov");
+    write_log_data(coverageData, ".cov", true);
 }
 
 // Memory allocation log (malloc_log)
@@ -1272,7 +1301,7 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
 
 extern "C" void jl_write_malloc_log(void)
 {
-    write_log_data(mallocData, ".mem");
+    write_log_data(mallocData, ".mem", false);
 }
 
 // --- code gen for intrinsic functions ---
@@ -4744,12 +4773,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int prevlno = -1;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
+        if (do_coverage && !jl_is_labelnode(stmt))
+            coverageVisitLine(filename, ctx.lineno, i);
         if (jl_is_linenode(stmt)) {
             lno = jl_linenode_line(stmt);
             if (ctx.debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
-            if (do_coverage)
-                coverageVisitLine(filename, lno);
             ctx.lineno = lno;
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
@@ -4796,8 +4825,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 }
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, scope, NULL));
             }
-            if (do_coverage)
-                coverageVisitLine(filename, lno);
             ctx.lineno = lno;
         }
         if (jl_is_labelnode(stmt)) {
