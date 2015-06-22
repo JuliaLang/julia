@@ -1041,7 +1041,7 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    blk
+    Expr(:let, blk)
 end
 
 macro printf(args...)
@@ -1059,9 +1059,9 @@ macro sprintf(args...)
     !isempty(args) || throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
-    blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(blk.args, :(takebuf_string(out)))
-    blk
+    letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
+    push!(letexpr.args[1].args, :(takebuf_string(out)))
+    letexpr
 end
 
 end # module

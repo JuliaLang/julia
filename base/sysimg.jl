@@ -149,9 +149,8 @@ include("multidimensional.jl")
 
 include("primes.jl")
 
-begin
-    SOURCE_PATH = ""
-    include = function(path)
+let SOURCE_PATH = ""
+    global include = function(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path

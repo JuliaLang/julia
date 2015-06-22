@@ -756,7 +756,7 @@ end
 
 function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_sparse::Bool)
     body = genbody(f, is_first_sparse)
-    @eval begin
+    @eval let
         local _F_
         function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
             $body
