@@ -226,7 +226,7 @@ int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m)
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym) {
-        jl_value_t *sv = jl_static_eval(e0, NULL, m, jl_emptysvec, ast, 0, 0);
+        jl_value_t *sv = jl_static_eval(e0, NULL, m, (jl_value_t*)jl_emptysvec, ast, 0, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
@@ -241,7 +241,7 @@ int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-int jl_eval_with_compiler_p(jl_value_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m)
+int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m)
 {
     assert(jl_is_expr(expr));
     if (expr->head==body_sym && compileloops) {
@@ -493,7 +493,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_is_expr(thk->ast));
-        ewc = jl_eval_with_compiler_p(thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
         if (!ewc) {
             if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
                 // interpreter doesn't handle closure environment
