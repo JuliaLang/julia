@@ -142,3 +142,28 @@ let l = ReentrantLock()
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
+
+# timing macros
+
+# test that they don't introduce global vars
+global v11801, t11801, names_before_timing
+names_before_timing = names(current_module(), true)
+
+let t = @elapsed 1+1
+    @test isa(t, Real) && t >= 0
+end
+
+let
+    val, t = @timed sin(1)
+    @test val == sin(1)
+    @test isa(t, Real) && t >= 0
+end
+
+# problem after #11801 - at global scope
+t11801 = @elapsed 1+1
+@test isa(t11801,Real) && t11801 >= 0
+v11801, t11801 = @timed sin(1)
+@test v11801 == sin(1)
+@test isa(t11801,Real) && t11801 >= 0
+
+@test names(current_module(), true) == names_before_timing
