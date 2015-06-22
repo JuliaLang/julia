@@ -5,7 +5,6 @@ immutable JLOptions
     quiet::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
-    build_path::Ptr{UInt8}
     eval::Ptr{UInt8}
     print::Ptr{UInt8}
     postboot::Ptr{UInt8}
@@ -23,13 +22,15 @@ immutable JLOptions
     malloc_log::Int8
     opt_level::Int8
     check_bounds::Int8
-    dumpbitcode::Int8
     depwarn::Int8
     can_inline::Int8
     fast_math::Int8
     worker::Int8
-    bindto::Ptr{UInt8}
     handle_signals::Int8
+    bindto::Ptr{UInt8}
+    outputbc::Ptr{UInt8}
+    outputo::Ptr{UInt8}
+    outputji::Ptr{UInt8}
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
