@@ -12,6 +12,10 @@ macro doc (args...)
   _expand_(args...)
 end
 
-setexpand!((args...) -> push!(docs, args))
+setexpand!() do ex
+  str, obj = ex.args[1], ex.args[2]
+  push!(docs, (current_module(), str, obj))
+  return esc(obj)
+end
 
 end
