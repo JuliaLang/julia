@@ -243,7 +243,7 @@ include("client.jl")
 # Documentation
 
 include("markdown/Markdown.jl")
-include("docs.jl")
+include("docs/Docs.jl")
 using .Docs
 using .Markdown
 
@@ -303,7 +303,7 @@ import .Dates: Date, DateTime, now
 include("deprecated.jl")
 
 # Some basic documentation
-include("basedocs.jl")
+include("docs/basedocs.jl")
 
 function __init__()
     # Base library init
