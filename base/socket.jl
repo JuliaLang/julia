@@ -314,7 +314,7 @@ function TCPServer()
     associate_julia_struct(this.handle, this)
     finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
+                eventloop(),this.handle)
     if err != 0
         #TODO: this codepath is not currently tested
         Libc.free(this.handle)
@@ -382,7 +382,7 @@ function UDPSocket()
     this = UDPSocket(Libc.malloc(_sizeof_uv_udp))
     associate_julia_struct(this.handle, this)
     err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
+                eventloop(),this.handle)
     finalizer(this, uvfinalize)
     if err != 0
         #TODO: this codepath is not currently tested

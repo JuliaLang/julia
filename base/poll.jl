@@ -8,11 +8,11 @@ type FileMonitor
     function FileMonitor(cb, file)
         handle = Libc.malloc(_sizeof_uv_fs_event)
         ccall(:uv_fs_event_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
+        disassociate_julia_struct(handle)
         err = ccall(:uv_fs_event_start, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Int32),
                     handle, uv_jl_fseventscb::Ptr{Void}, file, 0)
         if err < 0
             ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
-            disassociate_julia_struct(handle)
             ccall(:jl_forceclose_uv, Void, (Ptr{Void},), handle)
             throw(UVError("FileMonitor",err))
         end
