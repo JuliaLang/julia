@@ -383,7 +383,7 @@ for i = 1 : 3
     @test isequal(a', permutedims(a, [2, 1]))
 end
 
-begin
+let
     local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
     A = ones(Int,2,3,4)
     A1 = reshape(repmat([1,2],1,12),2,3,4)
@@ -642,7 +642,7 @@ B = cat(3, 1, 2, 3)
 @test isequal(symdiff(Int64[]), Int64[])
 
 # mapslices
-begin
+let
     local a,h,i
     a = rand(5,5)
     h = mapslices(v -> hist(v,0:0.1:1)[2], a, 1)
@@ -725,7 +725,7 @@ a[a] = [4,5,6]
 @test lexcmp([1, 1], [1]) == 1
 
 # sort on arrays
-begin
+let
     local a = rand(3,3)
 
     asr = sortrows(a)

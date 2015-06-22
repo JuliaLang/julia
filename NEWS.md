@@ -35,9 +35,6 @@ New language features
 Language changes
 ----------------
 
-  * Unsigned `BigInt` literal syntax has been removed ([#11105]).
-    Unsigned literals larger than `UInt128` now throw a syntax error.
-
   * Tuple types are now written as `Tuple{A, B}` instead of as `(A, B)`.
     Tuples of bits types are inlined into structs and arrays, like other
     immutable types.
@@ -78,6 +75,9 @@ Language changes
   * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
     ([#3737], [#2488], [#8599]).
 
+  * Unsigned `BigInt` literal syntax has been removed ([#11105]).
+    Unsigned literals larger than `UInt128` now throw a syntax error.
+
   * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
      in favor of using an explicit `throw` ([#9690]).
 
@@ -85,11 +85,11 @@ Language changes
 
   * `String` is renamed to `AbstractString` ([#8872]).
 
-  * `None` is deprecated; use `Union()` instead ([#8423]).
+  * `None` is deprecated; use `Union{}` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
 
-  * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075])
+  * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075]).
 
   * `Dict` literal syntax `[a=>b,c=>d]` is replaced by `Dict(a=>b,c=>d)`,
     `{a=>b}` is replaced by `Dict{Any,Any}(a=>b)`, and
@@ -121,6 +121,9 @@ Language changes
 
   * Unions of types should now be written with curly braces instead of parentheses, i.e.
     `Union{Type1, Type2}` instead of `Union(Type1, Type2)` ([#11432]).
+
+  * The keyword `local` is no longer allowed in global scope. Use `let` instead of
+    `begin` to create a new scope from the top level ([#7234], [#10472]).
 
 Command line option changes
 ---------------------------

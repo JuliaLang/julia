@@ -268,8 +268,9 @@ type FooFoo{A,B} y::FooFoo{A} end
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
 
-x = (2,3)
-@test +(x...) == 5
+let x = (2,3)
+    @test +(x...) == 5
+end
 
 # bits types
 if WORD_SIZE == 64
@@ -397,6 +398,30 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# issue #7234
+begin
+    glob_x2 = 24
+    f7234() = (glob_x2 += 1)
+end
+@test_throws UndefVarError f7234()
+begin
+    global glob_x2 = 24
+    f7234() = (glob_x2 += 1)
+end
+@test_throws UndefVarError f7234()
+# existing globals can be inherited by non-function blocks
+for i = 1:2
+    glob_x2 += 1
+end
+@test glob_x2 == 26
+# globals declared as such in a non-global scope are inherited
+let
+    global glob_x3 = 11
+    f7234_2() = (glob_x3 += 1)
+    f7234_2()
+end
+@test glob_x3 == 12
+
 # issue #7272
 @test expand(parse("let
               global x = 2
@@ -443,7 +468,7 @@ end
 @test (true ? 1 : false ? 2 : 3) == 1
 
 # issue #7252
-begin
+let
     local a
     1 > 0 ? a=2 : a=3
     @test a == 2
@@ -460,7 +485,7 @@ type UndefField
     UndefField() = new()
 end
 
-begin
+let
     local a
     a = cell(2)
     @test !isdefined(a,1) && !isdefined(a,2)
@@ -483,7 +508,7 @@ begin
     @test_throws TypeError isdefined(2)
 end
 
-begin
+let
     local a
     a = cell(2)
     @test !isassigned(a,1) && !isassigned(a,2)
@@ -506,7 +531,7 @@ Type11167{Float32,5}
 @test !isassigned(Type11167.name.cache, 3)
 
 # dispatch
-begin
+let
     local foo, bar, baz
     foo(x::Tuple{Vararg{Any}})=0
     foo(x::Tuple{Vararg{Integer}})=1
@@ -525,7 +550,7 @@ begin
     @test baz(Rational{Int}) == 2
 end
 
-begin
+let
     local mytype
     function mytype(vec)
         convert(Vector{Tuple{ASCIIString, DataType}}, vec)
@@ -536,7 +561,7 @@ end
 
 type MyArray{N} <: AbstractArray{Int, N}
 end
-begin
+let
     local x
     x = MyArray{1}()
     foob(x::AbstractArray)=0
@@ -544,7 +569,7 @@ begin
     @test foob(x) == 1
 end
 
-begin
+let
     local f, g, a
     f{T}(a::Vector{Vector{T}}) = a
     g{T}(a::Vector{Vector{T}}) = a
@@ -555,7 +580,7 @@ end
 
 type _AA{T}; a::T; end
 typealias _AoA{T} _AA{_AA{T}}
-begin
+let
     local g, a
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
@@ -563,7 +588,7 @@ begin
 end
 
 # dispatch using Val{T}. See discussion in #9452 for instances vs types
-begin
+let
     local firstlast
     firstlast(::Type{Val{true}}) = "First"
     firstlast(::Type{Val{false}}) = "Last"
@@ -573,7 +598,7 @@ begin
 end
 
 # x::Vararg{Any} declarations
-begin
+let
     local f1, f2, f3
     f1(x...) = [x...]
     f2(x::Vararg{Any}) = [x...]
@@ -623,7 +648,7 @@ begin
         try
             return 5
         finally
-            glo = 18
+            global glo = 18
         end
     end
     @test retfinally() == 5
@@ -633,9 +658,8 @@ begin
 end
 
 # finalizers
-let
-    A = [1]
-    x = 0
+let A = [1]
+    local x = 0
     finalizer(A, a->(x+=1))
     finalize(A)
     @test x == 1
@@ -684,7 +708,7 @@ let a = []
 end
 
 # chained and multiple assignment behavior (issue #2913)
-begin
+let
     local x, a, b, c, d, e
     x = (a,b,b,b,e) = (1,2,3,4,5)
     @test x === (1,2,3,4,5)
@@ -710,7 +734,7 @@ begin
 end
 
 # accessing fields by index
-begin
+let
     local z = complex(3, 4)
     v = Int[0,0]
     for i=1:2
@@ -736,7 +760,7 @@ end
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
 # issue #814
-begin
+let
     local MatOrNot, my_func, M
     typealias MatOrNot{T} Union{AbstractMatrix{T}, Vector{Union{}}}
     my_func{T<:Real}(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) = 0
@@ -744,7 +768,7 @@ begin
     @test my_func(Union{}[], M, M) == 0
 end
 
-begin
+let
     local my_func, a, c
     my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
     my_func{T}(x::T, P::Vector{T}) = 1
@@ -757,7 +781,7 @@ begin
     @test my_func(a,c)==1
 end
 
-begin
+let
     local baar, foor, boor
     # issue #1131
     baar(x::DataType) = 0
@@ -789,7 +813,7 @@ import Base.*
 
 *{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
 
-begin
+let
     local a,b
     a = SI{0,0,1}(1.0) * SI{1,2,0}(2.0)
     b = SI{0,0,1}(1.0) * SI{1,-2,0}(2.0)
@@ -798,7 +822,7 @@ begin
 end
 
 # pointer arithmetic
-begin
+let
    local a,b,c
    a = C_NULL
    b = C_NULL + 1
@@ -816,7 +840,7 @@ begin
 end
 
 # pull request 1270
-begin
+let
     local a,p, a2,p2
     a = [11,12,13]
     p = pointer(a)
@@ -834,7 +858,7 @@ end
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
-begin
+let
     local a, aa
     a = [1,2,3]
     aa = pointer_to_array(pointer(a), length(a))
@@ -852,7 +876,7 @@ immutable FooBar
     foo::Int
     bar::Int
 end
-begin
+let
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
     p = pointer(X)
@@ -862,7 +886,7 @@ begin
 end
 
 # issue #1287, combinations of try, catch, return
-begin
+let
     local f, g
 
     function f()
@@ -886,7 +910,7 @@ end
 type S1442{T}
 end
 
-begin
+let
     local f1442
     f1442(::DataType) = 1
     f1442{T}(::Type{S1442{T}}) = 2
@@ -1016,7 +1040,7 @@ end
 @test B2365{Int}(0).v === 0
 
 # issue #2352
-begin
+let
     local Sum, n
     Sum=0.0; for n=1:2:10000
         Sum += -1/n + 1/(n+1)
@@ -1039,7 +1063,7 @@ immutable Foo2517; end
 
 # issue #1474
 type X1474{a,b} end
-begin
+let
     local Y
     Y{A,B}(::Type{X1474{A,B}}) = 1
     Y{A}(::Type{X1474{A}}) = 2
@@ -1490,11 +1514,9 @@ f5254(a, b) = 1
 @test f5254(Bottom, 1) == 1
 
 # evaluate arguments left-to-right, including assignments. issue #4990
-let
-    i = 0
+let i = 0, x = 65
     @test (i, i+=1, i+=1) === (0, 1, 2)
     @test i == 2
-    x = 65
     @test [x, x|=0x20] == [65, 97]
 end
 
