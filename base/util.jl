@@ -167,35 +167,41 @@ end
 
 macro time(ex)
     quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        local bytes = diff.total_allocd + diff.allocd
-        local allocs = diff.malloc + diff.realloc + diff.poolalloc
-        time_print(elapsedtime, bytes, diff.total_time, allocs)
-        val
+        let
+            local stats = gc_num()
+            local elapsedtime = time_ns()
+            local val = $(esc(ex))
+            elapsedtime = time_ns() - elapsedtime
+            local diff = GC_Diff(gc_num(), stats)
+            local bytes = diff.total_allocd + diff.allocd
+            local allocs = diff.malloc + diff.realloc + diff.poolalloc
+            time_print(elapsedtime, bytes, diff.total_time, allocs)
+            val
+        end
     end
 end
 
 macro timev(ex)
     quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats))
-        val
+        let
+            local stats = gc_num()
+            local elapsedtime = time_ns()
+            local val = $(esc(ex))
+            elapsedtime = time_ns() - elapsedtime
+            timev_print(elapsedtime, GC_Diff(gc_num(), stats))
+            val
+        end
     end
 end
 
 # print nothing, return elapsed time
 macro elapsed(ex)
     quote
-        local t0 = time_ns()
-        local val = $(esc(ex))
-        (time_ns()-t0)/1e9
+        let
+            local t0 = time_ns()
+            local val = $(esc(ex))
+            (time_ns()-t0)/1e9
+        end
     end
 end
 
@@ -223,12 +229,14 @@ end
 # print nothing, return value, elapsed time, bytes allocated & gc time
 macro timed(ex)
     quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.total_allocd + diff.allocd, diff.total_time/1e9, diff
+        let
+            local stats = gc_num()
+            local elapsedtime = time_ns()
+            local val = $(esc(ex))
+            elapsedtime = time_ns() - elapsedtime
+            diff = GC_Diff(gc_num(), stats)
+            val, elapsedtime/1e9, diff.total_allocd + diff.allocd, diff.total_time/1e9, diff
+        end
     end
 end
 
