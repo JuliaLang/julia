@@ -223,7 +223,7 @@ Base.DocBootstrap.setexpand!(docm)
 # Names are resolved relative to the DocBootstrap module, so
 # inject the ones we need there.
 
-eval(Base.DocBootstrap, :(import ..Docs: @init, doc!, doc))
+eval(Base.DocBootstrap, :(import ..Docs: @init, doc!, doc, newmethod))
 
 # Metametadata
 
