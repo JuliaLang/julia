@@ -85,6 +85,7 @@ end
 @test searchsorted([1,2,3], 0) == 1:0
 @test searchsorted([1,2,3], 4) == 4:3
 
+# exercise the codepath in searchsorted* methods for ranges that check for zero step range
 immutable ConstantRange{T} <: Range{T}
    val::T
    len::Int
