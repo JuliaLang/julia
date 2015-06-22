@@ -36,7 +36,7 @@ extern "C" {
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
 
-void jl_uv_call_close_callback(void *val)
+static void jl_uv_call_close_callback(void *val)
 {
     jl_value_t *cb;
     if (!jl_old_base_module) {
