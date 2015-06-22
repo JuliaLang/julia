@@ -311,11 +311,11 @@ const invalid_history_message = """
 Invalid history file (~/.julia_history) format:
 If you have a history file left over from an older version of Julia,
 try renaming or deleting it.
-Invalid character: 0x"""
+Invalid character: """
 
 const munged_history_message = """
 Invalid history file (~/.julia_history) format:
-An editor may have converted tabs to spaces at line"""
+An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
@@ -331,13 +331,12 @@ function hist_from_file(hp, file)
     seek(file, 0)
     countlines = 0
     while true
-        local ch::Char
         mode = :julia
         line = hist_getline(file)
         isempty(line) && break
         countlines += 1
         line[1] != '#' &&
-            error(invalid_history_message, hex(line[1]), " at line ", countlines)
+            error(invalid_history_message, repr(line[1]), " at line ", countlines)
         while !isempty(line)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m == nothing && break
@@ -349,24 +348,17 @@ function hist_from_file(hp, file)
         end
         isempty(line) && break
         # Make sure starts with tab
-        if line[1] == ' '
+        line[1] == ' '  &&
             error(munged_history_message, countlines)
-        elseif line[1] != '\t'
-            error(invalid_history_message, hex(line[1]), " at line ", countlines)
-        end
+        line[1] != '\t' &&
+            error(invalid_history_message, repr(line[1]), " at line ", countlines)
         lines = UTF8String[]
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
-            eof(file) &&
-                break
+            eof(file) && break
             ch = Base.peek(file)
-            if ch == '#'
-                break
-            elseif ch == ' '
-                error(munged_history_message, countlines)
-            elseif ch != '\t'
-                error(invalid_history_message, hex(line[1]), " at line ", countlines)
-            end
+            ch == ' '  && error(munged_history_message, countlines)
+            ch != '\t' && break
             line = hist_getline(file)
             countlines += 1
         end
