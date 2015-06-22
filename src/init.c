@@ -89,7 +89,6 @@ static const char system_image_path[256] = JL_SYSTEM_IMAGE_PATH;
 jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_home
                             NULL, // julia_bin
-                            NULL, // build_path
                             NULL, // eval
                             NULL, // print
                             NULL, // postboot
@@ -107,13 +106,15 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // malloc_log
                             0,    // opt_level
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            JL_OPTIONS_DUMPBITCODE_OFF, // dump_bitcode
                             1,    // depwarn
                             1,    // can_inline
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
-                            NULL, // bindto
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
+                            NULL, // bindto
+                            NULL, // outputbc
+                            NULL, // outputo
+                            NULL, // outputji
 };
 
 int jl_boot_file_loaded = 0;
@@ -935,7 +936,7 @@ static char *abspath(const char *in)
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 { // this function resolves the paths in jl_options to absolute file locations as needed
-  // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and `build_path`
+  // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
   // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
   //
   // note: if you care about lost memory, you should call the appropriate `free()` function
@@ -965,7 +966,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             // build time path, relative to JULIA_HOME
             free_path = (char*)malloc(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                     jl_options.julia_home, jl_options.image_file);
+                             jl_options.julia_home, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_compileropts.image_file path too long\n");
             }
@@ -978,8 +979,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             free_path = NULL;
         }
     }
-    if (jl_options.build_path)
-        jl_options.build_path = abspath(jl_options.build_path);
+    if (jl_options.outputo)
+        jl_options.outputo = abspath(jl_options.outputo);
+    if (jl_options.outputji)
+        jl_options.outputji = abspath(jl_options.outputji);
+    if (jl_options.outputbc)
+        jl_options.outputbc = abspath(jl_options.outputbc);
     if (jl_options.machinefile)
         jl_options.machinefile = abspath(jl_options.machinefile);
     if (jl_options.load)
@@ -1265,59 +1270,40 @@ DLLEXPORT void jl_install_sigint_handler(void)
 extern int asprintf(char **str, const char *fmt, ...);
 extern void *__stack_chk_guard;
 
+DLLEXPORT int jl_generating_output()
+{
+    return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
+}
+
 void jl_compile_all(void);
 
 DLLEXPORT void julia_save()
 {
-    const char *build_path = jl_options.build_path;
-    if (build_path) {
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
-            jl_compile_all();
-        char *build_ji;
-        // TODO: these should be replaced by an option to write either a .ji or a .so
-        int write_ji = 1;    // save a .ji file
-        int separate_so = 1; // save a separate .so file
-        ios_t *s = NULL;
+    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
+        jl_compile_all();
 
-        if (write_ji) {
-            if (asprintf(&build_ji, "%s.ji",build_path) <= 0) {
-                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .ji build path\n");
-                return;
-            }
-            jl_save_system_image(build_ji);
-            free(build_ji);
+    ios_t *s = NULL;
+    if (jl_options.outputo)
+        s = jl_create_system_image();
+
+    if (jl_options.outputji) {
+        if (s == NULL) {
+            jl_save_system_image(jl_options.outputji);
         }
         else {
-            s = jl_create_system_image();
-        }
-
-        if (jl_options.dumpbitcode == JL_OPTIONS_DUMPBITCODE_ON) {
-            char *build_bc;
-            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
-                jl_dump_bitcode(build_bc);
-                free(build_bc);
-            }
-            else {
-                jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
-            }
-        }
-
-        if (!write_ji || separate_so) {
-            char *build_o;
-            if (asprintf(&build_o, "%s.o",build_path) <= 0) {
-                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
-                return;
-            }
-            if (separate_so) {
-                jl_dump_objfile(build_o, 0, NULL, 0);
-            }
-            else {
-                assert(s != NULL);
-                jl_dump_objfile(build_o, 0, (const char*)s->buf, s->size);
-            }
-            free(build_o);
+            ios_t f;
+            if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
+                jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
+            ios_write(&f, (const char*)s->buf, s->size);
+            ios_close(&f);
         }
     }
+
+    if (jl_options.outputbc)
+        jl_dump_bitcode((char*)jl_options.outputbc);
+
+    if (jl_options.outputo)
+        jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
 }
 
 jl_function_t *jl_typeinf_func=NULL;

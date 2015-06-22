@@ -5683,7 +5683,7 @@ extern "C" void jl_init_codegen(void)
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
     imaging_mode = true; // LLVM seems to JIT bad TOC tables for the optimizations we attempt in non-imaging_mode
 #else
-    imaging_mode = jl_options.build_path != NULL;
+    imaging_mode = jl_generating_output();
 #endif
 
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR <= 3
