@@ -65,9 +65,7 @@
      ;; vars assigned anywhere, if they have been defined as global
      (filter defined-julia-global (find-possible-globals e))))
    (append
-    (if (null? (find-decls 'local e))
-	'()
-	(error "local declaration in global scope"))
+    (find-decls 'local e)
     (find-decls 'local! e))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
