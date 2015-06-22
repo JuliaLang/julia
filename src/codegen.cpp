@@ -261,9 +261,7 @@ static GlobalVariable *jlemptytuple_var;
 #if JL_NEED_FLOATTEMP_VAR
 static GlobalVariable *jlfloattemp_var;
 #endif
-#ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
-#endif
 static GlobalVariable *jlexc_var;
 static GlobalVariable *jldiverr_var;
 static GlobalVariable *jlundeferr_var;
@@ -334,10 +332,8 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
-#ifdef JL_GC_MARKSWEEP
 static Function *wbfunc;
 static Function *queuerootfun;
-#endif
 static Function *expect_func;
 static Function *jldlsym_func;
 static Function *jlnewbits_func;
@@ -540,11 +536,9 @@ struct jl_gcinfo_t {
     int argDepth;
     int maxDepth;
     int argSpaceOffs;
-#ifdef JL_GC_MARKSWEEP
     Instruction *gcframe;
     Instruction *argSpaceInits;
     StoreInst *storeFrameSize;
-#endif
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
     std::vector<Instruction*> gc_frame_pops;
@@ -2672,10 +2666,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
             }
             if (theFptr == NULL) {
                 Value *theFunc = emit_expr(args[0], ctx);
-#ifdef JL_GC_MARKSWEEP
                 if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0)))
                     make_gcroot(boxed(theFunc,ctx), ctx);
-#endif
                 // extract pieces of the function object
                 // TODO: try extractvalue instead
                 theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
@@ -3555,7 +3547,6 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     gc->argDepth = 0;
     gc->maxDepth = 0;
 
-#ifdef JL_GC_MARKSWEEP
     // allocate gc frame
     // gc->gcframe is assumed to be the first instruction creating the gc frame
     // in finalize_gc_frame.
@@ -3571,14 +3562,6 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
                         builder.CreateBitCast(builder.CreateConstGEP1_32(gc->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     Instruction *linst = builder.CreateStore(gc->gcframe, prepare_global(jlpgcstack_var), false);
     gc->argSpaceInits = &b0->back();
-#else
-    // gc->gcframe is assumed to be the first instruction creating the gc frame
-    // in finalize_gc_frame
-    gc->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                       ConstantInt::get(T_int32, n_roots));
-    gc->first_gcframe_inst = BasicBlock::iterator(gc->argTemp);
-    Instruction *linst = gc->argTemp;
-#endif
     // initialize local variable stack roots to null
     for(size_t i=0; i < (size_t)gc->argSpaceOffs; i++) {
         Value *varSlot = emit_local_slot(i, ctx);
@@ -3632,7 +3615,6 @@ static void clear_gc_frame(jl_gcinfo_t *gc)
 static void finalize_gc_frame(jl_codectx_t *ctx)
 {
     jl_gcinfo_t *gc = &ctx->gc;
-#ifdef JL_GC_MARKSWEEP
     if (gc->argSpaceOffs + gc->maxDepth == 0) {
         // 0 roots; remove gc frame entirely
         clear_gc_frame(gc);
@@ -3667,23 +3649,11 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             instList.insertAfter(argTempi, after);
         }
     }
-#else
-    if (gc->maxDepth != 0) {
-        BasicBlock::iterator bbi(gc->argTemp);
-        AllocaInst *newgcframe =
-            new AllocaInst(jl_pvalue_llvmt,
-                           ConstantInt::get(T_int32, (gc->argSpaceOffs +
-                                                      gc->maxDepth)));
-        ReplaceInstWithInst(gc->argTemp->getParent()->getInstList(), bbi,
-                            newgcframe);
-    }
-#endif
 }
 
 static void
 emit_gcpop(jl_codectx_t *ctx)
 {
-#ifdef JL_GC_MARKSWEEP
     // finalize_gc_frame assumes each frame pop takes 4 instructions.
     Instruction *gcpop =
         (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
@@ -3691,9 +3661,6 @@ emit_gcpop(jl_codectx_t *ctx)
     builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false),
                                               jl_ppvalue_llvmt),
                         prepare_global(jlpgcstack_var));
-#else
-    (void)ctx;
-#endif
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref)
@@ -5105,13 +5072,11 @@ static void init_julia_llvm_env(Module *m)
                            "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
 
-#ifdef JL_GC_MARKSWEEP
     jlpgcstack_var =
         new GlobalVariable(*m, jl_ppvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_pgcstack");
     add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
-#endif
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
@@ -5332,7 +5297,6 @@ static void init_julia_llvm_env(Module *m)
     jlgetfield_func = builtin_func_map[jl_f_get_field];
     jlapplygeneric_func = jlcall_func_to_llvm("jl_apply_generic", (void*)&jl_apply_generic, m);
 
-#ifdef JL_GC_MARKSWEEP
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
                                     Function::ExternalLinkage,
                                     "jl_gc_queue_root", m);
@@ -5345,7 +5309,6 @@ static void init_julia_llvm_env(Module *m)
                               Function::ExternalLinkage,
                               "jl_gc_wb_slow", m);
     add_named_global(wbfunc, (void*)&jl_gc_wb_slow);
-#endif
 
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);
