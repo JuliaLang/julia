@@ -1524,9 +1524,7 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 void jl_restore_system_image_from_stream(ios_t *f)
 {
-#ifdef JL_GC_MARKSWEEP
     int en = jl_gc_enable(0);
-#endif
     DUMP_MODES last_mode = mode;
     mode = MODE_SYSTEM_IMAGE;
     arraylist_new(&backref_list, 250000);
@@ -1592,9 +1590,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
 
-#ifdef JL_GC_MARKSWEEP
     jl_gc_enable(en);
-#endif
     mode = last_mode;
     jl_update_all_fptrs();
 }
