@@ -57,6 +57,9 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 
+include("docs/bootstrap.jl")
+using .DocBootstrap
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
