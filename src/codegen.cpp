@@ -1960,20 +1960,45 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
         if (at1->isPointerTy()) {
             Type *elty = julia_type_to_llvm(rt1);
             if (elty->isAggregateType()) {
+                assert(jl_is_datatype(rt1));
+                size_t sz = jl_datatype_size(rt1);
+                if (sz > 512 && !((jl_datatype_t*)rt1)->haspadding) {
 #ifdef LLVM37
-                answer = builder.CreateCall(prepare_call(memcmp_func),
-                                {
-                                builder.CreatePointerCast(varg1, T_pint8),
-                                builder.CreatePointerCast(varg2, T_pint8),
-                                builder.CreateTrunc(ConstantExpr::getSizeOf(elty), T_size)
-                                });
+                    answer = builder.CreateCall(prepare_call(memcmp_func),
+                                    {
+                                    builder.CreatePointerCast(varg1, T_pint8),
+                                    builder.CreatePointerCast(varg2, T_pint8),
+                                    ConstantInt::get(T_size, sz)
+                                    });
 #else
-                answer = builder.CreateCall3(memcmp_func,
-                        builder.CreatePointerCast(varg1, T_pint8),
-                        builder.CreatePointerCast(varg2, T_pint8),
-                        builder.CreateTrunc(ConstantExpr::getSizeOf(elty), T_size));
+                    answer = builder.CreateCall3(prepare_call(memcmp_func),
+                            builder.CreatePointerCast(varg1, T_pint8),
+                            builder.CreatePointerCast(varg2, T_pint8),
+                            ConstantInt::get(T_size, sz));
 #endif
-                answer = builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
+                    answer = builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
+                }
+                else {
+                    varg1 = builder.CreatePointerCast(varg1, elty->getPointerTo());
+                    varg2 = builder.CreatePointerCast(varg2, elty->getPointerTo());
+                    jl_svec_t *types = ((jl_datatype_t*)rt1)->types;
+                    answer = ConstantInt::get(T_int1, 1);
+                    size_t l = jl_svec_len(types);
+                    for(unsigned i=0; i < l; i++) {
+                        jl_value_t *fldty = jl_svecref(types, i);
+                        Value *subAns;
+                        Value *fld1 = builder.CreateConstGEP2_32(varg1, 0, i);
+                        Value *fld2 = builder.CreateConstGEP2_32(varg2, 0, i);
+                        if (type_is_ghost(fld1->getType()))
+                            continue;
+                        if (!fld1->getType()->getContainedType(0)->isAggregateType()) {
+                            fld1 = builder.CreateLoad(fld1);
+                            fld2 = builder.CreateLoad(fld2);
+                        }
+                        subAns = emit_f_is(fldty, fldty, NULL, NULL, fld1, fld2, ctx);
+                        answer = builder.CreateAnd(answer, subAns);
+                    }
+                }
                 goto done;
             }
         }
@@ -1990,11 +2015,10 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
             for(unsigned i=0; i < l; i++) {
                 jl_value_t *fldty = jl_svecref(types,i);
                 Value *subAns;
-                subAns =
-                    emit_f_is(fldty, fldty, NULL, NULL,
-                              builder.CreateExtractElement(varg1, ConstantInt::get(T_int32,i)),
-                              builder.CreateExtractElement(varg2, ConstantInt::get(T_int32,i)),
-                              ctx);
+                subAns = emit_f_is(fldty, fldty, NULL, NULL,
+                        builder.CreateExtractElement(varg1, ConstantInt::get(T_int32,i)),
+                        builder.CreateExtractElement(varg2, ConstantInt::get(T_int32,i)),
+                        ctx);
                 answer = builder.CreateAnd(answer, subAns);
             }
             goto done;

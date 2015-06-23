@@ -3004,4 +3004,13 @@ let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
     a[9:end] = reinterpret(UInt8, u32)
     p = pointer(a)
     @test (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
+    f11813(p) = (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
+    @test f11813(p) === true # redundant comparison test seems to make this test more reliable, don't remove
+end
+let a = (1:1000...),
+    b = (1:1000...)
+    @test a == b
+    @test a === b
+    @test (a == b) === true
+    @test (a === b) === true
 end
