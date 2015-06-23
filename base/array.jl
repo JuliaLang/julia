@@ -289,8 +289,8 @@ done(a::Array,i) = (i > length(a))
 
 ## Indexing: getindex ##
 
-getindex(A::Array, i1::Int) = arrayref(A, i1)
-unsafe_getindex(A::Array, i1::Int) = @inbounds return arrayref(A, i1)
+getindex(A::Array, i::Int, I::Int...) = arrayref(A, i, I...)
+unsafe_getindex(A::Array, i::Int, I::Int...) = @inbounds return arrayref(A, i, I...)
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
@@ -318,7 +318,8 @@ function getindex{T<:Real}(A::Array, I::Range{T})
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i0::Real) = arrayset(A, convert(T,x), to_index(i0))
+setindex!{T}(A::Array{T}, x, i::Int, I::Int...) = arrayset(A, convert(T,x), i, I...)
+unsafe_setindex!{T}(A::Array{T}, x, i::Int, I::Int...) = @inbounds return arrayset(A, convert(T,x), i, I...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
