@@ -1329,7 +1329,6 @@ export
     @int128_str,
     @uint128_str,
     @big_str,
-    @mstr,   # triple-quoted strings
     @cmd,    # `commands`
 
     # notation for certain types
