@@ -30,7 +30,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->istopmod = 0;
     m->uuid = uv_now(uv_default_loop());
     htable_new(&m->bindings, 0);
-    arraylist_new(&m->usings, 0);
+    arraylist_str(&m->usings, 0, sizeof(jl_module_t *));
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
@@ -158,53 +158,60 @@ typedef struct _modstack_t {
 } modstack_t;
 
 // get binding for reading. might return NULL for unbound.
-static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st)
+static jl_binding_t *jl_get_binding_(jl_module_t *mod, jl_sym_t *var, modstack_t *st)
 {
-    modstack_t top = { m, st };
+    modstack_t top = { mod, st };
     modstack_t *tmp = st;
     while (tmp != NULL) {
-        if (tmp->m == m) {
+        if (tmp->m == mod) {
             // import cycle without finding actual location
             return NULL;
         }
         tmp = tmp->prev;
     }
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
-    if (b == HT_NOTFOUND || b->owner == NULL) {
+    jl_binding_t *bnd = (jl_binding_t*)ptrhash_get(&mod->bindings, var);
+    if (bnd == HT_NOTFOUND || bnd->owner == NULL) {
         jl_module_t *owner = NULL;
-        for(int i=(int)m->usings.len-1; i >= 0; --i) {
-            jl_module_t *imp = (jl_module_t*)m->usings.items[i];
-            jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
-            if (tempb != HT_NOTFOUND && tempb->exportp) {
-                tempb = jl_get_binding_(imp, var, &top);
-                if (tempb == NULL || tempb->owner == NULL)
-                    // couldn't resolve; try next using (see issue #6105)
-                    continue;
-                if (owner != NULL && tempb->owner != b->owner &&
-                    !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
-                    jl_printf(JL_STDERR,
-                              "Warning: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
-                              owner->name->name, imp->name->name, var->name, m->name->name);
-                    // mark this binding resolved, to avoid repeating the warning
-                    (void)jl_get_binding_wr(m, var);
-                    return NULL;
+        size_t len = mod->usings.len;
+        if (len) {
+            jl_module_t **usingp = (jl_module_t **)mod->usings.items;
+            do {
+                jl_module_t *imp = *usingp++;
+                jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+                if (tempb != HT_NOTFOUND && tempb->exportp) {
+                    tempb = jl_get_binding_(imp, var, &top);
+                    if (tempb == NULL || tempb->owner == NULL)
+                        // couldn't resolve; try next using (see issue #6105)
+                        continue;
+                    if (owner != NULL && tempb->owner != bnd->owner &&
+                          !(tempb->constp && tempb->value &&
+                            bnd->constp && bnd->value == tempb->value)) {
+                        jl_printf(JL_STDERR,
+                                  "Warning: both %s and %s export \"%s\";"
+                                  "uses of it in module %s must be qualified\n",
+                                  owner->name->name, imp->name->name, var->name,
+                                  mod->name->name);
+                        // mark this binding resolved, to avoid repeating the warning
+                        (void)jl_get_binding_wr(mod, var);
+                        return NULL;
+                    }
+                    owner = imp;
+                    bnd = tempb;
                 }
-                owner = imp;
-                b = tempb;
-            }
+            } while (--len);
         }
         if (owner != NULL) {
             // do a full import to prevent the result of this lookup
             // from changing, for example if this var is assigned to
             // later.
-            module_import_(m, b->owner, var, 0);
-            return b;
+            module_import_(mod, bnd->owner, var, 0);
+            return bnd;
         }
         return NULL;
     }
-    if (b->owner != m)
-        return jl_get_binding_(b->owner, var, &top);
-    return b;
+    if (bnd->owner != mod)
+        return jl_get_binding_(bnd->owner, var, &top);
+    return bnd;
 }
 
 DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -323,9 +330,12 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
-    for(size_t i=0; i < to->usings.len; i++) {
-        if (from == to->usings.items[i])
-            return;
+    size_t len = to->usings.len;
+    if (len) {
+        jl_module_t **usingp = (jl_module_t **)to->usings.items;
+        do {
+            if (from == *usingp++) return;
+        } while (--len);
     }
     // print a warning if something visible via this "using" conflicts with
     // an existing identifier. note that an identifier added later may still
@@ -349,8 +359,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
             }
         }
     }
-
-    arraylist_push(&to->usings, from);
+    arraylist_push_str(&to->usings, (void *)from);
 }
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
@@ -455,17 +464,22 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
     jl_current_module = (jl_module_t*)m;
 }
 
-DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
+DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *mod)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH1(&a);
-    for(int i=(int)m->usings.len-1; i >= 0; --i) {
-        jl_array_grow_end(a, 1);
-        jl_module_t *imp = (jl_module_t*)m->usings.items[i];
-        jl_cellset(a,jl_array_dim0(a)-1, (jl_value_t*)imp);
+    jl_array_t *arr = jl_alloc_array_1d(jl_array_any_type, 0);
+    size_t len = mod->usings.len;
+    if (len) {
+        JL_GC_PUSH1(&arr);
+        // Why doesn't this grow the array all at once?
+        // jl_array_grow_end(arr, len);
+        jl_module_t **usingp = (jl_module_t **)mod->usings.items;
+        do {
+            jl_array_grow_end(arr, 1);
+            jl_cellset(arr,jl_array_dim0(arr)-1, *usingp++);
+        } while (--len);
+        JL_GC_POP();
     }
-    JL_GC_POP();
-    return (jl_value_t*)a;
+    return (jl_value_t*)arr;
 }
 
 DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)

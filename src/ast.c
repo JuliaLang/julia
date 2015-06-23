@@ -376,15 +376,22 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 }
 
 static value_t julia_to_scm_(jl_value_t *v);
+typedef struct {
+    ssize_t idx;
+    size_t  val;
+} jlgensym_str;
+
 static arraylist_t jlgensym_to_flisp;
 
 static value_t julia_to_scm(jl_value_t *v)
 {
     value_t temp;
-    if (jlgensym_to_flisp.len)
-        jlgensym_to_flisp.len = 0; // in case we didn't free it last time we got here (for example, if we threw an error)
-    else
-        arraylist_new(&jlgensym_to_flisp, 0);
+    if (jlgensym_to_flisp.len) {
+        // in case we didn't free it last time we got here (for example, if we threw an error)
+        jlgensym_to_flisp.len = 0;
+    } else {
+        arraylist_str(&jlgensym_to_flisp, 0, sizeof(jlgensym_str));
+    }
     // need try/catch to reset GC handle stack in case of error
     FL_TRY_EXTERN {
         temp = julia_to_scm_(v);
@@ -401,7 +408,7 @@ static void array_to_list(jl_array_t *a, value_t *pv)
     if (jl_array_len(a) > 300000)
         lerror(OutOfMemoryError, "expression too large");
     value_t temp;
-    for(long i=jl_array_len(a)-1; i >= 0; i--) {
+    for (long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(FL_NIL, *pv);
         temp = julia_to_scm_(jl_cellref(a,i));
         // note: must be separate statement
@@ -425,15 +432,18 @@ static value_t julia_to_scm_(jl_value_t *v)
         return symbol(((jl_sym_t*)v)->name);
     if (jl_is_gensym(v)) {
         size_t idx = ((jl_gensym_t*)v)->id;
-        size_t i;
-        for (i = 0; i < jlgensym_to_flisp.len; i+=2) {
-            if ((ssize_t)jlgensym_to_flisp.items[i] == idx)
-                return fl_list2(fl_jlgensym_sym, fixnum((size_t)jlgensym_to_flisp.items[i+1]));
+        size_t len = jlgensym_to_flisp.len;
+        if (len) {
+            jlgensym_str *jlgenp = (jlgensym_str *)jlgensym_to_flisp.items;
+            do {
+                if (jlgenp->idx == idx) return fl_list2(fl_jlgensym_sym, fixnum(jlgenp->val));
+                jlgenp++;
+            } while (--len);
         }
-        arraylist_push(&jlgensym_to_flisp, (void*)idx);
         value_t flv = fl_applyn(0, symbol_value(symbol("make-jlgensym")));
         assert(iscons(flv) && car_(flv) == fl_jlgensym_sym);
-        arraylist_push(&jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
+        jlgensym_str jlgensym_tmp = {idx, numval(car_(cdr_(flv)))};
+        arraylist_push_str(&jlgensym_to_flisp, (void *)&jlgensym_tmp);
         return flv;
     }
     if (v == jl_true)
@@ -565,9 +575,7 @@ jl_value_t *jl_expand(jl_value_t *expr)
     value_t arg = julia_to_scm(expr);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")), arg);
     jl_value_t *result = scm_to_julia(e,0);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
+    jl_gc_reset_preserved_values(np);
     return result;
 }
 
@@ -576,11 +584,8 @@ DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     int np = jl_gc_n_preserved_values();
     value_t arg = julia_to_scm(expr);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-macroexpand")), arg);
-    jl_value_t *result;
-    result = scm_to_julia(e,0);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
+    jl_value_t *result = scm_to_julia(e,0);
+    jl_gc_reset_preserved_values(np);
     return result;
 }
 

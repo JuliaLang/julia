@@ -196,7 +196,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     if (outermost == NULL || jl_current_module == jl_main_module) {
         size_t i, l=module_stack.len;
         for(i = stackidx; i < l; i++) {
-            jl_module_load_time_initialize((jl_module_t*)module_stack.items[i]);
+            jl_module_load_time_initialize(((jl_module_t **)module_stack.items)[i]);
         }
         assert(module_stack.len == l);
         module_stack.len = stackidx;

@@ -104,18 +104,21 @@ static arraylist_t finalizer_list;
 static arraylist_t finalizer_list_marked;
 static arraylist_t to_finalize;
 
-static void schedule_finalization(void *o, void *f)
+typedef struct {
+    jl_value_t *obj;
+    jl_function_t *fun;
+} finalizer;
+
+static void schedule_finalization(finalizer fin)
 {
-    arraylist_push(&to_finalize, o);
-    arraylist_push(&to_finalize, f);
+    arraylist_push_str(&to_finalize, &fin);
 }
 
-static void run_finalizer(jl_value_t *o, jl_value_t *ff)
+static void run_finalizer(finalizer fin)
 {
-    jl_function_t *f = (jl_function_t*)ff;
-    assert(jl_is_function(f));
+    assert(jl_is_function(fin.fun));
     JL_TRY {
-        jl_apply(f, (jl_value_t**)&o, 1);
+        jl_apply(fin.fun, &fin.obj, 1);
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
@@ -124,21 +127,25 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
 }
 
-static int finalize_object(jl_value_t *o)
+static int finalize_object(jl_value_t *obj)
 {
     int success = 0;
-    jl_value_t *f = NULL;
-    JL_GC_PUSH1(&f);
-    for(int i = 0; i < finalizer_list.len; i+=2) {
-        if (o == (jl_value_t*)finalizer_list.items[i]) {
-            f = (jl_value_t*)finalizer_list.items[i+1];
-            if (i < finalizer_list.len - 2) {
-                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
-                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
-                i -= 2;
+    finalizer fin;
+    finalizer *finpnt;
+    fin.fun = NULL;
+    JL_GC_PUSH1(&fin.fun);
+    finpnt = (finalizer *)finalizer_list.items;
+    for (int i = 0; i < finalizer_list.len; i++) {
+        fin = finpnt[i];
+        if (obj == finpnt[i].obj) {
+            fin.obj = obj;
+            fin.fun = finpnt[i].fun;
+            finalizer_list.len--;
+            if (i < finalizer_list.len) {
+                finpnt[i] = finpnt[finalizer_list.len];
+                i--;
             }
-            finalizer_list.len -= 2;
-            run_finalizer(o, f);
+            run_finalizer(fin);
             success = 1;
         }
     }
@@ -148,12 +155,11 @@ static int finalize_object(jl_value_t *o)
 
 static void run_finalizers(void)
 {
-    void *o = NULL, *f = NULL;
-    JL_GC_PUSH2(&o, &f);
+    finalizer fin;
+    JL_GC_PUSH2(&fin.obj, &fin.fun);
     while (to_finalize.len > 0) {
-        f = arraylist_pop(&to_finalize);
-        o = arraylist_pop(&to_finalize);
-        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
+        arraylist_pop_str(&to_finalize, (void *)&fin);
+        run_finalizer(fin);
     }
     JL_GC_POP();
 }
@@ -161,12 +167,13 @@ static void run_finalizers(void)
 static void schedule_all_finalizers(arraylist_t* flist)
 {
     // Multi-thread version should steal the entire list while holding a lock.
-    for(size_t i=0; i < flist->len; i+=2) {
-        jl_value_t *f = (jl_value_t*)flist->items[i+1];
-        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
-            schedule_finalization(flist->items[i], flist->items[i+1]);
+    finalizer *fin = (finalizer *)flist->items;
+    for (size_t i=0; i < flist->len; i++, fin++) {
+        if (fin->fun != HT_NOTFOUND && !jl_is_cpointer(fin->fun)) {
+            schedule_finalization(*fin);
         }
     }
+    // Shouldn't this return the malloc'ed memory?
     flist->len = 0;
 }
 
@@ -179,8 +186,8 @@ void jl_gc_run_all_finalizers(void)
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
-    arraylist_push(&finalizer_list, (void*)v);
-    arraylist_push(&finalizer_list, (void*)f);
+    finalizer fin = {v, f};
+    arraylist_push_str(&finalizer_list, (void *)&fin);
 }
 
 void jl_finalize(jl_value_t *o)
@@ -482,11 +489,11 @@ static int verifying;
 static void add_lostval_parent(jl_value_t* parent)
 {
     for(int i = 0; i < lostval_parents_done.len; i++) {
-        if ((jl_value_t*)lostval_parents_done.items[i] == parent)
+        if (((jl_value_t **)lostval_parents_done.items)[i] == parent)
             return;
     }
     for(int i = 0; i < lostval_parents.len; i++) {
-        if ((jl_value_t*)lostval_parents.items[i] == parent)
+        if (((jl_value_t **)lostval_parents.items)[i] == parent)
             return;
     }
     arraylist_push(&lostval_parents, parent);
@@ -801,10 +808,20 @@ DLLEXPORT void jl_gc_preserve(jl_value_t *v)
 DLLEXPORT void jl_gc_unpreserve(void)
 {
     FOR_CURRENT_HEAP
-        (void)arraylist_pop(&preserved_values);
+        if (preserved_values.len) {
+            preserved_values.len--;
+        }
     END
 }
 
+void jl_gc_reset_preserved_values(size_t np)
+{
+    FOR_CURRENT_HEAP
+    if (preserved_values.len > np) {
+        preserved_values.len = np;
+    }
+    END
+}
 // weak references
 
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
@@ -823,7 +840,7 @@ static void sweep_weak_refs(void)
     FOR_EACH_HEAP
         size_t n=0, ndel=0, l=weak_refs.len;
         jl_weakref_t *wr;
-        void **lst = weak_refs.items;
+        void **lst = (void **)weak_refs.items;
         void *tmp;
 #define SWAP_wr(a,b) (tmp=a,a=b,b=tmp,1)
         if (l == 0)
@@ -1558,7 +1575,7 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     // after "using" it but before accessing it, this array might
     // contain the only reference.
     for(i=0; i < m->usings.len; i++) {
-        refyoung |= gc_push_root(m->usings.items[i], d);
+        refyoung |= gc_push_root(((jl_value_t **)m->usings.items)[i], d);
     }
     if (m->constant_table) {
         verify_parent1("module", m, &m->constant_table, "constant_table");
@@ -1854,13 +1871,13 @@ static void pre_mark(void)
     // stuff randomly preserved
     FOR_EACH_HEAP
         for(i=0; i < preserved_values.len; i++) {
-            gc_push_root((jl_value_t*)preserved_values.items[i], 0);
+            gc_push_root(((jl_value_t **)preserved_values.items)[i], 0);
         }
     END
 
     // objects currently being finalized
     for(i=0; i < to_finalize.len; i++) {
-        gc_push_root(to_finalize.items[i], 0);
+        gc_push_root(((finalizer *)to_finalize.items)[i].obj, 0);
     }
 
     jl_mark_box_caches();
@@ -1884,36 +1901,33 @@ static int n_finalized;
 static void post_mark(arraylist_t *list, int dryrun)
 {
     n_finalized = 0;
-    for(size_t i=0; i < list->len; i+=2) {
-        jl_value_t *v = (jl_value_t*)list->items[i];
-        jl_value_t *fin = (jl_value_t*)list->items[i+1];
-        int isfreed = !gc_marked(jl_astaggedvalue(v));
-        gc_push_root(fin, 0);
-        int isold = list == &finalizer_list && gc_bits(jl_astaggedvalue(v)) == GC_MARKED && gc_bits(jl_astaggedvalue(fin)) == GC_MARKED;
+    finalizer *fin = (finalizer *)list->items;
+    for (size_t i=0; i < list->len; i++) {
+        jl_value_t *obj = fin[i].obj;
+        jl_function_t *fun = fin[i].fun;
+        int isfreed = !gc_marked(jl_astaggedvalue(obj));
+        gc_push_root(fun, 0);
+        int isold = (list == &finalizer_list) &&
+                    gc_bits(jl_astaggedvalue(obj)) == GC_MARKED &&
+                    gc_bits(jl_astaggedvalue(fun)) == GC_MARKED;
         if (!dryrun && (isfreed || isold)) {
-            // remove from this list
-            if (i < list->len - 2) {
-                list->items[i] = list->items[list->len-2];
-                list->items[i+1] = list->items[list->len-1];
-                i -= 2;
-            }
-            list->len -= 2;
+            arraylist_remove(list, i);
+            i--;
         }
         if (isfreed) {
             // schedule finalizer or execute right away if it is not julia code
-            if (gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
-                void *p = jl_unbox_voidpointer(fin);
+            if (gc_typeof(fun) == (jl_value_t*)jl_voidpointer_type) {
+                void *p = jl_unbox_voidpointer((jl_value_t *)fun);
                 if (!dryrun && p)
-                    ((void (*)(void*))p)(jl_data_ptr(v));
+                    ((void (*)(void*))p)(jl_data_ptr(obj));
                 continue;
             }
-            gc_push_root(v, 0);
-            if (!dryrun) schedule_finalization(v, fin);
+            gc_push_root(obj, 0);
+            if (!dryrun) schedule_finalization(*fin);
             n_finalized++;
         }
         if (!dryrun && isold) {
-            arraylist_push(&finalizer_list_marked, v);
-            arraylist_push(&finalizer_list_marked, fin);
+            arraylist_push_str(&finalizer_list_marked, (void *)fin);
         }
     }
     visit_mark_stack(GC_MARKED_NOESC);
@@ -2019,7 +2033,7 @@ static void gc_verify_track(void)
         }
         jl_value_t* lostval_parent = NULL;
         for(int i = 0; i < lostval_parents.len; i++) {
-            lostval_parent = (jl_value_t*)lostval_parents.items[i];
+            lostval_parent = ((jl_value_t **)lostval_parents.items)[i];
             int clean_len = bits_save[GC_CLEAN].len;
             for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
                 void* p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
@@ -2193,17 +2207,17 @@ void jl_gc_collect(int full)
         FOR_EACH_HEAP
             // avoid counting remembered objects & bindings twice in perm_scanned_bytes
             for(int i = 0; i < last_remset->len; i++) {
-                jl_value_t *item = (jl_value_t*)last_remset->items[i];
+                jl_value_t *item = ((jl_value_t **)last_remset->items)[i];
                 objprofile_count(jl_typeof(item), 2, 0);
                 gc_bits(jl_astaggedvalue(item)) = GC_MARKED;
             }
             for (int i = 0; i < rem_bindings.len; i++) {
-                void *ptr = rem_bindings.items[i];
+                void *ptr = ((void **)rem_bindings.items)[i];
                 gc_bits(gc_val_buf(ptr)) = GC_MARKED;
             }
 
             for (int i = 0; i < last_remset->len; i++) {
-                jl_value_t *item = (jl_value_t*)last_remset->items[i];
+                jl_value_t *item = ((jl_value_t **)last_remset->items)[i];
                 push_root(item, 0, GC_MARKED);
             }
         END
@@ -2212,12 +2226,12 @@ void jl_gc_collect(int full)
         int n_bnd_refyoung = 0;
         FOR_EACH_HEAP
             for (int i = 0; i < rem_bindings.len; i++) {
-                jl_binding_t *ptr = (jl_binding_t*)rem_bindings.items[i];
+                jl_binding_t *ptr = ((jl_binding_t **)rem_bindings.items)[i];
                 // A null pointer can happen here when the binding is cleaned up
                 // as an exception is thrown after it was already queued (#10221)
                 if (!ptr->value) continue;
                 if (gc_push_root(ptr->value, 0) == GC_MARKED_NOESC) {
-                    rem_bindings.items[n_bnd_refyoung] = ptr;
+                    ((jl_binding_t **)rem_bindings.items)[n_bnd_refyoung] = ptr;
                     n_bnd_refyoung++;
                 }
             }
@@ -2320,11 +2334,10 @@ void jl_gc_collect(int full)
             FOR_EACH_HEAP
                 if (sweep_mask == GC_MARKED_NOESC) {
                     for (int i = 0; i < remset->len; i++) {
-                        gc_bits(jl_astaggedvalue(remset->items[i])) = GC_QUEUED;
+                        gc_bits(jl_astaggedvalue(((jl_value_t **)remset->items)[i])) = GC_QUEUED;
                     }
                     for (int i = 0; i < rem_bindings.len; i++) {
-                        void *ptr = rem_bindings.items[i];
-                        gc_bits(gc_val_buf(ptr)) = GC_QUEUED;
+                        gc_bits(gc_val_buf(((void **)rem_bindings.items)[i])) = GC_QUEUED;
                     }
                 }
                 else {
@@ -2546,8 +2559,8 @@ void jl_gc_init(void)
 {
     jl_mk_thread_heap();
 
-    arraylist_new(&finalizer_list, 0);
-    arraylist_new(&to_finalize, 0);
+    arraylist_str(&finalizer_list, 0, sizeof(finalizer));
+    arraylist_str(&to_finalize, 0, sizeof(finalizer));
 
     collect_interval = default_collect_interval;
     allocd_bytes = -default_collect_interval;
