@@ -910,14 +910,14 @@ nl = "
       a
      b
        c""" == " a$(nl)b$(nl)  c"
-# note tab/space mixing
+# tabs + spaces
 @test """
-	a
-     b
-     """ == "   a$(nl)b$(nl)"
+	 a
+	 b
+	""" == " a$(nl) b$(nl)"
 @test """
       a
-       """ == "a$(nl)"
+       """ == "a$(nl) "
 s = "   p"
 @test """
       $s""" == "$s"
@@ -937,10 +937,6 @@ s = "   p"
 @test """
       foo
       bar\t""" == "foo$(nl)bar\t"
-@test """
-      foo
-      \tbar
-       """ == "foo$(nl)       bar$(nl)"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"

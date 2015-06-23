@@ -125,6 +125,9 @@ Language changes
   * The keyword `local` is no longer allowed in global scope. Use `let` instead of
     `begin` to create a new scope from the top level ([#7234], [#10472]).
 
+  * Triple-quoted strings no longer treat tabs as 8 spaces. Instead, the
+    longest common prefix of spaces and tabs is removed.
+
 Command line option changes
 ---------------------------
 
