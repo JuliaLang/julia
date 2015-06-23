@@ -188,8 +188,6 @@ void jl_finalize(jl_value_t *o)
     (void)finalize_object(o);
 }
 
-#ifdef JL_GC_MARKSWEEP
-
 typedef struct _buff_t {
     union {
         uintptr_t header;
@@ -2680,33 +2678,6 @@ static void big_obj_stats(void)
 }
 #endif //MEMPROFILE
 
-#else //JL_GC_MARKSWEEP
-DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
-{
-    size_t allocsz = sz + sizeof_jl_taggedvalue_t;
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-    allocd_bytes += allocsz;
-    gc_num.alloc++;
-    return jl_valueof(malloc(allocsz));
-}
-int64_t jl_gc_diff_total_bytes(void)
-{
-    return 0;
-}
-DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
-{
-    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
-    jl_set_typeof(wr, jl_weakref_type);
-    wr->value = value;
-    return wr;
-}
-static inline int maybe_collect(void)
-{
-    return 0;
-}
-#endif //JL_GC_MARKSWEEP
-
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     maybe_collect();
@@ -2762,14 +2733,11 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
-#ifdef JL_GC_MARKSWEEP
     if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
         perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }
-    else
-#endif
-    if (allocsz < oldsz)
+    else if (allocsz < oldsz)
         freed_bytes += (oldsz - allocsz);
     else
         allocd_bytes += (allocsz - oldsz);

@@ -805,7 +805,6 @@ void jl_init_box_caches(void)
     }
 }
 
-#ifdef JL_GC_MARKSWEEP
 void jl_mark_box_caches(void)
 {
     int64_t i;
@@ -824,7 +823,6 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_gensym_cache[i]);
     }
 }
-#endif
 
 jl_value_t *jl_box_bool(int8_t x)
 {
