@@ -106,14 +106,12 @@
               <string>@less</string>
               <string>@linux</string>
               <string>@linux_only</string>
-              <string>@mstr</string>
               <string>@non_windowsxp_only</string>
               <string>@osx</string>
               <string>@osx_only</string>
               <string>@parallel</string>
               <string>@printf</string>
               <string>@profile</string>
-              <string>@r_mstr</string>
               <string>@r_str</string>
               <string>@schedule</string>
               <string>@show</string>

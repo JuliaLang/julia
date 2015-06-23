@@ -3310,14 +3310,7 @@ So far only the second case can actually occur.
          e)
         ((eq? (car e) 'macrocall)
          ;; expand macro
-         (let ((form
-		(if (and (length> e 2) (pair? (caddr e)) (eq? (caaddr e) 'triple_quoted_string))
-		    ;; for a custom triple-quoted string literal, first invoke mstr
-		    ;; to handle unindenting
-		    (apply invoke-julia-macro (cadr e)
-			   (julia-expand-macros `(macrocall @mstr ,(cadr (caddr e))))
-			   (cdddr e))
-		    (apply invoke-julia-macro (cadr e) (cddr e)))))
+         (let ((form (apply invoke-julia-macro (cadr e) (cddr e))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
