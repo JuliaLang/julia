@@ -170,7 +170,7 @@ end
 function logdet{T<:Real,S}(A::LU{T,S})
     d,s = logdet2(A)
     if s < 0
-        throw(DomainError("Determinant is negative"))
+        throw(DomainError())
     end
     d
 end
