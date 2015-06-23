@@ -460,7 +460,7 @@ static jl_sym_t *mk_symbol(const char *str)
 static void unmark_symbols_(jl_sym_t *root)
 {
     while (root != NULL) {
-        root->type = (jl_value_t*)(((uptrint_t)root->type)&~1UL);
+        root->type = (jl_value_t*)(((ptrint_t)root->type)&~((ptrint_t)1));
         unmark_symbols_(root->left);
         root = root->right;
     }

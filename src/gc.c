@@ -106,7 +106,7 @@ static size_t total_freed_bytes=0;
 #define gc_setmark(o) (((gcval_t*)(o))->marked=1)
 #define gc_val_buf(o) ((gcval_t*)(((void**)(o))-1))
 #define gc_setmark_buf(o) gc_setmark(gc_val_buf(o))
-#define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
+#define gc_typeof(v) ((jl_value_t*)(((ptrint_t)jl_typeof(v))&~((ptrint_t)1)))
 
 // malloc wrappers, aligned allocation
 
