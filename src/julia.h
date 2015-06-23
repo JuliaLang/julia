@@ -282,7 +282,8 @@ typedef struct _jl_datatype_t {
     // hidden fields:
     uint32_t nfields;
     int32_t ninitialized;
-    uint32_t alignment;  // strictest alignment over all fields
+    uint32_t alignment : 31;  // strictest alignment over all fields
+    uint32_t haspadding : 1;  // has internal undefined bytes
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)

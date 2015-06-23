@@ -2997,3 +2997,11 @@ type D11597{T} <: C11597{T} d::T end
 
 # issue #11772
 @test_throws UndefRefError (cell(5)...)
+
+# issue #11813
+let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
+    u32 = UInt32[0x3]
+    a[9:end] = reinterpret(UInt8, u32)
+    p = pointer(a)
+    @test (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
+end

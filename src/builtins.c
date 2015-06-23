@@ -251,9 +251,9 @@ static int NOINLINE compare_svec(jl_value_t *a, jl_value_t *b)
 }
 
 // See comment above for an explanation of NOINLINE.
-static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
-                                   jl_datatype_t *dt, size_t nf)
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
+    size_t nf = jl_datatype_nfields(dt);
     for (size_t f=0; f < nf; f++) {
         size_t offs = dt->fields[f].offset;
         char *ao = (char*)jl_data_ptr(a) + offs;
@@ -267,7 +267,11 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
             else eq = jl_egal(af, bf);
         }
         else {
-            eq = bits_equal(ao, bo, dt->fields[f].size);
+            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            if (!ft->haspadding)
+                eq = bits_equal(ao, bo, dt->fields[f].size);
+            else
+                eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
         }
         if (!eq) return 0;
     }
@@ -294,10 +298,9 @@ int jl_egal(jl_value_t *a, jl_value_t *b) // warning: a,b may NOT have been gc-r
     size_t sz = dt->size;
     if (sz == 0) return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0) {
+    if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
-    }
-    return compare_fields(a, b, dt, nf);
+    return compare_fields(a, b, dt);
 }
 
 JL_CALLABLE(jl_f_is)
