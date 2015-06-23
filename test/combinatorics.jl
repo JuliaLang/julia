@@ -99,3 +99,4 @@ end
 @test let p = [4, 3, 6, 10, 5, 2, 1, 7, 8, 9]; levicivita(p) == -1 && parity(p) == 1; end
 
 @test Base.nsetpartitions(-1) == 0
+@test collect(permutations([])) == Vector[[]]
