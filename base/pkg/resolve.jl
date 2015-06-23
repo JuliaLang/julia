@@ -36,7 +36,6 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
                 end
                 error(msg)
             end
-            rethrow(err)
         end
 
         # verify solution (debug code) and enforce its optimality
