@@ -297,7 +297,6 @@ _checksize(A::AbstractArray, dim, I::AbstractVector{Bool}) = size(A, dim) == sum
 _checksize(A::AbstractArray, dim, ::Colon) = true
 _checksize(A::AbstractArray, dim, ::Real) = size(A, dim) == 1
 
-@inline unsafe_setindex!{T}(v::Array{T}, x::T, ind::Int) = (@inbounds v[ind] = x; v)
 @inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!(v::BitArray, x, ind::Real) = (Base.unsafe_bitsetindex!(v.chunks, convert(Bool, x), to_index(ind)); v)
 
