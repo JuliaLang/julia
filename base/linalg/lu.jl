@@ -160,7 +160,7 @@ function det{T,S}(A::LU{T,S})
     return prod(diag(A.factors)) * (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T))
 end
 
-function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     dg = diag(A.factors)
     s = (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T)) * prod(sign(dg))
@@ -168,13 +168,15 @@ function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
 end
 
 function logdet{T<:Real,S}(A::LU{T,S})
-    d,s = logdet2(A)
+    d,s = logabsdet(A)
     if s < 0
         throw(DomainError())
     end
     d
 end
 
+_mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
+_mod2pi(x) = mod2pi(x)
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
     s = sum(log(diag(A.factors)))
@@ -182,7 +184,7 @@ function logdet{T<:Complex,S}(A::LU{T,S})
         s = Complex(real(s), imag(s)+π)
     end
     r, a = reim(s)
-    a = π-mod2pi(π-a) #Take principal branch with argument (-pi,pi]
+    a = π - _mod2pi(π - a) #Take principal branch with argument (-pi,pi]
     complex(r,a)
 end
 
