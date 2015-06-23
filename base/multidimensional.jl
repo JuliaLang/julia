@@ -311,7 +311,7 @@ _iterable(v) = repeated(v)
     _unsafe_setindex!(l, A, x, J...)
 end
 @inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractVector,Colon}...)
-    _unsafe_batchsetindex!(l, A, _iterable(x), to_index(J)...)
+    _unsafe_batchsetindex!(l, A, _iterable(x), to_indexes(J...)...)
 end
 
 # While setindex! with one array argument doesn't mean anything special, it is

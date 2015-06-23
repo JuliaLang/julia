@@ -603,9 +603,9 @@ end
 # Indexing with non-scalars. For now, this returns a copy, but changing that
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
-getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(V, to_index(I)...)
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(V, to_indexes(I...)...)
 unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
-unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = unsafe_getindex(V, to_index(I)...)
+unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = unsafe_getindex(V, to_indexes(I...)...)
 
 # Nonscalar setindex! falls back to the AbstractArray versions
 

@@ -438,12 +438,12 @@ function _getindex(::LinearFast, A::AbstractArray, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_getindex
     checkbounds(A, I...)
-    unsafe_getindex(A, sub2ind(size(A), to_index(I)...))
+    unsafe_getindex(A, sub2ind(size(A), to_indexes(I...)...))
 end
 _unsafe_getindex(::LinearFast, A::AbstractArray, I::Int) = (@_inline_meta; getindex(A, I))
 function _unsafe_getindex(::LinearFast, A::AbstractArray, I::Real...)
     @_inline_meta
-    unsafe_getindex(A, sub2ind(size(A), to_index(I)...))
+    unsafe_getindex(A, sub2ind(size(A), to_indexes(I...)...))
 end
 
 # LinearSlow Scalar indexing
@@ -530,12 +530,12 @@ function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_setindex!
     checkbounds(A, I...)
-    unsafe_setindex!(A, v, sub2ind(size(A), to_index(I)...))
+    unsafe_setindex!(A, v, sub2ind(size(A), to_indexes(I...)...))
 end
 _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Int) = (@_inline_meta; setindex!(A, v, I))
 function _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     @_inline_meta
-    unsafe_setindex!(A, v, sub2ind(size(A), to_index(I)...))
+    unsafe_setindex!(A, v, sub2ind(size(A), to_indexes(I...)...))
 end
 
 # LinearSlow Scalar indexing

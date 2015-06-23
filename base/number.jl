@@ -14,7 +14,7 @@ endof(x::Number) = 1
 getindex(x::Number) = x
 getindex(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
 getindex(x::Number, I::Integer...) = all([i == 1 for i in I]) ? x : throw(BoundsError())
-getindex(x::Number, I::Real...) = getindex(x, to_index(I)...)
+getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
 unsafe_getindex(x::Real, i::Real) = x
 first(x::Number) = x
 last(x::Number) = x
