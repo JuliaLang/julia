@@ -544,7 +544,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
 
 DLLEXPORT void jl_atexit_hook()
 {
-#if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
+#if defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
     if (jl_options.code_coverage)
@@ -1067,10 +1067,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-#ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_enable(0);
-#endif
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks();
@@ -1140,9 +1138,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 
-#ifdef JL_GC_MARKSWEEP
     jl_gc_enable(1);
-#endif
 
     if (jl_options.image_file)
         jl_init_restored_modules();
