@@ -4,7 +4,7 @@ module Docs
 
 import Base.Markdown: @doc_str, MD
 
-export doc, @doc
+export doc
 
 # Basic API / Storage
 
@@ -210,9 +210,20 @@ function docm(ex)
     :(doc($(esc(ex))))
 end
 
+# Not actually used; bootstrap version in bootstrap.jl
+
 macro doc (args...)
     docm(args...)
 end
+
+# Swap out the bootstrap macro with the real one
+
+Base.DocBootstrap.setexpand!(docm)
+
+# Names are resolved relative to the DocBootstrap module, so
+# inject the ones we need there.
+
+eval(Base.DocBootstrap, :(import ..Docs: @init, doc!, doc, newmethod))
 
 # Metametadata
 

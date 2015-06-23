@@ -227,7 +227,7 @@ macro timed(ex)
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
-        diff = GC_Diff(gc_num(), stats)
+        local diff = GC_Diff(gc_num(), stats)
         val, elapsedtime/1e9, diff.total_allocd + diff.allocd, diff.total_time/1e9, diff
     end
 end

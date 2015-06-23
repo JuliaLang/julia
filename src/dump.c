@@ -201,20 +201,16 @@ DLLEXPORT int jl_running_on_valgrind()
     return RUNNING_ON_VALGRIND;
 }
 
-static void jl_load_sysimg_so()
+static int jl_load_sysimg_so()
 {
 #ifndef _OS_WINDOWS_
     Dl_info dlinfo;
 #endif
     // attempt to load the pre-compiled sysimage from jl_sysimg_handle
-    // if this succeeds, sysimg_gvars will be a valid array
-    // otherwise, it will be NULL
-    if (jl_sysimg_handle == 0) {
-        sysimg_gvars = 0;
-        return;
-    }
+    if (jl_sysimg_handle == 0)
+        return -1;
 
-    int imaging_mode = jl_options.build_path != NULL;
+    int imaging_mode = jl_generating_output();
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release
@@ -261,7 +257,9 @@ static void jl_load_sysimg_so()
     if (sysimg_data) {
         size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
         jl_restore_system_image_data(sysimg_data, len);
+        return 0;
     }
+    return -1;
 }
 
 static jl_value_t *jl_deserialize_gv(ios_t *s, jl_value_t *v)
@@ -456,6 +454,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         jl_serialize_value(s, dt->instance);
     if (nf > 0) {
         write_int32(s, dt->alignment);
+        write_int8(s, dt->haspadding);
         ios_write(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, dt->types);
     }
@@ -958,6 +957,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
 
     if (nf > 0) {
         dt->alignment = read_int32(s);
+        dt->haspadding = read_int8(s);
         ios_read(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
         jl_gc_wb(dt, dt->types);
@@ -1503,8 +1503,11 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     char *fname_shlib = (char*)alloca(strlen(fname)+1);
     strcpy(fname_shlib, fname);
     char *fname_shlib_dot = strrchr(fname_shlib, '.');
-    if (fname_shlib_dot != NULL)
+    if (fname_shlib_dot != NULL) {
+        if (!strcmp(fname_shlib_dot, ".ji"))
+            return;  // .ji extension => load .ji file only
         *fname_shlib_dot = 0;
+    }
 
     // Get handle to sys.so
 #ifdef _OS_WINDOWS_
@@ -1523,9 +1526,7 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 void jl_restore_system_image_from_stream(ios_t *f)
 {
-#ifdef JL_GC_MARKSWEEP
     int en = jl_gc_enable(0);
-#endif
     DUMP_MODES last_mode = mode;
     mode = MODE_SYSTEM_IMAGE;
     arraylist_new(&backref_list, 250000);
@@ -1591,9 +1592,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
 
-#ifdef JL_GC_MARKSWEEP
     jl_gc_enable(en);
-#endif
     mode = last_mode;
     jl_update_all_fptrs();
 }
@@ -1603,19 +1602,21 @@ DLLEXPORT void jl_restore_system_image(const char *fname)
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
-    jl_load_sysimg_so();
     if (!is_ji) {
-        if (sysimg_gvars == 0)
+        int err = jl_load_sysimg_so();
+        if (err != 0) {
+            if (jl_sysimg_handle == 0)
+                jl_errorf("System image file \"%s\" not found\n", fname);
+            jl_errorf("Library \"%s\" does not contain a valid system image\n", fname);
+        }
+    }
+    else {
+        ios_t f;
+        if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found\n", fname);
-        return;
+        jl_restore_system_image_from_stream(&f);
+        ios_close(&f);
     }
-
-    ios_t f;
-    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        jl_errorf("System image file \"%s\" not found\n", fname);
-    }
-    jl_restore_system_image_from_stream(&f);
-    ios_close(&f);
 }
 
 DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)

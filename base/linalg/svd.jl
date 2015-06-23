@@ -53,7 +53,7 @@ end
 svdvals(x::Number) = [abs(x)]
 
 # SVD least squares
-function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
+function A_ldiv_B!{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
     n = length(A.S)
     Sinv = zeros(T, n)
     k = length(find(A.S .> eps(real(float(one(T))))*maximum(A.S)))

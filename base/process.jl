@@ -213,6 +213,7 @@ typealias ProcessChainOrNot Union{Bool,ProcessChain}
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
     proc = Libc.malloc(_sizeof_uv_process)
+    disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
@@ -221,7 +222,6 @@ function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
         uv_jl_return_spawn::Ptr{Void})
     if error != 0
-        disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end

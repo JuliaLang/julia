@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #if defined(_OS_WINDOWS_)
 #include <malloc.h>
 #else
@@ -187,9 +188,7 @@ void jl_enter_handler(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     eh->prev = jl_current_task->eh;
-#ifdef JL_GC_MARKSWEEP
     eh->gcstack = jl_pgcstack;
-#endif
     jl_current_task->eh = eh;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.
@@ -250,9 +249,9 @@ static int NOINLINE compare_svec(jl_value_t *a, jl_value_t *b)
 }
 
 // See comment above for an explanation of NOINLINE.
-static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
-                                   jl_datatype_t *dt, size_t nf)
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
+    size_t nf = jl_datatype_nfields(dt);
     for (size_t f=0; f < nf; f++) {
         size_t offs = dt->fields[f].offset;
         char *ao = (char*)jl_data_ptr(a) + offs;
@@ -266,7 +265,11 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
             else eq = jl_egal(af, bf);
         }
         else {
-            eq = bits_equal(ao, bo, dt->fields[f].size);
+            jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            if (!ft->haspadding)
+                eq = bits_equal(ao, bo, dt->fields[f].size);
+            else
+                eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
         }
         if (!eq) return 0;
     }
@@ -293,10 +296,9 @@ int jl_egal(jl_value_t *a, jl_value_t *b) // warning: a,b may NOT have been gc-r
     size_t sz = dt->size;
     if (sz == 0) return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0) {
+    if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
-    }
-    return compare_fields(a, b, dt, nf);
+    return compare_fields(a, b, dt);
 }
 
 JL_CALLABLE(jl_f_is)
@@ -933,7 +935,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 
 extern int jl_in_inference;
 extern int jl_boot_file_loaded;
-int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops, jl_module_t *m);
+int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m);
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig)
 {
@@ -947,7 +949,9 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
                 f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
                 jl_gc_wb(f->linfo, f->linfo->ast);
             }
-            if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1,f->linfo->module)) {
+            assert(jl_is_expr(f->linfo->ast));
+            if (always_infer ||
+                jl_eval_with_compiler_p((jl_expr_t*)f->linfo->ast, jl_lam_body((jl_expr_t*)f->linfo->ast), 1, f->linfo->module)) {
                 jl_type_infer(f->linfo, sig, f->linfo);
             }
         }
@@ -1335,34 +1339,35 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, "#<intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
     }
     else if (jl_is_int64(v)) {
-        n += jl_printf(out, "%lld", jl_unbox_int64(v));
+        n += jl_printf(out, "%" PRId64, jl_unbox_int64(v));
     }
     else if (jl_is_int32(v)) {
-        n += jl_printf(out, "%d", jl_unbox_int32(v));
+        n += jl_printf(out, "%" PRId32, jl_unbox_int32(v));
     }
     else if (jl_typeis(v,jl_int16_type)) {
-        n += jl_printf(out, "%hd", jl_unbox_int16(v));
+        n += jl_printf(out, "%" PRId16, jl_unbox_int16(v));
     }
     else if (jl_typeis(v,jl_int8_type)) {
-        n += jl_printf(out, "%hhd", jl_unbox_int8(v));
+        n += jl_printf(out, "%" PRId8, jl_unbox_int8(v));
     }
     else if (jl_is_uint64(v)) {
-        n += jl_printf(out, "0x%016llx", jl_unbox_uint64(v));
+        n += jl_printf(out, "0x%016" PRIx64, jl_unbox_uint64(v));
     }
     else if (jl_is_uint32(v)) {
-        n += jl_printf(out, "0x%08x", jl_unbox_uint32(v));
+        n += jl_printf(out, "0x%08" PRIx32, jl_unbox_uint32(v));
     }
     else if (jl_typeis(v,jl_uint16_type)) {
-        n += jl_printf(out, "0x%04hx", jl_unbox_uint16(v));
+        n += jl_printf(out, "0x%04" PRIx16, jl_unbox_uint16(v));
     }
     else if (jl_typeis(v,jl_uint8_type)) {
-        n += jl_printf(out, "0x%02hhx", jl_unbox_uint8(v));
+        n += jl_printf(out, "0x%02" PRIx8, jl_unbox_uint8(v));
     }
     else if (jl_is_cpointer(v)) {
 #ifdef _P64
-        n += jl_printf(out, "0x%016llx", jl_unbox_voidpointer(v));
+        n += jl_printf(out, "0x%016" PRIx64,
+                       (int64_t)jl_unbox_voidpointer(v));
 #else
-        n += jl_printf(out, "0x%08x", jl_unbox_voidpointer(v));
+        n += jl_printf(out, "0x%08" PRIx32, (int32_t)jl_unbox_voidpointer(v));
 #endif
     }
     else if (jl_is_float32(v)) {
@@ -1409,7 +1414,8 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, ":%s", ((jl_sym_t*)v)->name);
     }
     else if (jl_is_gensym(v)) {
-        n += jl_printf(out, "GenSym(%d)", ((jl_gensym_t*)v)->id);
+        n += jl_printf(out, "GenSym(%" PRIuPTR ")",
+                       (uintptr_t)((jl_gensym_t*)v)->id);
     }
     else if (jl_is_symbolnode(v)) {
         n += jl_printf(out, "%s::", jl_symbolnode_sym(v)->name);
@@ -1420,10 +1426,10 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, ".%s", jl_globalref_name(v)->name);
     }
     else if (jl_is_labelnode(v)) {
-        n += jl_printf(out, "%d:", jl_labelnode_label(v));
+        n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));
     }
     else if (jl_is_gotonode(v)) {
-        n += jl_printf(out, "goto %d", jl_gotonode_label(v));
+        n += jl_printf(out, "goto %" PRIuPTR, jl_gotonode_label(v));
     }
     else if (jl_is_quotenode(v)) {
         jl_value_t *qv = jl_fieldref(v,0);
@@ -1442,7 +1448,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, ")");
     }
     else if (jl_is_linenode(v)) {
-        n += jl_printf(out, "# line %d", jl_linenode_line(v));
+        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
     }
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
@@ -1508,14 +1514,14 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
             char *data = (char*)jl_data_ptr(v);
             n += jl_printf(out, "0x");
             for(int i=nb-1; i >= 0; --i)
-                n += jl_printf(out, "%02hhx", data[i]);
+                n += jl_printf(out, "%02" PRIx8, data[i]);
         }
         else {
             jl_value_t *fldval=NULL;
             JL_GC_PUSH1(&fldval);
             for (size_t i = 0; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, ((jl_sym_t*)jl_svecref(t->name->names, i))->name);
+                    n += jl_printf(out, "%s", ((jl_sym_t*)jl_svecref(t->name->names, i))->name);
                     //jl_fielddesc_t f = t->fields[i];
                     n += jl_printf(out, "=");
                 }

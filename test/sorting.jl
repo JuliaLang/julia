@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Order: Forward
+
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
 @test sort(['z':-1:'a';]) == ['a':'z';]
@@ -32,8 +34,8 @@ numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
 
 @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
 @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
-@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
-@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
+@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Forward) == 6:10
 
 for R in numTypes, T in numTypes
     @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
@@ -49,8 +51,8 @@ for R in numTypes, T in numTypes
 
     @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
     @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
-    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
-    @test searchsorted(ones(R, 15), T(1), 6, 10, Base.Order.Forward) == 6:10
+    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
+    @test searchsorted(ones(R, 15), T(1), 6, 10, Forward) == 6:10
 end
 
 for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
@@ -82,6 +84,26 @@ end
 @test searchsorted([], 0) == 1:0
 @test searchsorted([1,2,3], 0) == 1:0
 @test searchsorted([1,2,3], 4) == 4:3
+
+# exercise the codepath in searchsorted* methods for ranges that check for zero step range
+immutable ConstantRange{T} <: Range{T}
+   val::T
+   len::Int
+end
+
+Base.length(r::ConstantRange) = r.len
+Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
+Base.step(r::ConstantRange) = 0
+
+r = ConstantRange(1, 5)
+
+@test searchsortedfirst(r, 1.0, Forward) == 1
+@test searchsortedfirst(r, 1, Forward) == 1
+@test searchsortedfirst(r, UInt(1), Forward) == 1
+
+@test searchsortedlast(r, 1.0, Forward) == 5
+@test searchsortedlast(r, 1, Forward) == 5
+@test searchsortedlast(r, UInt(1), Forward) == 5
 
 a = rand(1:10000, 1000)
 

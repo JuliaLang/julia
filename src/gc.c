@@ -18,6 +18,7 @@
 #include <strings.h>
 #endif
 #include <assert.h>
+#include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
@@ -186,8 +187,6 @@ void jl_finalize(jl_value_t *o)
 {
     (void)finalize_object(o);
 }
-
-#ifdef JL_GC_MARKSWEEP
 
 typedef struct _buff_t {
     union {
@@ -496,8 +495,8 @@ static void add_lostval_parent(jl_value_t* parent)
 #define verify_val(v) do {                                              \
         if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
             jl_printf(JL_STDOUT,                                        \
-                      "Found lostval 0x%lx at %s:%d oftype: ",          \
-                      (uintptr_t)(lostval), __FILE__, __LINE__);        \
+                      "Found lostval %p at %s:%d oftype: ",             \
+                      (void*)(lostval), __FILE__, __LINE__);            \
             jl_static_show(JL_STDOUT, jl_typeof(v));                    \
             jl_printf(JL_STDOUT, "\n");                                 \
         }                                                               \
@@ -506,9 +505,9 @@ static void add_lostval_parent(jl_value_t* parent)
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
         if (*(jl_value_t**)(slot) == lostval && (obj) != lostval) {     \
-            jl_printf(JL_STDOUT, "Found parent %s 0x%lx at %s:%d\n",    \
-                      ty, (uintptr_t)(obj), __FILE__, __LINE__);        \
-            jl_printf(JL_STDOUT, "\tloc 0x%lx : ", (uintptr_t)(slot));  \
+            jl_printf(JL_STDOUT, "Found parent %s %p at %s:%d\n",       \
+                      (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
+            jl_printf(JL_STDOUT, "\tloc %p : ", (void*)(slot));         \
             jl_printf(JL_STDOUT, args);                                 \
             jl_printf(JL_STDOUT, "\n");                                 \
             jl_printf(JL_STDOUT, "\ttype: ");                           \
@@ -1432,7 +1431,8 @@ static void grow_mark_stack(void)
     size_t offset = mark_stack - mark_stack_base;
     mark_stack_base = (jl_value_t**)realloc(mark_stack_base, newsz*sizeof(void*));
     if (mark_stack_base == NULL) {
-        jl_printf(JL_STDERR, "Could'nt grow mark stack to : %d\n", newsz);
+        jl_printf(JL_STDERR, "Couldn't grow mark stack to : %" PRIuPTR "\n",
+                  (uintptr_t)newsz);
         exit(1);
     }
     mark_stack = mark_stack_base + offset;
@@ -2678,33 +2678,6 @@ static void big_obj_stats(void)
 }
 #endif //MEMPROFILE
 
-#else //JL_GC_MARKSWEEP
-DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
-{
-    size_t allocsz = sz + sizeof_jl_taggedvalue_t;
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-    allocd_bytes += allocsz;
-    gc_num.alloc++;
-    return jl_valueof(malloc(allocsz));
-}
-int64_t jl_gc_diff_total_bytes(void)
-{
-    return 0;
-}
-DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
-{
-    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
-    jl_set_typeof(wr, jl_weakref_type);
-    wr->value = value;
-    return wr;
-}
-static inline int maybe_collect(void)
-{
-    return 0;
-}
-#endif //JL_GC_MARKSWEEP
-
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     maybe_collect();
@@ -2760,14 +2733,11 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
-#ifdef JL_GC_MARKSWEEP
     if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
         perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }
-    else
-#endif
-    if (allocsz < oldsz)
+    else if (allocsz < oldsz)
         freed_bytes += (oldsz - allocsz);
     else
         allocd_bytes += (allocsz - oldsz);

@@ -1764,7 +1764,7 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
     long lno = li->line;
     if (lno > 0) {
         char *fname = ((jl_sym_t*)li->file)->name;
-        jl_printf(s, " at %s:%d", fname, lno);
+        jl_printf(s, " at %s:%ld", fname, lno);
     }
 }
 

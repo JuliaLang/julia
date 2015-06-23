@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -146,9 +147,7 @@ jl_datatype_t *jl_task_type;
 DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
 JL_THREAD jl_task_t *jl_root_task;
 DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-#ifdef JL_GC_MARKSWEEP
 DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
-#endif
 
 #ifdef COPY_STACKS
 static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
@@ -301,10 +300,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 #endif
 
         // set up global state for new task
-#ifdef JL_GC_MARKSWEEP
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
-#endif
 
         // restore task's current module, looking at parent tasks
         // if it hasn't set one.
@@ -754,11 +751,12 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         if (line_num == ip)
-            jl_safe_printf("unknown function (ip: %d)\n", line_num);
+            jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
         else if (line_num == -1)
             jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
         else
-            jl_safe_printf("%s at %s:%d\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, file_name,
+                           (uintptr_t)line_num);
     }
 }
 
@@ -841,9 +839,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->exception = jl_nothing;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-#ifdef JL_GC_MARKSWEEP
     t->gcstack = NULL;
-#endif
     t->stkbuf = NULL;
 
 #ifdef COPY_STACKS
@@ -943,9 +939,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->donenotify = NULL;
     jl_current_task->exception = NULL;
     jl_current_task->eh = NULL;
-#ifdef JL_GC_MARKSWEEP
     jl_current_task->gcstack = NULL;
-#endif
 
     jl_root_task = jl_current_task;
 

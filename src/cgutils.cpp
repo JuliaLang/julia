@@ -75,7 +75,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 #ifdef _OS_WINDOWS_
     std::string imp_name;
     // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_options.build_path != NULL) {
+    if (jl_generating_output()) {
         // add the __declspec(dllimport) attribute
         gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
         // this will cause llvm to rename it, so we do the same
@@ -97,7 +97,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 
 #ifdef _OS_WINDOWS_
     // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_options.build_path != NULL) {
+    if (jl_generating_output()) {
         if (gv->getLinkage() == GlobalValue::ExternalLinkage)
             gv->setLinkage(GlobalValue::DLLImportLinkage);
 #ifdef _P64
@@ -1874,7 +1874,6 @@ static Value* emit_allocobj(size_t static_size)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
 {
-#ifdef JL_GC_MARKSWEEP
     Value* parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
     Value* parent_type = builder.CreateLoad(parenttag);
     Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
@@ -1897,12 +1896,10 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
-#endif
 }
 
 static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-#ifdef JL_GC_MARKSWEEP
     BasicBlock *cont;
     Value *not_null = builder.CreateICmpNE(ptr, V_null);
     BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
@@ -1913,7 +1910,6 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
-#endif
 }
 
 static Value *emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx0,

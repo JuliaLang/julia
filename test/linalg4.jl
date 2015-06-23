@@ -135,3 +135,11 @@ A = rand(5,7)
 @test_throws(BoundsError,triu(A,-6))
 @test_throws(BoundsError,tril(A,8))
 @test_throws(BoundsError,tril(A,-6))
+
+# test generic axpy
+x = ['a','b','c','d','e']
+y = ['a','b','c','d','e']
+α = 'f'
+@test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
+@test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
+@test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))

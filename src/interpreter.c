@@ -77,7 +77,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 
 void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname);
 
-int jl_has_intrinsics(jl_expr_t *e, jl_module_t *m);
+int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m);
 
 extern int jl_boot_file_loaded;
 extern int inside_typedef;
@@ -181,7 +181,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             // directly calling an inner function ("let")
             jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
             if (jl_is_expr(li->ast) && !jl_lam_vars_captured((jl_expr_t*)li->ast) &&
-                !jl_has_intrinsics((jl_expr_t*)li->ast, jl_current_module)) {
+                !jl_has_intrinsics((jl_expr_t*)li->ast, (jl_expr_t*)li->ast, jl_current_module)) {
                 size_t na = nargs-1;
                 if (na == 0)
                     return jl_interpret_toplevel_thunk(li);

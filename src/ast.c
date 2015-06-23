@@ -140,7 +140,7 @@ void jl_init_frontend(void)
 
     // Enable / disable syntax deprecation warnings
     // Disable in imaging mode to avoid i/o errors (#10727)
-    if (jl_options.build_path != NULL)
+    if (jl_generating_output())
         jl_parse_depwarn(0);
     else
         jl_parse_depwarn((int)jl_options.depwarn);
@@ -197,9 +197,7 @@ static jl_value_t *full_list_of_lists(value_t e, int expronly)
 
 static jl_value_t *scm_to_julia(value_t e, int expronly)
 {
-#ifdef JL_GC_MARKSWEEP
     int en = jl_gc_enable(0);
-#endif
     jl_value_t *v;
     JL_TRY {
         v = scm_to_julia_(e, expronly);
@@ -210,9 +208,7 @@ static jl_value_t *scm_to_julia(value_t e, int expronly)
         jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
         v = (jl_value_t*)ex;
     }
-#ifdef JL_GC_MARKSWEEP
     jl_gc_enable(en);
-#endif
     return v;
 }
 

@@ -553,10 +553,10 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
         end
     end
 
-    if isa(f,QuoteNode) && isa(f.value, Function)
+    if isa(f,QuoteNode) && (isa(f.value, Function) || isa(f.value, IntrinsicFunction))
         return f.value
     end
-    if isa(f,Function)
+    if isa(f,Function) || isa(f,IntrinsicFunction)
         return f
     end
     if isa(f,SymbolNode)
@@ -3267,44 +3267,6 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
             replace_getfield!(ast, a, tupname, vals, sv, 1)
         end
     end
-end
-
-function code_typed(f, types::ANY; optimize=true)
-    types = to_tuple_type(types)
-    code_typed(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...}, optimize=optimize)
-end
-function code_typed(f::Function, types::ANY; optimize=true)
-    types = to_tuple_type(types)
-    asts = []
-    for x in _methods(f,types,-1)
-        linfo = func_for_method(x[3],types,x[2])
-        if optimize
-            (tree, ty) = typeinf(linfo, x[1], x[2], linfo, true, true)
-        else
-            (tree, ty) = typeinf_uncached(linfo, x[1], x[2], optimize=false)
-        end
-        if !isa(tree,Expr)
-            push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
-        else
-            push!(asts, tree)
-        end
-    end
-    asts
-end
-
-function return_types(f, types::ANY)
-    types = to_tuple_type(types)
-    return_types(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...})
-end
-function return_types(f::Function, types::ANY)
-    types = to_tuple_type(types)
-    rt = []
-    for x in _methods(f,types,-1)
-        linfo = func_for_method(x[3],types,x[2])
-        (tree, ty) = typeinf(linfo, x[1], x[2])
-        push!(rt, ty)
-    end
-    rt
 end
 
 #tfunc(f,t) = methods(f,t)[1].func.code.tfunc

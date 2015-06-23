@@ -542,6 +542,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 jl_throw(jl_overflow_exception);
             al = ((jl_datatype_t*)ty)->alignment;
             st->fields[i].isptr = 0;
+            if (((jl_datatype_t*)ty)->haspadding)
+                st->haspadding = 1;
         }
         else {
             fsz = sizeof(void*);
@@ -552,7 +554,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             ptrfree = 0;
         }
         if (al != 0) {
-            sz = LLT_ALIGN(sz, al);
+            size_t alsz = LLT_ALIGN(sz, al);
+            if (alsz > sz)
+                st->haspadding = 1;
+            sz = alsz;
             if (al > alignm)
                 alignm = al;
         }
@@ -608,6 +613,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->ditype = NULL;
     t->size = 0;
     t->alignment = 1;
+    t->haspadding = 0;
 
     if (tn == NULL) {
         t->name = NULL;
@@ -799,7 +805,6 @@ void jl_init_box_caches(void)
     }
 }
 
-#ifdef JL_GC_MARKSWEEP
 void jl_mark_box_caches(void)
 {
     int64_t i;
@@ -818,7 +823,6 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_gensym_cache[i]);
     }
 }
-#endif
 
 jl_value_t *jl_box_bool(int8_t x)
 {

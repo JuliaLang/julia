@@ -282,7 +282,8 @@ typedef struct _jl_datatype_t {
     // hidden fields:
     uint32_t nfields;
     int32_t ninitialized;
-    uint32_t alignment;  // strictest alignment over all fields
+    uint32_t alignment : 31;  // strictest alignment over all fields
+    uint32_t haspadding : 1;  // has internal undefined bytes
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
@@ -491,7 +492,6 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *inert_sym;
 
 // gc -------------------------------------------------------------------------
 
-#ifdef JL_GC_MARKSWEEP
 typedef struct _jl_gcframe_t {
     size_t nroots;
     struct _jl_gcframe_t *prev;
@@ -606,44 +606,6 @@ static inline void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
-
-#else // No Garbage Collection
-
-#define JL_GC_PUSH(...) ;
-#define JL_GC_PUSH1(...) ;
-#define JL_GC_PUSH2(...) ;
-#define JL_GC_PUSH3(...) ;
-#define JL_GC_PUSH4(...) ;
-#define JL_GC_PUSH5(...) ;
-#define JL_GC_PUSHARGS(rts_var,n) rts_var = ((jl_value_t**)alloca((n)*sizeof(jl_value_t*)));
-#define JL_GC_POP()
-
-#define jl_gc_preserve(v) ((void)(v))
-#define jl_gc_unpreserve()
-#define jl_gc_n_preserved_values() (0)
-
-#define allocb(nb)    malloc(nb)
-DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
-STATIC_INLINE jl_value_t *jl_gc_alloc_1w() { return jl_gc_allocobj(1*sizeof(void*)); }
-STATIC_INLINE jl_value_t *jl_gc_alloc_2w() { return jl_gc_allocobj(2*sizeof(void*)); }
-STATIC_INLINE jl_value_t *jl_gc_alloc_3w() { return jl_gc_allocobj(3*sizeof(void*)); }
-
-DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
-
-int64_t jl_gc_diff_total_bytes(void);
-#define jl_gc_sync_total_bytes()
-#define jl_gc_collect(arg);
-#define jl_gc_enable(on) (0)
-#define jl_gc_is_enabled() (0)
-#define jl_gc_track_malloced_array(a)
-#define jl_gc_count_allocd(sz)
-
-#define jl_gc_wb_binding(bnd, val)
-#define jl_gc_wb(parent, ptr)
-#define jl_gc_wb_buf(parent, bufptr)
-#define jl_gc_wb_back(ptr)
-
-#endif
 
 DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
@@ -1337,9 +1299,7 @@ void jl_install_default_signal_handlers(void);
 // info describing an exception handler
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
-#ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
-#endif
     struct _jl_handler_t *prev;
 } jl_handler_t;
 
@@ -1364,10 +1324,8 @@ typedef struct _jl_task_t {
 
     // current exception handler
     jl_handler_t *eh;
-#ifdef JL_GC_MARKSWEEP
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-#endif
     // current module, or NULL if this task has not set one
     jl_module_t *current_module;
 } jl_task_t;
@@ -1387,9 +1345,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
-#ifdef JL_GC_MARKSWEEP
     jl_pgcstack = eh->gcstack;
-#endif
     JL_SIGATOMIC_END();
 }
 
@@ -1490,9 +1446,19 @@ typedef struct {
     uv_file file;
 } jl_uv_file_t;
 
-DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
-DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
-DLLEXPORT void jl_safe_printf(const char *str, ...);
+#ifdef __GNUC__
+#define _JL_FORMAT_ATTR(type, str, arg) \
+    __attribute__((format(type, str, arg)))
+#else
+#define _JL_FORMAT_ATTR(type, str, arg)
+#endif
+
+DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+    _JL_FORMAT_ATTR(printf, 2, 3);
+DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+    _JL_FORMAT_ATTR(printf, 2, 0);
+DLLEXPORT void jl_safe_printf(const char *str, ...)
+    _JL_FORMAT_ATTR(printf, 1, 2);
 
 extern DLLEXPORT JL_STREAM *JL_STDIN;
 extern DLLEXPORT JL_STREAM *JL_STDOUT;
@@ -1511,7 +1477,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type);
 DLLEXPORT void jlbacktrace(void);
 
-#if defined(GC_FINAL_STATS) && defined(JL_GC_MARKSWEEP)
+#if defined(GC_FINAL_STATS)
 void jl_print_gc_stats(JL_STREAM *s);
 #endif
 
@@ -1524,7 +1490,6 @@ typedef struct {
     int8_t quiet;
     const char *julia_home;
     const char *julia_bin;
-    const char *build_path;
     const char *eval;
     const char *print;
     const char *postboot;
@@ -1542,16 +1507,20 @@ typedef struct {
     int8_t malloc_log;
     int8_t opt_level;
     int8_t check_bounds;
-    int8_t dumpbitcode;
     int8_t depwarn;
     int8_t can_inline;
     int8_t fast_math;
     int8_t worker;
-    const char *bindto;
     int8_t handle_signals;
+    const char *bindto;
+    const char *outputbc;
+    const char *outputo;
+    const char *outputji;
 } jl_options_t;
 
 extern DLLEXPORT jl_options_t jl_options;
+
+DLLEXPORT int jl_generating_output();
 
 // Settings for code_coverage and malloc_log
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated
@@ -1567,9 +1536,6 @@ extern DLLEXPORT jl_options_t jl_options;
 #define JL_OPTIONS_COMPILE_OFF 0
 #define JL_OPTIONS_COMPILE_ON  1
 #define JL_OPTIONS_COMPILE_ALL 2
-
-#define JL_OPTIONS_DUMPBITCODE_ON 1
-#define JL_OPTIONS_DUMPBITCODE_OFF 2
 
 #define JL_OPTIONS_COLOR_ON 1
 #define JL_OPTIONS_COLOR_OFF 2

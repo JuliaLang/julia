@@ -57,6 +57,9 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 
+include("docs/bootstrap.jl")
+using .DocBootstrap
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -149,9 +152,8 @@ include("multidimensional.jl")
 
 include("primes.jl")
 
-begin
-    SOURCE_PATH = ""
-    include = function(path)
+let SOURCE_PATH = ""
+    global include = function(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path
@@ -244,7 +246,7 @@ include("client.jl")
 # Documentation
 
 include("markdown/Markdown.jl")
-include("docs.jl")
+include("docs/Docs.jl")
 using .Docs
 using .Markdown
 
@@ -304,7 +306,7 @@ import .Dates: Date, DateTime, now
 include("deprecated.jl")
 
 # Some basic documentation
-include("basedocs.jl")
+include("docs/basedocs.jl")
 
 function __init__()
     # Base library init
