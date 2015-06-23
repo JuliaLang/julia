@@ -4,7 +4,7 @@
 
    Returns the number of dimensions of A
   ```
-  """ Base.ndims
+  """ ndims
 
   @doc doc"""
   ```rst
@@ -23,7 +23,7 @@
       julia> size(A,3,2)
       (4,3)
   ```
-  """ Base.size
+  """ size
 
   @doc doc"""
   ```rst
@@ -31,7 +31,7 @@
 
    Tests whether A or its elements are of type T
   ```
-  """ Base.iseltype
+  """ iseltype
 
   @doc doc"""
   ```rst
@@ -39,7 +39,7 @@
 
    Returns the number of elements in A
   ```
-  """ Base.length
+  """ length
 
   @doc doc"""
   ```rst
@@ -77,7 +77,7 @@
       (iter.I_1,iter.I_2) = (2,3)
       A[iter] = 0.8090413606455655
   ```
-  """ Base.eachindex
+  """ eachindex
 
   @doc doc"""
   ```rst
@@ -100,7 +100,7 @@
 
       Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
   ```
-  """ Base.Base
+  """ Base
 
   @doc doc"""
   ```rst
@@ -111,7 +111,7 @@
    matrices, one should usually use "nnz", which returns the number
    of stored values.
   ```
-  """ Base.countnz
+  """ countnz
 
   @doc doc"""
   ```rst
@@ -119,7 +119,7 @@
 
    Convert an array to its complex conjugate in-place
   ```
-  """ Base.conj!
+  """ conj!
 
   @doc doc"""
   ```rst
@@ -128,7 +128,7 @@
    Returns the distance in memory (in number of elements) between
    adjacent elements in dimension k
   ```
-  """ Base.stride
+  """ stride
 
   @doc doc"""
   ```rst
@@ -136,7 +136,7 @@
 
    Returns a tuple of the memory strides in each dimension
   ```
-  """ Base.strides
+  """ strides
 
   @doc doc"""
   ```rst
@@ -148,7 +148,7 @@
    **Example** "i, j, ... = ind2sub(size(A), indmax(A))" provides
    the indices of the maximum element
   ```
-  """ Base.ind2sub
+  """ ind2sub
 
   @doc doc"""
   ```rst
@@ -157,7 +157,7 @@
    Returns a tuple of subscripts into array "a" corresponding to the
    linear index "index"
   ```
-  """ Base.ind2sub
+  """ ind2sub
 
   @doc doc"""
   ```rst
@@ -166,7 +166,7 @@
    The inverse of "ind2sub", returns the linear index corresponding
    to the provided subscripts
   ```
-  """ Base.sub2ind
+  """ sub2ind
 
   @doc doc"""
   ```rst
@@ -177,7 +177,7 @@
    arguments. The syntax "Array(T, dims)" is also available, but
    deprecated.
   ```
-  """ Base.Array
+  """ Array
 
   @doc doc"""
   ```rst
@@ -187,7 +187,7 @@
    with the syntax "Type[]". Element values can be specified using
    "Type[a,b,c,...]".
   ```
-  """ Base.getindex
+  """ getindex
 
   @doc doc"""
   ```rst
@@ -196,7 +196,7 @@
    Construct an uninitialized cell array (heterogeneous array).
    "dims" can be either a tuple or a series of integer arguments.
   ```
-  """ Base.cell
+  """ cell
 
   @doc doc"""
   ```rst
@@ -205,7 +205,7 @@
    Create an array of all zeros of specified type. The type defaults
    to Float64 if not specified.
   ```
-  """ Base.zeros
+  """ zeros
 
   @doc doc"""
   ```rst
@@ -214,7 +214,7 @@
    Create an array of all zeros with the same element type and shape
    as A.
   ```
-  """ Base.zeros
+  """ zeros
 
   @doc doc"""
   ```rst
@@ -223,7 +223,7 @@
    Create an array of all ones of specified type. The type defaults to
    Float64 if not specified.
   ```
-  """ Base.ones
+  """ ones
 
   @doc doc"""
   ```rst
@@ -232,7 +232,7 @@
    Create an array of all ones with the same element type and shape as
    A.
   ```
-  """ Base.ones
+  """ ones
 
   @doc doc"""
   ```rst
@@ -240,7 +240,7 @@
 
    Create a "BitArray" with all values set to true
   ```
-  """ Base.trues
+  """ trues
 
   @doc doc"""
   ```rst
@@ -248,7 +248,7 @@
 
    Create a "BitArray" with all values set to false
   ```
-  """ Base.falses
+  """ falses
 
   @doc doc"""
   ```rst
@@ -262,7 +262,7 @@
    same object. "fill(Foo(), dims)" will return an array filled with
    the result of evaluating "Foo()" once.
   ```
-  """ Base.fill
+  """ fill
 
   @doc doc"""
   ```rst
@@ -273,7 +273,7 @@
    Foo())" will return "A" filled with the result of evaluating
    "Foo()" once.
   ```
-  """ Base.fill!
+  """ fill!
 
   @doc doc"""
   ```rst
@@ -283,7 +283,7 @@
    different dimensions. An implementation for a particular type of
    array may choose whether the data is copied or shared.
   ```
-  """ Base.reshape
+  """ reshape
 
   @doc doc"""
   ```rst
@@ -297,7 +297,7 @@
    ranges), this function returns a standard "Array" to allow
    operating on elements.
   ```
-  """ Base.similar
+  """ similar
 
   @doc doc"""
   ```rst
@@ -309,7 +309,7 @@
    constructs an array with the same binary data as the given array,
    but with the specified element type.
   ```
-  """ Base.reinterpret
+  """ reinterpret
 
   @doc doc"""
   ```rst
@@ -317,7 +317,7 @@
 
    n-by-n identity matrix
   ```
-  """ Base.eye
+  """ eye
 
   @doc doc"""
   ```rst
@@ -325,7 +325,7 @@
 
    m-by-n identity matrix
   ```
-  """ Base.eye
+  """ eye
 
   @doc doc"""
   ```rst
@@ -334,7 +334,7 @@
    Constructs an identity matrix of the same dimensions and type as
    "A".
   ```
-  """ Base.eye
+  """ eye
 
   @doc doc"""
   ```rst
@@ -343,7 +343,7 @@
    Construct a range of "n" linearly spaced elements from "start"
    to "stop".
   ```
-  """ Base.linspace
+  """ linspace
 
   @doc doc"""
   ```rst
@@ -352,7 +352,7 @@
    Construct a vector of "n" logarithmically spaced numbers from
    "10^start" to "10^stop".
   ```
-  """ Base.logspace
+  """ logspace
 
   @doc doc"""
   ```rst
@@ -362,7 +362,7 @@
    singleton dimensions, and returns an array of the results
    "f(as...)" for each position.
   ```
-  """ Base.broadcast
+  """ broadcast
 
   @doc doc"""
   ```rst
@@ -374,7 +374,7 @@
    listed in the "As", as in "broadcast!(f, A, A, B)" to perform
    "A[:] = broadcast(f, A, B)".
   ```
-  """ Base.broadcast!
+  """ broadcast!
 
   @doc doc"""
   ```rst
@@ -383,7 +383,7 @@
    Like "broadcast", but allocates a "BitArray" to store the
    result, rather then an "Array".
   ```
-  """ Base.bitbroadcast
+  """ bitbroadcast
 
   @doc doc"""
   ```rst
@@ -393,7 +393,7 @@
    "broadcast_function(f)(As...) === broadcast(f, As...)". Most
    useful in the form "const broadcast_f = broadcast_function(f)".
   ```
-  """ Base.broadcast_function
+  """ broadcast_function
 
   @doc doc"""
   ```rst
@@ -401,7 +401,7 @@
 
    Like "broadcast_function", but for "broadcast!".
   ```
-  """ Base.broadcast!_function
+  """ broadcast!_function
 
   @doc doc"""
   ```rst
@@ -411,7 +411,7 @@
    each "ind" may be an "Int", a "Range", or a "Vector". See
    the manual section on *array indexing* for details.
   ```
-  """ Base.getindex
+  """ getindex
 
   @doc doc"""
   ```rst
@@ -423,7 +423,7 @@
    computes the indices to the parent array on the fly without
    checking bounds.
   ```
-  """ Base.sub
+  """ sub
 
   @doc doc"""
   ```rst
@@ -432,7 +432,7 @@
    Returns the "parent array" of an array view type (e.g.,
    SubArray), or the array itself if it is not a view
   ```
-  """ Base.parent
+  """ parent
 
   @doc doc"""
   ```rst
@@ -441,7 +441,7 @@
    From an array view "A", returns the corresponding indexes in the
    parent
   ```
-  """ Base.parentindexes
+  """ parentindexes
 
   @doc doc"""
   ```rst
@@ -451,7 +451,7 @@
    equals "i". Equivalent to "A[:,:,...,i,:,:,...]" where "i" is
    in position "d".
   ```
-  """ Base.slicedim
+  """ slicedim
 
   @doc doc"""
   ```rst
@@ -460,7 +460,7 @@
    Returns a view of array "A" with the given indices like
    "sub()", but drops all dimensions indexed with scalars.
   ```
-  """ Base.slice
+  """ slice
 
   @doc doc"""
   ```rst
@@ -469,7 +469,7 @@
    Store values from array "X" within some subset of "A" as
    specified by "inds".
   ```
-  """ Base.setindex!
+  """ setindex!
 
   @doc doc"""
   ```rst
@@ -479,7 +479,7 @@
    and returns an array of the results "A[ks...]", where "ks" goes
    over the positions in the broadcast.
   ```
-  """ Base.broadcast_getindex
+  """ broadcast_getindex
 
   @doc doc"""
   ```rst
@@ -489,7 +489,7 @@
    stores the value from each position in "X" at the indices given
    by the same positions in "inds".
   ```
-  """ Base.broadcast_setindex!
+  """ broadcast_setindex!
 
   @doc doc"""
   ```rst
@@ -510,7 +510,7 @@
    block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal
    blocks and matching zero blocks away from the diagonal.
   ```
-  """ Base.cat
+  """ cat
 
   @doc doc"""
   ```rst
@@ -518,7 +518,7 @@
 
    Concatenate along dimension 1
   ```
-  """ Base.vcat
+  """ vcat
 
   @doc doc"""
   ```rst
@@ -526,7 +526,7 @@
 
    Concatenate along dimension 2
   ```
-  """ Base.hcat
+  """ hcat
 
   @doc doc"""
   ```rst
@@ -540,7 +540,7 @@
    If the first argument is a single integer "n", then all block
    rows are assumed to have "n" block columns.
   ```
-  """ Base.hvcat
+  """ hvcat
 
   @doc doc"""
   ```rst
@@ -548,7 +548,7 @@
 
    Reverse "A" in dimension "d".
   ```
-  """ Base.flipdim
+  """ flipdim
 
   @doc doc"""
   ```rst
@@ -557,7 +557,7 @@
    Circularly shift the data in an array. The second argument is a
    vector giving the amount to shift in each dimension.
   ```
-  """ Base.circshift
+  """ circshift
 
   @doc doc"""
   ```rst
@@ -567,7 +567,7 @@
    (determined by "A[i]!=0").  A common use of this is to convert a
    boolean array to an array of indexes of the "true" elements.
   ```
-  """ Base.find
+  """ find
 
   @doc doc"""
   ```rst
@@ -576,7 +576,7 @@
    Return a vector of the linear indexes of  "A" where "f" returns
    true.
   ```
-  """ Base.find
+  """ find
 
   @doc doc"""
   ```rst
@@ -585,7 +585,7 @@
    Return a vector of indexes for each dimension giving the locations
    of the non-zeros in "A" (determined by "A[i]!=0").
   ```
-  """ Base.findn
+  """ findn
 
   @doc doc"""
   ```rst
@@ -595,7 +595,7 @@
    column indexes of the non-zero values in matrix "A", and "V" is
    a vector of the non-zero values.
   ```
-  """ Base.findnz
+  """ findnz
 
   @doc doc"""
   ```rst
@@ -604,7 +604,7 @@
    Return the index of the first non-zero value in "A" (determined
    by "A[i]!=0").
   ```
-  """ Base.findfirst
+  """ findfirst
 
   @doc doc"""
   ```rst
@@ -612,7 +612,7 @@
 
    Return the index of the first element equal to "v" in "A".
   ```
-  """ Base.findfirst
+  """ findfirst
 
   @doc doc"""
   ```rst
@@ -621,7 +621,7 @@
    Return the index of the first element of "A" for which
    "predicate" returns true.
   ```
-  """ Base.findfirst
+  """ findfirst
 
   @doc doc"""
   ```rst
@@ -630,7 +630,7 @@
    Return the index of the last non-zero value in "A" (determined by
    "A[i]!=0").
   ```
-  """ Base.findlast
+  """ findlast
 
   @doc doc"""
   ```rst
@@ -638,7 +638,7 @@
 
    Return the index of the last element equal to "v" in "A".
   ```
-  """ Base.findlast
+  """ findlast
 
   @doc doc"""
   ```rst
@@ -647,7 +647,7 @@
    Return the index of the last element of "A" for which
    "predicate" returns true.
   ```
-  """ Base.findlast
+  """ findlast
 
   @doc doc"""
   ```rst
@@ -656,7 +656,7 @@
    Find the next index >= "i" of a non-zero element of "A", or
    "0" if not found.
   ```
-  """ Base.findnext
+  """ findnext
 
   @doc doc"""
   ```rst
@@ -665,7 +665,7 @@
    Find the next index >= "i" of an element of "A" for which
    "predicate" returns true, or "0" if not found.
   ```
-  """ Base.findnext
+  """ findnext
 
   @doc doc"""
   ```rst
@@ -674,7 +674,7 @@
    Find the next index >= "i" of an element of "A" equal to "v"
    (using "=="), or "0" if not found.
   ```
-  """ Base.findnext
+  """ findnext
 
   @doc doc"""
   ```rst
@@ -683,7 +683,7 @@
    Find the previous index <= "i" of a non-zero element of "A", or
    0 if not found.
   ```
-  """ Base.findprev
+  """ findprev
 
   @doc doc"""
   ```rst
@@ -692,7 +692,7 @@
    Find the previous index <= "i" of an element of "A" for which
    "predicate" returns true, or "0" if not found.
   ```
-  """ Base.findprev
+  """ findprev
 
   @doc doc"""
   ```rst
@@ -701,7 +701,7 @@
    Find the previous index <= "i" of an element of "A" equal to
    "v" (using "=="), or "0" if not found.
   ```
-  """ Base.findprev
+  """ findprev
 
   @doc doc"""
   ```rst
@@ -712,7 +712,7 @@
    generalization of transpose for multi-dimensional arrays. Transpose
    is equivalent to "permutedims(A, [2,1])".
   ```
-  """ Base.permutedims
+  """ permutedims
 
   @doc doc"""
   ```rst
@@ -721,7 +721,7 @@
    Like "permutedims()", except the inverse of the given permutation
    is applied.
   ```
-  """ Base.ipermutedims
+  """ ipermutedims
 
   @doc doc"""
   ```rst
@@ -734,7 +734,7 @@
    in-place permutation is supported and unexpected results will
    happen if *src* and *dest* have overlapping memory regions.
   ```
-  """ Base.permutedims!
+  """ permutedims!
 
   @doc doc"""
   ```rst
@@ -744,7 +744,7 @@
    Elements of "dims" must be unique and within the range
    "1:ndims(A)".
   ```
-  """ Base.squeeze
+  """ squeeze
 
   @doc doc"""
   ```rst
@@ -752,7 +752,7 @@
 
    Vectorize an array using column-major convention.
   ```
-  """ Base.vec
+  """ vec
 
   @doc doc"""
   ```rst
@@ -762,7 +762,7 @@
    singleton dimensions, and return whichever shape has more
    dimensions.
   ```
-  """ Base.promote_shape
+  """ promote_shape
 
   @doc doc"""
   ```rst
@@ -771,7 +771,7 @@
    Throw an error if the specified indexes are not in bounds for the
    given array.
   ```
-  """ Base.checkbounds
+  """ checkbounds
 
   @doc doc"""
   ```rst
@@ -784,7 +784,7 @@
    small and "A" is large.)  Technically, this process is known as
    "Bernoulli sampling" of "A".
   ```
-  """ Base.randsubseq
+  """ randsubseq
 
   @doc doc"""
   ```rst
@@ -793,7 +793,7 @@
    Like "randsubseq", but the results are stored in "S" (which is
    resized as needed).
   ```
-  """ Base.randsubseq!
+  """ randsubseq!
 
   @doc doc"""
   ```rst
@@ -804,7 +804,7 @@
    performance and to control the precision of the output (e.g. to
    avoid overflow).
   ```
-  """ Base.cumprod
+  """ cumprod
 
   @doc doc"""
   ```rst
@@ -813,7 +813,7 @@
    Cumulative product of "A" along a dimension, storing the result
    in "B". The dimension defaults to 1.
   ```
-  """ Base.cumprod!
+  """ cumprod!
 
   @doc doc"""
   ```rst
@@ -824,7 +824,7 @@
    performance and to control the precision of the output (e.g. to
    avoid overflow).
   ```
-  """ Base.cumsum
+  """ cumsum
 
   @doc doc"""
   ```rst
@@ -833,7 +833,7 @@
    Cumulative sum of "A" along a dimension, storing the result in
    "B". The dimension defaults to 1.
   ```
-  """ Base.cumsum!
+  """ cumsum!
 
   @doc doc"""
   ```rst
@@ -843,7 +843,7 @@
    compensated summation algorithm for additional accuracy. The
    dimension defaults to 1.
   ```
-  """ Base.cumsum_kbn
+  """ cumsum_kbn
 
   @doc doc"""
   ```rst
@@ -851,7 +851,7 @@
 
    Cumulative minimum along a dimension. The dimension defaults to 1.
   ```
-  """ Base.cummin
+  """ cummin
 
   @doc doc"""
   ```rst
@@ -859,7 +859,7 @@
 
    Cumulative maximum along a dimension. The dimension defaults to 1.
   ```
-  """ Base.cummax
+  """ cummax
 
   @doc doc"""
   ```rst
@@ -867,7 +867,7 @@
 
    Finite difference operator of matrix or vector.
   ```
-  """ Base.diff
+  """ diff
 
   @doc doc"""
   ```rst
@@ -876,7 +876,7 @@
    Compute differences along vector "F", using "h" as the spacing
    between points. The default spacing is one.
   ```
-  """ Base.gradient
+  """ gradient
 
   @doc doc"""
   ```rst
@@ -884,7 +884,7 @@
 
    Rotate matrix "A" 180 degrees.
   ```
-  """ Base.rot180
+  """ rot180
 
   @doc doc"""
   ```rst
@@ -893,7 +893,7 @@
    Rotate matrix "A" 180 degrees an integer "k" number of times.
    If "k" is even, this is equivalent to a "copy".
   ```
-  """ Base.rot180
+  """ rot180
 
   @doc doc"""
   ```rst
@@ -901,7 +901,7 @@
 
    Rotate matrix "A" left 90 degrees.
   ```
-  """ Base.rotl90
+  """ rotl90
 
   @doc doc"""
   ```rst
@@ -911,7 +911,7 @@
    times. If "k" is zero or a multiple of four, this is equivalent
    to a "copy".
   ```
-  """ Base.rotl90
+  """ rotl90
 
   @doc doc"""
   ```rst
@@ -919,7 +919,7 @@
 
    Rotate matrix "A" right 90 degrees.
   ```
-  """ Base.rotr90
+  """ rotr90
 
   @doc doc"""
   ```rst
@@ -929,7 +929,7 @@
    times. If "k" is zero or a multiple of four, this is equivalent
    to a "copy".
   ```
-  """ Base.rotr90
+  """ rotr90
 
   @doc doc"""
   ```rst
@@ -944,7 +944,7 @@
    you need a particular associativity, e.g. left-to-right, you should
    write your own loop. See documentation for "reduce".
   ```
-  """ Base.reducedim
+  """ reducedim
 
   @doc doc"""
   ```rst
@@ -954,7 +954,7 @@
    f(initial))*, but is generally faster because the intermediate
    array is avoided.
   ```
-  """ Base.mapreducedim
+  """ mapreducedim
 
   @doc doc"""
   ```rst
@@ -968,7 +968,7 @@
    "dims" is "[1,2]" and A is 4-dimensional, "f" is called on
    "A[:,:,i,j]" for all "i" and "j".
   ```
-  """ Base.mapslices
+  """ mapslices
 
   @doc doc"""
   ```rst
@@ -977,7 +977,7 @@
    Returns the sum of all array elements, using the Kahan-Babuska-
    Neumaier compensated summation algorithm for additional accuracy.
   ```
-  """ Base.sum_kbn
+  """ sum_kbn
 
   @doc doc"""
   ```rst
@@ -992,7 +992,7 @@
       12
       22
   ```
-  """ Base.cartesianmap
+  """ cartesianmap
 
   @doc doc"""
   ```rst
@@ -1000,7 +1000,7 @@
 
    Compute the kth lexicographic permutation of a vector.
   ```
-  """ Base.nthperm
+  """ nthperm
 
   @doc doc"""
   ```rst
@@ -1009,7 +1009,7 @@
    Return the "k" that generated permutation "p". Note that
    "nthperm(nthperm([1:n], k)) == k" for "1 <= k <= factorial(n)".
   ```
-  """ Base.nthperm
+  """ nthperm
 
   @doc doc"""
   ```rst
@@ -1017,7 +1017,7 @@
 
    In-place version of "nthperm()".
   ```
-  """ Base.nthperm!
+  """ nthperm!
 
   @doc doc"""
   ```rst
@@ -1027,7 +1027,7 @@
    "rng" argument specifies a random number generator, see *Random
    Numbers*.
   ```
-  """ Base.randperm
+  """ randperm
 
   @doc doc"""
   ```rst
@@ -1035,7 +1035,7 @@
 
    Return the inverse permutation of v.
   ```
-  """ Base.invperm
+  """ invperm
 
   @doc doc"""
   ```rst
@@ -1043,7 +1043,7 @@
 
    Returns true if v is a valid permutation.
   ```
-  """ Base.isperm
+  """ isperm
 
   @doc doc"""
   ```rst
@@ -1055,7 +1055,7 @@
    To return a new permutation, use "v[p]".  Note that this is
    generally faster than "permute!(v,p)" for large vectors.
   ```
-  """ Base.permute!
+  """ permute!
 
   @doc doc"""
   ```rst
@@ -1063,7 +1063,7 @@
 
    Like permute!, but the inverse of the given permutation is applied.
   ```
-  """ Base.ipermute!
+  """ ipermute!
 
   @doc doc"""
   ```rst
@@ -1073,7 +1073,7 @@
    "rng" argument specifies a random number generator, see *Random
    Numbers*.
   ```
-  """ Base.randcycle
+  """ randcycle
 
   @doc doc"""
   ```rst
@@ -1082,7 +1082,7 @@
    Return a randomly permuted copy of "v". The optional "rng"
    argument specifies a random number generator, see *Random Numbers*.
   ```
-  """ Base.shuffle
+  """ shuffle
 
   @doc doc"""
   ```rst
@@ -1090,7 +1090,7 @@
 
    In-place version of "shuffle()".
   ```
-  """ Base.shuffle!
+  """ shuffle!
 
   @doc doc"""
   ```rst
@@ -1098,7 +1098,7 @@
 
    Return a copy of "v" reversed from start to stop.
   ```
-  """ Base.reverse
+  """ reverse
 
   @doc doc"""
   ```rst
@@ -1109,7 +1109,7 @@
    (This can be nontrivial in the case where "v" is a Unicode
    string.)
   ```
-  """ Base.reverseind
+  """ reverseind
 
   @doc doc"""
   ```rst
@@ -1117,7 +1117,7 @@
 
    In-place version of "reverse()".
   ```
-  """ Base.reverse!
+  """ reverse!
 
   @doc doc"""
   ```rst
@@ -1129,7 +1129,7 @@
    "collect(combinations(array,n))" to get an array of all
    combinations.
   ```
-  """ Base.combinations
+  """ combinations
 
   @doc doc"""
   ```rst
@@ -1140,7 +1140,7 @@
    iterator object. Use "collect(permutations(array))" to get an
    array of all permutations.
   ```
-  """ Base.permutations
+  """ permutations
 
   @doc doc"""
   ```rst
@@ -1152,7 +1152,7 @@
    partitions. The number of partitions to generate can be efficiently
    computed using "length(partitions(n))".
   ```
-  """ Base.partitions
+  """ partitions
 
   @doc doc"""
   ```rst
@@ -1164,7 +1164,7 @@
    array of all partitions. The number of partitions to generate can
    be efficiently computed using "length(partitions(n,m))".
   ```
-  """ Base.partitions
+  """ partitions
 
   @doc doc"""
   ```rst
@@ -1177,7 +1177,7 @@
    The number of partitions to generate can be efficiently computed
    using "length(partitions(array))".
   ```
-  """ Base.partitions
+  """ partitions
 
   @doc doc"""
   ```rst
@@ -1191,7 +1191,7 @@
    equal to the Stirling number of the second kind and can be
    efficiently computed using "length(partitions(array,m))".
   ```
-  """ Base.partitions
+  """ partitions
 
   @doc doc"""
   ```rst
@@ -1199,7 +1199,7 @@
 
    Converts a numeric array to a packed boolean array
   ```
-  """ Base.bitpack
+  """ bitpack
 
   @doc doc"""
   ```rst
@@ -1207,7 +1207,7 @@
 
    Converts a packed boolean array to an array of booleans
   ```
-  """ Base.bitunpack
+  """ bitunpack
 
   @doc doc"""
   ```rst
@@ -1215,7 +1215,7 @@
 
    Performs a bitwise not operation on B. See *~ operator*.
   ```
-  """ Base.flipbits!
+  """ flipbits!
 
   @doc doc"""
   ```rst
@@ -1224,7 +1224,7 @@
    Performs a left rotation operation on "src" and put the result
    into "dest".
   ```
-  """ Base.rol!
+  """ rol!
 
   @doc doc"""
   ```rst
@@ -1232,7 +1232,7 @@
 
    Performs a left rotation operation on B.
   ```
-  """ Base.rol!
+  """ rol!
 
   @doc doc"""
   ```rst
@@ -1240,7 +1240,7 @@
 
    Performs a left rotation operation.
   ```
-  """ Base.rol
+  """ rol
 
   @doc doc"""
   ```rst
@@ -1249,7 +1249,7 @@
    Performs a right rotation operation on "src" and put the result
    into "dest".
   ```
-  """ Base.ror!
+  """ ror!
 
   @doc doc"""
   ```rst
@@ -1257,7 +1257,7 @@
 
    Performs a right rotation operation on B.
   ```
-  """ Base.ror!
+  """ ror!
 
   @doc doc"""
   ```rst
@@ -1265,7 +1265,7 @@
 
    Performs a right rotation operation.
   ```
-  """ Base.ror
+  """ ror
 
   @doc doc"""
   ```rst
@@ -1277,7 +1277,7 @@
    set to "max(I)" and "max(J)" respectively. If the "combine"
    function is not supplied, duplicates are added by default.
   ```
-  """ Base.sparse
+  """ sparse
 
   @doc doc"""
   ```rst
@@ -1291,7 +1291,7 @@
    column matrix with one column is sparse, whereas a sparse row
    matrix with one row ends up being dense.
   ```
-  """ Base.sparsevec
+  """ sparsevec
 
   @doc doc"""
   ```rst
@@ -1301,7 +1301,7 @@
    keys from the dictionary, and the nonzero values are the values
    from the dictionary.
   ```
-  """ Base.sparsevec
+  """ sparsevec
 
   @doc doc"""
   ```rst
@@ -1309,7 +1309,7 @@
 
    Returns "true" if "S" is sparse, and "false" otherwise.
   ```
-  """ Base.issparse
+  """ issparse
 
   @doc doc"""
   ```rst
@@ -1317,7 +1317,7 @@
 
    Convert an AbstractMatrix "A" into a sparse matrix.
   ```
-  """ Base.sparse
+  """ sparse
 
   @doc doc"""
   ```rst
@@ -1327,7 +1327,7 @@
    1". In julia, sparse vectors are really just sparse matrices with
    one column.
   ```
-  """ Base.sparsevec
+  """ sparsevec
 
   @doc doc"""
   ```rst
@@ -1335,7 +1335,7 @@
 
    Convert a sparse matrix "S" into a dense matrix.
   ```
-  """ Base.full
+  """ full
 
   @doc doc"""
   ```rst
@@ -1343,7 +1343,7 @@
 
    Returns the number of stored (filled) elements in a sparse matrix.
   ```
-  """ Base.nnz
+  """ nnz
 
   @doc doc"""
   ```rst
@@ -1353,7 +1353,7 @@
    not contain any nonzero values. No storage will be allocated for
    nonzero values during construction.
   ```
-  """ Base.spzeros
+  """ spzeros
 
   @doc doc"""
   ```rst
@@ -1362,7 +1362,7 @@
    Create a sparse matrix with the same structure as that of "S",
    but with every nonzero element having the value "1.0".
   ```
-  """ Base.spones
+  """ spones
 
   @doc doc"""
   ```rst
@@ -1372,7 +1372,7 @@
    m". In case "n" is supplied, create a sparse identity matrix of
    size "m x n".
   ```
-  """ Base.speye
+  """ speye
 
   @doc doc"""
   ```rst
@@ -1386,7 +1386,7 @@
    (diagonal). Optionally, "m" and "n" specify the size of the
    resulting sparse matrix.
   ```
-  """ Base.spdiagm
+  """ spdiagm
 
   @doc doc"""
   ```rst
@@ -1400,7 +1400,7 @@
    specified. The optional "rng" argument specifies a random number
    generator, see *Random Numbers*.
   ```
-  """ Base.sprand
+  """ sprand
 
   @doc doc"""
   ```rst
@@ -1410,7 +1410,7 @@
    (independent) probability "p" of any entry being nonzero, where
    nonzero values are sampled from the normal distribution.
   ```
-  """ Base.sprandn
+  """ sprandn
 
   @doc doc"""
   ```rst
@@ -1420,7 +1420,7 @@
    specified (independent) probability "p" of any entry being
    "true".
   ```
-  """ Base.sprandbool
+  """ sprandbool
 
   @doc doc"""
   ```rst
@@ -1429,7 +1429,7 @@
    Compute the elimination tree of a symmetric sparse matrix "A"
    from "triu(A)" and, optionally, its post-ordering permutation.
   ```
-  """ Base.etree
+  """ etree
 
   @doc doc"""
   ```rst
@@ -1441,7 +1441,7 @@
    triangular part of the matrix. Only the upper triangular part of
    the result is returned as well.
   ```
-  """ Base.symperm
+  """ symperm
 
   @doc doc"""
   ```rst
@@ -1453,7 +1453,7 @@
    storage of "A", and any modifications to the returned vector will
    mutate "A" as well. See "rowvals(A)" and "nzrange(A, col)".
   ```
-  """ Base.nonzeros
+  """ nonzeros
 
   @doc doc"""
   ```rst
@@ -1466,7 +1466,7 @@
    with iterating over structural nonzero values. See "nonzeros(A)"
    and "nzrange(A, col)".
   ```
-  """ Base.rowvals
+  """ rowvals
 
   @doc doc"""
   ```rst
@@ -1489,7 +1489,7 @@
          end
       end
   ```
-  """ Base.nzrange
+  """ nzrange
 
   @doc doc"""
   ```rst
@@ -1498,7 +1498,7 @@
    Quit (or control-D at the prompt). The default exit code is zero,
    indicating that the processes completed successfully.
   ```
-  """ Base.exit
+  """ exit
 
   @doc doc"""
   ```rst
@@ -1507,7 +1507,7 @@
    Quit the program indicating that the processes completed
    successfully. This function calls "exit(0)" (see "exit()").
   ```
-  """ Base.quit
+  """ quit
 
   @doc doc"""
   ```rst
@@ -1515,7 +1515,7 @@
 
    Register a zero-argument function to be called at exit.
   ```
-  """ Base.atexit
+  """ atexit
 
   @doc doc"""
   ```rst
@@ -1527,7 +1527,7 @@
    This function should be called from within the ".juliarc.jl"
    initialization file.
   ```
-  """ Base.atreplinit
+  """ atreplinit
 
   @doc doc"""
   ```rst
@@ -1535,7 +1535,7 @@
 
    Determine whether Julia is running an interactive session.
   ```
-  """ Base.isinteractive
+  """ isinteractive
 
   @doc doc"""
   ```rst
@@ -1544,7 +1544,7 @@
    Print information about exported global variables in a module,
    optionally restricted to those matching "pattern".
   ```
-  """ Base.whos
+  """ whos
 
   @doc doc"""
   ```rst
@@ -1553,7 +1553,7 @@
    Edit a file optionally providing a line number to edit at. Returns
    to the julia prompt when you quit the editor.
   ```
-  """ Base.edit
+  """ edit
 
   @doc doc"""
   ```rst
@@ -1562,7 +1562,7 @@
    Edit the definition of a function, optionally specifying a tuple of
    types to indicate which method to edit.
   ```
-  """ Base.edit
+  """ edit
 
   @doc doc"""
   ```rst
@@ -1571,7 +1571,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls the "edit" function on the resulting expression
   ```
-  """ Base.@edit
+  """ @edit
 
   @doc doc"""
   ```rst
@@ -1581,7 +1581,7 @@
    starting line number. Returns to the julia prompt when you quit the
    pager.
   ```
-  """ Base.less
+  """ less
 
   @doc doc"""
   ```rst
@@ -1591,7 +1591,7 @@
    optionally specifying a tuple of types to indicate which method to
    see.
   ```
-  """ Base.less
+  """ less
 
   @doc doc"""
   ```rst
@@ -1600,7 +1600,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls the "less" function on the resulting expression
   ```
-  """ Base.@less
+  """ @less
 
   @doc doc"""
   ```rst
@@ -1609,7 +1609,7 @@
    Send a printed form of "x" to the operating system clipboard
    ("copy").
   ```
-  """ Base.clipboard
+  """ clipboard
 
   @doc doc"""
   ```rst
@@ -1618,7 +1618,7 @@
    Return a string with the contents of the operating system clipboard
    ("paste").
   ```
-  """ Base.clipboard
+  """ clipboard
 
   @doc doc"""
   ```rst
@@ -1636,7 +1636,7 @@
    working directory, then looks for package code under "Pkg.dir()",
    then tries paths in the global array "LOAD_PATH".
   ```
-  """ Base.require
+  """ require
 
   @doc doc"""
   ```rst
@@ -1646,7 +1646,7 @@
    whether they have been loaded before. Typically used when
    interactively developing libraries.
   ```
-  """ Base.reload
+  """ reload
 
   @doc doc"""
   ```rst
@@ -1661,7 +1661,7 @@
    combine files in packages that are broken into multiple source
    files.
   ```
-  """ Base.include
+  """ include
 
   @doc doc"""
   ```rst
@@ -1671,7 +1671,7 @@
    than from a file. Since there is no file path involved, no path
    processing or fetching from node 1 is done.
   ```
-  """ Base.include_string
+  """ include_string
 
   @doc doc"""
   ```rst
@@ -1679,7 +1679,7 @@
 
    Get help for a function. "name" can be an object or a string.
   ```
-  """ Base.help
+  """ help
 
   @doc doc"""
   ```rst
@@ -1687,7 +1687,7 @@
 
    Search documentation for functions related to "string".
   ```
-  """ Base.apropos
+  """ apropos
 
   @doc doc"""
   ```rst
@@ -1699,7 +1699,7 @@
    If "types" is an abstract type, then the method that would be
    called by "invoke" is returned.
   ```
-  """ Base.which
+  """ which
 
   @doc doc"""
   ```rst
@@ -1708,7 +1708,7 @@
    Return the module in which the binding for the variable referenced
    by "symbol" was created.
   ```
-  """ Base.which
+  """ which
 
   @doc doc"""
   ```rst
@@ -1720,7 +1720,7 @@
    variable, it returns the module in which the variable was bound. It
    calls out to the "which" function.
   ```
-  """ Base.@which
+  """ @which
 
   @doc doc"""
   ```rst
@@ -1731,7 +1731,7 @@
    If "types" is specified, returns an array of methods whose types
    match.
   ```
-  """ Base.methods
+  """ methods
 
   @doc doc"""
   ```rst
@@ -1744,7 +1744,7 @@
    The optional second argument restricts the search to a particular
    module or function.
   ```
-  """ Base.methodswith
+  """ methodswith
 
   @doc doc"""
   ```rst
@@ -1752,7 +1752,7 @@
 
    Show an expression and result, returning the result
   ```
-  """ Base.@show
+  """ @show
 
   @doc doc"""
   ```rst
@@ -1762,7 +1762,7 @@
    "verbose" argument is true, detailed system information is shown
    as well.
   ```
-  """ Base.versioninfo
+  """ versioninfo
 
   @doc doc"""
   ```rst
@@ -1775,7 +1775,7 @@
 
    This function should only be used interactively.
   ```
-  """ Base.workspace
+  """ workspace
 
   @doc doc"""
   ```rst
@@ -1789,7 +1789,7 @@
    by contents at the bit level. This function is sometimes called
    "egal".
   ```
-  """ Base.is
+  """ is
 
   @doc doc"""
   ```rst
@@ -1797,7 +1797,7 @@
 
    Determine whether "x" is of the given "type".
   ```
-  """ Base.isa
+  """ isa
 
   @doc doc"""
   ```rst
@@ -1823,7 +1823,7 @@
    amenable to a more efficient implementation than that provided as a
    generic fallback (based on "isnan", "signbit", and "==").
   ```
-  """ Base.isequal
+  """ isequal
 
   @doc doc"""
   ```rst
@@ -1837,7 +1837,7 @@
    only need to implement it if they have special values such as
    "NaN".
   ```
-  """ Base.isless
+  """ isless
 
   @doc doc"""
   ```rst
@@ -1849,7 +1849,7 @@
    "ifelse" instead of an "if" statement can eliminate the branch
    in generated code and provide higher performance in tight loops.
   ```
-  """ Base.ifelse
+  """ ifelse
 
   @doc doc"""
   ```rst
@@ -1861,7 +1861,7 @@
    lexicographically comparable types, and "lexless" will call
    "lexcmp" by default.
   ```
-  """ Base.lexcmp
+  """ lexcmp
 
   @doc doc"""
   ```rst
@@ -1869,7 +1869,7 @@
 
    Determine whether "x" is lexicographically less than "y".
   ```
-  """ Base.lexless
+  """ lexless
 
   @doc doc"""
   ```rst
@@ -1877,7 +1877,7 @@
 
    Get the concrete type of "x".
   ```
-  """ Base.typeof
+  """ typeof
 
   @doc doc"""
   ```rst
@@ -1885,7 +1885,7 @@
 
    Construct a tuple of the given objects.
   ```
-  """ Base.tuple
+  """ tuple
 
   @doc doc"""
   ```rst
@@ -1894,7 +1894,7 @@
    Create a tuple of length "n", computing each element as "f(i)",
    where "i" is the index of the element.
   ```
-  """ Base.ntuple
+  """ ntuple
 
   @doc doc"""
   ```rst
@@ -1903,7 +1903,7 @@
    Get a unique integer id for "x". "object_id(x)==object_id(y)"
    if and only if "is(x,y)".
   ```
-  """ Base.object_id
+  """ object_id
 
   @doc doc"""
   ```rst
@@ -1920,7 +1920,7 @@
    its own "==" (hence "isequal") to guarantee the property
    mentioned above.
   ```
-  """ Base.hash
+  """ hash
 
   @doc doc"""
   ```rst
@@ -1930,7 +1930,7 @@
    program-accessible references to "x". The behavior of this
    function is unpredictable if "x" is of a bits type.
   ```
-  """ Base.finalizer
+  """ finalizer
 
   @doc doc"""
   ```rst
@@ -1938,7 +1938,7 @@
 
    Immediately run finalizers registered for object "x".
   ```
-  """ Base.finalize
+  """ finalize
 
   @doc doc"""
   ```rst
@@ -1948,7 +1948,7 @@
    not all internal values. For example, copying an array produces a
    new array with identically-same elements as the original.
   ```
-  """ Base.copy
+  """ copy
 
   @doc doc"""
   ```rst
@@ -1974,7 +1974,7 @@
    should be used in place of "deepcopy", and the "dict" variable
    should be updated as appropriate before returning.
   ```
-  """ Base.deepcopy
+  """ deepcopy
 
   @doc doc"""
   ```rst
@@ -1986,7 +1986,7 @@
    tests whether a global variable with that name is defined in
    "current_module()".
   ```
-  """ Base.isdefined
+  """ isdefined
 
   @doc doc"""
   ```rst
@@ -2020,7 +2020,7 @@
       julia> convert(Rational{Int64}, x)
       6004799503160661//18014398509481984
   ```
-  """ Base.convert
+  """ convert
 
   @doc doc"""
   ```rst
@@ -2029,7 +2029,7 @@
    Convert all arguments to their common promotion type (if any), and
    return them all (as a tuple).
   ```
-  """ Base.promote
+  """ promote
 
   @doc doc"""
   ```rst
@@ -2037,7 +2037,7 @@
 
    Convert "y" to the type of "x" ("convert(typeof(x), y)").
   ```
-  """ Base.oftype
+  """ oftype
 
   @doc doc"""
   ```rst
@@ -2054,7 +2054,7 @@
       julia> widen(1.5f0)
       1.5
   ```
-  """ Base.widen
+  """ widen
 
   @doc doc"""
   ```rst
@@ -2062,7 +2062,7 @@
 
    The identity function. Returns its argument.
   ```
-  """ Base.identity
+  """ identity
 
   @doc doc"""
   ```rst
@@ -2070,7 +2070,7 @@
 
    Return the supertype of DataType T
   ```
-  """ Base.super
+  """ super
 
   @doc doc"""
   ```rst
@@ -2080,7 +2080,7 @@
    Can also be written using the "<:" infix operator as "type1 <:
    type2".
   ```
-  """ Base.issubtype
+  """ issubtype
 
   @doc doc"""
   ```rst
@@ -2098,7 +2098,7 @@
    currently loaded subtypes are included, including those not visible
    in the current module.
   ```
-  """ Base.subtypes
+  """ subtypes
 
   @doc doc"""
   ```rst
@@ -2106,7 +2106,7 @@
 
    The lowest value representable by the given (real) numeric type.
   ```
-  """ Base.typemin
+  """ typemin
 
   @doc doc"""
   ```rst
@@ -2114,7 +2114,7 @@
 
    The highest value representable by the given (real) numeric type.
   ```
-  """ Base.typemax
+  """ typemax
 
   @doc doc"""
   ```rst
@@ -2123,7 +2123,7 @@
    The smallest in absolute value non-subnormal value representable by
    the given floating-point type
   ```
-  """ Base.realmin
+  """ realmin
 
   @doc doc"""
   ```rst
@@ -2132,7 +2132,7 @@
    The highest finite value representable by the given floating-point
    type
   ```
-  """ Base.realmax
+  """ realmax
 
   @doc doc"""
   ```rst
@@ -2141,7 +2141,7 @@
    The largest integer losslessly representable by the given floating-
    point type
   ```
-  """ Base.maxintfloat
+  """ maxintfloat
 
   @doc doc"""
   ```rst
@@ -2150,7 +2150,7 @@
    Size, in bytes, of the canonical binary representation of the given
    type, if any.
   ```
-  """ Base.sizeof
+  """ sizeof
 
   @doc doc"""
   ```rst
@@ -2161,7 +2161,7 @@
    sensible arguments. If "type" is omitted, then "eps(Float64)"
    is returned.
   ```
-  """ Base.eps
+  """ eps
 
   @doc doc"""
   ```rst
@@ -2170,7 +2170,7 @@
    The distance between "x" and the next larger representable
    floating-point value of the same type as "x".
   ```
-  """ Base.eps
+  """ eps
 
   @doc doc"""
   ```rst
@@ -2183,7 +2183,7 @@
    "Float64" even though strictly, not all "Int64" values can be
    represented exactly as "Float64" values.
   ```
-  """ Base.promote_type
+  """ promote_type
 
   @doc doc"""
   ```rst
@@ -2194,7 +2194,7 @@
    called directly, but should have definitions added to it for new
    types as appropriate.
   ```
-  """ Base.promote_rule
+  """ promote_rule
 
   @doc doc"""
   ```rst
@@ -2204,7 +2204,7 @@
    "a.b" calls "getfield(a, :b)", and the syntax "a.(b)" calls
    "getfield(a, b)".
   ```
-  """ Base.getfield
+  """ getfield
 
   @doc doc"""
   ```rst
@@ -2214,7 +2214,7 @@
    syntax "a.b = c" calls "setfield!(a, :b, c)", and the syntax
    "a.(b) = c" calls "setfield!(a, b, c)".
   ```
-  """ Base.setfield!
+  """ setfield!
 
   @doc doc"""
   ```rst
@@ -2241,7 +2241,7 @@
        (80,:mtime,Float64)
        (88,:ctime,Float64)
   ```
-  """ Base.fieldoffsets
+  """ fieldoffsets
 
   @doc doc"""
   ```rst
@@ -2250,7 +2250,7 @@
    Determine the declared type of a field (specified by name or index)
    in a composite type.
   ```
-  """ Base.fieldtype
+  """ fieldtype
 
   @doc doc"""
   ```rst
@@ -2261,7 +2261,7 @@
    values, so if you give it a type, it will tell you that a value of
    "DataType" is mutable.
   ```
-  """ Base.isimmutable
+  """ isimmutable
 
   @doc doc"""
   ```rst
@@ -2278,7 +2278,7 @@
       julia> isbits(Complex)
       false
   ```
-  """ Base.isbits
+  """ isbits
 
   @doc doc"""
   ```rst
@@ -2288,7 +2288,7 @@
    meaning its only subtypes are itself and "None" (but "T" itself
    is not "None").
   ```
-  """ Base.isleaftype
+  """ isleaftype
 
   @doc doc"""
   ```rst
@@ -2296,7 +2296,7 @@
 
    Compute a type that contains both "T" and "S".
   ```
-  """ Base.typejoin
+  """ typejoin
 
   @doc doc"""
   ```rst
@@ -2305,7 +2305,7 @@
    Compute a type that contains the intersection of "T" and "S".
    Usually this will be the smallest such type or one close to it.
   ```
-  """ Base.typeintersect
+  """ typeintersect
 
   @doc doc"""
   ```rst
@@ -2314,7 +2314,7 @@
    Return a collection of all instances of the given type, if
    applicable. Mostly used for enumerated types (see "@enum").
   ```
-  """ Base.instances
+  """ instances
 
   @doc doc"""
   ```rst
@@ -2326,7 +2326,7 @@
       julia> method_exists(length, Tuple{Array})
       true
   ```
-  """ Base.method_exists
+  """ method_exists
 
   @doc doc"""
   ```rst
@@ -2345,7 +2345,7 @@
       julia> applicable(f, 1, 2)
       true
   ```
-  """ Base.applicable
+  """ applicable
 
   @doc doc"""
   ```rst
@@ -2359,7 +2359,7 @@
    explicitly needed (often as part of the implementation of a more
    specific method of the same function).
   ```
-  """ Base.invoke
+  """ invoke
 
   @doc doc"""
   ```rst
@@ -2381,7 +2381,7 @@
    to "call(x, args...)".  This means that function-like behavior
    can be added to any type by defining new "call" methods.
   ```
-  """ Base.call
+  """ call
 
   @doc doc"""
   ```rst
@@ -2392,7 +2392,7 @@
    1-argument definition of "eval", which evaluates expressions in
    that module.
   ```
-  """ Base.eval
+  """ eval
 
   @doc doc"""
   ```rst
@@ -2400,7 +2400,7 @@
 
    Evaluate an expression and return the value.
   ```
-  """ Base.@eval
+  """ @eval
 
   @doc doc"""
   ```rst
@@ -2409,7 +2409,7 @@
    Load the file using "include", evaluate all expressions, and
    return the value of the last one.
   ```
-  """ Base.evalfile
+  """ evalfile
 
   @doc doc"""
   ```rst
@@ -2421,7 +2421,7 @@
    Metaprogramming chapter of the manual for more details and
    examples.
   ```
-  """ Base.esc
+  """ esc
 
   @doc doc"""
   ```rst
@@ -2430,7 +2430,7 @@
    Generates a symbol which will not conflict with other variable
    names.
   ```
-  """ Base.gensym
+  """ gensym
 
   @doc doc"""
   ```rst
@@ -2439,7 +2439,7 @@
    Generates a gensym symbol for a variable. For example, "@gensym x
    y" is transformed into "x = gensym("x"); y = gensym("y")".
   ```
-  """ Base.@gensym
+  """ @gensym
 
   @doc doc"""
   ```rst
@@ -2456,7 +2456,7 @@
    will raise an error. If "raise" is false, "parse" will return
    an expression that will raise an error upon evaluation.
   ```
-  """ Base.parse
+  """ parse
 
   @doc doc"""
   ```rst
@@ -2468,7 +2468,7 @@
    raise an error; otherwise, "parse" will return an expression that
    will raise an error upon evaluation.
   ```
-  """ Base.parse
+  """ parse
 
   @doc doc"""
   ```rst
@@ -2479,7 +2479,7 @@
    wrapper, and "Nullable{T}()" yields an empty instance of a
    wrapper that might contain a value of type "T".
   ```
-  """ Base.Nullable
+  """ Nullable
 
   @doc doc"""
   ```rst
@@ -2489,7 +2489,7 @@
    Returns the value if it is present; otherwise, throws a
    "NullException".
   ```
-  """ Base.get
+  """ get
 
   @doc doc"""
   ```rst
@@ -2499,7 +2499,7 @@
    Returns the value if it is present; otherwise, returns "convert(T,
    y)".
   ```
-  """ Base.get
+  """ get
 
   @doc doc"""
   ```rst
@@ -2507,7 +2507,7 @@
 
    Is the "Nullable" object "x" null, i.e. missing a value?
   ```
-  """ Base.isnull
+  """ isnull
 
   @doc doc"""
   ```rst
@@ -2517,7 +2517,7 @@
    if anything goes wrong, including the process exiting with a non-
    zero status.
   ```
-  """ Base.run
+  """ run
 
   @doc doc"""
   ```rst
@@ -2526,7 +2526,7 @@
    Run a command object asynchronously, returning the resulting
    "Process" object.
   ```
-  """ Base.spawn
+  """ spawn
 
   @doc doc"""
   ```rst
@@ -2536,7 +2536,7 @@
    Essentially equivalent to /dev/null on Unix or NUL on Windows.
    Usage: "run(`cat test.txt` |> DevNull)"
   ```
-  """ Base.DevNull
+  """ DevNull
 
   @doc doc"""
   ```rst
@@ -2546,7 +2546,7 @@
    it was successful (exited with a code of 0). An exception is raised
    if the process cannot be started.
   ```
-  """ Base.success
+  """ success
 
   @doc doc"""
   ```rst
@@ -2554,7 +2554,7 @@
 
    Determine whether a process is currently running.
   ```
-  """ Base.process_running
+  """ process_running
 
   @doc doc"""
   ```rst
@@ -2562,7 +2562,7 @@
 
    Determine whether a process has exited.
   ```
-  """ Base.process_exited
+  """ process_exited
 
   @doc doc"""
   ```rst
@@ -2571,7 +2571,7 @@
    Send a signal to a process. The default is to terminate the
    process.
   ```
-  """ Base.kill
+  """ kill
 
   @doc doc"""
   ```rst
@@ -2585,7 +2585,7 @@
    and "stdio" optionally specifies the process's standard output
    stream.
   ```
-  """ Base.open
+  """ open
 
   @doc doc"""
   ```rst
@@ -2596,7 +2596,7 @@
    waits for the process to complete.  Returns the value returned by
    "f".
   ```
-  """ Base.open
+  """ open
 
   @doc doc"""
   ```rst
@@ -2605,7 +2605,7 @@
    Set the process title. No-op on some operating systems. (not
    exported)
   ```
-  """ Base.Sys
+  """ Sys
 
   @doc doc"""
   ```rst
@@ -2614,7 +2614,7 @@
    Get the process title. On some systems, will always return empty
    string. (not exported)
   ```
-  """ Base.Sys
+  """ Sys
 
   @doc doc"""
   ```rst
@@ -2624,7 +2624,7 @@
    (stdout,stdin,process) of the output stream and input stream of the
    process, and the process object itself.
   ```
-  """ Base.readandwrite
+  """ readandwrite
 
   @doc doc"""
   ```rst
@@ -2633,7 +2633,7 @@
    Mark a command object so that running it will not throw an error if
    the result code is non-zero.
   ```
-  """ Base.ignorestatus
+  """ ignorestatus
 
   @doc doc"""
   ```rst
@@ -2643,7 +2643,7 @@
    group, allowing it to outlive the julia process, and not have
    Ctrl-C interrupts passed to it.
   ```
-  """ Base.detach
+  """ detach
 
   @doc doc"""
   ```rst
@@ -2660,7 +2660,7 @@
    The "dir" keyword argument can be used to specify a working
    directory for the command.
   ```
-  """ Base.setenv
+  """ setenv
 
   @doc doc"""
   ```rst
@@ -2674,7 +2674,7 @@
    set).  When "withenv" returns, the original environment has been
    restored.
   ```
-  """ Base.withenv
+  """ withenv
 
   @doc doc"""
   ```rst
@@ -2695,7 +2695,7 @@
 
       * "run(pipe("out.txt", `grep xyz`))"
   ```
-  """ Base.pipe
+  """ pipe
 
   @doc doc"""
   ```rst
@@ -2715,7 +2715,7 @@
 
       * "run(pipe(`update`, stdout="log.txt", append=true))"
   ```
-  """ Base.pipe
+  """ pipe
 
   @doc doc"""
   ```rst
@@ -2723,7 +2723,7 @@
 
    Get the local machine's host name.
   ```
-  """ Base.gethostname
+  """ gethostname
 
   @doc doc"""
   ```rst
@@ -2732,7 +2732,7 @@
    Get the IP address of the local machine, as a string of the form
    "x.x.x.x".
   ```
-  """ Base.getipaddr
+  """ getipaddr
 
   @doc doc"""
   ```rst
@@ -2740,7 +2740,7 @@
 
    Get julia's process ID.
   ```
-  """ Base.getpid
+  """ getpid
 
   @doc doc"""
   ```rst
@@ -2749,7 +2749,7 @@
    Get the system time in seconds since the epoch, with fairly high
    (typically, microsecond) resolution.
   ```
-  """ Base.time
+  """ time
 
   @doc doc"""
   ```rst
@@ -2758,7 +2758,7 @@
    Get the time in nanoseconds. The time corresponding to 0 is
    undefined, and wraps every 5.8 years.
   ```
-  """ Base.time_ns
+  """ time_ns
 
   @doc doc"""
   ```rst
@@ -2767,7 +2767,7 @@
    Set a timer to be read by the next call to "toc()" or "toq()".
    The macro call "@time expr" can also be used to time evaluation.
   ```
-  """ Base.tic
+  """ tic
 
   @doc doc"""
   ```rst
@@ -2775,7 +2775,7 @@
 
    Print and return the time elapsed since the last "tic()".
   ```
-  """ Base.toc
+  """ toc
 
   @doc doc"""
   ```rst
@@ -2784,7 +2784,7 @@
    Return, but do not print, the time elapsed since the last
    "tic()".
   ```
-  """ Base.toq
+  """ toq
 
   @doc doc"""
   ```rst
@@ -2795,7 +2795,7 @@
    its execution caused to be allocated, before returning the value of
    the expression.
   ```
-  """ Base.@time
+  """ @time
 
   @doc doc"""
   ```rst
@@ -2805,7 +2805,7 @@
    the same information as "@time", then any non-zero memory
    allocation counters, and then returns the value of the expression.
   ```
-  """ Base.@timev
+  """ @timev
 
   @doc doc"""
   ```rst
@@ -2815,7 +2815,7 @@
    expression, elapsed time, total bytes allocated, garbage collection
    time, and an object with various memory allocation counters.
   ```
-  """ Base.@timed
+  """ @timed
 
   @doc doc"""
   ```rst
@@ -2825,7 +2825,7 @@
    instead returning the number of seconds it took to execute as a
    floating-point number.
   ```
-  """ Base.@elapsed
+  """ @elapsed
 
   @doc doc"""
   ```rst
@@ -2840,7 +2840,7 @@
    results inconsistent with the "@time" macros, which do not try to
    adjust for the effects of compilation.
   ```
-  """ Base.@allocated
+  """ @allocated
 
   @doc doc"""
   ```rst
@@ -2849,7 +2849,7 @@
    A singleton of this type provides a hash table interface to
    environment variables.
   ```
-  """ Base.EnvHash
+  """ EnvHash
 
   @doc doc"""
   ```rst
@@ -2858,7 +2858,7 @@
    Reference to the singleton "EnvHash", providing a dictionary
    interface to system environment variables.
   ```
-  """ Base.ENV
+  """ ENV
 
   @doc doc"""
   ```rst
@@ -2869,7 +2869,7 @@
    Platform Variations in the Calling C and Fortran Code section of
    the manual.
   ```
-  """ Base.@unix
+  """ @unix
 
   @doc doc"""
   ```rst
@@ -2879,7 +2879,7 @@
    documentation for Handling Platform Variations in the Calling C and
    Fortran Code section of the manual.
   ```
-  """ Base.@osx
+  """ @osx
 
   @doc doc"""
   ```rst
@@ -2889,7 +2889,7 @@
    documentation for Handling Platform Variations in the Calling C and
    Fortran Code section of the manual.
   ```
-  """ Base.@linux
+  """ @linux
 
   @doc doc"""
   ```rst
@@ -2899,7 +2899,7 @@
    See documentation for Handling Platform Variations in the Calling C
    and Fortran Code section of the manual.
   ```
-  """ Base.@windows
+  """ @windows
 
   @doc doc"""
   ```rst
@@ -2907,7 +2907,7 @@
 
    Raise an "ErrorException" with the given message
   ```
-  """ Base.error
+  """ error
 
   @doc doc"""
   ```rst
@@ -2915,7 +2915,7 @@
 
    Throw an object as an exception
   ```
-  """ Base.throw
+  """ throw
 
   @doc doc"""
   ```rst
@@ -2925,7 +2925,7 @@
    The default argument is the current exception (if called within a
    "catch" block).
   ```
-  """ Base.rethrow
+  """ rethrow
 
   @doc doc"""
   ```rst
@@ -2933,7 +2933,7 @@
 
    Get a backtrace object for the current program point.
   ```
-  """ Base.backtrace
+  """ backtrace
 
   @doc doc"""
   ```rst
@@ -2942,7 +2942,7 @@
    Get the backtrace of the current exception, for use within
    "catch" blocks.
   ```
-  """ Base.catch_backtrace
+  """ catch_backtrace
 
   @doc doc"""
   ```rst
@@ -2951,7 +2951,7 @@
    Throw an "AssertionError" if "cond" is false. Also available as
    the macro "@assert expr".
   ```
-  """ Base.assert
+  """ assert
 
   @doc doc"""
   ```rst
@@ -2959,7 +2959,7 @@
 
    The parameters to a function call do not match a valid signature.
   ```
-  """ Base.ArgumentError
+  """ ArgumentError
 
   @doc doc"""
   ```rst
@@ -2967,7 +2967,7 @@
 
    The asserted condition did not evalutate to "true".
   ```
-  """ Base.AssertionError
+  """ AssertionError
 
   @doc doc"""
   ```rst
@@ -2976,7 +2976,7 @@
    An indexing operation into an array, "a", tried to access an out-
    of-bounds element, "i".
   ```
-  """ Base.BoundsError
+  """ BoundsError
 
   @doc doc"""
   ```rst
@@ -2984,7 +2984,7 @@
 
    The objects called do not have matching dimensionality.
   ```
-  """ Base.DimensionMismatch
+  """ DimensionMismatch
 
   @doc doc"""
   ```rst
@@ -2992,7 +2992,7 @@
 
    Integer division was attempted with a denominator value of 0.
   ```
-  """ Base.DivideError
+  """ DivideError
 
   @doc doc"""
   ```rst
@@ -3001,7 +3001,7 @@
    The arguments to a function or constructor are outside the valid
    domain.
   ```
-  """ Base.DomainError
+  """ DomainError
 
   @doc doc"""
   ```rst
@@ -3009,7 +3009,7 @@
 
    No more data was available to read from a file or stream.
   ```
-  """ Base.EOFError
+  """ EOFError
 
   @doc doc"""
   ```rst
@@ -3018,7 +3018,7 @@
    Generic error type. The error message, in the *.msg* field, may
    provide more specific details.
   ```
-  """ Base.ErrorException
+  """ ErrorException
 
   @doc doc"""
   ```rst
@@ -3026,7 +3026,7 @@
 
    Type conversion cannot be done exactly.
   ```
-  """ Base.InexactError
+  """ InexactError
 
   @doc doc"""
   ```rst
@@ -3034,7 +3034,7 @@
 
    The process was stopped by a terminal interrupt (CTRL+C).
   ```
-  """ Base.InterruptException
+  """ InterruptException
 
   @doc doc"""
   ```rst
@@ -3043,7 +3043,7 @@
    An indexing operation into an "Associative" ("Dict") or "Set"
    like object tried to access or delete a non-existent element.
   ```
-  """ Base.KeyError
+  """ KeyError
 
   @doc doc"""
   ```rst
@@ -3053,7 +3053,7 @@
    file. The error specifics should be available in the *.error*
    field.
   ```
-  """ Base.LoadError
+  """ LoadError
 
   @doc doc"""
   ```rst
@@ -3062,7 +3062,7 @@
    A method with the required type signature does not exist in the
    given generic function.
   ```
-  """ Base.MethodError
+  """ MethodError
 
   @doc doc"""
   ```rst
@@ -3070,7 +3070,7 @@
 
    An attempted access to a "Nullable" with no defined value.
   ```
-  """ Base.NullException
+  """ NullException
 
   @doc doc"""
   ```rst
@@ -3079,7 +3079,7 @@
    An operation allocated too much memory for either the system or the
    garbage collector to handle properly.
   ```
-  """ Base.OutOfMemoryError
+  """ OutOfMemoryError
 
   @doc doc"""
   ```rst
@@ -3087,7 +3087,7 @@
 
    An operation tried to write to memory that is read-only.
   ```
-  """ Base.ReadOnlyMemoryError
+  """ ReadOnlyMemoryError
 
   @doc doc"""
   ```rst
@@ -3096,7 +3096,7 @@
    The result of an expression is too large for the specified type and
    will cause a wraparound.
   ```
-  """ Base.OverflowError
+  """ OverflowError
 
   @doc doc"""
   ```rst
@@ -3105,7 +3105,7 @@
    The expression passed to the *parse* function could not be
    interpreted as a valid Julia expression.
   ```
-  """ Base.ParseError
+  """ ParseError
 
   @doc doc"""
   ```rst
@@ -3114,7 +3114,7 @@
    After a client Julia process has exited, further attempts to
    reference the dead child will throw this exception.
   ```
-  """ Base.ProcessExitedException
+  """ ProcessExitedException
 
   @doc doc"""
   ```rst
@@ -3123,7 +3123,7 @@
    The function call grew beyond the size of the call stack. This
    usually happens when a call recurses infinitely.
   ```
-  """ Base.StackOverflowError
+  """ StackOverflowError
 
   @doc doc"""
   ```rst
@@ -3132,7 +3132,7 @@
    A system call failed with an error code (in the "errno" global
    variable).
   ```
-  """ Base.SystemError
+  """ SystemError
 
   @doc doc"""
   ```rst
@@ -3141,7 +3141,7 @@
    A type assertion failure, or calling an intrinsic function with an
    incorrect argument type.
   ```
-  """ Base.TypeError
+  """ TypeError
 
   @doc doc"""
   ```rst
@@ -3149,7 +3149,7 @@
 
    The item or field is not defined for the given object.
   ```
-  """ Base.UndefRefError
+  """ UndefRefError
 
   @doc doc"""
   ```rst
@@ -3157,7 +3157,7 @@
 
    A symbol in the current scope is not defined.
   ```
-  """ Base.UndefVarError
+  """ UndefVarError
 
   @doc doc"""
   ```rst
@@ -3170,7 +3170,7 @@
    only triggered once. Times are in seconds. A timer is stopped and
    has its resources freed by calling "close" on it.
   ```
-  """ Base.Timer
+  """ Timer
 
   @doc doc"""
   ```rst
@@ -3179,7 +3179,7 @@
    Create a timer that wakes up tasks waiting for it (by calling
    "wait" on the timer object) at a specified interval.
   ```
-  """ Base.Timer
+  """ Timer
 
   @doc doc"""
   ```rst
@@ -3187,7 +3187,7 @@
 
    Get the name of a module as a symbol.
   ```
-  """ Base.module_name
+  """ module_name
 
   @doc doc"""
   ```rst
@@ -3195,7 +3195,7 @@
 
    Get a module's enclosing module. "Main" is its own parent.
   ```
-  """ Base.module_parent
+  """ module_parent
 
   @doc doc"""
   ```rst
@@ -3205,7 +3205,7 @@
    currently being read from. In general, this is not the same as the
    module containing the call to this function.
   ```
-  """ Base.current_module
+  """ current_module
 
   @doc doc"""
   ```rst
@@ -3215,7 +3215,7 @@
    example, "fullname(Base.Pkg)" gives "(:Base,:Pkg)", and
    "fullname(Main)" gives "()".
   ```
-  """ Base.fullname
+  """ fullname
 
   @doc doc"""
   ```rst
@@ -3224,7 +3224,7 @@
    Get an array of the names exported by a module, with optionally
    more module globals according to the additional parameters.
   ```
-  """ Base.names
+  """ names
 
   @doc doc"""
   ```rst
@@ -3232,7 +3232,7 @@
 
    Get the number of fields of a data type.
   ```
-  """ Base.nfields
+  """ nfields
 
   @doc doc"""
   ```rst
@@ -3240,7 +3240,7 @@
 
    Get an array of the fields of a data type.
   ```
-  """ Base.fieldnames
+  """ fieldnames
 
   @doc doc"""
   ```rst
@@ -3249,7 +3249,7 @@
    Determine whether a global is declared "const" in a given module.
    The default module argument is "current_module()".
   ```
-  """ Base.isconst
+  """ isconst
 
   @doc doc"""
   ```rst
@@ -3257,7 +3257,7 @@
 
    Determine whether a function is generic.
   ```
-  """ Base.isgeneric
+  """ isgeneric
 
   @doc doc"""
   ```rst
@@ -3265,7 +3265,7 @@
 
    Get the name of a generic function as a symbol, or ":anonymous".
   ```
-  """ Base.function_name
+  """ function_name
 
   @doc doc"""
   ```rst
@@ -3274,7 +3274,7 @@
    Determine the module containing a given definition of a generic
    function.
   ```
-  """ Base.function_module
+  """ function_module
 
   @doc doc"""
   ```rst
@@ -3283,7 +3283,7 @@
    Returns a tuple "(filename,line)" giving the location of a method
    definition.
   ```
-  """ Base.functionloc
+  """ functionloc
 
   @doc doc"""
   ```rst
@@ -3292,7 +3292,7 @@
    Returns a tuple "(filename,line)" giving the location of a method
    definition.
   ```
-  """ Base.functionloc
+  """ functionloc
 
   @doc doc"""
   ```rst
@@ -3300,7 +3300,7 @@
 
    Perform garbage collection. This should not generally be used.
   ```
-  """ Base.gc
+  """ gc
 
   @doc doc"""
   ```rst
@@ -3311,7 +3311,7 @@
    GC state. Disabling garbage collection should be used only with
    extreme caution, as it can cause memory use to grow without bound.
   ```
-  """ Base.gc_enable
+  """ gc_enable
 
   @doc doc"""
   ```rst
@@ -3320,7 +3320,7 @@
    Takes the expression x and returns an equivalent expression with
    all macros removed (expanded).
   ```
-  """ Base.macroexpand
+  """ macroexpand
 
   @doc doc"""
   ```rst
@@ -3329,7 +3329,7 @@
    Takes the expression x and returns an equivalent expression in
    lowered form
   ```
-  """ Base.expand
+  """ expand
 
   @doc doc"""
   ```rst
@@ -3338,7 +3338,7 @@
    Returns an array of lowered ASTs for the methods matching the given
    generic function and type signature.
   ```
-  """ Base.code_lowered
+  """ code_lowered
 
   @doc doc"""
   ```rst
@@ -3347,7 +3347,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls "code_lowered()" on the resulting expression
   ```
-  """ Base.@code_lowered
+  """ @code_lowered
 
   @doc doc"""
   ```rst
@@ -3358,7 +3358,7 @@
    argument "optimize" controls whether additional optimizations,
    such as inlining, are also applied.
   ```
-  """ Base.code_typed
+  """ code_typed
 
   @doc doc"""
   ```rst
@@ -3367,7 +3367,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls "code_typed()" on the resulting expression
   ```
-  """ Base.@code_typed
+  """ @code_typed
 
   @doc doc"""
   ```rst
@@ -3381,7 +3381,7 @@
    are particularly problematic for performance, so the results need
    to be used judiciously. See *@code_warntype* for more information.
   ```
-  """ Base.code_warntype
+  """ code_warntype
 
   @doc doc"""
   ```rst
@@ -3390,7 +3390,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls "code_warntype()" on the resulting expression
   ```
-  """ Base.@code_warntype
+  """ @code_warntype
 
   @doc doc"""
   ```rst
@@ -3402,7 +3402,7 @@
    All metadata and dbg.* calls are removed from the printed bitcode.
    Use code_llvm_raw for the full IR.
   ```
-  """ Base.code_llvm
+  """ code_llvm
 
   @doc doc"""
   ```rst
@@ -3411,7 +3411,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls "code_llvm()" on the resulting expression
   ```
-  """ Base.@code_llvm
+  """ @code_llvm
 
   @doc doc"""
   ```rst
@@ -3421,7 +3421,7 @@
    method matching the given generic function and type signature to
    STDOUT.
   ```
-  """ Base.code_native
+  """ code_native
 
   @doc doc"""
   ```rst
@@ -3430,7 +3430,7 @@
    Evaluates the arguments to the function call, determines their
    types, and calls "code_native()" on the resulting expression
   ```
-  """ Base.@code_native
+  """ @code_native
 
   @doc doc"""
   ```rst
@@ -3439,7 +3439,7 @@
    Compile the given function "f" for the argument tuple (of types)
    "args", but do not execute it.
   ```
-  """ Base.precompile
+  """ precompile
 
   @doc doc"""
   ```rst
@@ -3473,7 +3473,7 @@
    supplied.  The values can be read or written by "unsafe_load" or
    "unsafe_store!", respectively.
   ```
-  """ Base.cglobal
+  """ cglobal
 
   @doc doc"""
   ```rst
@@ -3494,7 +3494,7 @@
 
       bar = cfunction(foo, Float64, ())
   ```
-  """ Base.cfunction
+  """ cfunction
 
   @doc doc"""
   ```rst
@@ -3518,7 +3518,7 @@
    behavior, including program corruption or segfaults, at any later
    time.
   ```
-  """ Base.unsafe_convert
+  """ unsafe_convert
 
   @doc doc"""
   ```rst
@@ -3535,7 +3535,7 @@
    Neither "convert" nor "cconvert" should take a Julia object and
    turn it into a "Ptr".
   ```
-  """ Base.cconvert
+  """ cconvert
 
   @doc doc"""
   ```rst
@@ -3550,7 +3550,7 @@
    Incorrect usage may segfault your program or return garbage
    answers, in the same manner as C.
   ```
-  """ Base.unsafe_load
+  """ unsafe_load
 
   @doc doc"""
   ```rst
@@ -3565,7 +3565,7 @@
    Incorrect usage may corrupt or segfault your program, in the same
    manner as C.
   ```
-  """ Base.unsafe_store!
+  """ unsafe_store!
 
   @doc doc"""
   ```rst
@@ -3580,7 +3580,7 @@
    they are valid. Incorrect usage may corrupt or segfault your
    program, in the same manner as C.
   ```
-  """ Base.unsafe_copy!
+  """ unsafe_copy!
 
   @doc doc"""
   ```rst
@@ -3595,7 +3595,7 @@
    Incorrect usage may corrupt or segfault your program, in the same
    manner as C.
   ```
-  """ Base.unsafe_copy!
+  """ unsafe_copy!
 
   @doc doc"""
   ```rst
@@ -3604,7 +3604,7 @@
    Copy all elements from collection "src" to array "dest".
    Returns "dest".
   ```
-  """ Base.copy!
+  """ copy!
 
   @doc doc"""
   ```rst
@@ -3614,7 +3614,7 @@
    "so", to array "dest" starting at offset "do". Returns
    "dest".
   ```
-  """ Base.copy!
+  """ copy!
 
   @doc doc"""
   ```rst
@@ -3628,7 +3628,7 @@
    Calling "Ref(array[, index])" is generally preferable to this
    function.
   ```
-  """ Base.pointer
+  """ pointer
 
   @doc doc"""
   ```rst
@@ -3640,7 +3640,7 @@
    calling "free" on the pointer when the array is no longer
    referenced.
   ```
-  """ Base.pointer_to_array
+  """ pointer_to_array
 
   @doc doc"""
   ```rst
@@ -3651,7 +3651,7 @@
    garbage collection, so you must ensure that the object remains
    referenced for the whole time that the "Ptr" will be used.
   ```
-  """ Base.pointer_from_objref
+  """ pointer_from_objref
 
   @doc doc"""
   ```rst
@@ -3662,7 +3662,7 @@
    case, undefined behavior results, hence this function is considered
    "unsafe" and should be used with care.
   ```
-  """ Base.unsafe_pointer_to_objref
+  """ unsafe_pointer_to_objref
 
   @doc doc"""
   ```rst
@@ -3677,7 +3677,7 @@
           ...
       end
   ```
-  """ Base.disable_sigint
+  """ disable_sigint
 
   @doc doc"""
   ```rst
@@ -3686,7 +3686,7 @@
    Re-enable Ctrl-C handler during execution of a function.
    Temporarily reverses the effect of "disable_sigint".
   ```
-  """ Base.reenable_sigint
+  """ reenable_sigint
 
   @doc doc"""
   ```rst
@@ -3695,7 +3695,7 @@
    Raises a "SystemError" for "errno" with the descriptive string
    "sysfunc" if "bool" is true
   ```
-  """ Base.systemerror
+  """ systemerror
 
   @doc doc"""
   ```rst
@@ -3703,7 +3703,7 @@
 
    Equivalent to the native "char" c-type
   ```
-  """ Base.Cchar
+  """ Cchar
 
   @doc doc"""
   ```rst
@@ -3711,7 +3711,7 @@
 
    Equivalent to the native "unsigned char" c-type (UInt8)
   ```
-  """ Base.Cuchar
+  """ Cuchar
 
   @doc doc"""
   ```rst
@@ -3719,7 +3719,7 @@
 
    Equivalent to the native "signed short" c-type (Int16)
   ```
-  """ Base.Cshort
+  """ Cshort
 
   @doc doc"""
   ```rst
@@ -3727,7 +3727,7 @@
 
    Equivalent to the native "unsigned short" c-type (UInt16)
   ```
-  """ Base.Cushort
+  """ Cushort
 
   @doc doc"""
   ```rst
@@ -3735,7 +3735,7 @@
 
    Equivalent to the native "signed int" c-type (Int32)
   ```
-  """ Base.Cint
+  """ Cint
 
   @doc doc"""
   ```rst
@@ -3743,7 +3743,7 @@
 
    Equivalent to the native "unsigned int" c-type (UInt32)
   ```
-  """ Base.Cuint
+  """ Cuint
 
   @doc doc"""
   ```rst
@@ -3751,7 +3751,7 @@
 
    Equivalent to the native "signed long" c-type
   ```
-  """ Base.Clong
+  """ Clong
 
   @doc doc"""
   ```rst
@@ -3759,7 +3759,7 @@
 
    Equivalent to the native "unsigned long" c-type
   ```
-  """ Base.Culong
+  """ Culong
 
   @doc doc"""
   ```rst
@@ -3767,7 +3767,7 @@
 
    Equivalent to the native "signed long long" c-type (Int64)
   ```
-  """ Base.Clonglong
+  """ Clonglong
 
   @doc doc"""
   ```rst
@@ -3775,7 +3775,7 @@
 
    Equivalent to the native "unsigned long long" c-type (UInt64)
   ```
-  """ Base.Culonglong
+  """ Culonglong
 
   @doc doc"""
   ```rst
@@ -3783,7 +3783,7 @@
 
    Equivalent to the native "intmax_t" c-type (Int64)
   ```
-  """ Base.Cintmax_t
+  """ Cintmax_t
 
   @doc doc"""
   ```rst
@@ -3791,7 +3791,7 @@
 
    Equivalent to the native "uintmax_t" c-type (UInt64)
   ```
-  """ Base.Cuintmax_t
+  """ Cuintmax_t
 
   @doc doc"""
   ```rst
@@ -3799,7 +3799,7 @@
 
    Equivalent to the native "size_t" c-type (UInt)
   ```
-  """ Base.Csize_t
+  """ Csize_t
 
   @doc doc"""
   ```rst
@@ -3807,7 +3807,7 @@
 
    Equivalent to the native "ssize_t" c-type
   ```
-  """ Base.Cssize_t
+  """ Cssize_t
 
   @doc doc"""
   ```rst
@@ -3815,7 +3815,7 @@
 
    Equivalent to the native "ptrdiff_t" c-type (Int)
   ```
-  """ Base.Cptrdiff_t
+  """ Cptrdiff_t
 
   @doc doc"""
   ```rst
@@ -3823,7 +3823,7 @@
 
    Equivalent to the native "off_t" c-type
   ```
-  """ Base.Coff_t
+  """ Coff_t
 
   @doc doc"""
   ```rst
@@ -3831,7 +3831,7 @@
 
    Equivalent to the native "wchar_t" c-type (Int32)
   ```
-  """ Base.Cwchar_t
+  """ Cwchar_t
 
   @doc doc"""
   ```rst
@@ -3839,7 +3839,7 @@
 
    Equivalent to the native "float" c-type (Float32)
   ```
-  """ Base.Cfloat
+  """ Cfloat
 
   @doc doc"""
   ```rst
@@ -3847,7 +3847,7 @@
 
    Equivalent to the native "double" c-type (Float64)
   ```
-  """ Base.Cdouble
+  """ Cdouble
 
   @doc doc"""
   ```rst
@@ -3855,7 +3855,7 @@
 
    Get initial iteration state for an iterable object
   ```
-  """ Base.start
+  """ start
 
   @doc doc"""
   ```rst
@@ -3863,7 +3863,7 @@
 
    Test whether we are done iterating
   ```
-  """ Base.done
+  """ done
 
   @doc doc"""
   ```rst
@@ -3872,7 +3872,7 @@
    For a given iterable object and iteration state, return the current
    item and the next iteration state
   ```
-  """ Base.next
+  """ next
 
   @doc doc"""
   ```rst
@@ -3885,7 +3885,7 @@
    Note that "zip()" is its own inverse:
    "collect(zip(zip(a...)...)) == collect(a)".
   ```
-  """ Base.zip
+  """ zip
 
   @doc doc"""
   ```rst
@@ -3905,7 +3905,7 @@
       2 b
       3 c
   ```
-  """ Base.enumerate
+  """ enumerate
 
   @doc doc"""
   ```rst
@@ -3914,7 +3914,7 @@
    An iterator that yields the same elements as "iter", but starting
    at the given "state".
   ```
-  """ Base.rest
+  """ rest
 
   @doc doc"""
   ```rst
@@ -3923,7 +3923,7 @@
    An iterator that counts forever, starting at "start" and
    incrementing by "step".
   ```
-  """ Base.countfrom
+  """ countfrom
 
   @doc doc"""
   ```rst
@@ -3932,7 +3932,7 @@
    An iterator that generates at most the first "n" elements of
    "iter".
   ```
-  """ Base.take
+  """ take
 
   @doc doc"""
   ```rst
@@ -3941,7 +3941,7 @@
    An iterator that generates all but the first "n" elements of
    "iter".
   ```
-  """ Base.drop
+  """ drop
 
   @doc doc"""
   ```rst
@@ -3949,7 +3949,7 @@
 
    An iterator that cycles through "iter" forever.
   ```
-  """ Base.cycle
+  """ cycle
 
   @doc doc"""
   ```rst
@@ -3959,7 +3959,7 @@
    specified, generates "x" that many times (equivalent to
    "take(repeated(x), n)").
   ```
-  """ Base.repeated
+  """ repeated
 
   @doc doc"""
   ```rst
@@ -3973,7 +3973,7 @@
       julia> isempty([1 2 3])
       false
   ```
-  """ Base.isempty
+  """ isempty
 
   @doc doc"""
   ```rst
@@ -3981,7 +3981,7 @@
 
    Remove all elements from a "collection".
   ```
-  """ Base.empty!
+  """ empty!
 
   @doc doc"""
   ```rst
@@ -3991,7 +3991,7 @@
    which "getindex(collection, i)" is valid. For unordered
    collections, the number of elements.
   ```
-  """ Base.length
+  """ length
 
   @doc doc"""
   ```rst
@@ -4002,7 +4002,7 @@
       julia> endof([1,2,4])
       3
   ```
-  """ Base.endof
+  """ endof
 
   @doc doc"""
   ```rst
@@ -4034,7 +4034,7 @@
    that instances can be passed instead of types. However the form
    that accepts a type argument should be defined for new types.
   ```
-  """ Base.eltype
+  """ eltype
 
   @doc doc"""
   ```rst
@@ -4044,7 +4044,7 @@
    value in "a" that is a member of "b" . The output vector
    contains 0 wherever "a" is not a member of "b".
   ```
-  """ Base.indexin
+  """ indexin
 
   @doc doc"""
   ```rst
@@ -4053,7 +4053,7 @@
    Returns the indices of elements in collection "a" that appear in
    collection "b"
   ```
-  """ Base.findin
+  """ findin
 
   @doc doc"""
   ```rst
@@ -4064,7 +4064,7 @@
    equivalent elements originally appears. If "dim" is specified,
    returns unique regions of the array "itr" along "dim".
   ```
-  """ Base.unique
+  """ unique
 
   @doc doc"""
   ```rst
@@ -4091,7 +4091,7 @@
    of Julia might change the algorithm. Note that the elements are not
    reordered if you use an ordered collection.
   ```
-  """ Base.reduce
+  """ reduce
 
   @doc doc"""
   ```rst
@@ -4102,7 +4102,7 @@
    of "+", "*", "max", "min", "&", "|") when Julia can
    determine the neutral element of "op".
   ```
-  """ Base.reduce
+  """ reduce
 
   @doc doc"""
   ```rst
@@ -4111,7 +4111,7 @@
    Like "reduce()", but with guaranteed left associativity. "v0"
    will be used exactly once.
   ```
-  """ Base.foldl
+  """ foldl
 
   @doc doc"""
   ```rst
@@ -4121,7 +4121,7 @@
    as "v0". In general, this cannot be used with empty collections
    (see "reduce(op, itr)").
   ```
-  """ Base.foldl
+  """ foldl
 
   @doc doc"""
   ```rst
@@ -4130,7 +4130,7 @@
    Like "reduce()", but with guaranteed right associativity. "v0"
    will be used exactly once.
   ```
-  """ Base.foldr
+  """ foldr
 
   @doc doc"""
   ```rst
@@ -4140,7 +4140,7 @@
    as "v0". In general, this cannot be used with empty collections
    (see "reduce(op, itr)").
   ```
-  """ Base.foldr
+  """ foldr
 
   @doc doc"""
   ```rst
@@ -4148,7 +4148,7 @@
 
    Returns the largest element in a collection.
   ```
-  """ Base.maximum
+  """ maximum
 
   @doc doc"""
   ```rst
@@ -4156,7 +4156,7 @@
 
    Compute the maximum value of an array over the given dimensions.
   ```
-  """ Base.maximum
+  """ maximum
 
   @doc doc"""
   ```rst
@@ -4165,7 +4165,7 @@
    Compute the maximum value of "A" over the singleton dimensions of
    "r", and write results to "r".
   ```
-  """ Base.maximum!
+  """ maximum!
 
   @doc doc"""
   ```rst
@@ -4173,7 +4173,7 @@
 
    Returns the smallest element in a collection.
   ```
-  """ Base.minimum
+  """ minimum
 
   @doc doc"""
   ```rst
@@ -4181,7 +4181,7 @@
 
    Compute the minimum value of an array over the given dimensions.
   ```
-  """ Base.minimum
+  """ minimum
 
   @doc doc"""
   ```rst
@@ -4190,7 +4190,7 @@
    Compute the minimum value of "A" over the singleton dimensions of
    "r", and write results to "r".
   ```
-  """ Base.minimum!
+  """ minimum!
 
   @doc doc"""
   ```rst
@@ -4199,7 +4199,7 @@
    Compute both the minimum and maximum element in a single pass, and
    return them as a 2-tuple.
   ```
-  """ Base.extrema
+  """ extrema
 
   @doc doc"""
   ```rst
@@ -4207,7 +4207,7 @@
 
    Returns the index of the maximum element in a collection.
   ```
-  """ Base.indmax
+  """ indmax
 
   @doc doc"""
   ```rst
@@ -4215,7 +4215,7 @@
 
    Returns the index of the minimum element in a collection.
   ```
-  """ Base.indmin
+  """ indmin
 
   @doc doc"""
   ```rst
@@ -4223,7 +4223,7 @@
 
    Returns the maximum element and its index.
   ```
-  """ Base.findmax
+  """ findmax
 
   @doc doc"""
   ```rst
@@ -4232,7 +4232,7 @@
    For an array input, returns the value and index of the maximum over
    the given dimensions.
   ```
-  """ Base.findmax
+  """ findmax
 
   @doc doc"""
   ```rst
@@ -4240,7 +4240,7 @@
 
    Returns the minimum element and its index.
   ```
-  """ Base.findmin
+  """ findmin
 
   @doc doc"""
   ```rst
@@ -4249,7 +4249,7 @@
    For an array input, returns the value and index of the minimum over
    the given dimensions.
   ```
-  """ Base.findmin
+  """ findmin
 
   @doc doc"""
   ```rst
@@ -4257,7 +4257,7 @@
 
    Compute the maximum absolute value of a collection of values.
   ```
-  """ Base.maxabs
+  """ maxabs
 
   @doc doc"""
   ```rst
@@ -4265,7 +4265,7 @@
 
    Compute the maximum absolute values over given dimensions.
   ```
-  """ Base.maxabs
+  """ maxabs
 
   @doc doc"""
   ```rst
@@ -4274,7 +4274,7 @@
    Compute the maximum absolute values over the singleton dimensions
    of "r", and write values to "r".
   ```
-  """ Base.maxabs!
+  """ maxabs!
 
   @doc doc"""
   ```rst
@@ -4282,7 +4282,7 @@
 
    Compute the minimum absolute value of a collection of values.
   ```
-  """ Base.minabs
+  """ minabs
 
   @doc doc"""
   ```rst
@@ -4290,7 +4290,7 @@
 
    Compute the minimum absolute values over given dimensions.
   ```
-  """ Base.minabs
+  """ minabs
 
   @doc doc"""
   ```rst
@@ -4299,7 +4299,7 @@
    Compute the minimum absolute values over the singleton dimensions
    of "r", and write values to "r".
   ```
-  """ Base.minabs!
+  """ minabs!
 
   @doc doc"""
   ```rst
@@ -4307,7 +4307,7 @@
 
    Returns the sum of all elements in a collection.
   ```
-  """ Base.sum
+  """ sum
 
   @doc doc"""
   ```rst
@@ -4315,7 +4315,7 @@
 
    Sum elements of an array over the given dimensions.
   ```
-  """ Base.sum
+  """ sum
 
   @doc doc"""
   ```rst
@@ -4324,7 +4324,7 @@
    Sum elements of "A" over the singleton dimensions of "r", and
    write results to "r".
   ```
-  """ Base.sum!
+  """ sum!
 
   @doc doc"""
   ```rst
@@ -4333,7 +4333,7 @@
    Sum the results of calling function "f" on each element of
    "itr".
   ```
-  """ Base.sum
+  """ sum
 
   @doc doc"""
   ```rst
@@ -4342,7 +4342,7 @@
    Sum absolute values of all elements in a collection. This is
    equivalent to *sum(abs(itr))* but faster.
   ```
-  """ Base.sumabs
+  """ sumabs
 
   @doc doc"""
   ```rst
@@ -4351,7 +4351,7 @@
    Sum absolute values of elements of an array over the given
    dimensions.
   ```
-  """ Base.sumabs
+  """ sumabs
 
   @doc doc"""
   ```rst
@@ -4360,7 +4360,7 @@
    Sum absolute values of elements of "A" over the singleton
    dimensions of "r", and write results to "r".
   ```
-  """ Base.sumabs!
+  """ sumabs!
 
   @doc doc"""
   ```rst
@@ -4369,7 +4369,7 @@
    Sum squared absolute values of all elements in a collection. This
    is equivalent to *sum(abs2(itr))* but faster.
   ```
-  """ Base.sumabs2
+  """ sumabs2
 
   @doc doc"""
   ```rst
@@ -4378,7 +4378,7 @@
    Sum squared absolute values of elements of an array over the given
    dimensions.
   ```
-  """ Base.sumabs2
+  """ sumabs2
 
   @doc doc"""
   ```rst
@@ -4387,7 +4387,7 @@
    Sum squared absolute values of elements of "A" over the singleton
    dimensions of "r", and write results to "r".
   ```
-  """ Base.sumabs2!
+  """ sumabs2!
 
   @doc doc"""
   ```rst
@@ -4395,7 +4395,7 @@
 
    Returns the product of all elements of a collection.
   ```
-  """ Base.prod
+  """ prod
 
   @doc doc"""
   ```rst
@@ -4403,7 +4403,7 @@
 
    Multiply elements of an array over the given dimensions.
   ```
-  """ Base.prod
+  """ prod
 
   @doc doc"""
   ```rst
@@ -4412,7 +4412,7 @@
    Multiply elements of "A" over the singleton dimensions of "r",
    and write results to "r".
   ```
-  """ Base.prod!
+  """ prod!
 
   @doc doc"""
   ```rst
@@ -4420,7 +4420,7 @@
 
    Test whether any elements of a boolean collection are true.
   ```
-  """ Base.any
+  """ any
 
   @doc doc"""
   ```rst
@@ -4429,7 +4429,7 @@
    Test whether any values along the given dimensions of an array are
    true.
   ```
-  """ Base.any
+  """ any
 
   @doc doc"""
   ```rst
@@ -4438,7 +4438,7 @@
    Test whether any values in "A" along the singleton dimensions of
    "r" are true, and write results to "r".
   ```
-  """ Base.any!
+  """ any!
 
   @doc doc"""
   ```rst
@@ -4446,7 +4446,7 @@
 
    Test whether all elements of a boolean collection are true.
   ```
-  """ Base.all
+  """ all
 
   @doc doc"""
   ```rst
@@ -4455,7 +4455,7 @@
    Test whether all values along the given dimensions of an array are
    true.
   ```
-  """ Base.all
+  """ all
 
   @doc doc"""
   ```rst
@@ -4464,7 +4464,7 @@
    Test whether all values in "A" along the singleton dimensions of
    "r" are true, and write results to "r".
   ```
-  """ Base.all!
+  """ all!
 
   @doc doc"""
   ```rst
@@ -4473,7 +4473,7 @@
    Count the number of elements in "itr" for which predicate "p"
    returns true.
   ```
-  """ Base.count
+  """ count
 
   @doc doc"""
   ```rst
@@ -4482,7 +4482,7 @@
    Determine whether predicate "p" returns true for any elements of
    "itr".
   ```
-  """ Base.any
+  """ any
 
   @doc doc"""
   ```rst
@@ -4494,7 +4494,7 @@
       julia> all(i->(4<=i<=6), [4,5,6])
       true
   ```
-  """ Base.all
+  """ all
 
   @doc doc"""
   ```rst
@@ -4515,7 +4515,7 @@
        22
        33
   ```
-  """ Base.map
+  """ map
 
   @doc doc"""
   ```rst
@@ -4523,7 +4523,7 @@
 
    In-place version of "map()".
   ```
-  """ Base.map!
+  """ map!
 
   @doc doc"""
   ```rst
@@ -4533,7 +4533,7 @@
    than a new collection. "destination" must be at least as large as
    the first collection.
   ```
-  """ Base.map!
+  """ map!
 
   @doc doc"""
   ```rst
@@ -4559,7 +4559,7 @@
    "mapfoldl()" or "mapfoldr()" instead for guaranteed left or
    right associativity and invocation of "f" for every value.
   ```
-  """ Base.mapreduce
+  """ mapreduce
 
   @doc doc"""
   ```rst
@@ -4568,7 +4568,7 @@
    Like "mapreduce(f, op, v0, itr)". In general, this cannot be used
    with empty collections (see "reduce(op, itr)").
   ```
-  """ Base.mapreduce
+  """ mapreduce
 
   @doc doc"""
   ```rst
@@ -4577,7 +4577,7 @@
    Like "mapreduce()", but with guaranteed left associativity.
    "v0" will be used exactly once.
   ```
-  """ Base.mapfoldl
+  """ mapfoldl
 
   @doc doc"""
   ```rst
@@ -4587,7 +4587,7 @@
    "itr" as "v0". In general, this cannot be used with empty
    collections (see "reduce(op, itr)").
   ```
-  """ Base.mapfoldl
+  """ mapfoldl
 
   @doc doc"""
   ```rst
@@ -4596,7 +4596,7 @@
    Like "mapreduce()", but with guaranteed right associativity.
    "v0" will be used exactly once.
   ```
-  """ Base.mapfoldr
+  """ mapfoldr
 
   @doc doc"""
   ```rst
@@ -4606,7 +4606,7 @@
    "itr" as "v0". In general, this cannot be used with empty
    collections (see "reduce(op, itr)").
   ```
-  """ Base.mapfoldr
+  """ mapfoldr
 
   @doc doc"""
   ```rst
@@ -4615,7 +4615,7 @@
    Get the first element of an iterable collection. Returns the start
    point of a "Range" even if it is empty.
   ```
-  """ Base.first
+  """ first
 
   @doc doc"""
   ```rst
@@ -4626,7 +4626,7 @@
    to get the last index. Returns the end point of a "Range" even if
    it is empty.
   ```
-  """ Base.last
+  """ last
 
   @doc doc"""
   ```rst
@@ -4634,7 +4634,7 @@
 
    Get the step size of a "Range" object.
   ```
-  """ Base.step
+  """ step
 
   @doc doc"""
   ```rst
@@ -4643,7 +4643,7 @@
    Return an array of all items in a collection. For associative
    collections, returns (key, value) tuples.
   ```
-  """ Base.collect
+  """ collect
 
   @doc doc"""
   ```rst
@@ -4652,7 +4652,7 @@
    Return an array of type "Array{element_type,1}" of all items in a
    collection.
   ```
-  """ Base.collect
+  """ collect
 
   @doc doc"""
   ```rst
@@ -4664,7 +4664,7 @@
    Determine whether every element of "a" is also in "b", using
    "in()".
   ```
-  """ Base.issubset
+  """ issubset
 
   @doc doc"""
   ```rst
@@ -4674,7 +4674,7 @@
    "function" is false. For associative collections, the function is
    passed two arguments (key and value).
   ```
-  """ Base.filter
+  """ filter
 
   @doc doc"""
   ```rst
@@ -4684,7 +4684,7 @@
    false. For associative collections, the function is passed two
    arguments (key and value).
   ```
-  """ Base.filter!
+  """ filter!
 
   @doc doc"""
   ```rst
@@ -4694,7 +4694,7 @@
    collection. The syntax "a[i,j,...]" is converted by the compiler
    to "getindex(a, i, j, ...)".
   ```
-  """ Base.getindex
+  """ getindex
 
   @doc doc"""
   ```rst
@@ -4704,7 +4704,7 @@
    collection. The syntax "a[i,j,...] = x" is converted by the
    compiler to "setindex!(a, x, i, j, ...)".
   ```
-  """ Base.setindex!
+  """ setindex!
 
   @doc doc"""
   ```rst
@@ -4729,7 +4729,7 @@
         "B" => 2
         "A" => 1
   ```
-  """ Base.Dict
+  """ Dict
 
   @doc doc"""
   ```rst
@@ -4737,7 +4737,7 @@
 
    Determine whether a collection has a mapping for a given key.
   ```
-  """ Base.haskey
+  """ haskey
 
   @doc doc"""
   ```rst
@@ -4746,7 +4746,7 @@
    Return the value stored for the given key, or the given default
    value if no mapping for the key is present.
   ```
-  """ Base.get
+  """ get
 
   @doc doc"""
   ```rst
@@ -4763,7 +4763,7 @@
                time()
       end
   ```
-  """ Base.get
+  """ get
 
   @doc doc"""
   ```rst
@@ -4772,7 +4772,7 @@
    Return the value stored for the given key, or if no mapping for the
    key is present, store "key => default", and return "default".
   ```
-  """ Base.get!
+  """ get!
 
   @doc doc"""
   ```rst
@@ -4788,7 +4788,7 @@
                time()
       end
   ```
-  """ Base.get!
+  """ get!
 
   @doc doc"""
   ```rst
@@ -4797,7 +4797,7 @@
    Return the key matching argument "key" if one exists in
    "collection", otherwise return "default".
   ```
-  """ Base.getkey
+  """ getkey
 
   @doc doc"""
   ```rst
@@ -4806,7 +4806,7 @@
    Delete the mapping for the given key in a collection, and return
    the collection.
   ```
-  """ Base.delete!
+  """ delete!
 
   @doc doc"""
   ```rst
@@ -4816,7 +4816,7 @@
    "collection", otherwise return "default", or throw an error if
    default is not specified.
   ```
-  """ Base.pop!
+  """ pop!
 
   @doc doc"""
   ```rst
@@ -4825,7 +4825,7 @@
    Return an iterator over all keys in a collection.
    "collect(keys(d))" returns an array of keys.
   ```
-  """ Base.keys
+  """ keys
 
   @doc doc"""
   ```rst
@@ -4834,7 +4834,7 @@
    Return an iterator over all values in a collection.
    "collect(values(d))" returns an array of values.
   ```
-  """ Base.values
+  """ values
 
   @doc doc"""
   ```rst
@@ -4861,7 +4861,7 @@
         "baz" => 17.0
         "foo" => 0.0
   ```
-  """ Base.merge
+  """ merge
 
   @doc doc"""
   ```rst
@@ -4869,7 +4869,7 @@
 
    Update collection with pairs from the other collections
   ```
-  """ Base.merge!
+  """ merge!
 
   @doc doc"""
   ```rst
@@ -4878,7 +4878,7 @@
    Suggest that collection "s" reserve capacity for at least "n"
    elements. This can improve performance.
   ```
-  """ Base.sizehint!
+  """ sizehint!
 
   @doc doc"""
   ```rst
@@ -4888,7 +4888,7 @@
    object, or an empty set. Should be used instead of "IntSet" for
    sparse integer sets, or for sets of arbitrary objects.
   ```
-  """ Base.Set
+  """ Set
 
   @doc doc"""
   ```rst
@@ -4900,7 +4900,7 @@
    integers can be stored. If the set will be sparse (for example
    holding a single very large integer), use "Set" instead.
   ```
-  """ Base.IntSet
+  """ IntSet
 
   @doc doc"""
   ```rst
@@ -4910,7 +4910,7 @@
    Construct the union of two or more sets. Maintains order with
    arrays.
   ```
-  """ Base.union
+  """ union
 
   @doc doc"""
   ```rst
@@ -4918,7 +4918,7 @@
 
    Union each element of "iterable" into set "s" in-place.
   ```
-  """ Base.union!
+  """ union!
 
   @doc doc"""
   ```rst
@@ -4928,7 +4928,7 @@
    Construct the intersection of two or more sets. Maintains order and
    multiplicity of the first argument for arrays and ranges.
   ```
-  """ Base.intersect
+  """ intersect
 
   @doc doc"""
   ```rst
@@ -4940,7 +4940,7 @@
    "setdiff(set,element)" where "element" is a potential member of
    "set", will not work in general.
   ```
-  """ Base.setdiff
+  """ setdiff
 
   @doc doc"""
   ```rst
@@ -4948,7 +4948,7 @@
 
    Remove each element of "iterable" from set "s" in-place.
   ```
-  """ Base.setdiff!
+  """ setdiff!
 
   @doc doc"""
   ```rst
@@ -4957,7 +4957,7 @@
    Construct the symmetric difference of elements in the passed in
    sets or arrays. Maintains order with arrays.
   ```
-  """ Base.symdiff
+  """ symdiff
 
   @doc doc"""
   ```rst
@@ -4966,7 +4966,7 @@
    The set "s" is destructively modified to toggle the inclusion of
    integer "n".
   ```
-  """ Base.symdiff!
+  """ symdiff!
 
   @doc doc"""
   ```rst
@@ -4975,7 +4975,7 @@
    For each element in "itr", destructively toggle its inclusion in
    set "s".
   ```
-  """ Base.symdiff!
+  """ symdiff!
 
   @doc doc"""
   ```rst
@@ -4984,7 +4984,7 @@
    Construct the symmetric difference of sets "s1" and "s2",
    storing the result in "s1".
   ```
-  """ Base.symdiff!
+  """ symdiff!
 
   @doc doc"""
   ```rst
@@ -4992,7 +4992,7 @@
 
    Returns the set-complement of "IntSet" "s".
   ```
-  """ Base.complement
+  """ complement
 
   @doc doc"""
   ```rst
@@ -5000,7 +5000,7 @@
 
    Mutates "IntSet" "s" into its set-complement.
   ```
-  """ Base.complement!
+  """ complement!
 
   @doc doc"""
   ```rst
@@ -5010,7 +5010,7 @@
    with the result. If needed, "s1" will be expanded to the size of
    "s2".
   ```
-  """ Base.intersect!
+  """ intersect!
 
   @doc doc"""
   ```rst
@@ -5019,7 +5019,7 @@
 
    True if A is a subset of or equal to S.
   ```
-  """ Base.issubset
+  """ issubset
 
   @doc doc"""
   ```rst
@@ -5040,7 +5040,7 @@
    "collection". The result of the preceding example is equivalent
    to "append!([1, 2, 3], [4, 5, 6])".
   ```
-  """ Base.push!
+  """ push!
 
   @doc doc"""
   ```rst
@@ -5068,7 +5068,7 @@
        4
        5
   ```
-  """ Base.pop!
+  """ pop!
 
   @doc doc"""
   ```rst
@@ -5085,7 +5085,7 @@
        3
        4
   ```
-  """ Base.unshift!
+  """ unshift!
 
   @doc doc"""
   ```rst
@@ -5113,7 +5113,7 @@
        5
        6
   ```
-  """ Base.shift!
+  """ shift!
 
   @doc doc"""
   ```rst
@@ -5131,7 +5131,7 @@
        2
        1
   ```
-  """ Base.insert!
+  """ insert!
 
   @doc doc"""
   ```rst
@@ -5149,7 +5149,7 @@
        2
        1
   ```
-  """ Base.deleteat!
+  """ deleteat!
 
   @doc doc"""
   ```rst
@@ -5169,7 +5169,7 @@
       ERROR: ArgumentError: indices must be unique and sorted
        in deleteat! at array.jl:631
   ```
-  """ Base.deleteat!
+  """ deleteat!
 
   @doc doc"""
   ```rst
@@ -5218,7 +5218,7 @@
    To insert "replacement" before an index "n" without removing
    any items, use "splice!(collection, n:n-1, replacement)".
   ```
-  """ Base.splice!
+  """ splice!
 
   @doc doc"""
   ```rst
@@ -5246,7 +5246,7 @@
         3
        -1
   ```
-  """ Base.splice!
+  """ splice!
 
   @doc doc"""
   ```rst
@@ -5274,7 +5274,7 @@
        0
        0
   ```
-  """ Base.resize!
+  """ resize!
 
   @doc doc"""
   ```rst
@@ -5301,7 +5301,7 @@
    not already themselves in another collection. The result is of the
    preceding example is equivalent to "push!([1, 2, 3], 4, 5, 6)".
   ```
-  """ Base.append!
+  """ append!
 
   @doc doc"""
   ```rst
@@ -5316,7 +5316,7 @@
        2
        3
   ```
-  """ Base.prepend!
+  """ prepend!
 
   @doc doc"""
   ```rst
@@ -5409,7 +5409,7 @@
    there is no value to return (as in a C "void" function). Can be
    converted to an empty "Nullable" value.
   ```
-  """ Base.nothing
+  """ nothing
 
   @doc doc"""
   ```rst
@@ -5418,7 +5418,7 @@
    A symbol representing the name of the operating system. Possible
    values are ":Linux", ":Darwin" (OS X), or ":Windows".
   ```
-  """ Base.OS_NAME
+  """ OS_NAME
 
   @doc doc"""
   ```rst
@@ -5426,7 +5426,7 @@
 
    An array of the command line arguments passed to Julia, as strings.
   ```
-  """ Base.ARGS
+  """ ARGS
 
   @doc doc"""
   ```rst
@@ -5435,7 +5435,7 @@
    The C null pointer constant, sometimes used when calling external
    code.
   ```
-  """ Base.C_NULL
+  """ C_NULL
 
   @doc doc"""
   ```rst
@@ -5443,7 +5443,7 @@
 
    Standard word size on the current machine, in bits.
   ```
-  """ Base.WORD_SIZE
+  """ WORD_SIZE
 
   @doc doc"""
   ```rst
@@ -5451,7 +5451,7 @@
 
    An object describing which version of Julia is in use.
   ```
-  """ Base.VERSION
+  """ VERSION
 
   @doc doc"""
   ```rst
@@ -5460,7 +5460,7 @@
    An array of paths (as strings) where the "require" function looks
    for code.
   ```
-  """ Base.LOAD_PATH
+  """ LOAD_PATH
 
   @doc doc"""
   ```rst
@@ -5469,7 +5469,7 @@
    Equivalent to "Any" for dispatch purposes, but signals the
    compiler to skip code generation specialization for that field
   ```
-  """ Base.ANY
+  """ ANY
 
   @doc doc"""
   ```rst
@@ -6176,7 +6176,7 @@ Millisecond(v)
 
    Get the current working directory.
   ```
-  """ Base.pwd
+  """ pwd
 
   @doc doc"""
   ```rst
@@ -6184,7 +6184,7 @@ Millisecond(v)
 
    Set the current working directory.
   ```
-  """ Base.cd
+  """ cd
 
   @doc doc"""
   ```rst
@@ -6193,7 +6193,7 @@ Millisecond(v)
    Temporarily changes the current working directory (HOME if not
    specified) and applies function f before returning.
   ```
-  """ Base.cd
+  """ cd
 
   @doc doc"""
   ```rst
@@ -6202,7 +6202,7 @@ Millisecond(v)
    Returns the files and directories in the directory *dir* (or the
    current working directory if not given).
   ```
-  """ Base.readdir
+  """ readdir
 
   @doc doc"""
   ```rst
@@ -6212,7 +6212,7 @@ Millisecond(v)
    "mode" defaults to 0o777, modified by the current file creation
    mask.
   ```
-  """ Base.mkdir
+  """ mkdir
 
   @doc doc"""
   ```rst
@@ -6222,7 +6222,7 @@ Millisecond(v)
    "mode". "mode" defaults to 0o777, modified by the current file
    creation mask.
   ```
-  """ Base.mkpath
+  """ mkpath
 
   @doc doc"""
   ```rst
@@ -6233,7 +6233,7 @@ Millisecond(v)
    Note: This function raises an error under operating systems that
      do not support soft symbolic links, such as Windows XP.
   ```
-  """ Base.symlink
+  """ symlink
 
   @doc doc"""
   ```rst
@@ -6241,7 +6241,7 @@ Millisecond(v)
 
    Returns the value of a symbolic link "path".
   ```
-  """ Base.readlink
+  """ readlink
 
   @doc doc"""
   ```rst
@@ -6250,7 +6250,7 @@ Millisecond(v)
    Change the permissions mode of "path" to "mode". Only integer
    "mode"s (e.g. 0o777) are currently supported.
   ```
-  """ Base.chmod
+  """ chmod
 
   @doc doc"""
   ```rst
@@ -6285,7 +6285,7 @@ Millisecond(v)
    | ctime     | Unix timestamp of when the file was created                            |
    +-----------+------------------------------------------------------------------------+
   ```
-  """ Base.stat
+  """ stat
 
   @doc doc"""
   ```rst
@@ -6295,7 +6295,7 @@ Millisecond(v)
    rather than the file it refers to. This function must be called on
    a file path rather than a file object or a file descriptor.
   ```
-  """ Base.lstat
+  """ lstat
 
   @doc doc"""
   ```rst
@@ -6303,7 +6303,7 @@ Millisecond(v)
 
    Equivalent to stat(file).ctime
   ```
-  """ Base.ctime
+  """ ctime
 
   @doc doc"""
   ```rst
@@ -6311,7 +6311,7 @@ Millisecond(v)
 
    Equivalent to stat(file).mtime
   ```
-  """ Base.mtime
+  """ mtime
 
   @doc doc"""
   ```rst
@@ -6319,7 +6319,7 @@ Millisecond(v)
 
    Equivalent to stat(file).mode
   ```
-  """ Base.filemode
+  """ filemode
 
   @doc doc"""
   ```rst
@@ -6327,7 +6327,7 @@ Millisecond(v)
 
    Equivalent to stat(file).size
   ```
-  """ Base.filesize
+  """ filesize
 
   @doc doc"""
   ```rst
@@ -6345,7 +6345,7 @@ Millisecond(v)
 
    For allowed arguments, see "stat".
   ```
-  """ Base.uperm
+  """ uperm
 
   @doc doc"""
   ```rst
@@ -6353,7 +6353,7 @@ Millisecond(v)
 
    Like uperm but gets the permissions of the group owning the file
   ```
-  """ Base.gperm
+  """ gperm
 
   @doc doc"""
   ```rst
@@ -6362,7 +6362,7 @@ Millisecond(v)
    Like uperm but gets the permissions for people who neither own the
    file nor are a member of the group owning the file
   ```
-  """ Base.operm
+  """ operm
 
   @doc doc"""
   ```rst
@@ -6376,7 +6376,7 @@ Millisecond(v)
    symbolic link, dst will be a copy of the file or directory *src*
    refers to.
   ```
-  """ Base.cp
+  """ cp
 
   @doc doc"""
   ```rst
@@ -6389,7 +6389,7 @@ Millisecond(v)
    production use or situations in which more options are need, please
    use a package that provides the desired functionality instead.
   ```
-  """ Base.download
+  """ download
 
   @doc doc"""
   ```rst
@@ -6398,7 +6398,7 @@ Millisecond(v)
    Move the file, link, or directory from *src* to *dest*.
    "remove_destination=true" will first remove an existing *dst*.
   ```
-  """ Base.mv
+  """ mv
 
   @doc doc"""
   ```rst
@@ -6408,7 +6408,7 @@ Millisecond(v)
    "recursive=true" is passed and the path is a directory, then all
    contents are removed recursively.
   ```
-  """ Base.rm
+  """ rm
 
   @doc doc"""
   ```rst
@@ -6416,7 +6416,7 @@ Millisecond(v)
 
    Update the last-modified timestamp on a file to the current time.
   ```
-  """ Base.touch
+  """ touch
 
   @doc doc"""
   ```rst
@@ -6424,7 +6424,7 @@ Millisecond(v)
 
    Generate a unique temporary file path.
   ```
-  """ Base.tempname
+  """ tempname
 
   @doc doc"""
   ```rst
@@ -6433,7 +6433,7 @@ Millisecond(v)
    Obtain the path of a temporary directory (possibly shared with
    other processes).
   ```
-  """ Base.tempdir
+  """ tempdir
 
   @doc doc"""
   ```rst
@@ -6443,7 +6443,7 @@ Millisecond(v)
    temporary file in "parent" and "io" is an open file object for
    this path.
   ```
-  """ Base.mktemp
+  """ mktemp
 
   @doc doc"""
   ```rst
@@ -6452,7 +6452,7 @@ Millisecond(v)
    Create a temporary directory in the "parent" directory and return
    its path.
   ```
-  """ Base.mktempdir
+  """ mktempdir
 
   @doc doc"""
   ```rst
@@ -6461,7 +6461,7 @@ Millisecond(v)
    Returns "true" if "path" is a block device, "false"
    otherwise.
   ```
-  """ Base.isblockdev
+  """ isblockdev
 
   @doc doc"""
   ```rst
@@ -6470,7 +6470,7 @@ Millisecond(v)
    Returns "true" if "path" is a character device, "false"
    otherwise.
   ```
-  """ Base.ischardev
+  """ ischardev
 
   @doc doc"""
   ```rst
@@ -6478,7 +6478,7 @@ Millisecond(v)
 
    Returns "true" if "path" is a directory, "false" otherwise.
   ```
-  """ Base.isdir
+  """ isdir
 
   @doc doc"""
   ```rst
@@ -6487,7 +6487,7 @@ Millisecond(v)
    Returns "true" if the current user has permission to execute
    "path", "false" otherwise.
   ```
-  """ Base.isexecutable
+  """ isexecutable
 
   @doc doc"""
   ```rst
@@ -6495,7 +6495,7 @@ Millisecond(v)
 
    Returns "true" if "path" is a FIFO, "false" otherwise.
   ```
-  """ Base.isfifo
+  """ isfifo
 
   @doc doc"""
   ```rst
@@ -6504,7 +6504,7 @@ Millisecond(v)
    Returns "true" if "path" is a regular file, "false"
    otherwise.
   ```
-  """ Base.isfile
+  """ isfile
 
   @doc doc"""
   ```rst
@@ -6513,7 +6513,7 @@ Millisecond(v)
    Returns "true" if "path" is a symbolic link, "false"
    otherwise.
   ```
-  """ Base.islink
+  """ islink
 
   @doc doc"""
   ```rst
@@ -6521,7 +6521,7 @@ Millisecond(v)
 
    Returns "true" if "path" is a mount point, "false" otherwise.
   ```
-  """ Base.ismount
+  """ ismount
 
   @doc doc"""
   ```rst
@@ -6530,7 +6530,7 @@ Millisecond(v)
    Returns "true" if "path" is a valid filesystem path, "false"
    otherwise.
   ```
-  """ Base.ispath
+  """ ispath
 
   @doc doc"""
   ```rst
@@ -6539,7 +6539,7 @@ Millisecond(v)
    Returns "true" if the current user has permission to read
    "path", "false" otherwise.
   ```
-  """ Base.isreadable
+  """ isreadable
 
   @doc doc"""
   ```rst
@@ -6548,7 +6548,7 @@ Millisecond(v)
    Returns "true" if "path" has the setgid flag set, "false"
    otherwise.
   ```
-  """ Base.issetgid
+  """ issetgid
 
   @doc doc"""
   ```rst
@@ -6557,7 +6557,7 @@ Millisecond(v)
    Returns "true" if "path" has the setuid flag set, "false"
    otherwise.
   ```
-  """ Base.issetuid
+  """ issetuid
 
   @doc doc"""
   ```rst
@@ -6565,7 +6565,7 @@ Millisecond(v)
 
    Returns "true" if "path" is a socket, "false" otherwise.
   ```
-  """ Base.issocket
+  """ issocket
 
   @doc doc"""
   ```rst
@@ -6574,7 +6574,7 @@ Millisecond(v)
    Returns "true" if "path" has the sticky bit set, "false"
    otherwise.
   ```
-  """ Base.issticky
+  """ issticky
 
   @doc doc"""
   ```rst
@@ -6583,7 +6583,7 @@ Millisecond(v)
    Returns "true" if the current user has permission to write to
    "path", "false" otherwise.
   ```
-  """ Base.iswritable
+  """ iswritable
 
   @doc doc"""
   ```rst
@@ -6591,7 +6591,7 @@ Millisecond(v)
 
    Return the current user's home directory.
   ```
-  """ Base.homedir
+  """ homedir
 
   @doc doc"""
   ```rst
@@ -6599,7 +6599,7 @@ Millisecond(v)
 
    Get the directory part of a path.
   ```
-  """ Base.dirname
+  """ dirname
 
   @doc doc"""
   ```rst
@@ -6607,7 +6607,7 @@ Millisecond(v)
 
    Get the file name part of a path.
   ```
-  """ Base.basename
+  """ basename
 
   @doc doc"""
   ```rst
@@ -6617,7 +6617,7 @@ Millisecond(v)
    name of the script being run. Returns "nothing" if run from a
    REPL or an empty string if evaluated by "julia -e <expr>".
   ```
-  """ Base.@__FILE__
+  """ @__FILE__
 
   @doc doc"""
   ```rst
@@ -6626,7 +6626,7 @@ Millisecond(v)
    Determines whether a path is absolute (begins at the root
    directory).
   ```
-  """ Base.isabspath
+  """ isabspath
 
   @doc doc"""
   ```rst
@@ -6635,7 +6635,7 @@ Millisecond(v)
    Determines whether a path refers to a directory (for example, ends
    with a path separator).
   ```
-  """ Base.isdirpath
+  """ isdirpath
 
   @doc doc"""
   ```rst
@@ -6644,7 +6644,7 @@ Millisecond(v)
    Join path components into a full path. If some argument is an
    absolute path, then prior components are dropped.
   ```
-  """ Base.joinpath
+  """ joinpath
 
   @doc doc"""
   ```rst
@@ -6653,7 +6653,7 @@ Millisecond(v)
    Convert a path to an absolute path by adding the current directory
    if necessary.
   ```
-  """ Base.abspath
+  """ abspath
 
   @doc doc"""
   ```rst
@@ -6661,7 +6661,7 @@ Millisecond(v)
 
    Normalize a path, removing "." and ".." entries.
   ```
-  """ Base.normpath
+  """ normpath
 
   @doc doc"""
   ```rst
@@ -6670,7 +6670,7 @@ Millisecond(v)
    Canonicalize a path by expanding symbolic links and removing "."
    and ".." entries.
   ```
-  """ Base.realpath
+  """ realpath
 
   @doc doc"""
   ```rst
@@ -6681,7 +6681,7 @@ Millisecond(v)
    computation: the filesystem is not accessed to confirm the
    existence or nature of path or startpath.
   ```
-  """ Base.relpath
+  """ relpath
 
   @doc doc"""
   ```rst
@@ -6690,7 +6690,7 @@ Millisecond(v)
    On Unix systems, replace a tilde character at the start of a path
    with the current user's home directory.
   ```
-  """ Base.expanduser
+  """ expanduser
 
   @doc doc"""
   ```rst
@@ -6698,7 +6698,7 @@ Millisecond(v)
 
    Split a path into a tuple of the directory name and file name.
   ```
-  """ Base.splitdir
+  """ splitdir
 
   @doc doc"""
   ```rst
@@ -6708,7 +6708,7 @@ Millisecond(v)
    part. On Unix systems, the first component is always the empty
    string.
   ```
-  """ Base.splitdrive
+  """ splitdrive
 
   @doc doc"""
   ```rst
@@ -6719,7 +6719,7 @@ Millisecond(v)
    dot. Otherwise, return a tuple of the argument unmodified and the
    empty string.
   ```
-  """ Base.splitext
+  """ splitext
 
   @doc doc"""
   ```rst
@@ -6729,7 +6729,7 @@ Millisecond(v)
    default is to open files for reading only. Returns a stream for
    accessing the file.
   ```
-  """ Base.open
+  """ open
 
   @doc doc"""
   ```rst
@@ -6754,7 +6754,7 @@ Millisecond(v)
    | a+   | read, write, create, append       |
    +------+-----------------------------------+
   ```
-  """ Base.open
+  """ open
 
   @doc doc"""
   ```rst
@@ -6765,7 +6765,7 @@ Millisecond(v)
 
    **Example**: "open(readall, "file.txt")"
   ```
-  """ Base.open
+  """ open
 
   @doc doc"""
   ```rst
@@ -6773,7 +6773,7 @@ Millisecond(v)
 
    Create an in-memory I/O stream.
   ```
-  """ Base.IOBuffer
+  """ IOBuffer
 
   @doc doc"""
   ```rst
@@ -6781,7 +6781,7 @@ Millisecond(v)
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
   ```
-  """ Base.IOBuffer
+  """ IOBuffer
 
   @doc doc"""
   ```rst
@@ -6789,7 +6789,7 @@ Millisecond(v)
 
    Create a read-only IOBuffer on the data underlying the given string
   ```
-  """ Base.IOBuffer
+  """ IOBuffer
 
   @doc doc"""
   ```rst
@@ -6802,7 +6802,7 @@ Millisecond(v)
    The last argument optionally specifies a size beyond which the
    buffer may not be grown.
   ```
-  """ Base.IOBuffer
+  """ IOBuffer
 
   @doc doc"""
   ```rst
@@ -6811,7 +6811,7 @@ Millisecond(v)
    Obtain the contents of an "IOBuffer" as an array, without
    copying. Afterwards, the IOBuffer is reset to its initial state.
   ```
-  """ Base.takebuf_array
+  """ takebuf_array
 
   @doc doc"""
   ```rst
@@ -6820,7 +6820,7 @@ Millisecond(v)
    Obtain the contents of an "IOBuffer" as a string, without
    copying. Afterwards, the IOBuffer is reset to its initial state.
   ```
-  """ Base.takebuf_string
+  """ takebuf_string
 
   @doc doc"""
   ```rst
@@ -6832,7 +6832,7 @@ Millisecond(v)
    garbage collected. "name" allows you to associate the descriptor
    with a named file.
   ```
-  """ Base.fdio
+  """ fdio
 
   @doc doc"""
   ```rst
@@ -6840,7 +6840,7 @@ Millisecond(v)
 
    Commit all currently buffered writes to the given stream.
   ```
-  """ Base.flush
+  """ flush
 
   @doc doc"""
   ```rst
@@ -6848,7 +6848,7 @@ Millisecond(v)
 
    Close an I/O stream. Performs a "flush" first.
   ```
-  """ Base.close
+  """ close
 
   @doc doc"""
   ```rst
@@ -6857,7 +6857,7 @@ Millisecond(v)
    Write the canonical binary representation of a value to the given
    stream.
   ```
-  """ Base.write
+  """ write
 
   @doc doc"""
   ```rst
@@ -6866,7 +6866,7 @@ Millisecond(v)
    Read a value of the given type from a stream, in canonical binary
    representation.
   ```
-  """ Base.read
+  """ read
 
   @doc doc"""
   ```rst
@@ -6877,7 +6877,7 @@ Millisecond(v)
    series of integer arguments specifying the size of "Array" to
    return.
   ```
-  """ Base.read
+  """ read
 
   @doc doc"""
   ```rst
@@ -6885,7 +6885,7 @@ Millisecond(v)
 
    Read binary data from a stream, filling in the argument "array".
   ```
-  """ Base.read!
+  """ read!
 
   @doc doc"""
   ```rst
@@ -6894,7 +6894,7 @@ Millisecond(v)
    Read at most "nb" bytes from the stream into "b", returning the
    number of bytes read (increasing the size of "b" as needed).
   ```
-  """ Base.readbytes!
+  """ readbytes!
 
   @doc doc"""
   ```rst
@@ -6903,7 +6903,7 @@ Millisecond(v)
    Read at most "nb" bytes from the stream, returning a
    "Vector{UInt8}" of the bytes read.
   ```
-  """ Base.readbytes
+  """ readbytes
 
   @doc doc"""
   ```rst
@@ -6911,7 +6911,7 @@ Millisecond(v)
 
    Get the current position of a stream.
   ```
-  """ Base.position
+  """ position
 
   @doc doc"""
   ```rst
@@ -6919,7 +6919,7 @@ Millisecond(v)
 
    Seek a stream to the given position.
   ```
-  """ Base.seek
+  """ seek
 
   @doc doc"""
   ```rst
@@ -6927,7 +6927,7 @@ Millisecond(v)
 
    Seek a stream to its beginning.
   ```
-  """ Base.seekstart
+  """ seekstart
 
   @doc doc"""
   ```rst
@@ -6935,7 +6935,7 @@ Millisecond(v)
 
    Seek a stream to its end.
   ```
-  """ Base.seekend
+  """ seekend
 
   @doc doc"""
   ```rst
@@ -6943,7 +6943,7 @@ Millisecond(v)
 
    Seek a stream relative to the current position.
   ```
-  """ Base.skip
+  """ skip
 
   @doc doc"""
   ```rst
@@ -6954,7 +6954,7 @@ Millisecond(v)
 
    See also "unmark()", "reset()", "ismarked()"
   ```
-  """ Base.mark
+  """ mark
 
   @doc doc"""
   ```rst
@@ -6965,7 +6965,7 @@ Millisecond(v)
 
    See also "mark()", "reset()", "ismarked()"
   ```
-  """ Base.unmark
+  """ unmark
 
   @doc doc"""
   ```rst
@@ -6977,7 +6977,7 @@ Millisecond(v)
 
    See also "mark()", "unmark()", "ismarked()"
   ```
-  """ Base.reset
+  """ reset
 
   @doc doc"""
   ```rst
@@ -6987,7 +6987,7 @@ Millisecond(v)
 
    See also "mark()", "unmark()", "reset()"
   ```
-  """ Base.ismarked
+  """ ismarked
 
   @doc doc"""
   ```rst
@@ -7000,7 +7000,7 @@ Millisecond(v)
    will return "false" as long as buffered data is still available,
    even if the remote end of a connection is closed.
   ```
-  """ Base.eof
+  """ eof
 
   @doc doc"""
   ```rst
@@ -7008,7 +7008,7 @@ Millisecond(v)
 
    Determine whether a stream is read-only.
   ```
-  """ Base.isreadonly
+  """ isreadonly
 
   @doc doc"""
   ```rst
@@ -7019,7 +7019,7 @@ Millisecond(v)
    socket), "isopen" will return "false" even though buffered data
    may still be available. Use "eof" to check if necessary.
   ```
-  """ Base.isopen
+  """ isopen
 
   @doc doc"""
   ```rst
@@ -7032,7 +7032,7 @@ Millisecond(v)
    versions of Julia, or an instance of Julia with a different system
    image.
   ```
-  """ Base.serialize
+  """ serialize
 
   @doc doc"""
   ```rst
@@ -7040,7 +7040,7 @@ Millisecond(v)
 
    Read a value written by "serialize".
   ```
-  """ Base.deserialize
+  """ deserialize
 
   @doc doc"""
   ```rst
@@ -7049,7 +7049,7 @@ Millisecond(v)
    General escaping of traditional C and Unicode escape sequences,
    plus any characters in esc are also escaped (with a backslash).
   ```
-  """ Base.print_escaped
+  """ print_escaped
 
   @doc doc"""
   ```rst
@@ -7058,7 +7058,7 @@ Millisecond(v)
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of "print_escaped()".
   ```
-  """ Base.print_unescaped
+  """ print_unescaped
 
   @doc doc"""
   ```rst
@@ -7068,7 +7068,7 @@ Millisecond(v)
    If "last" is specified, it is used as the final delimiter instead
    of "delim".
   ```
-  """ Base.print_joined
+  """ print_joined
 
   @doc doc"""
   ```rst
@@ -7078,7 +7078,7 @@ Millisecond(v)
    of consecutive non-zero digits, of number "x", ensuring that it
    would parse to the exact same number.
   ```
-  """ Base.print_shortest
+  """ print_shortest
 
   @doc doc"""
   ```rst
@@ -7088,7 +7088,7 @@ Millisecond(v)
    this function only applies to synchronous *File*'s and *IOStream*'s
    not to any of the asynchronous streams.
   ```
-  """ Base.fd
+  """ fd
 
   @doc doc"""
   ```rst
@@ -7100,7 +7100,7 @@ Millisecond(v)
    The wr end is given for convenience in case the old STDOUT object
    was cached by the user and needs to be replaced elsewhere.
   ```
-  """ Base.redirect_stdout
+  """ redirect_stdout
 
   @doc doc"""
   ```rst
@@ -7109,7 +7109,7 @@ Millisecond(v)
    Replace STDOUT by stream for all C and julia level output to
    STDOUT. Note that *stream* must be a TTY, a Pipe or a TcpSocket.
   ```
-  """ Base.redirect_stdout
+  """ redirect_stdout
 
   @doc doc"""
   ```rst
@@ -7117,7 +7117,7 @@ Millisecond(v)
 
    Like redirect_stdout, but for STDERR
   ```
-  """ Base.redirect_stderr
+  """ redirect_stderr
 
   @doc doc"""
   ```rst
@@ -7127,7 +7127,7 @@ Millisecond(v)
    return tuple is still (rd,wr), i.e. data to be read from STDIN, may
    be written to wr.
   ```
-  """ Base.redirect_stdin
+  """ redirect_stdin
 
   @doc doc"""
   ```rst
@@ -7136,7 +7136,7 @@ Millisecond(v)
    Read the entirety of x as a string but remove trailing newlines.
    Equivalent to chomp(readall(x)).
   ```
-  """ Base.readchomp
+  """ readchomp
 
   @doc doc"""
   ```rst
@@ -7146,7 +7146,7 @@ Millisecond(v)
    *n* bytes, filling previously unallocated space with '\0' if the
    file or buffer is grown
   ```
-  """ Base.truncate
+  """ truncate
 
   @doc doc"""
   ```rst
@@ -7158,7 +7158,7 @@ Millisecond(v)
    "linecomment" is specified, characters from that character
    through the end of a line will also be skipped.
   ```
-  """ Base.skipchars
+  """ skipchars
 
   @doc doc"""
   ```rst
@@ -7169,7 +7169,7 @@ Millisecond(v)
    argument. EOL markers other than '\n' are supported by passing
    them as the second argument.
   ```
-  """ Base.countlines
+  """ countlines
 
   @doc doc"""
   ```rst
@@ -7179,7 +7179,7 @@ Millisecond(v)
    Seeking and truncating are not supported. See IOBuffer for the
    available constructors.
   ```
-  """ Base.PipeBuffer
+  """ PipeBuffer
 
   @doc doc"""
   ```rst
@@ -7189,7 +7189,7 @@ Millisecond(v)
    specifying a size beyond which the underlying Array may not be
    grown.
   ```
-  """ Base.PipeBuffer
+  """ PipeBuffer
 
   @doc doc"""
   ```rst
@@ -7198,7 +7198,7 @@ Millisecond(v)
    Read all available data on the stream, blocking the task only if no
    data is available. The result is a "Vector{UInt8,1}".
   ```
-  """ Base.readavailable
+  """ readavailable
 
   @doc doc"""
   ```rst
@@ -7209,7 +7209,7 @@ Millisecond(v)
    first argument is a stream. The representation used by "show"
    generally includes Julia-specific formatting and type information.
   ```
-  """ Base.show
+  """ show
 
   @doc doc"""
   ```rst
@@ -7220,7 +7220,7 @@ Millisecond(v)
    representation, it should overload "showcompact(io, x)" where the
    first argument is a stream.
   ```
-  """ Base.showcompact
+  """ showcompact
 
   @doc doc"""
   ```rst
@@ -7228,7 +7228,7 @@ Millisecond(v)
 
    Similar to "show", except shows all elements of arrays.
   ```
-  """ Base.showall
+  """ showall
 
   @doc doc"""
   ```rst
@@ -7238,7 +7238,7 @@ Millisecond(v)
    returns "string(typeof(x))". For arrays, returns strings like
    "2x2 Float64 Array".
   ```
-  """ Base.summary
+  """ summary
 
   @doc doc"""
   ```rst
@@ -7249,7 +7249,7 @@ Millisecond(v)
    "show". The representation used by "print" includes minimal
    formatting and tries to avoid Julia-specific details.
   ```
-  """ Base.print
+  """ print
 
   @doc doc"""
   ```rst
@@ -7257,7 +7257,7 @@ Millisecond(v)
 
    Print (using "print()") "x" followed by a newline.
   ```
-  """ Base.println
+  """ println
 
   @doc doc"""
   ```rst
@@ -7266,7 +7266,7 @@ Millisecond(v)
    Print strings in a color specified as a symbol, for example
    ":red" or ":blue".
   ```
-  """ Base.print_with_color
+  """ print_with_color
 
   @doc doc"""
   ```rst
@@ -7274,7 +7274,7 @@ Millisecond(v)
 
    Display an informational message.
   ```
-  """ Base.info
+  """ info
 
   @doc doc"""
   ```rst
@@ -7282,7 +7282,7 @@ Millisecond(v)
 
    Display a warning.
   ```
-  """ Base.warn
+  """ warn
 
   @doc doc"""
   ```rst
@@ -7292,7 +7292,7 @@ Millisecond(v)
    string. Optionally, an IOStream may be passed as the first argument
    to redirect output.
   ```
-  """ Base.@printf
+  """ @printf
 
   @doc doc"""
   ```rst
@@ -7300,7 +7300,7 @@ Millisecond(v)
 
    Return "@printf" formatted output as string.
   ```
-  """ Base.@sprintf
+  """ @sprintf
 
   @doc doc"""
   ```rst
@@ -7310,7 +7310,7 @@ Millisecond(v)
    arguments. Everything written to this I/O stream is returned as a
    string.
   ```
-  """ Base.sprint
+  """ sprint
 
   @doc doc"""
   ```rst
@@ -7318,7 +7318,7 @@ Millisecond(v)
 
    Show a descriptive representation of an exception object.
   ```
-  """ Base.showerror
+  """ showerror
 
   @doc doc"""
   ```rst
@@ -7326,7 +7326,7 @@ Millisecond(v)
 
    Show all user-visible structure of a value.
   ```
-  """ Base.dump
+  """ dump
 
   @doc doc"""
   ```rst
@@ -7334,7 +7334,7 @@ Millisecond(v)
 
    Show all structure of a value, including all fields of objects.
   ```
-  """ Base.xdump
+  """ xdump
 
   @doc doc"""
   ```rst
@@ -7342,7 +7342,7 @@ Millisecond(v)
 
    Read the entire contents of an I/O stream as a string.
   ```
-  """ Base.readall
+  """ readall
 
   @doc doc"""
   ```rst
@@ -7351,7 +7351,7 @@ Millisecond(v)
    Open "filename", read the entire contents as a string, then close
    the file. Equivalent to "open(readall, filename)".
   ```
-  """ Base.readall
+  """ readall
 
   @doc doc"""
   ```rst
@@ -7361,7 +7361,7 @@ Millisecond(v)
    (if one is reached before the end of the input), from the given
    "stream" (defaults to "STDIN"),
   ```
-  """ Base.readline
+  """ readline
 
   @doc doc"""
   ```rst
@@ -7369,7 +7369,7 @@ Millisecond(v)
 
    Read a string, up to and including the given delimiter byte.
   ```
-  """ Base.readuntil
+  """ readuntil
 
   @doc doc"""
   ```rst
@@ -7377,7 +7377,7 @@ Millisecond(v)
 
    Read all lines as an array.
   ```
-  """ Base.readlines
+  """ readlines
 
   @doc doc"""
   ```rst
@@ -7385,7 +7385,7 @@ Millisecond(v)
 
    Create an iterable object that will yield each line from a stream.
   ```
-  """ Base.eachline
+  """ eachline
 
   @doc doc"""
   ```rst
@@ -7432,7 +7432,7 @@ Millisecond(v)
    If "comments" is "true", lines beginning with "comment_char"
    and text following "comment_char" in any line are ignored.
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7442,7 +7442,7 @@ Millisecond(v)
    elements cannot be parsed as numbers, a cell array of numbers and
    strings is returned.
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7450,7 +7450,7 @@ Millisecond(v)
 
    The end of line delimiter is taken as "\n".
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7461,7 +7461,7 @@ Millisecond(v)
    cannot be parsed as numbers, a cell array of numbers and strings is
    returned.
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7470,7 +7470,7 @@ Millisecond(v)
    The columns are assumed to be separated by one or more whitespaces.
    The end of line delimiter is taken as "\n".
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7482,7 +7482,7 @@ Millisecond(v)
    cannot be parsed as numbers, a cell array of numbers and strings is
    returned.
   ```
-  """ Base.readdlm
+  """ readdlm
 
   @doc doc"""
   ```rst
@@ -7498,7 +7498,7 @@ Millisecond(v)
    written as two columns of tab-delimited text to "f" by either
    "writedlm(f, [x y])" or by "writedlm(f, zip(x, y))".
   ```
-  """ Base.writedlm
+  """ writedlm
 
   @doc doc"""
   ```rst
@@ -7506,7 +7506,7 @@ Millisecond(v)
 
    Equivalent to "readdlm" with "delim" set to comma.
   ```
-  """ Base.readcsv
+  """ readcsv
 
   @doc doc"""
   ```rst
@@ -7514,7 +7514,7 @@ Millisecond(v)
 
    Equivalent to "writedlm" with "delim" set to comma.
   ```
-  """ Base.writecsv
+  """ writecsv
 
   @doc doc"""
   ```rst
@@ -7526,7 +7526,7 @@ Millisecond(v)
    necessary to complete the encoding (but does not close
    "ostream").
   ```
-  """ Base.Base64EncodePipe
+  """ Base64EncodePipe
 
   @doc doc"""
   ```rst
@@ -7535,7 +7535,7 @@ Millisecond(v)
    Returns a new read-only I/O stream, which decodes base64-encoded
    data read from "istream".
   ```
-  """ Base.Base64DecodePipe
+  """ Base64DecodePipe
 
   @doc doc"""
   ```rst
@@ -7550,7 +7550,7 @@ base64encode(args...)
    using the standard "write" functions and returns the
    base64-encoded string.
   ```
-  """ Base.base64encode
+  """ base64encode
 
   @doc doc"""
   ```rst
@@ -7559,7 +7559,7 @@ base64encode(args...)
    Decodes the base64-encoded "string" and returns a
    "Vector{UInt8}" of the decoded bytes.
   ```
-  """ Base.base64decode
+  """ base64decode
 
   @doc doc"""
   ```rst
@@ -7585,7 +7585,7 @@ display(d::Display, mime, x)
    application/postscript) or "x::Vector{UInt8}" (for binary MIME
    types).
   ```
-  """ Base.display
+  """ display
 
   @doc doc"""
   ```rst
@@ -7601,7 +7601,7 @@ redisplay(d::Display, mime, x)
    times, and the backend may choose to defer the display until (for
    example) the next interactive prompt.
   ```
-  """ Base.redisplay
+  """ redisplay
 
   @doc doc"""
   ```rst
@@ -7613,7 +7613,7 @@ displayable(d::Display, mime) -> Bool
    display stack, or specifically by the display "d" in the second
    variant.
   ```
-  """ Base.displayable
+  """ displayable
 
   @doc doc"""
   ```rst
@@ -7643,7 +7643,7 @@ displayable(d::Display, mime) -> Bool
    dispatch mechanisms in determining how to display objects of any
    given type.
   ```
-  """ Base.writemime
+  """ writemime
 
   @doc doc"""
   ```rst
@@ -7654,7 +7654,7 @@ displayable(d::Display, mime) -> Bool
    determined automatically by the existence of the corresponding
    "writemime" function for "typeof(x)".)
   ```
-  """ Base.mimewritable
+  """ mimewritable
 
   @doc doc"""
   ```rst
@@ -7674,7 +7674,7 @@ displayable(d::Display, mime) -> Bool
    "reprmime" function assumes that "x" is already in the
    requested "mime" format and simply returns "x".
   ```
-  """ Base.reprmime
+  """ reprmime
 
   @doc doc"""
   ```rst
@@ -7685,7 +7685,7 @@ displayable(d::Display, mime) -> Bool
    "reprmime" except that binary data is base64-encoded as an ASCII
    string.
   ```
-  """ Base.stringmime
+  """ stringmime
 
   @doc doc"""
   ```rst
@@ -7696,7 +7696,7 @@ displayable(d::Display, mime) -> Bool
    "x" on the topmost compatible backend in the stack (i.e., the
    topmost backend that does not throw a "MethodError").
   ```
-  """ Base.pushdisplay
+  """ pushdisplay
 
   @doc doc"""
   ```rst
@@ -7706,7 +7706,7 @@ popdisplay(d::Display)
    Pop the topmost backend off of the display-backend stack, or the
    topmost copy of "d" in the second variant.
   ```
-  """ Base.popdisplay
+  """ popdisplay
 
   @doc doc"""
   ```rst
@@ -7717,7 +7717,7 @@ popdisplay(d::Display)
    to the given I/O stream.  (The text representation is the same as
    the way an object is printed in the Julia REPL.)
   ```
-  """ Base.TextDisplay
+  """ TextDisplay
 
   @doc doc"""
   ```rst
@@ -7725,7 +7725,7 @@ popdisplay(d::Display)
 
    Determine whether a MIME type is text data.
   ```
-  """ Base.istext
+  """ istext
 
   @doc doc"""
   ```rst
@@ -7777,7 +7777,7 @@ popdisplay(d::Display)
    consider encoding binary data using standard formats like HDF5
    (which can be used with memory-mapping).
   ```
-  """ Base.mmap_array
+  """ mmap_array
 
   @doc doc"""
   ```rst
@@ -7794,7 +7794,7 @@ popdisplay(d::Display)
    This would create a 25-by-30000 "BitArray", linked to the file
    associated with stream "s".
   ```
-  """ Base.mmap_bitarray
+  """ mmap_bitarray
 
   @doc doc"""
   ```rst
@@ -7803,7 +7803,7 @@ popdisplay(d::Display)
    Forces synchronization between the in-memory version of a memory-
    mapped "Array" or "BitArray" and the on-disk version.
   ```
-  """ Base.msync
+  """ msync
 
   @doc doc"""
   ```rst
@@ -7811,7 +7811,7 @@ popdisplay(d::Display)
 
    Connect to the host "host" on port "port"
   ```
-  """ Base.connect
+  """ connect
 
   @doc doc"""
   ```rst
@@ -7819,7 +7819,7 @@ popdisplay(d::Display)
 
    Connect to the Named Pipe/Domain Socket at "path"
   ```
-  """ Base.connect
+  """ connect
 
   @doc doc"""
   ```rst
@@ -7829,7 +7829,7 @@ popdisplay(d::Display)
    this listens on localhost only. To listen on all interfaces pass,
    "IPv4(0)" or "IPv6(0)" as appropriate.
   ```
-  """ Base.listen
+  """ listen
 
   @doc doc"""
   ```rst
@@ -7837,7 +7837,7 @@ popdisplay(d::Display)
 
    Listens on/Creates a Named Pipe/Domain Socket
   ```
-  """ Base.listen
+  """ listen
 
   @doc doc"""
   ```rst
@@ -7845,7 +7845,7 @@ popdisplay(d::Display)
 
    Gets the IP address of the "host" (may have to do a DNS lookup)
   ```
-  """ Base.getaddrinfo
+  """ getaddrinfo
 
   @doc doc"""
   ```rst
@@ -7853,7 +7853,7 @@ popdisplay(d::Display)
 
    Parse a string specifying an IPv4 or IPv6 ip address.
   ```
-  """ Base.parseip
+  """ parseip
 
   @doc doc"""
   ```rst
@@ -7861,7 +7861,7 @@ popdisplay(d::Display)
 
    Returns IPv4 object from ip address formatted as Integer
   ```
-  """ Base.IPv4
+  """ IPv4
 
   @doc doc"""
   ```rst
@@ -7869,7 +7869,7 @@ popdisplay(d::Display)
 
    Returns IPv6 object from ip address formatted as Integer
   ```
-  """ Base.IPv6
+  """ IPv6
 
   @doc doc"""
   ```rst
@@ -7878,7 +7878,7 @@ popdisplay(d::Display)
    Returns the number of bytes available for reading before a read
    from this stream or buffer will block.
   ```
-  """ Base.nb_available
+  """ nb_available
 
   @doc doc"""
   ```rst
@@ -7888,7 +7888,7 @@ popdisplay(d::Display)
    to the client. An uninitialized client stream may be provided, in
    which case it will be used instead of creating a new stream.
   ```
-  """ Base.accept
+  """ accept
 
   @doc doc"""
   ```rst
@@ -7898,7 +7898,7 @@ popdisplay(d::Display)
    Returns a tuple of the actual port that the server was created on
    and the server itself.
   ```
-  """ Base.listenany
+  """ listenany
 
   @doc doc"""
   ```rst
@@ -7914,7 +7914,7 @@ popdisplay(d::Display)
    "writable" when using polling, and "status" is always 0. Pass
    "false" for "cb" to not use a callback function.
   ```
-  """ Base.watch_file
+  """ watch_file
 
   @doc doc"""
   ```rst
@@ -7928,7 +7928,7 @@ popdisplay(d::Display)
    returned value is an object with boolean fields "readable",
    "writable", and "timedout", giving the result of the polling.
   ```
-  """ Base.poll_fd
+  """ poll_fd
 
   @doc doc"""
   ```rst
@@ -7938,7 +7938,7 @@ popdisplay(d::Display)
    seconds for *seconds* seconds. A return value of true indicates the
    file changed, a return value of false indicates a timeout.
   ```
-  """ Base.poll_file
+  """ poll_file
 
   @doc doc"""
   ```rst
@@ -7947,7 +7947,7 @@ popdisplay(d::Display)
    Bind "socket" to the given "host:port". Note that *0.0.0.0*
    will listen on all devices.
   ```
-  """ Base.bind
+  """ bind
 
   @doc doc"""
   ```rst
@@ -7955,7 +7955,7 @@ popdisplay(d::Display)
 
    Send "msg" over "socket to ``host:port".
   ```
-  """ Base.send
+  """ send
 
   @doc doc"""
   ```rst
@@ -7964,7 +7964,7 @@ popdisplay(d::Display)
    Read a UDP packet from the specified socket, and return the bytes
    received. This call blocks.
   ```
-  """ Base.recv
+  """ recv
 
   @doc doc"""
   ```rst
@@ -7974,7 +7974,7 @@ popdisplay(d::Display)
    (address, data), where address will be either IPv4 or IPv6 as
    appropriate.
   ```
-  """ Base.recvfrom
+  """ recvfrom
 
   @doc doc"""
   ```rst
@@ -7987,7 +7987,7 @@ popdisplay(d::Display)
    return an access error (default: false). "ttl": Time-to-live of
    packets sent on the socket.
   ```
-  """ Base.setopt
+  """ setopt
 
   @doc doc"""
   ```rst
@@ -7996,7 +7996,7 @@ popdisplay(d::Display)
    Converts the endianness of a value from Network byte order (big-
    endian) to that used by the Host.
   ```
-  """ Base.ntoh
+  """ ntoh
 
   @doc doc"""
   ```rst
@@ -8005,7 +8005,7 @@ popdisplay(d::Display)
    Converts the endianness of a value from that used by the Host to
    Network byte order (big-endian).
   ```
-  """ Base.hton
+  """ hton
 
   @doc doc"""
   ```rst
@@ -8014,7 +8014,7 @@ popdisplay(d::Display)
    Converts the endianness of a value from Little-endian to that used
    by the Host.
   ```
-  """ Base.ltoh
+  """ ltoh
 
   @doc doc"""
   ```rst
@@ -8023,7 +8023,7 @@ popdisplay(d::Display)
    Converts the endianness of a value from that used by the Host to
    Little-endian.
   ```
-  """ Base.htol
+  """ htol
 
   @doc doc"""
   ```rst
@@ -8033,7 +8033,7 @@ popdisplay(d::Display)
    host machine. Little-endian machines will contain the value
    0x04030201. Big-endian machines will contain the value 0x01020304.
   ```
-  """ Base.ENDIAN_BOM
+  """ ENDIAN_BOM
 
   @doc doc"""
   ```rst
@@ -8402,7 +8402,7 @@ popdisplay(d::Display)
    Compute the dot product. For complex vectors, the first vector is
    conjugated.
   ```
-  """ Base.dot
+  """ dot
 
   @doc doc"""
   ```rst
@@ -8413,7 +8413,7 @@ popdisplay(d::Display)
    defined), compute the Euclidean dot product (the sum of
    "dot(x[i],y[i])") as if they were vectors.
   ```
-  """ Base.vecdot
+  """ vecdot
 
   @doc doc"""
   ```rst
@@ -8422,7 +8422,7 @@ popdisplay(d::Display)
 
    Compute the cross product of two 3-vectors.
   ```
-  """ Base.cross
+  """ cross
 
   @doc doc"""
   ```rst
@@ -8434,7 +8434,7 @@ popdisplay(d::Display)
    efficient solving of multiple systems. For example:
    "A=factorize(A); x=A\\b; y=A\\C".
   ```
-  """ Base.factorize
+  """ factorize
 
   @doc doc"""
   ```rst
@@ -8443,7 +8443,7 @@ popdisplay(d::Display)
    Reconstruct the matrix "A" from the factorization
    "F=factorize(A)".
   ```
-  """ Base.full
+  """ full
 
   @doc doc"""
   ```rst
@@ -8451,7 +8451,7 @@ popdisplay(d::Display)
 
    Compute the LU factorization of "A", such that "A[p,:] = L*U".
   ```
-  """ Base.lu
+  """ lu
 
   @doc doc"""
   ```rst
@@ -8512,7 +8512,7 @@ popdisplay(d::Display)
       | \"size\"           | ✓      | ✓                        |               |
       +--------------------+--------+--------------------------+---------------+
   ```
-  """ Base.lufact
+  """ lufact
 
   @doc doc"""
   ```rst
@@ -8524,7 +8524,7 @@ popdisplay(d::Display)
    "colptr" and "rowval" are decremented in place, converting from
    1-based indices to 0-based indices.
   ```
-  """ Base.lufact!
+  """ lufact!
 
   @doc doc"""
   ```rst
@@ -8536,7 +8536,7 @@ popdisplay(d::Display)
    "LU" is "Val{:L}" (Lower), "F" is of type "LowerTriangular"
    and "A = F*F'". "LU" defaults to "Val{:U}".
   ```
-  """ Base.chol
+  """ chol
 
   @doc doc"""
   ```rst
@@ -8556,7 +8556,7 @@ popdisplay(d::Display)
    determines the tolerance for determining the rank. For negative
    values, the tolerance is the machine precision.
   ```
-  """ Base.cholfact
+  """ cholfact
 
   @doc doc"""
   ```rst
@@ -8584,7 +8584,7 @@ popdisplay(d::Display)
    The function calls the C library CHOLMOD and many other functions
    from the library are wrapped but not exported.
   ```
-  """ Base.cholfact
+  """ cholfact
 
   @doc doc"""
   ```rst
@@ -8596,7 +8596,7 @@ popdisplay(d::Display)
    different matrix "F" with the same structure when used as:
    "cholfact!(F::CholmodFactor, A)".
   ```
-  """ Base.cholfact!
+  """ cholfact!
 
   @doc doc"""
   ```rst
@@ -8606,7 +8606,7 @@ popdisplay(d::Display)
    that "A=L*Diagonal(d)*L'" where "L" is a unit lower triangular
    matrix and "d" is a vector with non-negative elements.
   ```
-  """ Base.ldltfact
+  """ ldltfact
 
   @doc doc"""
   ```rst
@@ -8636,7 +8636,7 @@ popdisplay(d::Display)
    The function calls the C library CHOLMOD and many other functions
    from the library are wrapped but not exported.
   ```
-  """ Base.ldltfact
+  """ ldltfact
 
   @doc doc"""
   ```rst
@@ -8647,7 +8647,7 @@ popdisplay(d::Display)
    is to compute a thin factorization. Note that "R" is not extended
    with zeros when the full "Q" is requested.
   ```
-  """ Base.qr
+  """ qr
 
   @doc doc"""
   ```rst
@@ -8729,7 +8729,7 @@ popdisplay(d::Display)
                    Householder transformations, SIAM J Sci Stat Comput
                    10 (1989), 53-57. doi:10.1137/0910005
   ```
-  """ Base.qrfact
+  """ qrfact
 
   @doc doc"""
   ```rst
@@ -8741,7 +8741,7 @@ popdisplay(d::Display)
    C library SPQR and a few additional functions from the library are
    wrapped but not exported.
   ```
-  """ Base.qrfact
+  """ qrfact
 
   @doc doc"""
   ```rst
@@ -8751,7 +8751,7 @@ popdisplay(d::Display)
    "StridedMatrix", but saves space by overwriting the input "A",
    instead of creating a copy.
   ```
-  """ Base.qrfact!
+  """ qrfact!
 
   @doc doc"""
   ```rst
@@ -8768,7 +8768,7 @@ popdisplay(d::Display)
    factorization).  If "false", returns a "Q" that spans all rows
    of "R" in its corresponding QR factorization.
   ```
-  """ Base.full
+  """ full
 
   @doc doc"""
   ```rst
@@ -8780,7 +8780,7 @@ popdisplay(d::Display)
    "BunchKaufman" objects: "size", "\", "inv", "issym",
    "ishermitian".
   ```
-  """ Base.bkfact
+  """ bkfact
 
   @doc doc"""
   ```rst
@@ -8789,7 +8789,7 @@ popdisplay(d::Display)
    "bkfact!" is the same as "bkfact()", but saves space by
    overwriting the input "A", instead of creating a copy.
   ```
-  """ Base.bkfact!
+  """ bkfact!
 
   @doc doc"""
   ```rst
@@ -8806,7 +8806,7 @@ popdisplay(d::Display)
    square root has "Real" elements, otherwise it has "Complex"
    elements.
   ```
-  """ Base.sqrtm
+  """ sqrtm
 
   @doc doc"""
   ```rst
@@ -8826,7 +8826,7 @@ popdisplay(d::Display)
    the factorization to a tuple; where possible, using "eigfact()"
    is recommended.
   ```
-  """ Base.eig
+  """ eig
 
   @doc doc"""
   ```rst
@@ -8839,7 +8839,7 @@ popdisplay(d::Display)
    the factorization to a tuple; where possible, using "eigfact()"
    is recommended.
   ```
-  """ Base.eig
+  """ eig
 
   @doc doc"""
   ```rst
@@ -8859,7 +8859,7 @@ popdisplay(d::Display)
    diagonal elements to make rows and columns more equal in norm. The
    default is "true" for both options.
   ```
-  """ Base.eigvals
+  """ eigvals
 
   @doc doc"""
   ```rst
@@ -8867,7 +8867,7 @@ popdisplay(d::Display)
 
    Returns the largest eigenvalue of "A".
   ```
-  """ Base.eigmax
+  """ eigmax
 
   @doc doc"""
   ```rst
@@ -8875,7 +8875,7 @@ popdisplay(d::Display)
 
    Returns the smallest eigenvalue of "A".
   ```
-  """ Base.eigmin
+  """ eigmin
 
   @doc doc"""
   ```rst
@@ -8890,7 +8890,7 @@ popdisplay(d::Display)
    eigenvalues "eigvals" is specified, returns the specific
    corresponding eigenvectors.
   ```
-  """ Base.eigvecs
+  """ eigvecs
 
   @doc doc"""
   ```rst
@@ -8918,7 +8918,7 @@ popdisplay(d::Display)
    elements to make rows and columns more equal in norm. The default
    is "true" for both options.
   ```
-  """ Base.eigfact
+  """ eigfact
 
   @doc doc"""
   ```rst
@@ -8931,7 +8931,7 @@ popdisplay(d::Display)
    "F[:vectors]". (The "k"th generalized eigenvector can be
    obtained from the slice "F[:vectors][:, k]".)
   ```
-  """ Base.eigfact
+  """ eigfact
 
   @doc doc"""
   ```rst
@@ -8940,7 +8940,7 @@ popdisplay(d::Display)
    Same as "eigfact()", but saves space by overwriting the input
    "A" (and "B"), instead of creating a copy.
   ```
-  """ Base.eigfact!
+  """ eigfact!
 
   @doc doc"""
   ```rst
@@ -8953,7 +8953,7 @@ popdisplay(d::Display)
    is the "HessenbergQ" object, and may be converted to a regular
    matrix with "full()".
   ```
-  """ Base.hessfact
+  """ hessfact
 
   @doc doc"""
   ```rst
@@ -8962,7 +8962,7 @@ popdisplay(d::Display)
    "hessfact!" is the same as "hessfact()", but saves space by
    overwriting the input A, instead of creating a copy.
   ```
-  """ Base.hessfact!
+  """ hessfact!
 
   @doc doc"""
   ```rst
@@ -8976,7 +8976,7 @@ popdisplay(d::Display)
    "A=F[:vectors]*F[:Schur]*F[:vectors]'". The eigenvalues of "A"
    can be obtained with "F[:values]".
   ```
-  """ Base.schurfact
+  """ schurfact
 
   @doc doc"""
   ```rst
@@ -8985,7 +8985,7 @@ popdisplay(d::Display)
    Computes the Schur factorization of "A", overwriting "A" in the
    process. See "schurfact()"
   ```
-  """ Base.schurfact!
+  """ schurfact!
 
   @doc doc"""
   ```rst
@@ -8993,7 +8993,7 @@ popdisplay(d::Display)
 
    See "schurfact()"
   ```
-  """ Base.schur
+  """ schur
 
   @doc doc"""
   ```rst
@@ -9007,7 +9007,7 @@ popdisplay(d::Display)
    right invariant subspace. A complex conjugate pair of eigenvalues
    must be either both included or excluded via "select".
   ```
-  """ Base.ordschur
+  """ ordschur
 
   @doc doc"""
   ```rst
@@ -9016,7 +9016,7 @@ popdisplay(d::Display)
    Reorders the Schur factorization of a real matrix "A=Q*T*Q'",
    overwriting "Q" and "T" in the process. See "ordschur()"
   ```
-  """ Base.ordschur!
+  """ ordschur!
 
   @doc doc"""
   ```rst
@@ -9024,7 +9024,7 @@ popdisplay(d::Display)
 
    Reorders the Schur factorization "S" of type "Schur".
   ```
-  """ Base.ordschur
+  """ ordschur
 
   @doc doc"""
   ```rst
@@ -9033,7 +9033,7 @@ popdisplay(d::Display)
    Reorders the Schur factorization "S" of type "Schur",
    overwriting "S" in the process. See "ordschur()"
   ```
-  """ Base.ordschur!
+  """ ordschur!
 
   @doc doc"""
   ```rst
@@ -9049,7 +9049,7 @@ popdisplay(d::Display)
    "B=F[:left]*F[:T]*F[:right]'". The generalized eigenvalues of
    "A" and "B" can be obtained with "F[:alpha]./F[:beta]".
   ```
-  """ Base.schurfact
+  """ schurfact
 
   @doc doc"""
   ```rst
@@ -9057,7 +9057,7 @@ popdisplay(d::Display)
 
    See "schurfact()"
   ```
-  """ Base.schur
+  """ schur
 
   @doc doc"""
   ```rst
@@ -9073,7 +9073,7 @@ popdisplay(d::Display)
    "A" and "B" can still be obtained with
    "GS[:alpha]./GS[:beta]".
   ```
-  """ Base.ordschur
+  """ ordschur
 
   @doc doc"""
   ```rst
@@ -9083,7 +9083,7 @@ popdisplay(d::Display)
    overwriting the matrices "(S, T, Q, Z)" in the process.  See
    "ordschur()".
   ```
-  """ Base.ordschur!
+  """ ordschur!
 
   @doc doc"""
   ```rst
@@ -9092,7 +9092,7 @@ popdisplay(d::Display)
    Reorders the Generalized Schur factorization of a Generalized Schur
    object.  See "ordschur()".
   ```
-  """ Base.ordschur
+  """ ordschur
 
   @doc doc"""
   ```rst
@@ -9102,7 +9102,7 @@ popdisplay(d::Display)
    object by overwriting the object with the new factorization.  See
    "ordschur()".
   ```
-  """ Base.ordschur!
+  """ ordschur!
 
   @doc doc"""
   ```rst
@@ -9116,7 +9116,7 @@ popdisplay(d::Display)
    produces "Vt" and hence "Vt" is more efficient to extract than
    "V". The default is to produce a thin decomposition.
   ```
-  """ Base.svdfact
+  """ svdfact
 
   @doc doc"""
   ```rst
@@ -9127,7 +9127,7 @@ popdisplay(d::Display)
    "true", an economy mode decomposition is returned. The default is
    to produce a thin decomposition.
   ```
-  """ Base.svdfact!
+  """ svdfact!
 
   @doc doc"""
   ```rst
@@ -9140,7 +9140,7 @@ popdisplay(d::Display)
    "true", an economy mode decomposition is returned. The default is
    to produce a thin decomposition.
   ```
-  """ Base.svd
+  """ svd
 
   @doc doc"""
   ```rst
@@ -9148,7 +9148,7 @@ popdisplay(d::Display)
 
    Returns the singular values of "A".
   ```
-  """ Base.svdvals
+  """ svdvals
 
   @doc doc"""
   ```rst
@@ -9157,7 +9157,7 @@ popdisplay(d::Display)
    Returns the singular values of "A", while saving space by
    overwriting the input.
   ```
-  """ Base.svdvals!
+  """ svdvals!
 
   @doc doc"""
   ```rst
@@ -9168,7 +9168,7 @@ popdisplay(d::Display)
    F[:U]*F[:D1]*F[:R0]*F[:Q]'" and "B =
    F[:V]*F[:D2]*F[:R0]*F[:Q]'".
   ```
-  """ Base.svdfact
+  """ svdfact
 
   @doc doc"""
   ```rst
@@ -9180,7 +9180,7 @@ popdisplay(d::Display)
    "B", returning "U", "V", "Q", "D1", "D2", and "R0"
    such that "A = U*D1*R0*Q'" and "B = V*D2*R0*Q'".
   ```
-  """ Base.svd
+  """ svd
 
   @doc doc"""
   ```rst
@@ -9189,7 +9189,7 @@ popdisplay(d::Display)
    Return only the singular values from the generalized singular value
    decomposition of "A" and "B".
   ```
-  """ Base.svdvals
+  """ svdvals
 
   @doc doc"""
   ```rst
@@ -9197,7 +9197,7 @@ popdisplay(d::Display)
 
    Upper triangle of a matrix.
   ```
-  """ Base.triu
+  """ triu
 
   @doc doc"""
   ```rst
@@ -9206,7 +9206,7 @@ popdisplay(d::Display)
    Returns the upper triangle of "M" starting from the "k"th
    superdiagonal.
   ```
-  """ Base.triu
+  """ triu
 
   @doc doc"""
   ```rst
@@ -9214,7 +9214,7 @@ popdisplay(d::Display)
 
    Upper triangle of a matrix, overwriting "M" in the process.
   ```
-  """ Base.triu!
+  """ triu!
 
   @doc doc"""
   ```rst
@@ -9223,7 +9223,7 @@ popdisplay(d::Display)
    Returns the upper triangle of "M" starting from the "k"th
    superdiagonal, overwriting "M" in the process.
   ```
-  """ Base.triu!
+  """ triu!
 
   @doc doc"""
   ```rst
@@ -9231,7 +9231,7 @@ popdisplay(d::Display)
 
    Lower triangle of a matrix.
   ```
-  """ Base.tril
+  """ tril
 
   @doc doc"""
   ```rst
@@ -9240,7 +9240,7 @@ popdisplay(d::Display)
    Returns the lower triangle of "M" starting from the "k"th
    subdiagonal.
   ```
-  """ Base.tril
+  """ tril
 
   @doc doc"""
   ```rst
@@ -9248,7 +9248,7 @@ popdisplay(d::Display)
 
    Lower triangle of a matrix, overwriting "M" in the process.
   ```
-  """ Base.tril!
+  """ tril!
 
   @doc doc"""
   ```rst
@@ -9257,7 +9257,7 @@ popdisplay(d::Display)
    Returns the lower triangle of "M" starting from the "k"th
    subdiagonal, overwriting "M" in the process.
   ```
-  """ Base.tril!
+  """ tril!
 
   @doc doc"""
   ```rst
@@ -9266,7 +9266,7 @@ popdisplay(d::Display)
    A "Range" giving the indices of the "k"th diagonal of the
    matrix "M".
   ```
-  """ Base.diagind
+  """ diagind
 
   @doc doc"""
   ```rst
@@ -9275,7 +9275,7 @@ popdisplay(d::Display)
    The "k"th diagonal of a matrix, as a vector. Use "diagm" to
    construct a diagonal matrix.
   ```
-  """ Base.diag
+  """ diag
 
   @doc doc"""
   ```rst
@@ -9284,13 +9284,13 @@ popdisplay(d::Display)
    Construct a diagonal matrix and place "v" on the "k"th
    diagonal.
   ```
-  """ Base.diagm
+  """ diagm
 
   @doc doc"""
   ```rst
   scale(A, b)
   ```
-  """ Base.scale
+  """ scale
 
   @doc doc"""
   ```rst
@@ -9307,13 +9307,13 @@ popdisplay(d::Display)
    Note: for large "A", "scale" can be much faster than "A .* b"
    or "b .* A", due to the use of BLAS.
   ```
-  """ Base.scale
+  """ scale
 
   @doc doc"""
   ```rst
   scale!(A, b)
   ```
-  """ Base.scale!
+  """ scale!
 
   @doc doc"""
   ```rst
@@ -9328,7 +9328,7 @@ popdisplay(d::Display)
    "A" by "b[i]" (similar to "diagm(b)*A"), again operating in-
    place on "A".
   ```
-  """ Base.scale!
+  """ scale!
 
   @doc doc"""
   ```rst
@@ -9339,7 +9339,7 @@ popdisplay(d::Display)
    "Tridiagonal" and provides efficient specialized linear solvers,
    but may be converted into a regular matrix with "full()".
   ```
-  """ Base.Tridiagonal
+  """ Tridiagonal
 
   @doc doc"""
   ```rst
@@ -9351,7 +9351,7 @@ popdisplay(d::Display)
    and provides efficient specialized linear solvers, but may be
    converted into a regular matrix with "full()".
   ```
-  """ Base.Bidiagonal
+  """ Bidiagonal
 
   @doc doc"""
   ```rst
@@ -9362,7 +9362,7 @@ popdisplay(d::Display)
    "SymTridiagonal" and provides efficient specialized eigensolvers,
    but may be converted into a regular matrix with "full()".
   ```
-  """ Base.SymTridiagonal
+  """ SymTridiagonal
 
   @doc doc"""
   ```rst
@@ -9370,7 +9370,7 @@ popdisplay(d::Display)
 
    Compute the rank of a matrix.
   ```
-  """ Base.rank
+  """ rank
 
   @doc doc"""
   ```rst
@@ -9388,7 +9388,7 @@ popdisplay(d::Display)
    (Note that for sparse matrices, "p=2" is currently not
    implemented.) Use "vecnorm()" to compute the Frobenius norm.
   ```
-  """ Base.norm
+  """ norm
 
   @doc doc"""
   ```rst
@@ -9402,7 +9402,7 @@ popdisplay(d::Display)
    For example, if "A" is a matrix and "p=2", then this is
    equivalent to the Frobenius norm.
   ```
-  """ Base.vecnorm
+  """ vecnorm
 
   @doc doc"""
   ```rst
@@ -9412,7 +9412,7 @@ popdisplay(d::Display)
    "p"-norm. Valid values for "p" are "1", "2" (default), or
    "Inf".
   ```
-  """ Base.cond
+  """ cond
 
   @doc doc"""
   ```rst
@@ -9433,7 +9433,7 @@ popdisplay(d::Display)
    condition number, relative condition number, or componentwise
    relative condition number.
   ```
-  """ Base.condskeel
+  """ condskeel
 
   @doc doc"""
   ```rst
@@ -9441,7 +9441,7 @@ popdisplay(d::Display)
 
    Matrix trace
   ```
-  """ Base.trace
+  """ trace
 
   @doc doc"""
   ```rst
@@ -9449,7 +9449,7 @@ popdisplay(d::Display)
 
    Matrix determinant
   ```
-  """ Base.det
+  """ det
 
   @doc doc"""
   ```rst
@@ -9458,7 +9458,7 @@ popdisplay(d::Display)
    Log of matrix determinant. Equivalent to "log(det(M))", but may
    provide increased accuracy and/or speed.
   ```
-  """ Base.logdet
+  """ logdet
 
   @doc doc"""
   ```rst
@@ -9466,7 +9466,7 @@ popdisplay(d::Display)
 
    Matrix inverse
   ```
-  """ Base.inv
+  """ inv
 
   @doc doc"""
   ```rst
@@ -9506,7 +9506,7 @@ popdisplay(d::Display)
           Speech and Signal Processing, 36(5), 1988, 757-763.
           doi:10.1109/29.1585
   ```
-  """ Base.pinv
+  """ pinv
 
   @doc doc"""
   ```rst
@@ -9514,7 +9514,7 @@ popdisplay(d::Display)
 
    Basis for nullspace of "M".
   ```
-  """ Base.nullspace
+  """ nullspace
 
   @doc doc"""
   ```rst
@@ -9523,7 +9523,7 @@ popdisplay(d::Display)
    Construct a matrix by repeating the given matrix "n" times in
    dimension 1 and "m" times in dimension 2.
   ```
-  """ Base.repmat
+  """ repmat
 
   @doc doc"""
   ```rst
@@ -9536,7 +9536,7 @@ popdisplay(d::Display)
    times that a slice along the i-th dimension of "A" should be
    repeated.
   ```
-  """ Base.repeat
+  """ repeat
 
   @doc doc"""
   ```rst
@@ -9544,7 +9544,7 @@ popdisplay(d::Display)
 
    Kronecker tensor product of two vectors or two matrices.
   ```
-  """ Base.kron
+  """ kron
 
   @doc doc"""
   ```rst
@@ -9553,7 +9553,7 @@ popdisplay(d::Display)
    Concatenate matrices block-diagonally. Currently only implemented
    for sparse matrices.
   ```
-  """ Base.blkdiag
+  """ blkdiag
 
   @doc doc"""
   ```rst
@@ -9573,7 +9573,7 @@ popdisplay(d::Display)
       plot(x, y, "o") # Plot (x,y) points
       plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
   ```
-  """ Base.linreg
+  """ linreg
 
   @doc doc"""
   ```rst
@@ -9581,7 +9581,7 @@ popdisplay(d::Display)
 
    Weighted least-squares linear regression.
   ```
-  """ Base.linreg
+  """ linreg
 
   @doc doc"""
   ```rst
@@ -9589,7 +9589,7 @@ popdisplay(d::Display)
 
    Matrix exponential.
   ```
-  """ Base.expm
+  """ expm
 
   @doc doc"""
   ```rst
@@ -9600,7 +9600,7 @@ popdisplay(d::Display)
    part and no two eigenvalues are negative complex conjugates of each
    other.
   ```
-  """ Base.lyap
+  """ lyap
 
   @doc doc"""
   ```rst
@@ -9610,7 +9610,7 @@ popdisplay(d::Display)
    = 0", where "A", "B" and "C" have compatible dimensions and
    "A" and "-B" have no eigenvalues with equal real part.
   ```
-  """ Base.sylvester
+  """ sylvester
 
   @doc doc"""
   ```rst
@@ -9618,7 +9618,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is symmetric.
   ```
-  """ Base.issym
+  """ issym
 
   @doc doc"""
   ```rst
@@ -9626,7 +9626,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is positive definite.
   ```
-  """ Base.isposdef
+  """ isposdef
 
   @doc doc"""
   ```rst
@@ -9635,7 +9635,7 @@ popdisplay(d::Display)
    Test whether a matrix is positive definite, overwriting "A" in
    the processes.
   ```
-  """ Base.isposdef!
+  """ isposdef!
 
   @doc doc"""
   ```rst
@@ -9643,7 +9643,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is lower triangular.
   ```
-  """ Base.istril
+  """ istril
 
   @doc doc"""
   ```rst
@@ -9651,7 +9651,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is upper triangular.
   ```
-  """ Base.istriu
+  """ istriu
 
   @doc doc"""
   ```rst
@@ -9659,7 +9659,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is diagonal.
   ```
-  """ Base.isdiag
+  """ isdiag
 
   @doc doc"""
   ```rst
@@ -9667,7 +9667,7 @@ popdisplay(d::Display)
 
    Test whether a matrix is Hermitian.
   ```
-  """ Base.ishermitian
+  """ ishermitian
 
   @doc doc"""
   ```rst
@@ -9675,7 +9675,7 @@ popdisplay(d::Display)
 
    The transposition operator (".'").
   ```
-  """ Base.transpose
+  """ transpose
 
   @doc doc"""
   ```rst
@@ -9687,7 +9687,7 @@ popdisplay(d::Display)
    supported and unexpected results will happen if *src* and *dest*
    have overlapping memory regions.
   ```
-  """ Base.transpose!
+  """ transpose!
 
   @doc doc"""
   ```rst
@@ -9695,7 +9695,7 @@ popdisplay(d::Display)
 
    The conjugate transposition operator ("'").
   ```
-  """ Base.ctranspose
+  """ ctranspose
 
   @doc doc"""
   ```rst
@@ -9707,7 +9707,7 @@ popdisplay(d::Display)
    supported and unexpected results will happen if *src* and *dest*
    have overlapping memory regions.
   ```
-  """ Base.ctranspose!
+  """ ctranspose!
 
   @doc doc"""
   ```rst
@@ -9786,7 +9786,7 @@ popdisplay(d::Display)
      | real or complex | inverse with level shift \"sigma\" | (A - \\sigma I )^{-1}              |
      +-----------------+------------------------------------+------------------------------------+
   ```
-  """ Base.eigs
+  """ eigs
 
   @doc doc"""
   ```rst
@@ -9816,7 +9816,7 @@ popdisplay(d::Display)
       X = sprand(10, 5, 0.2)
       svds(X, nsv = 2)
   ```
-  """ Base.svds
+  """ svds
 
   @doc doc"""
   ```rst
@@ -9835,7 +9835,7 @@ popdisplay(d::Display)
    in parallel, only 1 BLAS thread is used. The argument "n" still
    refers to the size of the problem that is solved on each processor.
   ```
-  """ Base.peakflops
+  """ peakflops
 
   @doc doc"""
   ```rst
@@ -10282,7 +10282,7 @@ popdisplay(d::Display)
 
    Unary minus operator.
   ```
-  """ Base.(:(-))
+  """ -
 
   @doc doc"""
   ```rst
@@ -10291,7 +10291,7 @@ popdisplay(d::Display)
    Addition operator. "x+y+z+..." calls this function with all
    arguments, i.e. "+(x, y, z, ...)".
   ```
-  """ Base.(:(+))
+  """ +
 
   @doc doc"""
   ```rst
@@ -10299,7 +10299,7 @@ popdisplay(d::Display)
 
    Subtraction operator.
   ```
-  """ Base.(:(-))
+  """ -
 
   @doc doc"""
   ```rst
@@ -10395,7 +10395,7 @@ popdisplay(d::Display)
    "x*y+z". "fma" is used to improve accuracy in certain
    algorithms. See "muladd".
   ```
-  """ Base.fma
+  """ fma
 
   @doc doc"""
   ```rst
@@ -10406,7 +10406,7 @@ popdisplay(d::Display)
    "fma(x,y,z)". "muladd" is used to improve performance. See
    "fma".
   ```
-  """ Base.muladd
+  """ muladd
 
   @doc doc"""
   ```rst
@@ -10416,7 +10416,7 @@ popdisplay(d::Display)
    The quotient from Euclidean division. Computes "x/y", truncated
    to an integer.
   ```
-  """ Base.div
+  """ div
 
   @doc doc"""
   ```rst
@@ -10424,7 +10424,7 @@ popdisplay(d::Display)
 
    Largest integer less than or equal to "x/y".
   ```
-  """ Base.fld
+  """ fld
 
   @doc doc"""
   ```rst
@@ -10432,7 +10432,7 @@ popdisplay(d::Display)
 
    Smallest integer larger than or equal to "x/y".
   ```
-  """ Base.cld
+  """ cld
 
   @doc doc"""
   ```rst
@@ -10441,7 +10441,7 @@ popdisplay(d::Display)
    Modulus after division, returning in the range [0,``y``), if "y"
    is positive, or ("y",0] if "y" is negative.
   ```
-  """ Base.mod
+  """ mod
 
   @doc doc"""
   ```rst
@@ -10454,7 +10454,7 @@ popdisplay(d::Display)
    not exactly the same as mod(x,2pi), which would compute the modulus
    of x relative to division by the floating-point number 2pi.
   ```
-  """ Base.mod2pi
+  """ mod2pi
 
   @doc doc"""
   ```rst
@@ -10465,7 +10465,7 @@ popdisplay(d::Display)
    sign as``x``, and smaller in magnitude than "y". This value is
    always exact.
   ```
-  """ Base.rem
+  """ rem
 
   @doc doc"""
   ```rst
@@ -10474,7 +10474,7 @@ popdisplay(d::Display)
    The quotient and remainder from Euclidean division. Equivalent to
    "(x÷y, x%y)".
   ```
-  """ Base.divrem
+  """ divrem
 
   @doc doc"""
   ```rst
@@ -10483,7 +10483,7 @@ popdisplay(d::Display)
    The floored quotient and modulus after division. Equivalent to
    "(fld(x,y), mod(x,y))".
   ```
-  """ Base.fldmod
+  """ fldmod
 
   @doc doc"""
   ```rst
@@ -10491,7 +10491,7 @@ popdisplay(d::Display)
 
    Modulus after division, returning in the range (0,m]
   ```
-  """ Base.mod1
+  """ mod1
 
   @doc doc"""
   ```rst
@@ -10499,7 +10499,7 @@ popdisplay(d::Display)
 
    Remainder after division, returning in the range (0,m]
   ```
-  """ Base.rem1
+  """ rem1
 
   @doc doc"""
   ```rst
@@ -10518,7 +10518,7 @@ popdisplay(d::Display)
    components of the given integer type. The result will differ from
    "x" by no more than "tol".
   ```
-  """ Base.rationalize
+  """ rationalize
 
   @doc doc"""
   ```rst
@@ -10526,7 +10526,7 @@ popdisplay(d::Display)
 
    Numerator of the rational representation of "x"
   ```
-  """ Base.num
+  """ num
 
   @doc doc"""
   ```rst
@@ -10534,7 +10534,7 @@ popdisplay(d::Display)
 
    Denominator of the rational representation of "x"
   ```
-  """ Base.den
+  """ den
 
   @doc doc"""
   ```rst
@@ -10569,7 +10569,7 @@ popdisplay(d::Display)
    "s". These syntaxes call the function "colon". The colon is
    also used in indexing to select whole dimensions.
   ```
-  """ Base.(:(:))
+  """ :
 
   @doc doc"""
   ```rst
@@ -10577,7 +10577,7 @@ popdisplay(d::Display)
 
    Called by ":" syntax for constructing ranges.
   ```
-  """ Base.colon
+  """ colon
 
   @doc doc"""
   ```rst
@@ -10586,7 +10586,7 @@ popdisplay(d::Display)
    Construct a range by length, given a starting value and optional
    step (defaults to 1).
   ```
-  """ Base.range
+  """ range
 
   @doc doc"""
   ```rst
@@ -10739,7 +10739,7 @@ popdisplay(d::Display)
    implemented by "isless". For floating-point numbers, uses "<"
    but throws an error for unordered arguments.
   ```
-  """ Base.cmp
+  """ cmp
 
   @doc doc"""
   ```rst
@@ -10747,7 +10747,7 @@ popdisplay(d::Display)
 
    Bitwise not
   ```
-  """ Base.(:(~))
+  """ ~
 
   @doc doc"""
   ```rst
@@ -10755,7 +10755,7 @@ popdisplay(d::Display)
 
    Bitwise and
   ```
-  """ Base.(:(&))
+  """ &
 
   @doc doc"""
   ```rst
@@ -10771,7 +10771,7 @@ popdisplay(d::Display)
 
    Bitwise exclusive or
   ```
-  """ Base.(:($))
+  """ $
 
   @doc doc"""
   ```rst
@@ -10779,7 +10779,7 @@ popdisplay(d::Display)
 
    Boolean not
   ```
-  """ Base.(:(!))
+  """ !
 
   @doc doc"""
   ```rst
@@ -10787,7 +10787,7 @@ popdisplay(d::Display)
 
    Matrix operator A \ B^H
   ```
-  """ Base.A_ldiv_Bc
+  """ A_ldiv_Bc
 
   @doc doc"""
   ```rst
@@ -10795,7 +10795,7 @@ popdisplay(d::Display)
 
    Matrix operator A \ B^T
   ```
-  """ Base.A_ldiv_Bt
+  """ A_ldiv_Bt
 
   @doc doc"""
   ```rst
@@ -10811,7 +10811,7 @@ popdisplay(d::Display)
        3.0  3.0
        7.0  7.0
   ```
-  """ Base.A_mul_B!
+  """ A_mul_B!
 
   @doc doc"""
   ```rst
@@ -10819,7 +10819,7 @@ popdisplay(d::Display)
 
    Matrix operator A B^H
   ```
-  """ Base.A_mul_Bc
+  """ A_mul_Bc
 
   @doc doc"""
   ```rst
@@ -10827,7 +10827,7 @@ popdisplay(d::Display)
 
    Matrix operator A B^T
   ```
-  """ Base.A_mul_Bt
+  """ A_mul_Bt
 
   @doc doc"""
   ```rst
@@ -10835,7 +10835,7 @@ popdisplay(d::Display)
 
    Matrix operator A / B^H
   ```
-  """ Base.A_rdiv_Bc
+  """ A_rdiv_Bc
 
   @doc doc"""
   ```rst
@@ -10843,7 +10843,7 @@ popdisplay(d::Display)
 
    Matrix operator A / B^T
   ```
-  """ Base.A_rdiv_Bt
+  """ A_rdiv_Bt
 
   @doc doc"""
   ```rst
@@ -10851,7 +10851,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H \ B
   ```
-  """ Base.Ac_ldiv_B
+  """ Ac_ldiv_B
 
   @doc doc"""
   ```rst
@@ -10859,7 +10859,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H \ B^H
   ```
-  """ Base.Ac_ldiv_Bc
+  """ Ac_ldiv_Bc
 
   @doc doc"""
   ```rst
@@ -10867,7 +10867,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H B
   ```
-  """ Base.Ac_mul_B
+  """ Ac_mul_B
 
   @doc doc"""
   ```rst
@@ -10875,7 +10875,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H B^H
   ```
-  """ Base.Ac_mul_Bc
+  """ Ac_mul_Bc
 
   @doc doc"""
   ```rst
@@ -10883,7 +10883,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H / B
   ```
-  """ Base.Ac_rdiv_B
+  """ Ac_rdiv_B
 
   @doc doc"""
   ```rst
@@ -10891,7 +10891,7 @@ popdisplay(d::Display)
 
    Matrix operator A^H / B^H
   ```
-  """ Base.Ac_rdiv_Bc
+  """ Ac_rdiv_Bc
 
   @doc doc"""
   ```rst
@@ -10899,7 +10899,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T \ B
   ```
-  """ Base.At_ldiv_B
+  """ At_ldiv_B
 
   @doc doc"""
   ```rst
@@ -10907,7 +10907,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T \ B^T
   ```
-  """ Base.At_ldiv_Bt
+  """ At_ldiv_Bt
 
   @doc doc"""
   ```rst
@@ -10915,7 +10915,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T B
   ```
-  """ Base.At_mul_B
+  """ At_mul_B
 
   @doc doc"""
   ```rst
@@ -10923,7 +10923,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T B^T
   ```
-  """ Base.At_mul_Bt
+  """ At_mul_Bt
 
   @doc doc"""
   ```rst
@@ -10931,7 +10931,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T / B
   ```
-  """ Base.At_rdiv_B
+  """ At_rdiv_B
 
   @doc doc"""
   ```rst
@@ -10939,7 +10939,7 @@ popdisplay(d::Display)
 
    Matrix operator A^T / B^T
   ```
-  """ Base.At_rdiv_Bt
+  """ At_rdiv_Bt
 
   @doc doc"""
   ```rst
@@ -10962,7 +10962,7 @@ popdisplay(d::Display)
    For default tolerance arguments, "maxeps = max(eps(abs(x)),
    eps(abs(y)))".
   ```
-  """ Base.isapprox
+  """ isapprox
 
   @doc doc"""
   ```rst
@@ -10970,7 +10970,7 @@ popdisplay(d::Display)
 
    Compute sine of "x", where "x" is in radians
   ```
-  """ Base.sin
+  """ sin
 
   @doc doc"""
   ```rst
@@ -10978,7 +10978,7 @@ popdisplay(d::Display)
 
    Compute cosine of "x", where "x" is in radians
   ```
-  """ Base.cos
+  """ cos
 
   @doc doc"""
   ```rst
@@ -10986,7 +10986,7 @@ popdisplay(d::Display)
 
    Compute tangent of "x", where "x" is in radians
   ```
-  """ Base.tan
+  """ tan
 
   @doc doc"""
   ```rst
@@ -10994,7 +10994,7 @@ popdisplay(d::Display)
 
    Compute sine of "x", where "x" is in degrees
   ```
-  """ Base.sind
+  """ sind
 
   @doc doc"""
   ```rst
@@ -11002,7 +11002,7 @@ popdisplay(d::Display)
 
    Compute cosine of "x", where "x" is in degrees
   ```
-  """ Base.cosd
+  """ cosd
 
   @doc doc"""
   ```rst
@@ -11010,7 +11010,7 @@ popdisplay(d::Display)
 
    Compute tangent of "x", where "x" is in degrees
   ```
-  """ Base.tand
+  """ tand
 
   @doc doc"""
   ```rst
@@ -11019,7 +11019,7 @@ popdisplay(d::Display)
    Compute \sin(\pi x) more accurately than "sin(pi*x)",
    especially for large "x".
   ```
-  """ Base.sinpi
+  """ sinpi
 
   @doc doc"""
   ```rst
@@ -11028,7 +11028,7 @@ popdisplay(d::Display)
    Compute \cos(\pi x) more accurately than "cos(pi*x)",
    especially for large "x".
   ```
-  """ Base.cospi
+  """ cospi
 
   @doc doc"""
   ```rst
@@ -11036,7 +11036,7 @@ popdisplay(d::Display)
 
    Compute hyperbolic sine of "x"
   ```
-  """ Base.sinh
+  """ sinh
 
   @doc doc"""
   ```rst
@@ -11044,7 +11044,7 @@ popdisplay(d::Display)
 
    Compute hyperbolic cosine of "x"
   ```
-  """ Base.cosh
+  """ cosh
 
   @doc doc"""
   ```rst
@@ -11052,7 +11052,7 @@ popdisplay(d::Display)
 
    Compute hyperbolic tangent of "x"
   ```
-  """ Base.tanh
+  """ tanh
 
   @doc doc"""
   ```rst
@@ -11060,7 +11060,7 @@ popdisplay(d::Display)
 
    Compute the inverse sine of "x", where the output is in radians
   ```
-  """ Base.asin
+  """ asin
 
   @doc doc"""
   ```rst
@@ -11068,7 +11068,7 @@ popdisplay(d::Display)
 
    Compute the inverse cosine of "x", where the output is in radians
   ```
-  """ Base.acos
+  """ acos
 
   @doc doc"""
   ```rst
@@ -11077,7 +11077,7 @@ popdisplay(d::Display)
    Compute the inverse tangent of "x", where the output is in
    radians
   ```
-  """ Base.atan
+  """ atan
 
   @doc doc"""
   ```rst
@@ -11086,7 +11086,7 @@ popdisplay(d::Display)
    Compute the inverse tangent of "y/x", using the signs of both
    "x" and "y" to determine the quadrant of the return value.
   ```
-  """ Base.atan2
+  """ atan2
 
   @doc doc"""
   ```rst
@@ -11094,7 +11094,7 @@ popdisplay(d::Display)
 
    Compute the inverse sine of "x", where the output is in degrees
   ```
-  """ Base.asind
+  """ asind
 
   @doc doc"""
   ```rst
@@ -11102,7 +11102,7 @@ popdisplay(d::Display)
 
    Compute the inverse cosine of "x", where the output is in degrees
   ```
-  """ Base.acosd
+  """ acosd
 
   @doc doc"""
   ```rst
@@ -11111,7 +11111,7 @@ popdisplay(d::Display)
    Compute the inverse tangent of "x", where the output is in
    degrees
   ```
-  """ Base.atand
+  """ atand
 
   @doc doc"""
   ```rst
@@ -11119,7 +11119,7 @@ popdisplay(d::Display)
 
    Compute the secant of "x", where "x" is in radians
   ```
-  """ Base.sec
+  """ sec
 
   @doc doc"""
   ```rst
@@ -11127,7 +11127,7 @@ popdisplay(d::Display)
 
    Compute the cosecant of "x", where "x" is in radians
   ```
-  """ Base.csc
+  """ csc
 
   @doc doc"""
   ```rst
@@ -11135,7 +11135,7 @@ popdisplay(d::Display)
 
    Compute the cotangent of "x", where "x" is in radians
   ```
-  """ Base.cot
+  """ cot
 
   @doc doc"""
   ```rst
@@ -11143,7 +11143,7 @@ popdisplay(d::Display)
 
    Compute the secant of "x", where "x" is in degrees
   ```
-  """ Base.secd
+  """ secd
 
   @doc doc"""
   ```rst
@@ -11151,7 +11151,7 @@ popdisplay(d::Display)
 
    Compute the cosecant of "x", where "x" is in degrees
   ```
-  """ Base.cscd
+  """ cscd
 
   @doc doc"""
   ```rst
@@ -11159,7 +11159,7 @@ popdisplay(d::Display)
 
    Compute the cotangent of "x", where "x" is in degrees
   ```
-  """ Base.cotd
+  """ cotd
 
   @doc doc"""
   ```rst
@@ -11167,7 +11167,7 @@ popdisplay(d::Display)
 
    Compute the inverse secant of "x", where the output is in radians
   ```
-  """ Base.asec
+  """ asec
 
   @doc doc"""
   ```rst
@@ -11176,7 +11176,7 @@ popdisplay(d::Display)
    Compute the inverse cosecant of "x", where the output is in
    radians
   ```
-  """ Base.acsc
+  """ acsc
 
   @doc doc"""
   ```rst
@@ -11185,7 +11185,7 @@ popdisplay(d::Display)
    Compute the inverse cotangent of "x", where the output is in
    radians
   ```
-  """ Base.acot
+  """ acot
 
   @doc doc"""
   ```rst
@@ -11193,7 +11193,7 @@ popdisplay(d::Display)
 
    Compute the inverse secant of "x", where the output is in degrees
   ```
-  """ Base.asecd
+  """ asecd
 
   @doc doc"""
   ```rst
@@ -11202,7 +11202,7 @@ popdisplay(d::Display)
    Compute the inverse cosecant of "x", where the output is in
    degrees
   ```
-  """ Base.acscd
+  """ acscd
 
   @doc doc"""
   ```rst
@@ -11211,7 +11211,7 @@ popdisplay(d::Display)
    Compute the inverse cotangent of "x", where the output is in
    degrees
   ```
-  """ Base.acotd
+  """ acotd
 
   @doc doc"""
   ```rst
@@ -11219,7 +11219,7 @@ popdisplay(d::Display)
 
    Compute the hyperbolic secant of "x"
   ```
-  """ Base.sech
+  """ sech
 
   @doc doc"""
   ```rst
@@ -11227,7 +11227,7 @@ popdisplay(d::Display)
 
    Compute the hyperbolic cosecant of "x"
   ```
-  """ Base.csch
+  """ csch
 
   @doc doc"""
   ```rst
@@ -11235,7 +11235,7 @@ popdisplay(d::Display)
 
    Compute the hyperbolic cotangent of "x"
   ```
-  """ Base.coth
+  """ coth
 
   @doc doc"""
   ```rst
@@ -11243,7 +11243,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic sine of "x"
   ```
-  """ Base.asinh
+  """ asinh
 
   @doc doc"""
   ```rst
@@ -11251,7 +11251,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic cosine of "x"
   ```
-  """ Base.acosh
+  """ acosh
 
   @doc doc"""
   ```rst
@@ -11259,7 +11259,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic tangent of "x"
   ```
-  """ Base.atanh
+  """ atanh
 
   @doc doc"""
   ```rst
@@ -11267,7 +11267,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic secant of "x"
   ```
-  """ Base.asech
+  """ asech
 
   @doc doc"""
   ```rst
@@ -11275,7 +11275,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic cosecant of "x"
   ```
-  """ Base.acsch
+  """ acsch
 
   @doc doc"""
   ```rst
@@ -11283,7 +11283,7 @@ popdisplay(d::Display)
 
    Compute the inverse hyperbolic cotangent of "x"
   ```
-  """ Base.acoth
+  """ acoth
 
   @doc doc"""
   ```rst
@@ -11291,7 +11291,7 @@ popdisplay(d::Display)
 
    Compute \sin(\pi x) / (\pi x) if x \neq 0, and 1 if x = 0.
   ```
-  """ Base.sinc
+  """ sinc
 
   @doc doc"""
   ```rst
@@ -11300,7 +11300,7 @@ popdisplay(d::Display)
    Compute \cos(\pi x) / x - \sin(\pi x) / (\pi x^2) if x \neq
    0, and 0 if x = 0. This is the derivative of "sinc(x)".
   ```
-  """ Base.cosc
+  """ cosc
 
   @doc doc"""
   ```rst
@@ -11308,7 +11308,7 @@ popdisplay(d::Display)
 
    Convert "x" from degrees to radians
   ```
-  """ Base.deg2rad
+  """ deg2rad
 
   @doc doc"""
   ```rst
@@ -11316,7 +11316,7 @@ popdisplay(d::Display)
 
    Convert "x" from radians to degrees
   ```
-  """ Base.rad2deg
+  """ rad2deg
 
   @doc doc"""
   ```rst
@@ -11324,7 +11324,7 @@ popdisplay(d::Display)
 
    Compute the \sqrt{x^2+y^2} avoiding overflow and underflow
   ```
-  """ Base.hypot
+  """ hypot
 
   @doc doc"""
   ```rst
@@ -11337,7 +11337,7 @@ popdisplay(d::Display)
    There is an experimental variant in the "Base.Math.JuliaLibm"
    module, which is typically faster and more accurate.
   ```
-  """ Base.log
+  """ log
 
   @doc doc"""
   ```rst
@@ -11346,7 +11346,7 @@ popdisplay(d::Display)
    Compute the base "b" logarithm of "x". Throws "DomainError"
    for negative "Real" arguments.
   ```
-  """ Base.log
+  """ log
 
   @doc doc"""
   ```rst
@@ -11355,7 +11355,7 @@ popdisplay(d::Display)
    Compute the logarithm of "x" to base 2. Throws "DomainError"
    for negative "Real" arguments.
   ```
-  """ Base.log2
+  """ log2
 
   @doc doc"""
   ```rst
@@ -11364,7 +11364,7 @@ popdisplay(d::Display)
    Compute the logarithm of "x" to base 10. Throws "DomainError"
    for negative "Real" arguments.
   ```
-  """ Base.log10
+  """ log10
 
   @doc doc"""
   ```rst
@@ -11376,7 +11376,7 @@ popdisplay(d::Display)
    There is an experimental variant in the "Base.Math.JuliaLibm"
    module, which is typically faster and more accurate.
   ```
-  """ Base.log1p
+  """ log1p
 
   @doc doc"""
   ```rst
@@ -11385,7 +11385,7 @@ popdisplay(d::Display)
    Return "(x,exp)" such that "x" has a magnitude in the interval
    "[1/2, 1)" or 0, and val = x \times 2^{exp}.
   ```
-  """ Base.frexp
+  """ frexp
 
   @doc doc"""
   ```rst
@@ -11393,7 +11393,7 @@ popdisplay(d::Display)
 
    Compute e^x
   ```
-  """ Base.exp
+  """ exp
 
   @doc doc"""
   ```rst
@@ -11401,7 +11401,7 @@ popdisplay(d::Display)
 
    Compute 2^x
   ```
-  """ Base.exp2
+  """ exp2
 
   @doc doc"""
   ```rst
@@ -11409,7 +11409,7 @@ popdisplay(d::Display)
 
    Compute 10^x
   ```
-  """ Base.exp10
+  """ exp10
 
   @doc doc"""
   ```rst
@@ -11417,7 +11417,7 @@ popdisplay(d::Display)
 
    Compute x \times 2^n
   ```
-  """ Base.ldexp
+  """ ldexp
 
   @doc doc"""
   ```rst
@@ -11426,7 +11426,7 @@ popdisplay(d::Display)
    Return a tuple (fpart,ipart) of the fractional and integral parts
    of a number. Both parts have the same sign as the argument.
   ```
-  """ Base.modf
+  """ modf
 
   @doc doc"""
   ```rst
@@ -11434,7 +11434,7 @@ popdisplay(d::Display)
 
    Accurately compute e^x-1
   ```
-  """ Base.expm1
+  """ expm1
 
   @doc doc"""
   ```rst
@@ -11489,7 +11489,7 @@ popdisplay(d::Display)
         julia> round(x, 1)
         1.2
   ```
-  """ Base.round
+  """ round
 
   @doc doc"""
   ```rst
@@ -11510,7 +11510,7 @@ popdisplay(d::Display)
 
    * "RoundDown"
   ```
-  """ Base.RoundingMode
+  """ RoundingMode
 
   @doc doc"""
   ```rst
@@ -11520,7 +11520,7 @@ popdisplay(d::Display)
    (fractional values of 0.5) being rounded to the nearest even
    integer.
   ```
-  """ Base.RoundNearest
+  """ RoundNearest
 
   @doc doc"""
   ```rst
@@ -11529,7 +11529,7 @@ popdisplay(d::Display)
    Rounds to nearest integer, with ties rounded away from zero (C/C++
    "round()" behaviour).
   ```
-  """ Base.RoundNearestTiesAway
+  """ RoundNearestTiesAway
 
   @doc doc"""
   ```rst
@@ -11538,7 +11538,7 @@ popdisplay(d::Display)
    Rounds to nearest integer, with ties rounded toward positive
    infinity (Java/JavaScript "round()" behaviour).
   ```
-  """ Base.RoundNearestTiesUp
+  """ RoundNearestTiesUp
 
   @doc doc"""
   ```rst
@@ -11546,7 +11546,7 @@ popdisplay(d::Display)
 
    "round()" using this rounding mode is an alias for "trunc()".
   ```
-  """ Base.RoundToZero
+  """ RoundToZero
 
   @doc doc"""
   ```rst
@@ -11554,7 +11554,7 @@ popdisplay(d::Display)
 
    "round()" using this rounding mode is an alias for "ceil()".
   ```
-  """ Base.RoundUp
+  """ RoundUp
 
   @doc doc"""
   ```rst
@@ -11562,7 +11562,7 @@ popdisplay(d::Display)
 
    "round()" using this rounding mode is an alias for "floor()".
   ```
-  """ Base.RoundDown
+  """ RoundDown
 
   @doc doc"""
   ```rst
@@ -11574,7 +11574,7 @@ popdisplay(d::Display)
    the real components while the second is used for rounding the
    imaginary components.
   ```
-  """ Base.round
+  """ round
 
   @doc doc"""
   ```rst
@@ -11588,7 +11588,7 @@ popdisplay(d::Display)
 
    "digits" and "base" work as for "round()".
   ```
-  """ Base.ceil
+  """ ceil
 
   @doc doc"""
   ```rst
@@ -11602,7 +11602,7 @@ popdisplay(d::Display)
 
    "digits" and "base" work as for "round()".
   ```
-  """ Base.floor
+  """ floor
 
   @doc doc"""
   ```rst
@@ -11616,7 +11616,7 @@ popdisplay(d::Display)
 
    "digits" and "base" work as for "round()".
   ```
-  """ Base.trunc
+  """ trunc
 
   @doc doc"""
   ```rst
@@ -11627,7 +11627,7 @@ popdisplay(d::Display)
    value is not representable by "T", an arbitrary value will be
    returned.
   ```
-  """ Base.unsafe_trunc
+  """ unsafe_trunc
 
   @doc doc"""
   ```rst
@@ -11638,7 +11638,7 @@ popdisplay(d::Display)
    representation, default 10. E.g., "signif(123.456, 2)" is
    "120.0", and "signif(357.913, 4, 2)" is "352.0".
   ```
-  """ Base.signif
+  """ signif
 
   @doc doc"""
   ```rst
@@ -11647,7 +11647,7 @@ popdisplay(d::Display)
    Return the minimum of the arguments. Operates elementwise over
    arrays.
   ```
-  """ Base.min
+  """ min
 
   @doc doc"""
   ```rst
@@ -11656,7 +11656,7 @@ popdisplay(d::Display)
    Return the maximum of the arguments. Operates elementwise over
    arrays.
   ```
-  """ Base.max
+  """ max
 
   @doc doc"""
   ```rst
@@ -11665,7 +11665,7 @@ popdisplay(d::Display)
    Return "(min(x,y), max(x,y))". See also: "extrema()" that
    returns "(minimum(x), maximum(x))"
   ```
-  """ Base.minmax
+  """ minmax
 
   @doc doc"""
   ```rst
@@ -11675,7 +11675,7 @@ popdisplay(d::Display)
    > hi", return "hi". Arguments are promoted to a common type.
    Operates elementwise over "x" if it is an array.
   ```
-  """ Base.clamp
+  """ clamp
 
   @doc doc"""
   ```rst
@@ -11683,7 +11683,7 @@ popdisplay(d::Display)
 
    Absolute value of "x"
   ```
-  """ Base.abs
+  """ abs
 
   @doc doc"""
   ```rst
@@ -11691,7 +11691,7 @@ popdisplay(d::Display)
 
    Squared absolute value of "x"
   ```
-  """ Base.abs2
+  """ abs2
 
   @doc doc"""
   ```rst
@@ -11699,7 +11699,7 @@ popdisplay(d::Display)
 
    Return "x" such that it has the same sign as "y"
   ```
-  """ Base.copysign
+  """ copysign
 
   @doc doc"""
   ```rst
@@ -11708,7 +11708,7 @@ popdisplay(d::Display)
    Return "+1" if "x" is positive, "0" if "x == 0", and "-1"
    if "x" is negative.
   ```
-  """ Base.sign
+  """ sign
 
   @doc doc"""
   ```rst
@@ -11717,7 +11717,7 @@ popdisplay(d::Display)
    Returns "true" if the value of the sign of "x" is negative,
    otherwise "false".
   ```
-  """ Base.signbit
+  """ signbit
 
   @doc doc"""
   ```rst
@@ -11726,7 +11726,7 @@ popdisplay(d::Display)
    Return "x" with its sign flipped if "y" is negative. For
    example "abs(x) = flipsign(x,x)".
   ```
-  """ Base.flipsign
+  """ flipsign
 
   @doc doc"""
   ```rst
@@ -11736,7 +11736,7 @@ popdisplay(d::Display)
    arguments. Use complex negative arguments instead.  The prefix
    operator "√" is equivalent to "sqrt".
   ```
-  """ Base.sqrt
+  """ sqrt
 
   @doc doc"""
   ```rst
@@ -11745,7 +11745,7 @@ popdisplay(d::Display)
    Integer square root: the largest integer "m" such that "m*m <=
    n".
   ```
-  """ Base.isqrt
+  """ isqrt
 
   @doc doc"""
   ```rst
@@ -11754,7 +11754,7 @@ popdisplay(d::Display)
    Return x^{1/3}.  The prefix operator "∛" is equivalent to
    "cbrt".
   ```
-  """ Base.cbrt
+  """ cbrt
 
   @doc doc"""
   ```rst
@@ -11764,7 +11764,7 @@ popdisplay(d::Display)
    \frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt for arbitrary complex
    "x".
   ```
-  """ Base.erf
+  """ erf
 
   @doc doc"""
   ```rst
@@ -11773,7 +11773,7 @@ popdisplay(d::Display)
    Compute the complementary error function of "x", defined by 1 -
    \operatorname{erf}(x).
   ```
-  """ Base.erfc
+  """ erfc
 
   @doc doc"""
   ```rst
@@ -11783,7 +11783,7 @@ popdisplay(d::Display)
    by e^{x^2} \operatorname{erfc}(x).  Note also that
    \operatorname{erfcx}(-ix) computes the Faddeeva function w(x).
   ```
-  """ Base.erfcx
+  """ erfcx
 
   @doc doc"""
   ```rst
@@ -11792,7 +11792,7 @@ popdisplay(d::Display)
    Compute the imaginary error function of "x", defined by -i
    \operatorname{erf}(ix).
   ```
-  """ Base.erfi
+  """ erfi
 
   @doc doc"""
   ```rst
@@ -11802,7 +11802,7 @@ popdisplay(d::Display)
    "x", defined by \frac{\sqrt{\pi}}{2} e^{-x^2}
    \operatorname{erfi}(x).
   ```
-  """ Base.dawson
+  """ dawson
 
   @doc doc"""
   ```rst
@@ -11811,7 +11811,7 @@ popdisplay(d::Display)
    Compute the inverse error function of a real "x", defined by
    \operatorname{erf}(\operatorname{erfinv}(x)) = x.
   ```
-  """ Base.erfinv
+  """ erfinv
 
   @doc doc"""
   ```rst
@@ -11820,7 +11820,7 @@ popdisplay(d::Display)
    Compute the inverse error complementary function of a real "x",
    defined by \operatorname{erfc}(\operatorname{erfcinv}(x)) = x.
   ```
-  """ Base.erfcinv
+  """ erfcinv
 
   @doc doc"""
   ```rst
@@ -11828,7 +11828,7 @@ popdisplay(d::Display)
 
    Return the real part of the complex number "z"
   ```
-  """ Base.real
+  """ real
 
   @doc doc"""
   ```rst
@@ -11836,7 +11836,7 @@ popdisplay(d::Display)
 
    Return the imaginary part of the complex number "z"
   ```
-  """ Base.imag
+  """ imag
 
   @doc doc"""
   ```rst
@@ -11845,7 +11845,7 @@ popdisplay(d::Display)
    Return both the real and imaginary parts of the complex number
    "z"
   ```
-  """ Base.reim
+  """ reim
 
   @doc doc"""
   ```rst
@@ -11853,7 +11853,7 @@ popdisplay(d::Display)
 
    Compute the complex conjugate of a complex number "z"
   ```
-  """ Base.conj
+  """ conj
 
   @doc doc"""
   ```rst
@@ -11861,7 +11861,7 @@ popdisplay(d::Display)
 
    Compute the phase angle in radians of a complex number "z"
   ```
-  """ Base.angle
+  """ angle
 
   @doc doc"""
   ```rst
@@ -11869,7 +11869,7 @@ popdisplay(d::Display)
 
    Return \exp(iz).
   ```
-  """ Base.cis
+  """ cis
 
   @doc doc"""
   ```rst
@@ -11877,7 +11877,7 @@ popdisplay(d::Display)
 
    Number of ways to choose "k" out of "n" items
   ```
-  """ Base.binomial
+  """ binomial
 
   @doc doc"""
   ```rst
@@ -11890,7 +11890,7 @@ popdisplay(d::Display)
    precision.  If "n" is not an "Integer", "factorial(n)" is
    equivalent to "gamma(n+1)".
   ```
-  """ Base.factorial
+  """ factorial
 
   @doc doc"""
   ```rst
@@ -11898,7 +11898,7 @@ popdisplay(d::Display)
 
    Compute "factorial(n)/factorial(k)"
   ```
-  """ Base.factorial
+  """ factorial
 
   @doc doc"""
   ```rst
@@ -11915,7 +11915,7 @@ popdisplay(d::Display)
         2 => 2
         5 => 2
   ```
-  """ Base.factor
+  """ factor
 
   @doc doc"""
   ```rst
@@ -11924,7 +11924,7 @@ popdisplay(d::Display)
    Greatest common (positive) divisor (or zero if x and y are both
    zero).
   ```
-  """ Base.gcd
+  """ gcd
 
   @doc doc"""
   ```rst
@@ -11932,7 +11932,7 @@ popdisplay(d::Display)
 
    Least common (non-negative) multiple.
   ```
-  """ Base.lcm
+  """ lcm
 
   @doc doc"""
   ```rst
@@ -11956,7 +11956,7 @@ popdisplay(d::Display)
      Furthermore, the signs of "u" and "v" are chosen so that
      "d" is positive.
   ```
-  """ Base.gcdx
+  """ gcdx
 
   @doc doc"""
   ```rst
@@ -11964,7 +11964,7 @@ popdisplay(d::Display)
 
    Test whether "n" is a power of two
   ```
-  """ Base.ispow2
+  """ ispow2
 
   @doc doc"""
   ```rst
@@ -11973,7 +11973,7 @@ popdisplay(d::Display)
    The smallest power of two not less than "n". Returns 0 for
    "n==0", and returns "-nextpow2(-n)" for negative arguments.
   ```
-  """ Base.nextpow2
+  """ nextpow2
 
   @doc doc"""
   ```rst
@@ -11982,7 +11982,7 @@ popdisplay(d::Display)
    The largest power of two not greater than "n". Returns 0 for
    "n==0", and returns "-prevpow2(-n)" for negative arguments.
   ```
-  """ Base.prevpow2
+  """ prevpow2
 
   @doc doc"""
   ```rst
@@ -11992,7 +11992,7 @@ popdisplay(d::Display)
    negative integer. "a" must be greater than 1, and "x" must be
    greater than 0.
   ```
-  """ Base.nextpow
+  """ nextpow
 
   @doc doc"""
   ```rst
@@ -12002,7 +12002,7 @@ popdisplay(d::Display)
    negative integer. "a" must be greater than 1, and "x" must not
    be less than 1.
   ```
-  """ Base.prevpow
+  """ prevpow
 
   @doc doc"""
   ```rst
@@ -12011,7 +12011,7 @@ popdisplay(d::Display)
    Next integer not less than "n" that can be written as \prod
    k_i^{p_i} for integers p_1, p_2, etc.
   ```
-  """ Base.nextprod
+  """ nextprod
 
   @doc doc"""
   ```rst
@@ -12020,7 +12020,7 @@ popdisplay(d::Display)
    Previous integer not greater than "n" that can be written as
    \prod k_i^{p_i} for integers p_1, p_2, etc.
   ```
-  """ Base.prevprod
+  """ prevprod
 
   @doc doc"""
   ```rst
@@ -12029,7 +12029,7 @@ popdisplay(d::Display)
    Take the inverse of "x" modulo "m": "y" such that xy = 1
    \pmod m
   ```
-  """ Base.invmod
+  """ invmod
 
   @doc doc"""
   ```rst
@@ -12037,7 +12037,7 @@ popdisplay(d::Display)
 
    Compute x^p \pmod m
   ```
-  """ Base.powermod
+  """ powermod
 
   @doc doc"""
   ```rst
@@ -12045,7 +12045,7 @@ popdisplay(d::Display)
 
    Compute the gamma function of "x"
   ```
-  """ Base.gamma
+  """ gamma
 
   @doc doc"""
   ```rst
@@ -12055,7 +12055,7 @@ popdisplay(d::Display)
    "Real" "x", while for "Complex" "x" it computes the
    logarithm of "gamma(x)".
   ```
-  """ Base.lgamma
+  """ lgamma
 
   @doc doc"""
   ```rst
@@ -12063,7 +12063,7 @@ popdisplay(d::Display)
 
    Compute the logarithmic factorial of "x"
   ```
-  """ Base.lfact
+  """ lfact
 
   @doc doc"""
   ```rst
@@ -12072,7 +12072,7 @@ popdisplay(d::Display)
    Compute the digamma function of "x" (the logarithmic derivative
    of "gamma(x)")
   ```
-  """ Base.digamma
+  """ digamma
 
   @doc doc"""
   ```rst
@@ -12080,7 +12080,7 @@ popdisplay(d::Display)
 
    Compute the inverse digamma function of "x".
   ```
-  """ Base.invdigamma
+  """ invdigamma
 
   @doc doc"""
   ```rst
@@ -12089,7 +12089,7 @@ popdisplay(d::Display)
    Compute the trigamma function of "x" (the logarithmic second
    derivative of "gamma(x)")
   ```
-  """ Base.trigamma
+  """ trigamma
 
   @doc doc"""
   ```rst
@@ -12098,7 +12098,7 @@ popdisplay(d::Display)
    Compute the polygamma function of order "m" of argument "x"
    (the "(m+1)th" derivative of the logarithm of "gamma(x)")
   ```
-  """ Base.polygamma
+  """ polygamma
 
   @doc doc"""
   ```rst
@@ -12106,7 +12106,7 @@ popdisplay(d::Display)
 
    kth derivative of the Airy function \operatorname{Ai}(x).
   ```
-  """ Base.airy
+  """ airy
 
   @doc doc"""
   ```rst
@@ -12114,7 +12114,7 @@ popdisplay(d::Display)
 
    Airy function \operatorname{Ai}(x).
   ```
-  """ Base.airyai
+  """ airyai
 
   @doc doc"""
   ```rst
@@ -12122,7 +12122,7 @@ popdisplay(d::Display)
 
    Airy function derivative \operatorname{Ai}'(x).
   ```
-  """ Base.airyprime
+  """ airyprime
 
   @doc doc"""
   ```rst
@@ -12130,7 +12130,7 @@ popdisplay(d::Display)
 
    Airy function derivative \operatorname{Ai}'(x).
   ```
-  """ Base.airyaiprime
+  """ airyaiprime
 
   @doc doc"""
   ```rst
@@ -12138,7 +12138,7 @@ popdisplay(d::Display)
 
    Airy function \operatorname{Bi}(x).
   ```
-  """ Base.airybi
+  """ airybi
 
   @doc doc"""
   ```rst
@@ -12146,7 +12146,7 @@ popdisplay(d::Display)
 
    Airy function derivative \operatorname{Bi}'(x).
   ```
-  """ Base.airybiprime
+  """ airybiprime
 
   @doc doc"""
   ```rst
@@ -12158,7 +12158,7 @@ popdisplay(d::Display)
    \left( \frac{2}{3} x \sqrt{x} \right) \right|} for "k == 2 ||
    k == 3".
   ```
-  """ Base.airyx
+  """ airyx
 
   @doc doc"""
   ```rst
@@ -12166,7 +12166,7 @@ popdisplay(d::Display)
 
    Bessel function of the first kind of order 0, J_0(x).
   ```
-  """ Base.besselj0
+  """ besselj0
 
   @doc doc"""
   ```rst
@@ -12174,7 +12174,7 @@ popdisplay(d::Display)
 
    Bessel function of the first kind of order 1, J_1(x).
   ```
-  """ Base.besselj1
+  """ besselj1
 
   @doc doc"""
   ```rst
@@ -12182,7 +12182,7 @@ popdisplay(d::Display)
 
    Bessel function of the first kind of order "nu", J_\nu(x).
   ```
-  """ Base.besselj
+  """ besselj
 
   @doc doc"""
   ```rst
@@ -12191,7 +12191,7 @@ popdisplay(d::Display)
    Scaled Bessel function of the first kind of order "nu", J_\nu(x)
    e^{- | \operatorname{Im}(x) |}.
   ```
-  """ Base.besseljx
+  """ besseljx
 
   @doc doc"""
   ```rst
@@ -12199,7 +12199,7 @@ popdisplay(d::Display)
 
    Bessel function of the second kind of order 0, Y_0(x).
   ```
-  """ Base.bessely0
+  """ bessely0
 
   @doc doc"""
   ```rst
@@ -12207,7 +12207,7 @@ popdisplay(d::Display)
 
    Bessel function of the second kind of order 1, Y_1(x).
   ```
-  """ Base.bessely1
+  """ bessely1
 
   @doc doc"""
   ```rst
@@ -12215,7 +12215,7 @@ popdisplay(d::Display)
 
    Bessel function of the second kind of order "nu", Y_\nu(x).
   ```
-  """ Base.bessely
+  """ bessely
 
   @doc doc"""
   ```rst
@@ -12224,7 +12224,7 @@ popdisplay(d::Display)
    Scaled Bessel function of the second kind of order "nu",
    Y_\nu(x) e^{- | \operatorname{Im}(x) |}.
   ```
-  """ Base.besselyx
+  """ besselyx
 
   @doc doc"""
   ```rst
@@ -12232,7 +12232,7 @@ popdisplay(d::Display)
 
    Bessel function of the third kind of order "nu", H^{(1)}_\nu(x).
   ```
-  """ Base.hankelh1
+  """ hankelh1
 
   @doc doc"""
   ```rst
@@ -12241,7 +12241,7 @@ popdisplay(d::Display)
    Scaled Bessel function of the third kind of order "nu",
    H^{(1)}_\nu(x) e^{-x i}.
   ```
-  """ Base.hankelh1x
+  """ hankelh1x
 
   @doc doc"""
   ```rst
@@ -12249,7 +12249,7 @@ popdisplay(d::Display)
 
    Bessel function of the third kind of order "nu", H^{(2)}_\nu(x).
   ```
-  """ Base.hankelh2
+  """ hankelh2
 
   @doc doc"""
   ```rst
@@ -12258,7 +12258,7 @@ popdisplay(d::Display)
    Scaled Bessel function of the third kind of order "nu",
    H^{(2)}_\nu(x) e^{x i}.
   ```
-  """ Base.hankelh2x
+  """ hankelh2x
 
   @doc doc"""
   ```rst
@@ -12268,7 +12268,7 @@ popdisplay(d::Display)
    function). "k" is either 1 or 2, selecting "hankelh1" or
    "hankelh2", respectively.
   ```
-  """ Base.besselh
+  """ besselh
 
   @doc doc"""
   ```rst
@@ -12277,7 +12277,7 @@ popdisplay(d::Display)
    Modified Bessel function of the first kind of order "nu",
    I_\nu(x).
   ```
-  """ Base.besseli
+  """ besseli
 
   @doc doc"""
   ```rst
@@ -12286,7 +12286,7 @@ popdisplay(d::Display)
    Scaled modified Bessel function of the first kind of order "nu",
    I_\nu(x) e^{- | \operatorname{Re}(x) |}.
   ```
-  """ Base.besselix
+  """ besselix
 
   @doc doc"""
   ```rst
@@ -12295,7 +12295,7 @@ popdisplay(d::Display)
    Modified Bessel function of the second kind of order "nu",
    K_\nu(x).
   ```
-  """ Base.besselk
+  """ besselk
 
   @doc doc"""
   ```rst
@@ -12304,7 +12304,7 @@ popdisplay(d::Display)
    Scaled modified Bessel function of the second kind of order "nu",
    K_\nu(x) e^x.
   ```
-  """ Base.besselkx
+  """ besselkx
 
   @doc doc"""
   ```rst
@@ -12313,7 +12313,7 @@ popdisplay(d::Display)
    Euler integral of the first kind \operatorname{B}(x,y) =
    \Gamma(x)\Gamma(y)/\Gamma(x+y).
   ```
-  """ Base.beta
+  """ beta
 
   @doc doc"""
   ```rst
@@ -12322,7 +12322,7 @@ popdisplay(d::Display)
    Natural logarithm of the absolute value of the beta function
    \log(|\operatorname{B}(x,y)|).
   ```
-  """ Base.lbeta
+  """ lbeta
 
   @doc doc"""
   ```rst
@@ -12331,7 +12331,7 @@ popdisplay(d::Display)
    Dirichlet eta function \eta(s) =
    \sum^\infty_{n=1}(-)^{n-1}/n^{s}.
   ```
-  """ Base.eta
+  """ eta
 
   @doc doc"""
   ```rst
@@ -12339,7 +12339,7 @@ popdisplay(d::Display)
 
    Riemann zeta function \zeta(s).
   ```
-  """ Base.zeta
+  """ zeta
 
   @doc doc"""
   ```rst
@@ -12348,7 +12348,7 @@ popdisplay(d::Display)
    Hurwitz zeta function \zeta(s, z).  (This is equivalent to the
    Riemann zeta function \zeta(s) for the case of "z=1".)
   ```
-  """ Base.zeta
+  """ zeta
 
   @doc doc"""
   ```rst
@@ -12356,7 +12356,7 @@ popdisplay(d::Display)
 
    Compute the number of digits in number "n" written in base "b".
   ```
-  """ Base.ndigits
+  """ ndigits
 
   @doc doc"""
   ```rst
@@ -12364,7 +12364,7 @@ popdisplay(d::Display)
 
    Multiply "x" and "y", giving the result as a larger type.
   ```
-  """ Base.widemul
+  """ widemul
 
   @doc doc"""
   ```rst
@@ -12376,7 +12376,7 @@ popdisplay(d::Display)
    inline code that uses either Horner's method or, for complex "z",
    a more efficient Goertzel-like algorithm.
   ```
-  """ Base.@evalpoly
+  """ @evalpoly
 
   @doc doc"""
   ```rst
@@ -12387,7 +12387,7 @@ popdisplay(d::Display)
    values in the computation. For applications requiring the handling
    of missing data, the "DataArray" package is recommended.
   ```
-  """ Base.mean
+  """ mean
 
   @doc doc"""
   ```rst
@@ -12396,7 +12396,7 @@ popdisplay(d::Display)
    Compute the mean of "v" over the singleton dimensions of "r",
    and write results to "r".
   ```
-  """ Base.mean!
+  """ mean!
 
   @doc doc"""
   ```rst
@@ -12412,7 +12412,7 @@ popdisplay(d::Display)
    applications requiring the handling of missing data, the
    "DataArray" package is recommended.
   ```
-  """ Base.std
+  """ std
 
   @doc doc"""
   ```rst
@@ -12422,7 +12422,7 @@ popdisplay(d::Display)
    mean "m". Note: Julia does not ignore "NaN" values in the
    computation.
   ```
-  """ Base.stdm
+  """ stdm
 
   @doc doc"""
   ```rst
@@ -12438,7 +12438,7 @@ popdisplay(d::Display)
    applications requiring the handling of missing data, the
    "DataArray" package is recommended.
   ```
-  """ Base.var
+  """ var
 
   @doc doc"""
   ```rst
@@ -12448,7 +12448,7 @@ popdisplay(d::Display)
    "m". Note: Julia does not ignore "NaN" values in the
    computation.
   ```
-  """ Base.varm
+  """ varm
 
   @doc doc"""
   ```rst
@@ -12457,7 +12457,7 @@ popdisplay(d::Display)
    Compute the middle of a scalar value, which is equivalent to "x"
    itself, but of the type of "middle(x, x)" for consistency.
   ```
-  """ Base.middle
+  """ middle
 
   @doc doc"""
   ```rst
@@ -12467,7 +12467,7 @@ popdisplay(d::Display)
    equivalent in both value and type to computing their mean ("(x +
    y) / 2").
   ```
-  """ Base.middle
+  """ middle
 
   @doc doc"""
   ```rst
@@ -12477,7 +12477,7 @@ popdisplay(d::Display)
    of its extrema. Since a range is sorted, the mean is performed with
    the first and last element.
   ```
-  """ Base.middle
+  """ middle
 
   @doc doc"""
   ```rst
@@ -12486,7 +12486,7 @@ popdisplay(d::Display)
    Compute the middle of an array, which consists in finding its
    extrema and then computing their mean.
   ```
-  """ Base.middle
+  """ middle
 
   @doc doc"""
   ```rst
@@ -12497,7 +12497,7 @@ popdisplay(d::Display)
    handling of missing data, the "DataArrays" package is
    recommended.
   ```
-  """ Base.median
+  """ median
 
   @doc doc"""
   ```rst
@@ -12505,7 +12505,7 @@ popdisplay(d::Display)
 
    Like "median", but may overwrite the input vector.
   ```
-  """ Base.median!
+  """ median!
 
   @doc doc"""
   ```rst
@@ -12517,7 +12517,7 @@ popdisplay(d::Display)
    elements of "v" in each bin. Note: Julia does not ignore "NaN"
    values in the computation.
   ```
-  """ Base.hist
+  """ hist
 
   @doc doc"""
   ```rst
@@ -12529,7 +12529,7 @@ popdisplay(d::Display)
    satisfies "sum(e[i] .< v .<= e[i+1])". Note: Julia does not
    ignore "NaN" values in the computation.
   ```
-  """ Base.hist
+  """ hist
 
   @doc doc"""
   ```rst
@@ -12539,7 +12539,7 @@ popdisplay(d::Display)
    edges for the bins. This function writes the resultant counts to a
    pre-allocated array "counts".
   ```
-  """ Base.hist!
+  """ hist!
 
   @doc doc"""
   ```rst
@@ -12554,7 +12554,7 @@ popdisplay(d::Display)
    "(length(edge1)-1, length(edge2)-1)". Note: Julia does not ignore
    "NaN" values in the computation.
   ```
-  """ Base.hist2d
+  """ hist2d
 
   @doc doc"""
   ```rst
@@ -12564,7 +12564,7 @@ popdisplay(d::Display)
    the edges given in "e1" and "e2". This function writes the
    results to a pre-allocated array "counts".
   ```
-  """ Base.hist2d!
+  """ hist2d!
 
   @doc doc"""
   ```rst
@@ -12575,7 +12575,7 @@ popdisplay(d::Display)
    2 or 5 multiplied by a power of 10. Note: Julia does not ignore
    "NaN" values in the computation.
   ```
-  """ Base.histrange
+  """ histrange
 
   @doc doc"""
   ```rst
@@ -12585,7 +12585,7 @@ popdisplay(d::Display)
    vector/range of length "length(e) - 1". Note: Julia does not
    ignore "NaN" values in the computation.
   ```
-  """ Base.midpoints
+  """ midpoints
 
   @doc doc"""
   ```rst
@@ -12595,7 +12595,7 @@ popdisplay(d::Display)
    probability values "p". Note: Julia does not ignore "NaN"
    values in the computation.
   ```
-  """ Base.quantile
+  """ quantile
 
   @doc doc"""
   ```rst
@@ -12604,7 +12604,7 @@ popdisplay(d::Display)
    Compute the quantile of a vector "v" at the probability "p".
    Note: Julia does not ignore "NaN" values in the computation.
   ```
-  """ Base.quantile
+  """ quantile
 
   @doc doc"""
   ```rst
@@ -12612,7 +12612,7 @@ popdisplay(d::Display)
 
    Like "quantile", but overwrites the input vector.
   ```
-  """ Base.quantile!
+  """ quantile!
 
   @doc doc"""
   ```rst
@@ -12646,7 +12646,7 @@ popdisplay(d::Display)
 
    Note: "v2" can be omitted, which indicates "v2 = v1".
   ```
-  """ Base.cov
+  """ cov
 
   @doc doc"""
   ```rst
@@ -12659,7 +12659,7 @@ popdisplay(d::Display)
    variable dimension, and "mean" to supply pre-computed mean
    values.
   ```
-  """ Base.cor
+  """ cor
 
   @doc doc"""
   ```rst
@@ -12687,7 +12687,7 @@ popdisplay(d::Display)
    *FFTW.set_num_threads(np)* to use *np* threads, if you have *np*
    processors.
   ```
-  """ Base.fft
+  """ fft
 
   @doc doc"""
   ```rst
@@ -12696,7 +12696,7 @@ popdisplay(d::Display)
    Same as "fft()", but operates in-place on "A", which must be an
    array of complex floating-point numbers.
   ```
-  """ Base.fft!
+  """ fft!
 
   @doc doc"""
   ```rst
@@ -12715,7 +12715,7 @@ popdisplay(d::Display)
    A multidimensional inverse FFT simply performs this operation along
    each transformed dimension of "A".
   ```
-  """ Base.ifft
+  """ ifft
 
   @doc doc"""
   ```rst
@@ -12723,7 +12723,7 @@ popdisplay(d::Display)
 
    Same as "ifft()", but operates in-place on "A".
   ```
-  """ Base.ifft!
+  """ ifft!
 
   @doc doc"""
   ```rst
@@ -12739,7 +12739,7 @@ popdisplay(d::Display)
       \operatorname{BDFT}(A)[k] = \operatorname{length}(A)
       \operatorname{IDFT}(A)[k]
   ```
-  """ Base.bfft
+  """ bfft
 
   @doc doc"""
   ```rst
@@ -12747,7 +12747,7 @@ popdisplay(d::Display)
 
    Same as "bfft()", but operates in-place on "A".
   ```
-  """ Base.bfft!
+  """ bfft!
 
   @doc doc"""
   ```rst
@@ -12774,7 +12774,7 @@ popdisplay(d::Display)
    similar but produce plans that perform the equivalent of the
    inverse transforms "ifft()" and so on.
   ```
-  """ Base.plan_fft
+  """ plan_fft
 
   @doc doc"""
   ```rst
@@ -12783,7 +12783,7 @@ popdisplay(d::Display)
    Same as "plan_fft()", but produces a plan that performs inverse
    transforms "ifft()".
   ```
-  """ Base.plan_ifft
+  """ plan_ifft
 
   @doc doc"""
   ```rst
@@ -12792,7 +12792,7 @@ popdisplay(d::Display)
    Same as "plan_fft()", but produces a plan that performs an
    unnormalized backwards transform "bfft()".
   ```
-  """ Base.plan_bfft
+  """ plan_bfft
 
   @doc doc"""
   ```rst
@@ -12800,7 +12800,7 @@ popdisplay(d::Display)
 
    Same as "plan_fft()", but operates in-place on "A".
   ```
-  """ Base.plan_fft!
+  """ plan_fft!
 
   @doc doc"""
   ```rst
@@ -12808,7 +12808,7 @@ popdisplay(d::Display)
 
    Same as "plan_ifft()", but operates in-place on "A".
   ```
-  """ Base.plan_ifft!
+  """ plan_ifft!
 
   @doc doc"""
   ```rst
@@ -12816,7 +12816,7 @@ popdisplay(d::Display)
 
    Same as "plan_bfft()", but operates in-place on "A".
   ```
-  """ Base.plan_bfft!
+  """ plan_bfft!
 
   @doc doc"""
   ```rst
@@ -12834,7 +12834,7 @@ popdisplay(d::Display)
    result, the "dims[1]" dimension is (roughly) halved in the same
    way.
   ```
-  """ Base.rfft
+  """ rfft
 
   @doc doc"""
   ```rst
@@ -12851,7 +12851,7 @@ popdisplay(d::Display)
    from "size(A)" due to the possibility of rounding by the
    "floor" function here.)
   ```
-  """ Base.irfft
+  """ irfft
 
   @doc doc"""
   ```rst
@@ -12862,7 +12862,7 @@ popdisplay(d::Display)
    product of the sizes of the transformed dimensions (of the real
    output array) in order to obtain the inverse transform.
   ```
-  """ Base.brfft
+  """ brfft
 
   @doc doc"""
   ```rst
@@ -12873,7 +12873,7 @@ popdisplay(d::Display)
    arguments, and the size of the transformed result, are the same as
    for "rfft()".
   ```
-  """ Base.plan_rfft
+  """ plan_rfft
 
   @doc doc"""
   ```rst
@@ -12884,7 +12884,7 @@ popdisplay(d::Display)
    first two arguments and the size of the transformed result, are the
    same as for "brfft()".
   ```
-  """ Base.plan_brfft
+  """ plan_brfft
 
   @doc doc"""
   ```rst
@@ -12895,7 +12895,7 @@ popdisplay(d::Display)
    respectively.  The first three arguments have the same meaning as
    for "irfft()".
   ```
-  """ Base.plan_irfft
+  """ plan_irfft
 
   @doc doc"""
   ```rst
@@ -12909,7 +12909,7 @@ popdisplay(d::Display)
    dimensions is a product of small primes; see "nextprod()".  See
    also "plan_dct()" for even greater efficiency.
   ```
-  """ Base.dct
+  """ dct
 
   @doc doc"""
   ```rst
@@ -12918,7 +12918,7 @@ popdisplay(d::Display)
    Same as "dct!()", except that it operates in-place on "A",
    which must be an array of real or complex floating-point values.
   ```
-  """ Base.dct!
+  """ dct!
 
   @doc doc"""
   ```rst
@@ -12933,7 +12933,7 @@ popdisplay(d::Display)
    "nextprod()".  See also "plan_idct()" for even greater
    efficiency.
   ```
-  """ Base.idct
+  """ idct
 
   @doc doc"""
   ```rst
@@ -12941,7 +12941,7 @@ popdisplay(d::Display)
 
    Same as "idct!()", but operates in-place on "A".
   ```
-  """ Base.idct!
+  """ idct!
 
   @doc doc"""
   ```rst
@@ -12951,7 +12951,7 @@ popdisplay(d::Display)
    "plan_fft()" except producing a function that computes "dct()".
    The first two arguments have the same meaning as for "dct()".
   ```
-  """ Base.plan_dct
+  """ plan_dct
 
   @doc doc"""
   ```rst
@@ -12959,7 +12959,7 @@ popdisplay(d::Display)
 
    Same as "plan_dct()", but operates in-place on "A".
   ```
-  """ Base.plan_dct!
+  """ plan_dct!
 
   @doc doc"""
   ```rst
@@ -12970,7 +12970,7 @@ popdisplay(d::Display)
    "idct()". The first two arguments have the same meaning as for
    "idct()".
   ```
-  """ Base.plan_idct
+  """ plan_idct
 
   @doc doc"""
   ```rst
@@ -12978,7 +12978,7 @@ popdisplay(d::Display)
 
    Same as "plan_idct()", but operates in-place on "A".
   ```
-  """ Base.plan_idct!
+  """ plan_idct!
 
   @doc doc"""
   ```rst
@@ -12986,7 +12986,7 @@ popdisplay(d::Display)
 
    Swap the first and second halves of each dimension of "x".
   ```
-  """ Base.fftshift
+  """ fftshift
 
   @doc doc"""
   ```rst
@@ -12995,7 +12995,7 @@ popdisplay(d::Display)
    Swap the first and second halves of the given dimension of array
    "x".
   ```
-  """ Base.fftshift
+  """ fftshift
 
   @doc doc"""
   ```rst
@@ -13003,7 +13003,7 @@ popdisplay(d::Display)
 
    Undoes the effect of "fftshift".
   ```
-  """ Base.ifftshift
+  """ ifftshift
 
   @doc doc"""
   ```rst
@@ -13013,7 +13013,7 @@ popdisplay(d::Display)
    with an optional initial filter state vector "si" (defaults to
    zeros).
   ```
-  """ Base.filt
+  """ filt
 
   @doc doc"""
   ```rst
@@ -13022,7 +13022,7 @@ popdisplay(d::Display)
    Same as "filt()" but writes the result into the "out" argument,
    which may alias the input "x" to modify it in-place.
   ```
-  """ Base.filt!
+  """ filt!
 
   @doc doc"""
   ```rst
@@ -13031,7 +13031,7 @@ popdisplay(d::Display)
    Construct vector "c" such that "b = conv(a,c) + r". Equivalent
    to polynomial division.
   ```
-  """ Base.deconv
+  """ deconv
 
   @doc doc"""
   ```rst
@@ -13039,7 +13039,7 @@ popdisplay(d::Display)
 
    Convolution of two vectors. Uses FFT algorithm.
   ```
-  """ Base.conv
+  """ conv
 
   @doc doc"""
   ```rst
@@ -13048,7 +13048,7 @@ popdisplay(d::Display)
    2-D convolution of the matrix "A" with the 2-D separable kernel
    generated by the vectors "u" and "v".  Uses 2-D FFT algorithm
   ```
-  """ Base.conv2
+  """ conv2
 
   @doc doc"""
   ```rst
@@ -13057,7 +13057,7 @@ popdisplay(d::Display)
    2-D convolution of the matrix "B" with the matrix "A".  Uses
    2-D FFT algorithm
   ```
-  """ Base.conv2
+  """ conv2
 
   @doc doc"""
   ```rst
@@ -13065,7 +13065,7 @@ popdisplay(d::Display)
 
    Compute the cross-correlation of two vectors.
   ```
-  """ Base.xcorr
+  """ xcorr
 
   @doc doc"""
   ```rst
@@ -13186,7 +13186,7 @@ popdisplay(d::Display)
    infinite.  (A coordinate transformation is performed internally to
    map the infinite interval to a finite one.)
   ```
-  """ Base.quadgk
+  """ quadgk
 
   @doc doc"""
   ```rst
@@ -13195,7 +13195,7 @@ popdisplay(d::Display)
    Convert an integer to a binary string, optionally specifying a
    number of digits to pad to.
   ```
-  """ Base.bin
+  """ bin
 
   @doc doc"""
   ```rst
@@ -13204,7 +13204,7 @@ popdisplay(d::Display)
    Convert an integer to a hexadecimal string, optionally specifying a
    number of digits to pad to.
   ```
-  """ Base.hex
+  """ hex
 
   @doc doc"""
   ```rst
@@ -13213,7 +13213,7 @@ popdisplay(d::Display)
    Convert an integer to a decimal string, optionally specifying a
    number of digits to pad to.
   ```
-  """ Base.dec
+  """ dec
 
   @doc doc"""
   ```rst
@@ -13222,7 +13222,7 @@ popdisplay(d::Display)
    Convert an integer to an octal string, optionally specifying a
    number of digits to pad to.
   ```
-  """ Base.oct
+  """ oct
 
   @doc doc"""
   ```rst
@@ -13233,7 +13233,7 @@ popdisplay(d::Display)
    as either an integer, or as a "UInt8" array of character values
    to use as digit symbols.
   ```
-  """ Base.base
+  """ base
 
   @doc doc"""
   ```rst
@@ -13244,7 +13244,7 @@ popdisplay(d::Display)
    digits are at higher indexes, such that "n ==
    sum([digits[k]*base^(k-1) for k=1:length(digits)])".
   ```
-  """ Base.digits
+  """ digits
 
   @doc doc"""
   ```rst
@@ -13256,7 +13256,7 @@ popdisplay(d::Display)
    array length. If the array length is excessive, the excess portion
    is filled with zeros.
   ```
-  """ Base.digits!
+  """ digits!
 
   @doc doc"""
   ```rst
@@ -13264,7 +13264,7 @@ popdisplay(d::Display)
 
    A string giving the literal bit representation of a number.
   ```
-  """ Base.bits
+  """ bits
 
   @doc doc"""
   ```rst
@@ -13276,7 +13276,7 @@ popdisplay(d::Display)
    point number. If the string does not contain a valid number, an
    error is raised.
   ```
-  """ Base.parse
+  """ parse
 
   @doc doc"""
   ```rst
@@ -13286,7 +13286,7 @@ popdisplay(d::Display)
    The result will be null if the string does not contain a valid
    number.
   ```
-  """ Base.tryparse
+  """ tryparse
 
   @doc doc"""
   ```rst
@@ -13296,7 +13296,7 @@ popdisplay(d::Display)
    "BigInt" or "BigFloat"). See "BigFloat" for information about
    some pitfalls with floating-point numbers.
   ```
-  """ Base.big
+  """ big
 
   @doc doc"""
   ```rst
@@ -13305,7 +13305,7 @@ popdisplay(d::Display)
    Convert a number to a signed integer. If the argument is unsigned,
    it is reinterpreted as signed without checking for overflow.
   ```
-  """ Base.signed
+  """ signed
 
   @doc doc"""
   ```rst
@@ -13315,7 +13315,7 @@ popdisplay(d::Display)
    it is reinterpreted as unsigned without checking for negative
    values.
   ```
-  """ Base.unsigned
+  """ unsigned
 
   @doc doc"""
   ```rst
@@ -13325,7 +13325,7 @@ popdisplay(d::Display)
    type. For numeric data, the smallest suitable "FloatingPoint"
    type is used. Converts strings to "Float64".
   ```
-  """ Base.float
+  """ float
 
   @doc doc"""
   ```rst
@@ -13342,7 +13342,7 @@ popdisplay(d::Display)
       julia> significand(15.2)*8
       15.2
   ```
-  """ Base.significand
+  """ significand
 
   @doc doc"""
   ```rst
@@ -13350,7 +13350,7 @@ popdisplay(d::Display)
 
    Get the exponent of a normalized floating-point number.
   ```
-  """ Base.exponent
+  """ exponent
 
   @doc doc"""
   ```rst
@@ -13358,7 +13358,7 @@ popdisplay(d::Display)
 
    Convert real numbers or arrays to complex. "i" defaults to zero.
   ```
-  """ Base.complex
+  """ complex
 
   @doc doc"""
   ```rst
@@ -13366,7 +13366,7 @@ popdisplay(d::Display)
 
    Byte-swap an integer
   ```
-  """ Base.bswap
+  """ bswap
 
   @doc doc"""
   ```rst
@@ -13375,7 +13375,7 @@ popdisplay(d::Display)
    Get a hexadecimal string of the binary representation of a floating
    point number
   ```
-  """ Base.num2hex
+  """ num2hex
 
   @doc doc"""
   ```rst
@@ -13384,7 +13384,7 @@ popdisplay(d::Display)
    Convert a hexadecimal string to the floating point number it
    represents
   ```
-  """ Base.hex2num
+  """ hex2num
 
   @doc doc"""
   ```rst
@@ -13393,7 +13393,7 @@ popdisplay(d::Display)
    Convert an arbitrarily long hexadecimal string to its binary
    representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
   ```
-  """ Base.hex2bytes
+  """ hex2bytes
 
   @doc doc"""
   ```rst
@@ -13402,7 +13402,7 @@ popdisplay(d::Display)
    Convert an array of bytes to its hexadecimal representation. All
    characters are in lower-case. Returns an ASCIIString.
   ```
-  """ Base.bytes2hex
+  """ bytes2hex
 
   @doc doc"""
   ```rst
@@ -13412,7 +13412,7 @@ popdisplay(d::Display)
    also specify the type itself). For matrices, returns an identity
    matrix of the appropriate size and type.
   ```
-  """ Base.one
+  """ one
 
   @doc doc"""
   ```rst
@@ -13421,7 +13421,7 @@ popdisplay(d::Display)
    Get the additive identity element for the type of x (x can also
    specify the type itself).
   ```
-  """ Base.zero
+  """ zero
 
   @doc doc"""
   ```rst
@@ -13430,7 +13430,7 @@ popdisplay(d::Display)
 
    The constant pi
   ```
-  """ Base.pi
+  """ pi
 
   @doc doc"""
   ```rst
@@ -13438,7 +13438,7 @@ popdisplay(d::Display)
 
    The imaginary unit
   ```
-  """ Base.im
+  """ im
 
   @doc doc"""
   ```rst
@@ -13447,7 +13447,7 @@ eu
 
    The constant e
   ```
-  """ Base.e
+  """ e
 
   @doc doc"""
   ```rst
@@ -13455,7 +13455,7 @@ eu
 
    Catalan's constant
   ```
-  """ Base.catalan
+  """ catalan
 
   @doc doc"""
   ```rst
@@ -13464,7 +13464,7 @@ eulergamma
 
    Euler's constant
   ```
-  """ Base.(:(γ))
+  """ γ
 
   @doc doc"""
   ```rst
@@ -13473,7 +13473,7 @@ golden
 
    The golden ratio
   ```
-  """ Base.(:(φ))
+  """ φ
 
   @doc doc"""
   ```rst
@@ -13481,7 +13481,7 @@ golden
 
    Positive infinity of type Float64
   ```
-  """ Base.Inf
+  """ Inf
 
   @doc doc"""
   ```rst
@@ -13489,7 +13489,7 @@ golden
 
    Positive infinity of type Float32
   ```
-  """ Base.Inf32
+  """ Inf32
 
   @doc doc"""
   ```rst
@@ -13497,7 +13497,7 @@ golden
 
    Positive infinity of type Float16
   ```
-  """ Base.Inf16
+  """ Inf16
 
   @doc doc"""
   ```rst
@@ -13505,7 +13505,7 @@ golden
 
    A not-a-number value of type Float64
   ```
-  """ Base.NaN
+  """ NaN
 
   @doc doc"""
   ```rst
@@ -13513,7 +13513,7 @@ golden
 
    A not-a-number value of type Float32
   ```
-  """ Base.NaN32
+  """ NaN32
 
   @doc doc"""
   ```rst
@@ -13521,7 +13521,7 @@ golden
 
    A not-a-number value of type Float16
   ```
-  """ Base.NaN16
+  """ NaN16
 
   @doc doc"""
   ```rst
@@ -13529,7 +13529,7 @@ golden
 
    Test whether a floating point number is subnormal
   ```
-  """ Base.issubnormal
+  """ issubnormal
 
   @doc doc"""
   ```rst
@@ -13537,7 +13537,7 @@ golden
 
    Test whether a number is finite
   ```
-  """ Base.isfinite
+  """ isfinite
 
   @doc doc"""
   ```rst
@@ -13545,7 +13545,7 @@ golden
 
    Test whether a number is infinite
   ```
-  """ Base.isinf
+  """ isinf
 
   @doc doc"""
   ```rst
@@ -13553,7 +13553,7 @@ golden
 
    Test whether a floating point number is not a number (NaN)
   ```
-  """ Base.isnan
+  """ isnan
 
   @doc doc"""
   ```rst
@@ -13562,7 +13562,7 @@ golden
    Returns positive infinity of the floating point type "f" or of
    the same floating point type as "f"
   ```
-  """ Base.inf
+  """ inf
 
   @doc doc"""
   ```rst
@@ -13571,7 +13571,7 @@ golden
    Returns NaN (not-a-number) of the floating point type "f" or of
    the same floating point type as "f"
   ```
-  """ Base.nan
+  """ nan
 
   @doc doc"""
   ```rst
@@ -13579,7 +13579,7 @@ golden
 
    Get the next floating point number in lexicographic order
   ```
-  """ Base.nextfloat
+  """ nextfloat
 
   @doc doc"""
   ```rst
@@ -13587,7 +13587,7 @@ golden
 
    Get the previous floating point number in lexicographic order
   ```
-  """ Base.prevfloat
+  """ prevfloat
 
   @doc doc"""
   ```rst
@@ -13596,7 +13596,7 @@ golden
    Test whether "x" or all its elements are numerically equal to
    some integer
   ```
-  """ Base.isinteger
+  """ isinteger
 
   @doc doc"""
   ```rst
@@ -13605,7 +13605,7 @@ golden
    Test whether "x" or all its elements are numerically equal to
    some real number
   ```
-  """ Base.isreal
+  """ isreal
 
   @doc doc"""
   ```rst
@@ -13622,7 +13622,7 @@ golden
 
    See "get_rounding" for available rounding modes.
   ```
-  """ Base.Float32
+  """ Float32
 
   @doc doc"""
   ```rst
@@ -13639,7 +13639,7 @@ golden
 
    See "get_rounding" for available rounding modes.
   ```
-  """ Base.Float64
+  """ Float64
 
   @doc doc"""
   ```rst
@@ -13653,7 +13653,7 @@ golden
    Instances can be constructed from strings via "parse()", or using
    the "big" string literal.
   ```
-  """ Base.BigInt
+  """ BigInt
 
   @doc doc"""
   ```rst
@@ -13672,7 +13672,7 @@ golden
       julia> big"2.1"
       2.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
   ```
-  """ Base.BigFloat
+  """ BigFloat
 
   @doc doc"""
   ```rst
@@ -13685,7 +13685,7 @@ golden
    Valid modes are "RoundNearest", "RoundToZero", "RoundUp",
    "RoundDown", and "RoundFromZero" ("BigFloat" only).
   ```
-  """ Base.get_rounding
+  """ get_rounding
 
   @doc doc"""
   ```rst
@@ -13699,7 +13699,7 @@ golden
    rounding mode of "Float64" will change the rounding mode of
    "Float32". See "get_rounding" for available modes
   ```
-  """ Base.set_rounding
+  """ set_rounding
 
   @doc doc"""
   ```rst
@@ -13715,7 +13715,7 @@ golden
 
    See "get_rounding" for available rounding modes.
   ```
-  """ Base.with_rounding
+  """ with_rounding
 
   @doc doc"""
   ```rst
@@ -13726,7 +13726,7 @@ golden
       julia> count_ones(7)
       3
   ```
-  """ Base.count_ones
+  """ count_ones
 
   @doc doc"""
   ```rst
@@ -13737,7 +13737,7 @@ golden
       julia> count_zeros(Int32(2 ^ 16 - 1))
       16
   ```
-  """ Base.count_zeros
+  """ count_zeros
 
   @doc doc"""
   ```rst
@@ -13748,7 +13748,7 @@ golden
       julia> leading_zeros(Int32(1))
       31
   ```
-  """ Base.leading_zeros
+  """ leading_zeros
 
   @doc doc"""
   ```rst
@@ -13759,7 +13759,7 @@ golden
       julia> leading_ones(UInt32(2 ^ 32 - 2))
       31
   ```
-  """ Base.leading_ones
+  """ leading_ones
 
   @doc doc"""
   ```rst
@@ -13770,7 +13770,7 @@ golden
       julia> trailing_zeros(2)
       1
   ```
-  """ Base.trailing_zeros
+  """ trailing_zeros
 
   @doc doc"""
   ```rst
@@ -13781,7 +13781,7 @@ golden
       julia> trailing_ones(3)
       2
   ```
-  """ Base.trailing_ones
+  """ trailing_ones
 
   @doc doc"""
   ```rst
@@ -13792,7 +13792,7 @@ golden
       julia> isprime(3)
       true
   ```
-  """ Base.isprime
+  """ isprime
 
   @doc doc"""
   ```rst
@@ -13807,7 +13807,7 @@ golden
       julia> isprime(big(3))
       true
   ```
-  """ Base.isprime
+  """ isprime
 
   @doc doc"""
   ```rst
@@ -13815,7 +13815,7 @@ golden
 
    Returns a collection of the prime numbers <= "n".
   ```
-  """ Base.primes
+  """ primes
 
   @doc doc"""
   ```rst
@@ -13830,7 +13830,7 @@ golden
       julia> isodd(10)
       false
   ```
-  """ Base.isodd
+  """ isodd
 
   @doc doc"""
   ```rst
@@ -13845,7 +13845,7 @@ golden
       julia> iseven(10)
       true
   ```
-  """ Base.iseven
+  """ iseven
 
   @doc doc"""
   ```rst
@@ -13854,7 +13854,7 @@ golden
    Get the precision of a floating point number, as defined by the
    effective number of bits in the mantissa.
   ```
-  """ Base.precision
+  """ precision
 
   @doc doc"""
   ```rst
@@ -13862,7 +13862,7 @@ golden
 
    Get the precision (in bits) currently used for BigFloat arithmetic.
   ```
-  """ Base.get_bigfloat_precision
+  """ get_bigfloat_precision
 
   @doc doc"""
   ```rst
@@ -13870,7 +13870,7 @@ golden
 
    Set the precision (in bits) to be used to BigFloat arithmetic.
   ```
-  """ Base.set_bigfloat_precision
+  """ set_bigfloat_precision
 
   @doc doc"""
   ```rst
@@ -13884,7 +13884,7 @@ golden
       f()
       set_bigfloat_precision(old)
   ```
-  """ Base.with_bigfloat_precision
+  """ with_bigfloat_precision
 
   @doc doc"""
   ```rst
@@ -13897,7 +13897,7 @@ golden
    integers or a filename, in which case the seed is read from a file.
    "RandomDevice" does not support seeding.
   ```
-  """ Base.srand
+  """ srand
 
   @doc doc"""
   ```rst
@@ -13907,7 +13907,7 @@ golden
    have their own seeds, which may be useful for generating different
    streams of random numbers.
   ```
-  """ Base.MersenneTwister
+  """ MersenneTwister
 
   @doc doc"""
   ```rst
@@ -13916,7 +13916,7 @@ golden
    Create a "RandomDevice" RNG object. Two such objects will always
    generate different streams of random numbers.
   ```
-  """ Base.RandomDevice
+  """ RandomDevice
 
   @doc doc"""
   ```rst
@@ -13934,7 +13934,7 @@ golden
 
    "S" defaults to "Float64".
   ```
-  """ Base.rand
+  """ rand
 
   @doc doc"""
   ```rst
@@ -13946,7 +13946,7 @@ golden
    size(A)))" or "copy!(A, rand(rng, eltype(A), size(A)))" but
    without allocating a new array.
   ```
-  """ Base.rand!
+  """ rand!
 
   @doc doc"""
   ```rst
@@ -13954,7 +13954,7 @@ golden
 
    Generate a "BitArray" of random boolean values.
   ```
-  """ Base.bitrand
+  """ bitrand
 
   @doc doc"""
   ```rst
@@ -13964,7 +13964,7 @@ golden
    standard deviation 1. Optionally generate an array of normally-
    distributed random numbers.
   ```
-  """ Base.randn
+  """ randn
 
   @doc doc"""
   ```rst
@@ -13973,7 +13973,7 @@ golden
    Fill the array A with normally-distributed (mean 0, standard
    deviation 1) random numbers. Also see the rand function.
   ```
-  """ Base.randn!
+  """ randn!
 
   @doc doc"""
   ```rst
@@ -13982,7 +13982,7 @@ golden
    Generate a random number according to the exponential distribution
    with scale 1. Optionally generate an array of such random numbers.
   ```
-  """ Base.randexp
+  """ randexp
 
   @doc doc"""
   ```rst
@@ -13991,7 +13991,7 @@ golden
    Fill the array A with random numbers following the exponential
    distribution (with scale 1).
   ```
-  """ Base.randexp!
+  """ randexp!
 
   @doc doc"""
   ```rst
@@ -14001,7 +14001,7 @@ golden
    function (which must be callable with no arguments). The task exits
    when this function returns.
   ```
-  """ Base.Task
+  """ Task
 
   @doc doc"""
   ```rst
@@ -14014,7 +14014,7 @@ golden
    considering states or scheduling in any way. Its use is
    discouraged.
   ```
-  """ Base.yieldto
+  """ yieldto
 
   @doc doc"""
   ```rst
@@ -14022,7 +14022,7 @@ golden
 
    Get the currently running Task.
   ```
-  """ Base.current_task
+  """ current_task
 
   @doc doc"""
   ```rst
@@ -14030,7 +14030,7 @@ golden
 
    Tell whether a task has exited.
   ```
-  """ Base.istaskdone
+  """ istaskdone
 
   @doc doc"""
   ```rst
@@ -14038,7 +14038,7 @@ golden
 
    Tell whether a task has started executing.
   ```
-  """ Base.istaskstarted
+  """ istaskstarted
 
   @doc doc"""
   ```rst
@@ -14048,7 +14048,7 @@ golden
    Additional arguments may be passed, to be returned from the last
    "produce" call in the producer.
   ```
-  """ Base.consume
+  """ consume
 
   @doc doc"""
   ```rst
@@ -14058,7 +14058,7 @@ golden
    consumer task. If the next "consume" call passes any values, they
    are returned by "produce".
   ```
-  """ Base.produce
+  """ produce
 
   @doc doc"""
   ```rst
@@ -14068,7 +14068,7 @@ golden
    task that calls this function is still runnable, and will be
    restarted immediately if there are no other runnable tasks.
   ```
-  """ Base.yield
+  """ yield
 
   @doc doc"""
   ```rst
@@ -14077,7 +14077,7 @@ golden
    Look up the value of a symbol in the current task's task-local
    storage.
   ```
-  """ Base.task_local_storage
+  """ task_local_storage
 
   @doc doc"""
   ```rst
@@ -14086,7 +14086,7 @@ golden
    Assign a value to a symbol in the current task's task-local
    storage.
   ```
-  """ Base.task_local_storage
+  """ task_local_storage
 
   @doc doc"""
   ```rst
@@ -14097,7 +14097,7 @@ golden
    "symbol", or lack thereof, is restored afterwards. Useful for
    emulating dynamic scoping.
   ```
-  """ Base.task_local_storage
+  """ task_local_storage
 
   @doc doc"""
   ```rst
@@ -14112,7 +14112,7 @@ golden
    notification has happened. The "RemoteRef" type does this, and so
    can be used for level-triggered events.
   ```
-  """ Base.Condition
+  """ Condition
 
   @doc doc"""
   ```rst
@@ -14123,7 +14123,7 @@ golden
    otherwise only one is. If "error" is true, the passed value is
    raised as an exception in the woken tasks.
   ```
-  """ Base.notify
+  """ notify
 
   @doc doc"""
   ```rst
@@ -14138,7 +14138,7 @@ golden
    "error" is true, the value is raised as an exception in the woken
    task.
   ```
-  """ Base.schedule
+  """ schedule
 
   @doc doc"""
   ```rst
@@ -14146,7 +14146,7 @@ golden
 
    Wrap an expression in a Task and add it to the scheduler's queue.
   ```
-  """ Base.@schedule
+  """ @schedule
 
   @doc doc"""
   ```rst
@@ -14155,7 +14155,7 @@ golden
    Wrap an expression in a Task without executing it, and return the
    Task. This only creates a task, and does not run it.
   ```
-  """ Base.@task
+  """ @task
 
   @doc doc"""
   ```rst
@@ -14164,7 +14164,7 @@ golden
    Block the current task for a specified number of seconds. The
    minimum sleep time is 1 millisecond or input of "0.001".
   ```
-  """ Base.sleep
+  """ sleep
 
   @doc doc"""
   ```rst
@@ -14173,7 +14173,7 @@ golden
    Creates a reentrant lock. The same task can acquire the lock as
    many times as required. Each lock must be matched with an unlock.
   ```
-  """ Base.ReentrantLock
+  """ ReentrantLock
 
   @doc doc"""
   ```rst
@@ -14184,7 +14184,7 @@ golden
    task can acquire the lock multiple times. Each "lock" must be
    matched by an "unlock"
   ```
-  """ Base.lock
+  """ lock
 
   @doc doc"""
   ```rst
@@ -14194,7 +14194,7 @@ golden
    been acquired before, it just decrements an internal counter and
    returns immediately.
   ```
-  """ Base.unlock
+  """ unlock
 
   @doc doc"""
   ```rst
@@ -14205,7 +14205,7 @@ golden
    advantage of multiple cores. "addprocs(4)" will add 4 processes
    on the local machine.
   ```
-  """ Base.addprocs
+  """ addprocs
 
   @doc doc"""
   ```rst
@@ -14213,7 +14213,7 @@ golden
 
    Equivalent to "addprocs(CPU_CORES)"
   ```
-  """ Base.addprocs
+  """ addprocs
 
   @doc doc"""
   ```rst
@@ -14269,7 +14269,7 @@ golden
    number of seconds a newly launched worker waits for connection
    establishment.
   ```
-  """ Base.addprocs
+  """ addprocs
 
   @doc doc"""
   ```rst
@@ -14285,7 +14285,7 @@ golden
    "JULIA_WORKER_TIMEOUT" in the worker process's environment.
    Relevant only when using TCP/IP as transport.
   ```
-  """ Base.addprocs
+  """ addprocs
 
   @doc doc"""
   ```rst
@@ -14293,7 +14293,7 @@ golden
 
    Get the number of available processes.
   ```
-  """ Base.nprocs
+  """ nprocs
 
   @doc doc"""
   ```rst
@@ -14302,7 +14302,7 @@ golden
    Get the number of available worker processes. This is one less than
    nprocs(). Equal to nprocs() if nprocs() == 1.
   ```
-  """ Base.nworkers
+  """ nworkers
 
   @doc doc"""
   ```rst
@@ -14310,7 +14310,7 @@ golden
 
    Returns a list of all process identifiers.
   ```
-  """ Base.procs
+  """ procs
 
   @doc doc"""
   ```rst
@@ -14318,7 +14318,7 @@ golden
 
    Returns a list of all worker process identifiers.
   ```
-  """ Base.workers
+  """ workers
 
   @doc doc"""
   ```rst
@@ -14326,7 +14326,7 @@ golden
 
    Removes the specified workers.
   ```
-  """ Base.rmprocs
+  """ rmprocs
 
   @doc doc"""
   ```rst
@@ -14336,7 +14336,7 @@ golden
    is equivalent to pressing Ctrl-C on the local machine. If no
    arguments are given, all workers are interrupted.
   ```
-  """ Base.interrupt
+  """ interrupt
 
   @doc doc"""
   ```rst
@@ -14344,7 +14344,7 @@ golden
 
    Get the id of the current process.
   ```
-  """ Base.myid
+  """ myid
 
   @doc doc"""
   ```rst
@@ -14361,7 +14361,7 @@ golden
    over the value of "err_retry" and "pmap" stops execution on the
    first error.
   ```
-  """ Base.pmap
+  """ pmap
 
   @doc doc"""
   ```rst
@@ -14370,7 +14370,7 @@ golden
    Call a function asynchronously on the given arguments on the
    specified process. Returns a "RemoteRef".
   ```
-  """ Base.remotecall
+  """ remotecall
 
   @doc doc"""
   ```rst
@@ -14404,7 +14404,7 @@ golden
    Often "wait" is called within a "while" loop to ensure a
    waited-for condition is met before proceeding.
   ```
-  """ Base.wait
+  """ wait
 
   @doc doc"""
   ```rst
@@ -14412,7 +14412,7 @@ golden
 
    Wait for and get the value of a remote reference.
   ```
-  """ Base.fetch
+  """ fetch
 
   @doc doc"""
   ```rst
@@ -14420,7 +14420,7 @@ golden
 
    Perform "wait(remotecall(...))" in one message.
   ```
-  """ Base.remotecall_wait
+  """ remotecall_wait
 
   @doc doc"""
   ```rst
@@ -14428,7 +14428,7 @@ golden
 
    Perform "fetch(remotecall(...))" in one message.
   ```
-  """ Base.remotecall_fetch
+  """ remotecall_fetch
 
   @doc doc"""
   ```rst
@@ -14438,7 +14438,7 @@ golden
    length 1" semantics: if a value is already present, blocks until
    the value is removed with "take!". Returns its first argument.
   ```
-  """ Base.put!
+  """ put!
 
   @doc doc"""
   ```rst
@@ -14447,7 +14447,7 @@ golden
    Fetch the value of a remote reference, removing it so that the
    reference is empty again.
   ```
-  """ Base.take!
+  """ take!
 
   @doc doc"""
   ```rst
@@ -14468,7 +14468,7 @@ golden
       @async put!(rr, remotecall_fetch(p, long_computation))
       isready(rr)  # will not block
   ```
-  """ Base.isready
+  """ isready
 
   @doc doc"""
   ```rst
@@ -14476,7 +14476,7 @@ golden
 
    Make an uninitialized remote reference on the local machine.
   ```
-  """ Base.RemoteRef
+  """ RemoteRef
 
   @doc doc"""
   ```rst
@@ -14484,7 +14484,7 @@ golden
 
    Make an uninitialized remote reference on process "n".
   ```
-  """ Base.RemoteRef
+  """ RemoteRef
 
   @doc doc"""
   ```rst
@@ -14494,7 +14494,7 @@ golden
    whichever is earlier. "testcb" is polled every "pollint"
    seconds.
   ```
-  """ Base.timedwait
+  """ timedwait
 
   @doc doc"""
   ```rst
@@ -14503,7 +14503,7 @@ golden
    Execute an expression on an automatically-chosen process, returning
    a "RemoteRef" to the result.
   ```
-  """ Base.@spawn
+  """ @spawn
 
   @doc doc"""
   ```rst
@@ -14513,7 +14513,7 @@ golden
    expression asynchronously on process "p", returning a
    "RemoteRef" to the result.
   ```
-  """ Base.@spawnat
+  """ @spawnat
 
   @doc doc"""
   ```rst
@@ -14521,7 +14521,7 @@ golden
 
    Equivalent to "fetch(@spawn expr)".
   ```
-  """ Base.@fetch
+  """ @fetch
 
   @doc doc"""
   ```rst
@@ -14529,7 +14529,7 @@ golden
 
    Equivalent to "fetch(@spawnat p expr)".
   ```
-  """ Base.@fetchfrom
+  """ @fetchfrom
 
   @doc doc"""
   ```rst
@@ -14538,7 +14538,7 @@ golden
    Schedule an expression to run on the local machine, also adding it
    to the set of items that the nearest enclosing "@sync" waits for.
   ```
-  """ Base.@async
+  """ @async
 
   @doc doc"""
   ```rst
@@ -14547,7 +14547,7 @@ golden
    Wait until all dynamically-enclosed uses of "@async", "@spawn",
    "@spawnat" and "@parallel" are complete.
   ```
-  """ Base.@sync
+  """ @sync
 
   @doc doc"""
   ```rst
@@ -14573,7 +14573,7 @@ golden
           body
       end
   ```
-  """ Base.@parallel
+  """ @parallel
 
   @doc doc"""
   ```rst
@@ -14592,7 +14592,7 @@ golden
    If an "init" function of the type "initfn(S::SharedArray)" is
    specified, it is called on all the participating workers.
   ```
-  """ Base.SharedArray
+  """ SharedArray
 
   @doc doc"""
   ```rst
@@ -14600,7 +14600,7 @@ golden
 
    Get the vector of processes that have mapped the shared array
   ```
-  """ Base.procs
+  """ procs
 
   @doc doc"""
   ```rst
@@ -14608,7 +14608,7 @@ golden
 
    Returns the actual "Array" object backing "S"
   ```
-  """ Base.sdata
+  """ sdata
 
   @doc doc"""
   ```rst
@@ -14617,7 +14617,7 @@ golden
    Returns the index of the current worker into the "pids" vector,
    i.e., the list of workers mapping the SharedArray
   ```
-  """ Base.indexpids
+  """ indexpids
 
   @doc doc"""
   ```rst
@@ -14630,7 +14630,7 @@ golden
    "params" is a dictionary of all keyword arguments "addprocs"
    was called with.
   ```
-  """ Base.launch
+  """ launch
 
   @doc doc"""
   ```rst
@@ -14649,7 +14649,7 @@ golden
 
       * with ":finalize" for cleanup purposes.
   ```
-  """ Base.manage
+  """ manage
 
   @doc doc"""
   ```rst
@@ -14661,7 +14661,7 @@ golden
    "Base.kill(manager::ClusterManager.....)" executes a remote
    "exit()" on "pid"
   ```
-  """ Base.kill
+  """ kill
 
   @doc doc"""
   ```rst
@@ -14672,7 +14672,7 @@ golden
    argument "--worker" has the effect of initializing a process as a
    worker using TCP/IP sockets for transport.
   ```
-  """ Base.init_worker
+  """ init_worker
 
   @doc doc"""
   ```rst
@@ -14688,7 +14688,7 @@ golden
    "Base.connect(manager::ClusterManager.....)" sets up TCP/IP
    socket connections in-between workers.
   ```
-  """ Base.connect
+  """ connect
 
   @doc doc"""
   ```rst
@@ -14701,7 +14701,7 @@ golden
    objects, one for incoming messages and the other for messages
    addressed to the remote worker.
   ```
-  """ Base.Base
+  """ Base
 
   @doc doc"""
   ```rst
@@ -14999,7 +14999,7 @@ golden
    periodic backtraces.  These are appended to an internal buffer of
    backtraces.
   ```
-  """ Base.@profile
+  """ @profile
 
   @doc doc"""
   ```rst
@@ -15118,7 +15118,7 @@ golden
    function; "rev=true" reverses whatever ordering specified via the
    "by" and "lt" keywords.
   ```
-  """ Base.sort!
+  """ sort!
 
   @doc doc"""
   ```rst
@@ -15127,7 +15127,7 @@ golden
    Variant of "sort!" that returns a sorted copy of "v" leaving
    "v" itself unmodified.
   ```
-  """ Base.sort
+  """ sort
 
   @doc doc"""
   ```rst
@@ -15135,7 +15135,7 @@ golden
 
    Sort a multidimensional array "A" along the given dimension.
   ```
-  """ Base.sort
+  """ sort
 
   @doc doc"""
   ```rst
@@ -15154,7 +15154,7 @@ golden
 
    See also "sortperm!()"
   ```
-  """ Base.sortperm
+  """ sortperm
 
   @doc doc"""
   ```rst
@@ -15166,7 +15166,7 @@ golden
 
    See also "sortperm()"
   ```
-  """ Base.sortperm!
+  """ sortperm!
 
   @doc doc"""
   ```rst
@@ -15174,7 +15174,7 @@ golden
 
    Sort the rows of matrix "A" lexicographically.
   ```
-  """ Base.sortrows
+  """ sortrows
 
   @doc doc"""
   ```rst
@@ -15182,7 +15182,7 @@ golden
 
    Sort the columns of matrix "A" lexicographically.
   ```
-  """ Base.sortcols
+  """ sortcols
 
   @doc doc"""
   ```rst
@@ -15192,7 +15192,7 @@ golden
    "rev" keywords modify what order is considered to be sorted just
    as they do for "sort".
   ```
-  """ Base.issorted
+  """ issorted
 
   @doc doc"""
   ```rst
@@ -15204,7 +15204,7 @@ golden
    order. Returns an empty range located at the insertion point if
    "a" does not contain values equal to "x".
   ```
-  """ Base.searchsorted
+  """ searchsorted
 
   @doc doc"""
   ```rst
@@ -15214,7 +15214,7 @@ golden
    to "x", according to the specified order. Returns "length(a)+1"
    if "x" is greater than all values in "a".
   ```
-  """ Base.searchsortedfirst
+  """ searchsortedfirst
 
   @doc doc"""
   ```rst
@@ -15224,7 +15224,7 @@ golden
    "x", according to the specified order. Returns "0" if "x" is
    less than all values in "a".
   ```
-  """ Base.searchsortedlast
+  """ searchsortedlast
 
   @doc doc"""
   ```rst
@@ -15239,7 +15239,7 @@ golden
    indices is returned. Note that "select!" does not fully sort the
    input array.
   ```
-  """ Base.select!
+  """ select!
 
   @doc doc"""
   ```rst
@@ -15249,7 +15249,7 @@ golden
    it, thereby returning the same thing as "select!" but leaving
    "v" unmodified.
   ```
-  """ Base.select
+  """ select
 
   @doc doc"""
   ```rst
@@ -15257,7 +15257,7 @@ golden
 
    The number of characters in string "s".
   ```
-  """ Base.length
+  """ length
 
   @doc doc"""
   ```rst
@@ -15265,7 +15265,7 @@ golden
 
    The number of bytes in string "s".
   ```
-  """ Base.sizeof
+  """ sizeof
 
   @doc doc"""
   ```rst
@@ -15297,7 +15297,7 @@ golden
 
    Create a string from any values using the "print" function.
   ```
-  """ Base.string
+  """ string
 
   @doc doc"""
   ```rst
@@ -15305,7 +15305,7 @@ golden
 
    Create a string from any value using the "showall" function.
   ```
-  """ Base.repr
+  """ repr
 
   @doc doc"""
   ```rst
@@ -15316,7 +15316,7 @@ golden
    freed. If "length" is specified, the string does not have to be
    0-terminated.
   ```
-  """ Base.bytestring
+  """ bytestring
 
   @doc doc"""
   ```rst
@@ -15326,7 +15326,7 @@ golden
    appropriate for passing it to C functions. The string will be
    encoded as either ASCII or UTF-8.
   ```
-  """ Base.bytestring
+  """ bytestring
 
   @doc doc"""
   ```rst
@@ -15334,7 +15334,7 @@ golden
 
    Create an ASCII string from a byte array.
   ```
-  """ Base.ascii
+  """ ascii
 
   @doc doc"""
   ```rst
@@ -15343,7 +15343,7 @@ golden
    Convert a string to a contiguous ASCII string (all characters must
    be valid ASCII characters).
   ```
-  """ Base.ascii
+  """ ascii
 
   @doc doc"""
   ```rst
@@ -15354,7 +15354,7 @@ golden
    freed. If "length" is specified, the string does not have to be
    0-terminated.
   ```
-  """ Base.ascii
+  """ ascii
 
   @doc doc"""
   ```rst
@@ -15362,7 +15362,7 @@ golden
 
    Create a UTF-8 string from a byte array.
   ```
-  """ Base.utf8
+  """ utf8
 
   @doc doc"""
   ```rst
@@ -15373,7 +15373,7 @@ golden
    "length" is specified, the string does not have to be
    0-terminated.
   ```
-  """ Base.utf8
+  """ utf8
 
   @doc doc"""
   ```rst
@@ -15382,7 +15382,7 @@ golden
    Convert a string to a contiguous UTF-8 string (all characters must
    be valid UTF-8 characters).
   ```
-  """ Base.utf8
+  """ utf8
 
   @doc doc"""
   ```rst
@@ -15437,7 +15437,7 @@ golden
    For example, NFKC corresponds to the options "compose=true,
    compat=true, stable=true".
   ```
-  """ Base.normalize_string
+  """ normalize_string
 
   @doc doc"""
   ```rst
@@ -15449,7 +15449,7 @@ golden
    even though they may contain more than one codepoint; for example a
    letter combined with an accent mark is a single grapheme.)
   ```
-  """ Base.graphemes
+  """ graphemes
 
   @doc doc"""
   ```rst
@@ -15459,7 +15459,7 @@ golden
    currently can be one of "Char", "ASCIIString", "UTF8String",
    "UTF16String", or "UTF32String"
   ```
-  """ Base.isvalid
+  """ isvalid
 
   @doc doc"""
   ```rst
@@ -15474,7 +15474,7 @@ golden
    for "UTF32String" can be "UTF32String", "Vector{Char}" or
    "Vector{UInt32}"
   ```
-  """ Base.isvalid
+  """ isvalid
 
   @doc doc"""
   ```rst
@@ -15483,7 +15483,7 @@ golden
    Returns true if the given char or integer is an assigned Unicode
    code point.
   ```
-  """ Base.is_assigned_char
+  """ is_assigned_char
 
   @doc doc"""
   ```rst
@@ -15492,7 +15492,7 @@ golden
    Test whether a string contains a match of the given regular
    expression.
   ```
-  """ Base.ismatch
+  """ ismatch
 
   @doc doc"""
   ```rst
@@ -15505,7 +15505,7 @@ golden
    by accessing "m.captures" The optional "idx" argument specifies
    an index at which to start the search.
   ```
-  """ Base.match
+  """ match
 
   @doc doc"""
   ```rst
@@ -15516,7 +15516,7 @@ golden
    matching sequences are allowed to overlap indices in the original
    string, otherwise they must be from distinct character ranges.
   ```
-  """ Base.eachmatch
+  """ eachmatch
 
   @doc doc"""
   ```rst
@@ -15524,7 +15524,7 @@ golden
 
    Return a vector of the matching substrings from eachmatch.
   ```
-  """ Base.matchall
+  """ matchall
 
   @doc doc"""
   ```rst
@@ -15533,7 +15533,7 @@ golden
    Make a string at least "n" columns wide when printed, by padding
    on the left with copies of "p".
   ```
-  """ Base.lpad
+  """ lpad
 
   @doc doc"""
   ```rst
@@ -15542,7 +15542,7 @@ golden
    Make a string at least "n" columns wide when printed, by padding
    on the right with copies of "p".
   ```
-  """ Base.rpad
+  """ rpad
 
   @doc doc"""
   ```rst
@@ -15563,7 +15563,7 @@ golden
    "search(string, 'c')"         = "index" such that
    "string[index] == 'c'", or "0" if unmatched.
   ```
-  """ Base.search
+  """ search
 
   @doc doc"""
   ```rst
@@ -15573,7 +15573,7 @@ golden
    given characters within the given string, searching in reverse from
    "start".
   ```
-  """ Base.rsearch
+  """ rsearch
 
   @doc doc"""
   ```rst
@@ -15582,7 +15582,7 @@ golden
    Similar to "search", but return only the start index at which the
    substring is found, or 0 if it is not.
   ```
-  """ Base.searchindex
+  """ searchindex
 
   @doc doc"""
   ```rst
@@ -15591,7 +15591,7 @@ golden
    Similar to "rsearch", but return only the start index at which
    the substring is found, or 0 if it is not.
   ```
-  """ Base.rsearchindex
+  """ rsearchindex
 
   @doc doc"""
   ```rst
@@ -15599,7 +15599,7 @@ golden
 
    Determine whether the second argument is a substring of the first.
   ```
-  """ Base.contains
+  """ contains
 
   @doc doc"""
   ```rst
@@ -15612,7 +15612,7 @@ golden
    expression. If "r" is a function, each occurrence is replaced
    with "r(s)" where "s" is the matched substring.
   ```
-  """ Base.replace
+  """ replace
 
   @doc doc"""
   ```rst
@@ -15628,7 +15628,7 @@ golden
    maximum size for the result and a flag determining whether empty
    fields should be kept in the result.
   ```
-  """ Base.split
+  """ split
 
   @doc doc"""
   ```rst
@@ -15636,7 +15636,7 @@ golden
 
    Similar to "split", but starting from the end of the string.
   ```
-  """ Base.rsplit
+  """ rsplit
 
   @doc doc"""
   ```rst
@@ -15646,7 +15646,7 @@ golden
    If "chars" (a character, or vector or set of characters) is
    provided, instead remove characters contained in it.
   ```
-  """ Base.strip
+  """ strip
 
   @doc doc"""
   ```rst
@@ -15656,7 +15656,7 @@ golden
    (a character, or vector or set of characters) is provided, instead
    remove characters contained in it.
   ```
-  """ Base.lstrip
+  """ lstrip
 
   @doc doc"""
   ```rst
@@ -15666,7 +15666,7 @@ golden
    "chars" (a character, or vector or set of characters) is
    provided, instead remove characters contained in it.
   ```
-  """ Base.rstrip
+  """ rstrip
 
   @doc doc"""
   ```rst
@@ -15676,7 +15676,7 @@ golden
    second argument is a vector or set of characters, tests whether the
    first character of "string" belongs to that set.
   ```
-  """ Base.startswith
+  """ startswith
 
   @doc doc"""
   ```rst
@@ -15686,7 +15686,7 @@ golden
    argument is a vector or set of characters, tests whether the last
    character of "string" belongs to that set.
   ```
-  """ Base.endswith
+  """ endswith
 
   @doc doc"""
   ```rst
@@ -15694,7 +15694,7 @@ golden
 
    Returns "string" with all characters converted to uppercase.
   ```
-  """ Base.uppercase
+  """ uppercase
 
   @doc doc"""
   ```rst
@@ -15702,7 +15702,7 @@ golden
 
    Returns "string" with all characters converted to lowercase.
   ```
-  """ Base.lowercase
+  """ lowercase
 
   @doc doc"""
   ```rst
@@ -15710,7 +15710,7 @@ golden
 
    Returns "string" with the first character converted to uppercase.
   ```
-  """ Base.ucfirst
+  """ ucfirst
 
   @doc doc"""
   ```rst
@@ -15718,7 +15718,7 @@ golden
 
    Returns "string" with the first character converted to lowercase.
   ```
-  """ Base.lcfirst
+  """ lcfirst
 
   @doc doc"""
   ```rst
@@ -15733,7 +15733,7 @@ golden
    "strings" can be any iterable over elements "x" which are
    convertible to strings via "print(io::IOBuffer, x)".
   ```
-  """ Base.join
+  """ join
 
   @doc doc"""
   ```rst
@@ -15741,7 +15741,7 @@ golden
 
    Remove the last character from a string
   ```
-  """ Base.chop
+  """ chop
 
   @doc doc"""
   ```rst
@@ -15749,7 +15749,7 @@ golden
 
    Remove a trailing newline from a string
   ```
-  """ Base.chomp
+  """ chomp
 
   @doc doc"""
   ```rst
@@ -15757,7 +15757,7 @@ golden
 
    Convert a byte index to a character index
   ```
-  """ Base.ind2chr
+  """ ind2chr
 
   @doc doc"""
   ```rst
@@ -15765,7 +15765,7 @@ golden
 
    Convert a character index to a byte index
   ```
-  """ Base.chr2ind
+  """ chr2ind
 
   @doc doc"""
   ```rst
@@ -15773,7 +15773,7 @@ golden
 
    Tells whether index "i" is valid for the given string
   ```
-  """ Base.isvalid
+  """ isvalid
 
   @doc doc"""
   ```rst
@@ -15782,7 +15782,7 @@ golden
    Get the next valid string index after "i". Returns a value
    greater than "endof(str)" at or after the end of the string.
   ```
-  """ Base.nextind
+  """ nextind
 
   @doc doc"""
   ```rst
@@ -15791,7 +15791,7 @@ golden
    Get the previous valid string index before "i". Returns a value
    less than "1" at the beginning of the string.
   ```
-  """ Base.prevind
+  """ prevind
 
   @doc doc"""
   ```rst
@@ -15802,7 +15802,7 @@ golden
    "rng" argument specifies a random number generator, see *Random
    Numbers*.
   ```
-  """ Base.randstring
+  """ randstring
 
   @doc doc"""
   ```rst
@@ -15810,7 +15810,7 @@ golden
 
    Gives the number of columns needed to print a character.
   ```
-  """ Base.charwidth
+  """ charwidth
 
   @doc doc"""
   ```rst
@@ -15818,7 +15818,7 @@ golden
 
    Gives the number of columns needed to print a string.
   ```
-  """ Base.strwidth
+  """ strwidth
 
   @doc doc"""
   ```rst
@@ -15830,7 +15830,7 @@ golden
    Number, i.e. a character whose category code begins with 'L' or
    'N'.
   ```
-  """ Base.isalnum
+  """ isalnum
 
   @doc doc"""
   ```rst
@@ -15841,7 +15841,7 @@ golden
    alphabetic if it belongs to the Unicode general category Letter,
    i.e. a character whose category code begins with 'L'.
   ```
-  """ Base.isalpha
+  """ isalpha
 
   @doc doc"""
   ```rst
@@ -15850,7 +15850,7 @@ golden
    Tests whether a character belongs to the ASCII character set, or
    whether this is true for all elements of a string.
   ```
-  """ Base.isascii
+  """ isascii
 
   @doc doc"""
   ```rst
@@ -15860,7 +15860,7 @@ golden
    is true for all elements of a string.  Control characters are the
    non-printing characters of the Latin-1 subset of Unicode.
   ```
-  """ Base.iscntrl
+  """ iscntrl
 
   @doc doc"""
   ```rst
@@ -15869,7 +15869,7 @@ golden
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
   ```
-  """ Base.isdigit
+  """ isdigit
 
   @doc doc"""
   ```rst
@@ -15880,7 +15880,7 @@ golden
    would cause a printer to use ink should be classified with
    isgraph(c)==true.
   ```
-  """ Base.isgraph
+  """ isgraph
 
   @doc doc"""
   ```rst
@@ -15890,7 +15890,7 @@ golden
    true for all elements of a string.  A character is classified as
    lowercase if it belongs to Unicode category Ll, Letter: Lowercase.
   ```
-  """ Base.islower
+  """ islower
 
   @doc doc"""
   ```rst
@@ -15901,7 +15901,7 @@ golden
    it belongs to the Unicode general category Number, i.e. a character
    whose category code begins with 'N'.
   ```
-  """ Base.isnumber
+  """ isnumber
 
   @doc doc"""
   ```rst
@@ -15911,7 +15911,7 @@ golden
    control character. For strings, tests whether this is true for all
    elements of the string.
   ```
-  """ Base.isprint
+  """ isprint
 
   @doc doc"""
   ```rst
@@ -15922,7 +15922,7 @@ golden
    For strings, tests whether this is true for all elements of the
    string.
   ```
-  """ Base.ispunct
+  """ ispunct
 
   @doc doc"""
   ```rst
@@ -15934,7 +15934,7 @@ golden
    For strings, tests whether this    is true for all elements of the
    string.
   ```
-  """ Base.isspace
+  """ isspace
 
   @doc doc"""
   ```rst
@@ -15945,7 +15945,7 @@ golden
    as uppercase if it belongs to Unicode category Lu, Letter:
    Uppercase, or Lt, Letter: Titlecase.
   ```
-  """ Base.isupper
+  """ isupper
 
   @doc doc"""
   ```rst
@@ -15954,7 +15954,7 @@ golden
    Tests whether a character is a valid hexadecimal digit, or whether
    this is true for all elements of a string.
   ```
-  """ Base.isxdigit
+  """ isxdigit
 
   @doc doc"""
   ```rst
@@ -15963,7 +15963,7 @@ golden
    Create a "Symbol" by concatenating the string representations of
    the arguments together.
   ```
-  """ Base.symbol
+  """ symbol
 
   @doc doc"""
   ```rst
@@ -15972,7 +15972,7 @@ golden
    General escaping of traditional C and Unicode escape sequences. See
    "print_escaped()" for more general escaping.
   ```
-  """ Base.escape_string
+  """ escape_string
 
   @doc doc"""
   ```rst
@@ -15981,7 +15981,7 @@ golden
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of "escape_string()". See also "print_unescaped()".
   ```
-  """ Base.unescape_string
+  """ unescape_string
 
   @doc doc"""
   ```rst
@@ -16003,7 +16003,7 @@ golden
    making a copy of the data and treating the NUL as a terminator
    rather than as part of the string.
   ```
-  """ Base.utf16
+  """ utf16
 
   @doc doc"""
   ```rst
@@ -16013,7 +16013,7 @@ golden
    A copy is made; the pointer can be safely freed. If "length" is
    specified, the string does not have to be NUL-terminated.
   ```
-  """ Base.utf16
+  """ utf16
 
   @doc doc"""
   ```rst
@@ -16035,7 +16035,7 @@ golden
    without making a copy of the data and treating the NUL as a
    terminator rather than as part of the string.
   ```
-  """ Base.utf32
+  """ utf32
 
   @doc doc"""
   ```rst
@@ -16045,7 +16045,7 @@ golden
    A copy is made; the pointer can be safely freed. If "length" is
    specified, the string does not have to be NUL-terminated.
   ```
-  """ Base.utf32
+  """ utf32
 
   @doc doc"""
   ```rst
@@ -16056,7 +16056,7 @@ golden
    The synonym "WString" for "UTF32String" or "UTF16String" is
    also provided.
   ```
-  """ Base.wstring
+  """ wstring
 
   @doc doc"""
   ```rst
@@ -16066,7 +16066,7 @@ golden
    string or an array of strings, using "numcores" processors. (not
    exported)
   ```
-  """ Base.runtests
+  """ runtests
 
   @doc doc"""
   ```rst
