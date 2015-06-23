@@ -307,6 +307,7 @@ include("deprecated.jl")
 
 # Some basic documentation
 include("docs/basedocs.jl")
+include("docs/helpdb.jl")
 
 function __init__()
     # Base library init
