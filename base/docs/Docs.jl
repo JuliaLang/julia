@@ -156,8 +156,6 @@ namify(sy::Symbol) = sy
 function mdify(ex)
     if isa(ex, AbstractString)
         :(@doc_str $ex)
-    elseif isexpr(ex, :macrocall) && namify(ex) == symbol("@mstr")
-        :(@doc_str $(Expr(:triple_quoted_string, ex.args[2])))
     else
         esc(ex)
     end
