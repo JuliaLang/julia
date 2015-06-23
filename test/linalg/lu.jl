@@ -112,4 +112,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
+
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
+@test_throws DomainError logdet([1 1; 1 -1])
