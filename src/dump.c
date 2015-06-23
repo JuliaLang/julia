@@ -454,6 +454,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         jl_serialize_value(s, dt->instance);
     if (nf > 0) {
         write_int32(s, dt->alignment);
+        write_int8(s, dt->haspadding);
         ios_write(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, dt->types);
     }
@@ -956,6 +957,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
 
     if (nf > 0) {
         dt->alignment = read_int32(s);
+        dt->haspadding = read_int8(s);
         ios_read(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
         jl_gc_wb(dt, dt->types);
