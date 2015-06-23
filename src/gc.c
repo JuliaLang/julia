@@ -2547,6 +2547,7 @@ void jl_gc_init(void)
     jl_mk_thread_heap();
 
     arraylist_new(&finalizer_list, 0);
+    arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
 
     collect_interval = default_collect_interval;
