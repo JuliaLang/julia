@@ -15,9 +15,6 @@ type Regex
     extra::Ptr{Void}
     ovec::Vector{Csize_t}
     match_data::Ptr{Void}
-    capture_name_to_idx::Dict{Symbol, Int}
-    idx_to_capture_name::Dict{Int, Symbol}
-
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
@@ -31,8 +28,7 @@ type Regex
             throw(ArgumentError("invalid regex match options: $match_options"))
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
-                         C_NULL, Csize_t[], C_NULL,
-                         Dict{Symbol, Int}(), Dict{Int, Symbol}()))
+                         C_NULL, Csize_t[], C_NULL))
         finalizer(re, re->begin
                               re.regex == C_NULL || PCRE.free_re(re.regex)
                               re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
@@ -60,10 +56,6 @@ function compile(regex::Regex)
         PCRE.jit_compile(regex.regex)
         regex.match_data = PCRE.create_match_data(regex.regex)
         regex.ovec = PCRE.get_ovec(regex.match_data)
-        for (idx, name) in PCRE.capture_names(regex.regex)
-            regex.capture_name_to_idx[Symbol(name)] = idx
-            regex.idx_to_capture_name[idx] = Symbol(name)
-        end
     end
     regex
 end
@@ -105,12 +97,13 @@ end
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
     if !isempty(m.captures)
         print(io, ", ")
         for i = 1:length(m.captures)
             # If the capture group is named, show the name.
             # Otherwise show its index.
-            capture_name = get(m.regex.idx_to_capture_name, i, i)
+            capture_name = get(idx_to_capture_name, i, i)
             print(io, capture_name, "=")
             show(io, m.captures[i])
             if i < length(m.captures)
@@ -122,9 +115,11 @@ function show(io::IO, m::RegexMatch)
 end
 
 # Capture group extraction
-getindex(m::RegexMatch, idx::Int) = m.captures[idx]
+getindex(m::RegexMatch, idx::Integer) = m.captures[idx]
 function getindex(m::RegexMatch, name::Symbol)
-    m[m.regex.capture_name_to_idx[name]]
+    idx = PCRE.substring_number_from_name(m.regex.regex, name)
+    idx <= 0 && error("no capture group named $name found in regex")
+    m[idx]
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
