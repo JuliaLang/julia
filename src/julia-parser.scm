@@ -1959,7 +1959,7 @@
   (let* ((isstr (eqv? (peek-token s) #\"))
 	 (ex    (production s)))
     (if (and (or isstr (any-string-literal? ex))
-	     (not (eof-object? (peek-token s))))
+	     (not (closing-token? (peek-token s))))
 	`(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
 	ex)))
 
