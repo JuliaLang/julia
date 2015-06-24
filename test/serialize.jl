@@ -292,3 +292,12 @@ create_serialization_stream() do s
     @test length(b) == 5
     @test isa(b,Vector{Any})
 end
+
+# Regex
+create_serialization_stream() do s
+    r1 = r"a?b.*"
+    serialize(s, r1)
+    seekstart(s)
+    r2 = deserialize(s)
+    @test r1 == r2
+end

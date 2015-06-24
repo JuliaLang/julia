@@ -249,3 +249,9 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
 end
 
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+
+## comparison ##
+
+function ==(a::Regex, b::Regex)
+    a.pattern == b.pattern && a.compile_options == b.compile_options && a.match_options == b.match_options
+end
