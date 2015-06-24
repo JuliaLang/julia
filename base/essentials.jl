@@ -138,7 +138,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
+setindex!(A::Array{Any}, x::ANY, i::Int) = arrayset(A, x, i)
 
 function length_checked_equal(args...)
     n = length(args[1])
