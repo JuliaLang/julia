@@ -286,70 +286,73 @@ keywords[:immutable] = doc"""
   See `type` and the manual for more information.
   """
 
-@doc doc"""
-  Executes an expression, printing the time it took to
-  execute and the total number of bytes its execution caused to be
-  allocated. Returns the value of the expression. For example:
+"""
+Executes an expression, printing the time it took to
+execute and the total number of bytes its execution caused to be
+allocated. Returns the value of the expression. For example:
 
-      @time begin
-        sleep(1)
-        2+2
-      end
-  """ @time
+    @time begin
+      sleep(1)
+      2+2
+    end
+"""
+@time
 
-@doc doc"""
-  Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
-  one or more flags, listed after the ending quote, to change its
-  behaviour:
+doc"""
+Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
+one or more flags, listed after the ending quote, to change its
+behaviour:
 
-    • `i` enables case-insensitive matching
-    • `m` treats the `^` and `$` tokens as matching the start and
-      and end of individual lines, as opposed to the whole string.
-    • `s` allows the `.` modifier to match newlines.
-    • `x` enables "comment mode": whitespace is enabled except when
-      escaped with `\`, and `#` is treated as starting a comment.
+  • `i` enables case-insensitive matching
+  • `m` treats the `^` and `$` tokens as matching the start and
+    and end of individual lines, as opposed to the whole string.
+  • `s` allows the `.` modifier to match newlines.
+  • `x` enables "comment mode": whitespace is enabled except when
+    escaped with `\`, and `#` is treated as starting a comment.
 
-  For example, this regex has all three flags enabled:
+For example, this regex has all three flags enabled:
 
-      julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
-      RegexMatch("angry,\nBad world")
-  """ r""
+    julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+    RegexMatch("angry,\nBad world")
+"""
+r""
 
-@doc doc"""
-      push!(collection, items...) → collection
+"""
+    push!(collection, items...) → collection
 
-  Insert `items` at the end of `collection`.
+Insert `items` at the end of `collection`.
 
-      push!([1,2,3], 4) == [1,2,3,4]
-  """ push!
+    push!([1,2,3], 4) == [1,2,3,4]
+"""
+push!
 
 if Base.USE_GPL_LIBS
 
 @doc doc"""
-      fft(A[, dims])
+    fft(A[, dims])
 
-  Performs a multidimensional FFT of the array `A`.  The optional
-  `dims` argument specifies an iterable subset of dimensions (e.g.
-  an integer, range, tuple, or array) to transform along.  Most
-  efficient if the size of `A` along the transformed dimensions is
-  a product of small primes; see `nextprod()`.  See also
-  `plan_fft()` for even greater efficiency.
+Performs a multidimensional FFT of the array `A`.  The optional
+`dims` argument specifies an iterable subset of dimensions (e.g.
+an integer, range, tuple, or array) to transform along.  Most
+efficient if the size of `A` along the transformed dimensions is
+a product of small primes; see `nextprod()`.  See also
+`plan_fft()` for even greater efficiency.
 
-  A one-dimensional FFT computes the one-dimensional discrete Fourier
-  transform (DFT) as defined by
+A one-dimensional FFT computes the one-dimensional discrete Fourier
+transform (DFT) as defined by
 
-  $$\operatorname{DFT}(A)[k] =
-    \sum_{n=1}^{\operatorname{length}(A)}
-    \exp\left(-i\frac{2\pi
-    (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n].$$
+$$\operatorname{DFT}(A)[k] =
+  \sum_{n=1}^{\operatorname{length}(A)}
+  \exp\left(-i\frac{2\pi
+  (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n].$$
 
-  A multidimensional FFT simply performs this operation along each
-  transformed dimension of `A`.
+A multidimensional FFT simply performs this operation along each
+transformed dimension of `A`.
 
-  Higher performance is usually possible with multi-threading. Use
-  `FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
-  processors.
-  """ fft
+Higher performance is usually possible with multi-threading. Use
+`FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
+processors.
+""" fft
 
 end # USE_GPL_LIBS
 
@@ -366,3 +369,8 @@ combine files in packages that are broken into multiple source
 files.
 """
 include_from_node1
+
+"""
+0 (zero; BrE: `/ˈzɪərəʊ/` or AmE: `/ˈziːroʊ/`) is both a number and the numerical digit used to represent that number in numerals. It fulfills a central role in mathematics as the additive identity of the integers, real numbers, and many other algebraic structures. As a digit, 0 is used as a placeholder in place value systems. Names for the number 0 in English include zero, nought or (US) naught (`/ˈnɔːt/`), nil, or — in contexts where at least one adjacent digit distinguishes it from the letter "O" — oh or o (`/ˈoʊ/`). Informal or slang terms for zero include zilch and zip. Ought and aught (/ˈɔːt/), as well as cipher, have also been used historically.
+"""
+0
