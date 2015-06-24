@@ -30,7 +30,7 @@ CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 ifneq ($(USEMSVC), 1)
-CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS)"
@@ -143,14 +143,6 @@ endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
-ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
-endif
-endif
-ifeq ($(BUILD_OS),WINNT)
-ifeq ($(OS),WINNT)
-MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
-endif
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
@@ -403,12 +395,12 @@ endif # ARCH == ppc64
 
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
-LLVM_CC = CFLAGS="-fsanitize=memory -fsanitize-memory-track-origins"
+LLVM_CC = CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 else
-LLVM_CC = CFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="$(CFLAGS) -fsanitize=address"
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
@@ -695,7 +687,7 @@ endif
 
 UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS)"
 endif
 ifneq ($(VERBOSE), 0)
 UV_MFLAGS += V=1
@@ -743,6 +735,9 @@ PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
 # Force optimization for PCRE flags (Issue #11668)
 PCRE_CFLAGS = -O3
+ifneq ($(OS),WINNT)
+PCRE_LDFLAGS = "-Wl,-rpath,'$(build_libdir)'"
+endif
 
 pcre2-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
@@ -752,10 +747,10 @@ pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 	touch -c $@
 pcre2-$(PCRE_VER)/config.status: pcre2-$(PCRE_VER)/configure
 	cd pcre2-$(PCRE_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir)
+	./configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	touch -c $@
 $(PCRE_SRC_TARGET): pcre2-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD) CFLAGS="$(PCRE_CFLAGS)"
+	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD)
 	touch -c $@
 pcre2-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -826,7 +821,7 @@ endif
 
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = $(OPENSPECFUN_SRC_DIR)/libopenspecfun.$(SHLIB_EXT)
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(OPENSPECFUN_CFLAGS)"
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(CFLAGS) $(OPENSPECFUN_CFLAGS)"
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
@@ -971,7 +966,7 @@ $(eval $(call git-external,openblas,OPENBLAS,Makefile,libopenblas.$(SHLIB_EXT)))
 
 OPENBLAS_OBJ_SOURCE = $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" LDFLAGS="$(LDFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -1233,7 +1228,7 @@ ARPACK_OBJ_TARGET = $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(ARPACK_CFLAGS)"
+ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
@@ -1442,9 +1437,10 @@ UTF8PROC_SRC_TARGET = $(UTF8PROC_SRC_DIR)/libutf8proc.a
 UTF8PROC_OBJ_LIB    = $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER = $(build_includedir)/utf8proc.h
 UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+UTF8PROC_CFLAGS     = -O2 -std=c99 $(fPIC) -DUTF8PROC_EXPORTS
 
 $(UTF8PROC_SRC_TARGET): $(UTF8PROC_SRC_DIR)/Makefile
-	$(MAKE) -C $(UTF8PROC_SRC_DIR) CC="$(CC)" CFLAGS="-O2 -std=c99 $(fPIC) -DUTF8PROC_EXPORTS $(DEPS_CFLAGS)" AR="$(AR)" libutf8proc.a
+	$(MAKE) -C $(UTF8PROC_SRC_DIR) CC="$(CC) $(DEPS_CFLAGS)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" AR="$(AR)" libutf8proc.a
 	touch -c $@
 $(UTF8PROC_SRC_DIR)/checked: $(UTF8PROC_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1588,8 +1584,8 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 LIBUNWIND_TARGET_OBJ = $(build_libdir)/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
-LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
-LIBUNWIND_CPPFLAGS = $(CPPFLAGS)
+LIBUNWIND_CFLAGS = -U_FORTIFY_SOURCE $(fPIC)
+LIBUNWIND_CPPFLAGS =
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@
@@ -1600,7 +1596,7 @@ libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
-	./configure $(CONFIGURE_COMMON) CPPFLAGS="$(LIBUNWIND_CPPFLAGS)" CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
+	./configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
 	touch -c $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
@@ -1633,7 +1629,7 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="$(CFLAGS) -ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="$(LDFLAGS) -Wl,-macosx_version_min,10.7"
 
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
@@ -1720,10 +1716,22 @@ endif
 
 ## MPFR ##
 
+ifeq ($(USE_SYSTEM_MPFR), 0)
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
+endif
+endif
+ifeq ($(BUILD_OS),WINNT)
+ifeq ($(OS),WINNT)
+MPFR_OPTS += --disable-thread-safe CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
+endif
+endif
+
+
 MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET = $(build_shlibdir)/libmpfr.$(SHLIB_EXT)
 ifeq ($(OS),Darwin)
-MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
+MPFR_CHECK_MFLAGS = LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 ifneq ($(SANITIZE),)
