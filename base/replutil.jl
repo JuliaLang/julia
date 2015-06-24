@@ -125,6 +125,8 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
+    # ex.args is a tuple type if it was thrown from `invoke` and is
+    # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param::SimpleVector = arg_types.parameters
@@ -171,8 +173,9 @@ function showerror(io::IO, ex::MethodError)
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if (f == Base.convert && !isempty(arg_types_param) &&
-        isa(arg_types_param[1], Type))
+    if (f == Base.convert && !isempty(arg_types_param) && !is_arg_types &&
+        isa(arg_types_param[1], DataType) &&
+        arg_types_param[1].name === Type.name)
         construct_type = arg_types_param[1].parameters[1]
         println(io)
         print(io, "This may have arisen from a call to the constructor $construct_type(...),")
