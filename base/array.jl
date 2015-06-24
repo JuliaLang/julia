@@ -289,8 +289,17 @@ done(a::Array,i) = (i > length(a))
 
 ## Indexing: getindex ##
 
-getindex(A::Array, i::Int, I::Int...) = arrayref(A, i, I...)
-unsafe_getindex(A::Array, i::Int, I::Int...) = @inbounds return arrayref(A, i, I...)
+getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
+getindex(A::Array, i1::Real, i2::Real) = arrayref(A, to_index(i1), to_index(i2))
+getindex(A::Array, i1::Real, i2::Real, i3::Real) = arrayref(A, to_index(i1), to_index(i2), to_index(i3))
+getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real) = arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
+
+unsafe_getindex(A::Array, i1::Real) = @inbounds return arrayref(A, to_index(i1))
+unsafe_getindex(A::Array, i1::Real, i2::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2))
+unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3))
+unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
@@ -318,8 +327,17 @@ function getindex{T<:Real}(A::Array, I::Range{T})
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i::Int, I::Int...) = arrayset(A, convert(T,x), i, I...)
-unsafe_setindex!{T}(A::Array{T}, x, i::Int, I::Int...) = @inbounds return arrayset(A, convert(T,x), i, I...)
+setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x), to_index(i1))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real) = arrayset(A, convert(T,x), to_index(i1), to_index(i2))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
+
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1))
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2))
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3))
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
