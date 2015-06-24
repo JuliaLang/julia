@@ -188,12 +188,12 @@ function objdoc(meta, def)
     end
 end
 
-fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
+fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def)
     def′ = unblock(def)
     isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
-    isexpr(def′, :type) && return namedoc(meta, def, namify(def′.args[2]))
+    isexpr(def′, :type, :bitstype) && return namedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     fexpr(def′) && return funcdoc(meta, def)
     isexpr(def′, :macrocall) && (def = namify(def′))
