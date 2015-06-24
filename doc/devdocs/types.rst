@@ -242,7 +242,7 @@ bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
    julia> jl_(x) = ccall(:jl_, Void, (Any,), x)
    jl_ (generic function with 1 method)
 
-::
+
    julia> jl_(start(methods(candid)))
    Method(sig=Tuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
 
