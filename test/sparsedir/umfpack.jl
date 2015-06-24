@@ -55,4 +55,4 @@ end
 
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
-@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+@test_approx_eq (x*(lufact(x) \ ones(2))) ones(2)
