@@ -101,19 +101,16 @@ mkdir -p usr/Git/tmp
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
 
-mingw=http://sourceforge.net/projects/mingw
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
-    f=mingw-w$bits-bin-$ARCH-20140102.7z
+    f=toolchain-nofortran-$ARCH-w64-mingw32.7z
     if ! [ -e $f ]; then
       echo "Downloading $f"
-      $curlflags -O $mingw-w64-dgn/files/mingw-w64/$f
+      $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
     fi
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
-    export PATH=$PATH:$PWD/mingw$bits/bin
-    # If there is a version of make.exe here, it is mingw32-make which won't work
-    rm -f mingw$bits/bin/make.exe
+    export PATH=$PATH:$PWD/usr/$ARCH-w64-mingw32/sys-root/mingw/bin
   fi
   export AR=${CROSS_COMPILE}ar
 
@@ -137,10 +134,10 @@ else
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
 fi
 
-if ! [ -e $f ]; then
+#if ! [ -e $f ]; then
   echo "Downloading $f"
   $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
-fi
+#fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
 echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
@@ -161,7 +158,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   f="/make/make-3.81-2/make-3.81-2-msys-1.0.11-bin.tar"
   if ! [ -e `basename $f.lzma` ]; then
     echo "Downloading `basename $f`"
-    $curlflags -O $mingw/files/MSYS/Base$f.lzma
+    $curlflags -O http://sourceforge.net/projects/mingw/files/MSYS/Base$f.lzma
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
