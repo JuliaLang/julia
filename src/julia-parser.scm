@@ -1940,6 +1940,13 @@
                               (quote ,(macroify-name (cadr (caddr e))))))
         (else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
 
+(define (parse-docstring s production)
+  (if (eqv? (peek-token s) #\")
+    (begin
+      (take-token s)
+      `(macrocall (|.| Base (quote @doc)) ,(parse-string-literal s #t) ,(production s)))
+    (production s)))
+
 ; --- main entry point ---
 
 ;; can optionally specify which grammar production to parse.
@@ -1961,5 +1968,4 @@
                (begin (take-token s) (skip-loop (peek-token s)))))
          (if (eof-object? (peek-token s))
              (eof-object)
-             ((if (null? production) parse-stmts (car production))
-              s)))))
+             (parse-docstring s (if (null? production) parse-stmts (car production)))))))
