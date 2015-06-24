@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Test string/show representation of Date
+# Test string representation of Date/DateTime
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test string(Dates.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE
 @test Dates.Date(1,1,1) - Dates.Date(0,12,31) == Dates.Day(1)
@@ -14,6 +14,14 @@
 @test string(Dates.DateTime(2000,1,1,0,0,0,500)) == "2000-01-01T00:00:00.5"
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
+
+# Test show representation of Date/DateTime
+b1, b2 = IOBuffer(), IOBuffer()
+d, dt = Date(), DateTime()
+show(b1, d); show(b2, dt)
+s1, s2 = takebuf_string(b1), takebuf_string(b2)
+@test string(d) == s1
+@test string(dt) == s2
 
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
