@@ -31,8 +31,8 @@ init:
 
 cache:
 # Cache any downloads from sourceforge because it's really unreliable
-  - mingw-w32-bin-i686-20140102.7z
-  - mingw-w64-bin-x86_64-20140102.7z
+  - toolchain-nofortran-i686-w64-mingw32.7z
+  - toolchain-nofortran-x86_64-w64-mingw32.7z
   - llvm-3.3-i686-w64-mingw32-juliadeps.7z
   - llvm-3.3-x86_64-w64-mingw32-juliadeps.7z
   - jq.exe
