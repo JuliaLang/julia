@@ -143,3 +143,28 @@ function utf16(p::Union{Ptr{UInt16}, Ptr{Int16}})
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf16(p, len)
 end
+
+function map(fun, str::UTF16String)
+    buf = UInt16[]
+    sizehint!(buf, length(str.data))
+    for ch in str
+        c2 = fun(ch)
+        if !isa(c2, Char)
+            throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
+        end
+        uc = reinterpret(UInt32, c2)
+        if uc < 0x10000
+            if utf16_is_surrogate(UInt16(uc))
+                throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))
+            end
+            push!(buf, UInt16(uc))
+        elseif uc <= 0x10ffff
+            push!(buf, UInt16(0xd7c0 + (uc >> 10)))
+            push!(buf, UInt16(0xdc00 + (uc & 0x3ff)))
+        else
+            throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))
+        end
+    end
+    push!(buf, 0)
+    UTF16String(buf)
+end
