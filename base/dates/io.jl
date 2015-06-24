@@ -71,7 +71,7 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
     for (i,k) in enumerate(s)
         k == "" && break
         tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
-        slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
+        slot = tran == "" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
         typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
               'y' in k ? Year : 'm' in k ? Month :
