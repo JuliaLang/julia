@@ -38,10 +38,12 @@ echo "" > get-deps.log
 if [ "$ARCH" = x86_64 ]; then
   bits=64
   archsuffix=64
+  exc=seh
   echo "override MARCH = x86-64" >> Make.user
 else
   bits=32
   archsuffix=86
+  exc=sjlj
   echo "override MARCH = i686" >> Make.user
   echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
 fi
@@ -101,10 +103,10 @@ rm -f usr/bin/libjulia-debug.dll
 mingw=http://sourceforge.net/projects/mingw
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
-    f=mingw-w$bits-bin-$ARCH-20140102.7z
+    f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     if ! [ -e $f ]; then
       echo "Downloading $f"
-      $curlflags -O $mingw-w64-dgn/files/mingw-w64/$f
+      $curlflags -O $mingw-w64/files/Toolchains%20targetting%20Win$bits/Personal%20Builds/mingw-builds/4.9.2/threads-win32/$exc/$f
     fi
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
@@ -134,10 +136,10 @@ else
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
 fi
 
-if ! [ -e $f ]; then
+#if ! [ -e $f ]; then
   echo "Downloading $f"
   $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
-fi
+#fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
 echo 'LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
