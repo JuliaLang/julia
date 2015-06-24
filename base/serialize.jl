@@ -209,7 +209,8 @@ end
 function serialize(s::SerializationState, r::Regex)
     serialize_type(s, typeof(r))
     serialize(s, r.pattern)
-    serialize(s, r.options)
+    serialize(s, r.compile_options)
+    serialize(s, r.match_options)
 end
 
 function serialize(s::SerializationState, n::BigInt)
@@ -706,8 +707,9 @@ deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(B
 
 function deserialize(s::SerializationState, t::Type{Regex})
     pattern = deserialize(s)
-    options = deserialize(s)
-    Regex(pattern, options)
+    compile_options = deserialize(s)
+    match_options = deserialize(s)
+    Regex(pattern, compile_options, match_options)
 end
 
 end

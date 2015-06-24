@@ -249,3 +249,18 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
 end
 
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+
+## comparison ##
+
+function ==(a::Regex, b::Regex)
+    a.pattern == b.pattern && a.compile_options == b.compile_options && a.match_options == b.match_options
+end
+
+## hash ##
+const hashre_seed = UInt === UInt64 ? 0x67e195eb8555e72d : 0xe32373e4
+function hash(r::Regex, h::UInt)
+    h += hashre_seed
+    h = hash(r.pattern, h)
+    h = hash(r.compile_options, h)
+    h = hash(r.match_options, h)
+end
