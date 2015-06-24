@@ -1893,3 +1893,23 @@ end
 @test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
 @test [i for i in eachindex("ḟøøƀäṙ")] == [1, 4, 6, 8, 10, 12]
 @test [x for x in enumerate("ḟøøƀäṙ")] == [(1, 'ḟ'), (2, 'ø'), (3, 'ø'), (4, 'ƀ'), (5, 'ä'), (6, 'ṙ')]
+
+# issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
+str = "abcdef\uff\uffff\u10ffffABCDEF"
+@test typeof(uppercase("abcdef")) == ASCIIString
+@test typeof(uppercase(utf8(str))) == UTF8String
+@test typeof(uppercase(utf16(str))) == UTF16String
+@test typeof(uppercase(utf32(str))) == UTF32String
+@test typeof(lowercase("ABCDEF")) == ASCIIString
+@test typeof(lowercase(utf8(str))) == UTF8String
+@test typeof(lowercase(utf16(str))) == UTF16String
+@test typeof(lowercase(utf32(str))) == UTF32String
+
+foomap(ch) = (ch > 65)
+foobar(ch) = Char(0xd800)
+foobaz(ch) = Char(0x200000)
+@test_throws UnicodeError map(foomap, utf16(str))
+@test_throws UnicodeError map(foobar, utf16(str))
+@test_throws UnicodeError map(foobaz, utf16(str))
+
+
