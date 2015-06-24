@@ -111,16 +111,17 @@ This function provides equivalent functionality, but makes no efforts to optimis
     table)
   "Syntax table for `julia-mode'.")
 
-(defconst julia-char-regex
-  (rx (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
-          (syntax open-parenthesis)
-          (syntax whitespace)
-          bol)
-      (group "'")
-      (group
-       (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
-           "\\\\"))
-      (group "'")))
+(eval-when-compile
+  (defconst julia-char-regex
+    (rx (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+            (syntax open-parenthesis)
+            (syntax whitespace)
+            bol)
+        (group "'")
+        (group
+         (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
+             "\\\\"))
+        (group "'"))))
 
 (defconst julia-triple-quoted-string-regex
   ;; We deliberately put a group on the first and last delimiter, so
@@ -253,6 +254,38 @@ This function provides equivalent functionality, but makes no efforts to optimis
 
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
+
+(defun julia-stringify-triple-quote ()
+  "Put `syntax-table' property on triple-quoted string delimeters.
+
+Based on `python-syntax-stringify'."
+  (let* ((string-start-pos (- (point) 3))
+         (string-end-pos (point))
+         (ppss (prog2
+                   (backward-char 3)
+                   (syntax-ppss)
+                 (forward-char 3)))
+         (in-comment (nth 4 ppss))
+         (in-string (nth 8 ppss)))
+    (unless in-comment
+      (if in-string
+          ;; We're in a string, so this must be the closing triple-quote.
+          ;; Put | on the last " character.
+          (put-text-property (1- string-end-pos) string-end-pos
+                             'syntax-table (string-to-syntax "|"))
+        ;; We're not in a string, so this is the opening triple-quote.
+        ;; Put | on the first " character.
+        (put-text-property string-start-pos (1+ string-start-pos)
+                           'syntax-table (string-to-syntax "|"))))))
+
+(defconst julia-syntax-propertize-function
+  (syntax-propertize-rules
+   ("\"\"\""
+    (0 (ignore (julia-stringify-triple-quote))))
+   (julia-char-regex
+    (1 "\"") ; Treat ' as a string delimiter.
+    (2 ".") ; Don't highlight anything between.
+    (3 "\"")))) ; Treat the last " in """ as a string delimiter.
 
 (defun julia-in-comment ()
   "Return non-nil if point is inside a comment.
@@ -605,17 +638,21 @@ c"))
   (set (make-local-variable 'comment-start) "# ")
   (set (make-local-variable 'comment-start-skip) "#+\\s-*")
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-       (list
-        `(,julia-char-regex
-          (1 "\"") ; Treat ' as a string delimiter.
-          (2 ".") ; Don't highlight anything between the open and close '.
-          (3 "\"")); Treat the close ' as a string delimiter.
-        `(,julia-triple-quoted-string-regex
-          (1 "\"") ; Treat the first " in """ as a string delimiter.
-          (2 ".") ; Don't highlight anything between.
-          (3 "\"")) ; Treat the last " in """ as a string delimiter.
-	))
+  (if (< emacs-major-version 24)
+      ;; Emacs 23 doesn't have syntax-propertize-function
+      (set (make-local-variable 'font-lock-syntactic-keywords)
+           (list
+            `(,julia-char-regex
+              (1 "\"") ; Treat ' as a string delimiter.
+              (2 ".") ; Don't highlight anything between the open and close '.
+              (3 "\"")); Treat the close ' as a string delimiter.
+            `(,julia-triple-quoted-string-regex
+              (1 "\"") ; Treat the first " in """ as a string delimiter.
+              (2 ".") ; Don't highlight anything between.
+              (3 "\"")))) ; Treat the last " in """ as a string delimiter.
+    ;; Emacs 24 and later has syntax-propertize-function, so use that instead.
+    (set (make-local-variable 'syntax-propertize-function)
+         julia-syntax-propertize-function))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
