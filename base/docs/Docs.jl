@@ -190,7 +190,7 @@ function objdoc(meta, def)
     end
 end
 
-fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
+fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def)
     def′ = unblock(def)
