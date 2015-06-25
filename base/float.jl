@@ -6,8 +6,10 @@ const Inf16 = box(Float16,unbox(UInt16,0x7c00))
 const NaN16 = box(Float16,unbox(UInt16,0x7e00))
 const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
 const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
-const Inf = box(Float64,unbox(UInt64,0x7ff0000000000000))
-const NaN = box(Float64,unbox(UInt64,0x7ff8000000000000))
+const Inf64 = box(Float64,unbox(UInt64,0x7ff0000000000000))
+const NaN64 = box(Float64,unbox(UInt64,0x7ff8000000000000))
+const Inf = Inf64
+const NaN = NaN64
 
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
@@ -374,8 +376,8 @@ end
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
-    typemin(::Type{Float64}) = $(-Inf)
-    typemax(::Type{Float64}) = $(Inf)
+    typemin(::Type{Float64}) = $(-Inf64)
+    typemax(::Type{Float64}) = $(Inf64)
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
