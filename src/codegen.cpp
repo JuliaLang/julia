@@ -154,10 +154,10 @@ DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
-static TargetMachine *jl_TargetMachine;
+DLLEXPORT TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
-static RTDyldMemoryManager *jl_mcjmm;
+DLLEXPORT RTDyldMemoryManager *jl_mcjmm;
 #define jl_Module (builder.GetInsertBlock()->getParent()->getParent())
 #else
 static Module *jl_Module;

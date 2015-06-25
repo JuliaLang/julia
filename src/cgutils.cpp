@@ -154,7 +154,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
-static std::map<Value *, void*> llvm_to_jl_value;
+DLLEXPORT std::map<Value *, void*> llvm_to_jl_value;
 
 #ifdef USE_MCJIT
 class FunctionMover : public ValueMaterializer
