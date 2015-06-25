@@ -655,6 +655,7 @@ export
     ldltfact,
     ldltfact!,
     linreg,
+    logabsdet,
     logdet,
     lu,
     lufact!,
