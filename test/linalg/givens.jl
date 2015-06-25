@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
 let
 debug = false
 
@@ -36,6 +35,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch A_mul_Bc!(A,G)
     @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
     @test_approx_eq norm(R*eye(elty, 10)) one(elty)
+
+    G, _ = givens(one(elty),zero(elty),9,10)
+    @test_approx_eq ctranspose(G*eye(elty,10))*(G*eye(elty,10)) eye(elty, 10)
+    K, _ = givens(zero(elty),one(elty),9,10)
+    @test_approx_eq ctranspose(K*eye(elty,10))*(K*eye(elty,10)) eye(elty, 10)
 
 end
 end #let

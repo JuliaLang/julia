@@ -159,7 +159,7 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
      # This is a rare case: F is very small.
 
         if f == 0
-            cs = zero
+            cs = zero(T)
             r = hypot(real(g), imag(g))
         # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
