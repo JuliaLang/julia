@@ -136,10 +136,10 @@ else
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
 fi
 
-#if ! [ -e $f ]; then
+if ! [ -e $f ]; then
   echo "Downloading $f"
   $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
-#fi
+fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
 echo 'LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
