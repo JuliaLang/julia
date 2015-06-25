@@ -201,14 +201,11 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
 # Note that it's most efficient to call checkbounds first, and then to_index
-@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
-    checkbounds(A, I...)
-    _unsafe_getindex(l, A, I...)
-end
-@generated function _unsafe_getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@generated function _getindex(b::BoundsCheck, l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
     N = length(I)
     quote
         # This is specifically *not* inlined.
+        Bool(b) && checkbounds(A, I...)
         @nexprs $N d->(I_d = to_index(I[d]))
         dest = similar(A, @ncall $N index_shape A I)
         @ncall $N checksize dest I
@@ -219,8 +216,9 @@ end
 # logical indexing optimization - don't use find (within to_index)
 # This is inherently a linear operation in the source, but we could potentially
 # use fast dividing integers to speed it up.
-function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
+function _getindex(b::BoundsCheck, ::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
     # Both index_shape and checksize compute sum(I); manually hoist it out
+    Bool(b) && checkbounds(src, I)
     N = sum(I)
     dest = similar(src, (N,))
     size(dest) == (N,) || throw(DimensionMismatch())
@@ -229,9 +227,9 @@ function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray
     s = 0
     for b in eachindex(I)
         s+=1
-        if unsafe_getindex(I, b)
+        if getindex(BoundsCheckOff(), I, b)
             d, Ds = next(D, Ds)
-            unsafe_setindex!(dest, unsafe_getindex(src, s), d)
+            setindex!(BoundsCheckOff(), dest, getindex(BoundsCheckOff(), src, s), d)
         end
     end
     dest
@@ -244,7 +242,7 @@ end
     Ds = start(D)
     for idx in I
         d, Ds = next(D, Ds)
-        unsafe_setindex!(dest, unsafe_getindex(src, idx), d)
+        setindex!(BoundsCheckOff(), dest, getindex(BoundsCheckOff(), src, idx), d)
     end
     dest
 end
@@ -259,9 +257,9 @@ end
         $(symbol(:offset_, N)) = 1
         D = eachindex(dest)
         Ds = start(D)
-        @nloops $N i dest d->(offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
+        @nloops $N i dest d->(offset_{d-1} = offset_d + (getindex(BoundsCheckOff(), I[d], i_d)-1)*stride_d) begin
             d, Ds = next(D, Ds)
-            unsafe_setindex!(dest, unsafe_getindex(src, offset_0), d)
+            setindex!(BoundsCheckOff(), dest, getindex(BoundsCheckOff(), src, offset_0), d)
         end
         dest
     end
@@ -274,10 +272,10 @@ end
         $(Expr(:meta, :inline))
         D = eachindex(dest)
         Ds = start(D)
-        @nloops $N i dest d->(j_d = unsafe_getindex(I[d], i_d)) begin
+        @nloops $N i dest d->(j_d = getindex(BoundsCheckOff(), I[d], i_d)) begin
             d, Ds = next(D, Ds)
-            v = @ncall $N unsafe_getindex src j
-            unsafe_setindex!(dest, v, d)
+            v = @ncall $N getindex BoundsCheckOff() src j
+            setindex!(BoundsCheckOff(), dest, v, d)
         end
         dest
     end
@@ -297,38 +295,33 @@ _checksize(A::AbstractArray, dim, I::AbstractVector{Bool}) = size(A, dim) == sum
 _checksize(A::AbstractArray, dim, ::Colon) = true
 _checksize(A::AbstractArray, dim, ::Real) = size(A, dim) == 1
 
-@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
-@inline unsafe_setindex!(v::BitArray, x, ind::Real) = (Base.unsafe_bitsetindex!(v.chunks, convert(Bool, x), to_index(ind)); v)
-
 ## setindex! ##
 # For multi-element setindex!, we check bounds, convert the indices (to_index),
 # and ensure the value to set is either an AbstractArray or a Repeated scalar
 # before redispatching to the _unsafe_batchsetindex!
 _iterable(v::AbstractArray) = v
 _iterable(v) = repeated(v)
-@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
-    checkbounds(A, J...)
-    _unsafe_setindex!(l, A, x, J...)
-end
-@inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractVector,Colon}...)
+@inline function _setindex!(b::BoundsCheck, l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractVector,Colon}...)
+    Bool(b) && checkbounds(A, J...)
     _unsafe_batchsetindex!(l, A, _iterable(x), to_index(J)...)
 end
 
 # While setindex! with one array argument doesn't mean anything special, it is
 # still supported for symmetry with getindex.
-_unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, I::AbstractArray) = _unsafe_setindex!(l, A, x, vec(I))
+_setindex!(b::BoundsCheck, l::LinearIndexing, A::AbstractArray, x, I::AbstractArray) = _setindex!(b, l, A, x, vec(I))
 # 1-d logical indexing: override the above to avoid calling find (in to_index)
-function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractVector{Bool})
+function _setindex!(b::BoundsCheck, ::LinearIndexing, A::AbstractArray, x, I::AbstractVector{Bool})
+    Bool(b) && checkbounds(A, I)
     X = _iterable(x)
     Xs = start(X)
     i = 0
     c = 0
     for b in eachindex(I)
         i+=1
-        if unsafe_getindex(I, b)
+        if getindex(BoundsCheckOff(), I, b)
             done(X, Xs) && throw_setindex_mismatch(x, c+1)
             (v, Xs) = next(X, Xs)
-            unsafe_setindex!(A, v, i)
+            setindex!(BoundsCheckOff(), A, v, i)
             c += 1
         end
     end
@@ -347,9 +340,9 @@ end
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d*size(A,d))
         $(symbol(:offset_, N)) = 1
-        @nloops $N i d->(1:idxlens[d]) d->(offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+        @nloops $N i d->(1:idxlens[d]) d->(offset_{d-1} = offset_d + (getindex(BoundsCheckOff(), I_d, i_d)-1)*stride_d) begin
             v, Xs = next(X, Xs)
-            unsafe_setindex!(A, v, offset_0)
+            setindex!(BoundsCheckOff(), A, v, offset_0)
         end
         A
     end
@@ -361,9 +354,9 @@ end
         idxlens = @ncall $N index_lengths A I
         @ncall $N setindex_shape_check X (d->idxlens[d])
         Xs = start(X)
-        @nloops $N i d->(1:idxlens[d]) d->(j_d = unsafe_getindex(I_d, i_d)) begin
+        @nloops $N i d->(1:idxlens[d]) d->(j_d = getindex(BoundsCheckOff(), I_d, i_d)) begin
             v, Xs = next(X, Xs)
-            @ncall $N unsafe_setindex! A v j
+            @ncall $N setindex! BoundsCheckOff() A v j
         end
         A
     end
@@ -386,17 +379,19 @@ function cartindex_exprs(indexes, syms)
     end
     exprs
 end
-@generated function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :($(Expr(:meta, :inline)); getindex(A, $(cartindex_exprs(I, :I)...)))
+@generated function _getindex{T,N}(b::BoundsCheck, l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
+    if b <: BoundsCheckOn
+        :($(Expr(:meta, :inline)); getindex(A, $(cartindex_exprs(I, :I)...)))
+    else
+        :($(Expr(:meta, :inline)); getindex(b, A, $(cartindex_exprs(I, :I)...)))
+    end
 end
-@generated function _unsafe_getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :($(Expr(:meta, :inline)); unsafe_getindex(A, $(cartindex_exprs(I, :I)...)))
-end
-@generated function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :($(Expr(:meta, :inline)); setindex!(A, v, $(cartindex_exprs(I, :I)...)))
-end
-@generated function _unsafe_setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :($(Expr(:meta, :inline)); unsafe_setindex!(A, v, $(cartindex_exprs(I, :I)...)))
+@generated function _setindex!{T,N}(b::BoundsCheck, l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
+    if b <: BoundsCheckOn
+        :($(Expr(:meta, :inline)); setindex!(A, v, $(cartindex_exprs(I, :I)...)))
+    else
+        :($(Expr(:meta, :inline)); setindex!(b, A, v, $(cartindex_exprs(I, :I)...)))
+    end
 end
 
 
@@ -524,9 +519,9 @@ end
             Base.Cartesian.@nexprs $N d->(d < $N ?
                 begin
                     c, k = divrem(k, Istride_{$N-d+1})
-                    j += (Base.unsafe_getindex(I_{$N-d+1}, c+1)-1)*Pstride_{$N-d+1}
+                    j += (Base.getindex(BoundsCheckOff(), I_{$N-d+1}, c+1)-1)*Pstride_{$N-d+1}
                 end : begin
-                    j += Base.unsafe_getindex(I_1, k+1)
+                    j += Base.getindex(BoundsCheckOff(), I_1, k+1)
                 end)
             index[i] = j
         end
@@ -665,7 +660,7 @@ end
         $(symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        @nloops $N i X d->(offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
+        @nloops $N i X d->(offset_{d-1} = offset_d + (getindex(BoundsCheckOff(), I[d], i_d)-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end
@@ -678,7 +673,9 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
+function setindex!(b::BoundsCheck, B::BitArray, X::BitArray, I0::UnitRange{Int})
+    Bool(b) && checkbounds(B, I0)
+    setindex_shape_check(X, length(I0))
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -686,7 +683,8 @@ function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
     return B
 end
 
-function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
+function setindex!(b::BoundsCheck, B::BitArray, x::Bool, I0::UnitRange{Int})
+    Bool(b) && checkbounds(B, I0)
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -694,9 +692,11 @@ function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
     return B
 end
 
-@generated function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@generated function setindex!(b::BoundsCheck, B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     N = length(I)
+    Isplat = Expr[:(I[$d]) for d=1:length(I)]
     quote
+        Bool(b) && checkbounds(B, I0, $(Isplat...))
         length(X) == 0 && return B
         f0 = first(I0)
         l0 = length(I0)
@@ -720,14 +720,16 @@ end
                     copy_chunks!(B.chunks, ind, X.chunks, refind, l0)
                     refind += l0
                 end)
-
+        # TODO: check indexing shape
         return B
     end
 end
 
-@generated function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@generated function setindex!(b::BoundsCheck, B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     N = length(I)
+    Isplat = Expr[:(I[$d]) for d=1:length(I)]
     quote
+        Bool(b) && checkbounds(B, I0, $(Isplat...))
         f0 = first(I0)
         l0 = length(I0)
         l0 == 0 && return B

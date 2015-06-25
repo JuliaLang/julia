@@ -295,15 +295,15 @@ getindex(A::Array, i1::Real, i2::Real, i3::Real) = arrayref(A, to_index(i1), to_
 getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real) = arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4))
 getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
-unsafe_getindex(A::Array, i1::Real) = @inbounds return arrayref(A, to_index(i1))
-unsafe_getindex(A::Array, i1::Real, i2::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2))
-unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3))
-unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4))
-unsafe_getindex(A::Array, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
+getindex(::BoundsCheckOff, A::Array, i1::Real) = @inbounds return arrayref(A, to_index(i1))
+getindex(::BoundsCheckOff, A::Array, i1::Real, i2::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2))
+getindex(::BoundsCheckOff, A::Array, i1::Real, i2::Real, i3::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3))
+getindex(::BoundsCheckOff, A::Array, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+getindex(::BoundsCheckOff, A::Array, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayref(A, to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
-getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
-function unsafe_getindex(A::Array, I::UnitRange{Int})
+function getindex(b::BoundsCheck, A::Array, I::UnitRange{Int})
+    Bool(b) && checkbounds(A, I)
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
@@ -311,8 +311,8 @@ function unsafe_getindex(A::Array, I::UnitRange{Int})
     end
     return X
 end
-getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
-function unsafe_getindex(A::Array, ::Colon)
+function getindex(::BoundsCheck, A::Array, ::Colon)
+    # Colon is always inbounds
     lI = length(A)
     X = similar(A, lI)
     if lI > 0
@@ -333,11 +333,11 @@ setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real) = arrayset(A, convert
 setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
 setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1))
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2))
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3))
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
+setindex!{T}(::BoundsCheckOff, A::Array{T}, x, i1::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1))
+setindex!{T}(::BoundsCheckOff, A::Array{T}, x, i1::Real, i2::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2))
+setindex!{T}(::BoundsCheckOff, A::Array{T}, x, i1::Real, i2::Real, i3::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3))
+setindex!{T}(::BoundsCheckOff, A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+setindex!{T}(::BoundsCheckOff, A::Array{T}, x, i1::Real, i2::Real, i3::Real, i4::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(I)...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -364,8 +364,8 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copy!
-setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_setindex!(A, X, I))
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+function setindex!{T}(b::BoundsCheck, A::Array{T}, X::Array{T}, I::UnitRange{Int})
+    Bool(b) && checkbounds(A, I)
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
@@ -373,8 +373,8 @@ function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     end
     return A
 end
-setindex!{T}(A::Array{T}, X::Array{T}, c::Colon) = unsafe_setindex!(A, X, c)
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
+function setindex!{T}(::BoundsCheck, A::Array{T}, X::Array{T}, ::Colon)
+    # Colon is always inbounds, no need to checkbounds
     lI = length(A)
     setindex_shape_check(X, lI)
     if lI > 0

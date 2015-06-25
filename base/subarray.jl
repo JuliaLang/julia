@@ -309,7 +309,7 @@ end
 
 function rangetype(T1, T2)
     rt = return_types(getindex, Tuple{T1, T2})
-    length(rt) == 1 || error("Can't infer return type")
+    length(rt) == 1 || error("Can't infer return type for $T1 and $T2")
     rt[1]
 end
 
@@ -317,7 +317,7 @@ reindex(a, b) = a[b]
 reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
 reindex(a::UnitRange, b::StepRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), step(b), length(b))
 reindex(a::StepRange, b::Range{Int}) = range(oftype(first(a), first(a)+(first(b)-1)*step(a)), step(a)*step(b), length(b))
-reindex(a, b::Int) = unsafe_getindex(a, b)
+reindex(a, b::Int) = getindex(BoundsCheckOff(), a, b)
 
 dimsizeexpr(Itype, d::Int, len::Int, Asym::Symbol, Isym::Symbol) = :(length($Isym[$d]))
 function dimsizeexpr(Itype::Type{Colon}, d::Int, len::Int, Asym::Symbol, Isym::Symbol)
@@ -346,8 +346,9 @@ end
     length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
 end
 
+# Colon isn't an AbstractArray so it doesn't get the same BoundsCheck fallbacks
 getindex(::Colon, i) = to_index(i)
-unsafe_getindex(v::Colon, i) = to_index(i)
+getindex(::BoundsCheck, ::Colon, i) = to_index(i)
 
 step(::Colon) = 1
 first(::Colon) = 1
@@ -551,20 +552,20 @@ end
         getindex(V.parent, $(idxs...))
     end
 end
-@generated function unsafe_getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
+@generated function getindex{T,N,P,IV,LD}(b::BoundsCheckOff, V::SubArray{T,N,P,IV,LD}, I::Int...)
     ni = length(I)
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
         meta = Expr(:meta, :inline)
         if iscontiguous(V)
-            return :($meta; unsafe_getindex(V.parent, V.first_index + I[1] - 1))
+            return :($meta; getindex(b, V.parent, V.first_index + I[1] - 1))
         end
-        return :($meta; unsafe_getindex(V.parent, V.first_index + V.stride1*(I[1]-1)))
+        return :($meta; getindex(b, V.parent, V.first_index + V.stride1*(I[1]-1)))
     end
     Isyms = [:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
     quote
         $exhead
-        unsafe_getindex(V.parent, $(idxs...))
+        getindex(b, V.parent, $(idxs...))
     end
 end
 @generated function setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
@@ -583,20 +584,20 @@ end
         setindex!(V.parent, v, $(idxs...))
     end
 end
-@generated function unsafe_setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
+@generated function setindex!{T,N,P,IV,LD}(b::BoundsCheckOff, V::SubArray{T,N,P,IV,LD}, v, I::Int...)
     ni = length(I)
     if ni == 1 && length(IV.parameters) == LD  # linear indexing
         meta = Expr(:meta, :inline)
         if iscontiguous(V)
-            return :($meta; unsafe_setindex!(V.parent, v, V.first_index + I[1] - 1))
+            return :($meta; setindex!(b, V.parent, v, V.first_index + I[1] - 1))
         end
-        return :($meta; unsafe_setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
+        return :($meta; setindex!(b, V.parent, v, V.first_index + V.stride1*(I[1]-1)))
     end
     Isyms = [:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
     quote
         $exhead
-        unsafe_setindex!(V.parent, v, $(idxs...))
+        setindex!(b, V.parent, v, $(idxs...))
     end
 end
 
@@ -604,8 +605,8 @@ end
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(V, to_index(I)...)
-unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
-unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = unsafe_getindex(V, to_index(I)...)
+getindex{T,N,P,IV}(::BoundsCheckOff, V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
+getindex{T,N,P,IV}(b::BoundsCheckOff, V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(b, V, to_index(I)...)
 
 # Nonscalar setindex! falls back to the AbstractArray versions
 
@@ -657,7 +658,7 @@ function index_generate(NP, Itypes, Vsym, Isyms)
             indexexprs[i] = :($Vsym.indexes[$i])
         else
             j += 1
-            indexexprs[i] = :(unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))
+            indexexprs[i] = :(getindex(BoundsCheckOff(), $Vsym.indexes[$i], $(Isyms[j])))
         end
     end
     # Note that we drop any extra indices. We're trusting that the indices are
