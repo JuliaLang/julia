@@ -700,12 +700,14 @@
 
 ; the principal non-terminals follow, in increasing precedence order
 
-(define (parse-block s) (parse-Nary s parse-eq '(#\newline #\;) 'block
-                                    '(end else elseif catch finally) #t))
+(define (parse-block s (down parse-eq))
+  (parse-Nary s down '(#\newline #\;) 'block
+	      '(end else elseif catch finally) #t))
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-  (let ((ex (parse-Nary s parse-eq '(#\;) 'toplevel '(#\newline) #t)))
+  (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
+			'(#\;) 'toplevel '(#\newline) #t)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
       (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
@@ -1243,7 +1245,7 @@
            `(const ,assgn))))
     ((module baremodule)
      (let* ((name (parse-unary-prefix s))
-            (body (parse-block s)))
+            (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
        (expect-end s)
        (list 'module (eq? word 'module) name
              (if (eq? word 'module)
@@ -2015,6 +2017,27 @@
                               (quote ,(macroify-name (cadr (caddr e))))))
         (else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
 
+(define (simple-string-literal? e)
+  (or (string? e)
+      (and (pair? e)
+	   (memq (car e) '(triple_quoted_string single_quoted_string)))))
+
+(define (any-string-literal? e)
+  (or (simple-string-literal? e)
+      (and (length= e 3) (eq? (car e) 'macrocall)
+	   (simple-string-literal? (caddr e))
+	   (let ((mname (string (cadr e))))
+	     (equal? (string.sub mname (string.dec mname (length mname) 4))
+		     "_str")))))
+
+(define (parse-docstring s production)
+  (let* ((isstr (eqv? (peek-token s) #\"))
+	 (ex    (production s)))
+    (if (and (or isstr (any-string-literal? ex))
+	     (not (closing-token? (peek-token s))))
+	`(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
+	ex)))
+
 ; --- main entry point ---
 
 ;; can optionally specify which grammar production to parse.
@@ -2037,4 +2060,4 @@
          (if (eof-object? (peek-token s))
              (eof-object)
              ((if (null? production) parse-stmts (car production))
-              s)))))
+	            s)))))
