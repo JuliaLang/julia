@@ -563,6 +563,7 @@ function matmul2x2{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
 end
 
 function matmul2x2!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    @inbounds begin
     if tA == 'T'
         A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A21 = transpose(A[1,2]); A22 = transpose(A[2,2])
     elseif tA == 'C'
@@ -581,6 +582,7 @@ function matmul2x2!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B
     C[1,2] = A11*B12 + A12*B22
     C[2,1] = A21*B11 + A22*B21
     C[2,2] = A21*B12 + A22*B22
+    end # inbounds
     C
 end
 
@@ -590,6 +592,7 @@ function matmul3x3{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
 end
 
 function matmul3x3!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    @inbounds begin
     if tA == 'T'
         A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A13 = transpose(A[3,1]);
         A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2]);
@@ -629,6 +632,6 @@ function matmul3x3!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B
     C[3,1] = A31*B11 + A32*B21 + A33*B31
     C[3,2] = A31*B12 + A32*B22 + A33*B32
     C[3,3] = A31*B13 + A32*B23 + A33*B33
-
+    end # inbounds
     C
 end
