@@ -2017,10 +2017,7 @@
                               (quote ,(macroify-name (cadr (caddr e))))))
         (else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
 
-(define (simple-string-literal? e)
-  (or (string? e)
-      (and (pair? e)
-	   (memq (car e) '(triple_quoted_string single_quoted_string)))))
+(define (simple-string-literal? e) (string? e))
 
 (define (any-string-literal? e)
   (or (simple-string-literal? e)
