@@ -21,9 +21,34 @@ function includeDir()
     joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia");
 end
 
+function osxInitDir()
+    if imagePath()[end-1:end] == "ji"
+        return return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
+    else
+       return match(r"(.*)(/julia/sys.dylib)",imagePath()).captures[1];
+    end
+end
+
+function linuxInitDir()
+    if imagePath()[end-1:end] == "ji"
+        return return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
+    else
+       return match(r"(.*)(/julia/sys.so)",imagePath()).captures[1];
+    end
+end
+
+function windowsInitDir()
+    if imagePath()[end-1:end] == "ji"
+        return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
+    else
+        return match(r"(.*)(\\julia\\sys.dll)",imagePath()).captures[1];
+    end
+end
+
 function initDir()
-    @unix_only return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
-    @windows_only return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
+    @osx_only return osxInitDir();
+    @linux_only return linuxInitDir();
+    @windows_only return windowInitDir();
 end
 
 function ldflags()
