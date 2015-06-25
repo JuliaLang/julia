@@ -9,11 +9,11 @@ other objects easily, either via the built-in documentation system in Julia 0.4
 or the `Docile.jl <http://github.com/MichaelHatherly/Docile.jl>`_ package in
 Julia 0.3.
 
+In 0.4:
+
 .. doctest::
 
-    VERSION < v"0.4-" && using Docile
-
-    @doc doc"Tells you if there are too foo items in the array." ->
+    "Tells you if there are too foo items in the array."
     foo(xs::Array) = ...
 
 Documentation is interpreted as `Markdown <http://en.wikipedia.org/wiki/Markdown>`_,
@@ -21,12 +21,12 @@ so you can use indentation and code fences to delimit code examples from text.
 
 .. doctest::
 
-    @doc doc"""
-      The `@bar` macro will probably make your code 2x faster or something. Use
-      it like this:
+    """
+    The `@bar` macro will probably make your code 2x faster or something. Use
+    it like this:
 
-          @bar buy_drink_for("Jiahao")
-      """ ->
+        @bar buy_drink_for("Jiahao")
+    """
     macro bar(ex) ...
 
 Documentation is very free-form; there are no set formatting
@@ -65,17 +65,15 @@ example:
 
 .. doctest::
 
-    @doc doc"""
-      Multiplication operator. `x*y*z*...` calls this function with multiple
-      arguments, i.e. `*(x,y,z...)`.
-      """ ->
+    """
+    Multiplication operator. `x*y*z*...` calls this function with multiple
+    arguments, i.e. `*(x,y,z...)`.
+    """
     function *(x, y)
       # ... [implementation sold seperately] ...
     end
 
-    @doc doc"""
-      When applied to strings, concatenates them.
-      """ ->
+    "When applied to strings, concatenates them."
     function *(x::String, y::String)
       # ... [insert secret sauce here] ...
     end
@@ -144,15 +142,3 @@ references) without cluttering the basic syntax.
 In principle, the Markdown parser itself can also be arbitrarily
 extended by packages, or an entirely custom flavour of Markdown can be
 used, but this should generally be unnecessary.
-
-Other Notes
------------
-
-Julia 0.4 will introduce the more convenient syntax
-
-.. doctest::
-
-    "..."
-    f(x) = ...
-
-but this is not yet implemented.

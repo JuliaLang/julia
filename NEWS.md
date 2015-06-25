@@ -25,9 +25,8 @@ New language features
     specialize. The quoted expression it returns forms the body of the specialized
     method which is then called at run time ([#7311]).
 
-  * (Also with syntax todo) Documentation system for functions, methods, types
-    and macros in packages and user code ([#8791]). Type `?@doc` at the repl
-    to see the current syntax and more information.
+  * [Documentation system](http://docs.julialang.org/en/latest/manual/documentation/)
+    for functions, methods, types and macros in packages and user code ([#8791]).
 
   * The syntax `function foo end` can be used to introduce a generic function without
     yet adding any methods ([#8283]).
