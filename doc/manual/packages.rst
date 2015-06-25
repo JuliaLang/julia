@@ -802,7 +802,7 @@ Fixing Package Requirements
 If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent::
 
     $ cd ~/.julia/v0.3/METADATA/FooBar/versions/0.0.1 && cat requires
-    julia 0.3-
+    julia 0.3
     $ vi requires
 
 Since the commit hash stays the same, the contents of the ``REQUIRE`` file that will be checked out in the repo will **not** match the requirements in ``METADATA`` after such a change;
