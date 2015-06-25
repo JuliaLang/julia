@@ -123,3 +123,12 @@ let
     @test contains(err_str, "constructor")
     @test contains(err_str, "T11007(...)")
 end
+
+# issue 11845
+let
+    buff = IOBuffer()
+    showerror(buff, MethodError(convert, (3, 1.0)))
+    showerror(buff, MethodError(convert, (Int, 1.0)))
+    showerror(buff, MethodError(convert, Tuple{Type, 1.0}))
+    showerror(buff, MethodError(convert, Tuple{DataType, 1.0}))
+end
