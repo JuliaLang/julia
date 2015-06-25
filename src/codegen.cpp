@@ -2008,8 +2008,13 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                     for(unsigned i=0; i < l; i++) {
                         jl_value_t *fldty = jl_svecref(types, i);
                         Value *subAns;
+#ifdef LLVM37
+                        Value *fld1 = builder.CreateConstGEP2_32(elty->getPointerTo(), varg1, 0, i);
+                        Value *fld2 = builder.CreateConstGEP2_32(elty->getPointerTo(), varg2, 0, i);
+#else
                         Value *fld1 = builder.CreateConstGEP2_32(varg1, 0, i);
                         Value *fld2 = builder.CreateConstGEP2_32(varg2, 0, i);
+#endif
                         if (type_is_ghost(fld1->getType()))
                             continue;
                         if (!fld1->getType()->getContainedType(0)->isAggregateType()) {
