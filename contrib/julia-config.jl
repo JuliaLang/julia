@@ -23,17 +23,17 @@ end
 
 function osxInitDir()
     if imagePath()[end-1:end] == "ji"
-        return return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
+        return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
     else
-       return match(r"(.*)(/julia/sys.dylib)",imagePath()).captures[1];
+        return match(r"(.*)(/julia/sys.dylib)",imagePath()).captures[1];
     end
 end
 
 function linuxInitDir()
     if imagePath()[end-1:end] == "ji"
-        return return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
+        return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
     else
-       return match(r"(.*)(/julia/sys.so)",imagePath()).captures[1];
+        return match(r"(.*)(/julia/sys.so)",imagePath()).captures[1];
     end
 end
 
