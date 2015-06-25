@@ -2213,6 +2213,20 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             return (e.typ.parameters[1],())
         end
     end
+    # Special case for throw. Use push the construction of the exception into
+    # a helper function to avoid creating a GC frame. This hack can be removed
+    # when codegen is smarter on inserting GC frames or if creating GC frames
+    # no longer affect performance.
+    if is(f, throw) && length(atypes) == 1 && isa(argexprs[1], Expr)
+        throw_expr::Expr = argexprs[1]
+        throw_args = throw_expr.args
+        if !is(throw_expr.head, :new)
+            return NF
+        end
+        expr = Expr(:call, TopNode(:throw_with_args), throw_args...)
+        expr.typ = Bottom
+        return (expr, ())
+    end
     if isa(f,IntrinsicFunction)
         return NF
     end
