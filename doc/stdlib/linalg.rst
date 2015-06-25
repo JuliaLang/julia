@@ -87,6 +87,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
            ``\``            ✓                       ✓             ✓
            ``cond``         ✓                                     ✓
            ``det``          ✓                       ✓             ✓
+           ``logdet``       ✓                       ✓
+           ``logabsdet``    ✓                       ✓
            ``size``         ✓                       ✓
       ================== ====== ======================== =============
 
@@ -563,6 +565,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logdet(M)
 
    Log of matrix determinant. Equivalent to ``log(det(M))``, but may provide increased accuracy and/or speed.
+
+.. function:: logabsdet(M)
+
+   Log of absolute value of determinant of real matrix. Equivalent to ``(log(abs(det(M))), sign(det(M)))``, but may provide increased accuracy and/or speed.
 
 .. function:: inv(M)
 

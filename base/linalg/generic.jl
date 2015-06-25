@@ -533,3 +533,5 @@ end
 det(x::Number) = x
 
 logdet(A::AbstractMatrix) = logdet(lufact(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+
