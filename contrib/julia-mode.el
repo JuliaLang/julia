@@ -278,14 +278,15 @@ Based on `python-syntax-stringify'."
         (put-text-property string-start-pos (1+ string-start-pos)
                            'syntax-table (string-to-syntax "|"))))))
 
-(defconst julia-syntax-propertize-function
-  (syntax-propertize-rules
-   ("\"\"\""
-    (0 (ignore (julia-stringify-triple-quote))))
-   (julia-char-regex
-    (1 "\"") ; Treat ' as a string delimiter.
-    (2 ".") ; Don't highlight anything between.
-    (3 "\"")))) ; Treat the last " in """ as a string delimiter.
+(unless (< emacs-major-version 24)
+  (defconst julia-syntax-propertize-function
+    (syntax-propertize-rules
+     ("\"\"\""
+      (0 (ignore (julia-stringify-triple-quote))))
+     (julia-char-regex
+      (1 "\"") ; Treat ' as a string delimiter.
+      (2 ".") ; Don't highlight anything between.
+      (3 "\""))))) ; Treat the last " in """ as a string delimiter.
 
 (defun julia-in-comment ()
   "Return non-nil if point is inside a comment.
