@@ -18,7 +18,7 @@ template<class T>
 static T* addComdat(T *G) { return G; }
 #endif
 
-static Value *tbaa_decorate(MDNode* md, Instruction* load_or_store)
+static Instruction *tbaa_decorate(MDNode* md, Instruction* load_or_store)
 {
     load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
     return load_or_store;
