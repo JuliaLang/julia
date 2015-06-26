@@ -1632,33 +1632,45 @@
 (define (take-char p)
   (begin (read-char p) p))
 
+; map the first element of lst
+(define (map-first f lst)
+  (if (null? lst) ()
+    (cons (f (car lst)) (cdr lst))))
+
+; map the elements of lst where (pred index) is true
+; e.g., (map-at odd? (lambda (x) 0) '(a b c d)) -> '(a 0 c 0)
+(define (map-at pred f lst)
+  (define (map-at- pred f lst i r)
+    (if (null? lst) (reverse r)
+      (let* ((x (car lst))
+             (y (if (pred i) (f x) x)))
+        (map-at- pred f (cdr lst) (+ i 1) (cons y r)))))
+  (map-at- pred f lst 0 ()))
+
 (define (parse-string-literal s custom)
   (let ((p (ts:port s)))
     (if (eqv? (peek-char p) #\")
         (if (eqv? (peek-char (take-char p)) #\")
-            (strip-first-newline
+            (map-first strip-leading-newline
               (dedent-triplequoted-string
                 (parse-string-literal- 2 (take-char p) s custom)))
             (list ""))
         (parse-string-literal- 0 p s custom))))
 
-(define (strip-first-newline lst)
-  (let* ((f (car lst))
-         (n (sizeof f)))
-    (if (and (> n 0) (eqv? (string.char f 0) #\newline))
-        (cons (string.sub f 1 n) (cdr lst))
-        lst)))
+(define (strip-leading-newline s)
+  (if (and (> (sizeof s) 0) (eqv? (string.char s 0) #\newline))
+      (string.tail s 1)
+      s))
 
 (define (dedent-triplequoted-string lst)
   (let ((prefix (triplequoted-string-indentation lst)))
     (if (length> prefix 0)
-        (map (lambda (s)
-               (if (string? s)
-                   (string-swap s
-                                (list->string (cons #\newline prefix))
-                                #\newline)
-                   s))
-             lst)
+        (map-at even?
+                (lambda (s)
+                  (string-replace s
+                                  (list->string (cons #\newline prefix))
+                                  #\newline))
+                lst)
         lst)))
 
 (define (triplequoted-string-indentation lst)
@@ -1716,8 +1728,8 @@
         (string-split- s sep (+ i (sizeof sep)) (cons (string.sub s start i) splits))
         (reverse (cons (string.sub s start (sizeof s)) splits)))))
 
-; swap all occurrences of a in s with b
-(define (string-swap s a b)
+; replace all occurrences of a in s with b
+(define (string-replace s a b)
   (string.join (string-split s a) b))
 
 (define (parse-interpolate s)
