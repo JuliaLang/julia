@@ -233,7 +233,7 @@ norm(x::Number, p::Real=2) =
 function vecdot(x::AbstractVector, y::AbstractVector)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("Vector x has length $lx, but vector y has length $(length(y))"))
+        throw(DimensionMismatch("vector x has length $lx, but vector y has length $(length(y))"))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))

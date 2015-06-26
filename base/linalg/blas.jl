@@ -357,7 +357,7 @@ for (fname, elty) in ((:dsymv_,:Float64),
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function symv!(uplo::Char, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty},beta::($elty), y::StridedVector{$elty})
             m, n = size(A)
-            if m != n throw(DimensionMismatch("Matrix A is $m by $n but must be square")) end
+            if m != n throw(DimensionMismatch("matrix A is $m by $n but must be square")) end
             if m != length(x) || m != length(y)
                 throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end

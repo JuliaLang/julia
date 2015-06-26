@@ -584,7 +584,7 @@ end
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
     end
     for j = n:-1:1
         xj = b[j]
@@ -603,7 +603,7 @@ end
 function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
     end
     for j = n:-1:1
         xj = b[j]
@@ -617,7 +617,7 @@ end
 function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
     end
     for j = 1:n
         xj = b[j]
@@ -636,7 +636,7 @@ end
 function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
     end
     for j = 1:n
         xj = b[j]

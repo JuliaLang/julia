@@ -347,10 +347,10 @@ function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
-        throw(DimensionMismatch("Matrix A has dimensions ($mA,$nA), vector B has length $mB"))
+        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), vector B has length $mB"))
     end
     if mA != length(C)
-        throw(DimensionMismatch("Result C has length $(length(C)), needs length $mA"))
+        throw(DimensionMismatch("result C has length $(length(C)), needs length $mA"))
     end
     z = zero(R)
 
@@ -403,10 +403,10 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("Matrix A has dimensions ($mA, $nB), matrix B has dimensions ($mB, $nB)"))
+        throw(DimensionMismatch("matrix A has dimensions ($mA, $nB), matrix B has dimensions ($mB, $nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("Result C has dimensions $(size(C)), needs ($mA, $nB)"))
+        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA, $nB)"))
     end
 
     if mA == nA == nB == 2

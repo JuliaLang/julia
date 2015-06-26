@@ -35,7 +35,7 @@ factorize(S::SymTridiagonal) = ldltfact(S)
 function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
-        throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
+        throw(DimensionMismatch("matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
     end
     d = S.data.dv
     l = S.data.ev

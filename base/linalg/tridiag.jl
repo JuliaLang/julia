@@ -77,7 +77,7 @@ function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
     end
     if n != size(C, 2)
-        throw(DimensionMismatch("Second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
+        throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
     α = S.dv
@@ -250,7 +250,7 @@ end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
-        throw(DimensionMismatch("Tridiagonal matrices must be square"))
+        throw(DimensionMismatch("tridiagonal matrices must be square"))
     end
     Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
 end
