@@ -7,7 +7,7 @@ immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
-        length(dv) - 1 <= length(ev) <= length(dv) || throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
+        length(dv) - 1 <= length(ev) <= length(dv) || throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but must be either $(length(dv) - 1) or $(length(dv))."))
         new(dv,ev)
     end
 end

@@ -309,7 +309,7 @@ end
 
 function \{T}(A::AbstractMatrix{T}, B::AbstractVecOrMat{T})
     if size(A,1) != size(B,1)
-        throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+        throw(DimensionMismatch("LHS and RHS must have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
     end
     factorize(A)\B
 end

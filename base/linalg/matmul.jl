@@ -205,7 +205,7 @@ function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T
         throw(DimensionMismatch("length(x)=$(length(x)) does not match size(A)=$(size(A))"))
     end
     if mA != length(y)
-        throw(DimensionMismatch("output vector y has length: $(length(y)), should have length $(mA)"))
+        throw(DimensionMismatch("output vector y has length: $(length(y)), must have length $(mA)"))
     if mA == 0
         return y
     end
@@ -226,7 +226,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
         tAt = 'T'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch("output matrix has size: $(nC), but must have size $(mA)"))
     end
     if mA == 0 || nA == 0
         return fill!(C,0)
@@ -254,7 +254,7 @@ function herk_wrapper!{T<:BlasReal}(C::Union{StridedMatrix{T}, StridedMatrix{Com
         tAt = 'C'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch("output matrix has size: $(nC), but must have size $(mA)"))
     end
     if mA == 0 || nA == 0
         return fill!(C,0)
@@ -296,7 +296,7 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
 
     if mA == 0 || nA == 0 || nB == 0
         if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+            throw(DimensionMismatch("C has dimensions $(size(C)), must have ($mA,$nB)"))
         end
         return fill!(C,0)
     end

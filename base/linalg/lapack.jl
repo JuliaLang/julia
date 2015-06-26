@@ -328,10 +328,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A); chkstride1(T)
             m, n = size(A); p, q = size(T)
             if m < n
-                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but should have more rows than columns"))
+                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but must have more rows than columns"))
             end
             if p != n || q != n
-                throw(DimensionMismatch("block reflector T has dimensions ($p,$q), but should have dimensions ($n,$n)"))
+                throw(DimensionMismatch("block reflector T has dimensions ($p,$q), but must have dimensions ($n,$n)"))
             end
             if n > 0
                 info = Array(BlasInt, 1)
@@ -1598,13 +1598,13 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(B)
             n = length(d)
             if !(n >= length(dl) >= n - 1)
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $n or $(n - 1)"))
+                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but must be $n or $(n - 1)"))
             end
             if !(n >= length(du) >= n - 1)
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $n or $(n - 1)"))
+                throw(DimensionMismatch("superdiagonal has length $(length(du)), but must be $n or $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
+                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but must have $n"))
             end
             if n == 0
                 return B # Early exit if possible
@@ -1626,10 +1626,10 @@ for (gtsv, gttrf, gttrs, elty) in
         function gttrf!(dl::Vector{$elty}, d::Vector{$elty}, du::Vector{$elty})
             n    = length(d)
             if length(dl) != n - 1
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $(n - 1)"))
+                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but must be $(n - 1)"))
             end
             if length(du) != n - 1
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $(n - 1)"))
+                throw(DimensionMismatch("superdiagonal has length $(length(du)), but must be $(n - 1)"))
             end
             du2  = similar(d, $elty, n-2)
             ipiv = similar(d, BlasInt, n)
@@ -1654,13 +1654,13 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(B)
             n = length(d)
             if length(dl) != n - 1
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $(n - 1)"))
+                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but must be $(n - 1)"))
             end
             if length(du) != n - 1
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $(n - 1)"))
+                throw(DimensionMismatch("superdiagonal has length $(length(du)), but must be $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
+                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but must have $n"))
             end
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(gttrs)), liblapack), Void,
@@ -1691,7 +1691,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             n = size(A, 2)
             m = min(n, size(A, 1))
             if k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= m = $m"))
             end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -1723,7 +1723,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= n = $n"))
             end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -1767,10 +1767,10 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $nA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= n = $n"))
             end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -1810,10 +1810,10 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch("invalid number of reflectors: k = $k must be <= n = $n"))
             end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -3379,7 +3379,7 @@ for (bdsqr, relty, elty) in
             # Do checks
             @chkuplo
             if length(e_) != n - 1
-                throw(DimensionMismatch("off-diagonal has length $(length(e_)) but should have length $(n - 1)"))
+                throw(DimensionMismatch("off-diagonal has length $(length(e_)), but must have length $(n - 1)"))
             end
             if ncvt > 0 && ldvt < n
                 throw(DimensionMismatch("leading dimension of Vt, $ldvt, must be at least $n"))
