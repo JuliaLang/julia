@@ -21,9 +21,22 @@ function includeDir()
     joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia");
 end
 
+function unixInitDir()
+    filePart = split(imagePath(),"/")[end]
+    return match(Regex("(.*)(/julia/$filePart)"),imagePath()).captures[1];
+end
+
+function windowsInitDir()
+    if imagePath()[end-1:end] == "ji"
+        return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
+    else
+        return match(r"(.*)(\\julia\\sys.dll)",imagePath()).captures[1];
+    end
+end
+
 function initDir()
-    @unix_only return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
-    @windows_only return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
+    @unix_only return unixInitDir();
+    @windows_only return windowInitDir();
 end
 
 function ldflags()
