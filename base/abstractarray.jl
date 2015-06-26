@@ -1133,8 +1133,8 @@ end
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
-mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
-function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
+mapslices(f, A::AbstractArray, dims) = mapslices(f, A, [dims...])
+function mapslices(f, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
         return map(f,A)
     end
