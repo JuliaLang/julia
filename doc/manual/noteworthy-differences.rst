@@ -293,7 +293,7 @@ Noteworthy differences from C/C++
   Octal (prefixed with ``0o``) and binary (prefixed with ``0b``) literals are also treated as unsigned
   (with the same current exception that they become signed ``BigInt`` type if they can't fit in a ``UInt128``).
 - String literals can be delimited with either ``"``  or ``"""``, ``"""`` delimited literals can contain ``"``
-  characters without quoting it like ``"\\\""``
+  characters without quoting it like ``"\""``
   String literals can have values of other variables or expressions interpolated into them,
   indicated by ``$variablename`` or ``$(expression)``, which evaluates the variable name or the expression in the context of the function.
 - ``//`` indicates a ``Rational`` number, and not a single-line comment (which is # in Julia)
