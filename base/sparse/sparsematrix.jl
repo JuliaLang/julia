@@ -872,7 +872,7 @@ for op in (+, -)
     @eval begin
         function ($OP){Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2})
             if size(A_1,1) != size(A_2,1) || size(A_1,2) != size(A_2,2)
-                throw(DimensionMismatch(""))
+                throw(DimensionMismatch("matrices are not the same size"))
             end
             Tv = eltype_plus(A_1, A_2)
             B =  spzeros(Tv, promote_type(Ti1, Ti2), broadcast_shape(A_1, A_2)...)
