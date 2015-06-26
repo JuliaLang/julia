@@ -317,7 +317,7 @@ endif
 endif
 	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
-	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
+	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
