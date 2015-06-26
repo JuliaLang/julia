@@ -290,11 +290,19 @@ function update(branch::AbstractString)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         begin
-            if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
-                info("Updating $pkg...")
-                @recover begin
-                    Git.run(`fetch -q --all`, dir=pkg)
-                    Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+            if Git.attached(dir=pkg)
+                if Git.dirty(dir=pkg)
+                    info("Skipping $pkg (dirty)...")
+                else
+                    prev_sha = chomp(Git.readall(`rev-parse --short HEAD`, dir=pkg))
+                    @recover begin
+                        Git.run(`fetch -q --all`, dir=pkg)
+                        Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+                    end
+                    post_sha = chomp(Git.readall(`rev-parse --short HEAD`, dir=pkg))
+                    branch = chomp(Git.readall(`rev-parse --abbrev-ref HEAD`, dir=pkg))
+                    info("Updating $pkg $branch...",
+                        prev_sha != post_sha ? " $prev_sha => $post_sha" : "")
                 end
             end
             if haskey(avail,pkg)
