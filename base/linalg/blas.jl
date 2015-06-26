@@ -460,7 +460,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
         function trmv!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
             n = chksquare(A)
             if n != length(x)
-                throw(DimensionMismatch("length(x)=$(length(x))does not match size(A)=$(size(A))"))
+                throw(DimensionMismatch("length(x)=$(length(x)) does not match size(A)=$(size(A))"))
             end
             ccall(($(blasfunc(fname)), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
