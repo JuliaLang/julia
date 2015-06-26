@@ -519,7 +519,6 @@ typedef struct {
     jl_expr_t *ast;
     jl_svec_t *sp;
     jl_lambda_info_t *linfo;
-    Value *envArg;
     Value *argArray;
     Value *argCount;
     std::string funcName;
@@ -1856,16 +1855,11 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         jl_sym_t *s = (jl_sym_t*)jl_cellref(vi,0);
         assert(jl_is_symbol(s));
         jl_varinfo_t &vari = ctx->vars[s];
-        if (vari.closureidx != -1) {
-            // this variable actually lives in the parent closure environment, copy it over
-            int idx = vari.closureidx;
-            val = emit_nthptr(ctx->envArg, idx + offsetof(jl_svec_t,data) / sizeof(void*), tbaa_sveclen);
-        }
-        else if (vari.isBox) {
-            val = vari.memloc;
+        if (vari.memloc) {
+            val = builder.CreateLoad(vari.memloc);
         }
         else {
-            assert(!vari.isAssigned && !vari.memloc); // make sure there wasn't an inference / codegen error earlier
+            assert(!vari.isAssigned); // make sure there wasn't an inference / codegen error earlier
             val = boxed(vari.value, ctx);
             if (!vari.value.isghost)
                 make_gcroot(val, ctx);
@@ -2915,13 +2909,22 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, boo
     jl_varinfo_t &vi = ctx->vars[sym];
     if (vi.memloc) {
         Value *bp = vi.memloc;
-        if (vi.isBox)
-            bp = builder.CreatePointerCast(builder.CreateLoad(bp), jl_ppvalue_llvmt);
+        if (vi.isBox) {
+            Instruction *load = builder.CreateLoad(bp);
+            if (vi.closureidx != -1) {
+                // if the jl_box_t in the closure env, it will be const in the function
+                load = tbaa_decorate(tbaa_const, load);
+            }
+            bp = builder.CreatePointerCast(load, jl_ppvalue_llvmt);
+        }
         if (vi.isArgument ||  // arguments are always defined
             ((vi.closureidx == -1 || !vi.isAssigned) && !vi.usedUndef)) {
-            Value *v = builder.CreateLoad(bp, vi.isVolatile);
-            if (vi.closureidx > -1 && !(vi.isAssigned && vi.isCaptured))
-                v = tbaa_decorate(tbaa_const, (Instruction*)v);
+            // if no undef usage was found by inference, and it's either not assigned or not in env it must be always defined
+            Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
+            if (vi.closureidx != -1 && !vi.isAssigned) {
+                // if it's in the closure env, but only assigned by the parent function, it will be const while in the child function
+                v = tbaa_decorate(tbaa_const, v);
+            }
             return mark_julia_type(v, vi.value.typ);
         }
         else {
@@ -4400,7 +4403,17 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // fetch env out of function object if we need it
     if (hasCapt) {
-        ctx.envArg = emit_nthptr(fArg, offsetof(jl_function_t,env)/sizeof(jl_value_t*), tbaa_func);
+        Value *envArg = emit_nthptr(fArg, offsetof(jl_function_t,env)/sizeof(jl_value_t*), tbaa_const);
+        for(i=0; i < captvinfoslen; i++) {
+            jl_array_t *vi = (jl_array_t*)jl_cellref(captvinfos, i);
+            assert(jl_is_array(vi));
+            jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
+            assert(jl_is_symbol(vname));
+            jl_varinfo_t &varinfo = ctx.vars[vname];
+            varinfo.memloc = builder.CreatePointerCast(
+                    emit_nthptr_addr(envArg, i + offsetof(jl_svec_t,data) / sizeof(void*)),
+                    jl_ppvalue_llvmt);
+        }
     }
 
     // step 8. set up GC frame
