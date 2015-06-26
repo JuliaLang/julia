@@ -352,6 +352,8 @@ end
 
 copy(o::ObjectIdDict) = ObjectIdDict(o)
 
+get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
+
 # SerializationState type needed as soon as ObjectIdDict is available
 
 type SerializationState{I<:IO}

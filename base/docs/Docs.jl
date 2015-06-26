@@ -78,12 +78,10 @@ type FuncDoc
     source::Dict{Method, Any}
 end
 
-FuncDoc() = FuncDoc(Method[], Dict(), Dict())
-
-getset(coll, key, default) = coll[key] = get(coll, key, default)
+FuncDoc() = FuncDoc([], Dict(), Dict())
 
 function doc!(f::Function, m::Method, data, source)
-    fd = getset(meta(), f, FuncDoc())
+    fd = get!(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
     !haskey(fd.meta, m) && push!(fd.order, m)
     fd.meta[m] = data
@@ -117,6 +115,68 @@ end
 catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
+# Type Documentation
+
+isdoc(x) = isexpr(x, :string, AbstractString) ||
+    (isexpr(x, :macrocall) && endswith(string(x.args[1]), "_str"))
+
+dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
+
+function field_meta (def)
+    def
+    meta = Dict()
+    doc = nothing
+    for l in def.args[3].args
+        if isdoc(l)
+            doc = mdify(l)
+        elseif doc != nothing && isexpr(l, Symbol, Expr)
+            meta[namify(l)] = doc
+            doc = nothing
+        end
+    end
+    return dict_expr(meta)
+end
+
+type TypeDoc
+    main
+    fields::Dict{Symbol, Any}
+    order::Vector{Method}
+    meta::Dict{Method, Any}
+end
+
+TypeDoc() = TypeDoc(nothing, Dict(), [], Dict())
+
+function doc!(t::DataType, data, fields)
+    td = get!(meta(), t, TypeDoc())
+    td.main = data
+    td.fields = fields
+end
+
+function doc!(f::DataType, m::Method, data, source)
+    td = get!(meta(), f, TypeDoc())
+    isa(td, TypeDoc) || error("Can't document a method when the type already has metadata")
+    !haskey(td.meta, m) && push!(td.order, m)
+    td.meta[m] = data
+end
+
+function doc(f::DataType)
+    docs = []
+    for mod in modules
+        if haskey(mod.META, f)
+            fd = mod.META[f]
+            if isa(fd, TypeDoc)
+                length(docs) == 0 && push!(docs, fd.main)
+                for m in fd.order
+                    push!(docs, fd.meta[m])
+                end
+            elseif length(docs) == 0
+                return fd
+            end
+        end
+    end
+    return catdoc(docs...)
+end
+
 # Generic Callables
 
 doc(f, ::Method) = doc(f)
@@ -138,8 +198,10 @@ const keywords = Dict{Symbol,Any}()
 
 # Usage macros
 
+isexpr(x::Expr) = true
+isexpr(x) = false
 isexpr(x::Expr, ts...) = x.head in ts
-isexpr{T}(x::T, ts...) = T in ts
+isexpr(x, ts...) = any(T->isa(T, Type) && isa(x, T), ts)
 
 function unblock(ex)
     isexpr(ex, :block) || return ex
@@ -179,6 +241,15 @@ function funcdoc(meta, def)
     end
 end
 
+function typedoc(meta, def, name)
+    quote
+        @init
+        $(esc(def))
+        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def))))
+        nothing
+    end
+end
+
 function objdoc(meta, def)
     quote
         @init
@@ -193,7 +264,7 @@ fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 function docm(meta, def)
     def′ = unblock(def)
     isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
-    isexpr(def′, :type, :bitstype) && return namedoc(meta, def, namify(def′.args[2]))
+    isexpr(def′, :type, :bitstype) && return typedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     fexpr(def′) && return funcdoc(meta, def)
     isexpr(def′, :macrocall) && (def = namify(def′))
