@@ -202,11 +202,10 @@ end
 function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedVector{T})
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
-        throw(DimensionMismatch())
+        throw(DimensionMismatch("length(x)=$(length(x)) does not match size(A)=$(size(A))"))
     end
     if mA != length(y)
-        throw(DimensionMismatch())
-    end
+        throw(DimensionMismatch("output vector y has length: $(length(y)), should have length $(mA)"))
     if mA == 0
         return y
     end
