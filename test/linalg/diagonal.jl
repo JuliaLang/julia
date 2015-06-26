@@ -22,6 +22,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     D = Diagonal(d)
     DM = diagm(d)
 
+    @test_throws ArgumentError size(D,0)
+    @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
     debug && println("Linear solve")
     @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
     @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
@@ -30,6 +32,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
         @test_approx_eq_eps A_ldiv_B!(D,copy(v)) DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
         @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
+        @test_approx_eq_eps A_ldiv_B!(D,eye(D)) D\eye(D) 2n^3*eps(relty)*(elty<:Complex ? 2:1)
         @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
         b = rand(elty,n,n)
         b = sparse(b)
@@ -65,6 +68,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_approx_eq full(a*D) a*DM
     @test_approx_eq full(D*a) DM*a
     @test_approx_eq full(D/a) DM/a
+    if relty <: BlasFloat
+        b = rand(elty,n,n)
+        b = sparse(b)
+        @test_approx_eq A_mul_B!(copy(D), copy(b)) full(D)*full(b)
+        @test_approx_eq At_mul_B!(copy(D), copy(b)) full(D).'*full(b)
+        @test_approx_eq Ac_mul_B!(copy(D), copy(b)) full(D)'*full(b)
+    end
 
     #division of two Diagonals
     @test_approx_eq D/D2 Diagonal(D.diag./D2.diag)
