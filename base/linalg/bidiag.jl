@@ -9,7 +9,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         if length(ev)==length(dv)-1
             new(dv, ev, isupper)
         else
-            throw(DimensionMismatch("Length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
+            throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
     end
 end
@@ -23,7 +23,7 @@ Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
     elseif uplo === 'L'
         isupper = false
     else
-        throw(ArgumentError("Bidiagonal uplo argument must be upper 'U' or lower 'L', got $(repr(uplo))"))
+        throw(ArgumentError("bidiagonal uplo argument must be upper 'U' or lower 'L', got $(repr(uplo))"))
     end
     Bidiagonal(copy(dv), copy(ev), isupper)
 end
@@ -107,7 +107,7 @@ function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     elseif -size(M,1)<n<size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(BoundsError("Matrix size is $(size(M)), n is $n"))
+        throw(BoundsError("matrix size is $(size(M)), n is $n"))
     end
 end
 
@@ -150,7 +150,7 @@ function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if nA != n
-        throw(DimensionMismatch("Size of A is ($nA,$mA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copy!(tmp, 1, B, (i - 1)*n + 1, n)
@@ -167,7 +167,7 @@ for func in (:Ac_ldiv_B!, :At_ldiv_B!)
         tmp = similar(B,size(B,1))
         n = size(B, 1)
         if mA != n
-            throw(DimensionMismatch("Size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+            throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
         end
         for i = 1:size(B,2)
             copy!(tmp, 1, B, (i - 1)*n + 1, n)
