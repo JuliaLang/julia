@@ -690,6 +690,24 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     return gf;
 }
 
+static jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+{
+    jl_lambda_info_t *new_linfo =
+        jl_new_lambda_info(linfo->ast, linfo->sparams);
+    new_linfo->tfunc = linfo->tfunc;
+    new_linfo->name = linfo->name;
+    new_linfo->roots = linfo->roots;
+    new_linfo->specTypes = linfo->specTypes;
+    new_linfo->unspecialized = linfo->unspecialized;
+    new_linfo->specializations = linfo->specializations;
+    new_linfo->module = linfo->module;
+    new_linfo->def = linfo->def;
+    new_linfo->capt = linfo->capt;
+    new_linfo->file = linfo->file;
+    new_linfo->line = linfo->line;
+    return new_linfo;
+}
+
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                     jl_binding_t *bnd,
                                     jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
@@ -698,8 +716,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     // argdata is svec({types...}, svec(typevars...))
     jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
-    jl_value_t *gf=NULL;
-    JL_GC_PUSH3(&gf, &tvars, &argtypes);
+    jl_value_t *gf = NULL;
+    JL_GC_PUSH4(&gf, &tvars, &argtypes, &f);
 
     if (bnd && bnd->value != NULL && !bnd->constp) {
         jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
@@ -714,7 +732,10 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                     call_func = (jl_value_t*)jl_module_call_func(jl_current_module);
                 size_t na = jl_nparams(argtypes);
                 jl_svec_t *newargtypes = jl_alloc_svec(1 + na);
-                JL_GC_PUSH1(&newargtypes);
+                jl_lambda_info_t *new_linfo = NULL;
+                JL_GC_PUSH2(&newargtypes, &new_linfo);
+                new_linfo = jl_copy_lambda_info(f->linfo);
+                f = jl_new_closure(f->fptr, f->env, new_linfo);
                 size_t i=0;
                 if (iskw) {
                     assert(na > 0);
@@ -734,6 +755,12 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                 // edit args, insert type first
                 if (!jl_is_expr(f->linfo->ast)) {
                     f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
+                    jl_gc_wb(f->linfo, f->linfo->ast);
+                }
+                else {
+                    // Do not mutate the original ast since it might
+                    // be reused somewhere else
+                    f->linfo->ast = jl_copy_ast(f->linfo->ast);
                     jl_gc_wb(f->linfo, f->linfo->ast);
                 }
                 jl_array_t *al = jl_lam_args((jl_expr_t*)f->linfo->ast);
