@@ -66,7 +66,7 @@ function eigs(A, B;
 
     if !isempty(v0)
         if length(v0) != n
-            throw(DimensionMismatch())
+            throw(DimensionMismatch("initial residual vector v0 has length: $(length(v0)), should have length $(n)"))
         end
         if eltype(v0) != T
             throw(ArgumentError("starting vector must have element type $T, got $(eltype(v0))"))
