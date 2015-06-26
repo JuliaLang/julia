@@ -87,7 +87,12 @@ push!(c,200)
 s = Set([1])
 @test isequal(sizehint!(s, 10), Set([1]))
 @test isequal(empty!(s), Set())
-# TODO: rehash
+
+# rehash!
+s = Set(1:5)
+k = s.dict.keys
+Base.rehash!(s)
+@test !isequal(s.dict.keys, k)
 
 # start, done, next
 for data_in in ((7,8,4,5),
