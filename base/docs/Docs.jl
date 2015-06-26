@@ -177,6 +177,17 @@ function doc(f::DataType)
     return catdoc(docs...)
 end
 
+isfield(x) = isexpr(x, :.) && (isexpr(x.args[1], Symbol) && isexpr(x.args[2], QuoteNode, :quote))
+
+function fielddoc(T, k)
+#   k in fieldnames(T) || Text(sprint(io -> println(io, "")))
+  for mod in modules
+    if haskey(mod.META, T) && isa(mod.META[T], TypeDoc) && haskey(mod.META[T].fields, k)
+      return mod.META[T].fields[k]
+    end
+  end
+end
+
 # Generic Callables
 
 doc(f, ::Method) = doc(f)
@@ -213,6 +224,7 @@ end
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 namify(ex::Expr) = isexpr(ex, :.)? ex : namify(ex.args[1])
+namify(ex::QuoteNode) = ex.value
 namify(sy::Symbol) = sy
 
 function mdify(ex)
@@ -468,10 +480,14 @@ macro repl (ex)
                   haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
-            # Backwards-compatible with the previous help system, for now
-            let doc = @doc $(esc(ex))
-                doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
-            end
+          $(if isfield(ex)
+                :(fielddoc($(esc(ex.args[1])), $(ex.args[2])))
+            else
+                # Backwards-compatible with the previous help system, for now
+                :(let doc = @doc $(esc(ex))
+                      doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+                  end)
+            end)
         end
     end
 end
