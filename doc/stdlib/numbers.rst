@@ -15,112 +15,112 @@ Data Formats
 .. function:: bin(n[, pad])
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
-   
+
 
 .. function:: hex(n[, pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
-   
+
 
 .. function:: dec(n[, pad])
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
-   
+
 
 .. function:: oct(n[, pad])
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
-   
+
 
 .. function:: base(base, n[, pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``UInt8`` array of character values to use as digit symbols.
-   
+
 
 .. function:: digits(n[, base][, pad])
 
    Returns an array of the digits of ``n`` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``.
-   
+
 
 .. function:: digits!(array, n[, base])
 
    Fills an array of the digits of ``n`` in the given base. More significant digits are at higher indexes. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.
-   
+
 
 .. function:: bits(n)
 
    A string giving the literal bit representation of a number.
-   
+
 
 .. function:: parse(type, str[, base])
 
    Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
-   
+
 
 .. function:: tryparse(type, str[, base])
 
    Like ``parse``, but returns a ``Nullable`` of the requested type. The result will be null if the string does not contain a valid number.
-   
+
 
 .. function:: big(x)
 
    Convert a number to a maximum precision representation (typically some pitfalls with floating-point numbers.
-   
+
 
 .. function:: signed(x)
 
    Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
-   
+
 
 .. function:: unsigned(x) -> Unsigned
 
    Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
-   
+
 
 .. function:: float(x)
 
    Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. Converts strings to ``Float64``.
-   
+
 
 .. function:: significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array. If ``x`` is a non-zero finite number, than the result will be a number of the same type on the interval [1,2). Otherwise ``x`` is returned.
-   
+
 
 .. function:: exponent(x) -> Int
 
    Get the exponent of a normalized floating-point number.
-   
+
 
 .. function:: complex(r[, i])
 
    Convert real numbers or arrays to complex. ``i`` defaults to zero.
-   
+
 
 .. function:: bswap(n)
 
    Byte-swap an integer
-   
+
 
 .. function:: num2hex(f)
 
    Get a hexadecimal string of the binary representation of a floating point number
-   
+
 
 .. function:: hex2num(str)
 
    Convert a hexadecimal string to the floating point number it represents
-   
+
 
 .. function:: hex2bytes(s::ASCIIString)
 
    Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
-   
+
 
 .. function:: bytes2hex(bin_arr::Array{UInt8, 1})
 
    Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
-   
+
 
 General Number Functions and Constants
 --------------------------------------
@@ -128,12 +128,12 @@ General Number Functions and Constants
 .. function:: one(x)
 
    Get the multiplicative identity element for the type of x (x can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
-   
+
 
 .. function:: zero(x)
 
    Get the additive identity element for the type of x (x can also specify the type itself).
-   
+
 
 .. data:: pi
           π
@@ -190,87 +190,87 @@ General Number Functions and Constants
 .. function:: issubnormal(f) -> Bool
 
    Test whether a floating point number is subnormal
-   
+
 
 .. function:: isfinite(f) -> Bool
 
    Test whether a number is finite
-   
+
 
 .. function:: isinf(f) -> Bool
 
    Test whether a number is infinite
-   
+
 
 .. function:: isnan(f) -> Bool
 
    Test whether a floating point number is not a number (NaN)
-   
+
 
 .. function:: inf(f)
 
    Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
-   
+
 
 .. function:: nan(f)
 
    Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
-   
+
 
 .. function:: nextfloat(f)
 
    Get the next floating point number in lexicographic order
-   
+
 
 .. function:: prevfloat(f) -> FloatingPoint
 
    Get the previous floating point number in lexicographic order
-   
+
 
 .. function:: isinteger(x) -> Bool
 
    Test whether ``x`` or all its elements are numerically equal to some integer
-   
+
 
 .. function:: isreal(x) -> Bool
 
    Test whether ``x`` or all its elements are numerically equal to some real number
-   
+
 
 .. function:: Float32(x[, mode::RoundingMode])
 
    Create a Float32 from ``x``. If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded. See ``get_rounding`` for available rounding modes.
-   
+
 
 .. function:: Float64(x[, mode::RoundingMode])
 
    Create a Float64 from ``x``. If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded. See ``get_rounding`` for available rounding modes.
-   
+
 
 .. function:: BigInt(x)
 
    Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``).  The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. Instances can be constructed from strings via ``parse()``, or using the ``big`` string literal.
-   
+
 
 .. function:: BigFloat(x)
 
    Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64`` or a ``BigInt``. The usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``. Note that because decimal literals are converted to floating point numbers when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead prefer to initialize constants from strings via ``parse()``, or using the ``big`` string literal.
-   
+
 
 .. function:: get_rounding(T)
 
    Get the current floating point rounding mode for type ``T``, controlling the rounding of basic arithmetic functions (``+()``, Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
-   
+
 
 .. function:: set_rounding(T, mode)
 
    Set the rounding mode of floating point type ``T``, controlling the rounding of basic arithmetic functions (``+()``, ``-()``, ``*()``, Note that this may affect other types, for instance changing the rounding mode of ``Float64`` will change the rounding mode of
-   
+
 
 .. function:: with_rounding(f::Function, T, mode)
 
    Change the rounding mode of floating point type ``T`` for the duration of ``f``. It is logically equivalent to: See ``get_rounding`` for available rounding modes.
-   
+
 
 Integers
 ~~~~~~~~
@@ -278,57 +278,57 @@ Integers
 .. function:: count_ones(x::Integer) -> Integer
 
    Number of ones in the binary representation of ``x``.
-   
+
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of ``x``.
-   
+
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of ``x``.
-   
+
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of ``x``.
-   
+
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of ``x``.
-   
+
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of ``x``.
-   
+
 
 .. function:: isprime(x::BigInt[, reps = 25]) -> Bool
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``. ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
-   
+
 
 .. function:: isprime(x::BigInt[, reps = 25]) -> Bool
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``. ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
-   
+
 
 .. function:: primes(n)
 
    Returns a collection of the prime numbers <= ``n``.
-   
+
 
 .. function:: isodd(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and
-   
+
 
 .. function:: iseven(x::Integer) -> Bool
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and
-   
+
 
 BigFloats
 ---------
@@ -337,22 +337,22 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 .. function:: precision(num::FloatingPoint)
 
    Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
-   
+
 
 .. function:: get_bigfloat_precision()
 
    Get the precision (in bits) currently used for BigFloat arithmetic.
-   
+
 
 .. function:: set_bigfloat_precision(x::Int64)
 
    Set the precision (in bits) to be used to BigFloat arithmetic.
-   
+
 
 .. function:: with_bigfloat_precision(f::Function, precision::Integer)
 
    Change the BigFloat arithmetic precision (in bits) for the duration of ``f``. It is logically equivalent to:
-   
+
 
 .. _random-numbers:
 
@@ -376,50 +376,50 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 .. function:: srand([rng][, seed])
 
    Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For ``MersenneTwister``, the integers or a filename, in which case the seed is read from a file.
-   
+
 
 .. function:: MersenneTwister([seed])
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
-   
+
 
 .. function:: RandomDevice()
 
    Create a ``RandomDevice`` RNG object. Two such objects will always generate different streams of random numbers.
-   
+
 
 .. function:: rand([rng][, S][, dims...])
 
    Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
-   
+
 
 .. function:: rand!([rng], A[, coll])
 
    Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``. This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
-   
+
 
 .. function:: bitrand([rng][, dims...])
 
    Generate a ``BitArray`` of random boolean values.
-   
+
 
 .. function:: randn([rng][, dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally- distributed random numbers.
-   
+
 
 .. function:: randn!([rng], A::Array{Float64, N})
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
-   
+
 
 .. function:: randexp([rng][, dims...])
 
    Generate a random number according to the exponential distribution with scale 1. Optionally generate an array of such random numbers.
-   
+
 
 .. function:: randexp!([rng], A::Array{Float64, N})
 
    Fill the array A with random numbers following the exponential distribution (with scale 1).
-   
+
 

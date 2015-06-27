@@ -11,7 +11,7 @@
 .. function:: @profile()
 
    periodic backtraces.  These are appended to an internal buffer of backtraces.
-   
+
 
 .. currentmodule:: Base.Profile
 The methods in :mod:`Base.Profile` are not exported and need to be called e.g. as ``Profile.print()``.
@@ -19,40 +19,40 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: clear()
 
    Clear any existing backtraces from the internal buffer.
-   
+
 
 .. function:: print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine results exported by a previous call to ``retrieve()``. Supply the vector ``data`` of backtraces and a dictionary ``lidict`` of line information.
-   
+
 
 .. function:: print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine results exported by a previous call to ``retrieve()``. Supply the vector ``data`` of backtraces and a dictionary ``lidict`` of line information.
-   
+
 
 .. function:: init(; n::Integer, delay::Float64)
 
    Configure the ``delay`` between backtraces (measured in seconds), and the number ``n`` of instruction pointers that may be stored. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long list of instruction pointers. Default settings can be obtained by calling this function with no arguments, and each can be set independently using keywords or in the order ``(n, delay)``.
-   
+
 
 .. function:: fetch() -> data
 
    Returns a reference to the internal buffer of backtraces. Note that subsequent operations, like ``clear()``, can affect ``data`` unless you first make a copy. Note that the values in ``data`` have meaning only on this machine in the current session, because it depends on the exact memory addresses used in JIT-compiling. This function is primarily for internal use; ``retrieve()`` may be a better choice for most users.
-   
+
 
 .. function:: retrieve() -> data, lidict
 
    set of all backtraces (``data``) and a dictionary that maps the values that store the file name, function name, and line number. This function allows you to save profiling results for future analysis.
-   
+
 
 .. function:: callers(funcname[, data, lidict][, filename=<filename>][, linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
    Given a previous profiling run, determine who called a particular function. Supplying the filename (and optionally, range of line numbers over which the function is defined) allows you to disambiguate an overloaded method. The returned value is a vector containing a count of the number of calls and line information about the caller.  One can optionally supply backtrace data obtained from ``retrieve()``; otherwise, the current internal profile buffer is used.
-   
+
 
 .. function:: clear_malloc_data()
 
    Clears any stored memory allocation data when running julia with ` force JIT-compilation), then call ``clear_malloc_data()``. Then execute your command(s) again, quit Julia, and examine the resulting ``*.mem`` files.
-   
+
 
