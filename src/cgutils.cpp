@@ -154,7 +154,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
-DLLEXPORT std::map<Value *, void*> llvm_to_jl_value;
+DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 
 #ifdef USE_MCJIT
 class FunctionMover : public ValueMaterializer
@@ -277,8 +277,8 @@ public:
                 }
             }
             std::map<Value*, void *>::iterator it;
-            it = llvm_to_jl_value.find(GV);
-            if (it != llvm_to_jl_value.end()) {
+            it = jl_llvm_to_jl_value.find(GV);
+            if (it != jl_llvm_to_jl_value.end()) {
                 newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
                 newGV->setConstant(true);
             }
@@ -444,7 +444,7 @@ static Value *julia_gv(const char *cname, void *addr)
 
     // make the pointer valid for this session
 #ifdef USE_MCJIT
-    llvm_to_jl_value[gv] = addr;
+    jl_llvm_to_jl_value[gv] = addr;
 #else
     void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = addr;
