@@ -62,7 +62,6 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
         }
     }
 #endif
-    addComdat(gv);
     sys::DynamicLibrary::AddSymbol(name, addr);
 
 #else // USE_MCJIT
