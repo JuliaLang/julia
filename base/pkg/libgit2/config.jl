@@ -23,30 +23,32 @@ function GitConfig()
     return GitConfig(cfg_ptr_ptr[])
 end
 
-function get{T}(::Type{T}, c::GitConfig, name::AbstractString)
-    if T<:AbstractString
-        str_ptr = Ref{Ptr{UInt8}}(C_NULL)
-        @check ccall((:git_config_get_string, :libgit2), Cint, #TODO: git_config_get_string_buf
-                    (Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{UInt8}), str_ptr, c.ptr, name)
-        return bytestring(str_ptr[])
-    elseif is(T, Bool)
-        val_ptr = Ref(Cint(0))
-        @check ccall((:git_config_get_bool, :libgit2), Cint,
-              (Ptr{Cint}, Ptr{Void}, Ptr{UInt8}), val_ptr, c.ptr, name)
-        return Bool(val_ptr[])
-    elseif is(T, Int32)
-        val_ptr = Ref(Cint(0))
-        @check ccall((:git_config_get_bool, :libgit2), Cint,
-              (Ptr{Cint}, Ptr{Void}, Ptr{UInt8}), val_ptr, c.ptr, name)
-        return val_ptr[]
-    elseif is(T, Int64)
-        val_ptr = Ref(Cintmax_t(0))
-        @check ccall((:git_config_get_bool, :libgit2), Cint,
-              (Ptr{Cintmax_t}, Ptr{Void}, Ptr{UInt8}), val_ptr, c.ptr, name)
-        return val_ptr[]
-    else
-        return nothing
-    end
+function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
+    str_ptr = Ref{Ptr{UInt8}}(C_NULL)
+    @check ccall((:git_config_get_string, :libgit2), Cint, #TODO: git_config_get_string_buf
+                (Ptr{Ptr{UInt8}}, Ptr{Void}, Cstring), str_ptr, c.ptr, name)
+    return bytestring(str_ptr[])
+end
+
+function get(::Type{Bool}, c::GitConfig, name::AbstractString)
+    val_ptr = Ref(Cint(0))
+    @check ccall((:git_config_get_bool, :libgit2), Cint,
+          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+    return Bool(val_ptr[])
+end
+
+function get(::Type{Int32}, c::GitConfig, name::AbstractString)
+    val_ptr = Ref(Cint(0))
+    @check ccall((:git_config_get_int32, :libgit2), Cint,
+          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+    return val_ptr[]
+end
+
+function get(::Type{Int64}, c::GitConfig, name::AbstractString)
+    val_ptr = Ref(Cintmax_t(0))
+    @check ccall((:git_config_get_int64, :libgit2), Cint,
+          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+    return val_ptr[]
 end
 
 function get{T}(c::GitConfig, name::AbstractString, default::T)
@@ -77,21 +79,21 @@ end
 
 function set!{T <: AbstractString}(c::GitConfig, name::AbstractString, value::T)
     @check ccall((:git_config_set_string, :libgit2), Cint,
-             (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}), c.ptr, name, value)
+                  (Ptr{Void}, Cstring, Cstring), c.ptr, name, value)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Bool)
     bval = Int32(value)
     @check ccall((:git_config_set_bool, :libgit2), Cint,
-             (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, bval)
+                  (Ptr{Void}, Cstring, Cint), c.ptr, name, bval)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Int32)
     @check ccall((:git_config_set_int32, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{UInt8}, Cint), c.ptr, name, value)
+                  (Ptr{Void}, Cstring, Cint), c.ptr, name, value)
 end
 
 function set!(c::GitConfig, name::AbstractString, value::Int64)
     @check ccall((:git_config_set_int64, :libgit2), Cint,
-             (Ptr{Void}, Ptr{UInt8}, Cintmax_t), c.ptr, name, value)
+                  (Ptr{Void}, Cstring, Cintmax_t), c.ptr, name, value)
 end

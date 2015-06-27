@@ -13,7 +13,7 @@ Signature(sig::GitSignature) = Signature(sig.ptr)
 function Signature(name::AbstractString, email::AbstractString)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_now, :libgit2), Cint,
-                 (Ptr{Ptr{SignatureStruct}}, Ptr{UInt8}, Ptr{UInt8}), sig_ptr_ptr, name, email)
+                 (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring), sig_ptr_ptr, name, email)
     sig = GitSignature(sig_ptr_ptr[])
     s = Signature(sig.ptr)
     finalize(sig)
@@ -30,7 +30,7 @@ end
 function Base.convert(::Type{GitSignature}, sig::Signature)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_new, :libgit2), Cint,
-                 (Ptr{Ptr{SignatureStruct}}, Ptr{Uint8}, Ptr{Uint8}, Cint, Cint),
+                 (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring, Cint, Cint),
                  sig_ptr_ptr, sig.name, sig.email, sig.time, sig.time_offset)
     return GitSignature(sig_ptr_ptr[])
 end

@@ -154,11 +154,11 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     end
 end
 
-function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{UInt8}, url::Ptr{UInt8}, payload::Ptr{Void})
+function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Cstring, url::Cstring, payload::Ptr{Void})
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
     err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}),
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
                 remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
 
@@ -172,7 +172,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Ptr{
     err != 0 && return Cint(err)
     return Cint(0)
 end
-const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}))
+const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Void}))
 
 """ git fetch [<url>|<repository>] [<refspecs>]"""
 function fetch{T<:AbstractString}(repo::GitRepo;
@@ -340,7 +340,7 @@ function clone(url::AbstractString, path::AbstractString;
     clone_opts_ref = Ref(clone_opts)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{UInt8}, Ptr{UInt8}, Ref{CloneOptionsStruct}),
+            (Ptr{Ptr{Void}}, Cstring, Cstring, Ref{CloneOptionsStruct}),
             repo_ptr_ptr, url, path, clone_opts_ref)
     return GitRepo(repo_ptr_ptr[])
 end
