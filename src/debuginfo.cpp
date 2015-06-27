@@ -30,6 +30,9 @@
 #endif
 #ifdef _OS_WINDOWS_
 #include <llvm/Object/COFF.h>
+#   ifdef LLVM37
+#       include <llvm/Object/ELFObjectFile.h>
+#   endif
 #endif
 
 #if defined(USE_MCJIT) && !defined(LLVM36) && defined(_OS_DARWIN_)
@@ -335,7 +338,7 @@ public:
 #elif defined(_OS_WINDOWS_)
 #   if defined(LLVM37)
             assert(obj.isELF());
-            Size = sym_iter.getCommonSize();
+            Size = ((llvm::object::ELFSymbolRef)sym_iter).getSize();
 #   else
             sym_iter.getSize(Size);
 #   endif
