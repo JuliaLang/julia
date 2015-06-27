@@ -9,7 +9,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         if length(ev)==length(dv)-1
             new(dv, ev, isupper)
         else
-            throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
+            throw(DimensionMismatch("length of diagonal vector dv: $(length(dv)) must be equal to length of off-diagonal vector ev: $(length(ev))"))
         end
     end
 end
@@ -81,7 +81,7 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-size(M::Bidiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(M.dv) : 1)
+size(M::Bidiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension d: $(d), must be ≥ 1")) : (d<=2 ? length(M.dv) : 1)
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -107,7 +107,7 @@ function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     elseif -size(M,1)<n<size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(BoundsError("matrix size is $(size(M)), n is $n"))
+        throw(BoundsError("matrix dimensions are $(size(M)), n is $n"))
     end
 end
 
@@ -146,11 +146,11 @@ A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesu
 At_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(transpose(A), b)
 Ac_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(ctranspose(A), b)
 function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
-    nA,mA = size(A)
+    nA, mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if nA != n
-        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("number of rows in A: ($nA) must be equal to number of rows in B: $(n)"))
     end
     for i = 1:size(B,2)
         copy!(tmp, 1, B, (i - 1)*n + 1, n)
@@ -163,11 +163,11 @@ A_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = A_ldiv_B
 
 for func in (:Ac_ldiv_B!, :At_ldiv_B!)
     @eval function ($func)(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
-        nA,mA = size(A)
+        nA, mA = size(A)
         tmp = similar(B,size(B,1))
         n = size(B, 1)
         if mA != n
-            throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+            throw(DimensionMismatch("number of columns in A: ($mA) must be equal to number of rows in B: $(n)"))
         end
         for i = 1:size(B,2)
             copy!(tmp, 1, B, (i - 1)*n + 1, n)

@@ -7,7 +7,7 @@ immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
-        length(dv) - 1 <= length(ev) <= length(dv) || throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but must be either $(length(dv) - 1) or $(length(dv))."))
+        length(dv) - 1 <= length(ev) <= length(dv) || throw(DimensionMismatch("subdiagonal has length $(length(ev)), must be either $(length(dv) - 1) or $(length(dv))."))
         new(dv,ev)
     end
 end
@@ -77,7 +77,7 @@ function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
     end
     if n != size(C, 2)
-        throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
+        throw(DimensionMismatch("second dimension of B: $n, does not match second dimension of C: $(size(C,2))"))
     end
 
     α = S.dv
@@ -227,7 +227,7 @@ end
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function size(M::Tridiagonal, d::Integer)
     if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $d"))
+        throw(ArgumentError("dimension d: $(d) must be ≥ 1"))
     elseif d <= 2
         return length(M.d)
     else

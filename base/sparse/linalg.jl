@@ -121,7 +121,7 @@ end
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
 function *{T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
-    A.m==length(X) || throw(DimensionMismatch())
+    A.m == length(X) || throw(DimensionMismatch())
     Y = zeros(promote_type(T1,T2), A.n)
     nzv = A.nzval
     rv = A.rowval
@@ -134,7 +134,7 @@ end
 *{TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, Tuple{SparseMatrixCSC, AbstractMatrix}, A, X)
 function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
-    A.n==mX || throw(DimensionMismatch())
+    A.n == mX || throw(DimensionMismatch("number of columns in A: $(A.n) should be equal to length of x: $(length(x))"))
     Y = zeros(promote_type(TvA,TX), A.m, nX)
     nzv = A.nzval
     rv = A.rowval
@@ -171,7 +171,7 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
                          sortindices::Symbol = :sortcols)
     mA, nA = size(A)
     mB, nB = size(B)
-    nA==mB || throw(DimensionMismatch())
+    nA == mB || throw(DimensionMismatch("number of columns in A: $(nA) must be equal to number of rows in B: $(mB)"))
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval

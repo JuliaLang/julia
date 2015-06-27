@@ -2,7 +2,7 @@
 
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
-    length(x) == length(y) || throw(DimensionMismatch())
+    length(x) == length(y) || throw(DimensionMismatch("length of vector x: $(length(x)) must be equal to length of vector y: $(length(y))"))
     s = 0
     xc = x.chunks
     yc = y.chunks
