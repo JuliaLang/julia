@@ -1,4 +1,5 @@
 using .Markdown
+using Base.Markdown: MD
 
 cd(dirname(@__FILE__))
 
@@ -7,6 +8,22 @@ isop(func) = ismatch(r"[^\w@!.]|^!$", func)
 ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 
 getdoc(mod, x) = try eval(parse("@doc $(ident(mod, x))")) catch e end
+
+flat_content(md) = md
+flat_content(xs::Vector) = reduce((xs, x) -> vcat(xs,flat_content(x)), [], xs)
+flat_content(md::MD) = flat_content(md.content)
+flatten(md::MD) = MD(flat_content(md))
+
+issig(md) = isa(md, Markdown.Code) && length(split(md.code, "\n")) == 1
+
+function splitsig(md)
+  md = flatten(md)
+  sig = nothing
+  if !isempty(md.content) && issig(md.content[1])
+      sig = shift!(md.content)
+  end
+  return md, sig
+end
 
 function translate(file)
   @assert isfile(file)
@@ -24,18 +41,20 @@ function translate(file)
         func = match(r".. function:: (@?[^\(\s\{]+)", l)
         func == nothing && (warn("bad function $l"); continue)
         func = func.captures[1]
+        doc = getdoc(mod, func)
 
-        if getdoc(mod, func) == nothing
+        if doc == nothing
           info("no docs for $(ident(mod, func))")
           println(io, l)
           doccing = false
           continue
         end
 
+        doc, sig = splitsig(doc)
         doccing = true
-        println(io, l)
+        println(io, sig == nothing ? l : ".. function:: $(sig.code)")
         println(io)
-        for l in split(Markdown.rst(getdoc(mod, func)), "\n")
+        for l in split(Markdown.rst(doc), "\n")
           println(io, "   ", l)
         end
         println(io)
