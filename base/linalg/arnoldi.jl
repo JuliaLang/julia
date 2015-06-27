@@ -19,10 +19,10 @@ function eigs(A, B;
     sym = issym(A) && !iscmplx
     nevmax=sym ? n-1 : n-2
     if nevmax <= 0
-        throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
+        throw(ArgumentError("input matrix A is too small, use eigfact instead"))
     end
     if nev > nevmax
-        warn("Adjusting nev from $nev to $nevmax")
+        warn("adjusting nev from $nev to $nevmax")
         nev = nevmax
     end
     if nev <= 0
@@ -30,7 +30,7 @@ function eigs(A, B;
     end
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("Adjusting ncv from $ncv to $ncvmin")
+        warn("adjusting ncv from $ncv to $ncvmin")
         ncv = ncvmin
     end
     ncv = BlasInt(min(ncv, n))
@@ -41,7 +41,7 @@ function eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        warn("use symbols instead of strings for specifying which eigenvalues to compute")
         which=symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -134,7 +134,7 @@ function eigs(A, B;
     # Issue 10495, 10701: Check that all eigenvalues are converged
     nev = length(output[1])
     nconv = output[ritzvec ? 3 : 2]
-    nev ≤ nconv || warn("not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
+    nev ≤ nconv || warn("Not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
 
     return output
 end

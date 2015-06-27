@@ -15,7 +15,7 @@ convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
     if d[1] != d[2]
-        throw(ArgumentError("Diagonal matrix must be square"))
+        throw(ArgumentError("diagonal matrix must be square"))
     end
     return Diagonal{T}(Array(T,d[1]))
 end
@@ -78,7 +78,7 @@ Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     if length(v) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
+        throw(DimensionMismatch("Diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
     for i=1:length(D.diag)
         d = D.diag[i]
@@ -91,7 +91,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
 end
 function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
     if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
+        throw(DimensionMismatch("Diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
     for i=1:length(D.diag)
         d = D.diag[i]
@@ -125,7 +125,7 @@ sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+        throw(DimensionMismatch("Diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
     end
     (m == 0 || n == 0) && return B
     for j = 1:n

@@ -216,7 +216,7 @@ end
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     n = length(d)
     if (length(dl) != n-1 || length(du) != n-1)
-        throw(ArgumentError("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
+        throw(ArgumentError("cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
     end
     Tridiagonal(dl, d, du, zeros(T,n-2))
 end
@@ -250,7 +250,7 @@ end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
-        throw(DimensionMismatch("tridiagonal matrices must be square"))
+        throw(DimensionMismatch("Tridiagonal matrices must be square"))
     end
     Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
 end
