@@ -19,7 +19,7 @@ end
 @doc ("I am a macro";)  ModuleMacroDoc.@m
 
 @test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == "I am a macro"
+@test (@doc ModuleMacroDoc.@m) == ["I am a macro"]
 
 # apropos function testing
 

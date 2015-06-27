@@ -73,17 +73,21 @@ function trackmethod(def)
 end
 
 type FuncDoc
+    main
     order::Vector{Method}
     meta::Dict{Method, Any}
     source::Dict{Method, Any}
 end
 
-FuncDoc() = FuncDoc(Method[], Dict(), Dict())
+FuncDoc() = FuncDoc(nothing, [], Dict(), Dict())
 
-getset(coll, key, default) = coll[key] = get(coll, key, default)
+function doc!(f::Function, data)
+    fd = get!(meta(), f, FuncDoc())
+    fd.main = data
+end
 
 function doc!(f::Function, m::Method, data, source)
-    fd = getset(meta(), f, FuncDoc())
+    fd = get!(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
     !haskey(fd.meta, m) && push!(fd.order, m)
     fd.meta[m] = data
@@ -95,6 +99,7 @@ function doc(f::Function)
     for mod in modules
         if haskey(mod.META, f)
             fd = mod.META[f]
+            length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
             if isa(fd, FuncDoc)
                 for m in fd.order
                     push!(docs, fd.meta[m])
@@ -117,6 +122,81 @@ end
 catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
+# Type Documentation
+
+isdoc(x) = isexpr(x, :string, AbstractString) ||
+    (isexpr(x, :macrocall) && endswith(string(x.args[1]), "_str"))
+
+dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
+
+function field_meta (def)
+    meta = Dict()
+    doc = nothing
+    for l in def.args[3].args
+        if isdoc(l)
+            doc = mdify(l)
+        elseif doc != nothing && isexpr(l, Symbol, :(::))
+            meta[namify(l)] = doc
+            doc = nothing
+        end
+    end
+    return dict_expr(meta)
+end
+
+type TypeDoc
+    main
+    fields::Dict{Symbol, Any}
+    order::Vector{Method}
+    meta::Dict{Method, Any}
+end
+
+TypeDoc() = TypeDoc(nothing, Dict(), [], Dict())
+
+function doc!(t::DataType, data, fields)
+    td = get!(meta(), t, TypeDoc())
+    td.main = data
+    td.fields = fields
+end
+
+function doc!(f::DataType, m::Method, data, source)
+    td = get!(meta(), f, TypeDoc())
+    isa(td, TypeDoc) || error("Can't document a method when the type already has metadata")
+    !haskey(td.meta, m) && push!(td.order, m)
+    td.meta[m] = data
+end
+
+function doc(f::DataType)
+    docs = []
+    for mod in modules
+        if haskey(mod.META, f)
+            fd = mod.META[f]
+            if isa(fd, TypeDoc)
+                length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
+                for m in fd.order
+                    push!(docs, fd.meta[m])
+                end
+            elseif length(docs) == 0
+                return fd
+            end
+        end
+    end
+    return catdoc(docs...)
+end
+
+isfield(x) = isexpr(x, :.) &&
+  (isexpr(x.args[1], Symbol) || isfield(x.args[1])) &&
+  isexpr(x.args[2], QuoteNode, :quote)
+
+function fielddoc(T, k)
+  for mod in modules
+    if haskey(mod.META, T) && isa(mod.META[T], TypeDoc) && haskey(mod.META[T].fields, k)
+      return mod.META[T].fields[k]
+    end
+  end
+  Text(sprint(io -> (print(io, "$T has fields: ");
+                     print_joined(io, fieldnames(T), ", ", " and "))))
+end
+
 # Generic Callables
 
 doc(f, ::Method) = doc(f)
@@ -138,8 +218,10 @@ const keywords = Dict{Symbol,Any}()
 
 # Usage macros
 
+isexpr(x::Expr) = true
+isexpr(x) = false
 isexpr(x::Expr, ts...) = x.head in ts
-isexpr{T}(x::T, ts...) = T in ts
+isexpr(x, ts...) = any(T->isa(T, Type) && isa(x, T), ts)
 
 function unblock(ex)
     isexpr(ex, :block) || return ex
@@ -150,12 +232,13 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(ex::Expr) = isexpr(ex, :.)? ex : namify(ex.args[1])
+namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
+namify(ex::QuoteNode) = ex.value
 namify(sy::Symbol) = sy
 
 function mdify(ex)
-    if isa(ex, AbstractString)
-        :(@doc_str $ex)
+    if isexpr(ex, AbstractString, :string)
+        :(Markdown.parse($(esc(ex))))
     else
         esc(ex)
     end
@@ -179,6 +262,15 @@ function funcdoc(meta, def)
     end
 end
 
+function typedoc(meta, def, name)
+    quote
+        @init
+        $(esc(def))
+        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def))))
+        nothing
+    end
+end
+
 function objdoc(meta, def)
     quote
         @init
@@ -193,7 +285,7 @@ fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 function docm(meta, def)
     def′ = unblock(def)
     isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
-    isexpr(def′, :type, :bitstype) && return namedoc(meta, def, namify(def′.args[2]))
+    isexpr(def′, :type, :bitstype) && return typedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     fexpr(def′) && return funcdoc(meta, def)
     isexpr(def′, :macrocall) && (def = namify(def′))
@@ -316,7 +408,7 @@ end
 writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
-@doc "Create an `HTML` object from a literal string." ->
+"Create an `HTML` object from a literal string."
 macro html_str(s)
     :(HTML($s))
 end
@@ -397,9 +489,13 @@ macro repl (ex)
                   haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
-            # Backwards-compatible with the previous help system, for now
-            let doc = @doc $(esc(ex))
-                doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+            if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
+                $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
+            else
+                # Backwards-compatible with the previous help system, for now
+                let doc = @doc $(esc(ex))
+                    doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+                end
             end
         end
     end
