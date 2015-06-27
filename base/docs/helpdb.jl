@@ -2159,7 +2159,7 @@ doc"""
     setenv(command, env; dir=working_dir)
 
 Set environment variables to use when running the given command.
-of strings of the form ``var=val``, or zero or more
+of strings of the form `var=val`, or zero or more
 replace) the existing environment, create `env` by `copy(ENV)`
 and then setting `env[`var`]=val` as desired, or use
 The `dir` keyword argument can be used to specify a working
@@ -2171,7 +2171,7 @@ doc"""
     withenv(f::Function, kv::Pair...)
 
 Execute `f()` in an environment that is temporarily modified (not
-replaced as in `setenv`) by zero or more ``var`=>val`
+replaced as in `setenv`) by zero or more `var`=>val`
 arguments `kv`.  `withenv` is generally used via the
 be used to temporarily unset an environment variable (if it is
 set).  When `withenv` returns, the original environment has been
@@ -4472,8 +4472,8 @@ doc"""
 
 Construct a date formatting object that can be passed repeatedly
 for parsing similarly formatted date strings. `format` is a
-format string in the form described above (e.g. ``yyyy-mm-
-dd``).
+format string in the form described above (e.g. `yyyy-mm-
+dd`).
 """
 Dates.Dates
 
@@ -5934,7 +5934,7 @@ is large, and is only read once and not written to.
 If `ignore_invalid_chars` is `true`, bytes in `source` with
 invalid character encoding will be ignored. Otherwise an error is
 thrown indicating the offending character position.
-If `quotes` is `true`, column enclosed within double-quote (``)
+If `quotes` is `true`, column enclosed within double-quote `"`
 characters are allowed to contain new lines and column delimiters.
 Double-quote characters within a quoted field must be escaped with
 another double-quote.
@@ -6058,7 +6058,7 @@ stack, typically using the richest supported multimedia output for
 display `d` only, throwing a `MethodError` if `d` cannot
 display objects of this type.
 There are also two variants with a `mime` argument (a MIME type
-string, such as ``image/png``), which attempt to display `x`
+string, such as `image/png`), which attempt to display `x`
 using the requested MIME type *only*, throwing a `MethodError` if
 this type is not supported by either the display(s) or by `x`.
 With these variants, one can also supply the `raw` data in the
@@ -6096,16 +6096,16 @@ doc"""
 The `display` functions ultimately call `writemime` in order to
 write an object `x` as a given `mime` type to a given I/O
 provide a rich multimedia representation of a user-defined type
-for `T`, via: `writemime(stream, ::MIME`mime`, x::T) = ...`,
+for `T`, via: `writemime(stream, ::MIME"mime", x::T) = ...`,
 where `mime` is a MIME-type string and the function body calls
 literal strings; to construct `MIME` types in a more flexible
-manner use `MIME{symbol(``)}`.)
+manner use `MIME{symbol("")}`.)
 For example, if you define a `MyImage` type and know how to write
 it to a PNG file, you could define a function `writemime(stream,
 be displayed on any PNG-capable `Display` (such as IJulia). As
 usual, be sure to `import Base.writemime` in order to add new
 methods to the built-in Julia function `writemime`.
-Technically, the `MIME`mime`` macro defines a singleton type
+Technically, the `MIME"mime"` macro defines a singleton type
 for the given `mime` string, which allows us to exploit Julia's
 dispatch mechanisms in determining how to display objects of any
 given type.
@@ -6127,8 +6127,8 @@ doc"""
 Returns an `AbstractString` or `Vector{UInt8}` containing the
 representation of `x` in the requested `mime` type, as written
 by `writemime` (throwing a `MethodError` if no appropriate
-MIME types with textual representations (such as ``text/html``
-or ``application/postscript``), whereas binary data is returned
+MIME types with textual representations (such as `text/html`
+or `application/postscript`), whereas binary data is returned
 as `Vector{UInt8}`.  (The function `istext(mime)` returns
 whether or not Julia treats a given `mime` type as text.)
 As a special case, if `x` is an `AbstractString` (for textual
@@ -6190,7 +6190,7 @@ Note that the file must be stored in binary format, and no format
 conversions are possible (this is a limitation of operating
 systems, not Julia).
 The file is passed via the stream argument.  When you initialize
-the stream, use ``r`` for a `read-only` array, and ``w+``
+the stream, use `r` for a `read-only` array, and `w+`
 to create a new array used to write values to disk.
 Optionally, you can specify an offset (in bytes) if, for example,
 you want to skip over a header in the file. The default value for
@@ -6352,7 +6352,7 @@ bind
 doc"""
     send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
-Send `msg` over `socket to ``host:port`.
+Send `msg` over `socket to `host:port`.
 """
 send
 
@@ -7169,8 +7169,8 @@ doc"""
 
 Reorders the Generalized Schur factorization of a matrix `(A, B) =
 and returns a GeneralizedSchur object `GS`.  The selected
-eigenvalues appear in the leading diagonal of both``(GS[:S],
-GS[:T])`` and the left and right unitary/orthogonal Schur vectors
+eigenvalues appear in the leading diagonal of both`(GS[:S],
+GS[:T])` and the left and right unitary/orthogonal Schur vectors
 are also reordered such that `(A, B) = GS[:Q]*(GS[:S],
 GS[:T])*GS[:Z]^{H}` still holds and the generalized eigenvalues of
 """
@@ -8219,7 +8219,7 @@ cld
 doc"""
     mod(x, y)
 
-Modulus after division, returning in the range [0,``y``), if `y`
+Modulus after division, returning in the range [0,`y`), if `y`
 is positive, or (`y`,0] if `y` is negative.
 """
 mod
@@ -8239,7 +8239,7 @@ doc"""
     rem(x, y)
 
 Remainder from Euclidean division, returning a value of the same
-sign as``x``, and smaller in magnitude than `y`. This value is
+sign as`x`, and smaller in magnitude than `y`. This value is
 always exact.
 """
 rem
@@ -11245,7 +11245,7 @@ returns immediately.
 unlock
 
 doc"""
-    addprocs(n::Integer; exeflags=``) -> List of process identifiers
+    addprocs(n::Integer; exeflags="") -> List of process identifiers
 
 Launches workers using the in-built `LocalManager` which only
 launches workers on the local host. This can be used to take
@@ -11262,7 +11262,7 @@ Equivalent to `addprocs(CPU_CORES)`
 addprocs
 
 doc"""
-    addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
+    addprocs(machines; tunnel=false, sshflags=`, max_parallel=10, exeflags=`) -> List of process identifiers
 
 Add processes on remote machines via SSH. Requires julia to be
 installed in the same location on each node, or to be available via
@@ -11459,7 +11459,7 @@ RemoteRef
 doc"""
     timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-Waits till `testcb` returns `true` or for `secs`` seconds,
+Waits till `testcb` returns `true` or for `secs` seconds,
 whichever is earlier. `testcb` is polled every `pollint`
 seconds.
 """
@@ -11816,7 +11816,7 @@ doc"""
     generate(pkg, license)
 
 Generate a new package named `pkg` with one of these license
-keys: ``MIT``, ``BSD`` or ``ASL``. If you want to make
+keys: `MIT`, `BSD` or `ASL`. If you want to make
 a package with a different license, you can edit it afterwards.
 Generate creates a git repo at `Pkg.dir(pkg)` for the package and
 inside it `LICENSE.md`, `README.md`, the julia entrypoint
