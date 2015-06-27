@@ -55,7 +55,7 @@ function translate(file)
         println(io, sig == nothing ? l : ".. function:: $(sig.code)")
         println(io)
         for l in split(Markdown.rst(doc), "\n")
-          println(io, "   ", l)
+          ismatch(r"^\s*$", l) ? println(io) : println(io, "   ", l)
         end
         println(io)
       elseif doccing && (startswith(l, "   ") || ismatch(r"^\s*$", l))
