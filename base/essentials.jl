@@ -245,3 +245,10 @@ const (:) = Colon()
 # For passing constants through type inference
 immutable Val{T}
 end
+
+# A trait for bounds check dispatch
+abstract BoundsCheck
+immutable BoundsCheckOff <: BoundsCheck end
+immutable BoundsCheckOn  <: BoundsCheck end
+Bool(::BoundsCheckOn) = true
+Bool(::BoundsCheckOff) = false

@@ -35,13 +35,15 @@ fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
 
-getindex(D::Diagonal, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_getindex(D, i, j))
-unsafe_getindex{T}(D::Diagonal{T}, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(T)
+function getindex{T}(b::BoundsCheck, D::Diagonal{T}, i::Int, j::Int)
+    Bool(b) && checkbounds(D, i, j)
+    i == j ? getindex(BoundsCheckOff(), D.diag, i) : zero(T)
+end
 
-setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
-function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
+function setindex!(b::BoundsCheck, D::Diagonal, v, i::Int, j::Int)
+    Bool(b) && checkbounds(D, i, j)
     if i == j
-        unsafe_setindex!(D.diag, v, i)
+        setindex!(BoundsCheckOff(), D.diag, v, i)
     else
         v == 0 || throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
     end
