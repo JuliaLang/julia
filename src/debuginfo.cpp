@@ -291,7 +291,11 @@ public:
 
 #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
+#           ifdef LLVM37
+            SymbolType = sym_iter.getType();
+#           else
             sym_iter.getType(SymbolType);
+#           endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter.getAddress(Addr);
             sym_iter.getSection(Section);
@@ -330,8 +334,8 @@ public:
 #   endif
 #elif defined(_OS_WINDOWS_)
 #   if defined(LLVM37)
-            assert(obj.isELF)
-            Size = obj.getSymbolSize(sym_iter);
+            assert(obj.isELF());
+            Size = sym_iter.getCommonSize();
 #   else
             sym_iter.getSize(Size);
 #   endif
@@ -919,7 +923,7 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 {
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
-    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.size > dwAddr) {
+    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.SectionSize > dwAddr) {
         return (DWORD64)(intptr_t)(*it).first;
     }
     return 0;
