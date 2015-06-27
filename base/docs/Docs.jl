@@ -135,7 +135,7 @@ function field_meta (def)
     for l in def.args[3].args
         if isdoc(l)
             doc = mdify(l)
-        elseif doc != nothing && isexpr(l, Symbol, Expr)
+        elseif doc != nothing && isexpr(l, Symbol, :(::))
             meta[namify(l)] = doc
             doc = nothing
         end
