@@ -650,7 +650,7 @@ end
 
 function A_rdiv_B!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -666,7 +666,7 @@ function A_rdiv_B!(A::StridedMatrix, B::UpperTriangular)
 end
 function A_rdiv_B!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -683,7 +683,7 @@ end
 
 function A_rdiv_B!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -699,7 +699,7 @@ function A_rdiv_B!(A::StridedMatrix, B::LowerTriangular)
 end
 function A_rdiv_B!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -716,7 +716,7 @@ end
 
 function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -732,7 +732,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
 end
 function A_rdiv_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -749,7 +749,7 @@ end
 
 function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m
@@ -765,7 +765,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
 end
 function A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
-    if size(A, 1) != n
+    if size(B, 1) != n
         throw(DimensionMismatch("left and right hand side does not fit"))
     end
     for i = 1:m

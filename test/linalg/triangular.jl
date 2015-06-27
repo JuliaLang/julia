@@ -2,7 +2,7 @@
 
 debug = false
 using Base.Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular
+using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bc!
 
 debug && println("Triangular matrices")
 
@@ -294,3 +294,19 @@ end
 @test isdiag(LowerTriangular(diagm([1,2,3,4])))
 @test !isdiag(UpperTriangular(rand(4, 4)))
 @test !isdiag(LowerTriangular(rand(4, 4)))
+
+# Test throwing in fallbacks for non BlasFloat/BlasComplex in A_rdiv_Bx!
+let
+    n = 5
+    A = rand(Float16, n, n)
+    B = rand(Float16, n-1, n-1)
+    @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UnitUpperTriangular(B))
+
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitUpperTriangular(B))
+end
