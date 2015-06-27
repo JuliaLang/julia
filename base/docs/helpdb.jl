@@ -1675,22 +1675,6 @@
 
   @doc doc"""
   ```rst
-  help(name)
-
-   Get help for a function. "name" can be an object or a string.
-  ```
-  """ help
-
-  @doc doc"""
-  ```rst
-  apropos(string)
-
-   Search documentation for functions related to "string".
-  ```
-  """ apropos
-
-  @doc doc"""
-  ```rst
   which(f, types)
 
    Returns the method of "f" (a "Method" object) that would be
