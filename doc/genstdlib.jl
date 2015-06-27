@@ -35,7 +35,9 @@ function translate(file)
         doccing = true
         println(io, l)
         println(io)
-        println(io, Markdown.rst(getdoc(mod, func)))
+        for l in split(Markdown.rst(getdoc(mod, func)), "\n")
+          println(io, "   ", l)
+        end
         println(io)
       elseif doccing && (startswith(l, "   ") || ismatch(r"^\s*$", l))
       else
