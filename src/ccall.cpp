@@ -164,7 +164,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
             libsym = get_library(f_lib);
             assert(libsym != NULL);
 #ifdef USE_MCJIT
-            llvm_to_jl_value[libptrgv] = libsym;
+            jl_llvm_to_jl_value[libptrgv] = libsym;
 #else
             *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
 #endif
@@ -172,7 +172,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     }
     if (libsym == NULL) {
 #ifdef USE_MCJIT
-        libsym = (uv_lib_t*)llvm_to_jl_value[libptrgv];
+        libsym = (uv_lib_t*)jl_llvm_to_jl_value[libptrgv];
 #else
         libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
 #endif
@@ -191,7 +191,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
            initnul, name);
         symMapGV[f_name] = llvmgv;
 #ifdef USE_MCJIT
-        llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
+        jl_llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
 #else
         *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
 #endif
