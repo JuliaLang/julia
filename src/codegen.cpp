@@ -883,8 +883,10 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 #else
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->specFunctionObject);
 #endif
+#ifndef KEEP_BODIES
             if (!imaging_mode)
                 ((Function*)li->specFunctionObject)->deleteBody();
+#endif
         }
         JL_SIGATOMIC_END();
     }
