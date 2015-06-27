@@ -1325,4 +1325,7 @@ function ishermitian(A::Sparse{Complex{Float64}})
     end
 end
 
+(*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseMatrixCSC{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, B::SparseMatrixCSC{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
+
 end #module
