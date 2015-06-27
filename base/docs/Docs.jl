@@ -123,7 +123,6 @@ isdoc(x) = isexpr(x, :string, AbstractString) ||
 dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
 
 function field_meta (def)
-    def
     meta = Dict()
     doc = nothing
     for l in def.args[3].args
@@ -165,7 +164,7 @@ function doc(f::DataType)
         if haskey(mod.META, f)
             fd = mod.META[f]
             if isa(fd, TypeDoc)
-                length(docs) == 0 && push!(docs, fd.main)
+                length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
                 for m in fd.order
                     push!(docs, fd.meta[m])
                 end
@@ -177,15 +176,18 @@ function doc(f::DataType)
     return catdoc(docs...)
 end
 
-isfield(x) = isexpr(x, :.) && (isexpr(x.args[1], Symbol) && isexpr(x.args[2], QuoteNode, :quote))
+isfield(x) = isexpr(x, :.) &&
+  (isexpr(x.args[1], Symbol) || isfield(x.args[1])) &&
+  isexpr(x.args[2], QuoteNode, :quote)
 
 function fielddoc(T, k)
-#   k in fieldnames(T) || Text(sprint(io -> println(io, "")))
   for mod in modules
     if haskey(mod.META, T) && isa(mod.META[T], TypeDoc) && haskey(mod.META[T].fields, k)
       return mod.META[T].fields[k]
     end
   end
+  Text(sprint(io -> (print(io, "$T has fields: ");
+                     print_joined(io, fieldnames(T), ", ", " and "))))
 end
 
 # Generic Callables
@@ -223,13 +225,13 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(ex::Expr) = isexpr(ex, :.)? ex : namify(ex.args[1])
+namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
 namify(ex::QuoteNode) = ex.value
 namify(sy::Symbol) = sy
 
 function mdify(ex)
-    if isa(ex, AbstractString)
-        :(@doc_str $ex)
+    if isexpr(ex, AbstractString, :string)
+        :(Markdown.parse($(esc(ex))))
     else
         esc(ex)
     end
@@ -399,7 +401,7 @@ end
 writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
-@doc "Create an `HTML` object from a literal string." ->
+"Create an `HTML` object from a literal string."
 macro html_str(s)
     :(HTML($s))
 end
@@ -480,14 +482,14 @@ macro repl (ex)
                   haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
-          $(if isfield(ex)
-                :(fielddoc($(esc(ex.args[1])), $(ex.args[2])))
+            if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
+                $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
             else
                 # Backwards-compatible with the previous help system, for now
-                :(let doc = @doc $(esc(ex))
-                      doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
-                  end)
-            end)
+                let doc = @doc $(esc(ex))
+                    doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+                end
+            end
         end
     end
 end
