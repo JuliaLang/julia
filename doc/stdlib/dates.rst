@@ -47,48 +47,28 @@ to use all other ``Dates`` functions, you'll need to prefix each function call w
 alternatively, you could call ``using Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
 
 
-.. function:: DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
-.. function:: DateTime(periods::Period...) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
-.. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
-.. function:: DateTime(dt::Date) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
-.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
@@ -98,91 +78,51 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
 .. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-   ::
-   
-       DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-   
    Similar form as above for parsing a ``DateTime``, but passes a more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
    
 
-.. function:: Date(y, [m, d]) -> Date
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
-   
-
-.. function:: Date(period::Period...) -> Date
-
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
-   
-
-.. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
-   
-
-.. function:: Date(dt::DateTime) -> Date
-
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
-   
-
-.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
    
 
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
-   ::
-   
-       Date(dt::AbstractString, df::DateFormat) -> Date
-   
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
    
 
-.. function:: now() -> DateTime
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
-   ::
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
    
-       now(::Type{UTC}) -> DateTime
+
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
    
+
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+   
+
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+   
+
+.. function:: now(::Type{UTC}) -> DateTime
+
    Returns a DateTime corresponding to the user's system time as UTC/GMT.
    
 
 .. function:: now(::Type{UTC}) -> DateTime
 
-   ::
-   
-       now(::Type{UTC}) -> DateTime
-   
    Returns a DateTime corresponding to the user's system time as UTC/GMT.
    
 
 .. function:: eps(::DateTime) -> Millisecond
 
-   ::
-   
-       eps(::DateTime) -> Millisecond
-   
    Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
    
 
@@ -191,46 +131,26 @@ Accessor Functions
 
 .. function:: year(dt::TimeType) -> Int64
 
-   ::
-   
-       year(dt::TimeType) -> Int64
-   
    Return the field part of a Date or DateTime as an ``Int64``.
    
 
-.. function:: Year(dt::TimeType) -> Year
+.. function:: Year(v)
 
-   ::
-   
-       Year(v)
-   
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``.
    
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
-   ::
-   
-       yearmonth(dt::TimeType) -> (Int64, Int64)
-   
    Simultaneously return the year and month parts of a Date or DateTime.
    
 
 .. function:: monthday(dt::TimeType) -> (Int64, Int64)
 
-   ::
-   
-       monthday(dt::TimeType) -> (Int64, Int64)
-   
    Simultaneously return the month and day parts of a Date or DateTime.
    
 
 .. function:: yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
-   ::
-   
-       yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
-   
    Simultaneously return the year, month, and day parts of a Date or DateTime.
    
 
@@ -239,254 +159,143 @@ Query Functions
 
 .. function:: dayname(dt::TimeType; locale="english") -> AbstractString
 
-   ::
-   
-       dayname(dt::TimeType; locale="english") -> AbstractString
-   
    Return the full day name corresponding to the day of the week of the Date or DateTime in the given ``locale``.
    
 
 .. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
-   ::
-   
-       dayabbr(dt::TimeType; locale="english") -> AbstractString
-   
    Return the abbreviated name corresponding to the day of the week of the Date or DateTime in the given ``locale``.
    
 
 .. function:: dayofweek(dt::TimeType) -> Int64
 
-   ::
-   
-       dayofweek(dt::TimeType) -> Int64
-   
    Returns the day of the week as an ``Int64`` with ``1 = Monday, 2 = Tuesday, etc.``.
    
 
 .. function:: dayofweekofmonth(dt::TimeType) -> Int
 
-   ::
-   
-       dayofweekofmonth(dt::TimeType) -> Int
-   
    For the day of week of ``dt``, returns which number it is in etc.` In the range 1:5.
    
 
 .. function:: daysofweekinmonth(dt::TimeType) -> Int
 
-   ::
-   
-       daysofweekinmonth(dt::TimeType) -> Int
-   
    For the day of week of ``dt``, returns the total number of that day of the week in ``dt``'s month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)`` in the adjuster function.
    
 
 .. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
-   ::
-   
-       monthname(dt::TimeType; locale="english") -> AbstractString
-   
    Return the full name of the month of the Date or DateTime in the given ``locale``.
    
 
 .. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
-   ::
-   
-       monthabbr(dt::TimeType; locale="english") -> AbstractString
-   
    Return the abbreviated month name of the Date or DateTime in the given ``locale``.
    
 
 .. function:: daysinmonth(dt::TimeType) -> Int
 
-   ::
-   
-       daysinmonth(dt::TimeType) -> Int
-   
    Returns the number of days in the month of ``dt``. Value will be 28, 29, 30, or 31.
    
 
 .. function:: isleapyear(dt::TimeType) -> Bool
 
-   ::
-   
-       isleapyear(dt::TimeType) -> Bool
-   
    Returns true if the year of ``dt`` is a leap year.
    
 
 .. function:: dayofyear(dt::TimeType) -> Int
 
-   ::
-   
-       dayofyear(dt::TimeType) -> Int
-   
    Returns the day of the year for ``dt`` with January 1st being day 1.
    
 
 .. function:: daysinyear(dt::TimeType) -> Int
 
-   ::
-   
-       daysinyear(dt::TimeType) -> Int
-   
    Returns 366 if the year of ``dt`` is a leap year, otherwise returns 365.
    
 
 .. function:: quarterofyear(dt::TimeType) -> Int
 
-   ::
-   
-       quarterofyear(dt::TimeType) -> Int
-   
    Returns the quarter that ``dt`` resides in. Range of value is 1:4.
    
 
 .. function:: dayofquarter(dt::TimeType) -> Int
 
-   ::
-   
-       dayofquarter(dt::TimeType) -> Int
-   
    Returns the day of the current quarter of ``dt``. Range of value is 1:92.
    
 
 Adjuster Functions
 ~~~~~~~~~~~~~~~~~~
 
-.. function:: trunc(dt::TimeType, ::Type{Period}) -> TimeType
+.. function:: trunc([T], x[, digits[, base]])
 
-   ::
-   
-       trunc([T], x[, digits[, base]])
    
 
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
-   ::
-   
-       firstdayofweek(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the Monday of its week.
    
 
 .. function:: lastdayofweek(dt::TimeType) -> TimeType
 
-   ::
-   
-       lastdayofweek(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the Sunday of its week.
    
 
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
-   ::
-   
-       firstdayofmonth(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the first day of its month.
    
 
 .. function:: lastdayofmonth(dt::TimeType) -> TimeType
 
-   ::
-   
-       lastdayofmonth(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the last day of its month.
    
 
 .. function:: firstdayofyear(dt::TimeType) -> TimeType
 
-   ::
-   
-       firstdayofyear(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the first day of its year.
    
 
 .. function:: lastdayofyear(dt::TimeType) -> TimeType
 
-   ::
-   
-       lastdayofyear(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the last day of its year.
    
 
 .. function:: firstdayofquarter(dt::TimeType) -> TimeType
 
-   ::
-   
-       firstdayofquarter(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the first day of its quarter.
    
 
 .. function:: lastdayofquarter(dt::TimeType) -> TimeType
 
-   ::
-   
-       lastdayofquarter(dt::TimeType) -> TimeType
-   
    Adjusts ``dt`` to the last day of its quarter.
    
 
-.. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: tonext(func::Function, dt::TimeType;step=Day(1), negate=false, limit=10000, same=false) -> TimeType
 
-   ::
-   
-       tonext(func::Function, dt::TimeType;step=Day(1), negate=false, limit=10000, same=false) -> TimeType
-   
    Adjusts ``dt`` by iterating at most ``limit`` iterations by a single ``TimeType`` argument and return a ``Bool``. ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
    
 
-.. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: toprev(func::Function, dt::TimeType;step=Day(-1), negate=false, limit=10000, same=false) -> TimeType
 
-   ::
-   
-       toprev(func::Function, dt::TimeType;step=Day(-1), negate=false, limit=10000, same=false) -> TimeType
-   
    Adjusts ``dt`` by iterating at most ``limit`` iterations by a single ``TimeType`` argument and return a ``Bool``. ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
    
 
-.. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tofirst(dt::TimeType, dow::Int;of=Month) -> TimeType
 
-   ::
-   
-       tofirst(dt::TimeType, dow::Int;of=Month) -> TimeType
-   
    Adjusts ``dt`` to the first ``dow`` of its month. Alternatively,
    
 
-.. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tolast(dt::TimeType, dow::Int;of=Month) -> TimeType
 
-   ::
-   
-       tolast(dt::TimeType, dow::Int;of=Month) -> TimeType
-   
    Adjusts ``dt`` to the last ``dow`` of its month. Alternatively,
    
 
-.. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
+.. function:: tonext(func::Function, dt::TimeType;step=Day(1), negate=false, limit=10000, same=false) -> TimeType
 
-   ::
-   
-       tonext(func::Function, dt::TimeType;step=Day(1), negate=false, limit=10000, same=false) -> TimeType
-   
    Adjusts ``dt`` by iterating at most ``limit`` iterations by a single ``TimeType`` argument and return a ``Bool``. ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
    
 
-.. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
+.. function:: toprev(func::Function, dt::TimeType;step=Day(-1), negate=false, limit=10000, same=false) -> TimeType
 
-   ::
-   
-       toprev(func::Function, dt::TimeType;step=Day(-1), negate=false, limit=10000, same=false) -> TimeType
-   
    Adjusts ``dt`` by iterating at most ``limit`` iterations by a single ``TimeType`` argument and return a ``Bool``. ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
    
 
@@ -503,19 +312,11 @@ Periods
 
 .. function:: Year(v)
 
-   ::
-   
-       Year(v)
-   
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``.
    
 
 .. function:: default(p::Period) -> Period
 
-   ::
-   
-       default(p::Period) -> Period
-   
    Returns a sensible ``default`` value for the input Period by returning ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute, Second, and Millisecond.
    
 
@@ -524,64 +325,36 @@ Conversion Functions
 
 .. function:: today() -> Date
 
-   ::
-   
-       today() -> Date
-   
    Returns the date portion of ``now()``.
    
 
 .. function:: unix2datetime(x) -> DateTime
 
-   ::
-   
-       unix2datetime(x) -> DateTime
-   
    Takes the number of seconds since unix epoch
    
 
 .. function:: datetime2unix(dt::DateTime) -> Float64
 
-   ::
-   
-       datetime2unix(dt::DateTime) -> Float64
-   
    Takes the given DateTime and returns the number of seconds since the unix epoch as a ``Float64``.
    
 
 .. function:: julian2datetime(julian_days) -> DateTime
 
-   ::
-   
-       julian2datetime(julian_days) -> DateTime
-   
    Takes the number of Julian calendar days since epoch
    
 
 .. function:: datetime2julian(dt::DateTime) -> Float64
 
-   ::
-   
-       datetime2julian(dt::DateTime) -> Float64
-   
    Takes the given DateTime and returns the number of Julian calendar days since the julian epoch as a ``Float64``.
    
 
 .. function:: rata2datetime(days) -> DateTime
 
-   ::
-   
-       rata2datetime(days) -> DateTime
-   
    Takes the number of Rata Die days since epoch
    
 
 .. function:: datetime2rata(dt::TimeType) -> Int64
 
-   ::
-   
-       datetime2rata(dt::TimeType) -> Int64
-   
    Returns the number of Rata Die days since epoch from the given Date or DateTime.
    
 

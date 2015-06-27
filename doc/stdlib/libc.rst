@@ -6,109 +6,61 @@
 
 .. function:: malloc(size::Integer) -> Ptr{Void}
 
-   ::
-   
-       malloc(size::Integer) -> Ptr{Void}
-   
    Call ``malloc`` from the C standard library.
    
 
 .. function:: calloc(num::Integer, size::Integer) -> Ptr{Void}
 
-   ::
-   
-       calloc(num::Integer, size::Integer) -> Ptr{Void}
-   
    Call ``calloc`` from the C standard library.
    
 
 .. function:: realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
-   ::
-   
-       realloc(addr::Ptr, size::Integer) -> Ptr{Void}
-   
    Call ``realloc`` from the C standard library. See warning in the documentation for ``free`` regarding only using this on memory originally obtained from ``malloc``.
    
 
 .. function:: free(addr::Ptr)
 
-   ::
-   
-       free(addr::Ptr)
-   
    Call ``free`` from the C standard library. Only use this on memory obtained from ``malloc``, not on pointers retrieved from other C libraries. ``Ptr`` objects obtained from C libraries should be freed by the free functions defined in that library, to avoid assertion failures if multiple ``libc`` libraries exist on the system.
    
 
 .. function:: errno([code])
 
-   ::
-   
-       errno([code])
-   
    Get the value of the C library's ``errno``. If an argument is specified, it is used to set the value of ``errno``. The value of ``errno`` is only valid immediately after a ``ccall`` to a C library routine that sets it. Specifically, you cannot call executed between prompts.
    
 
 .. function:: strerror(n)
 
-   ::
-   
-       strerror(n)
-   
    Convert a system call error code to a descriptive string
    
 
 .. function:: time(t::TmStruct)
 
-   ::
-   
-       time(t::TmStruct)
-   
    Converts a ``TmStruct`` struct to a number of seconds since the epoch.
    
 
 .. function:: strftime([format], time)
 
-   ::
-   
-       strftime([format], time)
-   
    Convert time, given as a number of seconds since the epoch or a Supported formats are the same as those in the standard C library.
    
 
 .. function:: strptime([format], timestr)
 
-   ::
-   
-       strptime([format], timestr)
-   
    Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the will tell the C library to use the current system settings to determine the timezone.
    
 
 .. function:: TmStruct([seconds])
 
-   ::
-   
-       TmStruct([seconds])
-   
    Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``,
    
 
 .. function:: flush_cstdio()
 
-   ::
-   
-       flush_cstdio()
-   
    Flushes the C ``stdout`` and ``stderr`` streams (which may have been written to by external C code).
    
 
-.. function:: msync(ptr, len, [flags])
+.. function:: msync(ptr, len[, flags])
 
-   ::
-   
-       msync(ptr, len[, flags])
-   
    Forces synchronization of the ``mmap()``ped memory region from combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows. You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
    
 
@@ -126,19 +78,11 @@
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
-   ::
-   
-       mmap(len, prot, flags, fd, offset)
-   
    Low-level interface to the ``mmap`` system call. See the man page.
    
 
 .. function:: munmap(pointer, len)
 
-   ::
-   
-       munmap(pointer, len)
-   
    Low-level interface for unmapping memory (see the man page). With is unmapped for you when the array goes out of scope.
    
 

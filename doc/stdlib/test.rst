@@ -12,12 +12,8 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
 .. currentmodule:: Base
 
-.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+.. function:: runtests([tests=["all"][, numcores=iceil(CPU_CORES/2)]])
 
-   ::
-   
-       runtests([tests=["all"][, numcores=iceil(CPU_CORES/2)]])
-   
    Run the Julia unit tests listed in ``tests``, which can be either a string or an array of strings, using ``numcores`` processors. (not exported)
    
 
@@ -135,37 +131,21 @@ Macros
 
 .. function:: @test(ex)
 
-   ::
-   
-       @test(ex)
-   
    Test the expression ``ex`` and calls the current handler to handle the result.
    
 
 .. function:: @test_throws(extype, ex)
 
-   ::
-   
-       @test_throws(extype, ex)
-   
    Test that the expression ``ex`` throws an exception of type
    
 
 .. function:: @test_approx_eq(a, b)
 
-   ::
-   
-       @test_approx_eq(a, b)
-   
    Test two floating point numbers ``a`` and ``b`` for equality taking in account small numerical errors.
    
 
 .. function:: @test_approx_eq_eps(a, b, tol)
 
-   ::
-   
-       @test_approx_eq_eps(a, b, tol)
-   
    Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``.
    
 
@@ -174,10 +154,6 @@ Functions
 
 .. function:: with_handler(f, handler)
 
-   ::
-   
-       with_handler(f, handler)
-   
    Run the function ``f`` using the ``handler`` as the handler.
    
 

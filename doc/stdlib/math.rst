@@ -9,52 +9,32 @@
 Mathematical Operators
 ----------------------
 
-.. function:: -(x)
+.. function:: -(x, y)
 
-   ::
-   
-       -(x, y)
-   
    Subtraction operator.
    
 
 .. _+:
 .. function:: +(x, y...)
 
-   ::
-   
-       +(x, y...)
-   
    Addition operator. ``x+y+z+...`` calls this function with all arguments, i.e. ``+(x, y, z, ...)``.
    
 
 .. _-:
 .. function:: -(x, y)
 
-   ::
-   
-       -(x, y)
-   
    Subtraction operator.
    
 
 .. _*:
-.. function:: *(x, y...)
+.. function:: *(s, t)
 
-   ::
-   
-       *(s, t)
-   
    Concatenate strings. The ``*`` operator is an alias to this function.
    
 
 .. _/:
 .. function:: /(x, y)
 
-   ::
-   
-       /(x, y)
-   
    Right division operator: multiplication of ``x`` by the inverse of arguments.
    
 
@@ -65,52 +45,32 @@ Mathematical Operators
    Gives floating-point results for integer arguments.
 
 .. _^:
-.. function:: ^(x, y)
+.. function:: ^(s, n)
 
-   ::
-   
-       ^(s, n)
-   
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
    
 
 .. _.+:
 .. function:: .+(x, y)
 
-   ::
-   
-       .+(x, y)
-   
    Element-wise addition operator.
    
 
 .. _.-:
 .. function:: .-(x, y)
 
-   ::
-   
-       .-(x, y)
-   
    Element-wise subtraction operator.
    
 
 .. _.*:
 .. function:: .*(x, y)
 
-   ::
-   
-       .*(x, y)
-   
    Element-wise multiplication operator.
    
 
 .. _./:
 .. function:: ./(x, y)
 
-   ::
-   
-       ./(x, y)
-   
    Element-wise right division operator.
    
 
@@ -122,185 +82,105 @@ Mathematical Operators
 .. _.^:
 .. function:: .^(x, y)
 
-   ::
-   
-       .^(x, y)
-   
    Element-wise exponentiation operator.
    
 
 .. function:: fma(x, y, z)
 
-   ::
-   
-       fma(x, y, z)
-   
    Computes ``x*y+z`` without rounding the intermediate result algorithms. See ``muladd``.
    
 
 .. function:: muladd(x, y, z)
 
-   ::
-   
-       muladd(x, y, z)
-   
    Combined multiply-add, computes ``x*y+z`` in an efficient manner. This may on some systems be equivalent to ``x*y+z``, or to
    
 
 .. function:: div(x, y)
 
-   ::
-   
-       div(x, y)
-   
    The quotient from Euclidean division. Computes ``x/y``, truncated to an integer.
    
 
 .. function:: fld(x, y)
 
-   ::
-   
-       fld(x, y)
-   
    Largest integer less than or equal to ``x/y``.
    
 
 .. function:: cld(x, y)
 
-   ::
-   
-       cld(x, y)
-   
    Smallest integer larger than or equal to ``x/y``.
    
 
 .. function:: mod(x, y)
 
-   ::
-   
-       mod(x, y)
-   
    Modulus after division, returning in the range [0,``y``), if ``y`` is positive, or (``y``,0] if ``y`` is negative.
    
 
 .. function:: mod2pi(x)
 
-   ::
-   
-       mod2pi(x)
-   
    Modulus after division by 2pi, returning in the range [0,2pi). This function computes a floating point representation of the modulus after division by numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would compute the modulus of x relative to division by the floating-point number 2pi.
    
 
 .. function:: rem(x, y)
 
-   ::
-   
-       rem(x, y)
-   
    Remainder from Euclidean division, returning a value of the same sign as``x``, and smaller in magnitude than ``y``. This value is always exact.
    
 
 .. function:: divrem(x, y)
 
-   ::
-   
-       divrem(x, y)
-   
    The quotient and remainder from Euclidean division. Equivalent to
    
 
 .. function:: fldmod(x, y)
 
-   ::
-   
-       fldmod(x, y)
-   
    The floored quotient and modulus after division. Equivalent to
    
 
-.. function:: mod1(x,m)
+.. function:: mod1(x, m)
 
-   ::
-   
-       mod1(x, m)
-   
    Modulus after division, returning in the range (0,m]
    
 
-.. function:: rem1(x,m)
+.. function:: rem1(x, m)
 
-   ::
-   
-       rem1(x, m)
-   
    Remainder after division, returning in the range (0,m]
    
 
 .. _//:
 .. function:: //(num, den)
 
-   ::
-   
-       //(num, den)
-   
    Divide two integers or rational numbers, giving a ``Rational`` result.
    
 
-.. function:: rationalize([Type=Int,] x; tol=eps(x))
+.. function:: rationalize([Type=Int], x; tol=eps(x))
 
-   ::
-   
-       rationalize([Type=Int], x; tol=eps(x))
-   
    Approximate floating point number ``x`` as a Rational number with components of the given integer type. The result will differ from
    
 
 .. function:: num(x)
 
-   ::
-   
-       num(x)
-   
    Numerator of the rational representation of ``x``
    
 
 .. function:: den(x)
 
-   ::
-   
-       den(x)
-   
    Denominator of the rational representation of ``x``
    
 
 .. _<<:
 .. function:: <<(x, n)
 
-   ::
-   
-       <<(x, n)
-   
    Left bit shift operator.
    
 
 .. _>>:
 .. function:: >>(x, n)
 
-   ::
-   
-       >>(x, n)
-   
    Right bit shift operator, preserving the sign of ``x``.
    
 
 .. _>>>:
 .. function:: >>>(x, n)
 
-   ::
-   
-       >>>(x, n)
-   
    Unsigned right bit shift operator.
    
 
@@ -312,220 +192,132 @@ Mathematical Operators
    function ``colon``.
    The colon is also used in indexing to select whole dimensions.
 
-.. function:: colon(start, [step], stop)
+.. function:: colon(start[, step], stop)
 
-   ::
-   
-       colon(start[, step], stop)
-   
    Called by ``:`` syntax for constructing ranges.
    
 
-.. function:: range(start, [step], length)
+.. function:: range(start[, step], length)
 
-   ::
-   
-       range(start[, step], length)
-   
    Construct a range by length, given a starting value and optional step (defaults to 1).
    
 
 .. _==:
 .. function:: ==(x, y)
 
-   ::
-   
-       ==(x, y)
-   
    Generic equality operator, giving a single ``Bool`` result. Falls back to ``===``. Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding. Follows IEEE semantics for floating-point numbers. Collections should generally implement ``==`` by calling ``==`` recursively on all contents. New numeric types should implement this function for two arguments of the new type, and handle comparison to other types via promotion rules where possible.
    
 
 .. _!=:
 .. function:: !=(x, y)
 
-   ::
-   
-       !=(x, y)
-   
    Not-equals comparison operator. Always gives the opposite answer as the fallback definition ``!=(x,y) = !(x==y)`` instead.
    
 
 .. _===:
 .. function:: ===(x, y)
 
-   ::
-   
-       ===(x, y)
-   
    See the ``is()`` operator
    
 
 .. _!==:
 .. function:: !==(x, y)
 
-   ::
-   
-       !==(x, y)
-   
    Equivalent to ``!is(x, y)``
    
 
 .. _<:
 .. function:: <(x, y)
 
-   ::
-   
-       <(x, y)
-   
    Less-than comparison operator. New numeric types should implement this function for two arguments of the new type. Because of the behavior of floating-point NaN values, ``<`` implements a partial order. Types with a canonical partial order should implement ``<``, and types with a canonical total order should implement ``isless``.
    
 
 .. _<=:
 .. function:: <=(x, y)
 
-   ::
-   
-       <=(x, y)
-   
    Less-than-or-equals comparison operator.
    
 
 .. _>:
 .. function:: >(x, y)
 
-   ::
-   
-       >(x, y)
-   
    Greater-than comparison operator. Generally, new types should implement ``<`` instead of this function, and rely on the fallback definition ``>(x,y) = y<x``.
    
 
 .. _>=:
 .. function:: >=(x, y)
 
-   ::
-   
-       >=(x, y)
-   
    Greater-than-or-equals comparison operator.
    
 
 .. _.==:
 .. function:: .==(x, y)
 
-   ::
-   
-       .==(x, y)
-   
    Element-wise equality comparison operator.
    
 
 .. _.!=:
 .. function:: .!=(x, y)
 
-   ::
-   
-       .!=(x, y)
-   
    Element-wise not-equals comparison operator.
    
 
 .. _.<:
 .. function:: .<(x, y)
 
-   ::
-   
-       .<(x, y)
-   
    Element-wise less-than comparison operator.
    
 
 .. _.<=:
 .. function:: .<=(x, y)
 
-   ::
-   
-       .<=(x, y)
-   
    Element-wise less-than-or-equals comparison operator.
    
 
 .. _.>:
 .. function:: .>(x, y)
 
-   ::
-   
-       .>(x, y)
-   
    Element-wise greater-than comparison operator.
    
 
 .. _.>=:
 .. function:: .>=(x, y)
 
-   ::
-   
-       .>=(x, y)
-   
    Element-wise greater-than-or-equals comparison operator.
    
 
-.. function:: cmp(x,y)
+.. function:: cmp(x, y)
 
-   ::
-   
-       cmp(x, y)
-   
    Return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``, respectively. Uses the total order implemented by ``isless``. For floating-point numbers, uses ``<`` but throws an error for unordered arguments.
    
 
 .. _~:
 .. function:: ~(x)
 
-   ::
-   
-       ~(x)
-   
    Bitwise not
    
 
 .. _&:
 .. function:: &(x, y)
 
-   ::
-   
-       &(x, y)
-   
    Bitwise and
    
 
 .. _|:
 .. function:: |(x, y)
 
-   ::
-   
-       |(x, y)
-   
    Bitwise or
    
 
 .. _$:
-.. function:: $(x, y)
+.. function:: \$(x, y)
 
-   ::
-   
-       \$(x, y)
-   
    Bitwise exclusive or
    
 
 .. _!:
 .. function:: !(x)
 
-   ::
-   
-       !(x)
-   
    Boolean not
    
 
@@ -539,174 +331,98 @@ Mathematical Operators
 
    Short-circuiting boolean or
 
-.. function:: A_ldiv_Bc(a,b)
+.. function:: A_ldiv_Bc(a, b)
 
-   ::
-   
-       A_ldiv_Bc(a, b)
-   
    Matrix operator A \ B^H
    
 
-.. function:: A_ldiv_Bt(a,b)
+.. function:: A_ldiv_Bt(a, b)
 
-   ::
-   
-       A_ldiv_Bt(a, b)
-   
    Matrix operator A \ B^T
    
 
 .. function:: A_mul_B!(Y, A, B) -> Y
 
-   ::
-   
-       A_mul_B!(Y, A, B) -> Y
-   
    Calculates the matrix-matrix or matrix-vector product *A B* and stores the result in *Y*, overwriting the existing value of *Y*.
    
 
 .. function:: A_mul_Bc(...)
 
-   ::
-   
-       A_mul_Bc(...)
-   
    Matrix operator A B^H
    
 
 .. function:: A_mul_Bt(...)
 
-   ::
-   
-       A_mul_Bt(...)
-   
    Matrix operator A B^T
    
 
 .. function:: A_rdiv_Bc(...)
 
-   ::
-   
-       A_rdiv_Bc(...)
-   
    Matrix operator A / B^H
    
 
-.. function:: A_rdiv_Bt(a,b)
+.. function:: A_rdiv_Bt(a, b)
 
-   ::
-   
-       A_rdiv_Bt(a, b)
-   
    Matrix operator A / B^T
    
 
 .. function:: Ac_ldiv_B(...)
 
-   ::
-   
-       Ac_ldiv_B(...)
-   
    Matrix operator A^H \ B
    
 
 .. function:: Ac_ldiv_Bc(...)
 
-   ::
-   
-       Ac_ldiv_Bc(...)
-   
    Matrix operator A^H \ B^H
    
 
 .. function:: Ac_mul_B(...)
 
-   ::
-   
-       Ac_mul_B(...)
-   
    Matrix operator A^H B
    
 
 .. function:: Ac_mul_Bc(...)
 
-   ::
-   
-       Ac_mul_Bc(...)
-   
    Matrix operator A^H B^H
    
 
-.. function:: Ac_rdiv_B(a,b)
+.. function:: Ac_rdiv_B(a, b)
 
-   ::
-   
-       Ac_rdiv_B(a, b)
-   
    Matrix operator A^H / B
    
 
-.. function:: Ac_rdiv_Bc(a,b)
+.. function:: Ac_rdiv_Bc(a, b)
 
-   ::
-   
-       Ac_rdiv_Bc(a, b)
-   
    Matrix operator A^H / B^H
    
 
 .. function:: At_ldiv_B(...)
 
-   ::
-   
-       At_ldiv_B(...)
-   
    Matrix operator A^T \ B
    
 
 .. function:: At_ldiv_Bt(...)
 
-   ::
-   
-       At_ldiv_Bt(...)
-   
    Matrix operator A^T \ B^T
    
 
 .. function:: At_mul_B(...)
 
-   ::
-   
-       At_mul_B(...)
-   
    Matrix operator A^T B
    
 
 .. function:: At_mul_Bt(...)
 
-   ::
-   
-       At_mul_Bt(...)
-   
    Matrix operator A^T B^T
    
 
-.. function:: At_rdiv_B(a,b)
+.. function:: At_rdiv_B(a, b)
 
-   ::
-   
-       At_rdiv_B(a, b)
-   
    Matrix operator A^T / B
    
 
-.. function:: At_rdiv_Bt(a,b)
+.. function:: At_rdiv_Bt(a, b)
 
-   ::
-   
-       At_rdiv_Bt(a, b)
-   
    Matrix operator A^T / B^T
    
 
@@ -715,523 +431,291 @@ Mathematical Functions
 
 .. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
 
-   ::
-   
-       isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
-   
    Inexact equality comparison - behaves slightly different depending on types of input args: For default tolerance arguments, ``maxeps = max(eps(abs(x)), eps(abs(y)))``.
    
 
 .. function:: sin(x)
 
-   ::
-   
-       sin(x)
-   
    Compute sine of ``x``, where ``x`` is in radians
    
 
 .. function:: cos(x)
 
-   ::
-   
-       cos(x)
-   
    Compute cosine of ``x``, where ``x`` is in radians
    
 
 .. function:: tan(x)
 
-   ::
-   
-       tan(x)
-   
    Compute tangent of ``x``, where ``x`` is in radians
    
 
 .. function:: sind(x)
 
-   ::
-   
-       sind(x)
-   
    Compute sine of ``x``, where ``x`` is in degrees
    
 
 .. function:: cosd(x)
 
-   ::
-   
-       cosd(x)
-   
    Compute cosine of ``x``, where ``x`` is in degrees
    
 
 .. function:: tand(x)
 
-   ::
-   
-       tand(x)
-   
    Compute tangent of ``x``, where ``x`` is in degrees
    
 
 .. function:: sinpi(x)
 
-   ::
-   
-       sinpi(x)
-   
    Compute \sin(\pi x) more accurately than ``sin(pi*x)``, especially for large ``x``.
    
 
 .. function:: cospi(x)
 
-   ::
-   
-       cospi(x)
-   
    Compute \cos(\pi x) more accurately than ``cos(pi*x)``, especially for large ``x``.
    
 
 .. function:: sinh(x)
 
-   ::
-   
-       sinh(x)
-   
    Compute hyperbolic sine of ``x``
    
 
 .. function:: cosh(x)
 
-   ::
-   
-       cosh(x)
-   
    Compute hyperbolic cosine of ``x``
    
 
 .. function:: tanh(x)
 
-   ::
-   
-       tanh(x)
-   
    Compute hyperbolic tangent of ``x``
    
 
 .. function:: asin(x)
 
-   ::
-   
-       asin(x)
-   
    Compute the inverse sine of ``x``, where the output is in radians
    
 
 .. function:: acos(x)
 
-   ::
-   
-       acos(x)
-   
    Compute the inverse cosine of ``x``, where the output is in radians
    
 
 .. function:: atan(x)
 
-   ::
-   
-       atan(x)
-   
    Compute the inverse tangent of ``x``, where the output is in radians
    
 
 .. function:: atan2(y, x)
 
-   ::
-   
-       atan2(y, x)
-   
    Compute the inverse tangent of ``y/x``, using the signs of both
    
 
 .. function:: asind(x)
 
-   ::
-   
-       asind(x)
-   
    Compute the inverse sine of ``x``, where the output is in degrees
    
 
 .. function:: acosd(x)
 
-   ::
-   
-       acosd(x)
-   
    Compute the inverse cosine of ``x``, where the output is in degrees
    
 
 .. function:: atand(x)
 
-   ::
-   
-       atand(x)
-   
    Compute the inverse tangent of ``x``, where the output is in degrees
    
 
 .. function:: sec(x)
 
-   ::
-   
-       sec(x)
-   
    Compute the secant of ``x``, where ``x`` is in radians
    
 
 .. function:: csc(x)
 
-   ::
-   
-       csc(x)
-   
    Compute the cosecant of ``x``, where ``x`` is in radians
    
 
 .. function:: cot(x)
 
-   ::
-   
-       cot(x)
-   
    Compute the cotangent of ``x``, where ``x`` is in radians
    
 
 .. function:: secd(x)
 
-   ::
-   
-       secd(x)
-   
    Compute the secant of ``x``, where ``x`` is in degrees
    
 
 .. function:: cscd(x)
 
-   ::
-   
-       cscd(x)
-   
    Compute the cosecant of ``x``, where ``x`` is in degrees
    
 
 .. function:: cotd(x)
 
-   ::
-   
-       cotd(x)
-   
    Compute the cotangent of ``x``, where ``x`` is in degrees
    
 
 .. function:: asec(x)
 
-   ::
-   
-       asec(x)
-   
    Compute the inverse secant of ``x``, where the output is in radians
    
 
 .. function:: acsc(x)
 
-   ::
-   
-       acsc(x)
-   
    Compute the inverse cosecant of ``x``, where the output is in radians
    
 
 .. function:: acot(x)
 
-   ::
-   
-       acot(x)
-   
    Compute the inverse cotangent of ``x``, where the output is in radians
    
 
 .. function:: asecd(x)
 
-   ::
-   
-       asecd(x)
-   
    Compute the inverse secant of ``x``, where the output is in degrees
    
 
 .. function:: acscd(x)
 
-   ::
-   
-       acscd(x)
-   
    Compute the inverse cosecant of ``x``, where the output is in degrees
    
 
 .. function:: acotd(x)
 
-   ::
-   
-       acotd(x)
-   
    Compute the inverse cotangent of ``x``, where the output is in degrees
    
 
 .. function:: sech(x)
 
-   ::
-   
-       sech(x)
-   
    Compute the hyperbolic secant of ``x``
    
 
 .. function:: csch(x)
 
-   ::
-   
-       csch(x)
-   
    Compute the hyperbolic cosecant of ``x``
    
 
 .. function:: coth(x)
 
-   ::
-   
-       coth(x)
-   
    Compute the hyperbolic cotangent of ``x``
    
 
 .. function:: asinh(x)
 
-   ::
-   
-       asinh(x)
-   
    Compute the inverse hyperbolic sine of ``x``
    
 
 .. function:: acosh(x)
 
-   ::
-   
-       acosh(x)
-   
    Compute the inverse hyperbolic cosine of ``x``
    
 
 .. function:: atanh(x)
 
-   ::
-   
-       atanh(x)
-   
    Compute the inverse hyperbolic tangent of ``x``
    
 
 .. function:: asech(x)
 
-   ::
-   
-       asech(x)
-   
    Compute the inverse hyperbolic secant of ``x``
    
 
 .. function:: acsch(x)
 
-   ::
-   
-       acsch(x)
-   
    Compute the inverse hyperbolic cosecant of ``x``
    
 
 .. function:: acoth(x)
 
-   ::
-   
-       acoth(x)
-   
    Compute the inverse hyperbolic cotangent of ``x``
    
 
 .. function:: sinc(x)
 
-   ::
-   
-       sinc(x)
-   
    Compute \sin(\pi x) / (\pi x) if x \neq 0, and 1 if x = 0.
    
 
 .. function:: cosc(x)
 
-   ::
-   
-       cosc(x)
-   
    Compute \cos(\pi x) / x - \sin(\pi x) / (\pi x^2) if x \neq 0, and 0 if x = 0. This is the derivative of ``sinc(x)``.
    
 
 .. function:: deg2rad(x)
 
-   ::
-   
-       deg2rad(x)
-   
    Convert ``x`` from degrees to radians
    
 
 .. function:: rad2deg(x)
 
-   ::
-   
-       rad2deg(x)
-   
    Convert ``x`` from radians to degrees
    
 
 .. function:: hypot(x, y)
 
-   ::
-   
-       hypot(x, y)
-   
    Compute the \sqrt{x^2+y^2} avoiding overflow and underflow
    
 
-.. function:: log(x)
+.. function:: log(b, x)
 
-   ::
-   
-       log(b, x)
-   
    Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
    
 
-.. function:: log(b,x)
+.. function:: log(b, x)
 
-   ::
-   
-       log(b, x)
-   
    Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
    
 
 .. function:: log2(x)
 
-   ::
-   
-       log2(x)
-   
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
    
 
 .. function:: log10(x)
 
-   ::
-   
-       log10(x)
-   
    Compute the logarithm of ``x`` to base 10. Throws ``DomainError`` for negative ``Real`` arguments.
    
 
 .. function:: log1p(x)
 
-   ::
-   
-       log1p(x)
-   
    Accurate natural logarithm of ``1+x``.  Throws ``DomainError`` for There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
    
 
 .. function:: frexp(val)
 
-   ::
-   
-       frexp(val)
-   
    Return ``(x,exp)`` such that ``x`` has a magnitude in the interval
    
 
 .. function:: exp(x)
 
-   ::
-   
-       exp(x)
-   
    Compute e^x
    
 
 .. function:: exp2(x)
 
-   ::
-   
-       exp2(x)
-   
    Compute 2^x
    
 
 .. function:: exp10(x)
 
-   ::
-   
-       exp10(x)
-   
    Compute 10^x
    
 
 .. function:: ldexp(x, n)
 
-   ::
-   
-       ldexp(x, n)
-   
    Compute x \times 2^n
    
 
 .. function:: modf(x)
 
-   ::
-   
-       modf(x)
-   
    Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.
    
 
 .. function:: expm1(x)
 
-   ::
-   
-       expm1(x)
-   
    Accurately compute e^x-1
    
 
-.. function:: round([T,] x, [digits, [base]], [r::RoundingMode])
+.. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
-   ::
-   
-       round(z, RoundingModeReal, RoundingModeImaginary)
-   
    Returns the nearest integral value of the same type as the complex- valued ``z`` to ``z``, breaking ties using the specified the real components while the second is used for rounding the imaginary components.
    
 
@@ -1302,778 +786,433 @@ Mathematical Functions
 
 .. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
-   ::
-   
-       round(z, RoundingModeReal, RoundingModeImaginary)
-   
    Returns the nearest integral value of the same type as the complex- valued ``z`` to ``z``, breaking ties using the specified the real components while the second is used for rounding the imaginary components.
    
 
-.. function:: ceil([T,] x, [digits, [base]])
+.. function:: ceil([T], x[, digits[, base]])
 
-   ::
-   
-       ceil([T], x[, digits[, base]])
    
 
-.. function:: floor([T,] x, [digits, [base]])
+.. function:: floor([T], x[, digits[, base]])
 
-   ::
-   
-       floor([T], x[, digits[, base]])
    
 
-.. function:: trunc([T,] x, [digits, [base]])
+.. function:: trunc([T], x[, digits[, base]])
 
-   ::
-   
-       trunc([T], x[, digits[, base]])
    
 
 .. function:: unsafe_trunc(T, x)
 
-   ::
-   
-       unsafe_trunc(T, x)
-   
    value is not representable by ``T``, an arbitrary value will be returned.
    
 
-.. function:: signif(x, digits, [base])
+.. function:: signif(x, digits[, base])
 
-   ::
-   
-       signif(x, digits[, base])
-   
    Rounds (in the sense of ``round``) ``x`` so that there are representation, default 10. E.g., ``signif(123.456, 2)`` is
    
 
 .. function:: min(x, y, ...)
 
-   ::
-   
-       min(x, y, ...)
-   
    Return the minimum of the arguments. Operates elementwise over arrays.
    
 
 .. function:: max(x, y, ...)
 
-   ::
-   
-       max(x, y, ...)
-   
    Return the maximum of the arguments. Operates elementwise over arrays.
    
 
 .. function:: minmax(x, y)
 
-   ::
-   
-       minmax(x, y)
-   
    Return ``(min(x,y), max(x,y))``. See also: ``extrema()`` that returns ``(minimum(x), maximum(x))``
    
 
 .. function:: clamp(x, lo, hi)
 
-   ::
-   
-       clamp(x, lo, hi)
-   
    Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x Operates elementwise over `x`` if it is an array.
    
 
 .. function:: abs(x)
 
-   ::
-   
-       abs(x)
-   
    Absolute value of ``x``
    
 
 .. function:: abs2(x)
 
-   ::
-   
-       abs2(x)
-   
    Squared absolute value of ``x``
    
 
 .. function:: copysign(x, y)
 
-   ::
-   
-       copysign(x, y)
-   
    Return ``x`` such that it has the same sign as ``y``
    
 
 .. function:: sign(x)
 
-   ::
-   
-       sign(x)
-   
    Return ``+1`` if ``x`` is positive, ``0`` if ``x == 0``, and ``-1`` if ``x`` is negative.
    
 
 .. function:: signbit(x)
 
-   ::
-   
-       signbit(x)
-   
    Returns ``true`` if the value of the sign of ``x`` is negative, otherwise ``false``.
    
 
 .. function:: flipsign(x, y)
 
-   ::
-   
-       flipsign(x, y)
-   
    Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``.
    
 
 .. function:: sqrt(x)
 
-   ::
-   
-       sqrt(x)
-   
    Return \sqrt{x}. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
    
 
 .. function:: isqrt(n)
 
-   ::
-   
-       isqrt(n)
-   
    Integer square root: the largest integer ``m`` such that ``m*m <= n``.
    
 
 .. function:: cbrt(x)
 
-   ::
-   
-       cbrt(x)
-   
    Return x^{1/3}.  The prefix operator ``∛`` is equivalent to
    
 
 .. function:: erf(x)
 
-   ::
-   
-       erf(x)
-   
    Compute the error function of ``x``, defined by
    
 
 .. function:: erfc(x)
 
-   ::
-   
-       erfc(x)
-   
    Compute the complementary error function of ``x``, defined by 1 -
    
 
 .. function:: erfcx(x)
 
-   ::
-   
-       erfcx(x)
-   
    Compute the scaled complementary error function of ``x``, defined by e^{x^2} \operatorname{erfc}(x).  Note also that
    
 
 .. function:: erfi(x)
 
-   ::
-   
-       erfi(x)
-   
    Compute the imaginary error function of ``x``, defined by -i
    
 
 .. function:: dawson(x)
 
-   ::
-   
-       dawson(x)
-   
    Compute the Dawson function (scaled imaginary error function) of
    
 
 .. function:: erfinv(x)
 
-   ::
-   
-       erfinv(x)
-   
    Compute the inverse error function of a real ``x``, defined by
    
 
 .. function:: erfcinv(x)
 
-   ::
-   
-       erfcinv(x)
-   
    Compute the inverse error complementary function of a real ``x``, defined by \operatorname{erfc}(\operatorname{erfcinv}(x)) = x.
    
 
 .. function:: real(z)
 
-   ::
-   
-       real(z)
-   
    Return the real part of the complex number ``z``
    
 
 .. function:: imag(z)
 
-   ::
-   
-       imag(z)
-   
    Return the imaginary part of the complex number ``z``
    
 
 .. function:: reim(z)
 
-   ::
-   
-       reim(z)
-   
    Return both the real and imaginary parts of the complex number
    
 
 .. function:: conj(z)
 
-   ::
-   
-       conj(z)
-   
    Compute the complex conjugate of a complex number ``z``
    
 
 .. function:: angle(z)
 
-   ::
-   
-       angle(z)
-   
    Compute the phase angle in radians of a complex number ``z``
    
 
 .. function:: cis(z)
 
-   ::
-   
-       cis(z)
-   
    Return \exp(iz).
    
 
-.. function:: binomial(n,k)
+.. function:: binomial(n, k)
 
-   ::
-   
-       binomial(n, k)
-   
    Number of ways to choose ``k`` out of ``n`` items
    
 
-.. function:: factorial(n)
+.. function:: factorial(n, k)
 
-   ::
-   
-       factorial(n, k)
-   
    Compute ``factorial(n)/factorial(k)``
    
 
-.. function:: factorial(n,k)
+.. function:: factorial(n, k)
 
-   ::
-   
-       factorial(n, k)
-   
    Compute ``factorial(n)/factorial(k)``
    
 
 .. function:: factor(n) -> Dict
 
-   ::
-   
-       factor(n) -> Dict
-   
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
    
 
-.. function:: gcd(x,y)
+.. function:: gcd(x, y)
 
-   ::
-   
-       gcd(x, y)
-   
    Greatest common (positive) divisor (or zero if x and y are both zero).
    
 
-.. function:: lcm(x,y)
+.. function:: lcm(x, y)
 
-   ::
-   
-       lcm(x, y)
-   
    Least common (non-negative) multiple.
    
 
-.. function:: gcdx(x,y)
+.. function:: gcdx(x, y)
 
-   ::
-   
-       gcdx(x, y)
-   
    Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy ux+vy = d = gcd(x,y). Note: Bézout coefficients are *not* uniquely defined. ``gcdx``
    
 
 .. function:: ispow2(n) -> Bool
 
-   ::
-   
-       ispow2(n) -> Bool
-   
    Test whether ``n`` is a power of two
    
 
 .. function:: nextpow2(n)
 
-   ::
-   
-       nextpow2(n)
-   
    The smallest power of two not less than ``n``. Returns 0 for
    
 
 .. function:: prevpow2(n)
 
-   ::
-   
-       prevpow2(n)
-   
    The largest power of two not greater than ``n``. Returns 0 for
    
 
 .. function:: nextpow(a, x)
 
-   ::
-   
-       nextpow(a, x)
-   
    The smallest ``a^n`` not less than ``x``, where ``n`` is a non- negative integer. ``a`` must be greater than 1, and ``x`` must be greater than 0.
    
 
 .. function:: prevpow(a, x)
 
-   ::
-   
-       prevpow(a, x)
-   
    The largest ``a^n`` not greater than ``x``, where ``n`` is a non- negative integer. ``a`` must be greater than 1, and ``x`` must not be less than 1.
    
 
-.. function:: nextprod([k_1,k_2,...], n)
+.. function:: nextprod([k_1, k_2, ...], n)
 
-   ::
-   
-       nextprod([k_1, k_2, ...], n)
-   
    Next integer not less than ``n`` that can be written as \prod k_i^{p_i} for integers p_1, p_2, etc.
    
 
-.. function:: prevprod([k_1,k_2,...], n)
+.. function:: prevprod([k_1, k_2, ...], n)
 
-   ::
-   
-       prevprod([k_1, k_2, ...], n)
-   
    Previous integer not greater than ``n`` that can be written as
    
 
-.. function:: invmod(x,m)
+.. function:: invmod(x, m)
 
-   ::
-   
-       invmod(x, m)
-   
    Take the inverse of ``x`` modulo ``m``: ``y`` such that xy = 1
    
 
 .. function:: powermod(x, p, m)
 
-   ::
-   
-       powermod(x, p, m)
-   
    Compute x^p \pmod m
    
 
 .. function:: gamma(x)
 
-   ::
-   
-       gamma(x)
-   
    Compute the gamma function of ``x``
    
 
 .. function:: lgamma(x)
 
-   ::
-   
-       lgamma(x)
-   
    Compute the logarithm of the absolute value of ``gamma()`` for logarithm of ``gamma(x)``.
    
 
 .. function:: lfact(x)
 
-   ::
-   
-       lfact(x)
-   
    Compute the logarithmic factorial of ``x``
    
 
 .. function:: digamma(x)
 
-   ::
-   
-       digamma(x)
-   
    Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
    
 
 .. function:: invdigamma(x)
 
-   ::
-   
-       invdigamma(x)
-   
    Compute the inverse digamma function of ``x``.
    
 
 .. function:: trigamma(x)
 
-   ::
-   
-       trigamma(x)
-   
    Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``)
    
 
 .. function:: polygamma(m, x)
 
-   ::
-   
-       polygamma(m, x)
-   
    Compute the polygamma function of order ``m`` of argument ``x``
    
 
-.. function:: airy(k,x)
+.. function:: airy(k, x)
 
-   ::
-   
-       airy(k, x)
-   
    kth derivative of the Airy function \operatorname{Ai}(x).
    
 
 .. function:: airyai(x)
 
-   ::
-   
-       airyai(x)
-   
    Airy function \operatorname{Ai}(x).
    
 
 .. function:: airyprime(x)
 
-   ::
-   
-       airyprime(x)
-   
    Airy function derivative \operatorname{Ai}'(x).
    
 
 .. function:: airyaiprime(x)
 
-   ::
-   
-       airyaiprime(x)
-   
    Airy function derivative \operatorname{Ai}'(x).
    
 
 .. function:: airybi(x)
 
-   ::
-   
-       airybi(x)
-   
    Airy function \operatorname{Bi}(x).
    
 
 .. function:: airybiprime(x)
 
-   ::
-   
-       airybiprime(x)
-   
    Airy function derivative \operatorname{Bi}'(x).
    
 
-.. function:: airyx(k,x)
+.. function:: airyx(k, x)
 
-   ::
-   
-       airyx(k, x)
-   
    scaled kth derivative of the Airy function, return k == 1``, and \operatorname{Ai}(x) e^{- \left| \operatorname{Re} k == 3``.
    
 
 .. function:: besselj0(x)
 
-   ::
-   
-       besselj0(x)
-   
    Bessel function of the first kind of order 0, J_0(x).
    
 
 .. function:: besselj1(x)
 
-   ::
-   
-       besselj1(x)
-   
    Bessel function of the first kind of order 1, J_1(x).
    
 
 .. function:: besselj(nu, x)
 
-   ::
-   
-       besselj(nu, x)
-   
    Bessel function of the first kind of order ``nu``, J_\nu(x).
    
 
 .. function:: besseljx(nu, x)
 
-   ::
-   
-       besseljx(nu, x)
-   
    Scaled Bessel function of the first kind of order ``nu``, J_\nu(x) e^{- | \operatorname{Im}(x) |}.
    
 
 .. function:: bessely0(x)
 
-   ::
-   
-       bessely0(x)
-   
    Bessel function of the second kind of order 0, Y_0(x).
    
 
 .. function:: bessely1(x)
 
-   ::
-   
-       bessely1(x)
-   
    Bessel function of the second kind of order 1, Y_1(x).
    
 
 .. function:: bessely(nu, x)
 
-   ::
-   
-       bessely(nu, x)
-   
    Bessel function of the second kind of order ``nu``, Y_\nu(x).
    
 
 .. function:: besselyx(nu, x)
 
-   ::
-   
-       besselyx(nu, x)
-   
    Scaled Bessel function of the second kind of order ``nu``, Y_\nu(x) e^{- | \operatorname{Im}(x) |}.
    
 
 .. function:: hankelh1(nu, x)
 
-   ::
-   
-       hankelh1(nu, x)
-   
    Bessel function of the third kind of order ``nu``, H^{(1)}_\nu(x).
    
 
 .. function:: hankelh1x(nu, x)
 
-   ::
-   
-       hankelh1x(nu, x)
-   
    Scaled Bessel function of the third kind of order ``nu``, H^{(1)}_\nu(x) e^{-x i}.
    
 
 .. function:: hankelh2(nu, x)
 
-   ::
-   
-       hankelh2(nu, x)
-   
    Bessel function of the third kind of order ``nu``, H^{(2)}_\nu(x).
    
 
 .. function:: hankelh2x(nu, x)
 
-   ::
-   
-       hankelh2x(nu, x)
-   
    Scaled Bessel function of the third kind of order ``nu``, H^{(2)}_\nu(x) e^{x i}.
    
 
 .. function:: besselh(nu, k, x)
 
-   ::
-   
-       besselh(nu, k, x)
-   
    Bessel function of the third kind of order ``nu`` (Hankel function). ``k`` is either 1 or 2, selecting ``hankelh1`` or
    
 
 .. function:: besseli(nu, x)
 
-   ::
-   
-       besseli(nu, x)
-   
    Modified Bessel function of the first kind of order ``nu``, I_\nu(x).
    
 
 .. function:: besselix(nu, x)
 
-   ::
-   
-       besselix(nu, x)
-   
    Scaled modified Bessel function of the first kind of order ``nu``, I_\nu(x) e^{- | \operatorname{Re}(x) |}.
    
 
 .. function:: besselk(nu, x)
 
-   ::
-   
-       besselk(nu, x)
-   
    Modified Bessel function of the second kind of order ``nu``, K_\nu(x).
    
 
 .. function:: besselkx(nu, x)
 
-   ::
-   
-       besselkx(nu, x)
-   
    Scaled modified Bessel function of the second kind of order ``nu``, K_\nu(x) e^x.
    
 
 .. function:: beta(x, y)
 
-   ::
-   
-       beta(x, y)
-   
    Euler integral of the first kind \operatorname{B}(x,y) =
    
 
 .. function:: lbeta(x, y)
 
-   ::
-   
-       lbeta(x, y)
-   
    Natural logarithm of the absolute value of the beta function
    
 
 .. function:: eta(x)
 
-   ::
-   
-       eta(x)
-   
    Dirichlet eta function \eta(s) =
    
 
-.. function:: zeta(s)
+.. function:: zeta(s, z)
 
-   ::
-   
-       zeta(s, z)
-   
    Hurwitz zeta function \zeta(s, z).  (This is equivalent to the Riemann zeta function \zeta(s) for the case of ``z=1``.)
    
 
 .. function:: zeta(s, z)
 
-   ::
-   
-       zeta(s, z)
-   
    Hurwitz zeta function \zeta(s, z).  (This is equivalent to the Riemann zeta function \zeta(s) for the case of ``z=1``.)
    
 
 .. function:: ndigits(n, b)
 
-   ::
-   
-       ndigits(n, b)
-   
    Compute the number of digits in number ``n`` written in base ``b``.
    
 
 .. function:: widemul(x, y)
 
-   ::
-   
-       widemul(x, y)
-   
    Multiply ``x`` and ``y``, giving the result as a larger type.
    
 
 .. function:: @evalpoly(z, c...)
 
-   ::
-   
-       @evalpoly(z, c...)
-   
    Evaluate the polynomial \sum_k c[k] z^{k-1} for the coefficients ascending order by power of ``z``.  This macro expands to efficient inline code that uses either Horner's method or, for complex ``z``, a more efficient Goertzel-like algorithm.
    
 
@@ -2082,217 +1221,121 @@ Statistics
 
 .. function:: mean(v[, region])
 
-   ::
-   
-       mean(v[, region])
-   
    Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``. Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
    
 
 .. function:: mean!(r, v)
 
-   ::
-   
-       mean!(r, v)
-   
    Compute the mean of ``v`` over the singleton dimensions of ``r``, and write results to ``r``.
    
 
 .. function:: std(v[, region])
 
-   ::
-   
-       std(v[, region])
-   
    Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``. Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the
    
 
 .. function:: stdm(v, m)
 
-   ::
-   
-       stdm(v, m)
-   
    Compute the sample standard deviation of a vector ``v`` with known mean ``m``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: var(v[, region])
 
-   ::
-   
-       var(v[, region])
-   
    Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``. Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the
    
 
 .. function:: varm(v, m)
 
-   ::
-   
-       varm(v, m)
-   
    Compute the sample variance of a vector ``v`` with known mean computation.
    
 
-.. function:: middle(x)
+.. function:: middle(array)
 
-   ::
-   
-       middle(array)
-   
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
-   
-
-.. function:: middle(x, y)
-
-   ::
-   
-       middle(array)
-   
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
-   
-
-.. function:: middle(range)
-
-   ::
-   
-       middle(array)
-   
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
    
 
 .. function:: middle(array)
 
-   ::
+   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
    
-       middle(array)
+
+.. function:: middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
    
+
+.. function:: middle(array)
+
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
    
 
 .. function:: median(v)
 
-   ::
-   
-       median(v)
-   
    Compute the median of a vector ``v``. ``NaN`` is returned if the data contains any ``NaN`` values. For applications requiring the handling of missing data, the ``DataArrays`` package is recommended.
    
 
 .. function:: median!(v)
 
-   ::
-   
-       median!(v)
-   
    Like ``median``, but may overwrite the input vector.
    
 
-.. function:: hist(v[, n]) -> e, counts
+.. function:: hist(v, e) -> e, counts
 
-   ::
-   
-       hist(v, e) -> e, counts
-   
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for the bins. The result will be a vector of length satisfies ``sum(e[i] .< v .<= e[i+1])``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: hist(v, e) -> e, counts
 
-   ::
-   
-       hist(v, e) -> e, counts
-   
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for the bins. The result will be a vector of length satisfies ``sum(e[i] .< v .<= e[i+1])``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: hist!(counts, v, e) -> e, counts
 
-   ::
-   
-       hist!(counts, v, e) -> e, counts
-   
    Compute the histogram of ``v``, using a vector/range ``e`` as the edges for the bins. This function writes the resultant counts to a pre-allocated array ``counts``.
    
 
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
-   ::
-   
-       hist2d(M, e1, e2) -> (edge1, edge2, counts)
-   
    Compute a ``2d histogram`` of a set of N points specified by N-by-2 matrix ``M``. Arguments ``e1`` and ``e2`` are bins for each dimension, specified either as integer bin counts or vectors of bin edges. The result is a tuple of ``edge1`` (the bin edges used in the first dimension), ``edge2`` (the bin edges used in the second dimension), and ``counts``, a histogram matrix of size
    
 
 .. function:: hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
 
-   ::
-   
-       hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
-   
    Compute a ``2d histogram`` with respect to the bins delimited by the edges given in ``e1`` and ``e2``. This function writes the results to a pre-allocated array ``counts``.
    
 
 .. function:: histrange(v, n)
 
-   ::
-   
-       histrange(v, n)
-   
    Compute *nice* bin ranges for the edges of a histogram of ``v``, using approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5 multiplied by a power of 10. Note: Julia does not ignore
    
 
 .. function:: midpoints(e)
 
-   ::
-   
-       midpoints(e)
-   
    Compute the midpoints of the bins with edges ``e``. The result is a vector/range of length ``length(e) - 1``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: quantile(v, p)
 
-   ::
-   
-       quantile(v, p)
-   
    Compute the quantile of a vector ``v`` at the probability ``p``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: quantile(v, p)
 
-   ::
-   
-       quantile(v, p)
-   
    Compute the quantile of a vector ``v`` at the probability ``p``. Note: Julia does not ignore ``NaN`` values in the computation.
    
 
 .. function:: quantile!(v, p)
 
-   ::
-   
-       quantile!(v, p)
-   
    Like ``quantile``, but overwrites the input vector.
    
 
 .. function:: cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
 
-   ::
-   
-       cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
-   
    Compute the Pearson covariance between the vector(s) in ``v1`` and This function accepts three keyword arguments: The size of the result depends on the size of ``v1`` and ``v2``. When both ``v1`` and ``v2`` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size ``(n1, n2)``, where ``n1`` and ``n2`` are the numbers of slices in ``v1`` and ``v2``, which depend on the setting of ``vardim``. Note: ``v2`` can be omitted, which indicates ``v2 = v1``.
    
 
 .. function:: cor(v1[, v2][, vardim=1, mean=nothing])
 
-   ::
-   
-       cor(v1[, v2][, vardim=1, mean=nothing])
-   
    Compute the Pearson correlation between the vector(s) in ``v1`` and Users can use the keyword argument ``vardim`` to specify the variable dimension, and ``mean`` to supply pre-computed mean values.
    
 
@@ -2305,327 +1348,183 @@ implemented by calling functions from `FFTW
 FFTW. Higher performance may be obtained by experimenting with
 multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
-.. function:: fft(A [, dims])
+.. function:: fft(A[, dims])
 
-   ::
-   
-       fft(A[, dims])
-   
    Performs a multidimensional FFT of the array ``A``.  The optional an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see ``nextprod()``.  See also A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as defined by A multidimensional FFT simply performs this operation along each transformed dimension of ``A``. Higher performance is usually possible with multi-threading. Use processors.
    
 
-.. function:: fft!(A [, dims])
+.. function:: fft!(A[, dims])
 
-   ::
-   
-       fft!(A[, dims])
-   
    Same as ``fft()``, but operates in-place on ``A``, which must be an array of complex floating-point numbers.
    
 
-.. function:: ifft(A [, dims])
+.. function:: ifft(A[, dims])
 
-   ::
-   
-       ifft(A[, dims])
-   
    Multidimensional inverse FFT. A one-dimensional inverse FFT computes A multidimensional inverse FFT simply performs this operation along each transformed dimension of ``A``.
    
 
-.. function:: ifft!(A [, dims])
+.. function:: ifft!(A[, dims])
 
-   ::
-   
-       ifft!(A[, dims])
-   
    Same as ``ifft()``, but operates in-place on ``A``.
    
 
-.. function:: bfft(A [, dims])
+.. function:: bfft(A[, dims])
 
-   ::
-   
-       bfft(A[, dims])
-   
    Similar to ``ifft()``, but computes an unnormalized inverse sizes of the transformed dimensions in order to obtain the inverse. scaling step, which in some applications can be combined with other computational steps elsewhere.)
    
 
-.. function:: bfft!(A [, dims])
+.. function:: bfft!(A[, dims])
 
-   ::
-   
-       bfft!(A[, dims])
-   
    Same as ``bfft()``, but operates in-place on ``A``.
    
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_fft(A[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays matching the shape and type of ``A``.  (The first two arguments have the same meaning as for ``fft()``.)  Returns a function ``plan(A)`` that computes ``fft(A, dims)`` quickly. The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or benchmarking different possible FFT algorithms and picking the fastest one; see the FFTW manual for more information on planner flags.  The optional ``timelimit`` argument specifies a rough upper bound on the allowed planning time, in seconds. Passing that operates in-place on its argument (which must be an array of complex floating-point numbers).  ``plan_ifft()`` and so on are similar but produce plans that perform the equivalent of the inverse transforms ``ifft()`` and so on.
    
 
-.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_ifft(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_fft()``, but produces a plan that performs inverse transforms ``ifft()``.
    
 
-.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_bfft(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_fft()``, but produces a plan that performs an unnormalized backwards transform ``bfft()``.
    
 
-.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft!(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_fft!(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_fft()``, but operates in-place on ``A``.
    
 
-.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft!(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_ifft!(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_ifft()``, but operates in-place on ``A``.
    
 
-.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft!(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_bfft!(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_bfft()``, but operates in-place on ``A``.
    
 
-.. function:: rfft(A [, dims])
+.. function:: rfft(A[, dims])
 
-   ::
-   
-       rfft(A[, dims])
-   
    Multidimensional FFT of a real array A, exploiting the fact that the transform has conjugate symmetry in order to save roughly half the computational time and storage costs compared with ``fft()``. If ``A`` has size ``(n_1, ..., n_d)``, the result has size The optional ``dims`` argument specifies an iterable subset of one or more dimensions of ``A`` to transform, similar to ``fft()``. Instead of (roughly) halving the first dimension of ``A`` in the result, the ``dims[1]`` dimension is (roughly) halved in the same way.
    
 
-.. function:: irfft(A, d [, dims])
+.. function:: irfft(A, d[, dims])
 
-   ::
-   
-       irfft(A, d[, dims])
-   
    Inverse of ``rfft()``: for a complex array ``A``, gives the corresponding real array whose FFT yields ``A`` in the first half. As for ``rfft()``, ``dims`` is an optional subset of dimensions to transform, defaulting to ``1:ndims(A)``. floor(size(A,dims[1])/2)+1``. (This parameter cannot be inferred from `size(A)`` due to the possibility of rounding by the
    
 
-.. function:: brfft(A, d [, dims])
+.. function:: brfft(A, d[, dims])
 
-   ::
-   
-       brfft(A, d[, dims])
-   
    Similar to ``irfft()`` but computes an unnormalized inverse transform (similar to ``bfft()``), which must be divided by the product of the sizes of the transformed dimensions (of the real output array) in order to obtain the inverse transform.
    
 
-.. function:: plan_rfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_rfft(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_rfft(A[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized real-input FFT, similar to ``plan_fft()`` except for ``rfft()`` instead of ``fft()``.  The first two arguments, and the size of the transformed result, are the same as for ``rfft()``.
    
 
-.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_brfft(A, d[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_brfft(A, d[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized real-input unnormalized transform, similar to first two arguments and the size of the transformed result, are the same as for ``brfft()``.
    
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_irfft(A, d[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_irfft(A, d[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized inverse real-input FFT, similar to respectively.  The first three arguments have the same meaning as for ``irfft()``.
    
 
-.. function:: dct(A [, dims])
+.. function:: dct(A[, dims])
 
-   ::
-   
-       dct(A[, dims])
-   
    Performs a multidimensional type-II discrete cosine transform (DCT) of the array ``A``, using the unitary normalization of the DCT. The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see ``nextprod()``.  See also ``plan_dct()`` for even greater efficiency.
    
 
-.. function:: dct!(A [, dims])
+.. function:: dct!(A[, dims])
 
-   ::
-   
-       dct!(A[, dims])
-   
    Same as ``dct!()``, except that it operates in-place on ``A``, which must be an array of real or complex floating-point values.
    
 
-.. function:: idct(A [, dims])
+.. function:: idct(A[, dims])
 
-   ::
-   
-       idct(A[, dims])
-   
    Computes the multidimensional inverse discrete cosine transform unitary normalization). The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see efficiency.
    
 
-.. function:: idct!(A [, dims])
+.. function:: idct!(A[, dims])
 
-   ::
-   
-       idct!(A[, dims])
-   
    Same as ``idct!()``, but operates in-place on ``A``.
    
 
-.. function:: plan_dct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_dct(A[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized discrete cosine transform (DCT), similar to The first two arguments have the same meaning as for ``dct()``.
    
 
-.. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct!(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_dct!(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_dct()``, but operates in-place on ``A``.
    
 
-.. function:: plan_idct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_idct(A[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to ``plan_fft()`` except producing a function that computes
    
 
-.. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct!(A[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_idct!(A[, dims[, flags[, timelimit]]])
-   
    Same as ``plan_idct()``, but operates in-place on ``A``.
    
 
-.. function:: fftshift(x)
+.. function:: fftshift(x, dim)
 
-   ::
-   
-       fftshift(x, dim)
-   
    Swap the first and second halves of the given dimension of array
    
 
-.. function:: fftshift(x,dim)
+.. function:: fftshift(x, dim)
 
-   ::
-   
-       fftshift(x, dim)
-   
    Swap the first and second halves of the given dimension of array
    
 
-.. function:: ifftshift(x, [dim])
+.. function:: ifftshift(x[, dim])
 
-   ::
-   
-       ifftshift(x[, dim])
-   
    Undoes the effect of ``fftshift``.
    
 
-.. function:: filt(b, a, x, [si])
+.. function:: filt(b, a, x[, si])
 
-   ::
-   
-       filt(b, a, x[, si])
-   
    Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an optional initial filter state vector ``si`` (defaults to zeros).
    
 
-.. function:: filt!(out, b, a, x, [si])
+.. function:: filt!(out, b, a, x[, si])
 
-   ::
-   
-       filt!(out, b, a, x[, si])
-   
    Same as ``filt()`` but writes the result into the ``out`` argument, which may alias the input ``x`` to modify it in-place.
    
 
-.. function:: deconv(b,a)
+.. function:: deconv(b, a)
 
-   ::
-   
-       deconv(b, a)
-   
    Construct vector ``c`` such that ``b = conv(a,c) + r``. Equivalent to polynomial division.
    
 
-.. function:: conv(u,v)
+.. function:: conv(u, v)
 
-   ::
-   
-       conv(u, v)
-   
    Convolution of two vectors. Uses FFT algorithm.
    
 
-.. function:: conv2(u,v,A)
+.. function:: conv2(B, A)
 
-   ::
-   
-       conv2(B, A)
-   
    2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
    
 
-.. function:: conv2(B,A)
+.. function:: conv2(B, A)
 
-   ::
-   
-       conv2(B, A)
-   
    2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
    
 
-.. function:: xcorr(u,v)
+.. function:: xcorr(u, v)
 
-   ::
-   
-       xcorr(u, v)
-   
    Compute the cross-correlation of two vectors.
    
 
@@ -2633,39 +1532,23 @@ The following functions are defined within the ``Base.FFTW`` module.
 
 .. currentmodule:: Base.FFTW
 
-.. function:: r2r(A, kind [, dims])
+.. function:: r2r(A, kind[, dims])
 
-   ::
-   
-       r2r(A, kind[, dims])
-   
    Performs a multidimensional real-input/real-output (r2r) transform of type ``kind`` of the array ``A``, as defined in the FFTW manual. types (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be an array or tuple in order to specify different transform types along the different dimensions of ``A``; ``kind[end]`` is used for any unspecified dimensions.  See the FFTW manual for precise definitions of these transform types, at http://www.fftw.org/doc. The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along. ``kind[i]`` is then the transform type for ``dims[i]``, with See also ``plan_r2r()`` to pre-plan optimized r2r transforms.
    
 
-.. function:: r2r!(A, kind [, dims])
+.. function:: r2r!(A, kind[, dims])
 
-   ::
-   
-       r2r!(A, kind[, dims])
-   
    Same as ``r2r()``, but operates in-place on ``A``, which must be an array of real or complex floating-point numbers.
    
 
-.. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r(A, kind[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_r2r(A, kind[, dims[, flags[, timelimit]]])
-   
    Pre-plan an optimized r2r transform, similar to ``Base.plan_fft()`` except that the transforms (and the first three arguments) correspond to ``r2r()`` and ``r2r!()``, respectively.
    
 
-.. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r!(A, kind[, dims[, flags[, timelimit]]])
 
-   ::
-   
-       plan_r2r!(A, kind[, dims[, flags[, timelimit]]])
-   
    Similar to ``Base.plan_fft()``, but corresponds to ``r2r!()``.
    
 
@@ -2677,12 +1560,8 @@ Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide
 some built-in integration support in Julia.
 
-.. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
+.. function:: quadgk(f, a, b, c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
 
-   ::
-   
-       quadgk(f, a, b, c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
-   
    Numerically integrate the function ``f(x)`` from ``a`` to ``b``, and optionally over additional intervals ``b`` to ``c`` and so on. Keyword options include a relative error tolerance ``reltol`` absolute error tolerance ``abstol`` (defaults to 0), a maximum number of function evaluations ``maxevals`` (defaults to ``10^7``), and the ``order`` of the integration rule (defaults to 7). Returns a pair ``(I,E)`` of the estimated integral ``I`` and an estimated upper bound on the absolute error ``E``.  If ``maxevals`` is not exceeded then ``E <= max(abstol, reltol*norm(I))`` will hold. (Note that it is useful to specify a positive ``abstol`` in cases where ``norm(I)`` may be zero.) The endpoints ``a`` etcetera can also be complex (in which case the integral is performed over straight-line segments in the complex plane).  If the endpoints are ``BigFloat``, then the integration will be performed in ``BigFloat`` precision as well (note: it is advisable to increase the integration ``order`` in rough proportion to the precision, for smooth integrands).  More generally, the precision is set by the precision of the integration endpoints The integrand ``f(x)`` can return any numeric scalar, vector, or matrix type, or in fact any type supporting ``+``, ``-``, multiplication by real values, and a ``norm`` (i.e., any normed vector space). Alternatively, a different norm can be specified by passing a *norm*-like function as the *norm* keyword argument multi-dimensional integration (cubature), there are many different algorithms (often much better than simple nested 1d integrals) and the optimal choice tends to be very problem-dependent.  See the Julia external-package listing for available algorithms for multidimensional integration or other specialized tasks (such as integrals of highly oscillatory or singular functions).] The algorithm is an adaptive Gauss-Kronrod integration technique: the integral in each interval is estimated using a Kronrod rule Gauss rule (``order`` points).   The interval with the largest error is then subdivided into two intervals and the process is repeated until the desired error tolerance is achieved. These quadrature rules work best for smooth functions within each interval, so if your function has a known discontinuity or other singularity, it is best to subdivide your interval to put the singularity at an endpoint.  For example, if ``f`` has a discontinuity at ``x=0.7`` and you want to integrate from 0 to 1, you should use ``quadgk(f, 0,0.7,1)`` to subdivide the interval at the point of discontinuity.  The integrand is never evaluated exactly at the endpoints of the intervals, so it is possible to integrate functions that diverge at the endpoints as long as the singularity is integrable (for example, a ``log(x)`` or For real-valued endpoints, the starting and/or ending points may be infinite.  (A coordinate transformation is performed internally to map the infinite interval to a finite one.)
    
 

@@ -4,21 +4,13 @@
  Dynamic Linker
 ****************
 
-.. function:: dlopen(libfile::AbstractString [, flags::Integer])
+.. function:: dlopen(libfile::AbstractString[, flags::Integer])
 
-   ::
-   
-       dlopen(libfile::AbstractString[, flags::Integer])
-   
    Load a shared library, returning an opaque handle. The optional flags argument is a bitwise-or of zero or more of the POSIX (and/or GNU libc and/or MacOS) dlopen command, if possible, or are ignored if the specified functionality is not available on the current platform.  The default is these flags, on POSIX platforms, is to specify symbols to be available for usage in other shared libraries, in situations where there are dependencies between shared libraries.
    
 
-.. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
+.. function:: dlopen_e(libfile::AbstractString[, flags::Integer])
 
-   ::
-   
-       dlopen_e(libfile::AbstractString[, flags::Integer])
-   
    Similar to ``dlopen()``, except returns a ``NULL`` pointer instead of raising errors.
    
 
@@ -56,37 +48,21 @@
 
 .. function:: dlsym(handle, sym)
 
-   ::
-   
-       dlsym(handle, sym)
-   
    Look up a symbol from a shared library handle, return callable function pointer on success.
    
 
 .. function:: dlsym_e(handle, sym)
 
-   ::
-   
-       dlsym_e(handle, sym)
-   
    Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
    
 
 .. function:: dlclose(handle)
 
-   ::
-   
-       dlclose(handle)
-   
    Close shared library referenced by handle.
    
 
 .. function:: find_library(names, locations)
 
-   ::
-   
-       find_library(names, locations)
-   
    Searches for the first library in ``names`` in the paths in the that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a
    
 
