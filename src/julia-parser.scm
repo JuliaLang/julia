@@ -952,7 +952,12 @@
                    (eqv? t #\()))
           ex
           (case t
-            ((#\( )   (take-token s)
+            ((#\( )
+	     (if (ts:space? s)
+             (syntax-deprecation-warning s
+                                         (string (deparse ex) " " (deparse t))
+                                         (string (deparse ex) (deparse t))))
+	     (take-token s)
              (let ((c
                     (let ((al (parse-arglist s #\) )))
                       (receive
@@ -968,7 +973,12 @@
                (if one-call
                    c
                    (loop c))))
-            ((#\[ )   (take-token s)
+            ((#\[ )
+	     (if (ts:space? s)
+             (syntax-deprecation-warning s
+                                         (string (deparse ex) " " (deparse t))
+                                         (string (deparse ex) (deparse t))))
+	     (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
@@ -998,7 +1008,12 @@
                      ((dict_comprehension)
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
-            ((|.|) (take-token s)
+            ((|.|)
+             (if (ts:space? s)
+               (syntax-deprecation-warning s
+                                           (string (deparse ex) " " (deparse t))
+                                           (string (deparse ex) (deparse t))))
+             (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
                      `(|.| ,ex ,(parse-atom s)))
@@ -1018,7 +1033,12 @@
 		 (error (string "space not allowed before \"" t "\"")))
 	     (take-token s)
              (loop (list t ex)))
-            ((#\{ )   (take-token s)
+            ((#\{ )
+             (if (ts:space? s)
+               (syntax-deprecation-warning s
+                                           (string (deparse ex) " " (deparse t))
+                                           (string (deparse ex) (deparse t))))
+             (take-token s)
              (loop (list* 'curly ex
                           (map subtype-syntax (parse-arglist s #\} )))))
             ((#\")
@@ -1357,6 +1377,10 @@
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
+        (if (ts:space? s)
+          (syntax-deprecation-warning s
+                                      (string (deparse word) " " (deparse nxt))
+                                      (string (deparse word) (deparse nxt))))
         (take-token s)
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
