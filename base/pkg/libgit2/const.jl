@@ -138,7 +138,7 @@ module GitConst
     const INDEXCAP_IGNORE_CASE = Cuint(1)
     const INDEXCAP_NO_FILEMODE = Cuint(2)
     const INDEXCAP_NO_SYMLINKS = Cuint(4)
-    const INDEXCAP_FROM_OWNER  = ~(Cuint(0))
+    const INDEXCAP_FROM_OWNER  = ~Cuint(0)
 
     const INDEX_ADD_DEFAULT                = Cuint(0)
     const INDEX_ADD_FORCE                  = Cuint(1 << 0)

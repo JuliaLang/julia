@@ -48,6 +48,17 @@ function Base.finalize(sa::StrArrayStruct)
     return sa_ptr[]
 end
 
+immutable StrArrayStruct2
+   strings::Ptr{Cstring}
+   count::Csize_t
+end
+StrArrayStruct2() = StrArrayStruct2(Ptr{Cstring}(C_NULL), zero(Csize_t))
+function Base.finalize(sa::StrArrayStruct2)
+    sa_ptr = Ref(sa)
+    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct2},), sa_ptr)
+    return sa_ptr[]
+end
+
 
 immutable CheckoutOptionsStruct
     version::Cuint
