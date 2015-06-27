@@ -249,13 +249,13 @@ typedef struct {
 } jl_uniontype_t;
 
 typedef struct {
-    uint16_t offset;   // offset relative to data start, excluding type tag
-    uint16_t size:15;
-    uint16_t isptr:1;
+    uint32_t offset;   // offset relative to data start, excluding type tag
+    uint32_t size:31;
+    uint32_t isptr:1;
 } jl_fielddesc_t;
 
-#define JL_FIELD_MAX_OFFSET ((1ul << 16) - 1ul)
-#define JL_FIELD_MAX_SIZE ((1ul << 15) - 1ul)
+// For both field size and total size
+#define JL_FIELD_MAX_SIZE ((((uint32_t)1) << 31) - 1)
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE

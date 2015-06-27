@@ -577,11 +577,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        if (__unlikely(sz > JL_FIELD_MAX_OFFSET))
-            jl_throw(jl_overflow_exception);
         st->fields[i].offset = sz;
         st->fields[i].size = fsz;
         sz += fsz;
+        if (__unlikely(sz >= JL_FIELD_MAX_SIZE)) {
+            jl_throw(jl_overflow_exception);
+        }
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
