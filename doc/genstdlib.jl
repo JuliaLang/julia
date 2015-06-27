@@ -2,13 +2,6 @@ using .Markdown
 
 cd(dirname(@__FILE__))
 
-isrst(md) =
-  length(md.content) == 1 &&
-  isa(md.content[1], Markdown.Code) &&
-  md.content[1].language == "rst"
-
-rst(md) = isrst(md) ? join(split(md.content[1].code, "\n")[3:end], "\n") : Markdown.rst(md)
-
 isop(func) = ismatch(r"[^\w@!.]|^!$", func)
 
 ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
@@ -42,7 +35,7 @@ function translate(file)
         doccing = true
         println(io, l)
         println(io)
-        println(io, rst(getdoc(mod, func)))
+        println(io, Markdown.rst(getdoc(mod, func)))
         println(io)
       elseif doccing && (startswith(l, "   ") || ismatch(r"^\s*$", l))
       else
@@ -53,7 +46,7 @@ function translate(file)
   end
 end
 
-println("\nConveting stdlib/\n")
+println("\nConverting stdlib/\n")
 
 for file in readdir("stdlib")
   translate("stdlib/$file")
