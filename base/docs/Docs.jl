@@ -73,12 +73,18 @@ function trackmethod(def)
 end
 
 type FuncDoc
+    main
     order::Vector{Method}
     meta::Dict{Method, Any}
     source::Dict{Method, Any}
 end
 
-FuncDoc() = FuncDoc([], Dict(), Dict())
+FuncDoc() = FuncDoc(nothing, [], Dict(), Dict())
+
+function doc!(f::Function, data)
+    fd = get!(meta(), f, FuncDoc())
+    fd.main = data
+end
 
 function doc!(f::Function, m::Method, data, source)
     fd = get!(meta(), f, FuncDoc())
@@ -93,6 +99,7 @@ function doc(f::Function)
     for mod in modules
         if haskey(mod.META, f)
             fd = mod.META[f]
+            length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
             if isa(fd, FuncDoc)
                 for m in fd.order
                     push!(docs, fd.meta[m])
