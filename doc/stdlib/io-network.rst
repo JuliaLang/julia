@@ -19,43 +19,193 @@ General I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(f::function, args...)
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
+
+   Start running "command" asynchronously, and return a tuple "(stream,process)".  If "mode" is ""r"", then "stream" reads from the process's standard output and "stdio" optionally specifies the process's standard input stream.  If "mode" is ""w"", then "stream" writes to the process's standard input and "stdio" optionally specifies the process's standard output stream.
+
+   ::
+
+       open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   Similar to "open(command, mode, stdio)", but calls "f(stream)" on the resulting read or write stream, then closes the stream and waits for the process to complete.  Returns the value returned by "f".
+
+   ::
+
+       open(file_name[, read, write, create, truncate, append]) -> IOStream
+
+   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+
+   ::
+
+       open(file_name[, mode]) -> IOStream
+
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
+
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
+
+   ::
+
+       open(f::function, args...)
 
    Apply the function "f" to the result of "open(args...)" and close the resulting file descriptor upon completion.
 
    **Example**: "open(readall, "file.txt")"
 
 
-.. function:: open(f::function, args...)
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
+
+   Start running "command" asynchronously, and return a tuple "(stream,process)".  If "mode" is ""r"", then "stream" reads from the process's standard output and "stdio" optionally specifies the process's standard input stream.  If "mode" is ""w"", then "stream" writes to the process's standard input and "stdio" optionally specifies the process's standard output stream.
+
+   ::
+
+       open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   Similar to "open(command, mode, stdio)", but calls "f(stream)" on the resulting read or write stream, then closes the stream and waits for the process to complete.  Returns the value returned by "f".
+
+   ::
+
+       open(file_name[, read, write, create, truncate, append]) -> IOStream
+
+   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+
+   ::
+
+       open(file_name[, mode]) -> IOStream
+
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
+
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
+
+   ::
+
+       open(f::function, args...)
 
    Apply the function "f" to the result of "open(args...)" and close the resulting file descriptor upon completion.
 
    **Example**: "open(readall, "file.txt")"
 
 
-.. function:: open(f::function, args...)
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
+
+   Start running "command" asynchronously, and return a tuple "(stream,process)".  If "mode" is ""r"", then "stream" reads from the process's standard output and "stdio" optionally specifies the process's standard input stream.  If "mode" is ""w"", then "stream" writes to the process's standard input and "stdio" optionally specifies the process's standard output stream.
+
+   ::
+
+       open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   Similar to "open(command, mode, stdio)", but calls "f(stream)" on the resulting read or write stream, then closes the stream and waits for the process to complete.  Returns the value returned by "f".
+
+   ::
+
+       open(file_name[, read, write, create, truncate, append]) -> IOStream
+
+   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+
+   ::
+
+       open(file_name[, mode]) -> IOStream
+
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
+
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
+
+   ::
+
+       open(f::function, args...)
 
    Apply the function "f" to the result of "open(args...)" and close the resulting file descriptor upon completion.
 
    **Example**: "open(readall, "file.txt")"
 
 
-.. function:: IOBuffer([data][, readable, writable[, maxsize]])
+.. function:: IOBuffer() -> IOBuffer
+
+   Create an in-memory I/O stream.
+
+   ::
+
+       IOBuffer(size::Int)
+
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+   ::
+
+       IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+   ::
+
+       IOBuffer([data][, readable, writable[, maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 
-.. function:: IOBuffer([data][, readable, writable[, maxsize]])
+.. function:: IOBuffer() -> IOBuffer
+
+   Create an in-memory I/O stream.
+
+   ::
+
+       IOBuffer(size::Int)
+
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+   ::
+
+       IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+   ::
+
+       IOBuffer([data][, readable, writable[, maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 
-.. function:: IOBuffer([data][, readable, writable[, maxsize]])
+.. function:: IOBuffer() -> IOBuffer
+
+   Create an in-memory I/O stream.
+
+   ::
+
+       IOBuffer(size::Int)
+
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+   ::
+
+       IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+   ::
+
+       IOBuffer([data][, readable, writable[, maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 
-.. function:: IOBuffer([data][, readable, writable[, maxsize]])
+.. function:: IOBuffer() -> IOBuffer
+
+   Create an in-memory I/O stream.
+
+   ::
+
+       IOBuffer(size::Int)
+
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+   ::
+
+       IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+   ::
+
+       IOBuffer([data][, readable, writable[, maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
@@ -90,12 +240,24 @@ General I/O
    Write the canonical binary representation of a value to the given stream.
 
 
-.. function:: read(stream, type, dims)
+.. function:: read(stream, type)
+
+   Read a value of the given type from a stream, in canonical binary representation.
+
+   ::
+
+       read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. "dims" is either a tuple or a series of integer arguments specifying the size of "Array" to return.
 
 
-.. function:: read(stream, type, dims)
+.. function:: read(stream, type)
+
+   Read a value of the given type from a stream, in canonical binary representation.
+
+   ::
+
+       read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. "dims" is either a tuple or a series of integer arguments specifying the size of "Array" to return.
 
@@ -218,12 +380,24 @@ General I/O
    Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous *File*'s and *IOStream*'s not to any of the asynchronous streams.
 
 
-.. function:: redirect_stdout(stream)
+.. function:: redirect_stdout()
+
+   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+
+   ::
+
+       redirect_stdout(stream)
 
    Replace STDOUT by stream for all C and julia level output to STDOUT. Note that *stream* must be a TTY, a Pipe or a TcpSocket.
 
 
-.. function:: redirect_stdout(stream)
+.. function:: redirect_stdout()
+
+   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+
+   ::
+
+       redirect_stdout(stream)
 
    Replace STDOUT by stream for all C and julia level output to STDOUT. Note that *stream* must be a TTY, a Pipe or a TcpSocket.
 
@@ -258,12 +432,24 @@ General I/O
    Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first argument. EOL markers other than '\n' are supported by passing them as the second argument.
 
 
-.. function:: PipeBuffer(data::Vector{UInt8}[, maxsize])
+.. function:: PipeBuffer()
+
+   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
+
+   ::
+
+       PipeBuffer(data::Vector{UInt8}[, maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
 
-.. function:: PipeBuffer(data::Vector{UInt8}[, maxsize])
+.. function:: PipeBuffer()
+
+   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
+
+   ::
+
+       PipeBuffer(data::Vector{UInt8}[, maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
@@ -351,12 +537,24 @@ Text I/O
    Show all structure of a value, including all fields of objects.
 
 
-.. function:: readall(filename::AbstractString)
+.. function:: readall(stream::IO)
+
+   Read the entire contents of an I/O stream as a string.
+
+   ::
+
+       readall(filename::AbstractString)
 
    Open "filename", read the entire contents as a string, then close the file. Equivalent to "open(readall, filename)".
 
 
-.. function:: readall(filename::AbstractString)
+.. function:: readall(stream::IO)
+
+   Read the entire contents of an I/O stream as a string.
+
+   ::
+
+       readall(filename::AbstractString)
 
    Open "filename", read the entire contents as a string, then close the file. Equivalent to "open(readall, filename)".
 
@@ -381,32 +579,320 @@ Text I/O
    Create an iterable object that will yield each line from a stream.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
 
-.. function:: readdlm(source; options...)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+
+   Read a matrix from the source where each line (separated by "eol") gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+
+   If "T" is a numeric type, the result is an array of that type, with any non-numeric elements as "NaN" for floating-point types, or zero. Other useful values of "T" include "ASCIIString", "AbstractString", and "Any".
+
+   If "header" is "true", the first row of data will be read as header and the tuple "(data_cells, header_cells)" is returned instead of only "data_cells".
+
+   Specifying "skipstart" will ignore the corresponding number of initial lines from the input.
+
+   If "skipblanks" is "true", blank lines in the input will be ignored.
+
+   If "use_mmap" is "true", the file specified by "source" is memory mapped for potential speedups. Default is "true" except on Windows. On Windows, you may want to specify "true" if the file is large, and is only read once and not written to.
+
+   If "ignore_invalid_chars" is "true", bytes in "source" with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If "quotes" is "true", column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying "dims" as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If "comments" is "true", lines beginning with "comment_char" and text following "comment_char" in any line are ignored.
+
+   ::
+
+       readdlm(source, delim::Char, eol::Char; options...)
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, delim::Char, T::Type; options...)
+
+   The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+   ::
+
+       readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n".
+
+   ::
+
+       readdlm(source; options...)
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as "\n". If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
@@ -618,32 +1104,66 @@ Memory-mapped I/O
    This would create a 25-by-30000 "BitArray", linked to the file associated with stream "s".
 
 
-.. function:: msync(ptr, len[, flags])
+.. function:: msync(array)
 
-   Forces synchronization of the "mmap()"ped memory region from "ptr" to "ptr+len". Flags defaults to "MS_SYNC", but can be a combination of "MS_ASYNC", "MS_SYNC", or "MS_INVALIDATE". See your platform man page for specifics. The flags argument is not valid on Windows.
-
-   You may not need to call "msync", because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   Forces synchronization between the in-memory version of a memory- mapped "Array" or "BitArray" and the on-disk version.
 
 
 Network I/O
 -----------
 
-.. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
+.. function:: connect([host], port) -> TcpSocket
+
+   Connect to the host "host" on port "port"
+
+   ::
+
+       connect(path) -> Pipe
+
+   Connect to the Named Pipe/Domain Socket at "path"
+
+   ::
+
+       connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id "pid", specified by "config" and return a pair of "AsyncStream" objects. Messages from "pid" to current process will be read off "instrm", while messages to be sent to "pid" will be written to "outstrm". The custom transport implementation must ensure that messages are delivered and received completely and in order. "Base.connect(manager::ClusterManager.....)" sets up TCP/IP socket connections in-between workers.
 
 
-.. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
+.. function:: connect([host], port) -> TcpSocket
+
+   Connect to the host "host" on port "port"
+
+   ::
+
+       connect(path) -> Pipe
+
+   Connect to the Named Pipe/Domain Socket at "path"
+
+   ::
+
+       connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id "pid", specified by "config" and return a pair of "AsyncStream" objects. Messages from "pid" to current process will be read off "instrm", while messages to be sent to "pid" will be written to "outstrm". The custom transport implementation must ensure that messages are delivered and received completely and in order. "Base.connect(manager::ClusterManager.....)" sets up TCP/IP socket connections in-between workers.
 
 
-.. function:: listen(path) -> PipeServer
+.. function:: listen([addr], port) -> TcpServer
+
+   Listen on port on the address specified by "addr". By default this listens on localhost only. To listen on all interfaces pass, "IPv4(0)" or "IPv6(0)" as appropriate.
+
+   ::
+
+       listen(path) -> PipeServer
 
    Listens on/Creates a Named Pipe/Domain Socket
 
 
-.. function:: listen(path) -> PipeServer
+.. function:: listen([addr], port) -> TcpServer
+
+   Listen on port on the address specified by "addr". By default this listens on localhost only. To listen on all interfaces pass, "IPv4(0)" or "IPv6(0)" as appropriate.
+
+   ::
+
+       listen(path) -> PipeServer
 
    Listens on/Creates a Named Pipe/Domain Socket
 

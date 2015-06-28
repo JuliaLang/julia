@@ -4,17 +4,47 @@
  Strings
 *********
 
-.. function:: length(s)
+.. function:: length(A) -> Integer
+
+   Returns the number of elements in A
+
+   ::
+
+       length(collection) -> Integer
+
+   For ordered, indexable collections, the maximum index "i" for which "getindex(collection, i)" is valid. For unordered collections, the number of elements.
+
+   ::
+
+       length(s)
 
    The number of characters in string "s".
 
 
-.. function:: sizeof(s::AbstractString)
+.. function:: sizeof(type)
+
+   Size, in bytes, of the canonical binary representation of the given type, if any.
+
+   ::
+
+       sizeof(s::AbstractString)
 
    The number of bytes in string "s".
 
 
-.. function:: *(s, t)
+.. function:: *(A, B)
+
+   Matrix multiplication
+
+   ::
+
+       *(x, y...)
+
+   Multiplication operator. "x*y*z*..." calls this function with all arguments, i.e. "*(x, y, z, ...)".
+
+   ::
+
+       *(s, t)
 
    Concatenate strings. The "*" operator is an alias to this function.
 
@@ -27,7 +57,13 @@
 	   julia> "Hello " * "world"
 	   "Hello world"
 
-.. function:: ^(s, n)
+.. function:: ^(x, y)
+
+   Exponentiation operator.
+
+   ::
+
+       ^(s, n)
 
    Repeat "n" times the string "s". The "^" operator is an alias to this function.
 
@@ -47,42 +83,126 @@
    Create a string from any value using the "showall" function.
 
 
-.. function:: bytestring(s)
+.. function:: bytestring(::Ptr{UInt8}[, length])
+
+   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
+
+   ::
+
+       bytestring(s)
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
 
-.. function:: bytestring(s)
+.. function:: bytestring(::Ptr{UInt8}[, length])
+
+   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
+
+   ::
+
+       bytestring(s)
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
 
-.. function:: ascii(::Ptr{UInt8}[, length])
+.. function:: ascii(::Array{UInt8, 1})
+
+   Create an ASCII string from a byte array.
+
+   ::
+
+       ascii(s)
+
+   Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
+
+   ::
+
+       ascii(::Ptr{UInt8}[, length])
 
    Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
 
 
-.. function:: ascii(::Ptr{UInt8}[, length])
+.. function:: ascii(::Array{UInt8, 1})
+
+   Create an ASCII string from a byte array.
+
+   ::
+
+       ascii(s)
+
+   Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
+
+   ::
+
+       ascii(::Ptr{UInt8}[, length])
 
    Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
 
 
-.. function:: ascii(::Ptr{UInt8}[, length])
+.. function:: ascii(::Array{UInt8, 1})
+
+   Create an ASCII string from a byte array.
+
+   ::
+
+       ascii(s)
+
+   Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
+
+   ::
+
+       ascii(::Ptr{UInt8}[, length])
 
    Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
 
 
-.. function:: utf8(s)
+.. function:: utf8(::Array{UInt8, 1})
+
+   Create a UTF-8 string from a byte array.
+
+   ::
+
+       utf8(::Ptr{UInt8}[, length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
+
+   ::
+
+       utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
 
-.. function:: utf8(s)
+.. function:: utf8(::Array{UInt8, 1})
+
+   Create a UTF-8 string from a byte array.
+
+   ::
+
+       utf8(::Ptr{UInt8}[, length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
+
+   ::
+
+       utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
 
-.. function:: utf8(s)
+.. function:: utf8(::Array{UInt8, 1})
+
+   Create a UTF-8 string from a byte array.
+
+   ::
+
+       utf8(::Ptr{UInt8}[, length])
+
+   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If "length" is specified, the string does not have to be 0-terminated.
+
+   ::
+
+       utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
@@ -121,12 +241,36 @@
    Returns an iterator over substrings of "s" that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)
 
 
-.. function:: isvalid(str, i)
+.. function:: isvalid(value) -> Bool
+
+   Returns true if the given value is valid for its type, which currently can be one of "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String"
+
+   ::
+
+       isvalid(T, value) -> Bool
+
+   Returns true if the given value is valid for that type. Types currently can be "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String" Values for "Char" can be of type "Char" or "UInt32" Values for "ASCIIString" and "UTF8String" can be of that type, or "Vector{UInt8}" Values for "UTF16String" can be "UTF16String" or "Vector{UInt16}" Values for "UTF32String" can be "UTF32String", "Vector{Char}" or "Vector{UInt32}"
+
+   ::
+
+       isvalid(str, i)
 
    Tells whether index "i" is valid for the given string
 
 
-.. function:: isvalid(str, i)
+.. function:: isvalid(value) -> Bool
+
+   Returns true if the given value is valid for its type, which currently can be one of "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String"
+
+   ::
+
+       isvalid(T, value) -> Bool
+
+   Returns true if the given value is valid for that type. Types currently can be "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String" Values for "Char" can be of type "Char" or "UInt32" Values for "ASCIIString" and "UTF8String" can be of that type, or "Vector{UInt8}" Values for "UTF16String" can be "UTF16String" or "Vector{UInt16}" Values for "UTF32String" can be "UTF32String", "Vector{Char}" or "Vector{UInt32}"
+
+   ::
+
+       isvalid(str, i)
 
    Tells whether index "i" is valid for the given string
 
@@ -282,7 +426,19 @@
    Convert a character index to a byte index
 
 
-.. function:: isvalid(str, i)
+.. function:: isvalid(value) -> Bool
+
+   Returns true if the given value is valid for its type, which currently can be one of "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String"
+
+   ::
+
+       isvalid(T, value) -> Bool
+
+   Returns true if the given value is valid for that type. Types currently can be "Char", "ASCIIString", "UTF8String", "UTF16String", or "UTF32String" Values for "Char" can be of type "Char" or "UInt32" Values for "ASCIIString" and "UTF8String" can be of that type, or "Vector{UInt8}" Values for "UTF16String" can be "UTF16String" or "Vector{UInt16}" Values for "UTF32String" can be "UTF32String", "Vector{Char}" or "Vector{UInt32}"
+
+   ::
+
+       isvalid(str, i)
 
    Tells whether index "i" is valid for the given string
 
@@ -392,12 +548,28 @@
    General unescaping of traditional C and Unicode escape sequences. Reverse of "escape_string()". See also "print_unescaped()".
 
 
-.. function:: utf16(::Union{Ptr{UInt16}, Ptr{Int16}}[, length])
+.. function:: utf16(s)
+
+   Create a UTF-16 string from a byte array, array of "UInt16", or any other string type.  (Data must be valid UTF-16.  Conversions of byte arrays check for a byte-order marker in the first two bytes, and do not include it in the resulting string.)
+
+   Note that the resulting "UTF16String" data is terminated by the NUL codepoint (16-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data.  This NUL is appended automatically by the *utf16(s)* conversion function.  If you have a "UInt16" array "A" that is already NUL-terminated valid UTF-16 data, then you can instead use *UTF16String(A)`* to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
+
+   ::
+
+       utf16(::Union{Ptr{UInt16}, Ptr{Int16}}[, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If "length" is specified, the string does not have to be NUL-terminated.
 
 
-.. function:: utf16(::Union{Ptr{UInt16}, Ptr{Int16}}[, length])
+.. function:: utf16(s)
+
+   Create a UTF-16 string from a byte array, array of "UInt16", or any other string type.  (Data must be valid UTF-16.  Conversions of byte arrays check for a byte-order marker in the first two bytes, and do not include it in the resulting string.)
+
+   Note that the resulting "UTF16String" data is terminated by the NUL codepoint (16-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data.  This NUL is appended automatically by the *utf16(s)* conversion function.  If you have a "UInt16" array "A" that is already NUL-terminated valid UTF-16 data, then you can instead use *UTF16String(A)`* to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
+
+   ::
+
+       utf16(::Union{Ptr{UInt16}, Ptr{Int16}}[, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If "length" is specified, the string does not have to be NUL-terminated.
 

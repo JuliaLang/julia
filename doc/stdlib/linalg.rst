@@ -13,7 +13,19 @@ Standard Functions
 
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://faculty.cse.tamu.edu/davis/suitesparse.html>`_.
 
-.. function:: *(s, t)
+.. function:: *(A, B)
+
+   Matrix multiplication
+
+   ::
+
+       *(x, y...)
+
+   Multiplication operator. "x*y*z*..." calls this function with all arguments, i.e. "*(x, y, z, ...)".
+
+   ::
+
+       *(s, t)
 
    Concatenate strings. The "*" operator is an alias to this function.
 
@@ -54,7 +66,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Compute a convenient factorization (including LU, Cholesky, Bunch- Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: "A=factorize(A); x=A\b; y=A\C".
 
 
-.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
+.. function:: full(S)
+
+   Convert a sparse matrix "S" into a dense matrix.
+
+   ::
+
+       full(F)
+
+   Reconstruct the matrix "A" from the factorization "F=factorize(A)".
+
+   ::
+
+       full(QRCompactWYQ[, thin=true]) -> Matrix
 
    Converts an orthogonal or unitary matrix stored as a "QRCompactWYQ" object, i.e. in the compact WY format [Bischof1987], to a dense matrix.
 
@@ -135,7 +159,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Compute the Cholesky factorization of a symmetric positive definite matrix "A" and return the matrix "F". If "LU" is "Val{:U}" (Upper), "F" is of type "UpperTriangular" and "A = F'*F". If "LU" is "Val{:L}" (Lower), "F" is of type "LowerTriangular" and "A = F*F'". "LU" defaults to "Val{:U}".
 
 
-.. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
+.. function:: cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
+
+   Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix "A" and return either a "Cholesky" if "pivot==Val{false}" or "CholeskyPivoted" if "pivot==Val{true}". "LU" may be ":L" for using the lower part or ":U" for the upper part. The default is to use ":U". The triangular matrix can be obtained from the factorization "F" with: "F[:L]" and "F[:U]". The following functions are available for "Cholesky" objects: "size", "", "inv", "det". For "CholeskyPivoted" there is also defined a "rank". If "pivot==Val{false}" a "PosDefException" exception is thrown in case the matrix is not positive definite. The argument "tol" determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
+
+   ::
+
+       cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite matrix "A". A fill-reducing permutation is used.  "F = cholfact(A)" is most frequently used to solve systems of equations with "F\b", but also the methods "diag", "det", "logdet" are defined for "F".  You can also extract individual factors from "F", using "F[:L]".  However, since pivoting is on by default, the factorization is internally represented as "A == P'*L*L'*P" with a permutation matrix "P"; using just "L" without accounting for "P" will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact "combined" factors like "PtL = F[:PtL]" (the equivalent of "P'*L") and "LtP = F[:UP]" (the equivalent of "L'*P").
 
@@ -144,7 +174,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 
-.. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
+.. function:: cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
+
+   Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix "A" and return either a "Cholesky" if "pivot==Val{false}" or "CholeskyPivoted" if "pivot==Val{true}". "LU" may be ":L" for using the lower part or ":U" for the upper part. The default is to use ":U". The triangular matrix can be obtained from the factorization "F" with: "F[:L]" and "F[:U]". The following functions are available for "Cholesky" objects: "size", "", "inv", "det". For "CholeskyPivoted" there is also defined a "rank". If "pivot==Val{false}" a "PosDefException" exception is thrown in case the matrix is not positive definite. The argument "tol" determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
+
+   ::
+
+       cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite matrix "A". A fill-reducing permutation is used.  "F = cholfact(A)" is most frequently used to solve systems of equations with "F\b", but also the methods "diag", "det", "logdet" are defined for "F".  You can also extract individual factors from "F", using "F[:L]".  However, since pivoting is on by default, the factorization is internally represented as "A == P'*L*L'*P" with a permutation matrix "P"; using just "L" without accounting for "P" will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact "combined" factors like "PtL = F[:PtL]" (the equivalent of "P'*L") and "LtP = F[:UP]" (the equivalent of "L'*P").
 
@@ -158,7 +194,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    "cholfact!" is the same as "cholfact()", but saves space by overwriting the input "A", instead of creating a copy. "cholfact!" can also reuse the symbolic factorization from a different matrix "F" with the same structure when used as: "cholfact!(F::CholmodFactor, A)".
 
 
-.. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
+.. function:: ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix "A" such that "A=L*Diagonal(d)*L'" where "L" is a unit lower triangular matrix and "d" is a vector with non-negative elements.
+
+   ::
+
+       ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian matrix "A". A fill-reducing permutation is used.  "F = ldltfact(A)" is most frequently used to solve systems of equations with "F\b", but also the methods "diag", "det", "logdet" are defined for "F". You can also extract individual factors from "F", using "F[:L]".  However, since pivoting is on by default, the factorization is internally represented as "A == P'*L*D*L'*P" with a permutation matrix "P"; using just "L" without accounting for "P" will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact "combined" factors like "PtL = F[:PtL]" (the equivalent of "P'*L") and "LtP = F[:UP]" (the equivalent of "L'*P").  The complete list of supported factors is ":L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP".
 
@@ -167,7 +209,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 
-.. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
+.. function:: ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix "A" such that "A=L*Diagonal(d)*L'" where "L" is a unit lower triangular matrix and "d" is a vector with non-negative elements.
+
+   ::
+
+       ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian matrix "A". A fill-reducing permutation is used.  "F = ldltfact(A)" is most frequently used to solve systems of equations with "F\b", but also the methods "diag", "det", "logdet" are defined for "F". You can also extract individual factors from "F", using "F[:L]".  However, since pivoting is on by default, the factorization is internally represented as "A == P'*L*D*L'*P" with a permutation matrix "P"; using just "L" without accounting for "P" will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact "combined" factors like "PtL = F[:PtL]" (the equivalent of "P'*L") and "LtP = F[:UP]" (the equivalent of "L'*P").  The complete list of supported factors is ":L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP".
 
@@ -181,12 +229,128 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Compute the (pivoted) QR factorization of "A" such that either "A = Q*R" or "A[:,p] = Q*R". Also see "qrfact". The default is to compute a thin factorization. Note that "R" is not extended with zeros when the full "Q" is requested.
 
 
-.. function:: qrfact(A) -> SPQR.Factorization
+.. function:: qrfact(A[, pivot=Val{false}]) -> F
+
+   Computes the QR factorization of "A". The return type of "F" depends on the element type of "A" and whether pivoting is specified (with "pivot==Val{true}").
+
+   ::
+
+       +------------------+-------------------+----------------+---------------------------------------+
+       | Return type      | "eltype(A)"     | "pivot"      | Relationship between "F" and "A"  |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QR"           | not "BlasFloat" | either         | "A==F[:Q]*F[:R]"                    |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QRCompactWY"  | "BlasFloat"     | "Val{false}" | "A==F[:Q]*F[:R]"                    |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QRPivoted"    | "BlasFloat"     | "Val{true}"  | "A[:,F[:p]]==F[:Q]*F[:R]"           |
+       +------------------+-------------------+----------------+---------------------------------------+
+
+   "BlasFloat" refers to any of: "Float32", "Float64", "Complex64" or "Complex128".
+
+   The individual components of the factorization "F" can be accessed by indexing:
+
+   ::
+
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | Component   | Description                                   | "QR"             | "QRCompactWY"       | "QRPivoted"      |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:Q]"   | "Q" (orthogonal/unitary) part of "QR"     | ✓ ("QRPackedQ")  | ✓ ("QRCompactWYQ")  | ✓ ("QRPackedQ")  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:R]"   | "R" (upper right triangular) part of "QR" | ✓                  | ✓                     | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:p]"   | pivot "Vector"                              |                    |                       | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:P]"   | (pivot) permutation "Matrix"                |                    |                       | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+
+   The following functions are available for the "QR" objects: "size", "". When "A" is rectangular, "" will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
+
+   Multiplication with respect to either thin or full "Q" is allowed, i.e. both "F[:Q]*F[:R]" and "F[:Q]*A" are supported. A "Q" matrix can be converted into a regular matrix with "full()" which has a named argument "thin".
+
+   Note: "qrfact" returns multiple types because LAPACK uses   several representations that minimize the memory storage   requirements of products of Householder elementary reflectors, so   that the "Q" and "R" matrices can be stored compactly rather   as two separate dense matrices.The data contained in "QR" or   "QRPivoted" can be used to construct the "QRPackedQ" type,   which is a compact representation of the rotation matrix:
+
+   ::
+
+            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+
+   where \tau_i is the scale factor and v_i is the projection   vector associated with the i^{th} Householder elementary   reflector.The data contained in "QRCompactWY" can be used to   construct the "QRCompactWYQ" type, which is a compact   representation of the rotation matrix
+
+   ::
+
+            Q = I + Y T Y^T
+
+   where "Y" is m \times r lower trapezoidal and "T" is r   \times r upper triangular. The *compact WY* representation   [Schreiber1989] is not to be confused with the older, *WY*   representation [Bischof1987]. (The LAPACK documentation uses   "V" in lieu of "Y".)
+
+   [Bischof1987] C Bischof and C Van Loan, The WY                representation for products of Householder matrices,                SIAM J Sci Stat Comput 8 (1987), s2-s13.                doi:10.1137/0908009
+
+   [Schreiber1989] R Schreiber and C Van Loan, A                  storage-efficient WY representation for products of                  Householder transformations, SIAM J Sci Stat Comput                  10 (1989), 53-57. doi:10.1137/0910005
+
+   ::
+
+       qrfact(A) -> SPQR.Factorization
 
    Compute the QR factorization of a sparse matrix "A". A fill- reducing permutation is used. The main application of this type is to solve least squares problems with "". The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 
 
-.. function:: qrfact(A) -> SPQR.Factorization
+.. function:: qrfact(A[, pivot=Val{false}]) -> F
+
+   Computes the QR factorization of "A". The return type of "F" depends on the element type of "A" and whether pivoting is specified (with "pivot==Val{true}").
+
+   ::
+
+       +------------------+-------------------+----------------+---------------------------------------+
+       | Return type      | "eltype(A)"     | "pivot"      | Relationship between "F" and "A"  |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QR"           | not "BlasFloat" | either         | "A==F[:Q]*F[:R]"                    |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QRCompactWY"  | "BlasFloat"     | "Val{false}" | "A==F[:Q]*F[:R]"                    |
+       +------------------+-------------------+----------------+---------------------------------------+
+       | "QRPivoted"    | "BlasFloat"     | "Val{true}"  | "A[:,F[:p]]==F[:Q]*F[:R]"           |
+       +------------------+-------------------+----------------+---------------------------------------+
+
+   "BlasFloat" refers to any of: "Float32", "Float64", "Complex64" or "Complex128".
+
+   The individual components of the factorization "F" can be accessed by indexing:
+
+   ::
+
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | Component   | Description                                   | "QR"             | "QRCompactWY"       | "QRPivoted"      |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:Q]"   | "Q" (orthogonal/unitary) part of "QR"     | ✓ ("QRPackedQ")  | ✓ ("QRCompactWYQ")  | ✓ ("QRPackedQ")  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:R]"   | "R" (upper right triangular) part of "QR" | ✓                  | ✓                     | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:p]"   | pivot "Vector"                              |                    |                       | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+       | "F[:P]"   | (pivot) permutation "Matrix"                |                    |                       | ✓                  |
+       +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+
+   The following functions are available for the "QR" objects: "size", "". When "A" is rectangular, "" will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
+
+   Multiplication with respect to either thin or full "Q" is allowed, i.e. both "F[:Q]*F[:R]" and "F[:Q]*A" are supported. A "Q" matrix can be converted into a regular matrix with "full()" which has a named argument "thin".
+
+   Note: "qrfact" returns multiple types because LAPACK uses   several representations that minimize the memory storage   requirements of products of Householder elementary reflectors, so   that the "Q" and "R" matrices can be stored compactly rather   as two separate dense matrices.The data contained in "QR" or   "QRPivoted" can be used to construct the "QRPackedQ" type,   which is a compact representation of the rotation matrix:
+
+   ::
+
+            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+
+   where \tau_i is the scale factor and v_i is the projection   vector associated with the i^{th} Householder elementary   reflector.The data contained in "QRCompactWY" can be used to   construct the "QRCompactWYQ" type, which is a compact   representation of the rotation matrix
+
+   ::
+
+            Q = I + Y T Y^T
+
+   where "Y" is m \times r lower trapezoidal and "T" is r   \times r upper triangular. The *compact WY* representation   [Schreiber1989] is not to be confused with the older, *WY*   representation [Bischof1987]. (The LAPACK documentation uses   "V" in lieu of "Y".)
+
+   [Bischof1987] C Bischof and C Van Loan, The WY                representation for products of Householder matrices,                SIAM J Sci Stat Comput 8 (1987), s2-s13.                doi:10.1137/0908009
+
+   [Schreiber1989] R Schreiber and C Van Loan, A                  storage-efficient WY representation for products of                  Householder transformations, SIAM J Sci Stat Comput                  10 (1989), 53-57. doi:10.1137/0910005
+
+   ::
+
+       qrfact(A) -> SPQR.Factorization
 
    Compute the QR factorization of a sparse matrix "A". A fill- reducing permutation is used. The main application of this type is to solve least squares problems with "". The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 
@@ -196,7 +360,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    "qrfact!" is the same as "qrfact()" when A is a subtype of "StridedMatrix", but saves space by overwriting the input "A", instead of creating a copy.
 
 
-.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
+.. function:: full(S)
+
+   Convert a sparse matrix "S" into a dense matrix.
+
+   ::
+
+       full(F)
+
+   Reconstruct the matrix "A" from the factorization "F=factorize(A)".
+
+   ::
+
+       full(QRCompactWYQ[, thin=true]) -> Matrix
 
    Converts an orthogonal or unitary matrix stored as a "QRCompactWYQ" object, i.e. in the compact WY format [Bischof1987], to a dense matrix.
 
@@ -222,14 +398,48 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    "sqrtm" uses a polyalgorithm, computing the matrix square root using Schur factorizations ("schurfact()") unless it detects the matrix to be Hermitian or real symmetric, in which case it computes the matrix square root from an eigendecomposition ("eigfact()"). In the latter situation for positive definite matrices, the matrix square root has "Real" elements, otherwise it has "Complex" elements.
 
 
-.. function:: eig(A, B) -> D, V
+.. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+
+   Computes eigenvalues and eigenvectors of "A". See "eigfact()" for details on the "balance" keyword argument.
+
+   ::
+
+       julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+       ([1.0,3.0,18.0],
+       3x3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0)
+
+   "eig" is a wrapper around "eigfact()", extracting all parts of the factorization to a tuple; where possible, using "eigfact()" is recommended.
+
+   ::
+
+       eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of "A" with respect to "B".
 
    "eig" is a wrapper around "eigfact()", extracting all parts of the factorization to a tuple; where possible, using "eigfact()" is recommended.
 
 
-.. function:: eig(A, B) -> D, V
+.. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+
+   Computes eigenvalues and eigenvectors of "A". See "eigfact()" for details on the "balance" keyword argument.
+
+   ::
+
+       julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+       ([1.0,3.0,18.0],
+       3x3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0)
+
+   "eig" is a wrapper around "eigfact()", extracting all parts of the factorization to a tuple; where possible, using "eigfact()" is recommended.
+
+   ::
+
+       eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of "A" with respect to "B".
 
@@ -260,12 +470,36 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    For "SymTridiagonal" matrices, if the optional vector of eigenvalues "eigvals" is specified, returns the specific corresponding eigenvectors.
 
 
-.. function:: eigfact(A, B) -> GeneralizedEigen
+.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+
+   Computes the eigenvalue decomposition of "A", returning an "Eigen" factorization object "F" which contains the eigenvalues in "F[:values]" and the eigenvectors in the columns of the matrix "F[:vectors]". (The "k"th eigenvector can be obtained from the slice "F[:vectors][:, k]".)
+
+   The following functions are available for "Eigen" objects: "inv", "det".
+
+   If "A" is "Symmetric", "Hermitian" or "SymTridiagonal", it is possible to calculate only a subset of the eigenvalues by specifying either a "UnitRange" "irange" covering indices of the sorted eigenvalues or a pair "vl" and "vu" for the lower and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option "permute=true" permutes the matrix to become closer to upper triangular, and "scale=true" scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is "true" for both options.
+
+   ::
+
+       eigfact(A, B) -> GeneralizedEigen
 
    Computes the generalized eigenvalue decomposition of "A" and "B", returning a "GeneralizedEigen" factorization object "F" which contains the generalized eigenvalues in "F[:values]" and the generalized eigenvectors in the columns of the matrix "F[:vectors]". (The "k"th generalized eigenvector can be obtained from the slice "F[:vectors][:, k]".)
 
 
-.. function:: eigfact(A, B) -> GeneralizedEigen
+.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+
+   Computes the eigenvalue decomposition of "A", returning an "Eigen" factorization object "F" which contains the eigenvalues in "F[:values]" and the eigenvectors in the columns of the matrix "F[:vectors]". (The "k"th eigenvector can be obtained from the slice "F[:vectors][:, k]".)
+
+   The following functions are available for "Eigen" objects: "inv", "det".
+
+   If "A" is "Symmetric", "Hermitian" or "SymTridiagonal", it is possible to calculate only a subset of the eigenvalues by specifying either a "UnitRange" "irange" covering indices of the sorted eigenvalues or a pair "vl" and "vu" for the lower and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option "permute=true" permutes the matrix to become closer to upper triangular, and "scale=true" scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is "true" for both options.
+
+   ::
+
+       eigfact(A, B) -> GeneralizedEigen
 
    Computes the generalized eigenvalue decomposition of "A" and "B", returning a "GeneralizedEigen" factorization object "F" which contains the generalized eigenvalues in "F[:values]" and the generalized eigenvectors in the columns of the matrix "F[:vectors]". (The "k"th generalized eigenvector can be obtained from the slice "F[:vectors][:, k]".)
 
@@ -285,7 +519,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    "hessfact!" is the same as "hessfact()", but saves space by overwriting the input A, instead of creating a copy.
 
 
-.. function:: schurfact(A, B) -> GeneralizedSchur
+.. function:: schurfact(A) -> Schur
+
+   Computes the Schur factorization of the matrix "A". The (quasi) triangular Schur factor can be obtained from the "Schur" object "F" with either "F[:Schur]" or "F[:T]" and the unitary/orthogonal Schur vectors can be obtained with "F[:vectors]" or "F[:Z]" such that "A=F[:vectors]*F[:Schur]*F[:vectors]'". The eigenvalues of "A" can be obtained with "F[:values]".
+
+   ::
+
+       schurfact(A, B) -> GeneralizedSchur
 
    Computes the Generalized Schur (or QZ) factorization of the matrices "A" and "B". The (quasi) triangular Schur factors can be obtained from the "Schur" object "F" with "F[:S]" and "F[:T]", the left unitary/orthogonal Schur vectors can be obtained with "F[:left]" or "F[:Q]" and the right unitary/orthogonal Schur vectors can be obtained with "F[:right]" or "F[:Z]" such that "A=F[:left]*F[:S]*F[:right]'" and "B=F[:left]*F[:T]*F[:right]'". The generalized eigenvalues of "A" and "B" can be obtained with "F[:alpha]./F[:beta]".
 
@@ -295,62 +535,230 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the Schur factorization of "A", overwriting "A" in the process. See "schurfact()"
 
 
-.. function:: schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+.. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+
+   See "schurfact()"
+
+   ::
+
+       schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
    See "schurfact()"
 
 
-.. function:: ordschur(GS, select) -> GeneralizedSchur
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'" according to the logical array "select" returning a Schur object "F". The selected eigenvalues appear in the leading diagonal of "F[:Schur]" and the the corresponding leading columns of "F[:vectors]" form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via "select".
+
+   ::
+
+       ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur".
+
+   ::
+
+       ordschur(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix "(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})" according to the logical array "select" and returns a GeneralizedSchur object "GS".  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that "(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}" still holds and the generalized eigenvalues of "A" and "B" can still be obtained with "GS[:alpha]./GS[:beta]".
+
+   ::
+
+       ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See "ordschur()".
 
 
-.. function:: ordschur!(GS, select) -> GeneralizedSchur
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'", overwriting "Q" and "T" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur", overwriting "S" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices "(S, T, Q, Z)" in the process.  See "ordschur()".
+
+   ::
+
+       ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See "ordschur()".
 
 
-.. function:: ordschur(GS, select) -> GeneralizedSchur
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'" according to the logical array "select" returning a Schur object "F". The selected eigenvalues appear in the leading diagonal of "F[:Schur]" and the the corresponding leading columns of "F[:vectors]" form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via "select".
+
+   ::
+
+       ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur".
+
+   ::
+
+       ordschur(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix "(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})" according to the logical array "select" and returns a GeneralizedSchur object "GS".  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that "(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}" still holds and the generalized eigenvalues of "A" and "B" can still be obtained with "GS[:alpha]./GS[:beta]".
+
+   ::
+
+       ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See "ordschur()".
 
 
-.. function:: ordschur!(GS, select) -> GeneralizedSchur
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'", overwriting "Q" and "T" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur", overwriting "S" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices "(S, T, Q, Z)" in the process.  See "ordschur()".
+
+   ::
+
+       ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See "ordschur()".
 
 
-.. function:: schurfact(A, B) -> GeneralizedSchur
+.. function:: schurfact(A) -> Schur
+
+   Computes the Schur factorization of the matrix "A". The (quasi) triangular Schur factor can be obtained from the "Schur" object "F" with either "F[:Schur]" or "F[:T]" and the unitary/orthogonal Schur vectors can be obtained with "F[:vectors]" or "F[:Z]" such that "A=F[:vectors]*F[:Schur]*F[:vectors]'". The eigenvalues of "A" can be obtained with "F[:values]".
+
+   ::
+
+       schurfact(A, B) -> GeneralizedSchur
 
    Computes the Generalized Schur (or QZ) factorization of the matrices "A" and "B". The (quasi) triangular Schur factors can be obtained from the "Schur" object "F" with "F[:S]" and "F[:T]", the left unitary/orthogonal Schur vectors can be obtained with "F[:left]" or "F[:Q]" and the right unitary/orthogonal Schur vectors can be obtained with "F[:right]" or "F[:Z]" such that "A=F[:left]*F[:S]*F[:right]'" and "B=F[:left]*F[:T]*F[:right]'". The generalized eigenvalues of "A" and "B" can be obtained with "F[:alpha]./F[:beta]".
 
 
-.. function:: schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+.. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+
+   See "schurfact()"
+
+   ::
+
+       schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
    See "schurfact()"
 
 
-.. function:: ordschur(GS, select) -> GeneralizedSchur
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'" according to the logical array "select" returning a Schur object "F". The selected eigenvalues appear in the leading diagonal of "F[:Schur]" and the the corresponding leading columns of "F[:vectors]" form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via "select".
+
+   ::
+
+       ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur".
+
+   ::
+
+       ordschur(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix "(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})" according to the logical array "select" and returns a GeneralizedSchur object "GS".  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that "(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}" still holds and the generalized eigenvalues of "A" and "B" can still be obtained with "GS[:alpha]./GS[:beta]".
+
+   ::
+
+       ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See "ordschur()".
 
 
-.. function:: ordschur!(GS, select) -> GeneralizedSchur
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'", overwriting "Q" and "T" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur", overwriting "S" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices "(S, T, Q, Z)" in the process.  See "ordschur()".
+
+   ::
+
+       ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See "ordschur()".
 
 
-.. function:: ordschur(GS, select) -> GeneralizedSchur
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'" according to the logical array "select" returning a Schur object "F". The selected eigenvalues appear in the leading diagonal of "F[:Schur]" and the the corresponding leading columns of "F[:vectors]" form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via "select".
+
+   ::
+
+       ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur".
+
+   ::
+
+       ordschur(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix "(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})" according to the logical array "select" and returns a GeneralizedSchur object "GS".  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that "(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}" still holds and the generalized eigenvalues of "A" and "B" can still be obtained with "GS[:alpha]./GS[:beta]".
+
+   ::
+
+       ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See "ordschur()".
 
 
-.. function:: ordschur!(GS, select) -> GeneralizedSchur
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix "A=Q*T*Q'", overwriting "Q" and "T" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization "S" of type "Schur", overwriting "S" in the process. See "ordschur()"
+
+   ::
+
+       ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+
+   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices "(S, T, Q, Z)" in the process.  See "ordschur()".
+
+   ::
+
+       ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See "ordschur()".
 
 
-.. function:: svdfact(A, B) -> GeneralizedSVD
+.. function:: svdfact(A[, thin=true]) -> SVD
+
+   Compute the Singular Value Decomposition (SVD) of "A" and return an "SVD" object. "U", "S", "V" and "Vt" can be obtained from the factorization "F" with "F[:U]", "F[:S]", "F[:V]" and "F[:Vt]", such that "A = U*diagm(S)*Vt". If "thin" is "true", an economy mode decomposition is returned. The algorithm produces "Vt" and hence "Vt" is more efficient to extract than "V". The default is to produce a thin decomposition.
+
+   ::
+
+       svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of "A" and "B", returning a "GeneralizedSVD" Factorization object "F", such that "A = F[:U]*F[:D1]*F[:R0]*F[:Q]'" and "B = F[:V]*F[:D2]*F[:R0]*F[:Q]'".
 
@@ -360,12 +768,24 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    "svdfact!" is the same as "svdfact()", but saves space by overwriting the input A, instead of creating a copy. If "thin" is "true", an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 
-.. function:: svd(A, B) -> U, V, Q, D1, D2, R0
+.. function:: svd(A[, thin=true]) -> U, S, V
+
+   Wrapper around "svdfact" extracting all parts the factorization to a tuple. Direct use of "svdfact" is therefore generally more efficient. Computes the SVD of A, returning "U", vector "S", and "V" such that "A == U*diagm(S)*V'". If "thin" is "true", an economy mode decomposition is returned. The default is to produce a thin decomposition.
+
+   ::
+
+       svd(A, B) -> U, V, Q, D1, D2, R0
 
    Wrapper around "svdfact" extracting all parts the factorization to a tuple. Direct use of "svdfact" is therefore generally more efficient. The function returns the generalized SVD of "A" and "B", returning "U", "V", "Q", "D1", "D2", and "R0" such that "A = U*D1*R0*Q'" and "B = V*D2*R0*Q'".
 
 
-.. function:: svdvals(A, B)
+.. function:: svdvals(A)
+
+   Returns the singular values of "A".
+
+   ::
+
+       svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of "A" and "B".
 
@@ -375,57 +795,123 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Returns the singular values of "A", while saving space by overwriting the input.
 
 
-.. function:: svdfact(A, B) -> GeneralizedSVD
+.. function:: svdfact(A[, thin=true]) -> SVD
+
+   Compute the Singular Value Decomposition (SVD) of "A" and return an "SVD" object. "U", "S", "V" and "Vt" can be obtained from the factorization "F" with "F[:U]", "F[:S]", "F[:V]" and "F[:Vt]", such that "A = U*diagm(S)*Vt". If "thin" is "true", an economy mode decomposition is returned. The algorithm produces "Vt" and hence "Vt" is more efficient to extract than "V". The default is to produce a thin decomposition.
+
+   ::
+
+       svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of "A" and "B", returning a "GeneralizedSVD" Factorization object "F", such that "A = F[:U]*F[:D1]*F[:R0]*F[:Q]'" and "B = F[:V]*F[:D2]*F[:R0]*F[:Q]'".
 
 
-.. function:: svd(A, B) -> U, V, Q, D1, D2, R0
+.. function:: svd(A[, thin=true]) -> U, S, V
+
+   Wrapper around "svdfact" extracting all parts the factorization to a tuple. Direct use of "svdfact" is therefore generally more efficient. Computes the SVD of A, returning "U", vector "S", and "V" such that "A == U*diagm(S)*V'". If "thin" is "true", an economy mode decomposition is returned. The default is to produce a thin decomposition.
+
+   ::
+
+       svd(A, B) -> U, V, Q, D1, D2, R0
 
    Wrapper around "svdfact" extracting all parts the factorization to a tuple. Direct use of "svdfact" is therefore generally more efficient. The function returns the generalized SVD of "A" and "B", returning "U", "V", "Q", "D1", "D2", and "R0" such that "A = U*D1*R0*Q'" and "B = V*D2*R0*Q'".
 
 
-.. function:: svdvals(A, B)
+.. function:: svdvals(A)
+
+   Returns the singular values of "A".
+
+   ::
+
+       svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of "A" and "B".
 
 
-.. function:: triu(M, k)
+.. function:: triu(M)
+
+   Upper triangle of a matrix.
+
+   ::
+
+       triu(M, k)
 
    Returns the upper triangle of "M" starting from the "k"th superdiagonal.
 
 
-.. function:: triu(M, k)
+.. function:: triu(M)
+
+   Upper triangle of a matrix.
+
+   ::
+
+       triu(M, k)
 
    Returns the upper triangle of "M" starting from the "k"th superdiagonal.
 
 
-.. function:: triu!(M, k)
+.. function:: triu!(M)
+
+   Upper triangle of a matrix, overwriting "M" in the process.
+
+   ::
+
+       triu!(M, k)
 
    Returns the upper triangle of "M" starting from the "k"th superdiagonal, overwriting "M" in the process.
 
 
-.. function:: triu!(M, k)
+.. function:: triu!(M)
+
+   Upper triangle of a matrix, overwriting "M" in the process.
+
+   ::
+
+       triu!(M, k)
 
    Returns the upper triangle of "M" starting from the "k"th superdiagonal, overwriting "M" in the process.
 
 
-.. function:: tril(M, k)
+.. function:: tril(M)
+
+   Lower triangle of a matrix.
+
+   ::
+
+       tril(M, k)
 
    Returns the lower triangle of "M" starting from the "k"th subdiagonal.
 
 
-.. function:: tril(M, k)
+.. function:: tril(M)
+
+   Lower triangle of a matrix.
+
+   ::
+
+       tril(M, k)
 
    Returns the lower triangle of "M" starting from the "k"th subdiagonal.
 
 
-.. function:: tril!(M, k)
+.. function:: tril!(M)
+
+   Lower triangle of a matrix, overwriting "M" in the process.
+
+   ::
+
+       tril!(M, k)
 
    Returns the lower triangle of "M" starting from the "k"th subdiagonal, overwriting "M" in the process.
 
 
-.. function:: tril!(M, k)
+.. function:: tril!(M)
+
+   Lower triangle of a matrix, overwriting "M" in the process.
+
+   ::
+
+       tril!(M, k)
 
    Returns the lower triangle of "M" starting from the "k"th subdiagonal, overwriting "M" in the process.
 
@@ -447,6 +933,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale(b, A)
 
+   ::
+
+       scale(A, b)
+
+       scale(b, A)
+
    Scale an array "A" by a scalar "b", returning a new array.
 
    If "A" is a matrix and "b" is a vector, then "scale(A,b)" scales each column "i" of "A" by "b[i]" (similar to "A*diagm(b)"), while "scale(b,A)" scales each row "i" of "A" by "b[i]" (similar to "diagm(b)*A"), returning a new array.
@@ -456,6 +948,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale(b, A)
 
+   ::
+
+       scale(A, b)
+
+       scale(b, A)
+
    Scale an array "A" by a scalar "b", returning a new array.
 
    If "A" is a matrix and "b" is a vector, then "scale(A,b)" scales each column "i" of "A" by "b[i]" (similar to "A*diagm(b)"), while "scale(b,A)" scales each row "i" of "A" by "b[i]" (similar to "diagm(b)*A"), returning a new array.
@@ -465,12 +963,24 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale!(b, A)
 
+   ::
+
+       scale!(A, b)
+
+       scale!(b, A)
+
    Scale an array "A" by a scalar "b", similar to "scale()" but overwriting "A" in-place.
 
    If "A" is a matrix and "b" is a vector, then "scale!(A,b)" scales each column "i" of "A" by "b[i]" (similar to "A*diagm(b)"), while "scale!(b,A)" scales each row "i" of "A" by "b[i]" (similar to "diagm(b)*A"), again operating in- place on "A".
 
 
 .. function:: scale!(b, A)
+
+   ::
+
+       scale!(A, b)
+
+       scale!(b, A)
 
    Scale an array "A" by a scalar "b", similar to "scale()" but overwriting "A" in-place.
 
@@ -604,12 +1114,42 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
 
-.. function:: linreg(x, y, w)
+.. function:: linreg(x, y) -> [a; b]
+
+   Linear Regression. Returns "a" and "b" such that "a+b*x" is the closest line to the given points "(x,y)". In other words, this function determines parameters "[a, b]" that minimize the squared error between "y" and "a+b*x".
+
+   **Example**:
+
+   ::
+
+       using PyPlot;
+       x = float([1:12])
+       y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
+       a, b = linreg(x,y) # Linear regression
+       plot(x, y, "o") # Plot (x,y) points
+       plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
+
+       linreg(x, y, w)
 
    Weighted least-squares linear regression.
 
 
-.. function:: linreg(x, y, w)
+.. function:: linreg(x, y) -> [a; b]
+
+   Linear Regression. Returns "a" and "b" such that "a+b*x" is the closest line to the given points "(x,y)". In other words, this function determines parameters "[a, b]" that minimize the squared error between "y" and "a+b*x".
+
+   **Example**:
+
+   ::
+
+       using PyPlot;
+       x = float([1:12])
+       y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
+       a, b = linreg(x,y) # Linear regression
+       plot(x, y, "o") # Plot (x,y) points
+       plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
+
+       linreg(x, y, w)
 
    Weighted least-squares linear regression.
 
@@ -888,12 +1428,24 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Returns the updated "y".
 
 
-.. function:: sbmv(uplo, k, A, x)
+.. function:: sbmv(uplo, k, alpha, A, x)
+
+   Returns "alpha*A*x" where "A" is a symmetric band matrix of order "size(A,2)" with "k" super-diagonals stored in the argument "A".
+
+   ::
+
+       sbmv(uplo, k, A, x)
 
    Returns "A*x" where "A" is a symmetric band matrix of order "size(A,2)" with "k" super-diagonals stored in the argument "A".
 
 
-.. function:: sbmv(uplo, k, A, x)
+.. function:: sbmv(uplo, k, alpha, A, x)
+
+   Returns "alpha*A*x" where "A" is a symmetric band matrix of order "size(A,2)" with "k" super-diagonals stored in the argument "A".
+
+   ::
+
+       sbmv(uplo, k, A, x)
 
    Returns "A*x" where "A" is a symmetric band matrix of order "size(A,2)" with "k" super-diagonals stored in the argument "A".
 
@@ -903,12 +1455,24 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Update "C" as "alpha*A*B + beta*C" or the other three variants according to "tA" (transpose "A") and "tB".  Returns the updated "C".
 
 
-.. function:: gemm(tA, tB, A, B)
+.. function:: gemm(tA, tB, alpha, A, B)
+
+   Returns "alpha*A*B" or the other three variants according to "tA" (transpose "A") and "tB".
+
+   ::
+
+       gemm(tA, tB, A, B)
 
    Returns "A*B" or the other three variants according to "tA" (transpose "A") and "tB".
 
 
-.. function:: gemm(tA, tB, A, B)
+.. function:: gemm(tA, tB, alpha, A, B)
+
+   Returns "alpha*A*B" or the other three variants according to "tA" (transpose "A") and "tB".
+
+   ::
+
+       gemm(tA, tB, A, B)
 
    Returns "A*B" or the other three variants according to "tA" (transpose "A") and "tB".
 
@@ -918,12 +1482,24 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Update the vector "y" as "alpha*A*x + beta*y" or "alpha*A'x + beta*y" according to "tA" (transpose "A"). Returns the updated "y".
 
 
-.. function:: gemv(tA, A, x)
+.. function:: gemv(tA, alpha, A, x)
+
+   Returns "alpha*A*x" or "alpha*A'x" according to "tA" (transpose "A").
+
+   ::
+
+       gemv(tA, A, x)
 
    Returns "A*x" or "A'x" according to "tA" (transpose "A").
 
 
-.. function:: gemv(tA, A, x)
+.. function:: gemv(tA, alpha, A, x)
+
+   Returns "alpha*A*x" or "alpha*A'x" according to "tA" (transpose "A").
+
+   ::
+
+       gemv(tA, A, x)
 
    Returns "A*x" or "A'x" according to "tA" (transpose "A").
 
@@ -933,17 +1509,53 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Update "C" as "alpha*A*B + beta*C" or "alpha*B*A + beta*C" according to "side". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.  Returns the updated "C".
 
 
-.. function:: symm(tA, tB, alpha, A, B)
+.. function:: symm(side, ul, alpha, A, B)
+
+   Returns "alpha*A*B" or "alpha*B*A" according to "side". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(side, ul, A, B)
+
+   Returns "A*B" or "B*A" according to "side".  "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(tA, tB, alpha, A, B)
 
    Returns "alpha*A*B" or the other three variants according to "tA" (transpose "A") and "tB".
 
 
-.. function:: symm(tA, tB, alpha, A, B)
+.. function:: symm(side, ul, alpha, A, B)
+
+   Returns "alpha*A*B" or "alpha*B*A" according to "side". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(side, ul, A, B)
+
+   Returns "A*B" or "B*A" according to "side".  "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(tA, tB, alpha, A, B)
 
    Returns "alpha*A*B" or the other three variants according to "tA" (transpose "A") and "tB".
 
 
-.. function:: symm(tA, tB, alpha, A, B)
+.. function:: symm(side, ul, alpha, A, B)
+
+   Returns "alpha*A*B" or "alpha*B*A" according to "side". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(side, ul, A, B)
+
+   Returns "A*B" or "B*A" according to "side".  "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symm(tA, tB, alpha, A, B)
 
    Returns "alpha*A*B" or the other three variants according to "tA" (transpose "A") and "tB".
 
@@ -953,12 +1565,24 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Update the vector "y" as "alpha*A*x + beta*y". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used. Returns the updated "y".
 
 
-.. function:: symv(ul, A, x)
+.. function:: symv(ul, alpha, A, x)
+
+   Returns "alpha*A*x". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symv(ul, A, x)
 
    Returns "A*x".  "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
 
 
-.. function:: symv(ul, A, x)
+.. function:: symv(ul, alpha, A, x)
+
+   Returns "alpha*A*x". "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
+
+   ::
+
+       symv(ul, A, x)
 
    Returns "A*x".  "A" is assumed to be symmetric.  Only the "ul" triangle of "A" is used.
 

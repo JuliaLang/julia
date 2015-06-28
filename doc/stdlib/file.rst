@@ -10,12 +10,24 @@
    Get the current working directory.
 
 
-.. function:: cd(f[, dir])
+.. function:: cd(dir::AbstractString)
+
+   Set the current working directory.
+
+   ::
+
+       cd(f[, dir])
 
    Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 
 
-.. function:: cd(f[, dir])
+.. function:: cd(dir::AbstractString)
+
+   Set the current working directory.
+
+   ::
+
+       cd(f[, dir])
 
    Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 

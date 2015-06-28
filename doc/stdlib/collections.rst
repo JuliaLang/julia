@@ -130,7 +130,19 @@ General Collections
    Remove all elements from a "collection".
 
 
-.. function:: length(s)
+.. function:: length(A) -> Integer
+
+   Returns the number of elements in A
+
+   ::
+
+       length(collection) -> Integer
+
+   For ordered, indexable collections, the maximum index "i" for which "getindex(collection, i)" is valid. For unordered collections, the number of elements.
+
+   ::
+
+       length(s)
 
    The number of characters in string "s".
 
@@ -188,42 +200,102 @@ Iterable Collections
    Returns an array containing only the unique elements of the iterable "itr", in the order that the first of each set of equivalent elements originally appears. If "dim" is specified, returns unique regions of the array "itr" along "dim".
 
 
-.. function:: reduce(op, itr)
+.. function:: reduce(op, v0, itr)
+
+   Reduce the given collection "ìtr" with the given binary operator "op". "v0" must be a neutral element for "op" that will be returned for empty collections. It is unspecified whether "v0" is used for non-empty collections.
+
+   Reductions for certain commonly-used operators have special implementations which should be used instead: "maximum(itr)", "minimum(itr)", "sum(itr)", "prod(itr)", "any(itr)", "all(itr)".
+
+   The associativity of the reduction is implementation dependent. This means that you can't use non-associative operations like "-" because it is undefined whether "reduce(-,[1,2,3])" should be evaluated as "(1-2)-3" or "1-(2-3)". Use "foldl" or "foldr" instead for guaranteed left or right associativity.
+
+   Some operations accumulate error, and parallelism will also be easier if the reduction can be executed in groups. Future versions of Julia might change the algorithm. Note that the elements are not reordered if you use an ordered collection.
+
+   ::
+
+       reduce(op, itr)
 
    Like "reduce(op, v0, itr)". This cannot be used with empty collections, except for some special cases (e.g. when "op" is one of "+", "*", "max", "min", "&", "|") when Julia can determine the neutral element of "op".
 
 
-.. function:: reduce(op, itr)
+.. function:: reduce(op, v0, itr)
+
+   Reduce the given collection "ìtr" with the given binary operator "op". "v0" must be a neutral element for "op" that will be returned for empty collections. It is unspecified whether "v0" is used for non-empty collections.
+
+   Reductions for certain commonly-used operators have special implementations which should be used instead: "maximum(itr)", "minimum(itr)", "sum(itr)", "prod(itr)", "any(itr)", "all(itr)".
+
+   The associativity of the reduction is implementation dependent. This means that you can't use non-associative operations like "-" because it is undefined whether "reduce(-,[1,2,3])" should be evaluated as "(1-2)-3" or "1-(2-3)". Use "foldl" or "foldr" instead for guaranteed left or right associativity.
+
+   Some operations accumulate error, and parallelism will also be easier if the reduction can be executed in groups. Future versions of Julia might change the algorithm. Note that the elements are not reordered if you use an ordered collection.
+
+   ::
+
+       reduce(op, itr)
 
    Like "reduce(op, v0, itr)". This cannot be used with empty collections, except for some special cases (e.g. when "op" is one of "+", "*", "max", "min", "&", "|") when Julia can determine the neutral element of "op".
 
 
-.. function:: foldl(op, itr)
+.. function:: foldl(op, v0, itr)
+
+   Like "reduce()", but with guaranteed left associativity. "v0" will be used exactly once.
+
+   ::
+
+       foldl(op, itr)
 
    Like "foldl(op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: foldl(op, itr)
+.. function:: foldl(op, v0, itr)
+
+   Like "reduce()", but with guaranteed left associativity. "v0" will be used exactly once.
+
+   ::
+
+       foldl(op, itr)
 
    Like "foldl(op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: foldr(op, itr)
+.. function:: foldr(op, v0, itr)
+
+   Like "reduce()", but with guaranteed right associativity. "v0" will be used exactly once.
+
+   ::
+
+       foldr(op, itr)
 
    Like "foldr(op, v0, itr)", but using the last element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: foldr(op, itr)
+.. function:: foldr(op, v0, itr)
+
+   Like "reduce()", but with guaranteed right associativity. "v0" will be used exactly once.
+
+   ::
+
+       foldr(op, itr)
 
    Like "foldr(op, v0, itr)", but using the last element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: maximum(A, dims)
+.. function:: maximum(itr)
+
+   Returns the largest element in a collection.
+
+   ::
+
+       maximum(A, dims)
 
    Compute the maximum value of an array over the given dimensions.
 
 
-.. function:: maximum(A, dims)
+.. function:: maximum(itr)
+
+   Returns the largest element in a collection.
+
+   ::
+
+       maximum(A, dims)
 
    Compute the maximum value of an array over the given dimensions.
 
@@ -233,12 +305,24 @@ Iterable Collections
    Compute the maximum value of "A" over the singleton dimensions of "r", and write results to "r".
 
 
-.. function:: minimum(A, dims)
+.. function:: minimum(itr)
+
+   Returns the smallest element in a collection.
+
+   ::
+
+       minimum(A, dims)
 
    Compute the minimum value of an array over the given dimensions.
 
 
-.. function:: minimum(A, dims)
+.. function:: minimum(itr)
+
+   Returns the smallest element in a collection.
+
+   ::
+
+       minimum(A, dims)
 
    Compute the minimum value of an array over the given dimensions.
 
@@ -263,32 +347,68 @@ Iterable Collections
    Returns the index of the minimum element in a collection.
 
 
-.. function:: findmax(A, dims) -> (maxval, index)
+.. function:: findmax(itr) -> (x, index)
+
+   Returns the maximum element and its index.
+
+   ::
+
+       findmax(A, dims) -> (maxval, index)
 
    For an array input, returns the value and index of the maximum over the given dimensions.
 
 
-.. function:: findmax(A, dims) -> (maxval, index)
+.. function:: findmax(itr) -> (x, index)
+
+   Returns the maximum element and its index.
+
+   ::
+
+       findmax(A, dims) -> (maxval, index)
 
    For an array input, returns the value and index of the maximum over the given dimensions.
 
 
-.. function:: findmin(A, dims) -> (minval, index)
+.. function:: findmin(itr) -> (x, index)
+
+   Returns the minimum element and its index.
+
+   ::
+
+       findmin(A, dims) -> (minval, index)
 
    For an array input, returns the value and index of the minimum over the given dimensions.
 
 
-.. function:: findmin(A, dims) -> (minval, index)
+.. function:: findmin(itr) -> (x, index)
+
+   Returns the minimum element and its index.
+
+   ::
+
+       findmin(A, dims) -> (minval, index)
 
    For an array input, returns the value and index of the minimum over the given dimensions.
 
 
-.. function:: maxabs(A, dims)
+.. function:: maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+   ::
+
+       maxabs(A, dims)
 
    Compute the maximum absolute values over given dimensions.
 
 
-.. function:: maxabs(A, dims)
+.. function:: maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+   ::
+
+       maxabs(A, dims)
 
    Compute the maximum absolute values over given dimensions.
 
@@ -298,12 +418,24 @@ Iterable Collections
    Compute the maximum absolute values over the singleton dimensions of "r", and write values to "r".
 
 
-.. function:: minabs(A, dims)
+.. function:: minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+   ::
+
+       minabs(A, dims)
 
    Compute the minimum absolute values over given dimensions.
 
 
-.. function:: minabs(A, dims)
+.. function:: minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+   ::
+
+       minabs(A, dims)
 
    Compute the minimum absolute values over given dimensions.
 
@@ -313,12 +445,36 @@ Iterable Collections
    Compute the minimum absolute values over the singleton dimensions of "r", and write values to "r".
 
 
-.. function:: sum(f, itr)
+.. function:: sum(itr)
+
+   Returns the sum of all elements in a collection.
+
+   ::
+
+       sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
+   ::
+
+       sum(f, itr)
 
    Sum the results of calling function "f" on each element of "itr".
 
 
-.. function:: sum(f, itr)
+.. function:: sum(itr)
+
+   Returns the sum of all elements in a collection.
+
+   ::
+
+       sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
+   ::
+
+       sum(f, itr)
 
    Sum the results of calling function "f" on each element of "itr".
 
@@ -328,17 +484,41 @@ Iterable Collections
    Sum elements of "A" over the singleton dimensions of "r", and write results to "r".
 
 
-.. function:: sum(f, itr)
+.. function:: sum(itr)
+
+   Returns the sum of all elements in a collection.
+
+   ::
+
+       sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
+   ::
+
+       sum(f, itr)
 
    Sum the results of calling function "f" on each element of "itr".
 
 
-.. function:: sumabs(A, dims)
+.. function:: sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is equivalent to *sum(abs(itr))* but faster.
+
+   ::
+
+       sumabs(A, dims)
 
    Sum absolute values of elements of an array over the given dimensions.
 
 
-.. function:: sumabs(A, dims)
+.. function:: sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is equivalent to *sum(abs(itr))* but faster.
+
+   ::
+
+       sumabs(A, dims)
 
    Sum absolute values of elements of an array over the given dimensions.
 
@@ -348,12 +528,24 @@ Iterable Collections
    Sum absolute values of elements of "A" over the singleton dimensions of "r", and write results to "r".
 
 
-.. function:: sumabs2(A, dims)
+.. function:: sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This is equivalent to *sum(abs2(itr))* but faster.
+
+   ::
+
+       sumabs2(A, dims)
 
    Sum squared absolute values of elements of an array over the given dimensions.
 
 
-.. function:: sumabs2(A, dims)
+.. function:: sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This is equivalent to *sum(abs2(itr))* but faster.
+
+   ::
+
+       sumabs2(A, dims)
 
    Sum squared absolute values of elements of an array over the given dimensions.
 
@@ -363,12 +555,24 @@ Iterable Collections
    Sum squared absolute values of elements of "A" over the singleton dimensions of "r", and write results to "r".
 
 
-.. function:: prod(A, dims)
+.. function:: prod(itr)
+
+   Returns the product of all elements of a collection.
+
+   ::
+
+       prod(A, dims)
 
    Multiply elements of an array over the given dimensions.
 
 
-.. function:: prod(A, dims)
+.. function:: prod(itr)
+
+   Returns the product of all elements of a collection.
+
+   ::
+
+       prod(A, dims)
 
    Multiply elements of an array over the given dimensions.
 
@@ -378,12 +582,36 @@ Iterable Collections
    Multiply elements of "A" over the singleton dimensions of "r", and write results to "r".
 
 
-.. function:: any(p, itr) -> Bool
+.. function:: any(itr) -> Bool
+
+   Test whether any elements of a boolean collection are true.
+
+   ::
+
+       any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
+   ::
+
+       any(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for any elements of "itr".
 
 
-.. function:: any(p, itr) -> Bool
+.. function:: any(itr) -> Bool
+
+   Test whether any elements of a boolean collection are true.
+
+   ::
+
+       any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
+   ::
+
+       any(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for any elements of "itr".
 
@@ -393,7 +621,19 @@ Iterable Collections
    Test whether any values in "A" along the singleton dimensions of "r" are true, and write results to "r".
 
 
-.. function:: all(p, itr) -> Bool
+.. function:: all(itr) -> Bool
+
+   Test whether all elements of a boolean collection are true.
+
+   ::
+
+       all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
+
+   ::
+
+       all(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for all elements of "itr".
 
@@ -403,7 +643,19 @@ Iterable Collections
        true
 
 
-.. function:: all(p, itr) -> Bool
+.. function:: all(itr) -> Bool
+
+   Test whether all elements of a boolean collection are true.
+
+   ::
+
+       all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
+
+   ::
+
+       all(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for all elements of "itr".
 
@@ -423,12 +675,36 @@ Iterable Collections
    Count the number of elements in "itr" for which predicate "p" returns true.
 
 
-.. function:: any(p, itr) -> Bool
+.. function:: any(itr) -> Bool
+
+   Test whether any elements of a boolean collection are true.
+
+   ::
+
+       any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
+   ::
+
+       any(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for any elements of "itr".
 
 
-.. function:: all(p, itr) -> Bool
+.. function:: all(itr) -> Bool
+
+   Test whether all elements of a boolean collection are true.
+
+   ::
+
+       all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
+
+   ::
+
+       all(p, itr) -> Bool
 
    Determine whether predicate "p" returns true for all elements of "itr".
 
@@ -457,42 +733,108 @@ Iterable Collections
         33
 
 
-.. function:: map!(function, destination, collection...)
+.. function:: map!(function, collection)
+
+   In-place version of "map()".
+
+   ::
+
+       map!(function, destination, collection...)
 
    Like "map()", but stores the result in "destination" rather than a new collection. "destination" must be at least as large as the first collection.
 
 
-.. function:: map!(function, destination, collection...)
+.. function:: map!(function, collection)
+
+   In-place version of "map()".
+
+   ::
+
+       map!(function, destination, collection...)
 
    Like "map()", but stores the result in "destination" rather than a new collection. "destination" must be at least as large as the first collection.
 
 
-.. function:: mapreduce(f, op, itr)
+.. function:: mapreduce(f, op, v0, itr)
+
+   Apply function "f" to each element in "itr", and then reduce the result using the binary function "op". "v0" must be a neutral element for "op" that will be returned for empty collections. It is unspecified whether "v0" is used for non-empty collections.
+
+   "mapreduce()" is functionally equivalent to calling "reduce(op, v0, map(f, itr))", but will in general execute faster since no intermediate collection needs to be created. See documentation for "reduce()" and "map()".
+
+   ::
+
+       julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
+       14
+
+   The associativity of the reduction is implementation-dependent. Additionally, some implementations may reuse the return value of "f" for elements that appear multiple times in "itr". Use "mapfoldl()" or "mapfoldr()" instead for guaranteed left or right associativity and invocation of "f" for every value.
+
+   ::
+
+       mapreduce(f, op, itr)
 
    Like "mapreduce(f, op, v0, itr)". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: mapreduce(f, op, itr)
+.. function:: mapreduce(f, op, v0, itr)
+
+   Apply function "f" to each element in "itr", and then reduce the result using the binary function "op". "v0" must be a neutral element for "op" that will be returned for empty collections. It is unspecified whether "v0" is used for non-empty collections.
+
+   "mapreduce()" is functionally equivalent to calling "reduce(op, v0, map(f, itr))", but will in general execute faster since no intermediate collection needs to be created. See documentation for "reduce()" and "map()".
+
+   ::
+
+       julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
+       14
+
+   The associativity of the reduction is implementation-dependent. Additionally, some implementations may reuse the return value of "f" for elements that appear multiple times in "itr". Use "mapfoldl()" or "mapfoldr()" instead for guaranteed left or right associativity and invocation of "f" for every value.
+
+   ::
+
+       mapreduce(f, op, itr)
 
    Like "mapreduce(f, op, v0, itr)". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: mapfoldl(f, op, itr)
+.. function:: mapfoldl(f, op, v0, itr)
+
+   Like "mapreduce()", but with guaranteed left associativity. "v0" will be used exactly once.
+
+   ::
+
+       mapfoldl(f, op, itr)
 
    Like "mapfoldl(f, op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: mapfoldl(f, op, itr)
+.. function:: mapfoldl(f, op, v0, itr)
+
+   Like "mapreduce()", but with guaranteed left associativity. "v0" will be used exactly once.
+
+   ::
+
+       mapfoldl(f, op, itr)
 
    Like "mapfoldl(f, op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: mapfoldr(f, op, itr)
+.. function:: mapfoldr(f, op, v0, itr)
+
+   Like "mapreduce()", but with guaranteed right associativity. "v0" will be used exactly once.
+
+   ::
+
+       mapfoldr(f, op, itr)
 
    Like "mapfoldr(f, op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
 
-.. function:: mapfoldr(f, op, itr)
+.. function:: mapfoldr(f, op, v0, itr)
+
+   Like "mapreduce()", but with guaranteed right associativity. "v0" will be used exactly once.
+
+   ::
+
+       mapfoldr(f, op, itr)
 
    Like "mapfoldr(f, op, v0, itr)", but using the first element of "itr" as "v0". In general, this cannot be used with empty collections (see "reduce(op, itr)").
 
@@ -512,17 +854,37 @@ Iterable Collections
    Get the step size of a "Range" object.
 
 
-.. function:: collect(element_type, collection)
+.. function:: collect(collection)
+
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
+   ::
+
+       collect(element_type, collection)
 
    Return an array of type "Array{element_type,1}" of all items in a collection.
 
 
-.. function:: collect(element_type, collection)
+.. function:: collect(collection)
+
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
+   ::
+
+       collect(element_type, collection)
 
    Return an array of type "Array{element_type,1}" of all items in a collection.
 
 
-.. function:: issubset(A, S) -> Bool
+.. function:: issubset(a, b)
+
+   ⊆(A, S) -> Bool ⊈(A, S) -> Bool ⊊(A, S) -> Bool
+
+   Determine whether every element of "a" is also in "b", using "in()".
+
+   ::
+
+       issubset(A, S) -> Bool
 
    ⊆(A, S) -> Bool
 
@@ -542,12 +904,30 @@ Iterable Collections
 Indexable Collections
 ---------------------
 
-.. function:: getindex(collection, key...)
+.. function:: getindex(type[, elements...])
+
+   Construct a 1-d array of the specified type. This is usually called with the syntax "Type[]". Element values can be specified using "Type[a,b,c,...]".
+
+   ::
+
+       getindex(A, inds...)
+
+   Returns a subset of array "A" as specified by "inds", where each "ind" may be an "Int", a "Range", or a "Vector". See the manual section on *array indexing* for details.
+
+   ::
+
+       getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a collection. The syntax "a[i,j,...]" is converted by the compiler to "getindex(a, i, j, ...)".
 
 
-.. function:: setindex!(collection, value, key...)
+.. function:: setindex!(A, X, inds...)
+
+   Store values from array "X" within some subset of "A" as specified by "inds".
+
+   ::
+
+       setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a collection. The syntax "a[i,j,...] = x" is converted by the compiler to "setindex!(a, x, i, j, ...)".
 
@@ -615,7 +995,25 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
    Determine whether a collection has a mapping for a given key.
 
 
-.. function:: get(f::Function, collection, key)
+.. function:: get(x)
+
+   Attempt to access the value of the "Nullable" object, "x". Returns the value if it is present; otherwise, throws a "NullException".
+
+   ::
+
+       get(x, y)
+
+   Attempt to access the value of the "Nullable{T}" object, "x". Returns the value if it is present; otherwise, returns "convert(T, y)".
+
+   ::
+
+       get(collection, key, default)
+
+   Return the value stored for the given key, or the given default value if no mapping for the key is present.
+
+   ::
+
+       get(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, return "f()".  Use "get!()" to also store the default value in the dictionary.
 
@@ -629,7 +1027,25 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
        end
 
 
-.. function:: get(f::Function, collection, key)
+.. function:: get(x)
+
+   Attempt to access the value of the "Nullable" object, "x". Returns the value if it is present; otherwise, throws a "NullException".
+
+   ::
+
+       get(x, y)
+
+   Attempt to access the value of the "Nullable{T}" object, "x". Returns the value if it is present; otherwise, returns "convert(T, y)".
+
+   ::
+
+       get(collection, key, default)
+
+   Return the value stored for the given key, or the given default value if no mapping for the key is present.
+
+   ::
+
+       get(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, return "f()".  Use "get!()" to also store the default value in the dictionary.
 
@@ -646,7 +1062,13 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 	      time()
      end
 
-.. function:: get!(f::Function, collection, key)
+.. function:: get!(collection, key, default)
+
+   Return the value stored for the given key, or if no mapping for the key is present, store "key => default", and return "default".
+
+   ::
+
+       get!(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, store "key => f()", and return "f()".
 
@@ -660,7 +1082,13 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
        end
 
 
-.. function:: get!(f::Function, collection, key)
+.. function:: get!(collection, key, default)
+
+   Return the value stored for the given key, or if no mapping for the key is present, store "key => default", and return "default".
+
+   ::
+
+       get!(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, store "key => f()", and return "f()".
 
@@ -687,7 +1115,13 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
    Delete the mapping for the given key in a collection, and return the collection.
 
 
-.. function:: pop!(collection) -> item
+.. function:: pop!(collection, key[, default])
+
+   Delete and return the mapping for "key" if it exists in "collection", otherwise return "default", or throw an error if default is not specified.
+
+   ::
+
+       pop!(collection) -> item
 
    Remove the last item in "collection" and return it.
 
@@ -824,17 +1258,53 @@ Set-Like Collections
    Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
 
 
-.. function:: symdiff!(s1, s2)
+.. function:: symdiff!(s, n)
+
+   The set "s" is destructively modified to toggle the inclusion of integer "n".
+
+   ::
+
+       symdiff!(s, itr)
+
+   For each element in "itr", destructively toggle its inclusion in set "s".
+
+   ::
+
+       symdiff!(s1, s2)
 
    Construct the symmetric difference of sets "s1" and "s2", storing the result in "s1".
 
 
-.. function:: symdiff!(s1, s2)
+.. function:: symdiff!(s, n)
+
+   The set "s" is destructively modified to toggle the inclusion of integer "n".
+
+   ::
+
+       symdiff!(s, itr)
+
+   For each element in "itr", destructively toggle its inclusion in set "s".
+
+   ::
+
+       symdiff!(s1, s2)
 
    Construct the symmetric difference of sets "s1" and "s2", storing the result in "s1".
 
 
-.. function:: symdiff!(s1, s2)
+.. function:: symdiff!(s, n)
+
+   The set "s" is destructively modified to toggle the inclusion of integer "n".
+
+   ::
+
+       symdiff!(s, itr)
+
+   For each element in "itr", destructively toggle its inclusion in set "s".
+
+   ::
+
+       symdiff!(s1, s2)
 
    Construct the symmetric difference of sets "s1" and "s2", storing the result in "s1".
 
@@ -854,7 +1324,15 @@ Set-Like Collections
    Intersects sets "s1" and "s2" and overwrites the set "s1" with the result. If needed, "s1" will be expanded to the size of "s2".
 
 
-.. function:: issubset(A, S) -> Bool
+.. function:: issubset(a, b)
+
+   ⊆(A, S) -> Bool ⊈(A, S) -> Bool ⊊(A, S) -> Bool
+
+   Determine whether every element of "a" is also in "b", using "in()".
+
+   ::
+
+       issubset(A, S) -> Bool
 
    ⊆(A, S) -> Bool
 
@@ -891,7 +1369,13 @@ Dequeues
    Use "append!()" to add all the elements of another collection to "collection". The result of the preceding example is equivalent to "append!([1, 2, 3], [4, 5, 6])".
 
 
-.. function:: pop!(collection) -> item
+.. function:: pop!(collection, key[, default])
+
+   Delete and return the mapping for "key" if it exists in "collection", otherwise return "default", or throw an error if default is not specified.
+
+   ::
+
+       pop!(collection) -> item
 
    Remove the last item in "collection" and return it.
 
@@ -977,7 +1461,21 @@ Dequeues
         1
 
 
-.. function:: deleteat!(collection, itr)
+.. function:: deleteat!(collection, index)
+
+   Remove the item at the given "index" and return the modified "collection". Subsequent items are shifted to fill the resulting gap.
+
+   ::
+
+       julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+       5-element Array{Int64,1}:
+        6
+        4
+        3
+        2
+        1
+
+       deleteat!(collection, itr)
 
    Remove the items at the indices given by "itr", and return the modified "collection". Subsequent items are shifted to fill the resulting gap. "itr" must be sorted and unique.
 
@@ -994,7 +1492,21 @@ Dequeues
         in deleteat! at array.jl:631
 
 
-.. function:: deleteat!(collection, itr)
+.. function:: deleteat!(collection, index)
+
+   Remove the item at the given "index" and return the modified "collection". Subsequent items are shifted to fill the resulting gap.
+
+   ::
+
+       julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+       5-element Array{Int64,1}:
+        6
+        4
+        3
+        2
+        1
+
+       deleteat!(collection, itr)
 
    Remove the items at the indices given by "itr", and return the modified "collection". Subsequent items are shifted to fill the resulting gap. "itr" must be sorted and unique.
 
@@ -1011,7 +1523,52 @@ Dequeues
         in deleteat! at array.jl:631
 
 
-.. function:: splice!(collection, range[, replacement]) -> items
+.. function:: splice!(collection, index[, replacement]) -> item
+
+   Remove the item at the given index, and return the removed item. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed item.
+
+   ::
+
+       julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+       2
+
+       julia> A
+       5-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        1
+
+       julia> splice!(A, 5, -1)
+       1
+
+       julia> A
+       5-element Array{Int64,1}:
+         6
+         5
+         4
+         3
+        -1
+
+       julia> splice!(A, 1, [-1, -2, -3])
+       6
+
+       julia> A
+       7-element Array{Int64,1}:
+        -1
+        -2
+        -3
+         5
+         4
+         3
+        -1
+
+   To insert "replacement" before an index "n" without removing any items, use "splice!(collection, n:n-1, replacement)".
+
+   ::
+
+       splice!(collection, range[, replacement]) -> items
 
    Remove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.
 
@@ -1034,7 +1591,52 @@ Dequeues
         -1
 
 
-.. function:: splice!(collection, range[, replacement]) -> items
+.. function:: splice!(collection, index[, replacement]) -> item
+
+   Remove the item at the given index, and return the removed item. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed item.
+
+   ::
+
+       julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+       2
+
+       julia> A
+       5-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        1
+
+       julia> splice!(A, 5, -1)
+       1
+
+       julia> A
+       5-element Array{Int64,1}:
+         6
+         5
+         4
+         3
+        -1
+
+       julia> splice!(A, 1, [-1, -2, -3])
+       6
+
+       julia> A
+       7-element Array{Int64,1}:
+        -1
+        -2
+        -3
+         5
+         4
+         3
+        -1
+
+   To insert "replacement" before an index "n" without removing any items, use "splice!(collection, n:n-1, replacement)".
+
+   ::
+
+       splice!(collection, range[, replacement]) -> items
 
    Remove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.
 

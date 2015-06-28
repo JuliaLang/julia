@@ -38,9 +38,9 @@
    Convert a system call error code to a descriptive string
 
 
-.. function:: time(t::TmStruct)
+.. function:: time()
 
-   Converts a "TmStruct" struct to a number of seconds since the epoch.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 
 .. function:: strftime([format], time)
@@ -63,11 +63,9 @@
    Flushes the C "stdout" and "stderr" streams (which may have been written to by external C code).
 
 
-.. function:: msync(ptr, len[, flags])
+.. function:: msync(array)
 
-   Forces synchronization of the "mmap()"ped memory region from "ptr" to "ptr+len". Flags defaults to "MS_SYNC", but can be a combination of "MS_ASYNC", "MS_SYNC", or "MS_INVALIDATE". See your platform man page for specifics. The flags argument is not valid on Windows.
-
-   You may not need to call "msync", because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   Forces synchronization between the in-memory version of a memory- mapped "Array" or "BitArray" and the on-disk version.
 
 
 .. data:: MS_ASYNC

@@ -52,7 +52,19 @@ Data Formats
    A string giving the literal bit representation of a number.
 
 
-.. function:: parse(type, str[, base])
+.. function:: parse(str, start; greedy=true, raise=true)
+
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If "greedy" is true (default), "parse" will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return "Expr(:incomplete, "(error message)")". If "raise" is true (default), syntax errors other than incomplete expressions will raise an error. If "raise" is false, "parse" will return an expression that will raise an error upon evaluation.
+
+   ::
+
+       parse(str; raise=true)
+
+   Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression. If "raise" is true (default), syntax errors will raise an error; otherwise, "parse" will return an expression that will raise an error upon evaluation.
+
+   ::
+
+       parse(type, str[, base])
 
    Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
 
@@ -385,7 +397,16 @@ Integers
        2
 
 
-.. function:: isprime(x::BigInt[, reps = 25]) -> Bool
+.. function:: isprime(x::Integer) -> Bool
+
+   Returns "true" if "x" is prime, and "false" otherwise.
+
+   ::
+
+       julia> isprime(3)
+       true
+
+       isprime(x::BigInt[, reps = 25]) -> Bool
 
    Probabilistic primality test. Returns "true" if "x" is prime; and "false" if "x" is not prime with high probability. The false positive rate is about "0.25^reps". "reps = 25" is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
 
@@ -395,7 +416,16 @@ Integers
        true
 
 
-.. function:: isprime(x::BigInt[, reps = 25]) -> Bool
+.. function:: isprime(x::Integer) -> Bool
+
+   Returns "true" if "x" is prime, and "false" otherwise.
+
+   ::
+
+       julia> isprime(3)
+       true
+
+       isprime(x::BigInt[, reps = 25]) -> Bool
 
    Probabilistic primality test. Returns "true" if "x" is prime; and "false" if "x" is not prime with high probability. The false positive rate is about "0.25^reps". "reps = 25" is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
 

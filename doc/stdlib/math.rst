@@ -9,7 +9,13 @@
 Mathematical Operators
 ----------------------
 
-.. function:: -(x, y)
+.. function:: -(x)
+
+   Unary minus operator.
+
+   ::
+
+       -(x, y)
 
    Subtraction operator.
 
@@ -21,13 +27,31 @@ Mathematical Operators
 
 
 .. _-:
-.. function:: -(x, y)
+.. function:: -(x)
+
+   Unary minus operator.
+
+   ::
+
+       -(x, y)
 
    Subtraction operator.
 
 
 .. _*:
-.. function:: *(s, t)
+.. function:: *(A, B)
+
+   Matrix multiplication
+
+   ::
+
+       *(x, y...)
+
+   Multiplication operator. "x*y*z*..." calls this function with all arguments, i.e. "*(x, y, z, ...)".
+
+   ::
+
+       *(s, t)
 
    Concatenate strings. The "*" operator is an alias to this function.
 
@@ -50,7 +74,13 @@ Mathematical Operators
    Gives floating-point results for integer arguments.
 
 .. _^:
-.. function:: ^(s, n)
+.. function:: ^(x, y)
+
+   Exponentiation operator.
+
+   ::
+
+       ^(s, n)
 
    Repeat "n" times the string "s". The "^" operator is an alias to this function.
 
@@ -239,11 +269,11 @@ Mathematical Operators
 
 
 .. _===:
-.. function:: ===(x, y)
+.. function:: is(x, y) -> Bool
 
-   ≡(x, y)
+   ===(x, y) -> Bool ≡(x, y) -> Bool
 
-   See the "is()" operator
+   Determine whether "x" and "y" are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called "egal".
 
 
 .. _!==:
@@ -709,12 +739,28 @@ Mathematical Functions
    Compute the \sqrt{x^2+y^2} avoiding overflow and underflow
 
 
-.. function:: log(b, x)
+.. function:: log(x)
+
+   Compute the natural logarithm of "x". Throws "DomainError" for negative "Real" arguments. Use complex negative arguments to obtain complex results.
+
+   There is an experimental variant in the "Base.Math.JuliaLibm" module, which is typically faster and more accurate.
+
+   ::
+
+       log(b, x)
 
    Compute the base "b" logarithm of "x". Throws "DomainError" for negative "Real" arguments.
 
 
-.. function:: log(b, x)
+.. function:: log(x)
+
+   Compute the natural logarithm of "x". Throws "DomainError" for negative "Real" arguments. Use complex negative arguments to obtain complex results.
+
+   There is an experimental variant in the "Base.Math.JuliaLibm" module, which is typically faster and more accurate.
+
+   ::
+
+       log(b, x)
 
    Compute the base "b" logarithm of "x". Throws "DomainError" for negative "Real" arguments.
 
@@ -771,7 +817,52 @@ Mathematical Functions
    Accurately compute e^x-1
 
 
-.. function:: round(z, RoundingModeReal, RoundingModeImaginary)
+.. function:: round([T], x[, digits[, base]][, r::RoundingMode])
+
+   "round(x)" rounds "x" to an integer value according to the default rounding mode (see "get_rounding()"), returning a value of the same type as "x". By default ("RoundNearest"), this will round to the nearest integer, with ties (fractional values of 0.5) being rounded to the even integer.
+
+   ::
+
+       julia> round(1.7)
+       2.0
+
+       julia> round(1.5)
+       2.0
+
+       julia> round(2.5)
+       2.0
+
+   The optional "RoundingMode" argument will change how the number gets rounded.
+
+   "round(T, x, [r::RoundingMode])" converts the result to type "T", throwing an "InexactError" if the value is not representable.
+
+   "round(x, digits)" rounds to the specified number of digits after the decimal place (or before if negative). "round(x, digits, base)" rounds using a base other than 10.
+
+   ::
+
+          julia> round(pi, 2)
+          3.14
+
+          julia> round(pi, 3, 2)
+          3.125
+
+   Note: Rounding to specified digits in bases other than 2 can be   inexact when operating on binary floating point numbers. For   example, the "Float64" value represented by "1.15" is   actually *less* than 1.15, yet will be rounded to 1.2.
+
+   ::
+
+         julia> x = 1.15
+         1.15
+
+         julia> @sprintf "%.20f" x
+         "1.14999999999999991118"
+
+         julia> x < 115//100
+         true
+
+         julia> round(x, 1)
+         1.2
+
+       round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex- valued "z" to "z", breaking ties using the specified "RoundingMode"s. The first "RoundingMode" is used for rounding the real components while the second is used for rounding the imaginary components.
 
@@ -841,7 +932,52 @@ Mathematical Functions
 
    :func:`round` using this rounding mode is an alias for :func:`floor`.
 
-.. function:: round(z, RoundingModeReal, RoundingModeImaginary)
+.. function:: round([T], x[, digits[, base]][, r::RoundingMode])
+
+   "round(x)" rounds "x" to an integer value according to the default rounding mode (see "get_rounding()"), returning a value of the same type as "x". By default ("RoundNearest"), this will round to the nearest integer, with ties (fractional values of 0.5) being rounded to the even integer.
+
+   ::
+
+       julia> round(1.7)
+       2.0
+
+       julia> round(1.5)
+       2.0
+
+       julia> round(2.5)
+       2.0
+
+   The optional "RoundingMode" argument will change how the number gets rounded.
+
+   "round(T, x, [r::RoundingMode])" converts the result to type "T", throwing an "InexactError" if the value is not representable.
+
+   "round(x, digits)" rounds to the specified number of digits after the decimal place (or before if negative). "round(x, digits, base)" rounds using a base other than 10.
+
+   ::
+
+          julia> round(pi, 2)
+          3.14
+
+          julia> round(pi, 3, 2)
+          3.125
+
+   Note: Rounding to specified digits in bases other than 2 can be   inexact when operating on binary floating point numbers. For   example, the "Float64" value represented by "1.15" is   actually *less* than 1.15, yet will be rounded to 1.2.
+
+   ::
+
+         julia> x = 1.15
+         1.15
+
+         julia> @sprintf "%.20f" x
+         "1.14999999999999991118"
+
+         julia> x < 115//100
+         true
+
+         julia> round(x, 1)
+         1.2
+
+       round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex- valued "z" to "z", breaking ties using the specified "RoundingMode"s. The first "RoundingMode" is used for rounding the real components while the second is used for rounding the imaginary components.
 

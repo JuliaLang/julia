@@ -32,7 +32,19 @@ Basic functions
    Tests whether A or its elements are of type T
 
 
-.. function:: length(s)
+.. function:: length(A) -> Integer
+
+   Returns the number of elements in A
+
+   ::
+
+       length(collection) -> Integer
+
+   For ordered, indexable collections, the maximum index "i" for which "getindex(collection, i)" is valid. For unordered collections, the number of elements.
+
+   ::
+
+       length(s)
 
    The number of characters in string "s".
 
@@ -108,12 +120,28 @@ largest range along each dimension.
    Returns a tuple of the memory strides in each dimension
 
 
-.. function:: ind2sub(a, index) -> subscripts
+.. function:: ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions "dims", corresponding to the linear index "index"
+
+   **Example** "i, j, ... = ind2sub(size(A), indmax(A))" provides the indices of the maximum element
+
+   ::
+
+       ind2sub(a, index) -> subscripts
 
    Returns a tuple of subscripts into array "a" corresponding to the linear index "index"
 
 
-.. function:: ind2sub(a, index) -> subscripts
+.. function:: ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions "dims", corresponding to the linear index "index"
+
+   **Example** "i, j, ... = ind2sub(size(A), indmax(A))" provides the indices of the maximum element
+
+   ::
+
+       ind2sub(a, index) -> subscripts
 
    Returns a tuple of subscripts into array "a" corresponding to the linear index "index"
 
@@ -131,7 +159,19 @@ Constructors
    "Array{T}(dims)" constructs an uninitialized dense array with element type "T". "dims" may be a tuple or a series of integer arguments. The syntax "Array(T, dims)" is also available, but deprecated.
 
 
-.. function:: getindex(collection, key...)
+.. function:: getindex(type[, elements...])
+
+   Construct a 1-d array of the specified type. This is usually called with the syntax "Type[]". Element values can be specified using "Type[a,b,c,...]".
+
+   ::
+
+       getindex(A, inds...)
+
+   Returns a subset of array "A" as specified by "inds", where each "ind" may be an "Int", a "Range", or a "Vector". See the manual section on *array indexing* for details.
+
+   ::
+
+       getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a collection. The syntax "a[i,j,...]" is converted by the compiler to "getindex(a, i, j, ...)".
 
@@ -141,22 +181,46 @@ Constructors
    Construct an uninitialized cell array (heterogeneous array). "dims" can be either a tuple or a series of integer arguments.
 
 
-.. function:: zeros(A)
+.. function:: zeros(type, dims)
+
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+
+   ::
+
+       zeros(A)
 
    Create an array of all zeros with the same element type and shape as A.
 
 
-.. function:: zeros(A)
+.. function:: zeros(type, dims)
+
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+
+   ::
+
+       zeros(A)
 
    Create an array of all zeros with the same element type and shape as A.
 
 
-.. function:: ones(A)
+.. function:: ones(type, dims)
+
+   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+
+   ::
+
+       ones(A)
 
    Create an array of all ones with the same element type and shape as A.
 
 
-.. function:: ones(A)
+.. function:: ones(type, dims)
+
+   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+
+   ::
+
+       ones(A)
 
    Create an array of all ones with the same element type and shape as A.
 
@@ -198,17 +262,53 @@ Constructors
    Change the type-interpretation of a block of memory. For example, "reinterpret(Float32, UInt32(7))" interprets the 4 bytes corresponding to "UInt32(7)" as a "Float32". For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
 
-.. function:: eye(A)
+.. function:: eye(n)
+
+   n-by-n identity matrix
+
+   ::
+
+       eye(m, n)
+
+   m-by-n identity matrix
+
+   ::
+
+       eye(A)
 
    Constructs an identity matrix of the same dimensions and type as "A".
 
 
-.. function:: eye(A)
+.. function:: eye(n)
+
+   n-by-n identity matrix
+
+   ::
+
+       eye(m, n)
+
+   m-by-n identity matrix
+
+   ::
+
+       eye(A)
 
    Constructs an identity matrix of the same dimensions and type as "A".
 
 
-.. function:: eye(A)
+.. function:: eye(n)
+
+   n-by-n identity matrix
+
+   ::
+
+       eye(m, n)
+
+   m-by-n identity matrix
+
+   ::
+
+       eye(A)
 
    Constructs an identity matrix of the same dimensions and type as "A".
 
@@ -256,7 +356,19 @@ All mathematical operations and functions are supported for arrays
 Indexing, Assignment, and Concatenation
 ---------------------------------------
 
-.. function:: getindex(collection, key...)
+.. function:: getindex(type[, elements...])
+
+   Construct a 1-d array of the specified type. This is usually called with the syntax "Type[]". Element values can be specified using "Type[a,b,c,...]".
+
+   ::
+
+       getindex(A, inds...)
+
+   Returns a subset of array "A" as specified by "inds", where each "ind" may be an "Int", a "Range", or a "Vector". See the manual section on *array indexing* for details.
+
+   ::
+
+       getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a collection. The syntax "a[i,j,...]" is converted by the compiler to "getindex(a, i, j, ...)".
 
@@ -286,7 +398,13 @@ Indexing, Assignment, and Concatenation
    Returns a view of array "A" with the given indices like "sub()", but drops all dimensions indexed with scalars.
 
 
-.. function:: setindex!(collection, value, key...)
+.. function:: setindex!(A, X, inds...)
+
+   Store values from array "X" within some subset of "A" as specified by "inds".
+
+   ::
+
+       setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a collection. The syntax "a[i,j,...] = x" is converted by the compiler to "setindex!(a, x, i, j, ...)".
 
@@ -333,12 +451,24 @@ Indexing, Assignment, and Concatenation
    Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.
 
 
-.. function:: find(f, A)
+.. function:: find(A)
+
+   Return a vector of the linear indexes of the non-zeros in "A" (determined by "A[i]!=0").  A common use of this is to convert a boolean array to an array of indexes of the "true" elements.
+
+   ::
+
+       find(f, A)
 
    Return a vector of the linear indexes of  "A" where "f" returns true.
 
 
-.. function:: find(f, A)
+.. function:: find(A)
+
+   Return a vector of the linear indexes of the non-zeros in "A" (determined by "A[i]!=0").  A common use of this is to convert a boolean array to an array of indexes of the "true" elements.
+
+   ::
+
+       find(f, A)
 
    Return a vector of the linear indexes of  "A" where "f" returns true.
 
@@ -353,62 +483,206 @@ Indexing, Assignment, and Concatenation
    Return a tuple "(I, J, V)" where "I" and "J" are the row and column indexes of the non-zero values in matrix "A", and "V" is a vector of the non-zero values.
 
 
-.. function:: findfirst(predicate, A)
+.. function:: findfirst(A)
+
+   Return the index of the first non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findfirst(A, v)
+
+   Return the index of the first element equal to "v" in "A".
+
+   ::
+
+       findfirst(predicate, A)
 
    Return the index of the first element of "A" for which "predicate" returns true.
 
 
-.. function:: findfirst(predicate, A)
+.. function:: findfirst(A)
+
+   Return the index of the first non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findfirst(A, v)
+
+   Return the index of the first element equal to "v" in "A".
+
+   ::
+
+       findfirst(predicate, A)
 
    Return the index of the first element of "A" for which "predicate" returns true.
 
 
-.. function:: findfirst(predicate, A)
+.. function:: findfirst(A)
+
+   Return the index of the first non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findfirst(A, v)
+
+   Return the index of the first element equal to "v" in "A".
+
+   ::
+
+       findfirst(predicate, A)
 
    Return the index of the first element of "A" for which "predicate" returns true.
 
 
-.. function:: findlast(predicate, A)
+.. function:: findlast(A)
+
+   Return the index of the last non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findlast(A, v)
+
+   Return the index of the last element equal to "v" in "A".
+
+   ::
+
+       findlast(predicate, A)
 
    Return the index of the last element of "A" for which "predicate" returns true.
 
 
-.. function:: findlast(predicate, A)
+.. function:: findlast(A)
+
+   Return the index of the last non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findlast(A, v)
+
+   Return the index of the last element equal to "v" in "A".
+
+   ::
+
+       findlast(predicate, A)
 
    Return the index of the last element of "A" for which "predicate" returns true.
 
 
-.. function:: findlast(predicate, A)
+.. function:: findlast(A)
+
+   Return the index of the last non-zero value in "A" (determined by "A[i]!=0").
+
+   ::
+
+       findlast(A, v)
+
+   Return the index of the last element equal to "v" in "A".
+
+   ::
+
+       findlast(predicate, A)
 
    Return the index of the last element of "A" for which "predicate" returns true.
 
 
-.. function:: findnext(A, v, i)
+.. function:: findnext(A, i)
+
+   Find the next index >= "i" of a non-zero element of "A", or "0" if not found.
+
+   ::
+
+       findnext(predicate, A, i)
+
+   Find the next index >= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findnext(A, v, i)
 
    Find the next index >= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
 
-.. function:: findnext(A, v, i)
+.. function:: findnext(A, i)
+
+   Find the next index >= "i" of a non-zero element of "A", or "0" if not found.
+
+   ::
+
+       findnext(predicate, A, i)
+
+   Find the next index >= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findnext(A, v, i)
 
    Find the next index >= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
 
-.. function:: findnext(A, v, i)
+.. function:: findnext(A, i)
+
+   Find the next index >= "i" of a non-zero element of "A", or "0" if not found.
+
+   ::
+
+       findnext(predicate, A, i)
+
+   Find the next index >= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findnext(A, v, i)
 
    Find the next index >= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
 
-.. function:: findprev(A, v, i)
+.. function:: findprev(A, i)
+
+   Find the previous index <= "i" of a non-zero element of "A", or 0 if not found.
+
+   ::
+
+       findprev(predicate, A, i)
+
+   Find the previous index <= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findprev(A, v, i)
 
    Find the previous index <= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
 
-.. function:: findprev(A, v, i)
+.. function:: findprev(A, i)
+
+   Find the previous index <= "i" of a non-zero element of "A", or 0 if not found.
+
+   ::
+
+       findprev(predicate, A, i)
+
+   Find the previous index <= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findprev(A, v, i)
 
    Find the previous index <= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
 
-.. function:: findprev(A, v, i)
+.. function:: findprev(A, i)
+
+   Find the previous index <= "i" of a non-zero element of "A", or 0 if not found.
+
+   ::
+
+       findprev(predicate, A, i)
+
+   Find the previous index <= "i" of an element of "A" for which "predicate" returns true, or "0" if not found.
+
+   ::
+
+       findprev(A, v, i)
 
    Find the previous index <= "i" of an element of "A" equal to "v" (using "=="), or "0" if not found.
 
@@ -506,32 +780,68 @@ Array functions
    Compute differences along vector "F", using "h" as the spacing between points. The default spacing is one.
 
 
-.. function:: rot180(A, k)
+.. function:: rot180(A)
+
+   Rotate matrix "A" 180 degrees.
+
+   ::
+
+       rot180(A, k)
 
    Rotate matrix "A" 180 degrees an integer "k" number of times. If "k" is even, this is equivalent to a "copy".
 
 
-.. function:: rot180(A, k)
+.. function:: rot180(A)
+
+   Rotate matrix "A" 180 degrees.
+
+   ::
+
+       rot180(A, k)
 
    Rotate matrix "A" 180 degrees an integer "k" number of times. If "k" is even, this is equivalent to a "copy".
 
 
-.. function:: rotl90(A, k)
+.. function:: rotl90(A)
+
+   Rotate matrix "A" left 90 degrees.
+
+   ::
+
+       rotl90(A, k)
 
    Rotate matrix "A" left 90 degrees an integer "k" number of times. If "k" is zero or a multiple of four, this is equivalent to a "copy".
 
 
-.. function:: rotl90(A, k)
+.. function:: rotl90(A)
+
+   Rotate matrix "A" left 90 degrees.
+
+   ::
+
+       rotl90(A, k)
 
    Rotate matrix "A" left 90 degrees an integer "k" number of times. If "k" is zero or a multiple of four, this is equivalent to a "copy".
 
 
-.. function:: rotr90(A, k)
+.. function:: rotr90(A)
+
+   Rotate matrix "A" right 90 degrees.
+
+   ::
+
+       rotr90(A, k)
 
    Rotate matrix "A" right 90 degrees an integer "k" number of times. If "k" is zero or a multiple of four, this is equivalent to a "copy".
 
 
-.. function:: rotr90(A, k)
+.. function:: rotr90(A)
+
+   Rotate matrix "A" right 90 degrees.
+
+   ::
+
+       rotr90(A, k)
 
    Rotate matrix "A" right 90 degrees an integer "k" number of times. If "k" is zero or a multiple of four, this is equivalent to a "copy".
 
@@ -574,12 +884,24 @@ Array functions
 Combinatorics
 -------------
 
-.. function:: nthperm(p)
+.. function:: nthperm(v, k)
+
+   Compute the kth lexicographic permutation of a vector.
+
+   ::
+
+       nthperm(p)
 
    Return the "k" that generated permutation "p". Note that "nthperm(nthperm([1:n], k)) == k" for "1 <= k <= factorial(n)".
 
 
-.. function:: nthperm(p)
+.. function:: nthperm(v, k)
+
+   Compute the kth lexicographic permutation of a vector.
+
+   ::
+
+       nthperm(p)
 
    Return the "k" that generated permutation "p". Note that "nthperm(nthperm([1:n], k)) == k" for "1 <= k <= factorial(n)".
 
@@ -656,22 +978,94 @@ Combinatorics
    Generate all permutations of an indexable object.  Because the number of permutations can be very large, this function returns an iterator object. Use "collect(permutations(array))" to get an array of all permutations.
 
 
-.. function:: partitions(array, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n))".
+
+   ::
+
+       partitions(n, m)
+
+   Generate all arrays of "m" integers that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n,m))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n,m))".
+
+   ::
+
+       partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(array))".
+
+   ::
+
+       partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array,m))" to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using "length(partitions(array,m))".
 
 
-.. function:: partitions(array, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n))".
+
+   ::
+
+       partitions(n, m)
+
+   Generate all arrays of "m" integers that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n,m))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n,m))".
+
+   ::
+
+       partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(array))".
+
+   ::
+
+       partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array,m))" to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using "length(partitions(array,m))".
 
 
-.. function:: partitions(array, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n))".
+
+   ::
+
+       partitions(n, m)
+
+   Generate all arrays of "m" integers that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n,m))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n,m))".
+
+   ::
+
+       partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(array))".
+
+   ::
+
+       partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array,m))" to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using "length(partitions(array,m))".
 
 
-.. function:: partitions(array, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n))".
+
+   ::
+
+       partitions(n, m)
+
+   Generate all arrays of "m" integers that sum to "n". Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(n,m))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(n,m))".
+
+   ::
+
+       partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array))" to get an array of all partitions. The number of partitions to generate can be efficiently computed using "length(partitions(array))".
+
+   ::
+
+       partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use "collect(partitions(array,m))" to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using "length(partitions(array,m))".
 
@@ -694,12 +1088,24 @@ BitArrays
    Performs a bitwise not operation on B. See *~ operator*.
 
 
-.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on "src" and put the result into "dest".
+
+   ::
+
+       rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a left rotation operation on B.
 
 
-.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on "src" and put the result into "dest".
+
+   ::
+
+       rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a left rotation operation on B.
 
@@ -709,12 +1115,24 @@ BitArrays
    Performs a left rotation operation.
 
 
-.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on "src" and put the result into "dest".
+
+   ::
+
+       ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a right rotation operation on B.
 
 
-.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on "src" and put the result into "dest".
+
+   ::
+
+       ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a right rotation operation on B.
 
@@ -731,17 +1149,47 @@ Sparse Matrices
 
 Sparse matrices support much of the same set of operations as dense matrices. The following functions are specific to sparse matrices.
 
-.. function:: sparse(A)
+.. function:: sparse(I, J, V[, m, n, combine])
+
+   Create a sparse matrix "S" of dimensions "m x n" such that "S[I[k], J[k]] = V[k]". The "combine" function is used to combine duplicates. If "m" and "n" are not specified, they are set to "max(I)" and "max(J)" respectively. If the "combine" function is not supplied, duplicates are added by default.
+
+   ::
+
+       sparse(A)
 
    Convert an AbstractMatrix "A" into a sparse matrix.
 
 
-.. function:: sparsevec(A)
+.. function:: sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix "S" of size "m x 1" such that "S[I[k]] = V[k]". Duplicates are combined using the "combine" function, which defaults to "+" if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+
+   ::
+
+       sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size "m x 1" where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
+
+   ::
+
+       sparsevec(A)
 
    Convert a dense vector "A" into a sparse matrix of size "m x 1". In julia, sparse vectors are really just sparse matrices with one column.
 
 
-.. function:: sparsevec(A)
+.. function:: sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix "S" of size "m x 1" such that "S[I[k]] = V[k]". Duplicates are combined using the "combine" function, which defaults to "+" if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+
+   ::
+
+       sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size "m x 1" where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
+
+   ::
+
+       sparsevec(A)
 
    Convert a dense vector "A" into a sparse matrix of size "m x 1". In julia, sparse vectors are really just sparse matrices with one column.
 
@@ -751,17 +1199,47 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
    Returns "true" if "S" is sparse, and "false" otherwise.
 
 
-.. function:: sparse(A)
+.. function:: sparse(I, J, V[, m, n, combine])
+
+   Create a sparse matrix "S" of dimensions "m x n" such that "S[I[k], J[k]] = V[k]". The "combine" function is used to combine duplicates. If "m" and "n" are not specified, they are set to "max(I)" and "max(J)" respectively. If the "combine" function is not supplied, duplicates are added by default.
+
+   ::
+
+       sparse(A)
 
    Convert an AbstractMatrix "A" into a sparse matrix.
 
 
-.. function:: sparsevec(A)
+.. function:: sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix "S" of size "m x 1" such that "S[I[k]] = V[k]". Duplicates are combined using the "combine" function, which defaults to "+" if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+
+   ::
+
+       sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size "m x 1" where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
+
+   ::
+
+       sparsevec(A)
 
    Convert a dense vector "A" into a sparse matrix of size "m x 1". In julia, sparse vectors are really just sparse matrices with one column.
 
 
-.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
+.. function:: full(S)
+
+   Convert a sparse matrix "S" into a dense matrix.
+
+   ::
+
+       full(F)
+
+   Reconstruct the matrix "A" from the factorization "F=factorize(A)".
+
+   ::
+
+       full(QRCompactWYQ[, thin=true]) -> Matrix
 
    Converts an orthogonal or unitary matrix stored as a "QRCompactWYQ" object, i.e. in the compact WY format [Bischof1987], to a dense matrix.
 
