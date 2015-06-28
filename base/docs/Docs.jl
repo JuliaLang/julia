@@ -75,11 +75,11 @@ end
 type FuncDoc
     main
     order::Vector{Method}
-    meta::Dict{Method, Any}
-    source::Dict{Method, Any}
+    meta::ObjectIdDict
+    source::ObjectIdDict
 end
 
-FuncDoc() = FuncDoc(nothing, [], Dict(), Dict())
+FuncDoc() = FuncDoc(nothing, [], ObjectIdDict(), ObjectIdDict())
 
 function doc!(f::Function, data)
     fd = get!(meta(), f, FuncDoc())
@@ -147,10 +147,10 @@ type TypeDoc
     main
     fields::Dict{Symbol, Any}
     order::Vector{Method}
-    meta::Dict{Method, Any}
+    meta::ObjectIdDict
 end
 
-TypeDoc() = TypeDoc(nothing, Dict(), [], Dict())
+TypeDoc() = TypeDoc(nothing, Dict(), [], ObjectIdDict())
 
 function doc!(t::DataType, data, fields)
     td = get!(meta(), t, TypeDoc())
