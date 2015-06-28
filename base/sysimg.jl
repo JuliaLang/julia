@@ -88,18 +88,13 @@ include("iterator.jl")
 include("osutils.jl")
 
 # strings & printing
-include("utferror.jl")
-include("utftypes.jl")
-include("utfcheck.jl")
 include("char.jl")
 include("ascii.jl")
-include("utf8.jl")
-include("utf16.jl")
-include("utf32.jl")
 include("iobuffer.jl")
 include("string.jl")
-include("utf8proc.jl")
-importall .UTF8proc
+include("unicode.jl")
+include("parse.jl")
+include("shell.jl")
 include("regex.jl")
 include("base64.jl")
 importall .Base64
