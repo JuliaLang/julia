@@ -1162,6 +1162,7 @@ export
     ntoh,
     open,
     pipe,
+    Pipe,
     PipeBuffer,
     poll_fd,
     poll_file,
