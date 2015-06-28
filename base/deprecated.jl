@@ -428,6 +428,11 @@ function to_index{T<:Real}(A::AbstractArray{T})
     Int[to_index_nodep(x) for x in A]
 end
 
+function to_index(I::Tuple)
+    depwarn("to_index(I::Tuple) is deprecated, use to_indexes(I...) instead.", :to_index)
+    to_indexes(I...)
+end
+
 function float_isvalid{T<:Union{Float32,Float64}}(s::AbstractString, out::Array{T,1})
     tf = tryparse(T, s)
     isnull(tf) || (out[1] = get(tf))
