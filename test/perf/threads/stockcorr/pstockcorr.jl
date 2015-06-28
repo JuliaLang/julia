@@ -87,7 +87,7 @@ function pstockcorr(n)
     CorrWiener = Array(Float64, T-1, 2)
 
     # Runtime requirement: need per-thread RNG since it stores state
-    rngs = [MersenneTwister(777) for x in 1:nthreads()]
+    rngs = [MersenneTwister(777+x) for x in 1:nthreads()]
 
     # Optimization: pre-computable factors
     # NOTE: this should be automatically hoisted out of the loop
