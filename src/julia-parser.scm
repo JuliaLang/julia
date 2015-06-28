@@ -1245,6 +1245,7 @@
            `(const ,assgn))))
     ((module baremodule)
      (let* ((name (parse-unary-prefix s))
+	    (loc  (line-number-filename-node s))
             (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
        (expect-end s)
        (list 'module (eq? word 'module) name
@@ -1253,9 +1254,13 @@
                         ;; add definitions for module-local eval
                         (let ((x (if (eq? name 'x) 'y 'x)))
                           `(= (call eval ,x)
-                              (call (|.| (top Core) 'eval) ,name ,x)))
+			      (block
+			       ,loc
+			       (call (|.| (top Core) 'eval) ,name ,x))))
                         `(= (call eval m x)
-                            (call (|.| (top Core) 'eval) m x))
+			    (block
+			     ,loc
+			     (call (|.| (top Core) 'eval) m x)))
                         (cdr body))
                  body))))
     ((export)

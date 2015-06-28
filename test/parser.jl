@@ -36,9 +36,8 @@ let a = :a
             end) == :(try
                       catch a
                       end)
-    @test :(module $a
-            end) == :(module a
-                      end)
+    @test :(module $a end) == :(module a
+                                end)
 end
 
 # string literals
