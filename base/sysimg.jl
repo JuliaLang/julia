@@ -276,8 +276,8 @@ end
 include("sysinfo.jl")
 import .Sys.CPU_CORES
 
-# mathematical constants
-include("constants.jl")
+# irrational mathematical constants
+include("irrationals.jl")
 
 # Numerical integration
 include("quadgk.jl")
