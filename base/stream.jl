@@ -128,18 +128,7 @@ type Pipe <: AsyncStream
         nothing, ReentrantLock(),
         DEFAULT_READ_BUFFER_SZ)
 end
-function Pipe()
-    handle = Libc.malloc(_sizeof_uv_named_pipe)
-    try
-        ret = Pipe(handle)
-        associate_julia_struct(ret.handle,ret)
-        finalizer(ret,uvfinalize)
-        return init_pipe!(ret;readable=true)
-    catch
-        Libc.free(handle)
-        rethrow()
-    end
-end
+Pipe() = Pipe(C_NULL)
 
 type PipeServer <: UVServer
     handle::Ptr{Void}
@@ -157,8 +146,9 @@ end
 
 function init_pipe!(pipe::Union{Pipe,PipeServer};readable::Bool=false,writable=false,julia_only=true)
     if pipe.handle == C_NULL
-        error("failed to initialize pipe")
-    elseif pipe.status != StatusUninit
+        malloc_julia_pipe!(pipe)
+    end
+    if pipe.status != StatusUninit
         error("pipe is already initialized")
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), pipe.handle, writable,readable,julia_only))
@@ -652,7 +642,7 @@ function process_events(block::Bool)
 end
 
 ## pipe functions ##
-function malloc_julia_pipe(x)
+function malloc_julia_pipe!(x)
     x.handle = Libc.malloc(_sizeof_uv_named_pipe)
     associate_julia_struct(x.handle,x)
     finalizer(x,uvfinalize)
@@ -676,7 +666,7 @@ end
 
 function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
     if read_end.handle == C_NULL
-        malloc_julia_pipe(read_end)
+        malloc_julia_pipe!(read_end)
     end
     init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
@@ -685,7 +675,7 @@ function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Ptr{Void}
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
-        malloc_julia_pipe(write_end)
+        malloc_julia_pipe!(write_end)
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
     init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
@@ -694,10 +684,10 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Pipe
 end
 function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
-        malloc_julia_pipe(write_end)
+        malloc_julia_pipe!(write_end)
     end
     if read_end.handle == C_NULL
-        malloc_julia_pipe(read_end)
+        malloc_julia_pipe!(read_end)
     end
     init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
     init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
@@ -961,7 +951,7 @@ function accept_nonblock(server::PipeServer,client::Pipe)
     err
 end
 function accept_nonblock(server::PipeServer)
-    client = Pipe()
+    client = init_pipe!(Pipe(); readable=true, writable=true, julia_only=true)
     uv_error("accept", accept_nonblock(server,client) != 0)
     client
 end
@@ -1031,7 +1021,9 @@ function connect(sock::AsyncStream, args...)
     sock
 end
 
-connect(path::AbstractString) = connect(Pipe(),path)
+# Libuv will internally reset read/writability, which is uses to
+# mark that this is an invalid pipe.
+connect(path::AbstractString) = connect(init_pipe!(Pipe(); readable=false, writable=false, julia_only=true),path)
 
 _fd(x::IOStream) = RawFD(fd(x))
 @unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))

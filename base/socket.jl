@@ -343,7 +343,12 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::UInt16) =
     ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},UInt16),ptr,port)
 
 accept(server::TCPServer) = accept(server, TCPSocket())
-accept(server::PipeServer) = accept(server, Pipe())
+
+# Libuv will internally reset the readable and writable flags on
+# this pipe after it has successfully accepted the connection, to
+# remember that before that this is an invalid pipe
+accept(server::PipeServer) = accept(server, init_pipe!(Pipe();
+    readable=false, writable=false, julia_only=true))
 
 ##
 
