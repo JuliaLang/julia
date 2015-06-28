@@ -28,6 +28,8 @@ include("libgit2/tag.jl")
 include("libgit2/blob.jl")
 include("libgit2/diff.jl")
 include("libgit2/rebase.jl")
+include("libgit2/repl.jl")
+
 
 immutable State
     head::Oid
@@ -471,7 +473,7 @@ end
 """ Returns all commit authors """
 function authors(repo::GitRepo)
     athrs = map(
-        (oid,repo)->author(get(GitCommit, repo, oid))::Signature,
+        (oid,repo)->author(get(GitCommit, repo, oid))::Signature, #TODO: cleanup
         repo) #, by = GitConst.SORT_TIME)
     return athrs
 end

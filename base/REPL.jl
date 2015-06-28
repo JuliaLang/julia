@@ -734,13 +734,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
 
+    # Set up shell mode
+    git_mode = Prompt("git> ";
+        prompt_prefix = hascolor ? repl.shell_color : "",
+        prompt_suffix = hascolor ?
+            (repl.envcolors ? Base.input_color : repl.input_color) : "",
+        keymap_func_data = repl,
+        complete = ShellCompletionProvider(repl),
+        on_done = respond(repl, julia_prompt) do line
+            line = strip(line)
+            :(Pkg.LibGit2.repl($line))
+        end)
+
     ################################# Stage II #############################
 
     # Setup history
     # We will have a unified history for all REPL modes
     hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
                                               :shell => shell_mode,
-                                              :help  => help_mode))
+                                              :help  => help_mode,
+                                              :git   => git_mode))
     if repl.history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
@@ -757,6 +770,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
+    git_mode.hist = hp
 
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
@@ -785,6 +799,16 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 end
             else
                 edit_insert(s, '?')
+            end
+        end,
+        '>' => function (s,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
+                transition(s, git_mode)
+                LineEdit.state(s, git_mode).input_buffer = buf
+                LineEdit.refresh_line(s)
+            else
+                edit_insert(s, '>')
             end
         end,
 
@@ -845,9 +869,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)
 
-    shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
+    shell_mode.keymap_dict = help_mode.keymap_dict = git_mode.keymap_dict = LineEdit.keymap(b)
 
-    ModalInterface([julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt])
+    ModalInterface([julia_prompt, shell_mode, help_mode, git_mode, search_prompt, prefix_prompt])
 end
 
 function run_frontend(repl::LineEditREPL, backend)

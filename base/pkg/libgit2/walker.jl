@@ -50,7 +50,8 @@ function Base.map(f::Function, repo::GitRepo;
                   oid::Oid=Oid(),
                   range::AbstractString="",
                   by::Cint = GitConst.SORT_NONE,
-                  rev::Bool=false)
+                  rev::Bool=false,
+                  count::Int=0)
     walker = GitRevWalker(repo)
     res = nothing
     try
@@ -64,6 +65,7 @@ function Base.map(f::Function, repo::GitRepo;
         end
         s = start(walker)
 
+        c = 0
         while !done(walker, s)
             val = f(s[1], repo)
             if res == nothing
@@ -71,6 +73,8 @@ function Base.map(f::Function, repo::GitRepo;
             end
             push!(res, val)
             val, s = next(walker, s)
+            c +=1
+            count == c && break
         end
     finally
         finalize(walker)
