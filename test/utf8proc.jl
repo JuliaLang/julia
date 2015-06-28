@@ -215,3 +215,45 @@ end
 @test isxdigit("0") == true
 @test isxdigit("a") == true
 @test isxdigit("g") == false
+
+# check utf8proc handling of CN category constants
+let c_ll = 'β', c_cn = '\u038B'
+    @test Base.UTF8proc.category_code(c_ll) == Base.UTF8proc.UTF8PROC_CATEGORY_LL
+    # check codepoint with category code CN
+    @test Base.UTF8proc.category_code(c_cn) == Base.UTF8proc.UTF8PROC_CATEGORY_CN
+end
+
+# graphemes
+let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
+                                              "β","l","a","h",
+                                              "b\u0302","l","á","h"]),
+                ("", UTF8String[]),
+                ("x\u0302", ["x\u0302"]),
+                ("\U1d4c1\u0302", ["\U1d4c1\u0302"]),
+                ("\U1d4c1\u0302\U1d4c1\u0300", ["\U1d4c1\u0302",
+                                                "\U1d4c1\u0300"]),
+                ("x",["x"]),
+                ("abc",["a","b","c"]))
+    for T in (utf8,utf16,utf32)
+        for nf in (:NFC, :NFD)
+            for (s, g) in grphtest
+                s_ = T(normalize_string(s, nf))
+                g_ = map(s -> normalize_string(s, nf), g)
+                grph = collect(graphemes(s_))
+                @test grph == g_
+                @test length(graphemes(s_)) == length(grph)
+            end
+            S = [T(normalize_string(s)) for (s,g) in grphtest]
+            G = map(graphemes, S)
+            @test map(graphemes, sort!(S)) == sort!(G)
+        end
+    end
+end
+
+# up-to-date character widths (#3721, #6939)
+@test charwidth('\U1f355') == strwidth("\U1f355") == strwidth(utf16("\U1f355")) == strwidth("\U1f355\u0302") == strwidth(utf16("\U1f355\u0302")) == 2
+
+# handling of embedded NUL chars (#10958)
+@test length("\0w") == length("\0α") == 2
+@test strwidth("\0w") == strwidth("\0α") == 1
+@test normalize_string("\0W", casefold=true) == "\0w"

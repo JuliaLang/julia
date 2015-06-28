@@ -15,16 +15,17 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "core", "keywordargs", "numbers", "string",
+        "linalg", "core", "keywordargs", "numbers", "string", "stringio",
         "stringhex", "stringesc", "stringjoin", "stringmap", "stringparse",
-        "stringreplace", "stringsplit", "stringstrip", "search", 
-        "triplequote", "printf", "isvalid", "utf8proc", "utfcheck",
+        "stringreplace", "stringsplit", "stringstrip", "stringpnt",
+        "triplequote", "printf", "isvalid", "search",
         "RepStrings", "SubStrings", "RopeStrings", "RevStrings",
+        "utf8proc", "utfcheck", "utf16", "utf32",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
         "abstractarray", "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall", "unicode",
+        "operators", "path", "ccall",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
