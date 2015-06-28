@@ -736,6 +736,17 @@
           ;; neither
           (method-def-expr- name sparams argl body isstaged))))
 
+;; remove nested blocks
+(define (flatten-blocks e)
+  (if (atom? e)
+      e
+      (apply append!
+             (map (lambda (x)
+                    (cond ((atom? x) (list x))
+                          ((eq? (car x) 'block) (cdr (flatten-blocks x)))
+                          (else (list x))))
+                  e))))
+
 (define (struct-def-expr name params super fields mut)
   (receive
    (params bounds) (sparam-name-bounds params '() '())
@@ -748,12 +759,13 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctors name field-names field-types gen-specific?)
+(define (default-inner-ctors name field-names field-types gen-specific? locs)
   (let* ((field-names (safe-field-names field-names field-types))
          (any-ctor
           ;; definition with Any for all arguments
           `(function (call ,name ,@field-names)
                      (block
+		      ,@locs
                       (call new ,@field-names)))))
     (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
         (list
@@ -761,17 +773,19 @@
          `(function (call ,name
                           ,@(map make-decl field-names field-types))
                     (block
+		     ,@locs
                      (call new ,@field-names)))
          any-ctor)
         (list any-ctor))))
 
-(define (default-outer-ctor name field-names field-types params bounds)
+(define (default-outer-ctor name field-names field-types params bounds locs)
   (let ((field-names (safe-field-names field-names field-types)))
     `(function (call (curly ,name
                             ,@(map (lambda (p b) `(<: ,p ,b))
                                    params bounds))
                      ,@(map make-decl field-names field-types))
                (block
+		,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
 (define (new-call Tname type-params params args field-names field-types mutabl)
@@ -891,27 +905,18 @@
     (ctors-min-initialized (car expr))
     (ctors-min-initialized (cdr expr)))))
 
-;; remove line numbers and nested blocks
-(define (flatten-blocks e)
-  (if (atom? e)
-      e
-      (apply append!
-             (map (lambda (x)
-                    (cond ((atom? x) (list x))
-                          ((eq? (car x) 'line) '())
-                          ((eq? (car x) 'block) (cdr (flatten-blocks x)))
-                          (else (list x))))
-                  e))))
-
-(define (struct-def-expr- name params bounds super fields mut)
+(define (struct-def-expr- name params bounds super fields0 mut)
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
-                           fields)
+                           fields0)
    (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+	  (locs        (if (and (pair? fields0) (pair? (car fields0)) (eq? (caar fields0) 'line))
+			   (list (car fields0))
+			   '()))
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (defs2 (if (null? defs)
-                     (default-inner-ctors name field-names field-types (null? params))
+                     (default-inner-ctors name field-names field-types (null? params) locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (for-each (lambda (v)
@@ -964,7 +969,7 @@
                     (block
                      (global ,name)
                      ,(default-outer-ctor name field-names field-types
-                        params bounds))))
+                        params bounds locs))))
                  '())
            (null))))))
 
