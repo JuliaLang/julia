@@ -44,8 +44,12 @@ Any[
    have opted into fast linear indexing (like \"Array\"), this is
    simply the range \"1:length(A)\". For other array types, this
    returns a specialized Cartesian range to efficiently index into the
-   array with indices specified for every dimension. Example for a
-   sparse 2-d array:
+   array with indices specified for every dimension. For other
+   iterables, including strings and dictionaries, this returns an
+   iterator object supporting arbitrary index types (e.g. unevenly
+   spaced or non-integer indices).
+
+   Example for a sparse 2-d array:
 
       julia> A = sprand(2, 3, 0.5)
       2x3 sparse matrix with 4 Float64 entries:
@@ -3973,21 +3977,28 @@ Any[
 
    Construct a merged collection from the given collections. If
    necessary, the types of the resulting collection will be promoted
-   to accommodate the types of the merged collections.
+   to accommodate the types of the merged collections. If the same key
+   is present in another collection, the value for that key will be
+   the value it has in the last collection listed.
 
       julia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)
       Dict{ASCIIString,Float64} with 2 entries:
         \"bar\" => 42.0
         \"foo\" => 0.0
 
-      julia> b = Dict(utf8(\"baz\") => 17, utf8(\"qux\") => 4711)
+      julia> b = Dict(utf8(\"baz\") => 17, utf8(\"bar\") => 4711)
       Dict{UTF8String,Int64} with 2 entries:
+        \"bar\" => 4711
         \"baz\" => 17
-        \"qux\" => 4711
 
       julia> merge(a, b)
-      Dict{UTF8String,Float64} with 4 entries:
-        \"qux\" => 4711.0
+      Dict{UTF8String,Float64} with 3 entries:
+        \"bar\" => 4711.0
+        \"baz\" => 17.0
+        \"foo\" => 0.0
+
+      julia> merge(b, a)
+      Dict{UTF8String,Float64} with 3 entries:
         \"bar\" => 42.0
         \"baz\" => 17.0
         \"foo\" => 0.0
@@ -7022,6 +7033,10 @@ popdisplay(d::Display)
       +--------------------+--------+--------------------------+---------------+
       | \\\"det\\\"            | ✓      | ✓                        | ✓             |
       +--------------------+--------+--------------------------+---------------+
+      | \\\"logdet\\\"         | ✓      | ✓                        |               |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"logabsdet\\\"      | ✓      | ✓                        |               |
+      +--------------------+--------+--------------------------+---------------+
       | \\\"size\\\"           | ✓      | ✓                        |               |
       +--------------------+--------+--------------------------+---------------+
 
@@ -7824,6 +7839,14 @@ popdisplay(d::Display)
 
    Log of matrix determinant. Equivalent to \"log(det(M))\", but may
    provide increased accuracy and/or speed.
+
+"),
+
+("Base","logabsdet","logabsdet(M)
+
+   Log of absolute value of determinant of real matrix. Equivalent to
+   \"(log(abs(det(M))), sign(det(M)))\", but may provide increased
+   accuracy and/or speed.
 
 "),
 
