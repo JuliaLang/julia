@@ -11,6 +11,10 @@ It can also install external libraries using your operating system's standard sy
 The list of registered Julia packages can be found at `<http://pkg.julialang.org>`_.
 All package manager commands are found in the :mod:`Pkg <Base.Pkg>` module, included in Julia's :mod:`Base` install.
 
+First we'll go over the mechanics of the ``Pkg`` family of commands and then we'll provide some guidance on how
+to get your package registered. Be sure to read the section below on package naming conventions, tagging versions
+and the importance of a ``REQUIRE`` file for when you're ready to add you code to the curated METADATA repository.
+
 Package Status
 --------------
 
