@@ -449,7 +449,6 @@ function _start()
         end
     catch err
         display_error(err,catch_backtrace())
-        println()
         exit(1)
     end
     if is_interactive && have_color
