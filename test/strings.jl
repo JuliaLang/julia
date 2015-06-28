@@ -260,8 +260,17 @@ end
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
+## generic string uses only endof and next ##
+
+immutable GenericString <: AbstractString
+    string::AbstractString
+end
+
+Base.endof(s::GenericString) = endof(s.string)
+Base.next(s::GenericString, i::Int) = next(s.string, i)
+
 # ascii search
-for str in [astr, Base.GenericString(astr)]
+for str in [astr, GenericString(astr)]
     @test_throws BoundsError search(str, 'z', 0)
     @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'x') == 0
@@ -300,7 +309,7 @@ for str in [astr]
 end
 
 # utf-8 search
-for str in (u8str, Base.GenericString(u8str))
+for str in (u8str, GenericString(u8str))
     @test_throws BoundsError search(str, 'z', 0)
     @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'z') == 0
@@ -1640,8 +1649,8 @@ tstr = tstStringType("12");
 @test_throws ErrorException endof(tstr)
 @test_throws ErrorException next(tstr, Bool(1))
 
-gstr = Base.GenericString("12");
-@test typeof(string(gstr))==Base.GenericString
+gstr = GenericString("12");
+@test typeof(string(gstr))==GenericString
 @test bytestring()==""
 
 @test convert(Array{UInt8}, gstr) ==[49;50]
@@ -1656,7 +1665,7 @@ gstr = Base.GenericString("12");
 
 @test_throws ErrorException sizeof(gstr)
 
-@test length(Base.GenericString(""))==0
+@test length(GenericString(""))==0
 
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
