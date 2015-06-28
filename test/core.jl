@@ -3014,3 +3014,22 @@ let a = (1:1000...),
     @test (a == b) === true
     @test (a === b) === true
 end
+
+# issue 11858
+type Foo11858
+    x::Float64
+end
+
+type Bar11858
+    x::Float64
+end
+
+g11858(x::Float64) = x
+f11858(a) = for Baz in a
+    Baz(x) = Baz(float(x))
+end
+f11858(Any[Foo11858, Bar11858, g11858])
+
+@test g11858(1) == 1.0
+@test Foo11858(1).x == 1.0
+@test Bar11858(1).x == 1.0
