@@ -480,9 +480,9 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
 
     PassManager PM;
 #ifndef LLVM37
-    PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+    PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
 #else
-    PM.add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
+    PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
 #endif
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
@@ -510,6 +510,11 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
     if (sysimg_data)
         jl_sysimg_to_llvm(shadow_module, globalvars, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(shadow_module, globalvars);
+    // Reset the target triple to make sure it matches the new target machine
+#ifdef LLVM37
+    shadow_module->setTargetTriple(TM->getTargetTriple().str());
+    shadow_module->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+#endif
     PM.run(*shadow_module);
 #else
     if (sysimg_data)
