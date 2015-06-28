@@ -176,3 +176,9 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test readall(io2) == ""
     @test bytestring(io2) == "goodnightmoonhelloworld"
 end
+
+# issue #11917
+# (previous tests triggered this sometimes, but this should trigger nearly all the time)
+let io = IOBuffer(0)
+   write(io, ones(UInt8, 1048577))
+end
