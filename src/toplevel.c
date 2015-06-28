@@ -202,7 +202,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         module_stack.len = stackidx;
     }
 
-    return jl_nothing;
+    return (jl_value_t*)newm;
 }
 
 // module referenced by TopNode from within m
