@@ -99,7 +99,9 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: free(pkg)
 
-   Free the package ``pkg`` to be managed by the package manager again. It calls ``Pkg.resolve()`` to determine optimal package versions after. This is an inverse for both ``Pkg.checkout`` and You can also supply an iterable collection of package names, e.g., once.
+   Free the package ``pkg`` to be managed by the package manager again. It calls ``Pkg.resolve()`` to determine optimal package versions after. This is an inverse for both ``Pkg.checkout`` and
+
+   You can also supply an iterable collection of package names, e.g., ``Pkg.free(("Pkg1", "Pkg2"))`` to free multiple packages at once.
 
 
 .. function:: build(pkgs...)

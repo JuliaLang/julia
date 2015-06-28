@@ -112,22 +112,30 @@ General Parallel Computing Support
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
-   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``. The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable Relevant only when using TCP/IP as transport.
+   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+
+   The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
-   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``. The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable Relevant only when using TCP/IP as transport.
+   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+
+   The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
-   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``. The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable Relevant only when using TCP/IP as transport.
+   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+
+   The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
-   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``. The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable Relevant only when using TCP/IP as transport.
+   Launches worker processes via the specified cluster manager. For example Beowulf clusters are  supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+
+   The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
 
 .. function:: nprocs()

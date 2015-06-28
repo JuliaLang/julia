@@ -249,12 +249,21 @@ General Number Functions and Constants
 
 .. function:: BigInt(x)
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``).  The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. Instances can be constructed from strings via ``parse()``, or using the ``big`` string literal.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``).  The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``.
+
+   Instances can be constructed from strings via ``parse()``, or using the ``big`` string literal.
 
 
 .. function:: BigFloat(x)
 
-   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64`` or a ``BigInt``. The usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``. Note that because decimal literals are converted to floating point numbers when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead prefer to initialize constants from strings via ``parse()``, or using the ``big`` string literal.
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64`` or a ``BigInt``. The usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
+
+   Note that because decimal literals are converted to floating point numbers when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead prefer to initialize constants from strings via ``parse()``, or using the ``big`` string literal.
+
+   ::
+
+       julia> big"2.1"
+       2.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
 
 
 .. function:: get_rounding(T)
@@ -309,10 +318,20 @@ Integers
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``. ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
 
+   ::
+
+       julia> isprime(big(3))
+       true
+
 
 .. function:: isprime(x::BigInt[, reps = 25]) -> Bool
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``. ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
+
+   ::
+
+       julia> isprime(big(3))
+       true
 
 
 .. function:: primes(n)

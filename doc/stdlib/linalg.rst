@@ -32,7 +32,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: vecdot(x, y)
 
-   For any iterable containers ``x`` and ``y`` (including arrays of any dimension) of numbers (or any element type for which ``dot`` is defined), compute the Euclidean dot product (the sum of
+   For any iterable containers ``x`` and ``y`` (including arrays of any dimension) of numbers (or any element type for which ``dot`` is defined), compute the Euclidean dot product (the sum of ``dot(x[i],y[i])``) as if they were vectors.
 
 
 .. function:: cross(x, y)
@@ -69,22 +69,30 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: chol(A[, LU]) -> F
 
-   Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``Val{:U}`` and ``A = F*F'``. ``LU`` defaults to ``Val{:U}``.
+   Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``Val{:U}`` (Upper), ``F`` is of type ``UpperTriangular`` and ``A = F'*F``. If ``LU`` is ``Val{:L}`` (Lower), ``F`` is of type ``LowerTriangular`` and ``A = F*F'``. ``LU`` defaults to ``Val{:U}``.
 
 
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``, but also the methods ``diag``, ``det``, ``logdet`` are defined for ``F``.  You can also extract individual factors from ``F``, using ``F[:L]``.  However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``; using just ``L`` without accounting for ``P`` will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact ``combined`` factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``). Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty, it should be a permutation of *1:size(A,1)* giving the ordering to use (instead of CHOLMOD's default AMD ordering). The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\\b``, but also the methods ``diag``, ``det``, ``logdet`` are defined for ``F``.  You can also extract individual factors from ``F``, using ``F[:L]``.  However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``; using just ``L`` without accounting for ``P`` will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact ``combined`` factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).
+
+   Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty, it should be a permutation of *1:size(A,1)* giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``, but also the methods ``diag``, ``det``, ``logdet`` are defined for ``F``.  You can also extract individual factors from ``F``, using ``F[:L]``.  However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``; using just ``L`` without accounting for ``P`` will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact ``combined`` factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``). Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty, it should be a permutation of *1:size(A,1)* giving the ordering to use (instead of CHOLMOD's default AMD ordering). The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\\b``, but also the methods ``diag``, ``det``, ``logdet`` are defined for ``F``.  You can also extract individual factors from ``F``, using ``F[:L]``.  However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``; using just ``L`` without accounting for ``P`` will give incorrect answers.  To include the effects of permutation, it's typically preferable to extact ``combined`` factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).
+
+   Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty, it should be a permutation of *1:size(A,1)* giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
-   overwriting the input ``A``, instead of creating a copy. different matrix ``F`` with the same structure when used as:
+   ``cholfact!`` is the same as ``cholfact()``, but saves space by overwriting the input ``A``, instead of creating a copy. ``cholfact!`` can also reuse the symbolic factorization from a different matrix ``F`` with the same structure when used as: ``cholfact!(F::CholmodFactor, A)``.
 
 
 .. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
@@ -401,7 +409,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: vecnorm(A[, p])
 
-   For any iterable container ``A`` (including arrays of any dimension) of numbers (or any element type for which ``norm`` is defined), compute the ``p``-norm (defaulting to ``p=2``) as if For example, if ``A`` is a matrix and ``p=2``, then this is equivalent to the Frobenius norm.
+   For any iterable container ``A`` (including arrays of any dimension) of numbers (or any element type for which ``norm`` is defined), compute the ``p``-norm (defaulting to ``p=2``) as if ``A`` were a vector of the corresponding length.
+
+   For example, if ``A`` is a matrix and ``p=2``, then this is equivalent to the Frobenius norm.
 
 
 .. function:: cond(M[, p])
@@ -424,9 +434,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Matrix determinant
 
 
-.. function:: logdet(M)
+.. function:: logabsdet(M)
 
-   Log of matrix determinant. Equivalent to ``log(det(M))``, but may provide increased accuracy and/or speed.
+   Log of absolute value of determinant of real matrix. Equivalent to ``(log(abs(det(M))), sign(det(M)))``, but may provide increased accuracy and/or speed.
 
 
 .. function:: logabsdet(M)
@@ -624,12 +634,12 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: ger!(alpha, x, y, A)
 
-   Rank-1 update of the matrix ``A`` with vectors ``x`` and ``y`` as
+   Rank-1 update of the matrix ``A`` with vectors ``x`` and ``y`` as ``alpha*x*y' + A``.
 
 
 .. function:: syr!(uplo, alpha, x, A)
 
-   Rank-1 update of the symmetric matrix ``A`` with vector ``x`` as
+   Rank-1 update of the symmetric matrix ``A`` with vector ``x`` as ``alpha*x*x.' + A``.  When ``uplo`` is 'U' the upper triangle of ``A`` is updated ('L' for lower triangle). Returns ``A``.
 
 
 .. function:: syrk!(uplo, trans, alpha, A, beta, C)
@@ -644,7 +654,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: her!(uplo, alpha, x, A)
 
-   Methods for complex arrays only.  Rank-1 update of the Hermitian matrix ``A`` with vector ``x`` as ``alpha*x*x' + A``.  When lower triangle). Returns ``A``.
+   Methods for complex arrays only.  Rank-1 update of the Hermitian matrix ``A`` with vector ``x`` as ``alpha*x*x' + A``.  When ``uplo`` is 'U' the upper triangle of ``A`` is updated ('L' for lower triangle). Returns ``A``.
 
 
 .. function:: herk!(uplo, trans, alpha, A, beta, C)

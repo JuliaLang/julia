@@ -37,8 +37,36 @@ AbstractArray `A` in an efficient manner. For array types that
 have opted into fast linear indexing (like `Array`), this is
 simply the range `1:length(A)`. For other array types, this
 returns a specialized Cartesian range to efficiently index into the
-array with indices specified for every dimension. Example for a
-sparse 2-d array:
+array with indices specified for every dimension. For other
+iterables, including strings and dictionaries, this returns an
+iterator object supporting arbitrary index types (e.g. unevenly
+spaced or non-integer indices).
+
+Example for a sparse 2-d array:
+
+      julia> A = sprand(2, 3, 0.5)
+      2x3 sparse matrix with 4 Float64 entries:
+          [1, 1]  =  0.598888
+          [1, 2]  =  0.0230247
+          [1, 3]  =  0.486499
+          [2, 3]  =  0.809041
+
+      julia> for iter in eachindex(A)
+                 @show iter.I_1, iter.I_2
+                 @show A[iter]
+             end
+      (iter.I_1,iter.I_2) = (1,1)
+      A[iter] = 0.5988881393454597
+      (iter.I_1,iter.I_2) = (2,1)
+      A[iter] = 0.0
+      (iter.I_1,iter.I_2) = (1,2)
+      A[iter] = 0.02302469881746183
+      (iter.I_1,iter.I_2) = (2,2)
+      A[iter] = 0.0
+      (iter.I_1,iter.I_2) = (1,3)
+      A[iter] = 0.4864987874354343
+      (iter.I_1,iter.I_2) = (2,3)
+      A[iter] = 0.8090413606455655
 """
 eachindex
 
@@ -325,7 +353,8 @@ doc"""
     sub(A, inds...)
 
 Like `getindex()`, but returns a view into the parent array `A`
-with the given indices instead of making a copy.  Calling
+with the given indices instead of making a copy. Calling
+`getindex()` or `setindex!()` on the returned `SubArray`
 computes the indices to the parent array on the fly without
 checking bounds.
 """
@@ -360,6 +389,7 @@ doc"""
     slice(A, inds...)
 
 Returns a view of array `A` with the given indices like
+`sub()`, but drops all dimensions indexed with scalars.
 """
 slice
 
@@ -2605,6 +2635,7 @@ doc"""
     Timer(delay, repeat=0)
 
 Create a timer that wakes up tasks waiting for it (by calling
+ `wait` on the timer object) at a specified interval.
 """
 Timer
 
@@ -3956,7 +3987,31 @@ doc"""
 
 Construct a merged collection from the given collections. If
 necessary, the types of the resulting collection will be promoted
-to accommodate the types of the merged collections.
+to accommodate the types of the merged collections. If the same key
+is present in another collection, the value for that key will be
+the value it has in the last collection listed.
+
+    julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+    Dict{ASCIIString,Float64} with 2 entries:
+      "bar" => 42.0
+      "foo" => 0.0
+
+    julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+    Dict{UTF8String,Int64} with 2 entries:
+      "bar" => 4711
+      "baz" => 17
+
+    julia> merge(a, b)
+    Dict{UTF8String,Float64} with 3 entries:
+      "bar" => 4711.0
+      "baz" => 17.0
+      "foo" => 0.0
+
+    julia> merge(b, a)
+    Dict{UTF8String,Float64} with 3 entries:
+      "bar" => 42.0
+      "baz" => 17.0
+      "foo" => 0.0
 """
 merge
 
@@ -5060,6 +5115,7 @@ doc"""
     mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
 
 Move the file, link, or directory from *src* to *dest*.
+`remove_destination=true` will first remove an existing *dst*.
 """
 mv
 
@@ -6046,7 +6102,8 @@ base64encode
 doc"""
     base64decode(string)
 
-Decodes the base64-encoded `string` and returns a
+Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of
+the decoded bytes.
 """
 base64decode
 
@@ -6742,6 +6799,7 @@ doc"""
 For any iterable containers `x` and `y` (including arrays of
 any dimension) of numbers (or any element type for which `dot` is
 defined), compute the Euclidean dot product (the sum of
+`dot(x[i],y[i])`) as if they were vectors.
 """
 vecdot
 
@@ -6801,6 +6859,8 @@ doc"""
 
 Compute the Cholesky factorization of a symmetric positive definite
 matrix `A` and return the matrix `F`. If `LU` is `Val{:U}`
+(Upper), `F` is of type `UpperTriangular` and `A = F'*F`. If
+`LU` is `Val{:L}` (Lower), `F` is of type `LowerTriangular`
 and `A = F*F'`. `LU` defaults to `Val{:U}`.
 """
 chol
@@ -6809,10 +6869,14 @@ doc"""
     cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive
+(semi)definite matrix `A` and return either a `Cholesky` if
+`pivot==Val{false}` or `CholeskyPivoted` if
+`pivot==Val{true}`. `LU` may be `:L` for using the lower part
 or `:U` for the upper part. The default is to use `:U`. The
 triangular matrix can be obtained from the factorization `F`
 with: `F[:L]` and `F[:U]`. The following functions are
-available for `Cholesky` objects: `size`, `\`, `inv`,
+available for `Cholesky` objects: `size`, `\\`, `inv`,
+`det`. For `CholeskyPivoted` there is also defined a `rank`.
 If `pivot==Val{false}` a `PosDefException` exception is thrown
 in case the matrix is not positive definite. The argument `tol`
 determines the tolerance for determining the rank. For negative
@@ -6826,7 +6890,7 @@ doc"""
 Compute the Cholesky factorization of a sparse positive definite
 matrix `A`. A fill-reducing permutation is used.  `F =
 cholfact(A)` is most frequently used to solve systems of equations
-with `F\b`, but also the methods `diag`, `det`, `logdet`
+with `F\\b`, but also the methods `diag`, `det`, `logdet`
 are defined for `F`.  You can also extract individual factors
 from `F`, using `F[:L]`.  However, since pivoting is on by
 default, the factorization is internally represented as `A ==
@@ -6835,11 +6899,13 @@ without accounting for `P` will give incorrect answers.  To
 include the effects of permutation, it's typically preferable to
 extact `combined` factors like `PtL = F[:PtL]` (the equivalent
 of `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
+
 Setting optional `shift` keyword argument computes the
 factorization of `A+shift*I` instead of `A`.  If the `perm`
 argument is nonempty, it should be a permutation of *1:size(A,1)*
 giving the ordering to use (instead of CHOLMOD's default AMD
 ordering).
+
 The function calls the C library CHOLMOD and many other functions
 from the library are wrapped but not exported.
 """
@@ -6848,8 +6914,11 @@ cholfact
 doc"""
     cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
+`cholfact!` is the same as `cholfact()`, but saves space by
 overwriting the input `A`, instead of creating a copy.
+`cholfact!` can also reuse the symbolic factorization from a
 different matrix `F` with the same structure when used as:
+`cholfact!(F::CholmodFactor, A)`.
 """
 cholfact!
 
@@ -7445,6 +7514,8 @@ doc"""
 For any iterable container `A` (including arrays of any
 dimension) of numbers (or any element type for which `norm` is
 defined), compute the `p`-norm (defaulting to `p=2`) as if
+`A` were a vector of the corresponding length.
+
 For example, if `A` is a matrix and `p=2`, then this is
 equivalent to the Frobenius norm.
 """
@@ -7490,6 +7561,16 @@ Log of matrix determinant. Equivalent to `log(det(M))`, but may
 provide increased accuracy and/or speed.
 """
 logdet
+
+doc"""
+    logabsdet(M)
+
+Log of absolute value of determinant of real matrix. Equivalent to
+`(log(abs(det(M))), sign(det(M)))`, but may provide increased
+accuracy and/or speed.
+"""
+logdet
+
 
 doc"""
     inv(M)
@@ -7789,6 +7870,7 @@ doc"""
     ger!(alpha, x, y, A)
 
 Rank-1 update of the matrix `A` with vectors `x` and `y` as
+`alpha*x*y' + A`.
 """
 Base.LinAlg.BLAS.ger!
 
@@ -7796,6 +7878,8 @@ doc"""
     syr!(uplo, alpha, x, A)
 
 Rank-1 update of the symmetric matrix `A` with vector `x` as
+`alpha*x*x.' + A`.  When `uplo` is 'U' the upper triangle of
+`A` is updated ('L' for lower triangle). Returns `A`.
 """
 Base.LinAlg.BLAS.syr!
 
@@ -7823,6 +7907,7 @@ doc"""
 
 Methods for complex arrays only.  Rank-1 update of the Hermitian
 matrix `A` with vector `x` as `alpha*x*x' + A`.  When
+`uplo` is 'U' the upper triangle of `A` is updated ('L' for
 lower triangle). Returns `A`.
 """
 Base.LinAlg.BLAS.her!
@@ -8975,6 +9060,7 @@ doc"""
 Compute the natural logarithm of `x`. Throws `DomainError` for
 negative `Real` arguments. Use complex negative arguments to
 obtain complex results.
+
 There is an experimental variant in the `Base.Math.JuliaLibm`
 module, which is typically faster and more accurate.
 """
@@ -10825,6 +10911,7 @@ Create an arbitrary precision integer. `x` may be an `Int` (or
 anything that can be converted to an `Int`).  The usual
 mathematical operators are defined for this type, and results are
 promoted to a `BigInt`.
+
 Instances can be constructed from strings via `parse()`, or using
 the `big` string literal.
 """
@@ -10837,10 +10924,14 @@ Create an arbitrary precision floating point number. `x` may be
 an `Integer`, a `Float64` or a `BigInt`. The usual
 mathematical operators are defined for this type, and results are
 promoted to a `BigFloat`.
+
 Note that because decimal literals are converted to floating point
 numbers when parsed, `BigFloat(2.1)` may not yield what you
 expect. You may instead prefer to initialize constants from strings
 via `parse()`, or using the `big` string literal.
+
+    julia> big"2.1"
+    2.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
 """
 BigFloat
 
@@ -10929,6 +11020,9 @@ and `false` if `x` is not prime with high probability. The
 false positive rate is about `0.25^reps`. `reps = 25` is
 considered safe for cryptographic applications (Knuth,
 Seminumerical Algorithms).
+
+    julia> isprime(big(3))
+    true
 """
 isprime
 
@@ -11277,9 +11371,11 @@ the number of cores on the specific host.
 Keyword arguments:
 to the worker from the master process.
 connected to in parallel at a host. Defaults to 10.
-to the host's current directory (as found by *pwd()*)
+to the host's current directory (as found by `pwd()`)
 may be.
-Environment variables :
+
+Environment variables:
+
 If the master process fails to establish a connection with a newly
 launched worker within 60.0 seconds, the worker treats it a fatal
 situation and terminates. This timeout can be controlled via
@@ -11295,8 +11391,10 @@ doc"""
 Launches worker processes via the specified cluster manager.
 For example Beowulf clusters are  supported via a custom cluster
 manager implemented in  package `ClusterManagers`.
+
 The number of seconds a newly launched worker waits for connection
 establishment from the master can be specified via variable
+`JULIA_WORKER_TIMEOUT` in the worker process's environment.
 Relevant only when using TCP/IP as transport.
 """
 addprocs
@@ -11790,7 +11888,9 @@ doc"""
 Free the package `pkg` to be managed by the package manager
 again. It calls `Pkg.resolve()` to determine optimal package
 versions after. This is an inverse for both `Pkg.checkout` and
+
 You can also supply an iterable collection of package names, e.g.,
+`Pkg.free(("Pkg1", "Pkg2"))` to free multiple packages at
 once.
 """
 Base.Pkg.free
@@ -12249,8 +12349,12 @@ doc"""
 
 Returns true if the given value is valid for that type. Types
 currently can be `Char`, `ASCIIString`, `UTF8String`,
+`UTF16String`, or `UTF32String` Values for `Char` can be of
 type `Char` or `UInt32` Values for `ASCIIString` and
+`UTF8String` can be of that type, or `Vector{UInt8}` Values for
+`UTF16String` can be `UTF16String` or `Vector{UInt16}` Values
 for `UTF32String` can be `UTF32String`, `Vector{Char}` or
+`Vector{UInt32}`.
 """
 isvalid
 
@@ -12732,7 +12836,7 @@ NUL codepoint (32-bit zero), which is not treated as a character in
 the string (so that it is mostly invisible in Julia); this allows
 the string to be passed directly to external functions requiring
 NUL-terminated data.  This NUL is appended automatically by the
-then you can instead use *UTF32String(A)`* to construct the string
+then you can instead use `UTF32String(A)` to construct the string
 without making a copy of the data and treating the NUL as a
 terminator rather than as part of the string.
 """

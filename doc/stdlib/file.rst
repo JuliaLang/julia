@@ -107,7 +107,7 @@
 
 .. function:: mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
 
-   Move the file, link, or directory from *src* to *dest*.
+   Move the file, link, or directory from *src* to *dest*. ``remove_destination=true`` will first remove an existing *dst*.
 
 
 .. function:: rm(path::AbstractString; recursive=false)

@@ -862,12 +862,12 @@ Events
 
 .. function:: Timer(delay, repeat=0)
 
-   Create a timer that wakes up tasks waiting for it (by calling
+   Create a timer that wakes up tasks waiting for it (by calling  ``wait`` on the timer object) at a specified interval.
 
 
 .. function:: Timer(delay, repeat=0)
 
-   Create a timer that wakes up tasks waiting for it (by calling
+   Create a timer that wakes up tasks waiting for it (by calling  ``wait`` on the timer object) at a specified interval.
 
 
 Reflection
