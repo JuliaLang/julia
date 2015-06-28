@@ -87,3 +87,107 @@ import Base.Test.@test
 @test sprint(help, "$mod.P.R.U") == "P.R.U\n"
 @test sprint(help, "T") == "M.T\n\nN.T\n\nP.R.T\n"
 end
+
+# General tests for docstrings.
+
+module DocsTest
+
+"DocsTest"
+DocsTest
+
+"f-1"
+function f(x)
+    x
+end
+
+"f-2"
+f(x, y) = x + y
+
+"g"
+function g end
+
+"AT"
+abstract AT
+
+"BT"
+bitstype 8 BT
+
+"T"
+type T <: AT
+    "T.x"
+    x
+    "T.y"
+    y :: Int
+end
+
+"IT"
+immutable IT
+    "IT.x"
+    x :: Int
+    "IT.y"
+    y
+end
+
+"TA"
+typealias TA Union(T, IT)
+
+"@mac"
+macro mac() end
+
+"G"
+G = :G
+
+"K"
+const K = :K
+
+end
+
+@test DocsTest.META[DocsTest] == doc"DocsTest"
+
+let f = DocsTest.f
+    funcdoc = DocsTest.META[f]
+    order = [methods(f, sig)[1] for sig in [(Any,), (Any, Any)]]
+    @test funcdoc.main == nothing
+    @test funcdoc.order == order
+    @test funcdoc.meta[order[1]] == doc"f-1"
+    @test funcdoc.meta[order[2]] == doc"f-2"
+end
+
+let g = DocsTest.g
+    funcdoc = DocsTest.META[g]
+    @test funcdoc.main == doc"g"
+end
+
+let AT = DocsTest.AT
+    @test DocsTest.META[AT] == doc"AT"
+end
+
+let BT = DocsTest.BT
+    @test DocsTest.META[BT] == doc"BT"
+end
+
+let T = DocsTest.T
+    typedoc = DocsTest.META[T]
+    @test typedoc.main == doc"T"
+    @test typedoc.fields[:x] == doc"T.x"
+    @test typedoc.fields[:y] == doc"T.y"
+end
+
+let IT = DocsTest.IT
+    typedoc = DocsTest.META[IT]
+    @test typedoc.main == doc"IT"
+    @test typedoc.fields[:x] == doc"IT.x"
+    @test typedoc.fields[:y] == doc"IT.y"
+end
+
+let TA = DocsTest.TA
+    @test DocsTest.META[TA] == doc"TA"
+end
+
+let mac = getfield(DocsTest, symbol("@mac"))
+    funcdoc = DocsTest.META[mac]
+    @test funcdoc.main == doc"@mac"
+end
+
+@test DocsTest.META[:G] == doc"G"
+@test DocsTest.META[:K] == doc"K"
