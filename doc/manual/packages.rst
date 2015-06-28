@@ -614,7 +614,14 @@ Guidelines for naming a package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Package names should be sensible to most Julia users, *even to those who are
-not domain experts*.
+not domain experts*. When you submit your package to METADATA, you can expect
+a little back and forth about the package name with collaborators, especially if it's
+ambiguous or can be confused with something other than what it is. During this
+bike-shedding, it's not uncommon to get a range of *different* name suggestions.
+These are only suggestions though, with the intent being to keep a tidy namespace in
+the curated METADATA repository. Since this repository belongs to the entire
+community, there will likely be a few collaborators who care your package name.
+Here are some guidelines to follow in naming your package:
 
 1. Avoid jargon. In particular, avoid acronyms unless there is minimal
    possibility of confusion.
