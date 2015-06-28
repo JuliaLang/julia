@@ -2551,6 +2551,16 @@
                      (append fu (cdr ex))))
              (map-to-lff e dest tail)))
 
+        ((module)
+         (if (and dest (not tail))
+             (let ((ex (to-lff (caddr e) dest tail))
+                   (fu (to-lff e #f #f)))
+               (cons (car ex)
+                     (append fu (cdr ex))))
+	     (if tail
+		 (cons `(return ,e) '())
+		 (cons e '()))))
+
         ((symbolicgoto symboliclabel)
          (cons (if tail '(return (null)) '(null))
                (map-to-lff e #f #f)))
@@ -2681,6 +2691,11 @@ So far only the second case can actually occur.
                              ,.(map (lambda (v) `(local ,v))
                                     vars)
                              ,(remove-local-decls body))))
+
+	    ((and (eq? (car e) 'module)
+		  (not (null? env)))
+	     (error "module expression not at top level"))
+
             (else
              ;; form (local! x) adds a local to a normal (non-scope) block
              (let ((newenv (append (declared-local!-vars e) env)))
