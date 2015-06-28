@@ -297,7 +297,7 @@ function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
         ptr = (to.append ? to.size+1 : to.ptr)
         written = min(nb, length(to.data) - ptr + 1)
         unsafe_copy!(pointer(to.data, ptr),
-            convert(Ptr{UInt8}, pointer(a, offs)), nb)
+                     convert(Ptr{UInt8}, pointer(a, offs)), written)
         to.size = max(to.size, ptr - 1 + written)
         if !to.append to.ptr += written end
     else
