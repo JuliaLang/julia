@@ -298,8 +298,9 @@ DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uin
         jl_set_nth_field(jv, i, args[i]);
     }
     for(size_t i=na; i < nf; i++) {
-        if (type->fields[i].isptr)
+        if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
+        }
     }
     return jv;
 }
@@ -557,7 +558,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (__unlikely(fsz > JL_FIELD_MAX_SIZE))
                 jl_throw(jl_overflow_exception);
             al = ((jl_datatype_t*)ty)->alignment;
-            st->fields[i].isptr = 0;
+            jl_field_setisptr(st, i, 0);
             if (((jl_datatype_t*)ty)->haspadding)
                 st->haspadding = 1;
         }
@@ -566,7 +567,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (fsz > MAX_ALIGN)
                 fsz = MAX_ALIGN;
             al = fsz;
-            st->fields[i].isptr = 1;
+            jl_field_setisptr(st, i, 1);
             ptrfree = 0;
         }
         if (al != 0) {
@@ -577,8 +578,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        st->fields[i].offset = sz;
-        st->fields[i].size = fsz;
+        jl_field_setoffset(st, i, sz);
+        jl_field_setsize(st, i, fsz);
         sz += fsz;
         if (__unlikely(sz >= JL_FIELD_MAX_SIZE)) {
             jl_throw(jl_overflow_exception);
