@@ -1744,11 +1744,11 @@ static int push_root(jl_value_t *v, int d, int bits)
         // int fdsz = sizeof(void*)*nf;
         // void** children = alloca(fdsz);
         // int ci = 0;
-        jl_fielddesc_t* fields = dt->fields;
         for(int i=0; i < nf; i++) {
-            if (fields[i].isptr) {
+            if (jl_field_isptr(dt, i)) {
                 nptr++;
-                jl_value_t **slot = (jl_value_t**)((char*)v + fields[i].offset);
+                jl_value_t **slot = (jl_value_t**)((char*)v +
+                                                   jl_field_offset(dt, i));
                 jl_value_t *fld = *slot;
                 if (fld) {
                     verify_parent2("object", v, slot, "field(%d)", i);

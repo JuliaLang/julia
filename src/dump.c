@@ -896,7 +896,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             }
             else {
                 for(size_t i=0; i < nf; i++) {
-                    if (t->fields[i].size > 0) {
+                    if (jl_field_size(t, i) > 0) {
                         jl_serialize_value(s, jl_get_nth_field(v, i));
                     }
                 }
@@ -1511,8 +1511,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         else {
             char *data = (char*)jl_data_ptr(v);
             for(i=0; i < nf; i++) {
-                if (dt->fields[i].size > 0) {
-                    if (dt->fields[i].isptr) {
+                if (jl_field_size(dt,i) > 0) {
+                    if (jl_field_isptr(dt,i)) {
                         jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
                         *fld = jl_deserialize_value(s, fld);
                     }
