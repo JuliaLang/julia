@@ -2292,33 +2292,33 @@ Construct a DateTime type by parsing the "dt" date string
 following the pattern given in the "format" string. The following
 codes can be used for constructing format strings:
 
-+-----------------+-----------+-----------------------------------------------------------------+
-| Code            | Matches   | Comment                                                         |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"y\"           | 1996, 96  | Returns year of 1996, 0096                                      |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"m\"           | 1, 01     | Matches 1 or 2-digit months                                     |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"u\"           | Jan       | Matches abbreviated months according to the \"locale\" keyword  |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"U\"           | January   | Matches full month names according to the \"locale\" keyword    |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"d\"           | 1, 01     | Matches 1 or 2-digit days                                       |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"H\"           | 00        | Matches hours                                                   |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"M\"           | 00        | Matches minutes                                                 |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"S\"           | 00        | Matches seconds                                                 |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"s\"           | .500      | Matches milliseconds                                            |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"e\"           | Mon, Tues | Matches abbreviated days of the week                            |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"E\"           | Monday    | Matches full name days of the week                              |
-+-----------------+-----------+-----------------------------------------------------------------+
-| \"yyyymmdd\"    | 19960101  | Matches fixed-width year, month, and day                        |
-+-----------------+-----------+-----------------------------------------------------------------+
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | Code            | Matches   | Comment                                                         |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"y\"           | 1996, 96  | Returns year of 1996, 0096                                      |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"m\"           | 1, 01     | Matches 1 or 2-digit months                                     |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"u\"           | Jan       | Matches abbreviated months according to the \"locale\" keyword  |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"U\"           | January   | Matches full month names according to the \"locale\" keyword    |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"d\"           | 1, 01     | Matches 1 or 2-digit days                                       |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"H\"           | 00        | Matches hours                                                   |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"M\"           | 00        | Matches minutes                                                 |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"S\"           | 00        | Matches seconds                                                 |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"s\"           | .500      | Matches milliseconds                                            |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"e\"           | Mon, Tues | Matches abbreviated days of the week                            |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"E\"           | Monday    | Matches full name days of the week                              |
+    +-----------------+-----------+-----------------------------------------------------------------+
+    | \"yyyymmdd\"    | 19960101  | Matches fixed-width year, month, and day                        |
+    +-----------------+-----------+-----------------------------------------------------------------+
 
 All characters not listed above are treated as delimiters between
 date and time slots. So a "dt" string of
@@ -6240,52 +6240,51 @@ respectively. If "B" is provided, the generalized eigenproblem is
 solved.
 
 The following keyword arguments are supported:
-    * "nev": Number of eigenvalues
+* "nev": Number of eigenvalues
+* "ncv": Number of Krylov vectors used in the computation;
+  should satisfy
 
-    * "ncv": Number of Krylov vectors used in the computation;
-      should satisfy
+     "nev+1 <= ncv <= n" for real symmetric problems and
+     "nev+2 <= ncv <= n" for other problems, where "n" is
+     the size of the input matrix "A". The default is "ncv =
+     max(20,2*nev+1)". Note that these restrictions limit the
+     input matrix "A" to be of dimension at least 2.
 
-         "nev+1 <= ncv <= n" for real symmetric problems and
-         "nev+2 <= ncv <= n" for other problems, where "n" is
-         the size of the input matrix "A". The default is "ncv =
-         max(20,2*nev+1)". Note that these restrictions limit the
-         input matrix "A" to be of dimension at least 2.
+* "which": type of eigenvalues to compute. See the note
+  below.
 
-    * "which": type of eigenvalues to compute. See the note
-      below.
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \"which\" | type of eigenvalues                                                                                                         |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":LM\"   | eigenvalues of largest magnitude (default)                                                                                  |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":SM\"   | eigenvalues of smallest magnitude                                                                                           |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":LR\"   | eigenvalues of largest real part                                                                                            |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":SR\"   | eigenvalues of smallest real part                                                                                           |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":LI\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \"A\" only)                                                  |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":SI\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \"A\" only)                                                 |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+    | \":BE\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \"A\" only) |
+    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \"which\" | type of eigenvalues                                                                                                         |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":LM\"   | eigenvalues of largest magnitude (default)                                                                                  |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":SM\"   | eigenvalues of smallest magnitude                                                                                           |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":LR\"   | eigenvalues of largest real part                                                                                            |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":SR\"   | eigenvalues of smallest real part                                                                                           |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":LI\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \"A\" only)                                                  |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":SI\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \"A\" only)                                                 |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-      | \":BE\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \"A\" only) |
-      +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+* "tol": tolerance (tol \le 0.0 defaults to
+  "DLAMCH('EPS')")
 
-    * "tol": tolerance (tol \le 0.0 defaults to
-      "DLAMCH('EPS')")
+* "maxiter": Maximum number of iterations (default = 300)
 
-    * "maxiter": Maximum number of iterations (default = 300)
+* "sigma": Specifies the level shift used in inverse
+  iteration. If "nothing" (default), defaults to ordinary
+  (forward) iterations. Otherwise, find eigenvalues close to
+  "sigma" using shift and invert iterations.
 
-    * "sigma": Specifies the level shift used in inverse
-      iteration. If "nothing" (default), defaults to ordinary
-      (forward) iterations. Otherwise, find eigenvalues close to
-      "sigma" using shift and invert iterations.
+* "ritzvec": Returns the Ritz vectors "v" (eigenvectors)
+  if "true"
 
-    * "ritzvec": Returns the Ritz vectors "v" (eigenvectors)
-      if "true"
-
-    * "v0": starting vector from which to start the iterations
+* "v0": starting vector from which to start the iterations
 
 "eigs" returns the "nev" requested eigenvalues in "d", the
 corresponding Ritz vectors "v" (only if "ritzvec=true"), the
@@ -6294,18 +6293,18 @@ number of converged eigenvalues "nconv", the number of iterations
 "nmult", as well as the final residual vector "resid".
 
 Note: The "sigma" and "which" keywords interact: the
-  description of eigenvalues searched for by "which" do _not_
-  necessarily refer to the eigenvalues of "A", but rather the
-  linear operator constructed by the specification of the iteration
-  mode implied by "sigma".
+description of eigenvalues searched for by "which" do _not_
+necessarily refer to the eigenvalues of "A", but rather the
+linear operator constructed by the specification of the iteration
+mode implied by "sigma".
 
-  +-----------------+------------------------------------+------------------------------------+
-  | \"sigma\"       | iteration mode                     | \"which\" refers to eigenvalues of |
-  +-----------------+------------------------------------+------------------------------------+
-  | \"nothing\"     | ordinary (forward)                 | A                                  |
-  +-----------------+------------------------------------+------------------------------------+
-  | real or complex | inverse with level shift \"sigma\" | (A - \\sigma I )^{-1}              |
-  +-----------------+------------------------------------+------------------------------------+
+    +-----------------+------------------------------------+------------------------------------+
+    | \"sigma\"       | iteration mode                     | \"which\" refers to eigenvalues of |
+    +-----------------+------------------------------------+------------------------------------+
+    | \"nothing\"     | ordinary (forward)                 | A                                  |
+    +-----------------+------------------------------------+------------------------------------+
+    | real or complex | inverse with level shift \"sigma\" | (A - \\sigma I )^{-1}              |
+    +-----------------+------------------------------------+------------------------------------+
 
 """
 eigs
@@ -9479,14 +9478,14 @@ Implemented by cluster managers. It is called on the master
 process, during a worker's lifetime, with appropriate "op"
 values:
 
-    * with ":register"/":deregister" when a worker is added /
-      removed from the Julia worker pool.
+* with ":register"/":deregister" when a worker is added /
+  removed from the Julia worker pool.
 
-    * with ":interrupt" when "interrupt(workers)" is called.
-      The "ClusterManager" should signal the appropriate worker
-      with an interrupt signal.
+* with ":interrupt" when "interrupt(workers)" is called.
+  The "ClusterManager" should signal the appropriate worker
+  with an interrupt signal.
 
-    * with ":finalize" for cleanup purposes.
+* with ":finalize" for cleanup purposes.
 
 """
 manage
@@ -10547,19 +10546,19 @@ used instead of the five booleans. The values of "mode"
 correspond to those from "fopen(3)" or Perl "open", and are
 equivalent to setting the following boolean groups:
 
-+------+-----------------------------------+
-| r    | read                              |
-+------+-----------------------------------+
-| r+   | read, write                       |
-+------+-----------------------------------+
-| w    | write, create, truncate           |
-+------+-----------------------------------+
-| w+   | read, write, create, truncate     |
-+------+-----------------------------------+
-| a    | write, create, append             |
-+------+-----------------------------------+
-| a+   | read, write, create, append       |
-+------+-----------------------------------+
+    +------+-----------------------------------+
+    | r    | read                              |
+    +------+-----------------------------------+
+    | r+   | read, write                       |
+    +------+-----------------------------------+
+    | w    | write, create, truncate           |
+    +------+-----------------------------------+
+    | w+   | read, write, create, truncate     |
+    +------+-----------------------------------+
+    | a    | write, create, append             |
+    +------+-----------------------------------+
+    | a+   | read, write, create, append       |
+    +------+-----------------------------------+
 
     open(f::function, args...)
 
@@ -13804,31 +13803,31 @@ doc"""
 Returns a structure whose fields contain information about the
 file. The fields of the structure are:
 
-+-----------+------------------------------------------------------------------------+
-| size      | The size (in bytes) of the file                                        |
-+-----------+------------------------------------------------------------------------+
-| device    | ID of the device that contains the file                                |
-+-----------+------------------------------------------------------------------------+
-| inode     | The inode number of the file                                           |
-+-----------+------------------------------------------------------------------------+
-| mode      | The protection mode of the file                                        |
-+-----------+------------------------------------------------------------------------+
-| nlink     | The number of hard links to the file                                   |
-+-----------+------------------------------------------------------------------------+
-| uid       | The user id of the owner of the file                                   |
-+-----------+------------------------------------------------------------------------+
-| gid       | The group id of the file owner                                         |
-+-----------+------------------------------------------------------------------------+
-| rdev      | If this file refers to a device, the ID of the device it refers to     |
-+-----------+------------------------------------------------------------------------+
-| blksize   | The file-system preferred block size for the file                      |
-+-----------+------------------------------------------------------------------------+
-| blocks    | The number of such blocks allocated                                    |
-+-----------+------------------------------------------------------------------------+
-| mtime     | Unix timestamp of when the file was last modified                      |
-+-----------+------------------------------------------------------------------------+
-| ctime     | Unix timestamp of when the file was created                            |
-+-----------+------------------------------------------------------------------------+
+    +-----------+------------------------------------------------------------------------+
+    | size      | The size (in bytes) of the file                                        |
+    +-----------+------------------------------------------------------------------------+
+    | device    | ID of the device that contains the file                                |
+    +-----------+------------------------------------------------------------------------+
+    | inode     | The inode number of the file                                           |
+    +-----------+------------------------------------------------------------------------+
+    | mode      | The protection mode of the file                                        |
+    +-----------+------------------------------------------------------------------------+
+    | nlink     | The number of hard links to the file                                   |
+    +-----------+------------------------------------------------------------------------+
+    | uid       | The user id of the owner of the file                                   |
+    +-----------+------------------------------------------------------------------------+
+    | gid       | The group id of the file owner                                         |
+    +-----------+------------------------------------------------------------------------+
+    | rdev      | If this file refers to a device, the ID of the device it refers to     |
+    +-----------+------------------------------------------------------------------------+
+    | blksize   | The file-system preferred block size for the file                      |
+    +-----------+------------------------------------------------------------------------+
+    | blocks    | The number of such blocks allocated                                    |
+    +-----------+------------------------------------------------------------------------+
+    | mtime     | Unix timestamp of when the file was last modified                      |
+    +-----------+------------------------------------------------------------------------+
+    | ctime     | Unix timestamp of when the file was created                            |
+    +-----------+------------------------------------------------------------------------+
 
 """
 stat
@@ -14816,13 +14815,13 @@ doc"""
 
 Gets the permissions of the owner of the file as a bitfield of
 
-+------+-----------------------+
-| 01   | Execute Permission    |
-+------+-----------------------+
-| 02   | Write Permission      |
-+------+-----------------------+
-| 04   | Read Permission       |
-+------+-----------------------+
+    +------+-----------------------+
+    | 01   | Execute Permission    |
+    +------+-----------------------+
+    | 02   | Write Permission      |
+    +------+-----------------------+
+    | 04   | Read Permission       |
+    +------+-----------------------+
 
 For allowed arguments, see "stat".
 
