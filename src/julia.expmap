@@ -32,7 +32,7 @@
     utf8proc_*;
     jlbacktrace;
     _IO_stdin_used;
-    llvm_to_jl_value;
+    __ZN4llvm23createLowerSimdLoopPassEv;
 
     /* freebsd */
     environ;
