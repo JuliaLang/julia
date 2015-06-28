@@ -10585,8 +10585,8 @@ minmax
 doc"""
     clamp(x, lo, hi)
 
-Return x if "lo <= x <= hi". If "x < lo", return "lo". If "x
-> hi", return "hi". Arguments are promoted to a common type.
+Return x if "lo <= x <= hi". If "x < lo", return "lo". If "x >
+hi", return "hi". Arguments are promoted to a common type.
 Operates elementwise over "x" if it is an array.
 """
 clamp
