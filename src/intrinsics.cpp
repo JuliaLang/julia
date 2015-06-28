@@ -265,7 +265,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         return UndefValue::get(to);
     }
     if (ty != jl_pvalue_llvmt) {
-        if (to->isAggregateType()) {
+        if (ty->isPointerTy() && to->isAggregateType()) {
             x = builder.CreateLoad(x); // something stack allocated
             ty = x->getType();
         }
