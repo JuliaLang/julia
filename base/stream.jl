@@ -174,7 +174,6 @@ function PipeServer()
         return init_pipe!(ret;readable=true)
     catch
         Libc.free(handle)
-        Libc.free(handle-1)
         rethrow()
     end
 end
