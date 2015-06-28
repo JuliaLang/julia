@@ -230,28 +230,23 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
             fields[llvm_nf++] = val;
         }
         JL_GC_POP();
+
         Type *t = julia_struct_to_llvm(jt);
         if (type_is_ghost(t))
             return UndefValue::get(NoopType);
         if (t->isVectorTy())
             return ConstantVector::get(ArrayRef<Constant*>(fields,llvm_nf));
-
-        Constant *init;
         if (t->isStructTy()) {
             StructType *st = dyn_cast<StructType>(t);
             assert(st);
-            init = ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
+            return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
         }
         else {
             assert(t->isArrayTy());
             ArrayType *at = dyn_cast<ArrayType>(t);
             assert(at);
-            init = ConstantArray::get(at, ArrayRef<Constant*>(fields,llvm_nf));
+            return ConstantArray::get(at, ArrayRef<Constant*>(fields,llvm_nf));
         }
-        if (nested)
-            return init;
-        else
-            return new GlobalVariable(*jl_Module, t, true, GlobalVariable::ExternalLinkage, init);
     }
     return NULL;
 }
@@ -259,8 +254,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
 static jl_cgval_t emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 {
     Constant *c = julia_const_to_llvm(e);
-    if (c)
-        return mark_julia_type(c, expr_type(e, ctx));
+    if (c) return mark_julia_type(c, expr_type(e, ctx));
     return emit_expr(e, ctx, false);
 }
 

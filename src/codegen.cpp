@@ -3958,9 +3958,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
             varinfo.used = true;
         varinfo.isSA = (jl_vinfo_sa(vi)!=0);
         varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || (!varinfo.isArgument && !lam->inferred);
-        varinfo.value = mark_julia_type((Value*)NULL, jl_cellref(vi,1));
-        if (!jl_is_type(varinfo.value.typ))
-            varinfo.value.typ = (jl_value_t*)jl_any_type;
+        jl_value_t *typ = jl_cellref(vi,1);
+        if (!jl_is_type(typ))
+            typ = (jl_value_t*)jl_any_type;
+        varinfo.value = mark_julia_type((Value*)NULL, typ);
     }
     bool hasCapt = (captvinfoslen > 0);
     for(i=0; i < captvinfoslen; i++) {
@@ -3977,9 +3978,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         varinfo.escapes = true;
         varinfo.used = true;
         varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || !lam->inferred;
-        varinfo.value = mark_julia_type((Value*)NULL, jl_cellref(vi,1));
-        if (!jl_is_type(varinfo.value.typ))
-            varinfo.value.typ = (jl_value_t*)jl_any_type;
+        jl_value_t *typ = jl_cellref(vi,1);
+        if (!jl_is_type(typ))
+            typ = (jl_value_t*)jl_any_type;
+        varinfo.value = mark_julia_type((Value*)NULL, typ);
     }
 
     // step 3. some variable analysis
@@ -4033,11 +4035,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
-            if (type_is_ghost(ty)) {
-                // mark as a ghost for now, we'll revise this later if needed as a local
-                ctx.vars[jl_decl_var(jl_cellref(largs,i))].value.isghost = true;
+            if (type_is_ghost(ty))
                 continue;
-            }
             if (ty->isAggregateType()) // aggregate types are passed by pointer
                 ty = PointerType::get(ty,0);
             fsig.push_back(ty);
@@ -4501,7 +4500,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (!vi.value.isghost) {
             if (specsig) {
                 jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
-                if (julia_type_to_llvm(argType)->isAggregateType())
+                Type *llvmArgType = julia_type_to_llvm(argType);
+                if (type_is_ghost(llvmArgType)) // this argument is not actually passed
+                    theArg = ghostValue(argType);
+                else if (llvmArgType->isAggregateType())
                     theArg = mark_julia_slot(AI++, argType); // this argument is by-pointer
                 else
                     theArg = mark_julia_type(AI++, argType);
