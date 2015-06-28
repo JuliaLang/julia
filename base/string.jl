@@ -579,15 +579,6 @@ isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
 isascii(s::ASCIIString) = true
 
-## generic string uses only endof and next ##
-
-immutable GenericString <: AbstractString
-    string::AbstractString
-end
-
-endof(s::GenericString) = endof(s.string)
-next(s::GenericString, i::Int) = next(s.string, i)
-
 ## substrings reference original strings ##
 
 immutable SubString{T<:AbstractString} <: AbstractString
