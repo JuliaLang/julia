@@ -3085,33 +3085,6 @@ for code.
 LOAD_PATH
 
 doc"""
-    MS_ASYNC
-
-Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
-
-"""
-Libc.MS_ASYNC
-
-doc"""
-    MS_INVALIDATE
-
-Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
-
-"""
-Libc.MS_INVALIDATE
-
-doc"""
-    MS_SYNC
-
-Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
-
-"""
-Libc.MS_SYNC
-
-doc"""
     TmStruct([seconds])
 
 Convert a number of seconds since the epoch to broken-down format,
