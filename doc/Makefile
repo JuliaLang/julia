@@ -1,6 +1,6 @@
 # Makefile for Sphinx documentation
 
-default: helpdb.jl html
+default: html
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
@@ -34,7 +34,6 @@ SPHINXBUILD = . $(ACTIVATE) && sphinx-build
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
-	@echo "  helpdb.jl  to make the REPL help db"
 	@echo "  html       to make standalone HTML files"
 	@echo "  dirhtml    to make HTML files named index.html in directories"
 	@echo "  singlehtml to make a single large HTML file"
@@ -170,10 +169,6 @@ doctest: $(SPHINX_BUILD)
 	PATH=$(PATH):$(build_bindir) $(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) _build/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in _build/doctest/output.txt."
-
-helpdb.jl: stdlib/*.rst $(SPHINX_BUILD)
-	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) _build/jlhelp
-	mv _build/jlhelp/jlhelp.jl helpdb.jl
 
 manual/unicode-input-table.rst: $(JULIAHOME)/base/latex_symbols.jl
 	$(JULIAHOME)/julia tabcomplete.jl > manual/unicode-input-table.rst
