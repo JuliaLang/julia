@@ -1160,7 +1160,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: merge(collection, others...)
 
-   Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections.
+   Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.
 
    ::
 
@@ -1169,14 +1169,19 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
          "bar" => 42.0
          "foo" => 0.0
 
-       julia> b = Dict(utf8("baz") => 17, utf8("qux") => 4711)
+       julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
        Dict{UTF8String,Int64} with 2 entries:
+         "bar" => 4711
          "baz" => 17
-         "qux" => 4711
 
        julia> merge(a, b)
-       Dict{UTF8String,Float64} with 4 entries:
-         "qux" => 4711.0
+       Dict{UTF8String,Float64} with 3 entries:
+         "bar" => 4711.0
+         "baz" => 17.0
+         "foo" => 0.0
+
+       julia> merge(b, a)
+       Dict{UTF8String,Float64} with 3 entries:
          "bar" => 42.0
          "baz" => 17.0
          "foo" => 0.0
