@@ -4,7 +4,6 @@ doc"""
 Returns the number of dimensions of A
 """
 ndims
-
 doc"""
     size(A[, dim...])
 
@@ -12,6 +11,14 @@ Returns a tuple containing the dimensions of A. Optionally you can
 specify the dimension(s) you want the length of, and get the length
 of that dimension, or a tuple of the lengths of dimensions you
 asked for.:
+
+    julia> A = rand(2,3,4);
+
+    julia> size(A,2)
+    3
+
+    julia> size(A,3,2)
+    (4,3)
 """
 size
 
@@ -122,7 +129,10 @@ doc"""
     ind2sub(dims, index) -> subscripts
 
 Returns a tuple of subscripts into an array with dimensions
-the indices of the maximum element
+`dims`, corresponding to the linear index `index`.
+
+**Example** `i, j, ... = ind2sub(size(A), indmax(A))` provides
+the indices of the maximum element.
 """
 ind2sub
 
@@ -145,6 +155,7 @@ sub2ind
 doc"""
     Array(dims)
 
+`Array{T}(dims)` constructs an uninitialized dense array with
 element type `T`. `dims` may be a tuple or a series of integer
 arguments. The syntax `Array(T, dims)` is also available, but
 deprecated.
@@ -156,6 +167,7 @@ doc"""
 
 Construct a 1-d array of the specified type. This is usually called
 with the syntax `Type[]`. Element values can be specified using
+`Type[a,b,c,...]`.
 """
 getindex
 
@@ -163,6 +175,7 @@ doc"""
     cell(dims)
 
 Construct an uninitialized cell array (heterogeneous array).
+`dims` can be either a tuple or a series of integer arguments.
 """
 cell
 
@@ -216,7 +229,9 @@ doc"""
     fill(x, dims)
 
 Create an array filled with the value `x`. For example,
+`fill(1.0, (10,10))` returns a  10x10 array of floats, with each
 element initialized to 1.0.
+
 If `x` is an object reference, all elements will refer to the
 same object. `fill(Foo(), dims)` will return an array filled with
 the result of evaluating `Foo()` once.
@@ -229,6 +244,7 @@ doc"""
 Fill array `A` with the value `x`. If `x` is an object
 reference, all elements will refer to the same object. `fill!(A,
 Foo())` will return `A` filled with the result of evaluating
+`Foo()` once.
 """
 fill!
 
@@ -248,6 +264,7 @@ Create an uninitialized array of the same type as the given array,
 but with the specified element type and dimensions. The second and
 third arguments are both optional. The `dims` argument may be a
 tuple or a series of integer arguments. For some special
+`AbstractArray` objects which are not real containers (like
 ranges), this function returns a standard `Array` to allow
 operating on elements.
 """
@@ -257,6 +274,7 @@ doc"""
     reinterpret(type, A)
 
 Change the type-interpretation of a block of memory. For example,
+`reinterpret(Float32, UInt32(7))` interprets the 4 bytes
 corresponding to `UInt32(7)` as a `Float32`. For arrays, this
 constructs an array with the same binary data as the given array,
 but with the specified element type.
@@ -280,15 +298,14 @@ eye
 doc"""
     eye(A)
 
-Constructs an identity matrix of the same dimensions and type as
+Constructs an identity matrix of the same dimensions and type as `A`.
 """
 eye
 
 doc"""
     linspace(start, stop, n=100)
 
-Construct a range of `n` linearly spaced elements from `start`
-to `stop`.
+Construct a range of `n` linearly spaced elements from `start` to `stop`.
 """
 linspace
 
@@ -296,6 +313,7 @@ doc"""
     logspace(start, stop, n=50)
 
 Construct a vector of `n` logarithmically spaced numbers from
+`10^start` to `10^stop`.
 """
 logspace
 
@@ -304,6 +322,7 @@ doc"""
 
 Broadcasts the arrays `As` to a common size by expanding
 singleton dimensions, and returns an array of the results
+`f(as...)` for each position.
 """
 broadcast
 
@@ -314,6 +333,7 @@ Like `broadcast`, but store the result of `broadcast(f, As...)`
 in the `dest` array. Note that `dest` is only used to store the
 result, and does not supply arguments to `f` unless it is also
 listed in the `As`, as in `broadcast!(f, A, A, B)` to perform
+`A[:] = broadcast(f, A, B)`.
 """
 broadcast!
 
@@ -329,6 +349,7 @@ doc"""
     broadcast_function(f)
 
 Returns a function `broadcast_f` such that
+`broadcast_function(f)(As...) === broadcast(f, As...)`. Most
 useful in the form `const broadcast_f = broadcast_function(f)`.
 """
 broadcast_function
@@ -429,6 +450,7 @@ output array along that dimension. For dimensions in `dims`, the
 size of the output array is the sum of the sizes of the input
 arrays along that dimension. If `dims` is a single number, the
 different arrays are tightly stacked along that dimension. If
+`dims` is an iterable containing several dimensions, this allows
 to construct block diagonal matrices and their higher-dimensional
 analogues by simultaneously increasing several dimensions for every
 new input array and putting zero blocks elsewhere. For example,
@@ -457,6 +479,8 @@ doc"""
 Horizontal and vertical concatenation in one call. This function is
 called for block matrix syntax. The first argument specifies the
 number of arguments to concatenate in each block row. For example,
+`[a b;c d e]` calls `hvcat((2,3),a,b,c,d,e)`.
+
 If the first argument is a single integer `n`, then all block
 rows are assumed to have `n` block columns.
 """
@@ -529,6 +553,7 @@ doc"""
     findfirst(predicate, A)
 
 Return the index of the first element of `A` for which
+`predicate` returns true.
 """
 findfirst
 
@@ -536,6 +561,7 @@ doc"""
     findlast(A)
 
 Return the index of the last non-zero value in `A` (determined by
+`A[i]!=0`).
 """
 findlast
 
@@ -550,6 +576,7 @@ doc"""
     findlast(predicate, A)
 
 Return the index of the last element of `A` for which
+`predicate` returns true.
 """
 findlast
 
@@ -564,6 +591,7 @@ doc"""
     findnext(predicate, A, i)
 
 Find the next index >= `i` of an element of `A` for which
+`0` if not found.
 """
 findnext
 
@@ -571,6 +599,7 @@ doc"""
     findnext(A, v, i)
 
 Find the next index >= `i` of an element of `A` equal to `v`
+`predicate` returns true, or `0` if not found.
 """
 findnext
 
@@ -586,6 +615,7 @@ doc"""
     findprev(predicate, A, i)
 
 Find the previous index <= `i` of an element of `A` for which
+`predicate` returns true, or `0` if not found.
 """
 findprev
 
@@ -593,6 +623,7 @@ doc"""
     findprev(A, v, i)
 
 Find the previous index <= `i` of an element of `A` equal to
+`v` (using `==`), or `0` if not found.
 """
 findprev
 
@@ -620,6 +651,7 @@ doc"""
 Permute the dimensions of array `src` and store the result in the
 array `dest`. `perm` is a vector specifying a permutation of
 length `ndims(src)`. The preallocated array `dest` should have
+`size(dest) == size(src)[perm]` and is completely overwritten. No
 in-place permutation is supported and unexpected results will
 happen if *src* and *dest* have overlapping memory regions.
 """

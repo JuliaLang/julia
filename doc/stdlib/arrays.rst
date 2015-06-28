@@ -16,6 +16,16 @@ Basic functions
 
    Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
 
+   ::
+
+       julia> A = rand(2,3,4);
+
+       julia> size(A,2)
+       3
+
+       julia> size(A,3,2)
+       (4,3)
+
 
 .. function:: iseltype(A, T)
 
@@ -115,7 +125,7 @@ Constructors
 
 .. function:: Array(dims)
 
-   element type ``T``. ``dims`` may be a tuple or a series of integer arguments. The syntax ``Array(T, dims)`` is also available, but deprecated.
+   ``Array{T}(dims)`` constructs an uninitialized dense array with element type ``T``. ``dims`` may be a tuple or a series of integer arguments. The syntax ``Array(T, dims)`` is also available, but deprecated.
 
 
 .. function:: getindex(collection, key...)
@@ -125,7 +135,7 @@ Constructors
 
 .. function:: cell(dims)
 
-   Construct an uninitialized cell array (heterogeneous array).
+   Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
 
 
 .. function:: zeros(A)
@@ -160,12 +170,14 @@ Constructors
 
 .. function:: fill(x, dims)
 
-   Create an array filled with the value ``x``. For example, element initialized to 1.0. If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
+   Create an array filled with the value ``x``. For example, ``fill(1.0, (10,10))`` returns a  10x10 array of floats, with each element initialized to 1.0.
+
+   If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with the value ``x``. If ``x`` is an object reference, all elements will refer to the same object. ``fill!(A, Foo())`` will return ``A`` filled with the result of evaluating
+   Fill array ``A`` with the value ``x``. If ``x`` is an object reference, all elements will refer to the same object. ``fill!(A, Foo())`` will return ``A`` filled with the result of evaluating ``Foo()`` once.
 
 
 .. function:: reshape(A, dims)
@@ -175,27 +187,27 @@ Constructors
 
 .. function:: similar(array, element_type, dims)
 
-   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments. For some special ranges), this function returns a standard ``Array`` to allow operating on elements.
+   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments. For some special ``AbstractArray`` objects which are not real containers (like ranges), this function returns a standard ``Array`` to allow operating on elements.
 
 
 .. function:: reinterpret(type, A)
 
-   Change the type-interpretation of a block of memory. For example, corresponding to ``UInt32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
+   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
 
 .. function:: eye(A)
 
-   Constructs an identity matrix of the same dimensions and type as
+   Constructs an identity matrix of the same dimensions and type as ``A``.
 
 
 .. function:: eye(A)
 
-   Constructs an identity matrix of the same dimensions and type as
+   Constructs an identity matrix of the same dimensions and type as ``A``.
 
 
 .. function:: eye(A)
 
-   Constructs an identity matrix of the same dimensions and type as
+   Constructs an identity matrix of the same dimensions and type as ``A``.
 
 
 .. function:: linspace(start, stop, n=100)
@@ -205,7 +217,7 @@ Constructors
 
 .. function:: logspace(start, stop, n=50)
 
-   Construct a vector of ``n`` logarithmically spaced numbers from
+   Construct a vector of ``n`` logarithmically spaced numbers from ``10^start`` to ``10^stop``.
 
 
 Mathematical operators and functions
@@ -215,12 +227,12 @@ All mathematical operations and functions are supported for arrays
 
 .. function:: broadcast(f, As...)
 
-   Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results
+   Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
 
 
 .. function:: broadcast!(f, dest, As...)
 
-   Like ``broadcast``, but store the result of ``broadcast(f, As...)`` in the ``dest`` array. Note that ``dest`` is only used to store the result, and does not supply arguments to ``f`` unless it is also listed in the ``As``, as in ``broadcast!(f, A, A, B)`` to perform
+   Like ``broadcast``, but store the result of ``broadcast(f, As...)`` in the ``dest`` array. Note that ``dest`` is only used to store the result, and does not supply arguments to ``f`` unless it is also listed in the ``As``, as in ``broadcast!(f, A, A, B)`` to perform ``A[:] = broadcast(f, A, B)``.
 
 
 .. function:: bitbroadcast(f, As...)
@@ -230,7 +242,7 @@ All mathematical operations and functions are supported for arrays
 
 .. function:: broadcast_function(f)
 
-   Returns a function ``broadcast_f`` such that useful in the form ``const broadcast_f = broadcast_function(f)``.
+   Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``. Most useful in the form ``const broadcast_f = broadcast_function(f)``.
 
 
 .. function:: broadcast!_function(f)
@@ -288,7 +300,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: cat(dims, A...)
 
-   Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal blocks and matching zero blocks away from the diagonal.
+   Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal blocks and matching zero blocks away from the diagonal.
 
 
 .. function:: vcat(A...)
@@ -303,7 +315,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
-   Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row. For example, If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
+   Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row. For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
+
+   If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
 
 
 .. function:: flipdim(A, d)
@@ -338,62 +352,62 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findfirst(predicate, A)
 
-   Return the index of the first element of ``A`` for which
+   Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findfirst(predicate, A)
 
-   Return the index of the first element of ``A`` for which
+   Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findfirst(predicate, A)
 
-   Return the index of the first element of ``A`` for which
+   Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findlast(predicate, A)
 
-   Return the index of the last element of ``A`` for which
+   Return the index of the last element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findlast(predicate, A)
 
-   Return the index of the last element of ``A`` for which
+   Return the index of the last element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findlast(predicate, A)
 
-   Return the index of the last element of ``A`` for which
+   Return the index of the last element of ``A`` for which ``predicate`` returns true.
 
 
 .. function:: findnext(A, v, i)
 
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v``
+   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` ``predicate`` returns true, or ``0`` if not found.
 
 
 .. function:: findnext(A, v, i)
 
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v``
+   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` ``predicate`` returns true, or ``0`` if not found.
 
 
 .. function:: findnext(A, v, i)
 
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v``
+   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` ``predicate`` returns true, or ``0`` if not found.
 
 
 .. function:: findprev(A, v, i)
 
-   Find the previous index <= ``i`` of an element of ``A`` equal to
+   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``), or ``0`` if not found.
 
 
 .. function:: findprev(A, v, i)
 
-   Find the previous index <= ``i`` of an element of ``A`` equal to
+   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``), or ``0`` if not found.
 
 
 .. function:: findprev(A, v, i)
 
-   Find the previous index <= ``i`` of an element of ``A`` equal to
+   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``), or ``0`` if not found.
 
 
 .. function:: permutedims(A, perm)
@@ -408,7 +422,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: permutedims!(dest, src, perm)
 
-   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have in-place permutation is supported and unexpected results will happen if *src* and *dest* have overlapping memory regions.
+   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if *src* and *dest* have overlapping memory regions.
 
 
 .. function:: squeeze(A, dims)
