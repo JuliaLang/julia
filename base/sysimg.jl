@@ -227,10 +227,7 @@ include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")
-include("help.jl")
 using .I18n
-using .Help
-push!(I18n.CALLBACKS, Help.clear_cache)
 
 # frontend
 include("Terminals.jl")
