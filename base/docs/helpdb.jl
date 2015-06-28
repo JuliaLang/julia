@@ -3088,7 +3088,7 @@ doc"""
     MS_ASYNC
 
 Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
+details. (not meaningful on Windows).
 
 """
 Libc.MS_ASYNC
@@ -3097,7 +3097,7 @@ doc"""
     MS_INVALIDATE
 
 Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
+details. (not meaningful on Windows).
 
 """
 Libc.MS_INVALIDATE
@@ -3106,7 +3106,7 @@ doc"""
     MS_SYNC
 
 Enum constant for "msync()". See your platform man page for
-details. (not available on Windows).
+details. (not meaningful on Windows).
 
 """
 Libc.MS_SYNC

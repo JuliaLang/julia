@@ -169,6 +169,10 @@ msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
 
+const MS_ASYNC = 1
+const MS_INVALIDATE = 2
+const MS_SYNC = 4
+
 @unix_only begin
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
@@ -195,9 +199,6 @@ function munmap(p::Ptr,len::Integer)
     systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
 end
 
-const MS_ASYNC = 1
-const MS_INVALIDATE = 2
-const MS_SYNC = 4
 function msync(p::Ptr, len::Integer, flags::Integer)
     systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
 end
