@@ -70,15 +70,15 @@
 
 .. data:: MS_ASYNC
 
-   Enum constant for :func:`msync`. See your platform man page for details. (not meaningful on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_SYNC
 
-   Enum constant for :func:`msync`. See your platform man page for details. (not meaningful on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_INVALIDATE
 
-   Enum constant for :func:`msync`. See your platform man page for details. (not meaningful on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
