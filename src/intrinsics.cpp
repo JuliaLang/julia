@@ -292,6 +292,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
             // up being dead code, and type inference knows that the other
             // branch's type is the only one that matters.
             // assert(ty == T_void);
+            //emit_error("emit_unbox: a type mismatch error in occurred during codegen", ctx);
             return UndefValue::get(to); // type mismatch error
         }
         return unboxed;
@@ -918,15 +919,12 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 return x;
             // ensure that X and Y have the same llvm Type
             Value *vx = x.V, *vy = y.V;
-            if (x.ispointer && !y.ispointer)
+            if (x.ispointer) // TODO: elid this load if unnecessary
                 vx = builder.CreateLoad(builder.CreatePointerCast(vx, llt1->getPointerTo(0)));
-            if (!x.ispointer && y.ispointer)
+            if (y.ispointer) // TODO: elid this load if unnecessary
                 vy = builder.CreateLoad(builder.CreatePointerCast(vy, llt1->getPointerTo(0)));
             ifelse_result = builder.CreateSelect(isfalse, vy, vx);
-            if (x.ispointer && y.ispointer)
-                return mark_julia_slot(ifelse_result, t1);
-            else
-                return mark_julia_type(ifelse_result, t2);
+            return mark_julia_type(ifelse_result, t2);
         }
         else {
             int argStart = ctx->gc.argDepth;
