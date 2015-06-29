@@ -535,3 +535,6 @@ end
 
 const UnionType = Union
 export UnionType
+
+const MathConst = Irrational
+export MathConst
