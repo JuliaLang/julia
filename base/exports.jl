@@ -407,6 +407,7 @@ export
     prevpow2,
     prevprod,
     primes,
+    primesmask,
     rad2deg,
     rationalize,
     real,

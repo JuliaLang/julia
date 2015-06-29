@@ -1976,7 +1976,6 @@ for f in (trunc, round, floor, ceil)
          312689//99532 ]
 
 # primes
-
 @test Base.primes(10000) == [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
     73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
@@ -2086,9 +2085,9 @@ for T in [Int,BigInt], n = [1:1000;1000000]
     prime = n!=1 && length(f)==1 && get(f,n,0)==1
     @test isprime(n) == prime
 
-    s = Base.primesmask(n)
-    for k = 1:n
-        @test s[k] == isprime(k)
+    s = primes(n)
+    for n in s
+        @test isprime(n)
     end
 end
 
