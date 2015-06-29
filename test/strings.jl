@@ -264,6 +264,7 @@ end
 
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
+@test strip("foobarfoo", ['f', 'o']) == "bar"
 
 # some test strings
 astr = "Hello, world.\n"
@@ -573,6 +574,9 @@ end
 @test search("foo,bar,baz", r"az") == 10:11
 @test search("foo,bar,baz", r"az", 12) == 0:-1
 
+@test searchindex("foo", 'o') == 2
+@test searchindex("foo", 'o', 3) == 3
+
 # string searchindex with a two-char UTF-8 (2 byte) string literal
 @test searchindex("ééé", "éé") == 1
 @test searchindex("ééé", "éé", 1) == 1
@@ -778,6 +782,12 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
+@test replace("foo", "oo", uppercase) == "fOO"
+
+# chomp/chop
+@test chomp("foo\n") == "foo"
+@test chop("foob") == "foo"
+
 # lower and upper
 @test uppercase("aBc") == "ABC"
 @test uppercase('A') == 'A'
@@ -805,6 +815,8 @@ end
 @test endswith("abcd", "cd")
 @test !endswith("abcd", "dc")
 @test !endswith("cd", "abcd")
+
+@test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
 
 # RepStrings and SubStrings
 u8str2 = u8str^2
@@ -847,6 +859,8 @@ ss=SubString(str2,1,4)  #empty source string
 
 ss=SubString(str2,1,1)  #empty source string, identical start and end index
 @test length(ss)==0
+
+@test SubString("foobar",big(1),big(3)) == "foo"
 
 str = "aa\u2200\u2222bb"
 u = SubString(str, 3, 6)
@@ -1153,6 +1167,7 @@ end
 
 @test symbol("asdf") === :asdf
 @test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
+@test :a < :b
 @test startswith(string(gensym("asdf")),"##asdf#")
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()
