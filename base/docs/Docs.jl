@@ -12,7 +12,7 @@ const modules = Module[]
 
 meta() = current_module().META
 
-macro init ()
+macro init()
     META = esc(:META)
     quote
         if !isdefined(:META)
@@ -129,7 +129,7 @@ isdoc(x) = isexpr(x, :string, AbstractString) ||
 
 dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
 
-function field_meta (def)
+function field_meta(def)
     meta = Dict()
     doc = nothing
     for l in def.args[3].args
@@ -303,7 +303,7 @@ end
 
 # Not actually used; bootstrap version in bootstrap.jl
 
-macro doc (args...)
+macro doc(args...)
     docm(args...)
 end
 
@@ -444,7 +444,7 @@ print(io::IO, t::Text{Function}) = t.content(io)
 writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 
 @doc "Create a `Text` object from a literal string." ->
-macro text_str (s)
+macro text_str(s)
     :(Text($s))
 end
 
@@ -481,7 +481,7 @@ end
 
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
-macro repl (ex)
+macro repl(ex)
     quote
         # Fuzzy Searching
         $(isexpr(ex, Symbol)) && repl_search($(string(ex)))

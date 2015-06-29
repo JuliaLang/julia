@@ -779,7 +779,7 @@ function deliver_result(sock::IO, msg, oid, value)
 end
 
 # notify waiters that a certain job has finished or RemoteRef has been emptied
-notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
+notify_full( rv::RemoteValue) = notify(rv.full, work_result(rv))
 notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##

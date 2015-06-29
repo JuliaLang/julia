@@ -12,7 +12,7 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
         sockname = tempname()
         try
             cmd = `$(params[:exename]) $(@__FILE__) udwrkr $sockname`
-            io, pobj = open (cmd, "r")
+            io, pobj = open(cmd, "r")
 
             wconfig = WorkerConfig()
             wconfig.userdata = Dict(:sockname=>sockname, :io=>io, :process=>pobj)
