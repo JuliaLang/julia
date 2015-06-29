@@ -53,7 +53,7 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number
     end
     C
 end
-A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, x::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
+A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
     T = promote_type(TA,Tx)
