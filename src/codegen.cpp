@@ -388,7 +388,7 @@ struct jl_cgval_t {
     //bool isarg; // derived from an argument
     bool needsgcroot; // this value needs a gcroot
     jl_cgval_t(Value *V, jl_value_t *typ) : // general constructor (with pointer type auto-detect)
-        V(V), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen
+        V(V), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen contexts
         typ(typ),
         //T(julia_type_to_llvm(typ)),
         isboxed(V && V->getType() == jl_pvalue_llvmt),
