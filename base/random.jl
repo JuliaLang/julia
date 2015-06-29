@@ -35,7 +35,7 @@ type Close1Open2 <: FloatInterval end
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
     end
 
-    rand {T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand{ T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
     rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
 end
 

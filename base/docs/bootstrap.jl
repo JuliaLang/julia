@@ -8,7 +8,7 @@ _expand_ = nothing
 
 setexpand!(f) = global _expand_ = f
 
-macro doc (args...)
+macro doc(args...)
   _expand_(args...)
 end
 
