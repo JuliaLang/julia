@@ -41,21 +41,9 @@ General I/O
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
 
-   ::
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
 
-       +------+-----------------------------------+
-       | r    | read                              |
-       +------+-----------------------------------+
-       | r+   | read, write                       |
-       +------+-----------------------------------+
-       | w    | write, create, truncate           |
-       +------+-----------------------------------+
-       | w+   | read, write, create, truncate     |
-       +------+-----------------------------------+
-       | a    | write, create, append             |
-       +------+-----------------------------------+
-       | a+   | read, write, create, append       |
-       +------+-----------------------------------+
+   ::
 
        open(f::function, args...)
 
@@ -86,21 +74,9 @@ General I/O
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
 
-   ::
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
 
-       +------+-----------------------------------+
-       | r    | read                              |
-       +------+-----------------------------------+
-       | r+   | read, write                       |
-       +------+-----------------------------------+
-       | w    | write, create, truncate           |
-       +------+-----------------------------------+
-       | w+   | read, write, create, truncate     |
-       +------+-----------------------------------+
-       | a    | write, create, append             |
-       +------+-----------------------------------+
-       | a+   | read, write, create, append       |
-       +------+-----------------------------------+
+   ::
 
        open(f::function, args...)
 
@@ -131,21 +107,9 @@ General I/O
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of "mode" correspond to those from "fopen(3)" or Perl "open", and are equivalent to setting the following boolean groups:
 
-   ::
+   +–––+–––––––––––––––––-+ | r    | read                              | +–––+–––––––––––––––––-+ | r+   | read, write                       | +–––+–––––––––––––––––-+ | w    | write, create, truncate           | +–––+–––––––––––––––––-+ | w+   | read, write, create, truncate     | +–––+–––––––––––––––––-+ | a    | write, create, append             | +–––+–––––––––––––––––-+ | a+   | read, write, create, append       | +–––+–––––––––––––––––-+
 
-       +------+-----------------------------------+
-       | r    | read                              |
-       +------+-----------------------------------+
-       | r+   | read, write                       |
-       +------+-----------------------------------+
-       | w    | write, create, truncate           |
-       +------+-----------------------------------+
-       | w+   | read, write, create, truncate     |
-       +------+-----------------------------------+
-       | a    | write, create, append             |
-       +------+-----------------------------------+
-       | a+   | read, write, create, append       |
-       +------+-----------------------------------+
+   ::
 
        open(f::function, args...)
 
