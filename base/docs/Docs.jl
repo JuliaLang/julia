@@ -493,7 +493,10 @@ macro repl (ex)
             if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
                 $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
             else
-                @doc $(esc(ex))
+                # Backwards-compatible with the previous help system, for now
+                let doc = @doc $(esc(ex))
+                    doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+                end
             end
         end
     end

@@ -89,6 +89,7 @@ release-candidate: release test
 	@$(MAKE) -C doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
+	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -115,6 +116,9 @@ release-candidate: release test
 	@echo 9. Announce on mailing lists
 	@echo 10. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
+
+$(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
+	@cp $< $@
 
 $(build_man1dir)/julia.1: doc/man/julia.1 | $(build_man1dir)
 	@mkdir -p $(build_man1dir)
@@ -184,7 +188,7 @@ JULIA_SYSIMG_BUILD_FLAGS += --output-ji $(call cygpath_w,$(build_private_libdir)
 endif
 
 COMMA:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_private_libdir)/inference.$(SHLIB_EXT)
+$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/inference.$(SHLIB_EXT)
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-o $(call cygpath_w,$(build_private_libdir)/sys.o) $(JULIA_SYSIMG_BUILD_FLAGS) -f \
 		-J $(call cygpath_w,$(build_private_libdir)/inference.$(SHLIB_EXT)) sysimg.jl \
