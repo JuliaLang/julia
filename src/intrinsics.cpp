@@ -968,6 +968,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         jl_value_t *newtyp = xinfo.typ;
         // TODO: compare the type validity of x,y,z before emitting the intrinsic
         Value *r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
+        if (newtyp == xinfo.typ && r->getType() != x->getType())
+            // cast back to the exact original type (float vs. int) before remarking as a julia type
+            r = builder.CreateBitCast(r, x->getType());
         return mark_julia_type(r, newtyp);
     }
     }
