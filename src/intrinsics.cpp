@@ -338,17 +338,24 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 
 static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
 {
+    // evaluate an argument at compile time to determine what type it is
+    // does bitstype validation if and only if fname != NULL
     jl_value_t *et = expr_type(targ, ctx);
-    jl_value_t *bt;
+    jl_value_t *bt = NULL;
     if (jl_is_type_type(et) && jl_is_leaf_type(jl_tparam0(et))) {
         bt = jl_tparam0(et);
     }
     else {
-        bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                           jl_svec_data(ctx->sp),
-                                           jl_svec_len(ctx->sp)/2);
+        JL_TRY {
+            bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                               jl_svec_data(ctx->sp),
+                                               jl_svec_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+            bt = NULL;
+        }
     }
-    if (!jl_is_bitstype(bt)) {
+    if (fname && !jl_is_bitstype(bt)) {
         jl_errorf("%s: expected bits type as first argument", fname);
         return NULL;
     }
@@ -380,32 +387,46 @@ int get_bitstype_nbits(jl_value_t *bt)
 static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     // Examine the first argument //
-    jl_value_t *bt = staticeval_bitstype(targ, "reinterpret", ctx);
+    jl_value_t *bt = staticeval_bitstype(targ, nullptr, ctx);
 
     // Examine the second argument //
     jl_cgval_t v = emit_unboxed(x, ctx);
 
     if (bt == NULL || !jl_is_leaf_type(bt)) {
         // dynamically-determined type; evaluate.
-        int nb = get_bitstype_nbits(bt);
-        Type *llvmt = julia_type_to_llvm(bt);
+        if (!jl_is_leaf_type(v.typ)) {
+            // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
+            jl_error("codegen: failed during evaluation of a call to reinterpret");
+            return jl_cgval_t();
+        }
+        int nb = jl_datatype_size(v.typ);
+        Type *llvmt = julia_type_to_llvm(v.typ);
         Value *runtime_bt = boxed(emit_expr(targ, ctx), ctx);
-        // TODO: emit type validity check (bitstype of size nb)
-        Value *unbox_v = v.V;
-        if (v.ispointer)
-            unbox_v = builder.CreateLoad(builder.CreatePointerCast(unbox_v, llvmt->getPointerTo()));
-        return mark_julia_type(
-                init_bits_value(emit_allocobj(nb), runtime_bt, unbox_v),
-                bt ? bt : (jl_value_t*)jl_any_type);
+        // XXX: emit type validity check on runtime_bt (bitstype of size nb)
+
+        Value *newobj = emit_allocobj(nb);
+        builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj));
+        int alignment = ((jl_datatype_t*)v.typ)->alignment;
+        if (!v.ispointer)
+            builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
+        else
+            builder.CreateMemCpy(newobj, builder.CreateBitCast(v.V, T_pint8), nb, alignment);
+        return mark_julia_type(newobj, bt ? bt : (jl_value_t*)jl_any_type);
     }
- 
+
+    if (!jl_is_bitstype(bt)) {
+        // TODO: to accept arbitrary types, replace this function with a call to llvm_type_rewrite
+        emit_error("reinterpret: expected bits type as first argument", ctx);
+        return jl_cgval_t();
+    }
+
     Type *llvmt = staticeval_bitstype(bt);
     if (v.typ == bt)
         return v;
 
     Value *vx;
     if (v.ispointer) {
-        // TODO: validate the size of the pointer contents
+        // TODO: validate the size and type of the pointer contents
         if (v.isimmutable) { // wrong type, but can lazy load this later as needed
             v.typ = bt;
             v.isboxed = false;
@@ -415,6 +436,10 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     }
     else {
         vx = v.V;
+        if (!jl_is_bitstype(v.typ)) {
+            emit_error("reinterpret: expected bits type value for second argument", ctx);
+            return jl_cgval_t();
+        }
     }
 
     Type *vxt = vx->getType();
@@ -854,7 +879,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Value *x = FP(auto_unbox(args[1], ctx));
             return mark_julia_type(
                     builder.CreateFPToSI(FP(x), JL_INTT(x->getType())),
-                    JL_JLINTT(x->getType()));                    
+                    JL_JLINTT(x->getType()));
         }
         else if (nargs == 2) {
             jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);

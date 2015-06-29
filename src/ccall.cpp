@@ -248,7 +248,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 
 Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
         bool tojulia, /* only matters if byref is set (declares the direction of the byref attribute) */
-        bool byref, /* only applies to arguments, set false for return values */
+        bool byref, /* only applies to arguments, set false for return values -- effectively the same as jl_cgval_t.ispointer */
         bool issigned, /* determines whether an integer value should be zero or sign extended */
         jl_codectx_t *ctx)
 {
@@ -426,7 +426,7 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
     if (addressOf)
         to = to->getContainedType(0);
     Value *slot = emit_static_alloca(to, ctx);
-    if (!jvinfo.isboxed)
+    if (!jvinfo.ispointer)
         builder.CreateStore(emit_unbox(to, jvinfo, jlto), slot);
     else
         builder.CreateMemCpy(slot, builder.CreateBitCast(jvinfo.V, T_pint8), (uint64_t)jl_datatype_size(jlto), (uint64_t)((jl_datatype_t*)jlto)->alignment);
