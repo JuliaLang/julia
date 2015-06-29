@@ -146,7 +146,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review, and Julia's history won't have any broken intermediate commits. A reasonable number of separate well-factored commits is fine, especially for larger changes.
  - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
  - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc., try running `git submodule update` first.
- - Avoid committing changes to auto-generated files such as `doc/stdlib/*.rst`, which is a frequent source of conflicts and can be re-generated later.
+ - Avoid committing changes to auto-generated files such as `doc/helpdb.jl`, which is a frequent source of conflicts and can be re-generated later.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
  - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
