@@ -312,12 +312,9 @@ static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
 {
     jl_value_t *bt = v.typ;
     if (!jl_is_bitstype(bt)) {
-        // TODO: make sure this code is valid; hopefully it is
-        // unreachable but it should still be well-formed.
-        // I think this can be reached with an invalid set of calls to Intrinsics
+        // This can be reached with a direct invalid call to an Intrinsic, such as:
+        //   Intrinsics.neg_int("")
         emit_error("auto_unbox: unable to determine argument type", ctx);
-        // TODO: This isn't correct but probably most likely to cause
-        // the least amount of trouble
         return UndefValue::get(T_void);
     }
     Type *to = julia_type_to_llvm(v.typ);
@@ -901,27 +898,47 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     HANDLE(select_value,3) {
-        Value *isfalse = emit_condition(args[1], "select_value", ctx);
+        Value *isfalse = emit_condition(args[1], "select_value", ctx); // emit the first argument
         jl_value_t *t1 = expr_type(args[2], ctx);
         jl_value_t *t2 = expr_type(args[3], ctx);
         Type *llt1 = julia_type_to_llvm(t1);
-        int argStart = ctx->gc.argDepth;
         Value *ifelse_result;
         if (llt1 != jl_pvalue_llvmt && t1 == t2) {
-            Value *x = auto_unbox(args[2], ctx);
-            Value *y = auto_unbox(args[3], ctx);
-            ifelse_result = builder.CreateSelect(isfalse, y, x);
+            // emit X and Y arguments
+            jl_cgval_t x = emit_unboxed(args[2], ctx);
+            jl_cgval_t y = emit_unboxed(args[3], ctx);
+            // check the return value was valid
+            if (type_is_ghost(llt1))
+                return x;
+            if (x.V->getType() == T_void && y.V->getType() == T_void)
+                return jl_cgval_t(); // undefined
+            if (x.V->getType() == T_void)
+                return y;
+            if (y.V->getType() == T_void)
+                return x;
+            // ensure that X and Y have the same llvm Type
+            Value *vx = x.V, *vy = y.V;
+            if (x.ispointer && !y.ispointer)
+                vx = builder.CreateLoad(builder.CreatePointerCast(vx, llt1->getPointerTo(0)));
+            if (!x.ispointer && y.ispointer)
+                vy = builder.CreateLoad(builder.CreatePointerCast(vy, llt1->getPointerTo(0)));
+            ifelse_result = builder.CreateSelect(isfalse, vy, vx);
+            if (x.ispointer && y.ispointer)
+                return mark_julia_slot(ifelse_result, t1);
+            else
+                return mark_julia_type(ifelse_result, t2);
         }
         else {
+            int argStart = ctx->gc.argDepth;
             Value *arg1 = boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx));
-            //TODO: if (arg1->getType() != jl_pvalue_llvmt)
+            // TODO: if (arg1->getType() != jl_pvalue_llvmt)
                 make_gcroot(arg1, ctx);
             Value *arg2 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
             ifelse_result = builder.CreateSelect(isfalse, arg2, arg1);
+            ctx->gc.argDepth = argStart;
+            jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
+            return mark_julia_type(ifelse_result, jt);
         }
-        ctx->gc.argDepth = argStart;
-        jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-        return mark_julia_type(ifelse_result, jt);
     }
 
     default: {
@@ -949,6 +966,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             }
         }
         jl_value_t *newtyp = xinfo.typ;
+        // TODO: compare the type validity of x,y,z before emitting the intrinsic
         Value *r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
         return mark_julia_type(r, newtyp);
     }
