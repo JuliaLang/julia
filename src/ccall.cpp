@@ -321,10 +321,14 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
         assert(!addressOf && !byRef); // don't expect any ABI to pass pointers by pointer
         return boxed(jvinfo, ctx);
     }
-    if (jl_is_tuple(jlto)) {
-        emit_error("ccall: unimplemented: boxed tuple argument type", ctx);
-        return UndefValue::get(to);
-    }
+    assert(jl_is_leaf_type(jlto));
+
+    // TODO: Tuple arguments are currently undefined behavior, for defining the calling convention that they match to.
+    // XXX: However, they are used in the llvmcall test, so I guess it'll have to stay.
+    //if (jl_is_tuple(jlto) || jl_is_tuple_type(jlto)) {
+    //    emit_error("ccall: unimplemented: unboxed tuple argument type", ctx);
+    //    return UndefValue::get(to);
+    //}
 
     jl_value_t *ety = jlto;
     if (addressOf) {
@@ -337,9 +341,9 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
             ety = jvinfo.typ; // skip the type-check
         assert(to->isPointerTy());
     }
-    if (jvinfo.typ != ety || ety == (jl_value_t*)jl_any_type) {
-        if (!addressOf && jlto == (jl_value_t*)jl_voidpointer_type) {
-            // allow a bit more flexibility for what can be passed to (void*)
+    if (jvinfo.typ != ety && ety != (jl_value_t*)jl_any_type) {
+        if (!addressOf && ety == (jl_value_t*)jl_voidpointer_type) {
+            // allow a bit more flexibility for what can be passed to (void*) due to Ref{T} conversion behavior below
             if (!jl_is_cpointer_type(jvinfo.typ)) {
                 // emit a typecheck, if not statically known to be correct
                 std::stringstream msg;
@@ -358,7 +362,7 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
     }
 
     if (!addressOf && !byRef)
-        return emit_unbox(to, jvinfo, jlto);
+        return emit_unbox(to, jvinfo, ety);
 
     if (addressOf && jvinfo.isboxed) {
         if (!jl_is_abstracttype(ety)) {
@@ -411,7 +415,7 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        builder.CreateMemCpy(ai, builder.CreatePointerCast(jvinfo.V, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+        builder.CreateMemCpy(ai, jvinfo.V, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
         Value *p2 = builder.CreatePointerCast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -427,9 +431,9 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
         to = to->getContainedType(0);
     Value *slot = emit_static_alloca(to, ctx);
     if (!jvinfo.ispointer)
-        builder.CreateStore(emit_unbox(to, jvinfo, jlto), slot);
+        builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
     else
-        builder.CreateMemCpy(slot, builder.CreateBitCast(jvinfo.V, T_pint8), (uint64_t)jl_datatype_size(jlto), (uint64_t)((jl_datatype_t*)jlto)->alignment);
+        builder.CreateMemCpy(slot, jvinfo.V, (uint64_t)jl_datatype_size(ety), (uint64_t)((jl_datatype_t*)ety)->alignment);
     return slot;
 }
 

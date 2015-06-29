@@ -268,6 +268,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
         if (type_is_ghost(to)) {
             return NULL;
         }
+        //emit_error("emit_unbox: a type mismatch error in occurred during codegen", ctx);
         return UndefValue::get(to); // type mismatch error
     }
     if (!x.isboxed) { // already unboxed, but sometimes need conversion
