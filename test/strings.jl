@@ -253,6 +253,15 @@ for T in (UInt8,UInt16,UInt32,UInt64)
     @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
+@test lpad("foo", 3) == "foo"
+@test rpad("foo", 3) == "foo"
+@test lpad("foo", 5) == "  foo"
+@test rpad("foo", 5) == "foo  "
+@test lpad("foo", 5, "  ") == "  foo"
+@test rpad("foo", 5, "  ") == "foo  "
+@test lpad("foo", 6, "  ") == "   foo"
+@test rpad("foo", 6, "  ") == "foo   "
+
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
 
