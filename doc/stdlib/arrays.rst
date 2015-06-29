@@ -51,9 +51,7 @@ Basic functions
 
 .. function:: eachindex(A...)
 
-   Creates an iterable object for visiting each index of an AbstractArray "A" in an efficient manner. For array types that have opted into fast linear indexing (like "Array"), this is simply the range "1:length(A)". For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
-
-   Example for a sparse 2-d array:
+   Creates an iterable object for visiting each index of an AbstractArray "A" in an efficient manner. For array types that have opted into fast linear indexing (like "Array"), this is simply the range "1:length(A)". For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. Example for a sparse 2-d array:
 
    ::
 
