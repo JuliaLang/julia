@@ -536,17 +536,25 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
     return dt;
 }
 
-jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
+jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
+                                             int8_t fielddesc_type)
 {
+    // fielddesc_type is specified manually for builtin types
+    // and is (will be) calculated automatically for user defined types.
+    uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
     jl_datatype_t *t = (jl_datatype_t*)
         newobj((jl_value_t*)jl_datatype_type,
-               NWORDS(sizeof(jl_datatype_t) + nfields*sizeof(jl_fielddesc_t)));
+               NWORDS(sizeof(jl_datatype_t) + nfields * fielddesc_size));
+    // fielddesc_type should only be assigned here. It can cause data
+    // corruption otherwise.
+    t->fielddesc_type = fielddesc_type;
     t->nfields = nfields;
     return t;
 }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
+    // TODO overflow check
     size_t sz = 0, alignm = 1;
     int ptrfree = 1;
 
@@ -614,7 +622,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
             t = jl_bool_type;
     }
     if (t == NULL)
-        t = jl_new_uninitialized_datatype(jl_svec_len(fnames));
+        t = jl_new_uninitialized_datatype(jl_svec_len(fnames), 2); // TODO
     else
         tn = t->name;
     // init before possibly calling jl_new_typename
