@@ -1991,7 +1991,7 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
 //    bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
     if (isteq && isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1))
         return ConstantInt::get(T_int1, 1);
-    return NULL; // TODO: redo this optimization code
+    return NULL; // XXX TODO: redo this optimization code
 }
 
 static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
@@ -2004,6 +2004,8 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
     if (jl_typeis(ff, jl_intrinsic_type)) {
         *ret = emit_intrinsic((intrinsic)*(uint32_t*)jl_data_ptr(ff),
                               args, nargs, ctx);
+        if (ret->typ == (jl_value_t*)jl_any_type) // the select_value intrinsic may be missing type information
+            *ret = remark_julia_type(*ret, expr_type(expr, ctx));
         return true;
     }
     if (!jl_is_func(ff)) {
@@ -2948,10 +2950,17 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         if (store_unboxed_p(declType)) {
             Type *vtype = julia_struct_to_llvm(declType);
             assert(vtype != jl_pvalue_llvmt);
-            if (type_is_ghost(vtype))
+            if (type_is_ghost(vtype)) {
                 slot = emit_expr(r, ctx);
-            else
+            }
+            else {
                 slot = emit_unboxed(r, ctx);
+                if (!slot.isboxed && slot.ispointer) { // emit a copy (if rval is not SSA). XXX: is this condition correct?
+                    slot = mark_julia_type(
+                            emit_unbox(julia_type_to_llvm(slot.typ), slot, slot.typ),
+                            slot.typ);
+                }
+            }
         }
         else {
             Value *rval = boxed(emit_expr(r, ctx, true), ctx);
@@ -3041,6 +3050,11 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else {
             // SSA variable w/o gcroot, just track the value info
+            if (!rval_info.isboxed && rval_info.ispointer) { // emit a copy (if rval is not SSA). XXX: is this condition correct?
+                rval_info = mark_julia_type(
+                        emit_unbox(julia_type_to_llvm(rval_info.typ), rval_info, rval_info.typ),
+                        rval_info.typ);
+            }
             vi.value = rval_info;
         }
         // add info to arravar list
@@ -3059,7 +3073,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         // store unboxed
         assert(vi.value.ispointer);
         builder.CreateStore(emit_unbox(
-                    vi.value.V->getType()->getContainedType(0),
+                    julia_type_to_llvm(vi.value.typ),
                     emit_unboxed(r, ctx),
                     vi.value.typ),
                 vi.value.V, vi.isVolatile);
