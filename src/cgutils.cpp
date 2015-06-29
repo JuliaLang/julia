@@ -1564,8 +1564,8 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 static Value* emit_allocobj(size_t static_size);
 static Value *init_bits_value(Value *newv, Value *jt, Value *v)
 {
-    builder.CreateStore(jt, builder.CreateBitCast(emit_typeptr_addr(newv), jl_ppvalue_llvmt));
-    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(v->getType(),0)), 16); // Julia's gc-alignment is 16-bytes
+    builder.CreateStore(jt, emit_typeptr_addr(newv));
+    builder.CreateAlignedStore(v, builder.CreateBitCast(newv, PointerType::get(v->getType(),0)), sizeof(void*)); // min alignment in julia's gc is pointer-aligned
     return newv;
 }
 
