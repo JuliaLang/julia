@@ -12,7 +12,7 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
+        bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
@@ -307,6 +307,65 @@ function fma(x::BigFloat, y::BigFloat, z::BigFloat)
     r = BigFloat()
     ccall(("mpfr_fma",:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &r, &x, &y, &z, ROUNDING_MODE[end])
     return r
+end
+
+# div
+# BigFloat
+function div(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_div,:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+
+# Unsigned Int
+function div(x::BigFloat, c::CulongMax)
+    z = BigFloat()
+    ccall(($(string(:mpfr_div_ui)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+function div(c::CulongMax, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_ui_div, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+
+# Signed Integer
+function div(x::BigFloat, c::ClongMax)
+    z = BigFloat()
+    ccall((:mpfr_div_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+function div(c::ClongMax, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_si_div, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+
+# Float32/Float64
+function div(x::BigFloat, c::CdoubleMax)
+    z = BigFloat()
+    ccall((:mpfr_div_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32), &z, &x, c, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+function div(c::CdoubleMax, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_d_div, :libmpfr), Int32, (Ptr{BigFloat}, Cdouble, Ptr{BigFloat}, Int32), &z, c, &x, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
+end
+
+# BigInt
+function div(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, to_mpfr(RoundToZero))
+    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+    return z
 end
 
 
