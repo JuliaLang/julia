@@ -23,7 +23,7 @@ end
 =={s}(::Irrational{s}, ::Irrational{s}) = true
 ==(::Irrational, ::Irrational) = false
 
-# Irationals are not rational, so unequal to everything else
+# Irrationals, by definition, can't have a finite representation equal them exactly
 ==(x::Irrational, y::Real) = false
 ==(x::Real, y::Irrational) = false
 
