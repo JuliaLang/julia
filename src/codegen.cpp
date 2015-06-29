@@ -1264,9 +1264,9 @@ static void coverageVisitLine(std::string filename, int line)
                                                  ConstantInt::get(T_int64,0), "lcnt"));
     }
     GlobalVariable *v = prepare_global(vec[line]);
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
                                           ConstantInt::get(T_int64,1)),
-                        v);
+                        v, true);
 }
 
 extern "C" int isabspath(const char *in);
@@ -1856,7 +1856,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         assert(jl_is_symbol(s));
         jl_varinfo_t &vari = ctx->vars[s];
         if (vari.memloc) {
-            val = builder.CreateLoad(vari.memloc);
+            val = builder.CreateLoad(vari.memloc, vari.isVolatile);
         }
         else {
             assert(!vari.isAssigned); // make sure there wasn't an inference / codegen error earlier
@@ -3000,8 +3000,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
     // it's a local variable or closure variable
     jl_varinfo_t &vi = ctx->vars[s];
-    if (!vi.hasGCRoot && vi.used && !vi.isArgument &&
-            !is_stable_expr(r, ctx)) {
+    if (!vi.memloc && !vi.hasGCRoot && vi.used
+            && !vi.isArgument && !is_stable_expr(r, ctx)) {
         Instruction *newroot = cast<Instruction>(emit_local_slot(ctx->gc.argSpaceSize++, ctx));
         newroot->removeFromParent(); // move it to the gc frame basic block so it can be reused as needed
         newroot->insertAfter(ctx->gc.last_gcframe_inst);
@@ -3033,7 +3033,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             if (vi.isBox) {
                 bp = builder.CreatePointerCast(builder.CreateLoad(bp), jl_ppvalue_llvmt);
             }
-            builder.CreateStore(rval, bp);
+            builder.CreateStore(rval, bp, vi.isVolatile);
             if (vi.isBox) {
                 // bp is a jl_box_t*
                 emit_write_barrier(ctx, bp, rval);
@@ -3062,7 +3062,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     vi.value.V->getType()->getContainedType(0),
                     emit_unboxed(r, ctx),
                     vi.value.typ),
-                vi.value.V);
+                vi.value.V, vi.isVolatile);
     }
 }
 
@@ -3518,7 +3518,7 @@ emit_gcpops(jl_codectx_t *ctx)
             builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
             Instruction *gcpop =
                 (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
-            builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop, false),
+            builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
                                                       jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
         }
@@ -4412,6 +4412,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             varinfo.memloc = builder.CreatePointerCast(
                     emit_nthptr_addr(envArg, i + offsetof(jl_svec_t,data) / sizeof(void*)),
                     jl_ppvalue_llvmt);
+            varinfo.hasGCRoot = true;
         }
     }
 
@@ -4422,26 +4423,29 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int varnum = 0;
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_varinfo_t &varinfo = ctx.vars[s];
+        assert(!varinfo.memloc); // arguments shouldn't also be in the closure env
         if (store_unboxed_p(s, &ctx)) {
-            ctx.vars[s].hasGCRoot = true;
+            varinfo.hasGCRoot = true;
         }
-        else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
+        else if (varinfo.isAssigned || (va && i==largslen-1)) {
             Value *av = emit_local_slot(varnum, &ctx);
             varnum++;
-            ctx.vars[s].memloc = av;
+            varinfo.memloc = av;
         }
     }
     for(i=0; i < vinfoslen; i++) {
         jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
-        if (ctx.vars[s].isArgument)
+        jl_varinfo_t &varinfo = ctx.vars[s];
+        if (varinfo.memloc || varinfo.isArgument)
             continue;
         if (store_unboxed_p(s, &ctx)) {
-            ctx.vars[s].hasGCRoot = true;
+            varinfo.hasGCRoot = true;
         }
-        else if (ctx.vars[s].hasGCRoot) {
+        else if (varinfo.hasGCRoot) {
             Value *lv = emit_local_slot(varnum, &ctx);
             varnum++;
-            ctx.vars[s].memloc = lv;
+            varinfo.memloc = lv;
         }
     }
     assert(varnum == ctx.gc.argSpaceSize);
