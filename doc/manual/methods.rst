@@ -267,7 +267,7 @@ Julia language. Core operations typically have dozens of methods::
     +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat) at mpfr.jl:318
     +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat,d::Base.MPFR.BigFloat) at mpfr.jl:324
     +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat,d::Base.MPFR.BigFloat,e::Base.MPFR.BigFloat) at mpfr.jl:331
-    +(x::MathConst{sym},y::MathConst{sym}) at constants.jl:71
+    +(x::Irrational{sym},y::Irrational{sym}) at constants.jl:71
     +{T<:Number}(x::T<:Number,y::T<:Number) at promotion.jl:205
     +{T<:FloatingPoint}(x::Bool,y::T<:FloatingPoint) at bool.jl:43
     +(x::Number,y::Number) at promotion.jl:167

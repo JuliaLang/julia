@@ -70,7 +70,7 @@ export
     LinSpace,
     LocalProcess,
     LowerTriangular,
-    MathConst,
+    Irrational,
     Matrix,
     MergeSort,
     Nullable,

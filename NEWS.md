@@ -275,6 +275,8 @@ Library improvements
 
     * Optional `log` and `log1p` functions implemented in pure Julia (experimental) ([#10008]).
 
+    * The `MathConst` type has been renamed `Irrational` ([#11922]).
+
   * Random numbers
 
     * Streamlined random number generation APIs [#8246].
@@ -1357,6 +1359,7 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7234]: https://github.com/JuliaLang/julia/issues/7234
 [#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
 [#7311]: https://github.com/JuliaLang/julia/issues/7311
@@ -1459,6 +1462,7 @@ Too numerous to mention.
 [#10400]: https://github.com/JuliaLang/julia/issues/10400
 [#10446]: https://github.com/JuliaLang/julia/issues/10446
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
+[#10472]: https://github.com/JuliaLang/julia/issues/10472
 [#10525]: https://github.com/JuliaLang/julia/issues/10525
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
@@ -1483,3 +1487,4 @@ Too numerous to mention.
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
 [#11741]: https://github.com/JuliaLang/julia/issues/11741
+[#11922]: https://github.com/JuliaLang/julia/issues/11922

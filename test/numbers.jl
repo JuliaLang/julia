@@ -2408,7 +2408,7 @@ end
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
 
 #isreal(x::Real) = true
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test isreal(x) == true
 end
 
@@ -2423,7 +2423,7 @@ for x in [subtypes(Complex); subtypes(Real)]
 end
 
 #getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
 end
 
