@@ -3,6 +3,7 @@
 module Docs
 
 import Base.Markdown: @doc_str, MD
+import Base.Meta: quot
 
 export doc
 
@@ -40,41 +41,34 @@ end
 
 # Function / Method support
 
-function newmethod(defs)
-    keylen = -1
-    key = nothing
-    for def in defs
-        length(def.sig.parameters) > keylen && (keylen = length(def.sig.parameters); key = def)
-    end
-    return key
-end
-
-function newmethod(funcs, f)
-    applicable = Method[]
-    for def in methods(f)
-        (!haskey(funcs, def) || funcs[def] != def.func) && push!(applicable, def)
-    end
-    return newmethod(applicable)
-end
-
-def_dict(f) = [def => def.func for def in methods(f)]
-
-function trackmethod(def)
-    name = uncurly(unblock(def).args[1].args[1])
-    f = esc(name)
-    quote
-        funcs = nothing
-        if $(isexpr(name, Symbol)) && isdefined($(Expr(:quote, name))) && isgeneric($f)
-            funcs = def_dict($f)
+function signature(expr::Expr)
+    if isexpr(expr, :call)
+        sig = :(Tuple{})
+        for arg in expr.args[2:end]
+            isexpr(arg, :parameters) && continue
+            push!(sig.args, argtype(arg))
         end
-        $(esc(def))
-        if funcs !== nothing
-            $f, newmethod(funcs, $f)
-        else
-            $f, newmethod(methods($f))
-        end
+        Expr(:let, Expr(:block, typevars(expr)..., sig))
+    else
+        signature(expr.args[1])
     end
 end
+
+function argtype(expr::Expr)
+    isexpr(expr, :(::))  && return expr.args[end]
+    isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
+    argtype(expr.args[1])
+end
+argtype(::Symbol) = :Any
+
+function typevars(expr::Expr)
+    isexpr(expr, :curly) && return [tvar(x) for x in expr.args[2:end]]
+    typevars(expr.args[1])
+end
+typevars(::Symbol) = []
+
+tvar(x::Expr)   = :($(x.args[1]) = TypeVar($(quot(x.args[1])), $(x.args[2]), true))
+tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
 
 type FuncDoc
     main
@@ -259,11 +253,13 @@ function namedoc(meta, def, name)
 end
 
 function funcdoc(meta, def)
+    f = esc(namify(def))
+    m = :(which($f, $(esc(signature(def)))))
     quote
         @init
-        f, m = $(trackmethod(def))
-        doc!(f, m, $(mdify(meta)), $(esc(Expr(:quote, def))))
-        f
+        $(esc(def))
+        doc!($f, $m, $(mdify(meta)), $(esc(quot(def))))
+        $f
     end
 end
 
@@ -310,7 +306,8 @@ function docm(meta, def)
     isexpr(def′, :bitstype) && return namedoc(meta, def, def′.args[2])
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     isexpr(def′, :module) && return namedoc(meta, def, def′.args[2])
-    fexpr(def′) && return funcdoc(meta, def)
+    fexpr(def′) && return funcdoc(meta, def′)
+    isexpr(def′, :macrocall) && (def = namify(def′))
     return objdoc(meta, def)
 end
 
@@ -335,8 +332,7 @@ Base.DocBootstrap.setexpand!(docm)
 # Names are resolved relative to the DocBootstrap module, so
 # inject the ones we need there.
 
-eval(Base.DocBootstrap,
-     :(import ..Docs: @init, doc!, doc, newmethod, def_dict, @doc_str))
+eval(Base.DocBootstrap, :(import ..Docs: @init, doc!, doc, @doc_str))
 
 # Metametadata
 
