@@ -217,7 +217,7 @@ static int jl_load_sysimg_so()
     if (jl_is_debugbuild()) imaging_mode = 1;
 #endif
     // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode) {
+    if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
