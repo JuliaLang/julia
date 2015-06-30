@@ -3054,7 +3054,18 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, boo
             return v;
         }
     }
-    return vi.value;
+    else if (vi.isVolatile) {
+        // copy value to a non-volatile location
+        assert(vi.value.ispointer);
+        Type *T = julia_type_to_llvm(vi.value.typ)->getPointerTo();
+        Value *v = vi.value.V;
+        if (v->getType() != T)
+            v = builder.CreatePointerCast(v, T);
+        return mark_julia_type(builder.CreateLoad(v, true), vi.value.typ);
+    }
+    else {
+        return vi.value;
+    }
 }
 
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
