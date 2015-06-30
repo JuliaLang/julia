@@ -13,28 +13,15 @@ export countlines, readdlm, readcsv, writedlm, writecsv
 const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
-countlines(nameorfile) = countlines(nameorfile, '\n')
-function countlines(filename::AbstractString, eol::Char)
-    open(filename) do io
-        countlines(io, eol)
-    end
-end
-function countlines(io::IO, eol::Char)
-    if !isascii(eol)
-        throw(ArgumentError("only ASCII line terminators are supported"))
-    end
+countlines(f::AbstractString,eol::Char='\n') = open(io->countlines(io,eol),f)::Int
+function countlines(io::IO, eol::Char='\n')
+    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     a = Array(UInt8, 8192)
     nl = 0
-    preceded_by_eol = true
     while !eof(io)
         nb = readbytes!(io, a)
-        for i=1:nb
-            if Char(a[i]) == eol
-                preceded_by_eol = true
-            elseif preceded_by_eol
-                preceded_by_eol = false
-                nl+=1
-            end
+        @simd for i=1:nb
+            @inbounds nl += a[i] == eol
         end
     end
     nl
