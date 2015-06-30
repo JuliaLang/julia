@@ -44,7 +44,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     debug && println("Simple unary functions")
     for op in (-,)
-        @test_approx_eq op(D) op(DM)
+      @test op(D)==op(DM)
     end
 
     for func in (det, trace)
