@@ -211,7 +211,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 // - later, it refers to either old Base or new Base
 DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
-    while (m != jl_main_module) {
+    while (m != m->parent) {
         if (m->istopmod)
             return m;
         m = m->parent;
