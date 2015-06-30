@@ -12,7 +12,7 @@ for T in IntTypes
     @eval begin
         -(x::$T) = box($T,neg_int(unbox($T,x)))
 
-        if T != Int  # don't overwrite definition from line 8
+        if !($T === Int)  # don't overwrite definition from line 8
             +(x::$T, y::$T) = box($T, add_int(unbox($T,x),unbox($T,y)))
         end
         -(x::$T, y::$T) = box($T, sub_int(unbox($T,x),unbox($T,y)))
@@ -139,7 +139,7 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for T in IntTypes
     if issubtype(T,Signed)
-        if T != Int  # don't overwrite definition from line 8
+        if !(T === Int)  # don't overwrite definition from line 9
             @eval <( x::$T, y::$T) = slt_int(unbox($T,x),unbox($T,y))
         end
         @eval <=(x::$T, y::$T) = sle_int(unbox($T,x),unbox($T,y))
