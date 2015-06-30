@@ -459,4 +459,12 @@ if VERSION < v"0.4.0-dev+5322"
     include("timer.jl")
 end
 
+if VERSION < v"0.4.0-dev+5688"
+    typealias Irrational MathConst
+    @eval const $(symbol("@irrational")) = getfield(Base, symbol("@math_const"))
+    export Irrational
+else
+    import Base.@irrational
+end
+
 end # module
