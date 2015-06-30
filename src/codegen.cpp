@@ -2742,7 +2742,6 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
             else {
                 assert(at == et);
                 argvals[idx] = emit_unbox(et, emit_unboxed(args[i+1], ctx), jt);
-                assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
         }
