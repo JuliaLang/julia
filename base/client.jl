@@ -368,7 +368,6 @@ function early_init()
 end
 
 function init_parallel()
-    start_gc_msgs_task()
     atexit(terminate_all_workers)
 
     init_bind_addr()
