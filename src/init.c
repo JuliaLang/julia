@@ -111,6 +111,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
+                            JL_OPTIONS_USE_PRECOMPILED_YES,
                             NULL, // bindto
                             NULL, // outputbc
                             NULL, // outputo
