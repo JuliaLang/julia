@@ -132,25 +132,6 @@ function send_msg(w::Worker, kind, args...)
     send_msg_(w, kind, args, false)
 end
 
-function flush_gc_msgs(w::Worker)
-    if !isdefined(w, :w_stream)
-        return
-    end
-    w.gcflag = false
-    msgs = copy(w.add_msgs)
-    if !isempty(msgs)
-        empty!(w.add_msgs)
-        remote_do(w, add_clients, msgs)
-    end
-
-    msgs = copy(w.del_msgs)
-    if !isempty(msgs)
-        empty!(w.del_msgs)
-        #print("sending delete of $msgs\n")
-        remote_do(w, del_clients, msgs)
-    end
-end
-
 function check_worker_state(w::Worker)
     #println("Sending msg $kind")
     if w.state == W_CREATED
@@ -177,7 +158,6 @@ function send_msg_(w::Worker, kind, args, now::Bool)
         end
 
         if !now && w.gcflag
-            flush_gc_msgs(w)
         else
             flush(io)
         end
@@ -186,18 +166,6 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     end
 end
 
-function flush_gc_msgs()
-    try
-        for w in (PGRP::ProcessGroup).workers
-            if isa(w,Worker) && w.gcflag && (w.state == W_CONNECTED)
-                flush_gc_msgs(w)
-            end
-        end
-    catch e
-        bt = catch_backtrace()
-        @schedule showerror(STDERR, e, bt)
-    end
-end
 
 ## process group creation ##
 
@@ -417,12 +385,6 @@ type RemoteRef
     function RemoteRef(pid::Integer)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
-        if mod(REQ_ID,200) == 0
-            # force gc after making a lot of refs since they take up
-            # space on the machine where they're stored, yet the client
-            # is responsible for freeing them.
-            gc()
-        end
         rr
     end
 
@@ -477,14 +439,6 @@ function del_clients(pairs::Vector)
     end
 end
 
-any_gc_flag = Condition()
-function start_gc_msgs_task()
-    @schedule while true
-        wait(any_gc_flag)
-        flush_gc_msgs()
-    end
-end
-
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
@@ -494,9 +448,7 @@ function send_del_client(rr::RemoteRef)
             return
         end
         w = worker_from_id(rr.where)
-        push!(w.del_msgs, (rr2id(rr), myid()))
-        w.gcflag = true
-        notify(any_gc_flag)
+        remote_do(w, del_client, rr2id(rr), myid())
     end
 end
 
@@ -522,9 +474,7 @@ function send_add_client(rr::RemoteRef, i)
         # itself inside deserialize().
         w = worker_from_id(rr.where)
         #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
-        push!(w.add_msgs, (rr2id(rr), i))
-        w.gcflag = true
-        notify(any_gc_flag)
+        remote_do(w, add_client, (rr2id(rr), i))
     end
 end
 
@@ -730,7 +680,10 @@ function fetch_ref_del(rid, remote)
     del_client(rid, remote)
     val
 end
+fetch_ref_preserve(rid) = wait_full(lookup_ref(rid))
 fetch(r::RemoteRef) = (val = call_on_owner(fetch_ref_del, r, myid()); r.id = -1; val)
+close(r::RemoteRef) = (call_on_owner(del_client, r, myid()); r.id = -1; nothing)
+fetch_preserve(r::RemoteRef) = call_on_owner(fetch_ref_preserve, r)
 fetch(x::ANY) = x
 
 # storing a value to a RemoteRef
