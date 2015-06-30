@@ -409,7 +409,7 @@ type RemoteRef
             return found
         end
         client_refs[r] = true
-        finalizer(r, send_del_client)
+        finalizer(r, (ref) -> (ref.id < 0 || error("Forgot to fetch remote ref")))
         r
     end
 
@@ -437,7 +437,7 @@ end
 hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+rr2id(r::RemoteRef) = (r.id >= 0 || error("trying to use a consumed RemoteRef"); (r.whence, r.id))
 
 lookup_ref(id) = lookup_ref(PGRP, id)
 function lookup_ref(pg, id)
@@ -724,8 +724,13 @@ end
 wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
 wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
 
-fetch_ref(rid) = wait_full(lookup_ref(rid))
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
+function fetch_ref_del(rid, remote)
+    rv = lookup_ref(rid)
+    val = wait_full(rv)
+    del_client(rid, remote)
+    val
+end
+fetch(r::RemoteRef) = (val = call_on_owner(fetch_ref_del, r, myid()); r.id = -1; val)
 fetch(x::ANY) = x
 
 # storing a value to a RemoteRef
