@@ -989,13 +989,13 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 return jl_cgval_t();
             }
         }
-        jl_value_t *newtyp = xinfo.typ;
+        jl_value_t *newtyp = NULL;
         // TODO: compare the type validity of x,y,z before emitting the intrinsic
         Value *r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
-        if (newtyp == xinfo.typ && r->getType() != x->getType())
-            // cast back to the exact original type (float vs. int) before remarking as a julia type
+        if (!newtyp && r->getType() != x->getType())
+            // cast back to the exact original type (e.g. float vs. int) before remarking as a julia type
             r = builder.CreateBitCast(r, x->getType());
-        return mark_julia_type(r, newtyp);
+        return mark_julia_type(r, newtyp ?: xinfo.typ);
     }
     }
     assert(0);
@@ -1331,7 +1331,10 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
     HANDLE(jl_alloca,1) {
-        return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
+        *newtyp = jl_voidpointer_type;
+        AllocaInst *AI = builder.CreateAlloca(T_int8, JL_INT(x));
+        AI->setAlignment(16);
+        return AI;
     }
     HANDLE(ceil_llvm,1) {
         x = FP(x);
