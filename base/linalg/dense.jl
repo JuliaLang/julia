@@ -389,18 +389,16 @@ end
 
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
 
-for (T1,PIVOT) in ((BlasFloat,Val{true}),(Any,Val{false}))
-    @eval function (\){T<:$T1}(A::StridedMatrix{T}, B::StridedVecOrMat)
-        m, n = size(A)
-        if m == n
-            if istril(A)
-                return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
-            end
-            istriu(A) && return \(UpperTriangular(A),B)
-            return \(lufact(A),B)
+function (\)(A::StridedMatrix, B::StridedVecOrMat)
+    m, n = size(A)
+    if m == n
+        if istril(A)
+            return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
         end
-        return qrfact(A,$PIVOT)\B
+        istriu(A) && return \(UpperTriangular(A),B)
+        return \(lufact(A),B)
     end
+    return qrfact(A,Val{true})\B
 end
 
 ## Moore-Penrose pseudoinverse

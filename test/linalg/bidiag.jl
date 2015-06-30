@@ -66,7 +66,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         debug && println("Generic Mat-vec ops")
         @test_approx_eq T*dv Tfull*dv
         @test_approx_eq T'*dv Tfull'*dv
-        @test_approx_eq T/dv' Tfull/dv'
+        if relty != BigFloat # not supported by pivoted QR
+            @test_approx_eq T/dv' Tfull/dv'
+        end
 
         debug && println("Diagonals")
         @test diag(T,2) == zeros(elty, n-2)
