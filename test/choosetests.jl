@@ -22,7 +22,7 @@ function choosetests(choices = [])
         "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall", "unicode",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
-        "priorityqueue", "file", "version", "resolve",
+        "priorityqueue", "file", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "readdlm", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "rounding", "ranges", "mod2pi",
