@@ -74,7 +74,7 @@ widen(::Type{BigInt})  = BigInt
 
 signed(x::BigInt) = x
 
-BigInt(x::BigInt) = x
+convert(::Type{BigInt}, x::BigInt) = x
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
@@ -102,29 +102,30 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     Nullable(sgn < 0 ? -z : z)
 end
 
-function BigInt(x::Union{Clong,Int32})
+function convert(::Type{BigInt}, x::Union{Clong,Int32})
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-function BigInt(x::Union{Culong,UInt32})
+function convert(::Type{BigInt}, x::Union{Culong,UInt32})
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
-BigInt(x::Bool) = BigInt(UInt(x))
+convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 
-function BigInt(x::Float64)
+function convert(::Type{BigInt}, x::Float64)
     !isinteger(x) && throw(InexactError())
     z = BigInt()
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
     return z
 end
 
-BigInt(x::Union{Float16,Float32}) = BigInt(Float64(x))
+convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
+convert(::Type{BigInt}, x::Float32) = BigInt(Float64(x))
 
-function BigInt(x::Integer)
+function convert(::Type{BigInt}, x::Integer)
     if x < 0
         if typemin(Clong) <= x
             return BigInt(convert(Clong,x))
@@ -151,10 +152,6 @@ function BigInt(x::Integer)
         return b
     end
 end
-
-convert(::Type{BigInt}, x::Integer) = BigInt(x)
-convert(::Type{BigInt}, x::Float16) = BigInt(x)
-convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 
 rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)

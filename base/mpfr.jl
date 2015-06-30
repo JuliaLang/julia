@@ -61,12 +61,12 @@ end
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-BigFloat(x::BigFloat) = x
+convert(::Type{BigFloat}, x::BigFloat) = x
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     @eval begin
-        function BigFloat(x::($fC))
+        function convert(::Type{BigFloat}, x::($fC))
             z = BigFloat()
             ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ptr{BigFloat}, ($fC), Int32), &z, x, ROUNDING_MODE[end])
             return z
@@ -74,19 +74,19 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     end
 end
 
-function BigFloat(x::BigInt)
+function convert(::Type{BigFloat}, x::BigInt)
     z = BigFloat()
     ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-BigFloat(x::Integer) = BigFloat(BigInt(x))
+convert(::Type{BigFloat}, x::Integer) = BigFloat(BigInt(x))
 
-BigFloat(x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong,x))
-BigFloat(x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong,x))
+convert(::Type{BigFloat}, x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong,x))
+convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong,x))
 
-BigFloat(x::Union{Float16,Float32}) = BigFloat(Float64(x))
-BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
+convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
+convert(::Type{BigFloat}, x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()
@@ -95,8 +95,6 @@ function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
 end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
-convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguity
-convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
 ## BigFloat -> Integer
@@ -163,7 +161,6 @@ function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(BigInt,x)
 end
-Base.BigInt(x::BigFloat) = convert(BigInt,x)
 
 function convert{T<:Integer}(::Type{T},x::BigFloat)
     isinteger(x) || throw(InexactError())
