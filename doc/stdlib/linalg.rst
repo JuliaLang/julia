@@ -48,7 +48,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: full(F)
 
-  Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
+   Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
 .. function:: lu(A) -> L, U, p
 
