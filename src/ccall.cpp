@@ -461,8 +461,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                "cglobal: first argument not a pointer or valid constant expression",
                                ctx);
         }
-        arg1.typ = (jl_value_t*)jl_voidpointer_type;
-        arg1.isboxed = false;
+        arg1 = remark_julia_type(arg1, (jl_value_t*)jl_voidpointer_type);
         jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
     }
 
