@@ -111,7 +111,12 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
+#ifdef _OS_WINDOWS_
+// TODO remove this when using LLVM 3.5+
+                            JL_OPTIONS_USE_PRECOMPILED_NO,
+#else
                             JL_OPTIONS_USE_PRECOMPILED_YES,
+#endif
                             NULL, // bindto
                             NULL, // outputbc
                             NULL, // outputo

@@ -182,11 +182,6 @@ $(build_private_libdir)/inference.o: $(build_private_libdir)/inference0.$(SHLIB_
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-o $(call cygpath_w,$(build_private_libdir)/inference.o) -f \
 		-J $(call cygpath_w,$(build_private_libdir)/inference0.$(SHLIB_EXT)) coreimg.jl)
 
-# on windows, also generate a .ji file so we can delete the .dll
-ifeq ($(OS),WINNT)
-JULIA_SYSIMG_BUILD_FLAGS += --output-ji $(call cygpath_w,$(build_private_libdir)/sys.ji)
-endif
-
 COMMA:=,
 $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/inference.$(SHLIB_EXT)
 	@$(call PRINT_JULIA, cd base && \
@@ -363,15 +358,9 @@ else ifeq ($(OS), Linux)
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-ifeq ($(OS),WINNT)
-	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
-		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
-	done
-else
 	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
 		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.$(SHLIB_EXT)$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.$(SHLIB_EXT)" 256 $(call cygpath_w,$$julia)); \
 	done
-endif
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -417,9 +406,6 @@ ifeq ($(JULIA_CPU_TARGET), native)
 endif
 
 ifeq ($(OS), WINNT)
-	# If we are running on windows, also delete sys.dll until we switch to llvm3.5+
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
-
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
