@@ -218,7 +218,7 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.use_precompiled = JL_OPTIONS_USE_PRECOMPILED_NO;
             else
                 jl_errorf("julia: invalid argument to --precompiled={yes|no} (%s)\n", optarg);
-            break;            
+            break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
             break;
