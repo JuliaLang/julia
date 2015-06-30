@@ -1637,3 +1637,10 @@ function terminate_all_workers()
         end
     end
 end
+
+function getindex(r::RemoteRef, args...)
+    if r.where == myid()
+        return getindex(fetch(r), args...)
+    end
+    return remotecall_fetch(r.where, getindex, r, args...)
+end
