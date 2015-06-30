@@ -14,6 +14,16 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
+rr=RemoteRef()
+a = rand(5,5)
+put!(rr, a)
+@test rr[2,3] == a[2,3]
+
+rr=RemoteRef(workers()[1])
+a = rand(5,5)
+put!(rr, a)
+@test rr[1,5] == a[1,5]
+
 dims = (20,20,20)
 
 @linux_only begin
