@@ -59,7 +59,7 @@ tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
-
+-(A::Diagonal)=Diagonal(-A.diag)
 +(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 -(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
