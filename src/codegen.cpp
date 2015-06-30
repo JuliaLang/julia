@@ -1793,7 +1793,7 @@ static jl_cgval_t emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx) // TODO: m
     if (!v.isboxed) {
         Value *vbox = boxed(v, ctx);
         make_gcroot(vbox, ctx);
-        v = mark_julia_type(vbox, v.typ);
+        v = jl_cgval_t(vbox, v.typ); // bypass normal auto-unbox behavior for isghost
     }
     else if (might_need_root(e)) { // TODO: v.needsroot
         make_gcroot(v.V, ctx);
