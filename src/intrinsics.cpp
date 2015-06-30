@@ -388,7 +388,7 @@ int get_bitstype_nbits(jl_value_t *bt)
 static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     // Examine the first argument //
-    jl_value_t *bt = staticeval_bitstype(targ, nullptr, ctx);
+    jl_value_t *bt = staticeval_bitstype(targ, NULL, ctx);
 
     // Examine the second argument //
     jl_cgval_t v = emit_unboxed(x, ctx);
@@ -428,7 +428,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     Value *vx;
     if (v.ispointer) {
         // TODO: validate the size and type of the pointer contents
-        if (v.isimmutable) { // wrong type, but can lazy load this later as needed
+        if (v.isimmutable && !v.needsgcroot) { // wrong type, but can lazy load this later as needed
             v.typ = bt;
             v.isboxed = false;
             return v;

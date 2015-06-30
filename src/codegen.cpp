@@ -1960,38 +1960,135 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     return mark_julia_type(result, jl_any_type); // (typ will be patched up by caller)
 }
 
-// emit code for is (===). rt1 and rt2 are the julia types of the arguments,
-// arg1 and arg2 are expressions for the arguments if we have them, or NULL,
-// and varg1 and varg2 are LLVM values for the arguments if we have them.
-static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
-                        jl_value_t *arg1, jl_value_t *arg2,
-                        Value *varg1, Value *varg2, jl_codectx_t *ctx)
+static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codectx_t *ctx)
 {
-    if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
-        !jl_is_typevar(jl_tparam0(rt1)) && !jl_is_typevar(jl_tparam0(rt2)) &&
-        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || jl_is_gensym(arg1) || is_constant(arg1, ctx)) &&
-        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || jl_is_gensym(arg2) || is_constant(arg2, ctx))) {
-        if (jl_tparam0(rt1) == jl_tparam0(rt2))
-            return ConstantInt::get(T_int1, 1);
-        return ConstantInt::get(T_int1, 0);
+    assert(jl_is_datatype(arg1.typ) && arg1.typ == arg2.typ);
+    Type *at = julia_type_to_llvm(arg1.typ);
+
+    if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
+        Value *varg1 = emit_unbox(at, arg1, arg1.typ);
+        Value *varg2 = emit_unbox(at, arg2, arg2.typ);
+        return builder.CreateICmpEQ(JL_INT(varg1),JL_INT(varg2));
     }
-    int ptr_comparable = 0;
+
+    if (at->isVectorTy()) {
+        jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
+        Value *answer = ConstantInt::get(T_int1, 1);
+        Value *varg1 = emit_unbox(at, arg1, arg1.typ);
+        Value *varg2 = emit_unbox(at, arg2, arg2.typ);
+        size_t l = jl_svec_len(types);
+        for(unsigned i=0; i < l; i++) {
+            jl_value_t *fldty = jl_svecref(types,i);
+            Value *subAns, *fld1, *fld2;
+            fld1 = builder.CreateExtractElement(varg1, ConstantInt::get(T_int32,i)),
+            fld2 = builder.CreateExtractElement(varg2, ConstantInt::get(T_int32,i)),
+            subAns = emit_bits_compare(mark_julia_type(fld1, fldty), mark_julia_type(fld2, fldty), ctx);
+            answer = builder.CreateAnd(answer, subAns);
+        }
+        return answer;
+    }
+
+    if (at->isAggregateType()) { // Struct or Array
+        assert(arg1.ispointer && arg2.ispointer);
+        size_t sz = jl_datatype_size(arg1.typ);
+        if (sz > 512 && !((jl_datatype_t*)arg1.typ)->haspadding) {
+#ifdef LLVM37
+            Value *answer = builder.CreateCall(prepare_call(memcmp_func),
+                            {
+                            builder.CreatePointerCast(arg1.V, T_pint8),
+                            builder.CreatePointerCast(arg2.V, T_pint8),
+                            ConstantInt::get(T_size, sz)
+                            });
+#else
+            Value *answer = builder.CreateCall3(prepare_call(memcmp_func),
+                    builder.CreatePointerCast(arg1.V, T_pint8),
+                    builder.CreatePointerCast(arg2.V, T_pint8),
+                    ConstantInt::get(T_size, sz));
+#endif
+            return builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
+        }
+        else {
+            at = at->getPointerTo();
+            Value *varg1 = arg1.V;
+            if (varg1->getType() != at)
+                builder.CreatePointerCast(varg1, at);
+            Value *varg2 = arg2.V;
+            if (varg2->getType() != at)
+                builder.CreatePointerCast(varg2, at);
+            jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
+            Value *answer = ConstantInt::get(T_int1, 1);
+            size_t l = jl_svec_len(types);
+            for(unsigned i=0; i < l; i++) {
+                jl_value_t *fldty = jl_svecref(types, i);
+                Value *subAns, *fld1, *fld2;
+                fld1 = builder.CreateConstGEP2_32(varg1, 0, i);
+                fld2 = builder.CreateConstGEP2_32(varg2, 0, i);
+                if (type_is_ghost(fld1->getType()))
+                    continue;
+                subAns = emit_bits_compare(mark_julia_slot(fld1, fldty), mark_julia_slot(fld2, fldty), ctx);
+                answer = builder.CreateAnd(answer, subAns);
+            }
+            return answer;
+        }
+    }
+    assert(0 && "what is this llvm type?");
+    return 0;
+}
+
+// emit code for is (===).
+static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codectx_t *ctx)
+{
+    jl_value_t *rt1 = arg1.typ, *rt2 = arg2.typ;
+    bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
+    if (isleaf && rt1 != rt2 && !jl_is_type_type(rt1) && !jl_is_type_type(rt2))
+        // disjoint leaf types are never equal (quick test)
+        return ConstantInt::get(T_int1, 0);
+    if (arg1.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1))) {
+        if (arg2.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt2))) {
+            if (rt1 == rt2) {
+                // singleton objects of the same type
+                return ConstantInt::get(T_int1, 1);
+            }
+        }
+    }
+
+    bool sub1 = jl_subtype(rt1, rt2, 0);
+    bool sub2 = jl_subtype(rt2, rt1, 0);
+    bool isteq = sub1 && sub2;
+    if (!sub1 && !sub2) // types are disjoint (exhaustive test)
+        return ConstantInt::get(T_int1, 0);
+
+    bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
+    if (isbits) { // whether this type is unique'd by value
+        return emit_bits_compare(arg1, arg2, ctx);
+    }
+
+    int ptr_comparable = 0; // whether this type is unique'd by pointer
     if (rt1==(jl_value_t*)jl_sym_type || rt2==(jl_value_t*)jl_sym_type ||
-        jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2))
+        jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2)) // excludes abstract types
         ptr_comparable = 1;
     if (jl_subtype(rt1, (jl_value_t*)jl_type_type, 0) ||
-        jl_subtype(rt2, (jl_value_t*)jl_type_type, 0))
+        jl_subtype(rt2, (jl_value_t*)jl_type_type, 0)) // use typeseq for datatypes
         ptr_comparable = 0;
     if ((jl_is_type_type(rt1) && jl_is_leaf_type(jl_tparam0(rt1))) ||
-        (jl_is_type_type(rt2) && jl_is_leaf_type(jl_tparam0(rt2))))
+        (jl_is_type_type(rt2) && jl_is_leaf_type(jl_tparam0(rt2)))) // can compare leaf types by pointer
         ptr_comparable = 1;
-//    int last_depth = ctx->gc.argDepth;
-    bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
-    bool isteq = jl_types_equal(rt1, rt2);
-//    bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
-    if (isteq && isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1))
-        return ConstantInt::get(T_int1, 1);
-    return NULL; // XXX TODO: redo this optimization code
+    if (ptr_comparable) {
+        assert(arg1.isboxed && arg2.isboxed); // only boxed types are valid for pointer comparison
+        return builder.CreateICmpEQ(arg1.V, arg2.V);
+    }
+
+    if (arg2.isboxed && arg2.needsgcroot)
+        make_gcroot(arg2.V, ctx);
+    Value *varg1 = boxed(arg1, ctx);
+    if (!arg1.isboxed && arg1.needsgcroot)
+        make_gcroot(varg1, ctx);
+    Value *varg2 = boxed(arg2, ctx); // unrooted!
+#ifdef LLVM37
+    return builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
+#else
+    return builder.CreateTrunc(builder.CreateCall2(prepare_call(jlegal_func), varg1, varg2), T_int1);
+#endif
 }
 
 static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
@@ -2044,21 +2141,40 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
     }
 
     else if (f->fptr == &jl_f_is && nargs==2) {
-        rt1 = expr_type(args[1], ctx);
-        rt2 = expr_type(args[2], ctx);
-        Value *ans = emit_f_is(rt1,rt2, args[1],args[2], NULL,NULL, ctx);
-        JL_GC_POP();
-        if (!ans)
-            return false;
+        // handle simple static expressions with no side-effects
+        rt1 = static_eval(args[1], ctx, true);
+        if (rt1) {
+            rt2 = static_eval(args[2], ctx, true);
+            if (rt2) {
+                *ret = mark_julia_type(ConstantInt::get(T_int1, jl_egal(rt1, rt2)), jl_bool_type);
+                JL_GC_POP();
+                return true;
+            }
+        }
+        // emit values
+        int last_depth = ctx->gc.argDepth;
+        jl_cgval_t v1 = emit_unboxed(args[1], ctx);
+        if (v1.isboxed && v1.needsgcroot && might_need_root(args[1]))
+            make_gcroot(v1.V, ctx);
+        jl_cgval_t v2 = emit_unboxed(args[2], ctx); // unrooted!
+        // FIXME: v.typ is roughly equiv. to expr_type, but with typeof(T) == Type{T} instead of DataType in a few cases
+        if (v1.typ == (jl_value_t*)jl_datatype_type)
+            v1.typ = expr_type(args[1], ctx);
+        if (v2.typ == (jl_value_t*)jl_datatype_type)
+            v2.typ = expr_type(args[2], ctx);
+        // emit comparison test
+        Value *ans = emit_f_is(v1, v2, ctx);
+        ctx->gc.argDepth = last_depth;
         *ret = mark_julia_type(ans, jl_bool_type);
+        JL_GC_POP();
         return true;
     }
 
     else if (f->fptr == &jl_f_typeof && nargs==1) {
         jl_cgval_t arg1 = emit_expr(args[1], ctx);
         Value *lty = emit_typeof(arg1);
-        JL_GC_POP();
         *ret = mark_julia_type(lty, jl_datatype_type);
+        JL_GC_POP();
         return true;
     }
 
@@ -2609,9 +2725,12 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
                 jl_cgval_t arg = emit_unboxed(args[i+1], ctx);
-                if (arg.V->getType() == at && arg.isimmutable && !arg.needsgcroot && arg.ispointer) {
+                if (arg.isimmutable && !arg.needsgcroot && arg.ispointer) {
                     // can lazy load on demand, no copy needed
-                    argvals[idx] = arg.V;
+                    Value *argv = arg.V;
+                    if (argv->getType() != at)
+                        builder.CreatePointerCast(argv, at);
+                    argvals[idx] = argv;
                 }
                 else {
                     Value *v = emit_unbox(et, arg, jt);
