@@ -564,10 +564,10 @@ process_signaled(s::Process) = (s.termsignal > 0)
 #process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
-    process_running (s) ? "ProcessRunning" :
+    process_running(s) ? "ProcessRunning" :
     process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
-    #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
+    #process_stopped(s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
+    process_exited(s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
 end
 

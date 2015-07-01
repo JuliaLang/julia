@@ -115,7 +115,7 @@ end
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
-.< (x::Real,y::Real) = x < y
+.<( x::Real,y::Real) = x < y
 .<=(x::Real,y::Real) = x <= y
 const .≤ = .<=
 const .≠ = .!=
@@ -154,26 +154,26 @@ ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
 # transposed multiply
-Ac_mul_B (a,b) = ctranspose(a)*b
-A_mul_Bc (a,b) = a*ctranspose(b)
+Ac_mul_B(a,b)  = ctranspose(a)*b
+A_mul_Bc(a,b)  = a*ctranspose(b)
 Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
-At_mul_B (a,b) = transpose(a)*b
-A_mul_Bt (a,b) = a*transpose(b)
+At_mul_B(a,b)  = transpose(a)*b
+A_mul_Bt(a,b)  = a*transpose(b)
 At_mul_Bt(a,b) = transpose(a)*transpose(b)
 
 # transposed divide
-Ac_rdiv_B (a,b) = ctranspose(a)/b
-A_rdiv_Bc (a,b) = a/ctranspose(b)
+Ac_rdiv_B(a,b)  = ctranspose(a)/b
+A_rdiv_Bc(a,b)  = a/ctranspose(b)
 Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
-At_rdiv_B (a,b) = transpose(a)/b
-A_rdiv_Bt (a,b) = a/transpose(b)
+At_rdiv_B(a,b)  = transpose(a)/b
+A_rdiv_Bt(a,b)  = a/transpose(b)
 At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
 
-Ac_ldiv_B (a,b) = ctranspose(a)\b
-A_ldiv_Bc (a,b) = a\ctranspose(b)
+Ac_ldiv_B(a,b)  = ctranspose(a)\b
+A_ldiv_Bc(a,b)  = a\ctranspose(b)
 Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
-At_ldiv_B (a,b) = transpose(a)\b
-A_ldiv_Bt (a,b) = a\transpose(b)
+At_ldiv_B(a,b)  = transpose(a)\b
+A_ldiv_Bt(a,b)  = a\transpose(b)
 At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 

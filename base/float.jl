@@ -173,8 +173,8 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 
 # fallbacks
 floor{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,floor(x))
-ceil {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
-round {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
+ceil{ T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
+round{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
 
 trunc(x::Float64) = box(Float64,trunc_llvm(unbox(Float64,x)))
 trunc(x::Float32) = box(Float32,trunc_llvm(unbox(Float32,x)))
@@ -236,15 +236,15 @@ end
 ==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
 !=(x::Float32, y::Float32) = ne_float(unbox(Float32,x),unbox(Float32,y))
 !=(x::Float64, y::Float64) = ne_float(unbox(Float64,x),unbox(Float64,y))
-< (x::Float32, y::Float32) = lt_float(unbox(Float32,x),unbox(Float32,y))
-< (x::Float64, y::Float64) = lt_float(unbox(Float64,x),unbox(Float64,y))
+<( x::Float32, y::Float32) = lt_float(unbox(Float32,x),unbox(Float32,y))
+<( x::Float64, y::Float64) = lt_float(unbox(Float64,x),unbox(Float64,y))
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
 isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
 isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
-isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
-isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
+isless( x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
+isless( x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 function cmp(x::FloatingPoint, y::FloatingPoint)
     (isnan(x) || isnan(y)) && throw(DomainError())
