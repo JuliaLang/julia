@@ -311,3 +311,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
     @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
 end
+
+#gesvx
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    B = rand(elty,10,5)
+    C = copy(A)
+    D = copy(B)
+    X, rcond, f, b, r = LAPACK.gesvx!(C,D)
+    @test_approx_eq X A\B
+end
