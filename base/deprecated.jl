@@ -537,4 +537,10 @@ const UnionType = Union
 export UnionType
 
 const MathConst = Irrational
-export MathConst
+
+macro math_const(sym, val, def)
+    depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
+    :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
+end
+
+export MathConst, @math_const
