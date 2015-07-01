@@ -1686,11 +1686,18 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                              pi);
         }
     }
-    if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
-        jl_is_long(params[0])) {
-        size_t nt = jl_unbox_long(params[0]);
-        return (jl_value_t*)jl_tupletype_fill(nt, (n==2) ? params[1] :
-                                              (jl_value_t*)jl_any_type);
+    if (tc == (jl_value_t*)jl_ntuple_type && (n == 1 || n == 2)) {
+        if (jl_is_long(params[0])) {
+            size_t nt = jl_unbox_long(params[0]);
+            return jl_tupletype_fill(nt, (n==2) ? params[1] :
+                                     (jl_value_t*)jl_any_type);
+        }
+        else if (!jl_is_typevar(params[0])) {
+            // Only allow integer or TypeVar as the first parameter to
+            // NTuple. issue #9233
+            jl_type_error_rt("apply_type", "first parameter of NTuple",
+                             (jl_value_t*)jl_long_type, params[0]);
+        }
     }
     size_t ntp = jl_svec_len(tp);
     if (n > ntp)
