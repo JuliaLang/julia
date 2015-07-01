@@ -527,6 +527,10 @@ function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
 
+# 11551
+@deprecate utf16_is_surrogate(chr::UInt16) Base.is_surrogate_codeunit(chr)
+@deprecate utf16_get_supplementary(lead::UInt16, trail::UInt16) Base.get_supplementary(lead, trail)
+
 const UnionType = Union
 export UnionType
 
