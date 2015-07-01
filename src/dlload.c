@@ -119,7 +119,7 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
             uv_dlclose(handle);
     }
 /*
-    this branch permutes all base paths in DL_LOAD_PATH with all extensions
+    this branch permutes all base paths in DL_LOAD_PATH with all DL extensions
     note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH)
 */
     else if (jl_base_module != NULL) {
@@ -154,7 +154,7 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
     }
 
 /*
-    now fall back and look in default library paths, for all extensions
+    now fall back and use default dlopen (system library paths) vs. all DL extensions
 */
     for(i=0; i < N_EXTENSIONS; i++) {
         ext = extensions[i];
