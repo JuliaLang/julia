@@ -102,7 +102,18 @@ macro test_throws(args...)
         ex = args[2]
         extype = args[1]
     end
-    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(esc(extype))))
+    if ex.head == :macrocall
+        evalexpr = Expr(:call, :eval, Expr(:quote, ex))
+        :(do_test_throws(() -> $(esc(eval_expr)),
+            $(Expr(:quote,ex)),
+            backtrace(),
+            $(esc(extype))))
+    else
+        :(do_test_throws(()->($(esc(ex))),
+            $(Expr(:quote,ex)),
+            backtrace(),
+            $(esc(extype))))
+    end
 end
 
 macro test_fails(ex)
