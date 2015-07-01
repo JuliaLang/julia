@@ -1960,8 +1960,13 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         return strctinfo;
     }
     else if (!sty->mutabl) {
-        // 0 fields, ghost
-        return ghostValue(sty);
+        // 0 fields, ghost or bitstype
+        if (sty->size == 0)
+            return ghostValue(sty);
+        if (nargs >= 2)
+            return emit_unboxed(args[1], ctx);  // do side effects
+        Type *lt = julia_type_to_llvm(ty);
+        return mark_julia_type(UndefValue::get(lt), ty);
     }
     else {
         // 0 fields, singleton
