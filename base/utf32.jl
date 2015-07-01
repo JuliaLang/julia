@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# UTF-32 basic functions
 next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
@@ -40,8 +41,8 @@ function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
     convert(T, takebuf_string(s))
 end
 
-convert(::Type{Array{Char,1}}, s::UTF32String) = s.data
-convert(::Type{Array{Char}}, s::UTF32String) = s.data
+convert(::Type{Vector{Char}}, str::UTF32String) = str.data
+convert(::Type{Array{Char}},  str::UTF32String) = str.data
 
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
@@ -60,19 +61,19 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     elseif data[1] == Char(0xfffe0000) # byte-swapped
         d = Array(Char, length(data))
         for i = 2:length(data)
-            d[i-1] = bswap(data[i])
+            @inbounds d[i-1] = bswap(data[i])
         end
     else
         d = Array(Char, length(data) + 1)
         copy!(d, 1, data, 1, length(data)) # assume native byte order
     end
-    d[end] = Char(0) # NULL terminate
+    d[end] = 0 # NULL terminate
     UTF32String(d)
 end
 
 function isvalid(::Type{UTF32String}, str::Union{Vector{Char}, Vector{UInt32}})
     for i=1:length(str)
-        @inbounds if !isvalid(Char, reinterpret(UInt32, str[i])) ; return false ; end
+        @inbounds if !isvalid(Char, UInt32(str[i])) ; return false ; end
     end
     return true
 end
@@ -89,9 +90,9 @@ end
 function map(f, s::UTF32String)
     d = s.data
     out = similar(d)
-    out[end] = Char(0)
+    out[end] = 0
 
-    for i = 1:(length(d)-1)
+    @inbounds for i = 1:(length(d)-1)
         c2 = f(d[i])
         if !isa(c2, Char)
             throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
