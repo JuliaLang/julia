@@ -180,6 +180,7 @@ echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
 echo 'LIBBLASNAME = libopenblas' >> Make.user
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
 echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
+echo 'JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji"' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
