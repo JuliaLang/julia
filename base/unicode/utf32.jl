@@ -34,7 +34,7 @@ function convert(::Type{UTF32String}, str::AbstractString)
 end
 
 "
-Converts a UTF-32 encoded vector of `UInt32` to a `UTF8String`
+Converts a vector of `Char` to a `UTF8String`
 
 ### Returns:
 *   `UTF8String`
@@ -42,10 +42,11 @@ Converts a UTF-32 encoded vector of `UInt32` to a `UTF8String`
 ### Throws:
 *   `UnicodeError`
 "
-function convert(::Type{UTF8String}, dat::Vector{UInt32})
-    len = sizeof(dat)
+function convert(::Type{UTF8String}, chrs::Vector{Char})
+    len = sizeof(chrs)
     # handle zero length string quickly
     len == 0 && return empty_utf8
+    dat = reinterpret(UInt32, chrs)
     # get number of bytes to allocate
     len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>2)
     flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
@@ -158,7 +159,7 @@ function convert(::Type{UTF32String}, str::UTF16String)
 end
 
 "
-Converts a UTF-32 encoded vector of `UInt32` to a `UTF16String`
+Converts a vector of `Char` to a `UTF16String`
 
 ### Returns:
 *   `::UTF16String`
@@ -166,10 +167,11 @@ Converts a UTF-32 encoded vector of `UInt32` to a `UTF16String`
 ### Throws:
 *   `UnicodeError`
 "
-function convert(::Type{UTF16String}, dat::Vector{UInt32})
-    len = sizeof(dat)
+function convert(::Type{UTF16String}, chrs::Vector{Char})
+    len = sizeof(chrs)
     # handle zero length string quickly
-    len <= 4 && return empty_utf16
+    len == 0 && return empty_utf16
+    dat = reinterpret(UInt32, chrs)
     # get number of words to allocate
     len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
     len += num4byte + 1
@@ -226,9 +228,6 @@ function encode_to_utf16(dat, len)
     UTF16String(buf)
 end
 
-convert(::Type{UTF8String},  dat::Vector{Char})   = convert(UTF8String, reinterpret(UInt32, dat))
-
-convert(::Type{UTF16String}, dat::Vector{Char})   = convert(UTF16String, reinterpret(UInt32, dat))
 convert(::Type{UTF32String}, c::Char)             = UTF32String(Char[c, Char(0)])
 
 function convert(::Type{UTF32String}, str::ASCIIString)
