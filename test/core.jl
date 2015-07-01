@@ -3081,3 +3081,12 @@ catch err
     @test err.expected == Int
     @test err.got == 0x1
 end
+
+try
+    @eval Union{Int, 1}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Type
+    @test err.got == 1
+end
