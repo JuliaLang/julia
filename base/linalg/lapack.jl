@@ -3952,7 +3952,7 @@ for (trsen, tgsen, elty) in
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{Void}, Ptr{Void},
-                    Ptr{$elty}, Ptr  {BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt},
                     Ptr{BlasInt}),
                     &'N', &'V', select, &n,
                     T, &ldt, Q, &ldq,

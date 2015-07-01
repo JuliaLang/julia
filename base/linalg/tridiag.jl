@@ -135,7 +135,7 @@ eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eig
 type ZeroOffsetVector
     data::Vector
 end
-getindex (a::ZeroOffsetVector, i) = a.data[i+1]
+getindex( a::ZeroOffsetVector, i) = a.data[i+1]
 setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
 
 #Implements the inverse using the recurrence relation between principal minors

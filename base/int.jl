@@ -72,11 +72,11 @@ typealias Signed64 Union{Int8,Int16,Int32,Int64}
 typealias Unsigned64 Union{UInt8,UInt16,UInt32,UInt64}
 typealias Integer64 Union{Signed64,Unsigned64}
 
-div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
+div{T<:Signed64  }(x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
 div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
-rem{T<:Signed64}  (x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
+rem{T<:Signed64  }(x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
 rem{T<:Unsigned64}(x::T, y::T) = box(T,urem_int(unbox(T,x),unbox(T,y)))
-mod{T<:Signed64}  (x::T, y::T) = box(T,smod_int(unbox(T,x),unbox(T,y)))
+mod{T<:Signed64  }(x::T, y::T) = box(T,smod_int(unbox(T,x),unbox(T,y)))
 
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
@@ -136,8 +136,8 @@ for T in IntTypes
         trailing_zeros(x::$T) = Int(box($T,cttz_int(unbox($T,x))))
     end
 end
-count_zeros  (x::Integer) = count_ones(~x)
-leading_ones (x::Integer) = leading_zeros(~x)
+count_zeros(  x::Integer) = count_ones(~x)
+leading_ones( x::Integer) = leading_zeros(~x)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
@@ -154,8 +154,8 @@ end
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
-< (x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
-< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
+<( x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
+<( x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
 <=(x::Signed,   y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
 <=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
 
@@ -446,10 +446,10 @@ if WORD_SIZE == 32
 
     mod(x::Int128, y::Int128) = Int128(mod(BigInt(x),BigInt(y)))
 
-    << (x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
-    << (x::UInt128, y::Int) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int,y)))
-    >> (x::Int128,  y::Int) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int,y)))
-    >> (x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
+    <<( x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
+    <<( x::UInt128, y::Int) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int,y)))
+    >>( x::Int128,  y::Int) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int,y)))
+    >>( x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
     >>>(x::Int128,  y::Int) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int,y)))
     >>>(x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
 else
