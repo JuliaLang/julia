@@ -357,3 +357,9 @@ let c = 0, f, t
     sleep(0.1)
     @test val == c
 end
+
+# MathConst -> Irrational
+f(::Irrational) = true
+@test f(π)
+Compat.@irrational mathconst_one 1.0 big(1.)
+@test f(mathconst_one)

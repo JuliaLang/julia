@@ -63,6 +63,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   Julia 0.4, using these types also checks whether the string has embedded
   NUL characters [#10994](https://github.com/JuliaLang/julia/pull/10994).)
 
+* `typealias Irrational MathConst` - `MathConst` has been renamed to `Irrational` [#11922](https://github.com/JuliaLang/julia/pull/11922)
+
 ## New functions
 
 * `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator.
@@ -110,6 +112,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * Libc and dynamic library-related functions have been moved to the Libc and Libdl modules [#10328](https://github.com/JuliaLang/julia/pull/10328)
 
 * `zero(Ptr{T})` is now `Ptr{T}(0)` [#8909](https://github.com/JuliaLang/julia/pull/8909)
+
+* The unexported macro `Base.@math_const` was renamed to `Base.@irrational`, accessible as `Compat.@irrational` on either 0.3 or 0.4 [#11922](https://github.com/JuliaLang/julia/pull/11922)
 
 ## New types
 
