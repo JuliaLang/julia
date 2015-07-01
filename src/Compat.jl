@@ -468,7 +468,11 @@ else
 end
 
 if VERSION < v"0.4.0-dev+5305"
-    Base.gc_enable(on::Bool) = on ? gc_enable() : gc_disable()
+    function Base.gc_enable(on::Bool)
+        state = ccall(:jl_gc_is_enabled, Cint, ()) != 0
+        on ? gc_enable() : gc_disable()
+        state
+    end
 end
 
 end # module
