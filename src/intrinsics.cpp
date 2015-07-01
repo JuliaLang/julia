@@ -352,7 +352,7 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
         bt = jl_tparam0(et);
     }
     else {
-        JL_TRY {
+        JL_TRY { // TODO: change this to an actual call to staticeval rather than actually executing code
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
                                                jl_svec_data(ctx->sp),
                                                jl_svec_len(ctx->sp)/2);
@@ -400,19 +400,30 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
 
     if (bt == NULL || !jl_is_leaf_type(bt)) {
         // dynamically-determined type; evaluate.
-        if (!jl_is_leaf_type(v.typ)) {
-            // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
-            jl_error("codegen: failed during evaluation of a call to reinterpret");
-            return jl_cgval_t();
+        int nb, alignment;
+        Type *llvmt;
+        if (bt && jl_is_bitstype(bt)) {
+            // always fixed size
+            nb = jl_datatype_size(bt);
+            llvmt = julia_type_to_llvm(bt);
+            alignment = ((jl_datatype_t*)bt)->alignment;
         }
-        int nb = jl_datatype_size(v.typ);
-        Type *llvmt = julia_type_to_llvm(v.typ);
+        else {
+            if (!jl_is_leaf_type(v.typ) && !jl_is_bitstype(v.typ)) {
+                // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
+                // since codegen has no idea what size it might have
+                jl_error("codegen: failed during evaluation of a call to reinterpret");
+                return jl_cgval_t();
+            }
+            nb = jl_datatype_size(v.typ);
+            llvmt = julia_type_to_llvm(v.typ);
+            alignment = ((jl_datatype_t*)v.typ)->alignment;
+        }
         Value *runtime_bt = boxed(emit_expr(targ, ctx), ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
         Value *newobj = emit_allocobj(nb);
         builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj));
-        int alignment = ((jl_datatype_t*)v.typ)->alignment;
         if (!v.ispointer)
             builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
         else
