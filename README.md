@@ -101,6 +101,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat provides an unexported `Compat.unsafe_convert` method that is aliased to `Base.convert` on Julia 0.3 and
   `Base.unsafe_convert` on Julia 0.4.
 
+* `gc_enable()` is now `gc_enable(true)` and `gc_disable()` is now `gc_enable(false)` [#11647](https://github.com/JuliaLang/julia/pull/11647)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

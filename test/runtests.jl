@@ -363,3 +363,7 @@ f(::Irrational) = true
 @test f(π)
 Compat.@irrational mathconst_one 1.0 big(1.)
 @test f(mathconst_one)
+
+# gc_enable(::Bool)
+gc_enable(false)
+gc_enable(true)

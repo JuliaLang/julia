@@ -467,4 +467,8 @@ else
     import Base.@irrational
 end
 
+if VERSION < v"0.4.0-dev+5305"
+    Base.gc_enable(on::Bool) = on ? gc_enable() : gc_disable()
+end
+
 end # module
