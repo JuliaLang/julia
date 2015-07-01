@@ -112,6 +112,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL && !jl_generating_output()) {
+        // suppress warning "replacing module Core.Inference" during bootstrapping
         jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
@@ -130,7 +131,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_typeerror_type = NULL;
         jl_methoderror_type = NULL;
         jl_loaderror_type = NULL;
-        jl_current_task->tls = jl_nothing;
+        jl_current_task->tls = jl_nothing; // may contain an entry for :SOURCE_FILE that is not valid in the new base
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
