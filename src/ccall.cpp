@@ -252,6 +252,9 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
         bool issigned, /* determines whether an integer value should be zero or sign extended */
         jl_codectx_t *ctx)
 {
+    if (v->getType() == T_void)
+        return UndefValue::get(target_type); // convert undef (unreachable) -> undef (target_type)
+
     if (byref) {
         if (tojulia) {
             Type *ptarget_type = PointerType::get(target_type, 0);
@@ -334,7 +337,7 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
     if (addressOf) {
         if (!jl_is_cpointer_type(jlto)) {
             emit_error("ccall: & on argument was not matched by Ptr{T} argument type", ctx);
-            return UndefValue::get(to); // the only "safe" thing to emit here is the expected struct
+            return UndefValue::get(T_void);
         }
         ety = jl_tparam0(jlto);
         if (jlto == (jl_value_t*)jl_voidpointer_type)
