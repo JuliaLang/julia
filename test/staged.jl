@@ -128,3 +128,10 @@ f10502() = ()
 # One-line @generated functions
 @generated oneliner(x,y) = :($x, x, $y, y)
 @test oneliner(1, 2.) == (Int, 1, Float64, 2.)
+
+# issue #11982
+@generated function f11982(T)
+    string(T.parameters[1])
+end
+@test f11982(Float32) == "Float32"
+@test f11982(Int32) == "Int32"
