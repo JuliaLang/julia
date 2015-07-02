@@ -471,7 +471,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     for (i=0; i < np; i++) {
         jl_value_t *elt = jl_tparam(type,i);
         jl_value_t *decl_i = jl_nth_slot_type(decl,i);
-        if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+        if (!isstaged && jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
             !(jl_subtype(decl_i, (jl_value_t*)jl_type_type, 0) && !is_kind(decl_i))) {
             jl_methlist_t *curr = mt->defs;
             int ok=1;
@@ -520,7 +520,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 set_to_any = 1;
             }
         }
-        if (set_to_any) {
+        if (set_to_any || isstaged) {
         }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
                  // give up on specializing static parameters for Type{Type{Type{...}}}
