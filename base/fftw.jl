@@ -336,6 +336,13 @@ function call{T<:fftwComplex}(w::PlanWrap!{T}, Z::StridedArray{T})
     return Z
 end
 
+immutable ScaleWrap{W, N}
+    w::W
+    nrm::N
+end
+
+call(w::ScaleWrap, Z) = scale!(w.w(Z), w.nrm)
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -542,14 +549,14 @@ for (f,fb) in ((:ifft,:bfft), (:ifft!,:bfft!))
         function $pf(X, region, flags, tlim)
             nrm = normalization(X, region)
             p = $pfb(X, region, flags, tlim)
-            return Z -> scale!(p(Z), nrm)
+            return ScaleWrap(p, nrm)
         end
         $pf(X, region, flags) = $pf(X, region, flags, NO_TIMELIMIT)
         $pf(X, region) = $pf(X, region, ESTIMATE, NO_TIMELIMIT)
         function $pf(X)
             nrm = normalization(X)
             p = $pfb(X)
-            return Z -> scale!(p(Z), nrm)
+            return ScaleWrap(p, nrm)
         end
     end
 end
@@ -703,7 +710,7 @@ function plan_irfft(X::StridedArray, d::Integer, region, flags, tlim)
     osize = [size(X)...]
     osize[d1] = d
     nrm = 1 / prod(osize[[region...]])
-    return Z -> scale!(p(Z), nrm)
+    return ScaleWrap(p, nrm)
 end
 
 plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
