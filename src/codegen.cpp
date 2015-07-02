@@ -628,6 +628,7 @@ static Function *to_function(jl_lambda_info_t *li)
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
+    jl_gc_inhibit_finalizers(nested_compile);
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li);
@@ -647,6 +648,7 @@ static Function *to_function(jl_lambda_info_t *li)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
+    jl_gc_inhibit_finalizers(nested_compile);
 #ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
