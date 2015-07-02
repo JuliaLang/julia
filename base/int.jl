@@ -95,14 +95,6 @@ for T in IntTypes
         (&)(x::$T, y::$T) = box($T,and_int(unbox($T,x),unbox($T,y)))
         (|)(x::$T, y::$T) = box($T, or_int(unbox($T,x),unbox($T,y)))
         ($)(x::$T, y::$T) = box($T,xor_int(unbox($T,x),unbox($T,y)))
-
-        <<(x::$T,  y::Int) = box($T, shl_int(unbox($T,x),unbox(Int,y)))
-        >>>(x::$T, y::Int) = box($T,lshr_int(unbox($T,x),unbox(Int,y)))
-    end
-    if issubtype(T,Unsigned)
-        @eval >>(x::$T, y::Int) = box($T,lshr_int(unbox($T,x),unbox(Int,y)))
-    else
-        @eval >>(x::$T, y::Int) = box($T,ashr_int(unbox($T,x),unbox(Int,y)))
     end
     for S in IntTypes
         (S === Int128 || S === UInt128) && continue
