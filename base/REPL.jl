@@ -734,7 +734,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
 
-    # Set up shell mode
+    # Set up git mode
     git_mode = Prompt("git> ";
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
@@ -743,7 +743,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         complete = ShellCompletionProvider(repl),
         on_done = respond(repl, julia_prompt) do line
             line = strip(line)
-            :(Pkg.LibGit2.repl($line))
+            :(Pkg.LibGit2.repl_cmd($line))
         end)
 
     ################################# Stage II #############################
