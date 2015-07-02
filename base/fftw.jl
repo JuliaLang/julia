@@ -378,6 +378,13 @@ function call{T<:fftwNumber}(w::PlanWrapR2R{T}, Z::StridedArray{T})
     return W
 end
 
+function call{T<:Number}(w::PlanWrapR2R{T}, Z::StridedArray{T})
+    # Missing assert_applicable?
+    W = T <: Complex ? complexfloat(Z) : float(Z)
+    execute_r2r(w.p.plan, W, W)
+    return W
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -812,13 +819,9 @@ end
 
 function plan_r2r{T<:Number}(X::StridedArray{T}, kinds, region,
                              flags::Unsigned, tlim::Real)
-    Y = T<:Complex ? complexfloat(X) : float(X)
+    Y = T <: Complex ? complexfloat(X) : float(X)
     p = Plan_r2r(Y, Y, region, kinds, flags, tlim)
-    return Z::StridedArray{T} -> begin
-        W = T<:Complex ? complexfloat(Z) : float(Z)
-        execute_r2r(p.plan, W, W)
-        return W
-    end
+    return PlanWrapR2R{T}(p)
 end
 
 function plan_r2r!{T<:fftwNumber}(
