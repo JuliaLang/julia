@@ -759,24 +759,29 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctors name field-names field-types gen-specific? locs)
-  (let* ((field-names (safe-field-names field-names field-types))
+(define (default-inner-ctors name field-names field-types locs gen-specific? mutable?)
+  (let* ((arg-names (safe-field-names field-names field-types))
          (any-ctor
           ;; definition with Any for all arguments
-          `(function (call ,name ,@field-names)
-                     (block
-		      ,@locs
-                      (call new ,@field-names)))))
-    (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
-        (list
-         ;; definition with field types for all arguments
-         `(function (call ,name
-                          ,@(map make-decl field-names field-types))
-                    (block
-		     ,@locs
-                     (call new ,@field-names)))
-         any-ctor)
-        (list any-ctor))))
+          `(function (call ,name ,@arg-names)
+                     (block ,@locs (call new ,@arg-names))))
+         (ctors (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
+                    (list
+                      ;; definition with field types for all arguments
+                      `(function (call ,name ,@(map make-decl arg-names field-types))
+                                 (block ,@locs (call new ,@arg-names)))
+                      any-ctor)
+                    (list any-ctor))))
+    (if (and (not mutable?)
+             (length> field-names 1)
+             (eq? arg-names field-names))
+        (let ((g (gensy)))
+          (cons `(function (call ,name
+                                 (parameters ,@(map (lambda (k) `(kw ,k (|.| ,g ',k))) field-names))
+                                 (|::| ,g ,name))
+                           (block ,@locs (call new ,@field-names)))
+                ctors))
+        ctors)))
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
   (let ((field-names (safe-field-names field-names field-types)))
@@ -916,7 +921,7 @@
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (defs2 (if (null? defs)
-                     (default-inner-ctors name field-names field-types (null? params) locs)
+                     (default-inner-ctors name field-names field-types locs (null? params) mut)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (for-each (lambda (v)
