@@ -324,6 +324,18 @@ function call{T<:Number}(w::PlanWrap{T}, Z::StridedArray{T})
     return W
 end
 
+immutable PlanWrap!{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrap!{T}}, plan::P) = PlanWrap!{T, P}(plan)
+
+function call{T<:fftwComplex}(w::PlanWrap!{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    execute(w.p.plan, Z, Z)
+    return Z
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -495,11 +507,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                           flags::Unsigned,
                                                           tlim::Real)
             p = Plan(X, X, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                assert_applicable(p, Z)
-                execute(p.plan, Z, Z)
-                return Z
-            end
+            return PlanWrap!{T}(p)
         end
 
         $f(X::StridedArray) = $f(X, 1:ndims(X))
