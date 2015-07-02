@@ -37,3 +37,8 @@ show(buf, r"")
 # regex match / search string must be a ByteString
 @test_throws ArgumentError match(r"test", utf32("this is a test"))
 @test_throws ArgumentError search(utf32("this is a test"), r"test")
+
+# Named subpatterns
+m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+@test (m[:a], m[2], m["b"]) == ("x", "y", "z")
+@test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
