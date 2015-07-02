@@ -84,6 +84,7 @@ $(julia_flisp.boot): julia-parser.scm julia-syntax.scm \
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc flisp/*.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: table.c
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: gc-debug.c
 
 $(BUILDDIR)/support/libsupport.a: support/*.h support/*.c
 	$(MAKE) -C support BUILDDIR='$(abspath $(BUILDDIR)/support)'
