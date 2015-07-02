@@ -8,8 +8,9 @@ abstract Result
 type Success <: Result
     expr
     resultexpr
+    res
+    Success(expr, resultexpr=nothing, res=nothing) = new(expr, resultexpr, res)
 end
-Success(expr) = Success(expr, nothing)
 type Failure <: Result
     expr
     resultexpr
@@ -21,7 +22,7 @@ type Error <: Result
     backtrace
 end
 
-default_handler(r::Success) = nothing
+default_handler(r::Success) = r.res
 function default_handler(r::Failure)
     if r.resultexpr != nothing
         error("test failed: $(r.resultexpr)\n in expression: $(r.expr)")
@@ -63,10 +64,10 @@ function do_test_throws(body, qex, bt, extype)
             @test_throws without an exception type is deprecated;
             Use `@test_throws $(typeof(err)) $(qex)` instead.
             """, bt = bt)
-            Success(qex)
+            Success(qex, nothing, err)
         else
             if isa(err, extype)
-                Success(qex)
+                Success(qex, nothing, err)
             else
                 if isa(err,Type)
                     Failure(qex, "the type $err was thrown instead of an instance of $extype")
