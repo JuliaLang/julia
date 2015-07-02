@@ -304,6 +304,26 @@ end
 
 @inline call(::ToReal, x) = real(x)
 
+immutable PlanWrap{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrap{T}}, plan::P) = PlanWrap{T, P}(plan)
+
+function call{T<:fftwComplex}(w::PlanWrap{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    W = similar(Z, T)
+    execute(w.p.plan, Z, W)
+    return W
+end
+
+function call{T<:Number}(w::PlanWrap{T}, Z::StridedArray{T})
+    W = complexfloat(Z) # in-place transform
+    assert_applicable(w.p, W)
+    execute(w.p.plan, W, W)
+    return W
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -460,24 +480,14 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                          tlim::Real)
             Y = similar(X, T)
             p = Plan(X, Y, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                assert_applicable(p, Z)
-                W = similar(Z, T)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrap{T}(p)
         end
 
         function $plan_f{T<:Number}(X::StridedArray{T}, region,
                                     flags::Unsigned, tlim::Real)
             Y = complexfloat(X) # in-place transform
             p = Plan(Y, Y, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                W = complexfloat(Z) # in-place transform
-                assert_applicable(p, W)
-                execute(p.plan, W, W)
-                return W
-            end
+            return PlanWrap{T}(p)
         end
 
         function $plan_f!{T<:fftwComplex}(X::StridedArray{T},
