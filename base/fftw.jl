@@ -343,6 +343,21 @@ end
 
 call(w::ScaleWrap, Z) = scale!(w.w(Z), w.nrm)
 
+immutable PlanWrapR{Ti, To, Nd, P}
+    p::P
+    osize::NTuple{Nd, Int}
+end
+
+call{Ti, To, Nd, P}(::Type{PlanWrapR{Ti, To, Nd}}, p::P, osize) =
+    PlanWrapR{Ti, To, Nd, P}(p, (osize...))
+
+function call{Ti, To}(w::PlanWrapR{Ti, To}, Z::StridedArray{Ti})
+    assert_applicable(w.p, Z)
+    W = Array(To, w.osize...)
+    execute(w.p.plan, Z, W)
+    return W
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -588,12 +603,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
             p = Plan(X, Y, region, flags, tlim)
-            return Z::StridedArray{$Tr} -> begin
-                assert_applicable(p, Z)
-                W = Array($Tc, osize...)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrapR{$Tr, $Tc, ndims(X)}(p, osize)
         end
 
         # FFTW currently doesn't support PRESERVE_INPUT for
@@ -644,12 +654,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize[region] = d
             Y = Array($Tr, osize...)
             p = Plan(X, Y, region, flags | PRESERVE_INPUT, tlim)
-            return Z::StridedArray{$Tc} -> begin
-                assert_applicable(p, Z)
-                W = Array($Tr, osize...)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrapR{$Tc, $Tr, ndims(X)}(p, osize)
         end
 
         function plan_brfft(X::StridedArray{$Tc}, d::Integer, region,
