@@ -3736,10 +3736,10 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Type *prt = NULL;
     int sret = 0;
     std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_sig, fargt_vasig, inRegList, byRefList, attrs,
-                                            ((isref&1) ? (jl_value_t*)jl_any_type : jlrettype), argt->parameters);
+                                            ((isref&1) ? (jl_value_t*)jl_any_type : jlrettype), argt->parameters, nargs);
     if (!err_msg.empty())
         jl_error(err_msg.c_str());
-    if (fargt.size() != fargt_sig.size())
+    if (fargt.size() + sret != fargt_sig.size())
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
     jl_compile(ff);
@@ -3835,7 +3835,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         else {
             // undo whatever we might have done to this poor argument
             bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
-            val = llvm_type_rewrite(val, val->getType(), fargt[i+sret], true, byRefList[i], issigned, &ctx);
+            val = llvm_type_rewrite(val, val->getType(), fargt[i], true, byRefList[i], issigned, &ctx);
         }
 
         // figure out how to repack this type
