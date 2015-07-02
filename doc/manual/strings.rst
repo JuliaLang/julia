@@ -697,6 +697,16 @@ use destructuring syntax to bind them to local variables::
     julia> first, second, third = m.captures; first
     "a"
 
+Captures can also be accessed by indexing the :obj:`RegexMatch` object
+with the number or name of the capture group::
+
+    julia> m=match(r"(?P<hour>\d+):(?P<minute>\d+)","12:45")
+    RegexMatch("12:45", hour="12", minute="45")
+    julia> m[:minute]
+    "45"
+    julia> m[2]
+    "45"
+
 You can modify the behavior of regular expressions by some combination
 of the flags ``i``, ``m``, ``s``, and ``x`` after the closing double
 quote mark. These flags have the same meaning as they do in Perl, as
