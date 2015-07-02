@@ -1688,9 +1688,14 @@
         (parse-string-literal- 0 p s custom))))
 
 (define (strip-leading-newline s)
-  (if (and (> (sizeof s) 0) (eqv? (string.char s 0) #\newline))
-      (string.tail s 1)
-      s))
+  (let ((n (sizeof s)))
+    (cond
+      ((and (> n 0) (eqv? (string.char s 0) #\newline))
+       (string.tail s 1))
+      ((and (> n 1) (eqv? (string.char s 0) #\return)
+                    (eqv? (string.char s 1) #\newline))
+       (string.tail s 2))
+      (else s))))
 
 (define (dedent-triplequoted-string lst)
   (let ((prefix (triplequoted-string-indentation lst)))
