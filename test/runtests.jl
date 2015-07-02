@@ -367,3 +367,26 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 # gc_enable(::Bool)
 @test gc_enable(false)
 @test !gc_enable(true)
+
+# Vector{Int}(), Array{Int}
+
+@test @compat typeof(Vector{Int}()) == Array{Int,1}
+@test @compat length(Vector{Int}()) == 0
+
+@test @compat typeof(Vector{Int8}(10)) == Array{Int8,1}
+@test @compat length(Vector{Int8}(10)) == 10
+
+@test @compat typeof(Array{UInt16}()) == Array{UInt16,0}
+@test @compat length(Array{UInt16}()) == 1
+
+@test @compat typeof(Array{UInt16}(0)) == Array{UInt16,1}
+@test @compat length(Array{UInt16}(0)) == 0
+
+@test @compat typeof(Array{Float16}(5)) == Array{Float16,1}
+@test @compat length(Array{Float16}(5)) == 5
+
+@test @compat typeof(Array{String}(2,2)) == Array{String,2}
+@test @compat size(Array{String}(2,2)) == (2,2)
+
+@test @compat typeof(Array{Rational{Int}}(2,2,2,2,2)) == Array{Rational{Int},5}
+@test @compat size(Array{Rational{Int}}(2,2,2,2,2)) == (2,2,2,2,2)

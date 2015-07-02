@@ -279,6 +279,12 @@ function _compat(ex::Expr)
             if isexpr(s, :curly) && s.args[1] == :Val
                 ex = Expr(:call, :chol, ex.args[2], s.args[2])
             end
+        elseif VERSION < v"0.4.0-dev+4739" && isexpr(f, :curly) && (f.args[1] == :Vector || f.args[1] == :Array)
+            if f.args[1] == :Vector && length(ex.args) == 1
+                ex = Expr(:call, :Array, f.args[2], 0)
+            else
+                ex = Expr(:call, :Array, f.args[2], ex.args[2:end]...)
+            end
         end
     elseif ex.head == :curly
         f = ex.args[1]
