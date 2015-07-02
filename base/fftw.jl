@@ -365,6 +365,19 @@ function call{Ti, To}(w::PlanWrapR{Ti, To, true}, Z::StridedArray{Ti})
     return W
 end
 
+immutable PlanWrapR2R{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrapR2R{T}}, plan::P) = PlanWrapR2R{T, P}(plan)
+
+function call{T<:fftwNumber}(w::PlanWrapR2R{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    W = similar(Z, T)
+    execute_r2r(w.p.plan, Z, W)
+    return W
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -794,12 +807,7 @@ function plan_r2r{T<:fftwNumber}(
     X::StridedArray{T}, kinds, region, flags::Unsigned, tlim::Real)
     Y = similar(X, T)
     p = Plan_r2r(X, Y, region, kinds, flags, tlim)
-    return Z::StridedArray{T} -> begin
-        assert_applicable(p, Z)
-        W = similar(Z, T)
-        execute_r2r(p.plan, Z, W)
-        return W
-    end
+    return PlanWrapR2R{T}(p)
 end
 
 function plan_r2r{T<:Number}(X::StridedArray{T}, kinds, region,
