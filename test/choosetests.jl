@@ -62,7 +62,7 @@ function choosetests(choices = [])
 
     linalgtests = ["linalg1", "linalg2", "linalg3", "linalg4",
                    "linalg/lapack", "linalg/triangular", "linalg/tridiag",
-                   "linalg/bidiag", "linalg/diagonal",
+                   "linalg/bidiag", "linalg/diagonal", "linalg/dense",
                    "linalg/pinv", "linalg/givens", "linalg/cholesky",
                    "linalg/lu", "linalg/symmetric", "linalg/generic"]
     if Base.USE_GPL_LIBS
