@@ -527,10 +527,6 @@ function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
 
-# 11551
-@deprecate utf16_is_surrogate(chr::UInt16) Base.is_surrogate_codeunit(chr)
-@deprecate utf16_get_supplementary(lead::UInt16, trail::UInt16) Base.get_supplementary(lead, trail)
-
 const UnionType = Union
 export UnionType
 
@@ -542,6 +538,44 @@ macro math_const(sym, val, def)
 end
 
 export MathConst, @math_const
+
+# 11551
+function utf16_is_surrogate(chr::UInt16)
+    depwarn("""
+            Base.utf16_is_surrogate was undocumented and unexported,
+            and has been removed.  Use Base.is_surrogate_codeunit(chr::Unsigned) instead,
+            however it is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("utf16_is_surrogate"))
+    Base.is_surrogate_codeunit(chr)
+end
+function utf16_is_lead(chr::UInt16)
+    depwarn("""
+            Base.utf16_is_lead was undocumented and unexported,
+            and has been removed.  Use Base.is_surrogate_lead(chr::Unsigned) instead,
+            however is is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("utf16_is_lead"))
+    Base.is_surrogate_lead(chr)
+end
+function utf16_is_trail(chr::UInt16)
+    depwarn("""
+            Base.utf16_is_trail was undocumented and unexported,
+            and has been removed.  Use Base.is_surrogate_trail(chr::Unsigned) instead,
+            however it is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("utf16_is_trail"))
+    Base.is_surrogate_trail(chr)
+end
+function utf16_get_supplementary(lead::UInt16, trail::UInt16)
+    depwarn("""
+            Base.utf16_get_supplementary was undocumented and unexported,
+            and has been removed.  Use Base.get_supplementary(lead::Unsigned, trail::Unsigned) instead,
+            however it is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("utf16_get_supplementary"))
+    Base.get_supplementary(lead, trail)
+end
 
 # 11280, mmap
 
