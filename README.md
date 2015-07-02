@@ -50,6 +50,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat f(t::Timer)` - mimic the Julia 0.4 Timer class
 
+* `@compat Vector{Int}()`, `@compat Vector{UInt8}(n)`, `@compat Array{Float32}(2,2)` - Julia 0.4-style array constructors.
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
