@@ -265,7 +265,8 @@ macro big_str(s)
     !isnull(n) && return get(n)
     n = tryparse(BigFloat,s)
     !isnull(n) && return get(n)
-    throw(ArgumentError("invalid number format $(repr(s)) for BigInt or BigFloat"))
+    message = "invalid number format $s for BigInt or BigFloat"
+    :(throw(ArgumentError($message)))
 end
 
 ## system word size ##
