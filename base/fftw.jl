@@ -294,6 +294,16 @@ function fix_kinds(region, kinds)
     return kinds
 end
 
+immutable Identity
+end
+
+@inline call(::Identity, x) = x
+
+immutable ToReal
+end
+
+@inline call(::ToReal, x) = real(x)
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -697,19 +707,19 @@ rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
 irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
 brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
 
-plan_fft(x::Number) = x -> x
-plan_ifft(x::Number) = x -> x
-plan_bfft(x::Number) = x -> x
-plan_rfft(x::Real) = x -> x
-plan_irfft(x::Number, d::Integer) = (irfft(x,d); x -> real(x))
-plan_brfft(x::Number, d::Integer) = (brfft(x,d); x -> real(x))
+plan_fft(x::Number) = Identity()
+plan_ifft(x::Number) = Identity()
+plan_bfft(x::Number) = Identity()
+plan_rfft(x::Real) = Identity()
+plan_irfft(x::Number, d::Integer) = (irfft(x,d); ToReal())
+plan_brfft(x::Number, d::Integer) = (brfft(x,d); ToReal())
 
-plan_fft(x::Number, dims) = (fft(x,dims); x -> x)
-plan_ifft(x::Number, dims) = (ifft(x,dims); x -> x)
-plan_bfft(x::Number, dims) = (bfft(x,dims); x -> x)
-plan_rfft(x::Real, dims) = (rfft(x,dims); x -> x)
-plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); x -> real(x))
-plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); x -> real(x))
+plan_fft(x::Number, dims) = (fft(x,dims); Identity())
+plan_ifft(x::Number, dims) = (ifft(x,dims); Identity())
+plan_bfft(x::Number, dims) = (bfft(x,dims); Identity())
+plan_rfft(x::Real, dims) = (rfft(x,dims); Identity())
+plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); ToReal())
+plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); ToReal())
 
 plan_fft(x::Number, dims, flags) = plan_fft(x, dims)
 plan_ifft(x::Number, dims, flags) = plan_ifft(x, dims)
