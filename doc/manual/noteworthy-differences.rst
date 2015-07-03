@@ -13,7 +13,8 @@ Noteworthy and unusual Julia features
   similarly ``χ⁽³⁾`` is used in electromagnetism for the third-order nonlinear susceptibility, another example is ``∇²``
   which is the name of the Laplacian operator. All of these Unicode symbols are valid Julia identifiers.
 
-  It can also be useful for caching powers of ``x`` to ensure that intermediate products are reused optimally in time-critical code. A classic example is in computing the [Lennard-Jones 12-6 potential energy](https://en.wikipedia.org/wiki/Lennard-Jones_potential) in computational chemistry and physics, in order to compute: 
+  It can also be useful for caching powers of ``x`` to ensure that intermediate products are reused optimally in time-critical code. 
+  A classic example is in computing the [Lennard-Jones 12-6 potential energy](https://en.wikipedia.org/wiki/Lennard-Jones_potential) in computational chemistry and physics, in order to compute: 
     
   .. math::
     
