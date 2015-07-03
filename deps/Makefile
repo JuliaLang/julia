@@ -1642,8 +1642,8 @@ libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
 	$(TAR) xfz $<
 	touch -c $@
 
-$(OSXUNWIND_OBJ_SOURCE): libosxunwind-$(OSXUNWIND_VER)/Makefile
-	$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) $(OSXUNWIND_FLAGS)
+$(OSXUNWIND_OBJ_SOURCE): libosxunwind-$(OSXUNWIND_VER)/Makefile | $(OBJCONV_TARGET)
+	$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) $(OSXUNWIND_FLAGS) OBJCONV=$(OBJCONV_TARGET) SYMFILE=../osxunwind.def
 	touch -c $@
 $(OSXUNWIND_OBJ_TARGET): $(OSXUNWIND_OBJ_SOURCE) | $(build_shlibdir)
 	cp libosxunwind-$(OSXUNWIND_VER)/libosxunwind.a $(build_libdir)/libosxunwind.a

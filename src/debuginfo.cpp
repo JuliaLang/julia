@@ -873,6 +873,9 @@ public:
 
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
+// Same but for the julia unwinder
+extern "C" void __jl_register_frame(void*);
+extern "C" void __jl_deregister_frame(void*);
 
 static const char *processFDE(const char *Entry, bool isDeregister) {
   const char *P = Entry;
@@ -880,10 +883,14 @@ static const char *processFDE(const char *Entry, bool isDeregister) {
   P += 4;
   uint32_t Offset = *((const uint32_t *)P);
   if (Offset != 0) {
-    if (isDeregister)
+    if (isDeregister) {
+      __jl_deregister_frame(const_cast<char *>(Entry));
       __deregister_frame(const_cast<char *>(Entry));
-    else
+    }
+    else {
+      __jl_register_frame(const_cast<char *>(Entry));
       __register_frame(const_cast<char *>(Entry));
+    }
   }
   return P + Length;
 }
