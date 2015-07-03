@@ -765,6 +765,9 @@ function precise_container_types(args, types, vtypes, sv)
         if isa(ai,Expr) && (is_known_call(ai, svec, sv) || is_known_call(ai, tuple, sv))
             aa = ai.args
             result[i] = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
+            if any(isvarargtype, result[i])
+                return nothing
+            end
         elseif ti<:Tuple && (i==n || !isvatuple(ti))
             result[i] = ti.parameters
         else
@@ -838,6 +841,11 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
             end
         end
         return Any
+    end
+    for i=1:(length(argtypes)-1)
+        if isvarargtype(argtypes[i])
+            return Any
+        end
     end
     if isgeneric(f)
         return abstract_call_gf(f, fargs, Tuple{argtypes...}, e)
@@ -2859,7 +2867,7 @@ function inlining_pass(e::Expr, sv, ast)
     for ninline = 1:100
         ata = Any[exprtype(e.args[i],sv) for i in 2:length(e.args)]
         for a in ata
-            a === Bottom && return (e, stmts)
+            (a === Bottom || isvarargtype(a)) && return (e, stmts)
         end
         atype = Tuple{ata...}
         if length(atype.parameters) > MAX_TUPLETYPE_LEN

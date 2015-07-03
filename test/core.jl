@@ -3090,3 +3090,14 @@ catch err
     @test err.expected == Type
     @test err.got == 1
 end
+
+# issue #10930
+@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+find_tvar10930{T<:Tuple}(sig::Type{T}) = 1
+function find_tvar10930(arg)
+    if arg<:Tuple
+        find_tvar10930(arg[random_var_name])
+    end
+    return 1
+end
+@test find_tvar10930(Vararg{Int}) === 1
