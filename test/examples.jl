@@ -35,8 +35,6 @@ include("../examples/queens.jl")
 @test solve(8, 8, 7) == Array{Int,1}[[1,1],[2,3],[3,5],[4,2],[5,8],[7,4],[8,7]]
 
 # At least make sure code laods
-include("../examples/plife.jl")
-
 include("../examples/preduce.jl")
 
 include("../examples/wordcount.jl")
