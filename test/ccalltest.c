@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <complex.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -84,6 +85,13 @@ complex_t* cptest(complex_t *a) {
     a->real += 1;
     a->imag -= 2;
     return a;
+}
+
+complex_t* cptest_static(complex_t *a) {
+    complex_t *b = (complex_t*)malloc(sizeof(complex_t));
+    b->real = a->real;
+    b->imag = a->imag;
+    return b;
 }
 
 // Native-like data types
