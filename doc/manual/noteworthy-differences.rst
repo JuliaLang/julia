@@ -9,29 +9,32 @@ Noteworthy Differences from other Languages
 Noteworthy and unusual Julia features
 ---------------------------------
 
-* Julia allows identifiers with complex Unicode, for example you could represent the value of a chi-squared test with ``χ²``, similarly ``χ⁽³⁾`` is used in electromagnetism for the third-order nonlinear susceptibility, another example is ``∇²`` which is the name of the Laplacian operator. All of these Unicode symbols are valid Julia identifiers.
+* Julia allows identifiers with complex Unicode, for example you could represent the value of a chi-squared test with ``χ²``,
+  similarly ``χ⁽³⁾`` is used in electromagnetism for the third-order nonlinear susceptibility, another example is ``∇²``
+  which is the name of the Laplacian operator. All of these Unicode symbols are valid Julia identifiers.
 
-    It can also be useful for caching powers of ``x`` to ensure that intermediate products are reused optimally in time-critical code. A classic example is in computing the [Lennard-Jones 12-6 potential energy](https://en.wikipedia.org/wiki/Lennard-Jones_potential) in computational chemistry and physics. 
+  It can also be useful for caching powers of ``x`` to ensure that intermediate products are reused optimally in time-critical code. A classic example is in computing the [Lennard-Jones 12-6 potential energy](https://en.wikipedia.org/wiki/Lennard-Jones_potential) in computational chemistry and physics, in order to compute: 
     
-    in order to compute: 
+  .. math::
     
-    .. math::
-    
-        A/x^12 - B/x^6 
+      A/x^12 - B/x^6 
         
-    one can write:
+  one can write:
 
-    .. doctest::
+  .. doctest::
 
-        "Lennard-Jones potential"
-        function lj(x, A, B)
-            x⁻² = x^-2
-            x⁻⁶ = (x⁻²)^3
-            x⁻¹² = (x⁻⁶)^2
-            A*x⁻¹² - B*x⁻⁶
-        end
+  "Lennard-Jones potential"
+  function lj(x, A, B)
+      x⁻² = x^-2
+      x⁻⁶ = (x⁻²)^3
+      x⁻¹² = (x⁻⁶)^2
+      A*x⁻¹² - B*x⁻⁶
+  end
 
-    But be wary about referencing a global variable while thinking it was an operator applied to a local variable and updating a variable without remembering to update the cached value.
+  .. note::
+  
+  Be wary about referencing a global variable while thinking it was an operator applied to a local variable and updating a
+  variable without remembering to update the cached value.
 
 * The ``/`` operator gives floating-point results for integer arguments, use ``div`` for truncating to an integer.
 
