@@ -51,19 +51,19 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             # Start by building inference0.{ji,o}
             inference0_path = joinpath(dirname(sysimg_path), "inference0")
             info("Building inference0.o...")
-            println("$julia -C $cpu_target --build $inference0_path coreimg.jl")
-            run(`$julia -C $cpu_target --build $inference0_path coreimg.jl`)
+            println("$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl")
+            run(`$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl`)
 
             # Bootstrap off off that to create inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
             info("Building inference.o...")
-            println("$julia -C $cpu_target --build $inference_path coreimg.jl")
-            run(`$julia -C $cpu_target --build $inference_path coreimg.jl`)
+            println("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
+            run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
             # Bootstrap off off that to create sys.{ji,o}
             info("Building sys.o...")
-            println("$julia -C $cpu_target --build $sysimg_path -J $inference_path.ji -f sysimg.jl")
-            run(`$julia -C $cpu_target --build $sysimg_path -J $inference_path.ji -f sysimg.jl`)
+            println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o  -J $inference_path.ji -f sysimg.jl")
+            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji -f sysimg.jl`)
 
             if ld != nothing
                 link_sysimg(sysimg_path, ld)
@@ -72,7 +72,11 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             end
 
             if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
-                info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                if Base.isfile("$sysimg_path.$(Libdl.dlext)")
+                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.$(Libdl.dlext)")
+                else
+                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                end
             else
                 info("Julia will automatically load this system image at next startup")
             end
@@ -166,7 +170,7 @@ if !isinteractive()
         println(" Example:")
         println("   build_sysimg.jl /usr/local/lib/julia/sys core2 ~/my_usrimg.jl --force")
         println()
-        println(" Running this script with no arguments is equivalent to calling it via")
+        println(" Running this script with no arguments is equivalent to:")
         println("   build_sysimg.jl $(default_sysimg_path) native")
         return 0
     end
