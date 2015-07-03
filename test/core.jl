@@ -3101,3 +3101,8 @@ function find_tvar10930(arg)
     return 1
 end
 @test find_tvar10930(Vararg{Int}) === 1
+
+# issue #12003
+const DATE12003 = DateTime(1917,1,1)
+failure12003(dt=DATE12003) = Dates.year(dt)
+@test isa(failure12003(), Integer)

@@ -128,7 +128,7 @@ static Value *uint_cnvt(Type *to, Value *x)
 }
 
 #define LLVM_FP(a,b) APFloat(a,b)
-static Constant *julia_const_to_llvm(jl_value_t *e)
+static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
 {
     jl_value_t *jt = jl_typeof(e);
     jl_datatype_t *bt = (jl_datatype_t*)jt;
@@ -212,7 +212,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             else if (f == jl_false)
                 val = ConstantInt::get(T_int8,0);
             else
-                val = julia_const_to_llvm(f);
+                val = julia_const_to_llvm(f, true);
             if (val == NULL) {
                 JL_GC_POP();
                 return NULL;
@@ -238,7 +238,10 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             assert(at);
             init = ConstantArray::get(at, ArrayRef<Constant*>(fields,llvm_nf));
         }
-        return new GlobalVariable(*jl_Module, t, true, GlobalVariable::ExternalLinkage, init);
+        if (nested)
+            return init;
+        else
+            return new GlobalVariable(*jl_Module, t, true, GlobalVariable::ExternalLinkage, init);
     }
     return NULL;
 }
