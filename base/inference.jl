@@ -926,6 +926,11 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     end
     #print("call ", e.args[1], argtypes, "\n\n")
     f = _ieval(func)
+    if isa(called, Expr)
+        # if called thing is a constant, still make sure it gets annotated with a type.
+        # issue #11997
+        called.typ = abstract_eval_constant(f)
+    end
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
