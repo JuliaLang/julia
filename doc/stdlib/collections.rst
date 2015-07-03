@@ -122,6 +122,20 @@ General Collections
 
    For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
 
+   If the collection is infinite (e.g. :func:`repeated`), then the function returns ``ℵ₀``, an instance of the singleton type :obj:`AlephNull`.
+
+.. function:: AlephNull()
+
+   A singleton type with instance ``ℵ₀`` representing the cardinality of the set of natural numbers. Its main purpose is to provide a well-defined :func:`length` of infinite iterators, and its use outside this context is discouraged.
+
+   .. doctest::
+
+      julia> length(repeated(1))
+      ℵ₀
+
+      julia> min(ℵ₀,5)
+      5
+
 .. function:: endof(collection) -> Integer
 
    Returns the last index of the collection.

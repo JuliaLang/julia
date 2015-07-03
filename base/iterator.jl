@@ -23,11 +23,11 @@ min(x::Integer, ::AlephNull) = x
 min(::AlephNull, x::Integer) = x
 min(::AlephNull, ::AlephNull) = AlephNull()
 
-max(x::Integer, ::AlephNull) = AlephNull()
+max(::Integer, ::AlephNull) = AlephNull()
 max(::AlephNull, ::Integer) = AlephNull()
 max(::AlephNull, ::AlephNull) = AlephNull()
 
-+(x::Integer, ::AlephNull) = AlephNull()
++(::Integer, ::AlephNull) = AlephNull()
 +(::AlephNull, ::Integer) = AlephNull()
 +(::AlephNull, ::AlephNull) = AlephNull()
 
