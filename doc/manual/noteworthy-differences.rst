@@ -31,7 +31,9 @@ Noteworthy and unusual Julia features
         A*x⁻¹² - B*x⁻⁶
     end
 
-But be wary...
+But be wary about referencing a global variable while thinking it was an operator applied to a local variable and updating a variable without remembering to update the cached value.
+
+* The ``/`` operator gives floating-point results for integer arguments, use ``div`` for truncating to an integer.
 
 Noteworthy differences from MATLAB
 ----------------------------------
