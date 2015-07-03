@@ -127,6 +127,9 @@ Language changes
   * Triple-quoted strings no longer treat tabs as 8 spaces. Instead, the
     longest common prefix of spaces and tabs is removed.
 
+  * `global x` in a nested scope is now a syntax error if `x` is local
+    to the enclosing scope ([#7264]/[#11985]).
+
 Command line option changes
 ---------------------------
 
