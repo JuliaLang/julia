@@ -235,7 +235,7 @@ endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
 JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
 endif
-ifeq ($(LLVM_VER),svn)
+ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS += LLVM
 endif
 ifeq ($(OS),Darwin)
