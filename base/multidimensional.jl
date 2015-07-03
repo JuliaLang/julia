@@ -86,6 +86,7 @@ end
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
 
 ndims(R::CartesianRange) = length(R.start)
+ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
 
 @generated function eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     startargs = fill(1, N)
