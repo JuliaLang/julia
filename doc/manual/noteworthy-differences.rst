@@ -6,6 +6,44 @@
 Noteworthy Differences from other Languages
 *******************************************
 
+Noteworthy unusual Julia features
+---------------------------------
+
+* Julia allows identifiers with complex unicode, for example you could represent the value of a chi-squared test with ``χ²``, ``χ⁽³⁾`` is used in electromagnetism for the third-order nonlinear susceptibility and ``∇²`` is used in electromagnetism for the third-order nonlinear susceptibility. All of these unicode symbols are valid Julia identifiers.
+
+.. doctest::
+
+    # x² instead of xx, x_squared, etc.
+    for x = 1:r; x² = x*x
+        for y = 1:r; y² = y*y
+            n = 4x² + y²
+            # do something with n
+        end
+    end
+
+    # Lennard-Jones 12-6 potential energy
+    function lennard_jones(x, A, B)
+        x⁻² = x^-2
+        x⁻⁶ = (x⁻²)^3
+        x⁻¹² = (x⁻⁶)^2
+        A*x⁻¹² - B*x⁻⁶
+    end
+
+    # Others
+    function expected!(ret, pixels, β)
+        μx, μy = β[1:2]
+        σ = β[3]
+        b² = β[4]
+        Na² = β[5]
+        for i in 1:length(pixels)
+            x, y = pixels[i]
+            ret[i] = Na²*twoDGauss(x, y, μx, μy, σ) + b²
+        end
+        ret
+    end
+
+But be wary...
+
 Noteworthy differences from MATLAB
 ----------------------------------
 
