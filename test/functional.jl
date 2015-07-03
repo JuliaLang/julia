@@ -48,8 +48,10 @@ let b = IOBuffer("1\n2\n3\n"), a = []
         push!(a, (i,x))
     end
     @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
-    @test length(enumerate(eachline(b))) == 3
 end
+@test length(enumerate(1:3)) == 3
+@test length(repeated(0)) == ℵ₀
+
 
 # zip eachline (issue #7369)
 let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
@@ -83,8 +85,8 @@ let i = 0
         i <= 10 || break
     end
 end
-@test length(countfrom(0,2)) == Inf
-@test length(countfrom(0)) == Inf
+@test length(countfrom(0,2)) == ℵ₀
+@test length(countfrom(0)) == ℵ₀
 
 # take
 # ----
@@ -124,7 +126,7 @@ end
 
 @test length(drop(1:10,5)) == 5
 @test length(drop(1:10,15)) == 0
-@test length(drop(countfrom(0),5)) == Inf
+@test length(drop(countfrom(0),5)) == ℵ₀
 
 
 # cycle
@@ -138,7 +140,7 @@ let i = 0
     end
 end
 
-@test length(cycle(0:3)) == Inf
+@test length(cycle(0:3)) == ℵ₀
 
 # repeated
 # --------
@@ -158,5 +160,5 @@ let i = 0
     end
 end
 
-@test length(repeated(1)) == Inf
+@test length(repeated(1)) == ℵ₀
 @test length(repeated(1,10)) == 10
