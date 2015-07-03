@@ -21,17 +21,17 @@ Noteworthy and unusual Julia features
         
     one can write:
 
-.. doctest::
+    .. doctest::
 
-    "Lennard-Jones potential"
-    function lj(x, A, B)
-        x⁻² = x^-2
-        x⁻⁶ = (x⁻²)^3
-        x⁻¹² = (x⁻⁶)^2
-        A*x⁻¹² - B*x⁻⁶
-    end
+        "Lennard-Jones potential"
+        function lj(x, A, B)
+            x⁻² = x^-2
+            x⁻⁶ = (x⁻²)^3
+            x⁻¹² = (x⁻⁶)^2
+            A*x⁻¹² - B*x⁻⁶
+        end
 
-But be wary about referencing a global variable while thinking it was an operator applied to a local variable and updating a variable without remembering to update the cached value.
+    But be wary about referencing a global variable while thinking it was an operator applied to a local variable and updating a variable without remembering to update the cached value.
 
 * The ``/`` operator gives floating-point results for integer arguments, use ``div`` for truncating to an integer.
 
