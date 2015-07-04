@@ -50,7 +50,8 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
     dlerror(); /* Reset error status. */
     lib->handle = dlopen(filename,
                          (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
-                         | (flags & JL_RTLD_GLOBAL ? RTLD_GLOBAL : RTLD_LOCAL)
+                         | JL_RTLD(flags, LOCAL)
+                         | JL_RTLD(flags, GLOBAL)
 #ifdef RTLD_NODELETE
                          | JL_RTLD(flags, NODELETE)
 #endif
@@ -96,7 +97,7 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
                                 (LPCWSTR)(&jl_load_dynamic_library),
                                 &handle->handle)) {
             free(handle);
-            jl_errorf("could not load base module", modname);
+            jl_error("could not load base module");
         }
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
@@ -178,14 +179,13 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
 #endif
 
 notfound:
-    if (throw_err)
-        jl_printf(JL_STDERR, "dlerror loading '%s': %s\n", modname, uv_dlerror(handle));
-
+    // copy the error message into the path buffer so we can free the lib handle
+    path[0] = '\0';
+    snprintf(path, PATHBUF, "%s", uv_dlerror(handle));
     uv_dlclose(handle);
     free(handle);
-
     if (throw_err)
-        jl_errorf("could not load library %s", modname);
+        jl_errorf("could not load library '%s': %s", modname, path);
     return NULL;
 done:
     return handle;
@@ -204,7 +204,7 @@ jl_uv_libhandle jl_load_dynamic_library(const char *modname, unsigned flags)
 void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
-    int  error=uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
+    int error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error) ptr=NULL;
     return ptr;
 }
@@ -212,9 +212,9 @@ void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol)
 void *jl_dlsym(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
-    int  error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
-    if (error != 0) {
-        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror((uv_lib_t *) handle));
+    int error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
+    if (error) {
+        jl_errorf("could not load symbol '%s': %s", symbol, uv_dlerror((uv_lib_t *) handle));
     }
     return ptr;
 }
