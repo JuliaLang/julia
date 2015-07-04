@@ -963,6 +963,8 @@ DLLEXPORT double jl_unbox_float64(jl_value_t *v);
 DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 
+DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
+
 #ifdef _P64
 #define jl_box_long(x)   jl_box_int64(x)
 #define jl_box_ulong(x)  jl_box_uint64(x)
