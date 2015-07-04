@@ -2690,6 +2690,17 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     return b;
 }
 
+DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+{
+    maybe_collect();
+    allocd_bytes += nm*sz;
+    gc_num.malloc++;
+    void *b = calloc(nm, sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
@@ -2710,6 +2721,38 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
     if (b == NULL)
         jl_throw(jl_memory_exception);
     return b;
+}
+
+DLLEXPORT void *jl_malloc(size_t sz)
+{
+    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + 16);
+    p[0] = sz;
+    return (void *)(p + 2);
+}
+
+DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+{
+    int64_t *p;
+    size_t nmsz = nm*sz;
+    p = (int64_t *)jl_gc_counted_calloc(nmsz + 16, 1);
+    p[0] = nmsz;
+    return (void *)(p + 2);
+}
+
+DLLEXPORT void jl_free(void *p)
+{
+    int64_t *pp = (int64_t *)p - 2;
+    size_t sz = pp[0];
+    jl_gc_counted_free(pp, sz + 16);
+}
+
+DLLEXPORT void *jl_realloc(void *p, size_t sz)
+{
+    int64_t *pp = (int64_t *)p - 2;
+    size_t szold = pp[0];
+    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold + 16, sz + 16);
+    pnew[0] = sz;
+    return (void *)(pnew + 2);
 }
 
 DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
