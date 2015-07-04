@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # script to generate tables of common symbols from a system image
 # steps to rerun this:
 #   1. empty the contents of common_symbols*.inc

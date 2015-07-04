@@ -75,6 +75,7 @@ else
 endif
 
 release-candidate: release test
+	@$(JULIA_EXECUTABLE) contrib/add_license_to_files.jl #add license headers
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
