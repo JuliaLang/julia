@@ -3,9 +3,10 @@
 default: helpdb.jl html
 
 # You can set these variables from the command line.
-SPHINXOPTS    =
-PAPER         =
-JULIAHOME     = $(abspath ..)
+SPHINXOPTS       =
+PAPER            =
+JULIAHOME        = $(abspath ..)
+JULIA_EXECUTABLE = $(JULIAHOME)/usr/bin/julia
 
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
@@ -167,7 +168,7 @@ linkcheck: $(SPHINX_BUILD)
 	      "or in _build/linkcheck/output.txt."
 
 doctest: $(SPHINX_BUILD)
-	PATH=$(PATH):$(build_bindir) $(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) _build/doctest
+	PATH="$(PATH):$(build_bindir)" $(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) _build/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in _build/doctest/output.txt."
 
@@ -176,7 +177,7 @@ helpdb.jl: stdlib/*.rst $(SPHINX_BUILD)
 	mv _build/jlhelp/jlhelp.jl helpdb.jl
 
 manual/unicode-input-table.rst: $(JULIAHOME)/base/latex_symbols.jl
-	$(JULIAHOME)/julia tabcomplete.jl > manual/unicode-input-table.rst
+	$(JULIA_EXECUTABLE) tabcomplete.jl > manual/unicode-input-table.rst
 
 unicode: manual/unicode-input-table.rst
 
