@@ -53,6 +53,7 @@ Another macro is provided to check if the given expression throws an exception o
 :func:`@test_throws`::
 
   julia> @test_throws ErrorException error("An error")
+  ErrorException("An error")
 
   julia> @test_throws BoundsError error("An error")
   ERROR: test failed: error("An error")
@@ -61,6 +62,7 @@ Another macro is provided to check if the given expression throws an exception o
    in do_test_throws at test.jl:55
 
   julia> @test_throws DomainError throw(DomainError())
+  DomainError()
 
   julia> @test_throws DomainError throw(EOFError())
   ERROR: test failed: throw(EOFError())
@@ -138,6 +140,7 @@ Macros
 .. function:: @test_throws(extype, ex)
 
    Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
+   The default handler returns the exception if it is of the expected type.
 
 .. function:: @test_approx_eq(a, b)
 
