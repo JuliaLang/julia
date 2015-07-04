@@ -620,7 +620,14 @@ not domain experts*.
   * It's not ok to say ``PMA``, even if you're talking about positive mental
     attitude.
 
-2. Packages that provide most of their functionality in association with a new
+2. Avoid using ``Julia`` in your package name.
+
+  * It is usually clear from context and to your users that the package is a
+    Julia package.
+  * Having Julia in the name can imply that the package is connected to, or
+    endorsed by, contributors to the Julia language itself.
+
+3. Packages that provide most of their functionality in association with a new
    type should have pluralized names.
 
   * ``DataFrames`` provides the ``DataFrame`` type.
@@ -630,12 +637,12 @@ not domain experts*.
   * In contrast, ``JuliaParser`` provides no new type, but instead new
     functionality in the ``JuliaParser.parse()`` function.
 
-3. Err on the side of clarity, even if clarity seems long-winded to you.
+4. Err on the side of clarity, even if clarity seems long-winded to you.
 
   * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
     even though the latter are shorter.
 
-4. A less systematic name may suit a package that implements one of several
+5. A less systematic name may suit a package that implements one of several
    possible approaches to its domain.
 
   * Julia does not have a single comprehensive plotting package. Instead,
@@ -645,7 +652,7 @@ not domain experts*.
   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
     many well-established sorting algorithms.
 
-5. Packages that wrap external libraries or programs should be named after
+6. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
 
   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
