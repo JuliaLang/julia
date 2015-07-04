@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Issue #11948
 script = """
 f(x) = x+1
