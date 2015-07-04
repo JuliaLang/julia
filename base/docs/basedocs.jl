@@ -296,7 +296,7 @@ allocated. Returns the value of the expression. For example:
       2+2
     end
 """
-@time
+:@time
 
 doc"""
 Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
