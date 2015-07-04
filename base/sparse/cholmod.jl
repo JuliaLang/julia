@@ -31,14 +31,6 @@ const cholmod_com_offsets = Array(Csize_t, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
     Void, (Ptr{Csize_t},), cholmod_com_offsets)
 
-const common_supernodal = (1:4) + cholmod_com_offsets[4]
-const common_final_ll = (1:4) + cholmod_com_offsets[7]
-const common_print = (1:4) + cholmod_com_offsets[13]
-const common_itype = (1:4) + cholmod_com_offsets[18]
-const common_dtype = (1:4) + cholmod_com_offsets[19]
-const common_nmethods = (1:4) + cholmod_com_offsets[15]
-const common_postorder = (1:4) + cholmod_com_offsets[17]
-
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm) end
 
@@ -136,12 +128,23 @@ function __init__()
     ### The common struct. Controls the type of factorization and keeps pointers
     ### to temporary memory.
     global const commonStruct = fill(0xff, common_size)
-    start(commonStruct)
+
+    global const common_supernodal = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[4] + 1))
+    global const common_final_ll = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[7] + 1))
+    global const common_print = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[13] + 1))
+    global const common_itype = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[18] + 1))
+    global const common_dtype = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[19] + 1))
+    global const common_nmethods = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[15] + 1))
+    global const common_postorder = convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[17] + 1))
+
+    start(commonStruct)              # initializes CHOLMOD
     set_print_level(commonStruct, 0) # no printing from CHOLMOD by default
+
 end
 
 function set_print_level(cm::Array{UInt8}, lev::Integer)
-    cm[common_print] = reinterpret(UInt8, [Int32(lev)])
+    global common_print
+    unsafe_store!(common_print, lev)
 end
 
 ####################
@@ -1154,14 +1157,14 @@ function fact_{Tv<:VTypes}(A::Sparse{Tv}, cm::Array{UInt8};
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
 
     if !postorder
-        cm[common_postorder] = reinterpret(UInt8, [zero(Cint)])
+        unsafe_store!(common_postorder, 0)
     end
 
     if isempty(perm)
         F = analyze(A, cm)
     else # user permutation provided
         if userperm_only # use perm even if it is worse than AMD
-            cm[common_nmethods] = reinterpret(UInt8, [one(Cint)])
+            unsafe_store!(common_nmethods, 1)
         end
         F = analyze_p(A, SuiteSparse_long[p-1 for p in perm], cm)
     end
@@ -1174,8 +1177,8 @@ function cholfact(A::Sparse; kws...)
     cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
     set_print_level(cm, 0) # no printing from CHOLMOD by default
 
-    # Hack! makes it a llt
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
+    # Makes it an LLt
+    unsafe_store!(common_final_ll, 1)
 
     F = fact_(A, cm; kws...)
     s = unsafe_load(F.p)
@@ -1187,11 +1190,11 @@ function ldltfact(A::Sparse; kws...)
     cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
     set_print_level(cm, 0) # no printing from CHOLMOD by default
 
-    # Hack! makes it a ldlt
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
+    # Makes it an LDLt
+    unsafe_store!(common_final_ll, 0)
 
-    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
-    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
+    # Really make sure it's an LDLt by avoiding supernodal factorisation
+    unsafe_store!(common_supernodal, 0)
 
     F = fact_(A, cm; kws...)
     s = unsafe_load(F.p)
@@ -1214,7 +1217,7 @@ function update!{Tv<:VTypes}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 
     s = unsafe_load(F.p)
     if s.is_ll!=0
-        cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+        unsafe_store!(common_final_ll, 1) # Makes it an LLt
     end
     factorize_p!(A, shift, F, cm)
 end
