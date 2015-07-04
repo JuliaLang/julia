@@ -14,10 +14,13 @@
    the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
    dlopen command, if possible, or are ignored if the specified
    functionality is not available on the current platform.  The
-   default is ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL``.  An important usage
-   of these flags, on POSIX platforms, is to specify
-   ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL`` in order for the library's
-   symbols to be available for usage in other shared libraries, in
+   default flags are platform specific.  On MacOS the default ``dlopen`` flags are
+   ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL`` while on other platforms the
+   defaults are ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL``. An important usage
+   of these flags is to specify non default behavior for when the dynamic library loader
+   binds library references to exported symbols and if the bound references are put into
+   process local or global scope.  For instance ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL``
+   allows the library's symbols to be available for usage in other shared libraries, addressing
    situations where there are dependencies between shared libraries.
 
 .. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
