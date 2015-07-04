@@ -29,7 +29,7 @@ for eltyA in (Float64, Complex{Float64})
         if eltyA == eltyB # promotions not defined for unexported methods
             @test qrfact(sparse(eye(eltyA, 5)))\ones(eltyA, 5) == ones(5)
             @test_throws ArgumentError SPQR.factorize(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(sparse(eye(eltyA, 5))))
-            @test_throws ArgumentError SPQR.Factorization(1, 1, convert(Ptr{SPQR.C_Factorization{eltyA, CHOLMOD.SuiteSparse_long}}, C_NULL))
+            @test_throws ArgumentError SPQR.Factorization(1, 1, convert(Ptr{SPQR.C_Factorization{eltyA}}, C_NULL))
             F = qrfact(A)
             @test size(F) == (m,n)
             @test size(F, 1) == m
