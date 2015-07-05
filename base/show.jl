@@ -596,6 +596,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
         print(io, "end")
 
+    elseif is(head, :bitstype) && nargs == 2
+        print(io, "bitstype ")
+        show_list(io, args, ' ', indent)
+
     # empty return (i.e. "function f() return end")
     elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
         print(io, head)
