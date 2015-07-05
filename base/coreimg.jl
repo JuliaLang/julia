@@ -47,7 +47,7 @@ typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 include("array.jl")
 
 # Doc macro shim
-macro doc (ex) esc(ex.args[2]) end
+macro doc(ex) esc(ex.args[2]) end
 
 #TODO: eliminate Dict from inference
 include("hashing.jl")
