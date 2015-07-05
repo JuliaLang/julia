@@ -504,8 +504,9 @@ static void add_lostval_parent(jl_value_t* parent)
 
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
-        if (*(jl_value_t**)(slot) == lostval && (obj) != lostval) {     \
-            jl_printf(JL_STDOUT, "Found parent %s %p at %s:%d\n",       \
+        if (*(jl_value_t**)(slot) == lostval &&                         \
+            (jl_value_t*)(obj) != lostval) {                            \
+            jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
                       (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
             jl_printf(JL_STDOUT, "\tloc %p : ", (void*)(slot));         \
             jl_printf(JL_STDOUT, args);                                 \
@@ -1522,7 +1523,7 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
         else {
             for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL) {
-                    verify_parent2("task", ta, &rts[i], "stack(%d)", i);
+                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
                     gc_push_root(rts[i], d);
                 }
             }
@@ -1651,7 +1652,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];
             if (elt != NULL) {
-                verify_parent2("svec", v, &data[i], "elem(%d)", i);
+                verify_parent2("svec", v, &data[i], "elem(%d)", (int)i);
                 refyoung |= gc_push_root(elt, d);
             }
         }
@@ -1709,7 +1710,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                 for(size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
                     if (elt != NULL) {
-                        verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
+                        verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", (int)i);
                         refyoung |= gc_push_root(elt, d);
                     }
                     // try to split large array marking (incremental mark TODO)
@@ -1951,12 +1952,11 @@ static arraylist_t bits_save[4];
 // freelist in pools
 static void clear_mark(int bits)
 {
-    size_t i;
-    pool_t* pool;
-    gcval_t* pv;
+    gcval_t *pv;
     if (!verifying) {
-    for(int i = 0; i < 4; i++)
-        bits_save[i].len = 0;
+        for (int i = 0; i < 4; i++) {
+            bits_save[i].len = 0;
+        }
     }
     void *current_heap = NULL;
     bigval_t *bigs[2];
@@ -2008,7 +2008,7 @@ static void gc_verify_track(void)
 {
     do {
         arraylist_push(&lostval_parents_done, lostval);
-        jl_printf(JL_STDERR, "Now looking for 0x%lx =======\n", lostval);
+        jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
         pre_mark();
         post_mark(&finalizer_list, 1);
@@ -2036,7 +2036,7 @@ static void gc_verify_track(void)
         }
         else {
             jl_printf(JL_STDERR, "Missing write barrier found !\n");
-            jl_printf(JL_STDERR, "0x%lx was written a reference to 0x%lx that was not recorded\n", lostval_parent, lostval);
+            jl_printf(JL_STDERR, "%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
             jl_printf(JL_STDERR, "(details above)\n");
             lostval = NULL;
         }
@@ -2059,7 +2059,7 @@ static void gc_verify(void)
     for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
         gcval_t* v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
-            jl_printf(JL_STDERR, "Error. Early free of 0x%lx type :", (uptrint_t)v);
+            jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));
             jl_printf(JL_STDERR, "val : ");
             jl_(jl_valueof(v));
