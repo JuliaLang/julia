@@ -140,7 +140,8 @@ those available for the ``perl`` and ``ruby`` programs::
                               Run time-intensive code optimizations
     --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
     --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)
-    --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings
+    --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)
+
     --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
     --math-mode={ieee|user}   Always use IEEE semantics for math (ignoring declarations),
                               or adhere to declarations in source code

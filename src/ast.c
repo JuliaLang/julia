@@ -116,6 +116,7 @@ static builtinspec_t julia_flisp_ast_ext[] = {
 };
 
 extern int jl_parse_depwarn(int warn);
+extern int jl_parse_deperror(int err);
 
 void jl_init_frontend(void)
 {
@@ -142,6 +143,8 @@ void jl_init_frontend(void)
     // Disable in imaging mode to avoid i/o errors (#10727)
     if (jl_generating_output())
         jl_parse_depwarn(0);
+    else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+        jl_parse_deperror(1);
     else
         jl_parse_depwarn((int)jl_options.depwarn);
 }
@@ -519,7 +522,15 @@ void jl_stop_parsing(void)
 
 DLLEXPORT int jl_parse_depwarn(int warn)
 {
-    value_t prev = fl_applyn(1, symbol_value(symbol("jl-parser-depwarn")), warn? FL_T : FL_F);
+    value_t prev = fl_applyn(1, symbol_value(symbol("jl-parser-depwarn")),
+                             warn ? FL_T : FL_F);
+    return prev == FL_T ? 1 : 0;
+}
+
+int jl_parse_deperror(int err)
+{
+    value_t prev = fl_applyn(1, symbol_value(symbol("jl-parser-deperror")),
+                             err ? FL_T : FL_F);
     return prev == FL_T ? 1 : 0;
 }
 
