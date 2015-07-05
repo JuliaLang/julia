@@ -2,9 +2,9 @@
 
 module Docs
 
-import Base.Markdown: @doc_str, MD
+import Base.Markdown: MD, @doc_markdown
 
-export doc
+export doc, @doc_str, @docsyntax
 
 # Basic API / Storage
 
@@ -15,6 +15,7 @@ meta() = current_module().META
 macro init()
     META = esc(:META)
     quote
+        isdefined(current_module(), :__DOCSYNTAX__) || @docsyntax $(esc(:markdown))
         if !isdefined(:META)
             const $META = ObjectIdDict()
             doc!($META, @doc_str $("Documentation metadata for `$(current_module())`."))
@@ -134,7 +135,7 @@ function field_meta(def)
     doc = nothing
     for l in def.args[3].args
         if isdoc(l)
-            doc = mdify(l)
+            doc = docify(l)
         elseif doc != nothing && isexpr(l, Symbol, :(::))
             meta[namify(l)] = doc
             doc = nothing
@@ -236,19 +237,28 @@ namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
 namify(ex::QuoteNode) = ex.value
 namify(sy::Symbol) = sy
 
-function mdify(ex)
-    if isexpr(ex, AbstractString, :string)
-        :(Markdown.parse($(esc(ex))))
-    else
-        esc(ex)
-    end
+macro docsyntax(format)
+    :(const $(esc(:__DOCSYNTAX__)) = $(Expr(:quote, format)))
 end
+
+docsyntax(m) = isdefined(m, :__DOCSYNTAX__) ? getfield(m, :__DOCSYNTAX__) : :markdown
+
+# TODO: merge with 'isdoc'.
+isdocstr(x) = isexpr(x, AbstractString, :string) ||
+    (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str"))
+
+function docify(ex)
+    name = symbol("@doc_", docsyntax(current_module()))
+    esc(isdocstr(ex) ? Expr(:macrocall, name, ex) : ex)
+end
+
+macro doc_str(text) esc(text) end
 
 function namedoc(meta, def, name)
     quote
         @init
         $(esc(def))
-        doc!($(esc(name)), $(mdify(meta)))
+        doc!($(esc(name)), $(docify(meta)))
         nothing
     end
 end
@@ -257,7 +267,7 @@ function funcdoc(meta, def)
     quote
         @init
         f, m = $(trackmethod(def))
-        doc!(f, m, $(mdify(meta)), $(esc(Expr(:quote, def))))
+        doc!(f, m, $(docify(meta)), $(esc(Expr(:quote, def))))
         f
     end
 end
@@ -266,7 +276,7 @@ function typedoc(meta, def, name)
     quote
         @init
         $(esc(def))
-        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def))))
+        doc!($(esc(name)), $(docify(meta)), $(field_meta(unblock(def))))
         nothing
     end
 end
@@ -275,7 +285,7 @@ function objdoc(meta, def)
     quote
         @init
         f = $(esc(def))
-        doc!(f, $(mdify(meta)))
+        doc!(f, $(docify(meta)))
         f
     end
 end
@@ -316,7 +326,7 @@ Base.DocBootstrap.setexpand!(docm)
 # inject the ones we need there.
 
 eval(Base.DocBootstrap,
-     :(import ..Docs: @init, doc!, doc, newmethod, def_dict, @doc_str))
+     :(import ..Docs: @init, doc!, doc, newmethod, def_dict, @doc_str, @doc_markdown))
 
 # Metametadata
 

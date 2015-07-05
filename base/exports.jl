@@ -1343,7 +1343,9 @@ export
     @text_str,
     @html_str,
     @doc,
+    @docsyntax,
     @doc_str,
+    @doc_markdown,
 
     # output
     @show,
