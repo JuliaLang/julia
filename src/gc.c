@@ -787,10 +787,12 @@ typedef struct {
 } jl_alloc_num_t;
 
 DLLEXPORT struct {
+    int sweep_mask;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
     jl_alloc_num_t print;
-} gc_debug_env = {{0, 0, 0, 0},
+} gc_debug_env = {GC_MARKED_NOESC,
+                  {0, 0, 0, 0},
                   {0, 0, 0, 0},
                   {0, 0, 0, 0}};
 
@@ -819,6 +821,10 @@ static int gc_debug_alloc_check(jl_alloc_num_t *num)
 
 static void gc_debug_init()
 {
+    char *env = getenv("JL_GC_NO_GENERATIONAL");
+    if (env && strcmp(env, "0") != 0) {
+        gc_debug_env.sweep_mask = GC_MARKED;
+    }
     gc_debug_alloc_init(&gc_debug_env.pool, "POOL");
     gc_debug_alloc_init(&gc_debug_env.other, "OTHER");
     gc_debug_alloc_init(&gc_debug_env.print, "PRINT");
@@ -2401,7 +2407,11 @@ void jl_gc_collect(int full)
             }
             else {
                 collect_interval = default_collect_interval/2;
+#ifdef GC_DEBUG_ENV
+                sweep_mask = gc_debug_env.sweep_mask;
+#else
                 sweep_mask = GC_MARKED_NOESC;
+#endif
             }
             if (sweep_mask == GC_MARKED)
                 perm_scanned_bytes = 0;
