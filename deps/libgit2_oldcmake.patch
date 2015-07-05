@@ -1,0 +1,15 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5c55ddd..6564337 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -13,7 +13,9 @@
+ 
+ PROJECT(libgit2 C)
+ CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+-CMAKE_POLICY(SET CMP0015 NEW)
++IF(CMAKE_VERSION VERSION_GREATER 2.8.0)
++	CMAKE_POLICY(SET CMP0015 NEW)
++ENDIF()
+ 
+ # Add find modules to the path
+ SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
