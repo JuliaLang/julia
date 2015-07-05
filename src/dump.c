@@ -1459,8 +1459,9 @@ extern jl_array_t *jl_module_init_order;
 
 void jl_save_system_image_to_stream(ios_t *f)
 {
-    jl_gc_collect(1);
-    jl_gc_collect(0);
+    jl_gc_collect(1); // full
+    jl_gc_collect(0); // incremental (sweep finalizers)
+    JL_SIGATOMIC_BEGIN();
     int en = jl_gc_enable(0);
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
@@ -1508,6 +1509,7 @@ void jl_save_system_image_to_stream(ios_t *f)
     arraylist_free(&reinit_list);
 
     jl_gc_enable(en);
+    JL_SIGATOMIC_END();
 }
 
 DLLEXPORT void jl_save_system_image(const char *fname)
@@ -1516,8 +1518,10 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
     }
+    JL_SIGATOMIC_BEGIN();
     jl_save_system_image_to_stream(&f);
     ios_close(&f);
+    JL_SIGATOMIC_END();
 }
 
 DLLEXPORT ios_t *jl_create_system_image()
@@ -1561,6 +1565,7 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 void jl_restore_system_image_from_stream(ios_t *f)
 {
+    JL_SIGATOMIC_BEGIN();
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
     mode = MODE_SYSTEM_IMAGE;
@@ -1630,6 +1635,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     jl_gc_enable(en);
     mode = last_mode;
     jl_update_all_fptrs();
+    JL_SIGATOMIC_END();
 }
 
 DLLEXPORT void jl_restore_system_image(const char *fname)
@@ -1649,17 +1655,21 @@ DLLEXPORT void jl_restore_system_image(const char *fname)
         ios_t f;
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
             jl_errorf("System image file \"%s\" not found\n", fname);
+        JL_SIGATOMIC_BEGIN();
         jl_restore_system_image_from_stream(&f);
         ios_close(&f);
+        JL_SIGATOMIC_END();
     }
 }
 
 DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 {
     ios_t f;
+    JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char*)buf, len);
     jl_restore_system_image_from_stream(&f);
     ios_close(&f);
+    JL_SIGATOMIC_END();
 }
 
 void jl_init_restored_modules()
@@ -1681,6 +1691,7 @@ DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
+    JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     if (li->module->constant_table == NULL)
@@ -1696,11 +1707,13 @@ DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     jl_gc_enable(en);
     tree_literal_values = NULL;
     mode = last_mode;
+    JL_SIGATOMIC_END();
     return rt;
 }
 
 DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
+    JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;
@@ -1732,11 +1745,13 @@ DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     tree_enclosing_module = last_tem;
     jl_gc_enable(en);
     mode = last_mode;
+    JL_SIGATOMIC_END();
     return v;
 }
 
 DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
+    JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     jl_array_t *bytes = (jl_array_t*)data;
@@ -1753,6 +1768,7 @@ DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;
     mode = last_mode;
+    JL_SIGATOMIC_END();
     return v;
 }
 
@@ -1763,6 +1779,7 @@ DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod)
         jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
         return 1;
     }
+    JL_SIGATOMIC_BEGIN();
     jl_module_t *lastmod = jl_current_module;
     jl_current_module = mod;
     jl_serialize_mod_list(&f);
@@ -1797,6 +1814,7 @@ DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod)
 
     htable_reset(&backref_table, 0);
     ios_close(&f);
+    JL_SIGATOMIC_END();
 
     return 0;
 }
@@ -1814,6 +1832,7 @@ static jl_module_t *_jl_restore_new_module(ios_t *f)
         ios_close(f);
         return NULL;
     }
+    JL_SIGATOMIC_BEGIN();
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
@@ -1824,10 +1843,17 @@ static jl_module_t *_jl_restore_new_module(ios_t *f)
     mode = MODE_MODULE;
     jl_module_t *parent = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(f, NULL);
-    jl_binding_t *b = jl_get_binding_wr(parent, name);
-    jl_declare_constant(b);
-    if (b->value != NULL) {
-        jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
+    jl_exception_in_transit = NULL;
+    jl_binding_t *b;
+    JL_TRY {
+        b = jl_get_binding_wr(parent, name);
+        jl_declare_constant(b); // this can throw
+        if (b->value != NULL) {
+            jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
+        }
+    }
+    JL_CATCH {
+        goto cleanup;
     }
     b->value = jl_deserialize_value(f, &b->value);
 
@@ -1925,12 +1951,15 @@ static jl_module_t *_jl_restore_new_module(ios_t *f)
         }
     }
 
+cleanup:
     mode = last_mode;
     jl_gc_enable(en);
     arraylist_free(&flagref_list);
     arraylist_free(&methtable_list);
     arraylist_free(&backref_list);
     ios_close(f);
+    JL_SIGATOMIC_END();
+    if (jl_exception_in_transit) jl_rethrow();
 
     jl_init_restored_modules();
 
