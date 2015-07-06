@@ -11,7 +11,7 @@ New language features
     `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
     define a constructor ([#8712], [#2403]).
 
-  * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
+  * Unicode version 8 is now supported for identifiers etcetera ([#7917], [#12031]).
 
   * Type parameters now permit any arbitrary `isbits` type, not just
     `Int` and `Bool` ([#6081]).
@@ -1510,3 +1510,4 @@ Too numerous to mention.
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
+[#12031]: https://github.com/JuliaLang/julia/issues/12031
