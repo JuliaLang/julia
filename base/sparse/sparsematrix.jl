@@ -2835,3 +2835,37 @@ function Base.centralize_sumabs2!{S,Tv,Ti}(R::AbstractArray{S}, A::SparseMatrixC
     end
     return R
 end
+
+## Unitform matrix arithmetic
+
+function (+)(A::SparseMatrixCSC, J::UniformScaling)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, J.λ)
+    end
+    return sparse(i, j, nz)
+end
+
+function (-)(A::SparseMatrixCSC, J::UniformScaling)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, -J.λ)
+    end
+    return sparse(i, j, nz)
+end
+function (-)(J::UniformScaling, A::SparseMatrixCSC)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, -J.λ)
+    end
+    return sparse(i, j, -nz)
+end
