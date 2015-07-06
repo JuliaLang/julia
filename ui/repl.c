@@ -517,8 +517,6 @@ static int true_main(int argc, char *argv[])
     return 0;
 }
 
-DLLEXPORT extern void julia_save();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -575,7 +573,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
-    julia_save();
     jl_atexit_hook();
     return ret;
 }

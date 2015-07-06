@@ -1141,8 +1141,9 @@ DLLEXPORT ios_t *jl_create_system_image();
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
-DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
-DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
+DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t* worklist);
+DLLEXPORT jl_array_t *jl_restore_incremental(const char *fname);
+DLLEXPORT jl_array_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
 void jl_init_restored_modules();
 
 // front end interface
