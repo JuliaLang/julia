@@ -541,6 +541,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 
 void jl_write_coverage_data(void);
 void jl_write_malloc_log(void);
+static void julia_save(void);
 
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
@@ -551,6 +552,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
 
 DLLEXPORT void jl_atexit_hook()
 {
+    julia_save();
 #if defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
@@ -1282,7 +1284,7 @@ DLLEXPORT int jl_generating_output()
 
 void jl_compile_all(void);
 
-DLLEXPORT void julia_save()
+static void julia_save()
 {
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
         jl_compile_all();
