@@ -414,14 +414,16 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
 
     # load the saved line
     if idx == max_idx
-        LineEdit.transition(s, hist.last_mode)
-        LineEdit.replace_line(s, hist.last_buffer)
-        hist.last_mode = nothing
-        hist.last_buffer = IOBuffer()
+        LineEdit.transition(s, hist.last_mode) do
+            LineEdit.replace_line(s, hist.last_buffer)
+            hist.last_mode = nothing
+            hist.last_buffer = IOBuffer()
+        end
     else
         if haskey(hist.mode_mapping, hist.modes[idx])
-            LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]])
-            LineEdit.replace_line(s, hist.history[idx])
+            LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
+                LineEdit.replace_line(s, hist.history[idx])
+            end
         else
             return :skip
         end
@@ -437,8 +439,9 @@ function LineEdit.accept_result(s, p::LineEdit.HistoryPrompt{REPLHistoryProvider
     hist = p.hp
     if 1 <= hist.cur_idx <= length(hist.modes)
         m = hist.mode_mapping[hist.modes[hist.cur_idx]]
-        LineEdit.transition(s, m)
-        LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
+        LineEdit.transition(s, m) do
+            LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
+        end
     else
         LineEdit.transition(s, parent)
     end
@@ -633,9 +636,9 @@ function mode_keymap(julia_prompt)
     '\b' => function (s,o...)
         if isempty(s) || position(LineEdit.buffer(s)) == 0
             buf = copy(LineEdit.buffer(s))
-            transition(s, julia_prompt)
-            LineEdit.state(s, julia_prompt).input_buffer = buf
-            LineEdit.refresh_line(s)
+            transition(s, julia_prompt) do
+                LineEdit.state(s, julia_prompt).input_buffer = buf
+            end
         else
             LineEdit.edit_backspace(s)
         end
@@ -759,9 +762,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
-                transition(s, shell_mode)
-                LineEdit.state(s, shell_mode).input_buffer = buf
-                LineEdit.refresh_line(s)
+                transition(s, shell_mode) do
+                    LineEdit.state(s, shell_mode).input_buffer = buf
+                end
             else
                 edit_insert(s, ';')
             end
@@ -769,9 +772,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         '?' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
-                transition(s, help_mode)
-                LineEdit.state(s, help_mode).input_buffer = buf
-                LineEdit.refresh_line(s)
+                transition(s, help_mode) do
+                    LineEdit.state(s, help_mode).input_buffer = buf
+                end
             else
                 edit_insert(s, '?')
             end

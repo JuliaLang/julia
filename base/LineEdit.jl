@@ -29,6 +29,10 @@ type MIState
 end
 MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
 
+function show(io::IO, s::MIState)
+    print(io, "MI State (", s.current_mode, " active)")
+end
+
 type Prompt <: TextInterface
     prompt
     first_prompt
@@ -606,7 +610,7 @@ function edit_clear(s::MIState)
 end
 
 function replace_line(s::PromptState, l::IOBuffer)
-    s.input_buffer = l
+    s.input_buffer = copy(l)
 end
 
 function replace_line(s::PromptState, l)
@@ -1060,6 +1064,12 @@ type PrefixSearchState <: ModeState
         new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
 end
 
+function show(io::IO, s::PrefixSearchState)
+    print(io, "PrefixSearchState ", isdefined(s,:parent) ?
+     string("(", s.parent, " active)") : "(no parent)", " for ",
+     isdefined(s,:mi) ? s.mi : "no MI")
+end
+
 input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
@@ -1087,14 +1097,16 @@ function reset_state(s::PrefixSearchState)
     end
 end
 
-function transition(s::PrefixSearchState, mode)
+function transition(f::Function, s::PrefixSearchState, mode)
     if isdefined(s,:mi)
-        transition(s.mi,mode)
+        transition(f,s.mi,mode)
     end
     s.parent = mode
     s.histprompt.parent_prompt = mode
     if isdefined(s,:mi)
-        transition(s.mi,s.histprompt)
+        transition(f,s.mi,s.histprompt)
+    else
+        f()
     end
 end
 
@@ -1138,8 +1150,9 @@ end
 
 function accept_result(s, p)
     parent = state(s, p).parent
-    replace_line(state(s, parent), state(s, p).response_buffer)
-    transition(s, parent)
+    transition(s, parent) do
+        replace_line(state(s, parent), state(s, p).response_buffer)
+    end
 end
 
 function copybuf!(dst::IOBuffer, src::IOBuffer)
@@ -1152,28 +1165,33 @@ end
 
 function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
     # a bit of hack to help fix #6325
-    buf = buffer(s)
+    buf = copy(buffer(s))
+    parent = mode(s)
     p.hp.last_mode = mode(s)
-    p.hp.last_buffer = copy(buf)
+    p.hp.last_buffer = buf
 
-    ss = state(s, p)
-    ss.parent = mode(s)
-    ss.backward = backward
-    truncate(ss.query_buffer, 0)
-    copybuf!(ss.response_buffer, buf)
-    transition(s, p)
+    transition(s, p) do
+        ss = state(s, p)
+        ss.parent = parent
+        ss.backward = backward
+        truncate(ss.query_buffer, 0)
+        copybuf!(ss.response_buffer, buf)
+    end
 end
 
 function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
-    buf = buffer(s)
+    buf = copy(buffer(s))
+    parent = mode(s)
 
+    transition(s, p) do
+        pss = state(s, p)
+        pss.parent = parent
+        pss.prefix = bytestring(pointer(buf.data), position(buf))
+        copybuf!(pss.response_buffer, buf)
+        pss.indent = state(s, parent).indent
+        pss.mi = s
+    end
     pss = state(s, p)
-    pss.parent = mode(s)
-    pss.prefix = bytestring(pointer(buf.data), position(buf))
-    copybuf!(pss.response_buffer, buf)
-    pss.indent = state(s, mode(s)).indent
-    pss.mi = s
-    transition(s, p)
     if backward
         history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
     else
@@ -1491,7 +1509,7 @@ function activate(p::TextInterface, s::MIState, termbuf)
 end
 activate(m::ModalInterface, s::MIState, termbuf) = activate(s.current_mode, s, termbuf)
 
-function transition(s::MIState, mode)
+function transition(f::Function, s::MIState, mode)
     if mode == :abort
         s.aborted = true
         return
@@ -1506,9 +1524,11 @@ function transition(s::MIState, mode)
     termbuf = TerminalBuffer(IOBuffer())
     s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf)
     s.current_mode = mode
+    f()
     activate(mode, s.mode_state[mode], termbuf)
     write(terminal(s), takebuf_array(termbuf.out_stream))
 end
+transition(s::MIState, mode) = transition((args...)->nothing, s, mode)
 
 function reset_state(s::PromptState)
     if s.input_buffer.size != 0
