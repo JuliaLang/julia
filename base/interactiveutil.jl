@@ -54,8 +54,8 @@ function edit( m::Method )
 end
 
 edit(file::AbstractString) = edit(file, 1)
-edit(f::Callable)          = edit(functionloc(f)...)
-edit(f::Callable, t::ANY)  = edit(functionloc(f,t)...)
+edit(f)          = edit(functionloc(f)...)
+edit(f, t::ANY)  = edit(functionloc(f,t)...)
 
 # terminal pager
 
@@ -65,8 +65,8 @@ function less(file::AbstractString, line::Integer)
 end
 
 less(file::AbstractString) = less(file, 1)
-less(f::Callable)          = less(functionloc(f)...)
-less(f::Callable, t::ANY)  = less(functionloc(f,t)...)
+less(f)          = less(functionloc(f)...)
+less(f, t::ANY)  = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
