@@ -43,6 +43,15 @@ end
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
 @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
 
+@test isnan(mean([NaN]))
+@test isnan(mean([0.0,NaN]))
+@test isnan(mean([NaN,0.0]))
+
+@test isnan(mean([0.,Inf,-Inf]))
+@test isnan(mean([1.,-1.,Inf,-Inf]))
+@test isnan(mean([-Inf,Inf]))
+@test isequal(mean([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
+
 # test var & std
 
 # edge case: empty vector
