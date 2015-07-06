@@ -131,7 +131,8 @@ log(::Irrational{:e}, x) = log(x)
 
 # align along = for nice Array printing
 function alignment(x::Irrational)
-    m = match(r"^(.*?)(=.*)$", sprint(showcompact_lim, x))
-    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
+    maybe_m = match(r"^(.*?)(=.*)$", sprint(showcompact_lim, x))
+    isnull(maybe_m) && return (length(sprint(showcompact_lim, x)), 0)
+    m = get(maybe_m)
     (length(m.captures[1]), length(m.captures[2]))
 end

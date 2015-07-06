@@ -20,7 +20,7 @@ end
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::AbstractString)
-        m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
+        m = get(match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path))
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
     homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
@@ -31,8 +31,9 @@ isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2]
 
 function splitdir(path::ByteString)
     a, b = splitdrive(path)
-    m = match(path_dir_splitter,b)
-    m == nothing && return (a,b)
+    maybe_m = match(path_dir_splitter,b)
+    isnull(maybe_m) && return (a,b)
+    m = get(maybe_m)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, bytestring(m.captures[3])
 end
@@ -43,15 +44,16 @@ basename(path::AbstractString) = splitdir(path)[2]
 
 function splitext(path::AbstractString)
     a, b = splitdrive(path)
-    m = match(path_ext_splitter, b)
-    m == nothing && return (path,"")
+    maybe_m = match(path_ext_splitter, b)
+    isnull(maybe_m) && return (path,"")
+    m = get(maybe_m)
     a*m.captures[1], bytestring(m.captures[2])
 end
 
 function pathsep(paths::AbstractString...)
     for path in paths
-        m = match(path_separator_re, path)
-        m != nothing && return m.match[1]
+        maybe_m = match(path_separator_re, path)
+        !isnull(maybe_m) && return get(maybe_m).match[1]
     end
     return path_separator
 end

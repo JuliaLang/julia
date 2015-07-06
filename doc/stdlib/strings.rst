@@ -133,7 +133,7 @@
 
 .. function:: match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
-   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
+   Search for the first match of the regular expression ``r`` in ``s`` and return a Nullable{RegexMatch} object that eihther contains the match or is null if the match failed. The matching substring can be retrieved by accessing ``get(m).match`` and the captured sequences can be retrieved by accessing ``get(m).captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
 .. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 

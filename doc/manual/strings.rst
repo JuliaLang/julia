@@ -595,23 +595,22 @@ however, one wants to know not just whether a string matched, but also
 .. doctest::
 
     julia> match(r"^\s*(?:#|$)", "not a comment")
-
+    Nullable{RegexMatch}()
     julia> match(r"^\s*(?:#|$)", "# a comment")
-    RegexMatch("#")
+    Nullable(RegexMatch("#"))
 
 If the regular expression does not match the given string, :func:`match`
-returns ``nothing`` — a special value that does not print anything at
-the interactive prompt. Other than not printing, it is a completely
-normal value and you can test for it programmatically::
+returns a null-valued ``Nullable`` object, ``Nullable{RegexMatch}()``.
+You can test for this with the ``isnull`` function::
 
-    m = match(r"^\s*(?:#|$)", line)
-    if m == nothing
+    maybe_m = match(r"^\s*(?:#|$)", line)
+    if isnull(maybe_m)
       println("not a comment")
     else
       println("blank or comment")
     end
 
-If a regular expression does match, the value returned by :func:`match` is a
+If a regular expression does match, then you can call ``get`` on the  value returned by :func:`match` to get a
 :obj:`RegexMatch` object. These objects record how the expression matches,
 including the substring that the pattern matches and any captured
 substrings, if there are any. This example only captures the portion of
@@ -620,7 +619,7 @@ text after the comment character. We could do the following:
 
 .. doctest::
 
-    julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
+    julia> m = get(match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment "))
     RegexMatch("# a comment ", 1="a comment")
 
 When calling :func:`match`, you have the option to specify an index at
@@ -629,13 +628,13 @@ which to start the search. For example:
 .. doctest::
 
    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
-   RegexMatch("1")
+   Nullable(RegexMatch("1"))
 
    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
-   RegexMatch("2")
+   Nullable(RegexMatch("2"))
 
    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
-   RegexMatch("3")
+   Nullable(RegexMatch("3"))
 
 You can extract the following info from a :obj:`RegexMatch` object:
 
@@ -649,7 +648,7 @@ contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
 a string is invalid). Here's is a pair of somewhat contrived examples::
 
-    julia> m = match(r"(a|b)(c)?(d)", "acd")
+    julia> m = get(match(r"(a|b)(c)?(d)", "acd"))
     RegexMatch("acd", 1="a", 2="c", 3="d")
 
     julia> m.match
@@ -670,7 +669,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
      2
      3
 
-    julia> m = match(r"(a|b)(c)?(d)", "ad")
+    julia> m = get(match(r"(a|b)(c)?(d)", "ad"))
     RegexMatch("ad", 1="a", 2=nothing, 3="d")
 
     julia> m.match
@@ -700,7 +699,7 @@ use destructuring syntax to bind them to local variables::
 Captures can also be accessed by indexing the :obj:`RegexMatch` object
 with the number or name of the capture group::
 
-    julia> m=match(r"(?P<hour>\d+):(?P<minute>\d+)","12:45")
+    julia> m = get(match(r"(?P<hour>\d+):(?P<minute>\d+)","12:45"))
     RegexMatch("12:45", hour="12", minute="45")
     julia> m[:minute]
     "45"
@@ -749,7 +748,7 @@ For example, the following regex has all three flags turned on:
     r"a+.*b+.*?d$"ims
 
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
-    RegexMatch("angry,\nBad world")
+    Nullable(RegexMatch("angry,\nBad world"))
 
 Triple-quoted regex strings, of the form ``r"""..."""``, are also
 supported (and may be convenient for regular expressions containing

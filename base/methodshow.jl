@@ -93,7 +93,7 @@ function url(m::Method)
         try
             d = dirname(file)
             u = Git.readchomp(`config remote.origin.url`, dir=d)
-            u = match(Git.GITHUB_REGEX,u).captures[1]
+            u = get(match(Git.GITHUB_REGEX,u)).captures[1]
             root = cd(d) do # dir=d confuses --show-toplevel, apparently
                 Git.readchomp(`rev-parse --show-toplevel`)
             end

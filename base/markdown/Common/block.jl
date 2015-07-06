@@ -57,7 +57,7 @@ function hashheader(stream::IO, md::MD)
 
         if c != '\n' # Empty header
             h = readline(stream) |> strip
-            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            h = get(match(r"(.*?)( +#+)?$", h)).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
             push!(md.content, Header(parseinline(seek(buffer, 0), md), level))

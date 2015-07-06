@@ -39,6 +39,6 @@ show(buf, r"")
 @test_throws ArgumentError search(utf32("this is a test"), r"test")
 
 # Named subpatterns
-m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+m = get(match(r"(?<a>.)(.)(?<b>.)", "xyz"))
 @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
 @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"

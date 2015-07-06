@@ -338,8 +338,9 @@ function hist_from_file(hp, file)
         line[1] != '#' &&
             error(invalid_history_message, repr(line[1]), " at line ", countlines)
         while !isempty(line)
-            m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
-            m == nothing && break
+            maybe_m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
+            isnull(maybe_m) && break
+            m = get(maybe_m)
             if m.captures[1] == "mode"
                 mode = symbol(m.captures[2])
             end

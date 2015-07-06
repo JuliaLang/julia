@@ -122,10 +122,11 @@ function next(::EnvHash, i)
         throw(BoundsError())
     end
     env::ByteString
-    m = match(r"^(.*?)=(.*)$"s, env)
-    if m == nothing
+    maybe_m = match(r"^(.*?)=(.*)$"s, env)
+    if isnull(maybe_m)
         error("malformed environment entry: $env")
     end
+    m = get(maybe_m)
     (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
 end
 end
@@ -146,10 +147,11 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     buf = Array(UInt16, len)
     unsafe_copy!(pointer(buf), pos, len)
     env = utf8(UTF16String(buf))
-    m = match(r"^(=?[^=]+)=(.*)$"s, env)
-    if m == nothing
+    maybe_m = match(r"^(=?[^=]+)=(.*)$"s, env)
+    if isnull(maybe_m)
         error("malformed environment entry: $env")
     end
+    m = get(maybe_m)
     (ByteString[convert(typeof(env),x) for x in m.captures], (pos+len*2, blk))
 end
 end
