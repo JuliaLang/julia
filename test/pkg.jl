@@ -126,15 +126,20 @@ end"""
   end
 
   Pkg.test("PackageWithCodeCoverage")
-  covfile = Pkg.dir("PackageWithCodeCoverage","src","PackageWithCodeCoverage.jl.cov")
-  @test !isfile(covfile)
+  covdir = Pkg.dir("PackageWithCodeCoverage","src")
+  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
+  @test isempty(covfiles)
   Pkg.test("PackageWithCodeCoverage", coverage=true)
-  @test isfile(covfile)
-  covstr = readall(covfile)
-  srclines = split(src, '\n')
-  covlines = split(covstr, '\n')
-  for i = 1:length(linetested)
-      covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
-      @test covlines[i] == covline
+  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
+  @test !isempty(covfiles)
+  for file in covfiles
+      @test isfile(joinpath(covdir,file))
+      covstr = readall(joinpath(covdir,file))
+      srclines = split(src, '\n')
+      covlines = split(covstr, '\n')
+      for i = 1:length(linetested)
+          covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
+          @test covlines[i] == covline
+      end
   end
 end
