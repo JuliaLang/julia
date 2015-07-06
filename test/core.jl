@@ -3106,3 +3106,8 @@ end
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
+
+# #12023 Test error checking in bitstype
+@test_throws ErrorException bitstype 0 SPJa12023
+@test_throws ErrorException bitstype 4294967312 SPJb12023
+@test_throws ErrorException bitstype -4294967280 SPJc12023
