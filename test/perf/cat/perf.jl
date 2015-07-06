@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("../perfutil.jl")
 
 function cat2d_perf(n, iter)
@@ -45,7 +47,7 @@ function vcat_perf(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i = 1:iter
-        c = [a, b, b, a]
+        c = [a; b; b; a]
     end
 end
 
@@ -89,6 +91,6 @@ testdata = [(cat2d_perf,  "hvcat",        "horizontal/vertical matrix concatenat
             (vcat_perf,   "vcat",         "vertical matrix concatenation", problemsizes),
             (vcat_perf2,  "vcat_setind",  "vertical matrix concatenation using setindex", problemsizes),
             (catnd_perf,  "catnd",        "N-dimensional matrix concatenation", problemsizes),
-            (catnd_perf2, "catnd_setind", "N-dimensional matrix concatenation using setindex", problemsizes)] 
+            (catnd_perf2, "catnd_setind", "N-dimensional matrix concatenation using setindex", problemsizes)]
 include("../perfgeneric.jl")
 

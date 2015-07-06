@@ -1,7 +1,12 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <julia.h>
 #include <stdio.h>
 #include <math.h>
 
+#ifdef _OS_WINDOWS_
+__declspec(dllexport) __cdecl
+#endif
 double my_c_sqrt(double x)
 {
     return sqrt(x);
@@ -10,7 +15,6 @@ double my_c_sqrt(double x)
 int main()
 {
     jl_init(NULL);
-    JL_SET_STACK_BASE;
 
     {
         // Simple running Julia code
@@ -51,14 +55,15 @@ int main()
 
         double* xData = jl_array_data(x);
 
-        for(size_t i=0; i<jl_array_len(x); i++)
+        size_t i;
+        for(i=0; i<jl_array_len(x); i++)
             xData[i] = i;
 
         jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
-        for(size_t i=0; i<jl_array_len(x); i++)
+        for(i=0; i<jl_array_len(x); i++)
             printf("%e ", xData[i]);
         printf("]\n");
 
@@ -90,9 +95,10 @@ int main()
 
         if (jl_exception_occurred()) {
             jl_show(jl_stderr_obj(), jl_exception_occurred());
-            JL_PRINTF(jl_stderr_stream(), "\n");
+            jl_printf(jl_stderr_stream(), "\n");
         }
     }
 
+    jl_atexit_hook();
     return 0;
 }

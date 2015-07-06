@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTES on range reduction
 # [1] compute numbers near pi: http://www.cs.berkeley.edu/~wkahan/testpi/nearpi.c
 # [2] range reduction: http://hal-ujm.ccsd.cnrs.fr/docs/00/08/69/04/PDF/RangeReductionIEEETC0305.pdf
@@ -187,8 +189,8 @@ testModPi()
 @test_approx_eq mod2pi(10)          mod(10,2pi)
 @test_approx_eq mod2pi(-10)         mod(-10,2pi)
 @test_approx_eq mod2pi(355)         3.1416227979431572
-@test_approx_eq mod2pi(int32(355))  3.1416227979431572
+@test_approx_eq mod2pi(Int32(355))  3.1416227979431572
 @test_approx_eq mod2pi(355.0)       3.1416227979431572
 @test_approx_eq mod2pi(355.0f0)     3.1416228f0
-@test mod2pi(int64(2)^60) == mod2pi(2.0^60)
-@test_throws ErrorException mod2pi(int64(2)^60-1)
+@test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
+@test_throws ArgumentError mod2pi(Int64(2)^60-1)

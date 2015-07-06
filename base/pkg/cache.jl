@@ -1,9 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Cache
 
 import ..Git, ..Dir
 using ..Types
 
-path(pkg::String) = abspath(".cache", pkg)
+path(pkg::AbstractString) = abspath(".cache", pkg)
 
 function mkcachedir()
     cache = joinpath(realpath("."), ".cache")
@@ -11,22 +13,23 @@ function mkcachedir()
         return
     end
 
-    @windows_only mkdir(cache)
-    @unix_only begin
-        if Dir.isversioned(pwd())
-            rootcache = joinpath(realpath(".."), ".cache")
-            if !isdir(rootcache)
-                mkdir(rootcache)
-            end
-            symlink(rootcache, cache)
-            return
-        end
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
         mkdir(cache)
+        return
     end
+    if Dir.isversioned(pwd())
+        rootcache = joinpath(realpath(".."), ".cache")
+        if !isdir(rootcache)
+            mkdir(rootcache)
+        end
+        symlink(rootcache, cache)
+        return
+    end
+    mkdir(cache)
 end
 
 
-function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
+function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     isdir(".cache") || mkcachedir()
     cache = path(pkg)
     if !isdir(cache)
@@ -38,13 +41,15 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
         end
     end
     Git.set_remote_url(url, dir=cache)
-    if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
+    in_cache = Git.iscommit(sha1s, dir=cache)
+    if !all(in_cache)
         info("Updating cache of $pkg...")
         Git.success(`remote update`, dir=cache) ||
         error("couldn't update $cache using `git remote update`")
+        in_cache = Git.iscommit(sha1s, dir=cache)
     end
-    filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
+    sha1s[!in_cache]
 end
-prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, String[sha1...])
+prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) = prefetch(pkg, url, AbstractString[sha1...])
 
 end # module

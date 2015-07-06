@@ -29,7 +29,7 @@ osascript 2>&1>/dev/null <<EOF
     if (ProcessList contains "Terminal") or ((count of every window) is less than 1) then
       tell application "System Events" to tell process "Terminal" to keystroke "n" using command down
     end if
-    do script ("exec '${ROOT}/julia/bin/julia'") in front window
+    do script ("exec '${ROOT}/julia/bin/julia'")
   end tell
 EOF
 

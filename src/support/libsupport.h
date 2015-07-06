@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef LIBSUPPORT_H
 #define LIBSUPPORT_H
 
@@ -5,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
+#include <assert.h>
 #include "dtypes.h"
 #include "utils.h"
 #include "utf8.h"

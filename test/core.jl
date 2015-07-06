@@ -1,27 +1,35 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # test core language features
 
-const Bottom = Union()
+const Bottom = Union{}
+
+function testintersect(a, b, result, cmp=is)
+    @test cmp(typeintersect(a, b), result)
+    @test cmp(typeintersect(b, a), result)
+end
+isnot(x,y) = !is(x,y)
 
 # basic type relationships
 @test Int8 <: Integer
 @test Int32 <: Integer
-@test (Int8,Int8) <: (Integer,Integer)
+@test Tuple{Int8,Int8} <: Tuple{Integer,Integer}
 @test !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
 @test !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
-@test (Integer,Integer...) <: (Integer,Real...)
-@test (Integer,Float64,Integer...) <: (Integer,Number...)
-@test (Integer,Float64) <: (Integer,Number...)
-@test (Int32,) <: (Number...)
-@test () <: (Number...)
-@test !((Int32...) <: (Int32,))
-@test !((Int32...) <: (Number,Integer))
-@test !((Integer...,) <: (Integer,Integer,Integer...))
+@test Tuple{Integer,Vararg{Integer}} <: Tuple{Integer,Vararg{Real}}
+@test Tuple{Integer,Float64,Vararg{Integer}} <: Tuple{Integer,Vararg{Number}}
+@test Tuple{Integer,Float64} <: Tuple{Integer,Vararg{Number}}
+@test Tuple{Int32,} <: Tuple{Vararg{Number}}
+@test Tuple{} <: Tuple{Vararg{Number}}
+@test !(Tuple{Vararg{Int32}} <: Tuple{Int32,})
+@test !(Tuple{Vararg{Int32}} <: Tuple{Number,Integer})
+@test !(Tuple{Vararg{Integer}} <: Tuple{Integer,Integer,Vararg{Integer}})
 @test !(Array{Int8,1} <: Array{Any,1})
 @test !(Array{Any,1} <: Array{Int8,1})
 @test Array{Int8,1} <: Array{Int8,1}
 @test !(Type{Bottom} <: Type{Int32})
-@test !(Vector{Float64} <: Vector{Union(Float64,Float32)})
-@test is(Bottom, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
+@test !(Vector{Float64} <: Vector{Union{Float64,Float32}})
+testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
 
 @test !isa(Array,Type{Any})
 @test Type{Complex} <: DataType
@@ -29,142 +37,171 @@ const Bottom = Union()
 @test !(Type{Ptr{Bottom}} <: Type{Ptr})
 @test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
-    @test !is(Bottom, typeintersect(Array{Bottom},AbstractArray{T}))
-    @test  is(Bottom, typeintersect((Type{Ptr{Uint8}},Ptr{Bottom}),
-                                  (Type{Ptr{T}},Ptr{T})))
+    testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
+    testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
+                  Tuple{Type{Ptr{T}},Ptr{T}}, Bottom)
     @test !(Type{T} <: TypeVar)
 
-    @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
-                  (Range{Int},(Int,Int)))
+    testintersect(Tuple{Range{Int},Tuple{Int,Int}},Tuple{AbstractArray{T},Dims},
+                  Tuple{Range{Int},Tuple{Int,Int}})
 
-    @test isequal(typeintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
-                  (Int, Array{Int,1}))
+    testintersect(Tuple{T, AbstractArray{T}}, Tuple{Number, Array{Int,1}},
+                  Tuple{Int, Array{Int,1}})
 
-    @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                  Bottom)
+    testintersect(Tuple{T, AbstractArray{T}}, Tuple{Int, Array{Number,1}},
+                  Tuple{Int, Array{Number,1}})
 
-    @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
-                  (Number, Array{Number,1}))
-    @test !is(Bottom, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
+    testintersect(Tuple{T, AbstractArray{T}},Tuple{Any, Array{Number,1}},
+                  Tuple{Number, Array{Number,1}}, isequal)
+    testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, isnot)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws MethodError f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
-    @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
-    @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
+    testintersect(Tuple{T,T}, Tuple{Union{Float64,Int64},Int64}, Tuple{Int64,Int64})
+    testintersect(Tuple{T,T}, Tuple{Int64,Union{Float64,Int64}}, Tuple{Int64,Int64})
 
-    TT = TypeVar(:T,Top)
-    S = TypeVar(:S,true); N = TypeVar(:N,true)
-    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{S,N}}) == Type{Array{S,1}}
+    TT = TypeVar(:T)
+    S = TypeVar(:S,true); N = TypeVar(:N,true); SN = TypeVar(:S,Number,true)
+    testintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{SN,N}}, Type{Array{SN,1}})
     # issue #5359
-    @test typeintersect((Type{Array{T,1}},Array{T,1}),
-                        (Type{AbstractVector},Vector{Int})) === Bottom
+    testintersect(Tuple{Type{Array{T,1}},Array{T,1}},
+                  Tuple{Type{AbstractVector},Vector{Int}}, Bottom)
     # issue #5559
-    @test typeintersect((Type{Vector{Complex128}}, AbstractVector),
-                        (Type{Array{T,N}}, Array{S,N})) == (Type{Vector{Complex128}},Vector)
-    @test typeintersect((Type{Vector{Complex128}}, AbstractArray),
-                        (Type{Array{T,N}}, Array{S,N})) == (Type{Vector{Complex128}},Vector)
+    testintersect(Tuple{Type{Vector{Complex128}}, AbstractVector},
+                  Tuple{Type{Array{T,N}}, Array{S,N}}, Tuple{Type{Vector{Complex128}},Vector}, isequal)
+    testintersect(Tuple{Type{Vector{Complex128}}, AbstractArray},
+                  Tuple{Type{Array{T,N}}, Array{S,N}}, Tuple{Type{Vector{Complex128}},Vector}, isequal)
 
-    @test typeintersect(Type{Array{T}}, Type{AbstractArray{T}}) === Bottom
+    testintersect(Type{Array{T}}, Type{AbstractArray{T}}, Bottom)
 
-    @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === Bottom
-    @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
+    testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}, Bottom)
+    testintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}, Bottom)
+
+    testintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}, Tuple{Rational{Integer},Int})
+
+    testintersect(Pair{T,Ptr{T}}, Pair{Ptr{S},S}, Bottom)
+    testintersect(Tuple{T,Ptr{T}}, Tuple{Ptr{S},S}, Bottom)
 end
 let N = TypeVar(:N,true)
-    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                                ((Integer,Integer), (Integer...))),
-                  ((Integer,Integer), (Integer,Integer)))
-    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                                ((Integer...), (Integer,Integer))),
-                  ((Integer,Integer), (Integer,Integer)))
-    local A = typeintersect((NTuple{N,Any},Array{Int,N}),
-                            ((Int,Int...),Array))
-    local B = ((Int,Int...),Array{Int,N})
+    testintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
+                  Tuple{Tuple{Integer,Integer}, Tuple{Vararg{Integer}}},
+                  Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
+    testintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
+                  Tuple{Tuple{Vararg{Integer}}, Tuple{Integer,Integer}},
+                  Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
+    local A = typeintersect(Tuple{NTuple{N,Any},Array{Int,N}},
+                            Tuple{Tuple{Int,Vararg{Int}},Array})
+    local B = Tuple{Tuple{Int,Vararg{Int}},Array{Int,N}}
     @test A<:B && B<:A
-    @test isequal(typeintersect((NTuple{N,Any},Array{Int,N}),
-                                ((Int,Int...),Array{Int,2})),
-                  ((Int,Int), Array{Int,2}))
-
-    @test isequal(typeintersect((Type{Void},Type{Void}), Type{NTuple{N,Void}}),
-                  Type{(Void,Void)})
+    testintersect(Tuple{NTuple{N,Any},Array{Int,N}},
+                  Tuple{Tuple{Int,Vararg{Int}},Array{Int,2}},
+                  Tuple{Tuple{Int,Int}, Array{Int,2}})
 end
-@test is(Bottom, typeintersect(Type{Any},Type{Complex}))
-@test is(Bottom, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
+testintersect(Type{Any},Type{Complex}, Bottom)
+testintersect(Type{Any},Type{TypeVar(:T,Real)}, Bottom)
 @test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
 @test !(Type{Array{Integer}} <: Type{Array{TypeVar(:T,Integer)}})
-@test is(Bottom, typeintersect(Type{Function},UnionType))
-@test is(Type{Int32}, typeintersect(Type{Int32},DataType))
+testintersect(Type{Function},UnionType,Bottom)
+testintersect(Type{Int32}, DataType, Type{Int32})
 @test !(Type <: TypeVar)
-@test !is(Bottom, typeintersect(DataType, Type))
-@test !is(Bottom, typeintersect(UnionType, Type))
-@test !is(Bottom, typeintersect(DataType, Type{Int}))
-@test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Int)}))
-@test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
+testintersect(DataType, Type, Bottom, isnot)
+testintersect(UnionType, Type, Bottom, isnot)
+testintersect(DataType, Type{Int}, Bottom, isnot)
+testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, isnot)
+testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, isnot)
 
-@test typeintersect((Int...), (Bool...)) === ()
-@test typeintersect(Type{(Int...)}, Type{(Bool...)}) === Bottom
-@test typeintersect((Bool,Int...), (Bool...)) === (Bool,)
+testintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{})
+testintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}, Bottom)
+testintersect(Tuple{Bool,Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{Bool,})
 
-let T = TypeVar(:T,Union(Float32,Float64))
-    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+let T = TypeVar(:T,Union{Float32,Float64})
+    testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
-let T = TypeVar(:T,Union(Float32,Float64),true)
-    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+let T = TypeVar(:T,Union{Float32,Float64},true)
+    testintersect(AbstractArray, Matrix{T}, Matrix{T})
 end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
 @test DataType <: Type{TypeVar(:T,Type)}
 
-@test isa((),Type{()})
-@test (DataType,) <: Type{TypeVar(:T,Tuple)}
-@test !((Int,) <: Type{TypeVar(:T,Tuple)})
-@test isa((Int,),Type{TypeVar(:T,Tuple)})
+@test isa(Tuple{},Type{Tuple{}})
+@test !(Tuple{Int,} <: Type{TypeVar(:T,Tuple)})
+@test isa(Tuple{Int,},Type{TypeVar(:T,Tuple)})
 
-@test !isa(Type{(Int,Int)},Tuple)
-@test Type{(Int,Int)} <: Tuple
-@test Type{(Int,)} <: (DataType,)
-@test !isa((Int,), Type{(Int...,)})
-@test !isa((Int,), Type{(Any...,)})
+@test !isa(Type{Tuple{Int,Int}},Tuple)
+@test !(Type{Tuple{Int,Int}} <: Tuple)
+@test Tuple{Type{Int}} <: Tuple{DataType}
+
+@test () != Type{Tuple{}}
 
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
-@test issubtype(Array{(Any...)}, Array{NTuple})
-@test !issubtype(Array{(Int...)}, Array{NTuple})
-@test !issubtype(Array{(Int,Int)}, Array{NTuple})
-@test issubtype(Type{(Void,)}, (Type{Void},))
-@test issubtype((Type{Void},),Type{(Void,)})
+@test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
+@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
+@test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
+@test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
-@test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
+@test Type{TypeVar(:T,Number)} <: Union{DataType,UnionType}
 @test !(Type{TypeVar(:T,Number)} <: DataType)
-@test Type{TypeVar(:T,Tuple)} <: Union(Tuple,UnionType)
-@test !(Type{TypeVar(:T,Tuple)} <: Union(DataType,UnionType))
-
-@test !is(Bottom, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
-@test !is(Bottom, typeintersect((DataType,UnionType),Type{(Number,Bottom)}))
+@test !(Type{TypeVar(:T,Tuple)} <: Union{Tuple,UnionType})
+@test Type{TypeVar(:T,Tuple)} <: Union{DataType,UnionType}
 
 # issue #2997
-let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
-    @test typeintersect(T,Real) === Float64
+let T = TypeVar(:T,Union{Float64,Array{Float64,1}},true)
+    testintersect(T,Real,Float64)
+end
+
+# issue #8652
+args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b) != 0
+let T1 = TypeVar(:T, Integer, true), T2 = TypeVar(:T, Integer, true)
+    a = Tuple{Type{T1}, T1}
+    b2 = Tuple{Type{T2}, Integer}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
+    a = Tuple{Type{T1}, Ptr{T1}}
+    b2 = Tuple{Type{T2}, Ptr{Integer}}
+    @test args_morespecific(a, b2)
+    @test !args_morespecific(b2, a)
+end
+
+# issue #11534
+let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
+    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
+    t2 = Tuple{Array, T}
+    @test !args_morespecific(t1, t2)
+    @test  args_morespecific(t2, t1)
 end
 
 # join
 @test typejoin(Int8,Int16) === Signed
-@test typejoin(Int,String) === Any
+@test typejoin(Int,AbstractString) === Any
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
-@test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
-@test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
-                            (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
-                   (Any,String,Int...))
-@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
-                   (Int8,Signed...))
-@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
-                   (Int8,Signed...))
-@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
-                   (Int8,Integer...))
-@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
-@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
+@test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
+@test Base.typeseq(typejoin(Tuple{ASCIIString,ASCIIString},Tuple{UTF8String,ASCIIString},
+                            Tuple{ASCIIString,UTF8String},Tuple{Int,ASCIIString,Int}),
+                   Tuple{Any,AbstractString,Vararg{Int}})
+@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
+                   Tuple{Int8,Vararg{Signed}})
+@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
+                   Tuple{Int8,Vararg{Signed}})
+@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
+                   Tuple{Int8,Vararg{Integer}})
+@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
+@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+
+# typejoin associativity
+abstract Foo____{K}
+type Wow____{K,V} <: Foo____{K} end
+type Bar____{K,V} <: Foo____{K} end
+let
+    a = Wow____{Int64, Int64}
+    b = Wow____{Int64, Float64}
+    c = Bar____{Int64, Int64}
+    @test typejoin(typejoin(b,c), a) == typejoin(typejoin(b,a), c) == Foo____{Int64}
+end
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -173,10 +210,10 @@ nttest1{n}(x::NTuple{n,Int}) = n
 @test nttest1(()) == 0
 @test nttest1((1,2)) == 2
 @test NTuple <: Tuple
-@test NTuple{TypeVar(:T),Int32} <: (Int32...)
-@test !(NTuple{TypeVar(:T),Int32} <: (Int32,Int32...))
-@test (Int32...) <: NTuple{TypeVar(:T),Int32}
-@test (Int32,Int32...) <: NTuple{TypeVar(:T),Int32}
+@test NTuple{TypeVar(:T),Int32} <: Tuple{Vararg{Int32}}
+@test !(NTuple{TypeVar(:T),Int32} <: Tuple{Int32,Vararg{Int32}})
+@test Tuple{Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
+@test Tuple{Int32,Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
 
 # type declarations
 
@@ -228,11 +265,12 @@ end
 
 type FooFoo{A,B} y::FooFoo{A} end
 
-@test FooFoo{Int} <: FooFoo{Int,String}.types[1]
+@test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
 
-x = (2,3)
-@test +(x...) == 5
+let x = (2,3)
+    @test +(x...) == 5
+end
 
 # bits types
 if WORD_SIZE == 64
@@ -299,6 +337,11 @@ let m = sptest3(:a)
     @test is(m(0),Symbol)
 end
 
+sptest4{T}(x::T, y::T) = 42
+sptest4{T}(x::T, y) = 44
+@test sptest4(1,2) == 42
+@test sptest4(1, "cat") == 44
+
 # closures
 function clotest()
     c = 0
@@ -315,7 +358,7 @@ function clotest()
     @test (()->c)() == 1
 
     fibb(n) = n < 2 ? n : fibb(n-1)+fibb(n-2)
-    assert(fibb(10)==55)
+    @test fibb(10) == 55
 
     return (n->(c+=n), ()->c)
 end
@@ -354,6 +397,30 @@ end
 glotest()
 @test glob_x == 88
 @test loc_x == 10
+
+# issue #7234
+begin
+    glob_x2 = 24
+    f7234() = (glob_x2 += 1)
+end
+@test_throws UndefVarError f7234()
+begin
+    global glob_x2 = 24
+    f7234() = (glob_x2 += 1)
+end
+@test_throws UndefVarError f7234()
+# existing globals can be inherited by non-function blocks
+for i = 1:2
+    glob_x2 += 1
+end
+@test glob_x2 == 26
+# globals declared as such in a non-global scope are inherited
+let
+    global glob_x3 = 11
+    f7234_2() = (glob_x3 += 1)
+    f7234_2()
+end
+@test glob_x3 == 12
 
 # issue #7272
 @test expand(parse("let
@@ -401,7 +468,7 @@ end
 @test (true ? 1 : false ? 2 : 3) == 1
 
 # issue #7252
-begin
+let
     local a
     1 > 0 ? a=2 : a=3
     @test a == 2
@@ -418,7 +485,7 @@ type UndefField
     UndefField() = new()
 end
 
-begin
+let
     local a
     a = cell(2)
     @test !isdefined(a,1) && !isdefined(a,2)
@@ -441,16 +508,38 @@ begin
     @test_throws TypeError isdefined(2)
 end
 
+let
+    local a
+    a = cell(2)
+    @test !isassigned(a,1) && !isassigned(a,2)
+    a[1] = 1
+    @test isassigned(a,1) && !isassigned(a,2)
+    a = Array(Float64,1)
+    @test isassigned(a,1)
+    @test isassigned(a)
+    @test !isassigned(a,2)
+end
+
+# isassigned, issue #11167
+type Type11167{T,N} end
+Type11167{Int,2}
+@test !isassigned(Type11167.name.cache, 0)
+@test isassigned(Type11167.name.cache, 1)
+@test !isassigned(Type11167.name.cache, 2)
+Type11167{Float32,5}
+@test isassigned(Type11167.name.cache, 2)
+@test !isassigned(Type11167.name.cache, 3)
+
 # dispatch
-begin
+let
     local foo, bar, baz
-    foo(x::(Any...))=0
-    foo(x::(Integer...))=1
+    foo(x::Tuple{Vararg{Any}})=0
+    foo(x::Tuple{Vararg{Integer}})=1
     @test foo((:a,))==0
     @test foo(( 2,))==1
 
-    bar{T}(x::(T,T,T,T))=1
-    bar(x::(Any,Any,Any,Any))=2
+    bar{T}(x::Tuple{T,T,T,T})=1
+    bar(x::Tuple{Any,Any,Any,Any})=2
     @test bar((1,1,1,1)) == 1
     @test bar((1,1,1,"a")) == 2
     @test bar((:a,:a,:a,:a)) == 1
@@ -461,18 +550,18 @@ begin
     @test baz(Rational{Int}) == 2
 end
 
-begin
+let
     local mytype
     function mytype(vec)
-        convert(Vector{(ASCIIString, DataType)}, vec)
+        convert(Vector{Tuple{ASCIIString, DataType}}, vec)
     end
     some_data = Any[("a", Int32), ("b", Int32)]
-    @test isa(mytype(some_data),Vector{(ASCIIString, DataType)})
+    @test isa(mytype(some_data),Vector{Tuple{ASCIIString, DataType}})
 end
 
 type MyArray{N} <: AbstractArray{Int, N}
 end
-begin
+let
     local x
     x = MyArray{1}()
     foob(x::AbstractArray)=0
@@ -480,7 +569,7 @@ begin
     @test foob(x) == 1
 end
 
-begin
+let
     local f, g, a
     f{T}(a::Vector{Vector{T}}) = a
     g{T}(a::Vector{Vector{T}}) = a
@@ -491,11 +580,32 @@ end
 
 type _AA{T}; a::T; end
 typealias _AoA{T} _AA{_AA{T}}
-begin
+let
     local g, a
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
     @test is(g(a),a)
+end
+
+# dispatch using Val{T}. See discussion in #9452 for instances vs types
+let
+    local firstlast
+    firstlast(::Type{Val{true}}) = "First"
+    firstlast(::Type{Val{false}}) = "Last"
+
+    @test firstlast(Val{true}) == "First"
+    @test firstlast(Val{false}) == "Last"
+end
+
+# x::Vararg{Any} declarations
+let
+    local f1, f2, f3
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    @test f1(1,2,3) == [1,2,3]
+    @test f2(1,2,3) == [1,2,3]
+    @test f3(1,2,3) == [1,2,3]
 end
 
 # try/finally
@@ -538,12 +648,29 @@ begin
         try
             return 5
         finally
-            glo = 18
+            global glo = 18
         end
     end
     @test retfinally() == 5
     @test glo == 18
+
+    @test try error() end === nothing
 end
+
+# finalizers
+let A = [1]
+    local x = 0
+    finalizer(A, a->(x+=1))
+    finalize(A)
+    @test x == 1
+    A = 0
+    gc(); gc()
+    @test x == 1
+end
+
+# Module() constructor
+@test names(Module(:anonymous), true, true) != [:anonymous]
+@test names(Module(:anonymous, false), true, true) == [:anonymous]
 
 # issue #7307
 function test7307(a, ret)
@@ -581,7 +708,7 @@ let a = []
 end
 
 # chained and multiple assignment behavior (issue #2913)
-begin
+let
     local x, a, b, c, d, e
     x = (a,b,b,b,e) = (1,2,3,4,5)
     @test x === (1,2,3,4,5)
@@ -607,7 +734,7 @@ begin
 end
 
 # accessing fields by index
-begin
+let
     local z = complex(3, 4)
     v = Int[0,0]
     for i=1:2
@@ -633,15 +760,15 @@ end
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
 # issue #814
-begin
+let
     local MatOrNot, my_func, M
-    typealias MatOrNot{T} Union(AbstractMatrix{T}, Vector{Union()})
+    typealias MatOrNot{T} Union{AbstractMatrix{T}, Vector{Union{}}}
     my_func{T<:Real}(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) = 0
     M = [ 2. 1. ; 1. 1. ]
-    @test my_func(Union()[], M, M) == 0
+    @test my_func(Union{}[], M, M) == 0
 end
 
-begin
+let
     local my_func, a, c
     my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
     my_func{T}(x::T, P::Vector{T}) = 1
@@ -651,10 +778,10 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws MethodError my_func(a,c)
+    @test my_func(a,c)==1
 end
 
-begin
+let
     local baar, foor, boor
     # issue #1131
     baar(x::DataType) = 0
@@ -686,7 +813,7 @@ import Base.*
 
 *{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
 
-begin
+let
     local a,b
     a = SI{0,0,1}(1.0) * SI{1,2,0}(2.0)
     b = SI{0,0,1}(1.0) * SI{1,-2,0}(2.0)
@@ -694,8 +821,26 @@ begin
     @test typeof(b) === SI{1,-2,1}
 end
 
+# pointer arithmetic
+let
+   local a,b,c
+   a = C_NULL
+   b = C_NULL + 1
+   c = C_NULL - 1
+
+   @test a != b != c
+   @test UInt(a) == 0
+   @test UInt(b) == 1
+   @test UInt(c) == typemax(UInt)
+
+   @test b - a == -(a - b) == 1
+   @test c - a == -(a - c) == typemax(UInt)
+   @test c - b == -(b - c) == typemax(UInt) - 1
+   @test a < b < c
+end
+
 # pull request 1270
-begin
+let
     local a,p, a2,p2
     a = [11,12,13]
     p = pointer(a)
@@ -713,16 +858,16 @@ end
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
-begin
+let
     local a, aa
     a = [1,2,3]
     aa = pointer_to_array(pointer(a), length(a))
     @test aa == a
     aa = pointer_to_array(pointer(a), (length(a),))
     @test aa == a
-    aa = pointer_to_array(pointer(a), uint(length(a)))
+    aa = pointer_to_array(pointer(a), UInt(length(a)))
     @test aa == a
-    aa = pointer_to_array(pointer(a), uint16(length(a)))
+    aa = pointer_to_array(pointer(a), UInt16(length(a)))
     @test aa == a
     @test_throws ErrorException pointer_to_array(pointer(a), -3)
 end
@@ -731,17 +876,17 @@ immutable FooBar
     foo::Int
     bar::Int
 end
-begin
+let
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
-    p = convert(Ptr{FooBar}, X)
+    p = pointer(X)
     @test unsafe_load(p, 2) == FooBar(4,4)
     unsafe_store!(p, FooBar(7,3), 1)
     @test X[1] == FooBar(7,3)
 end
 
 # issue #1287, combinations of try, catch, return
-begin
+let
     local f, g
 
     function f()
@@ -765,7 +910,7 @@ end
 type S1442{T}
 end
 
-begin
+let
     local f1442
     f1442(::DataType) = 1
     f1442{T}(::Type{S1442{T}}) = 2
@@ -778,26 +923,26 @@ end
 abstract Component
 
 type Transform <: Component
-  x
-  y
-  z
+    x
+    y
+    z
 
-  Transform() = new(0, 0, 0)
+    Transform() = new(0, 0, 0)
 end
 
 type Body <: Component
-  vel
-  curr_force
+    vel
+    curr_force
 
-  Body() = new(0, 0)
+    Body() = new(0, 0)
 end
 
-function NewEntity{ T<:Component }(components::Type{T}...)
-  map((c)->c(), components)
+function NewEntity{T<:Component}(components::Type{T}...)
+    map((c)->c(), components)
 end
 
 @test_throws MethodError NewEntity(Transform, Transform, Body, Body)
-@test isa(NewEntity(Transform, Transform), (Transform, Transform))
+@test isa(NewEntity(Transform, Transform), Tuple{Transform, Transform})
 @test_throws MethodError NewEntity(Transform, Transform, Body, Body)
 
 # issue #1826
@@ -811,16 +956,16 @@ end
 let
     tst = 1
     m1(i) = (tst+=1;i-1)
-    x = [1:4]
+    x = [1:4;]
     x[1:end] *= 2
-    @test x == [2:2:8]
+    @test x == [2:2:8;]
     x[m1(end)] += 3
     @test x == [2,4,9,8]
     @test tst == 2
 
     # issue #1886
-    X = [1:4]
-    r = Array(Range1{Int},1)
+    X = [1:4;]
+    r = Array(UnitRange{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -848,7 +993,7 @@ let
     # but type inference will track it more accurately as
     # (Type{Integer}, Type{Int}).
     f1628() = I1628((Integer,Int))
-    @test isa(f1628(), I1628{(DataType,DataType)})
+    @test isa(f1628(), I1628{Tuple{DataType,DataType}})
 end
 
 let
@@ -869,7 +1014,7 @@ end
 let
     i2098() = begin
         c = Any[2.0]
-        [1:1:c[1]]
+        [1:1:c[1];]
     end
     @test isequal(i2098(), [1.0,2.0])
 end
@@ -884,18 +1029,18 @@ end
 # issue #2169
 let
     i2169{T}(a::Array{T}) = typemin(T)
-    @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
+    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
 end
 
 # issue #2365
 type B2365{T}
-     v::Union(T, Void)
+     v::Union{T, Void}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
 
 # issue #2352
-begin
+let
     local Sum, n
     Sum=0.0; for n=1:2:10000
         Sum += -1/n + 1/(n+1)
@@ -918,14 +1063,14 @@ immutable Foo2517; end
 
 # issue #1474
 type X1474{a,b} end
-begin
+let
     local Y
     Y{A,B}(::Type{X1474{A,B}}) = 1
     Y{A}(::Type{X1474{A}}) = 2
     Y(::Type{X1474}) = 3
     @test Y(X1474) == 3
     @test Y(X1474{Int}) == 2
-    @test Y(X1474{Int,String}) == 1
+    @test Y(X1474{Int,AbstractString}) == 1
 end
 
 # issue #2562
@@ -1047,9 +1192,9 @@ function foo4075(f::Foo4075, s::Symbol)
     x
 end
 
-@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+@test isa(foo4075(Foo4075(Int64(1),2.0),:y), Float64)
 # very likely to segfault the second time if this is broken
-@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+@test isa(foo4075(Foo4075(Int64(1),2.0),:y), Float64)
 
 # issue #3167
 function foo(x)
@@ -1059,18 +1204,21 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Void), 3)
-x[1] = 1.0
-x[2] = 2.0
-x[3] = 3.0
-foo(x) == [1.0, 2.0, 3.0]
-
-# issue #4115
-type Foo4115
+let x = Array(Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}, 3)
+    x[1] = 1.0
+    x[2] = 2.0
+    x[3] = 3.0
+    @test foo(x) == [1.0, 2.0, 3.0]
 end
-typealias Foo4115s NTuple{3,Union(Foo4115,Type{Foo4115})}
-baz4115(x::Foo4115s) = x
-@test baz4115((Foo4115,Foo4115,Foo4115())) === (Foo4115,Foo4115,Foo4115())
+
+# TODO!!
+# issue #4115
+#type Foo4115
+#end
+#typealias Foo4115s NTuple{3,Union{Foo4115,Type{Foo4115}}}
+#baz4115(x::Foo4115s) = x
+#@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
+#                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
 
 # issue #4129
 type Foo4129; end
@@ -1093,7 +1241,7 @@ foo4129(a::Baz4129,b::Bar41291,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
 
-@test isa(foo4129(Baz4129(Bar41291(Foo4129())),1,2), (Baz4129,Bar4129,Foo4129,Int,Int))
+@test isa(foo4129(Baz4129(Bar41291(Foo4129())),1,2), Tuple{Baz4129,Bar4129,Foo4129,Int,Int})
 
 # issue #4141
 type Vertex4141{N,T}; end
@@ -1140,20 +1288,19 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws MethodError Foo4376{Float32}(Foo4376{Float32}(2.0f0))
 
 type _0_test_ctor_syntax_
-    _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
+    _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
 end
 
 # issue #4413
 type A4413 end
 type B4413 end
 type C4413 end
-f4413(::Union(A4413, B4413, C4413)) = "ABC"
-f4413(::Union(A4413, B4413)) = "AB"
-g4413(::Union(A4413, C4413)) = "AC"
-g4413(::Union(A4413, B4413, C4413)) = "ABC"
+f4413(::Union{A4413, B4413, C4413}) = "ABC"
+f4413(::Union{A4413, B4413}) = "AB"
+g4413(::Union{A4413, C4413}) = "AC"
+g4413(::Union{A4413, B4413, C4413}) = "ABC"
 
 @test f4413(A4413()) == "AB" && f4413(B4413()) == "AB"
 @test g4413(A4413()) == "AC" && g4413(C4413()) == "AC"
@@ -1163,8 +1310,8 @@ g4413(::Union(A4413, B4413, C4413)) = "ABC"
 # tuple argument, but it shouldn't do that for an argument that a static
 # parameter depends on.
 f4482{T}(x::T) = T
-@test f4482((Ptr,Ptr)) === (DataType,DataType)
-@test f4482((Ptr,))    === (DataType,)
+@test f4482((Ptr,Ptr)) === Tuple{DataType,DataType}
+@test f4482((Ptr,))    === Tuple{DataType,}
 
 # issue #4486
 try
@@ -1184,21 +1331,21 @@ f4526(x) = isa(x.a, Void)
 # issue #4528
 function f4528(A, B)
     if A
-        reinterpret(Uint64, B)
+        reinterpret(UInt64, B)
     end
 end
-@test f4528(false, int32(12)) === nothing
-@test_throws ErrorException f4528(true, int32(12))
+@test f4528(false, Int32(12)) === nothing
+@test_throws ErrorException f4528(true, Int32(12))
 
 # issue #4518
-f4518(x, y::Union(Int32,Int64)) = 0
-f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
+f4518(x, y::Union{Int32,Int64}) = 0
+f4518(x::ASCIIString, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,Int64(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
@@ -1210,13 +1357,20 @@ function f6591(d)
     Intrinsics.box(Int64, d)
     (f->f(d))(identity)
 end
-let d = Intrinsics.box(Date4581{Int}, int64(1))
+let d = Intrinsics.box(Date4581{Int}, Int64(1))
     @test isa(f6591(d), Date4581)
 end
 
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
+
+# more undef var errors
+function test_undef_var_9898(a)
+    a1 = a1
+    a
+end
+@test_throws UndefVarError test_undef_var_9898(1)
 
 # issue #4505
 let
@@ -1231,8 +1385,8 @@ type Z4681
     x::Ptr{Void}
     Z4681() = new(C_NULL)
 end
-Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
-@test_throws TypeError ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+@test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479
 f4479(::Real,c) = 1
@@ -1284,7 +1438,7 @@ abstract IT4805{N, T}
 let
     T = TypeVar(:T,Int,true)
     N = TypeVar(:N,true)
-    @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != Bottom
+    testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, isnot)
 end
 
 let
@@ -1325,7 +1479,7 @@ f5150(T) = Array(Rational{T},1)
 # issue #5165
 bitstype 64 T5165{S}
 make_t(x::Int64) = Base.box(T5165{Void}, Base.unbox(Int64, x))
-xs5165 = T5165[make_t(int64(1))]
+xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
     println(b5165, x)   # segfaulted
@@ -1360,11 +1514,9 @@ f5254(a, b) = 1
 @test f5254(Bottom, 1) == 1
 
 # evaluate arguments left-to-right, including assignments. issue #4990
-let
-    i = 0
+let i = 0, x = 65
     @test (i, i+=1, i+=1) === (0, 1, 2)
     @test i == 2
-    x = 65
     @test [x, x|=0x20] == [65, 97]
 end
 
@@ -1396,11 +1548,11 @@ end
 # issue #5142
 bitstype 64 Int5142
 function h5142(a::Bool)
-    x=a ? (int64(0),reinterpret(Int5142,int64(0))) : (int64(1),reinterpret(Int5142,int64(1)))
+    x=a ? (Int64(0),reinterpret(Int5142,Int64(0))) : (Int64(1),reinterpret(Int5142,Int64(1)))
     x[2]::Int5142
 end
 function h5142(a::Int)
-    x=(int64(0),reinterpret(Int5142,int64(0)))
+    x=(Int64(0),reinterpret(Int5142,Int64(0)))
     x[a]::Int5142
 end
 h5142(true)
@@ -1409,8 +1561,8 @@ h5142(2)
 
 bitstype 8 Int5142b
 function h5142b(a::Int)
-    x=((int8(1),int8(2)),(reinterpret(Int5142b,int8(3)),reinterpret(Int5142b,int8(4))))
-    x[a]::(Int8,Int8)
+    x=((Int8(1),Int8(2)),(reinterpret(Int5142b,Int8(3)),reinterpret(Int5142b,Int8(4))))
+    x[a]::Tuple{Int8,Int8}
 end
 h5142b(1)
 @test_throws TypeError h5142b(2)
@@ -1432,13 +1584,13 @@ end
 function read_file5374(fileobj)
     read(fileobj.io, Float32)
 end
-@test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)
+@test isa(read_file5374(FileObj5374(IOBuffer(UInt8[0,0,0,0]))), Float32)
 
 # issue #5457
 function f5457(obj_ptr::Ptr{Float64}, f)
     new_obj = convert(Float64, f(1.0))
     unsafe_store!(obj_ptr, new_obj)
-    return int32(1)
+    return Int32(1)
 end
 let
     a = [1.0]
@@ -1537,9 +1689,9 @@ macro m6031(x); x; end
 @test (@m6031 [2,4,6])[2] == 4
 
 # issue #6050
-@test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
-                          Dict{Int64,(Range1{Int64},Range1{Int64})},
-                          :vals) == Array{(Range1{Int64},Range1{Int64}),1}
+@test Core.Inference.getfield_tfunc([nothing, QuoteNode(:vals)],
+          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+          :vals) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
 
 # issue #6068
 x6068 = 1
@@ -1566,12 +1718,12 @@ x6074 = 6074
 @test @X6074() == 6074
 
 # issue #5536
-test5536(a::Union(Real, AbstractArray)...) = "Splatting"
-test5536(a::Union(Real, AbstractArray)) = "Non-splatting"
+test5536(a::Union{Real, AbstractArray}...) = "Splatting"
+test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 @test test5536(5) == "Non-splatting"
 
-# multiline comments (#6139 and others raised in #6128)
-@test 3 == include_string("1 + 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2")
+# multiline comments (#6139 and others raised in #6128) and embedded NUL chars (#10994)
+@test 3 == include_string("1 + 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2") == include_string("1 + #= \0 =# 2")
 @test_throws LoadError include_string("#=")
 @test_throws LoadError include_string("#= #= #= =# =# =")
 
@@ -1622,21 +1774,22 @@ end
 # issue #5577
 f5577(::Any) = false
 f5577(::Type) = true
-@test !f5577((Int,String,2))
-@test f5577(((Int,String),String))
+@test !f5577((Int,AbstractString,2))
+@test !f5577(((Int,AbstractString),AbstractString))
+@test f5577(Tuple{Tuple{Int,AbstractString},AbstractString})
 @test f5577(Int)
 @test !f5577(2)
 
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
-f6426(x,t::(Type...)) = string(t)
-@test f6426(1, (1.,2.)) == "((Float64,Float64),)"
+f6426(x,t::Tuple{Vararg{Type}}) = string(t)
+@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
 
 # issue #6502
-f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
+f6502() = convert(Tuple{Vararg{Int}}, (10,))
 @test f6502() === (10,)
-@test convert((Bool,Int...,), (true,10)) === (true,10)
-@test convert((Int,Bool...), (true,1,0)) === (1,true,false)
+@test convert(Tuple{Bool,Vararg{Int}}, (true,10)) === (true,10)
+@test convert(Tuple{Int,Vararg{Bool}}, (true,1,0)) === (1,true,false)
 
 # issue on the flight from DFW
 # (type inference deducing Type{:x} rather than Symbol)
@@ -1655,7 +1808,7 @@ end
 
 # issue #6634
 function crc6634(spec)
-    A = Uint
+    A = UInt
     remainder::A = 1
     function handler(append)
         remainder = append ? 1 : 2
@@ -1696,7 +1849,7 @@ obj = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array(T,1)
-    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,int64(1)))
+    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,Int64(1)))
     a
 end
 
@@ -1755,19 +1908,19 @@ end
 # issue #6980
 abstract A6980
 type B6980 <: A6980 end
-f6980(::Union(Int, Float64), ::A6980) = false
-f6980(::Union(Int, Float64), ::B6980) = true
+f6980(::Union{Int, Float64}, ::A6980) = false
+f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-typealias Maybe7049{T} Union(T,Void)
-function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+typealias Maybe7049{T} Union{T,Void}
+function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMatrix{T}) = T,
+let z{T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}}(A::StridedMatrix{T}) = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -1780,7 +1933,7 @@ f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
 
 # issue #7302
 function test7302()
-    t = [Uint64][1]
+    t = [UInt64][1]
     convert(t, "5")
 end
 @test_throws MethodError test7302()
@@ -1815,11 +1968,12 @@ type A7652
     a :: Int
 end
 a7652 = A7652(0)
-f7652() = issubtype(fieldtype(a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
-g7652() = fieldtype(A7652, :types)
-@test g7652() == fieldtype(A7652, :types) == Tuple
-@test fieldtype(a7652, 1) == Int
+t_a7652 = A7652
+f7652() = issubtype(fieldtype(t_a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+g7652() = fieldtype(DataType, :types)
+@test g7652() == fieldtype(DataType, :types) == SimpleVector
+@test fieldtype(t_a7652, 1) == Int
 h7652() = a7652.(1) = 2
 h7652()
 @test a7652.a == 2
@@ -1835,15 +1989,15 @@ type Foo7810{T<:AbstractVector}
     v::T
 end
 bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
-@test Base.return_types(bar7810,())[1] == Array{Foo7810{Array{(Int,Int),1}},1}
+@test Base.return_types(bar7810,Tuple{})[1] == Array{Foo7810{Array{Tuple{Int,Int},1}},1}
 
 # issue 7897
 function issue7897!(data, arr)
-    data = reinterpret(Uint32, data)
+    data = reinterpret(UInt32, data)
     a = arr[1]
 end
 
-a = ones(Uint8, 10)
+a = ones(UInt8, 10)
 sa = sub(a,4:6)
 # This can throw an error, but shouldn't segfault
 try
@@ -1882,3 +2036,1073 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
 end
+
+# call overloading (#2403)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test x((3,)...) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    @test issue2403func(x) == 34
+end
+
+# a method specificity issue
+c99991{T}(::Type{T},x::T) = 0
+c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
+@test c99991(UnitRange{Float64}, 1.0:2.0) == 1
+@test c99991(UnitRange{Int}, 1:2) == 2
+
+# issue #8798
+let
+    const npy_typestrs = Dict("b1"=>Bool,
+                              "i1"=>Int8,      "u1"=>UInt8,
+                              "i2"=>Int16,     "u2"=>UInt16,
+                              "i4"=>Int32,     "u4"=>UInt32,
+                              "i8"=>Int64,     "u8"=>UInt64)
+    sizeof_lookup() = sizeof(npy_typestrs["i8"])
+    @test sizeof_lookup() == 8
+end
+
+# issue #8851
+abstract AbstractThing{T,N}
+type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+end
+
+testintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing, ConcreteThing{TypeVar(:T,FloatingPoint),2}, isequal)
+
+# issue #8978
+module I8978
+y = 1
+g() = f(y)
+f(x) = 2
+f(x::Int) = 3.0
+module II8978
+function callf(f)
+    try
+        f()
+    finally
+    end
+end
+end
+h(f) = II8978.callf() do
+    local x
+    for i = 1:1
+        x = g()+f
+    end
+    x
+end
+end
+
+@test I8978.h(4) === 7.0
+
+# issue #9134
+function f9134()
+    ii = zeros(Int32, 1)
+    let i
+        ii[1] = i
+    end
+end
+@test_throws UndefVarError f9134()
+
+# issue #9475
+module I9475
+    arr = Array(Any, 1)
+    @eval @eval $arr[1] = 1
+end
+
+# issue #9520
+f9520a(::Any, ::Any, args...) = 15
+f9520b(::Any, ::Any, ::Any, args...) = 23
+f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+@test invoke(f9520a, Tuple{Any, Any}, 1, 2) == 15
+@test invoke(f9520a, Tuple{Any, Any, Any}, 1, 2, 3) == 15
+@test invoke(f9520b, Tuple{Any, Any, Any}, 1, 2, 3) == 23
+@test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
+# Keep until the old signature of invoke is dropped.
+@test invoke(f9520a, (Any, Any), 1, 2) == 15
+@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
+@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
+@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+
+# jl_new_bits testing
+let x = [1,2,3]
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int,Int,Int}, x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+end
+
+# sig 2 is SIGINT per the POSIX.1-1990 standard
+if Base.is_unix(OS_NAME)
+    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+    @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
+    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+end
+
+# pull request #9534
+@test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
+@test try; [][]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,); end
+@test try; [][1,2]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,2); end
+@test try; [][10]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (10,); end
+f9534a() = (a=1+2im; a.(-100))
+f9534a(x) = (a=1+2im; a.(x))
+@test try; f9534a() catch ex; (ex::BoundsError).a === 1+2im && ex.i == -100; end
+@test try; f9534a(3) catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+f9534b() = (a=(1,2.,""); a[5])
+f9534b(x) = (a=(1,2.,""); a[x])
+@test try; f9534b() catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 5; end
+@test try; f9534b(4) catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 4; end
+f9534c() = (a=(1,2.); a[3])
+f9534c(x) = (a=(1,2.); a[x])
+@test try; f9534c() catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 3; end
+@test try; f9534c(0) catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 0; end
+f9534d() = (a=(1,2,4,6,7); a[7])
+f9534d(x) = (a=(1,2,4,6,7); a[x])
+@test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
+@test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
+f9534e(x) = (a=IOBuffer(); a.(x) = 3)
+@test try; f9534e(-2) catch ex; is((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
+f9534f() = (a=IOBuffer(); a.(-2))
+f9534f(x) = (a=IOBuffer(); a.(x))
+@test try; f9534f() catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
+@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == typemin(Int)+2; end
+x9634 = 3
+@test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+@test try; throw(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int)) catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int, typemin(Int))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == typemin(Int); end
+@test try; throw(BoundsError(Int, (:a,))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == (:a,); end
+f9534g(a,b,c...) = c[0]
+@test try; f9534g(1,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 0; end
+f9534h(a,b,c...) = c[a]
+@test f9534h(4,2,3,4,5,6) == 6
+@test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+
+# issue #9535
+counter9535 = 0
+f9535() = (global counter9535; counter9535 += 1; counter9535)
+g9535() = (f9535(),f9535())
+@test g9535() == (1,2)
+@test g9535() == (3,4)
+
+# issue #9617
+let p = 15
+    @test 2p+1 == 31  # not a hex float literal
+end
+@test_throws ParseError parse("0x0.1")  # must have p or P
+
+# weak references
+type Obj; x; end
+function mk_wr(r, wr)
+    x = Obj(1)
+    push!(r, x)
+    push!(wr, WeakRef(x))
+end
+test_wr(r,wr) = @test r[1] == wr[1].value
+function test_wr()
+    ref = []
+    wref = []
+    mk_wr(ref, wref)
+    test_wr(ref, wref)
+    gc()
+    test_wr(ref, wref)
+    pop!(ref)
+    gc()
+    @test wref[1].value == nothing
+end
+test_wr()
+
+# issue #9947
+function f9947()
+    if 1 == 0
+        1
+    else
+        min(UInt128(2),1)
+    end
+end
+@test f9947() == UInt128(1)
+
+# Type inference for tuple parameters
+immutable fooTuple{s}; end
+barTuple1() = fooTuple{(:y,)}()
+barTuple2() = fooTuple{tuple(:y)}()
+
+@test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
+
+#issue #9835
+module M9835
+    using Base.Test
+    type A end; type B end
+    f() = (isa(A(), A) ? A : B)()
+    @test isa(f(), A)
+end
+
+#issue #10163
+let a = :(()), b = :(())
+    @test a.args !== b.args
+end
+
+# issue caused by commit 189b00aef0376d1a998d36115cd11b17464d26ce and worked around
+# by commit 24c64b86bd4e793dbfe9d85c067dc0579b320d14
+let
+    g{T}(x::T...) = T
+    g(x...) = 0
+    @test g((),Int) == 0
+    @test g((),()) == Tuple{}
+end
+
+# TODO: hopefully this issue is obsolete after the tuple type change
+## issue #8631
+#f8631(::(Type, Type...), ::(Any, Any...)) = 1
+#f8631{T}(::Type{(T...)}, x::Tuple) = 2
+#@test length(methods(f8631, ((Type, Type...), (Any, Any...)))) == 2
+
+# issue caused by 8d0037cb377257fc4232c8526b12337dd7bdf0a7
+args8d003 = (:x, :y)
+@test eval(:(:(f($(($args8d003)...))))) == :(f(x,y))
+x8d003 = Any[:y8d003]
+y8d003 = 777
+@test eval(:(string(:(f($($(x8d003...))))))) == "f(777)"
+
+# issue #9378
+abstract Foo9378{T,S}
+immutable B9378{T} end
+typealias FooB9378{T} Foo9378{T,B9378}
+immutable CFoo9378 <: FooB9378{Float64} end
+@test isa(CFoo9378(),FooB9378)
+
+# issue #10281
+const N10281 = 1000
+@test if false
+    for i in 1:N10281
+    end
+end === nothing
+
+# issue #10221
+module GCbrokentype
+OLD_STDOUT = STDOUT
+file = open(tempname(), "w")
+redirect_stdout(file)
+versioninfo()
+try
+    type Foo{T}
+        val::Bar{T}
+    end
+end
+gc()
+redirect_stdout(OLD_STDOUT)
+close(file)
+end
+
+# issue #10373
+f10373(x) = x
+g10373(x) = x
+type newtype10373
+end
+let f
+    for f in (f10373,g10373)
+        f(x::newtype10373) = println("$f")
+    end
+end
+@test f10373.env.defs.func.code.name == :f10373
+@test f10373.env.defs.next.func.code.name == :f10373
+@test g10373.env.defs.func.code.name == :g10373
+@test g10373.env.defs.next.func.code.name == :g10373
+
+# issue #7221
+f7221{T<:Number}(::T) = 1
+f7221(::BitArray) = 2
+f7221(::AbstractVecOrMat) = 3
+@test f7221(trues(1)) == 2
+
+# issue #9232
+arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
+result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
+# this gave a "type too large", but not reliably
+@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union{Float32,Float64})}, Type{TypeVar(:T2, Number)}})) == 1
+
+# test functionality of non-power-of-2 bitstype constants
+bitstype 24 Int24
+Int24(x::Int) = Intrinsics.box(Int24,Intrinsics.trunc_int(Int24,Intrinsics.unbox(Int,x)))
+Int(x::Int24) = Intrinsics.box(Int,Intrinsics.zext_int(Int,Intrinsics.unbox(Int24,x)))
+let x,y,f
+    x = Int24(Int(0x12345678)) # create something (via truncation)
+    @test Int(0x345678) === Int(x)
+    function f() Int24(Int(0x02468ace)) end
+    y = f() # invoke llvm constant folding
+    @test Int(0x468ace) === Int(y)
+    @test x !== y
+    @test string(y) == "Int24(0x468ace)"
+end
+
+# issue #10570
+immutable Array_512_Uint8
+    d1::Uint8
+    d2::Uint8
+    d3::Uint8
+    d4::Uint8
+    d5::Uint8
+    d6::Uint8
+    d7::Uint8
+    d8::Uint8
+    d9::Uint8
+    d10::Uint8
+    d11::Uint8
+    d12::Uint8
+    d13::Uint8
+    d14::Uint8
+    d15::Uint8
+    d16::Uint8
+    d17::Uint8
+    d18::Uint8
+    d19::Uint8
+    d20::Uint8
+    d21::Uint8
+    d22::Uint8
+    d23::Uint8
+    d24::Uint8
+    d25::Uint8
+    d26::Uint8
+    d27::Uint8
+    d28::Uint8
+    d29::Uint8
+    d30::Uint8
+    d31::Uint8
+    d32::Uint8
+    d33::Uint8
+    d34::Uint8
+    d35::Uint8
+    d36::Uint8
+    d37::Uint8
+    d38::Uint8
+    d39::Uint8
+    d40::Uint8
+    d41::Uint8
+    d42::Uint8
+    d43::Uint8
+    d44::Uint8
+    d45::Uint8
+    d46::Uint8
+    d47::Uint8
+    d48::Uint8
+    d49::Uint8
+    d50::Uint8
+    d51::Uint8
+    d52::Uint8
+    d53::Uint8
+    d54::Uint8
+    d55::Uint8
+    d56::Uint8
+    d57::Uint8
+    d58::Uint8
+    d59::Uint8
+    d60::Uint8
+    d61::Uint8
+    d62::Uint8
+    d63::Uint8
+    d64::Uint8
+    d65::Uint8
+    d66::Uint8
+    d67::Uint8
+    d68::Uint8
+    d69::Uint8
+    d70::Uint8
+    d71::Uint8
+    d72::Uint8
+    d73::Uint8
+    d74::Uint8
+    d75::Uint8
+    d76::Uint8
+    d77::Uint8
+    d78::Uint8
+    d79::Uint8
+    d80::Uint8
+    d81::Uint8
+    d82::Uint8
+    d83::Uint8
+    d84::Uint8
+    d85::Uint8
+    d86::Uint8
+    d87::Uint8
+    d88::Uint8
+    d89::Uint8
+    d90::Uint8
+    d91::Uint8
+    d92::Uint8
+    d93::Uint8
+    d94::Uint8
+    d95::Uint8
+    d96::Uint8
+    d97::Uint8
+    d98::Uint8
+    d99::Uint8
+    d100::Uint8
+    d101::Uint8
+    d102::Uint8
+    d103::Uint8
+    d104::Uint8
+    d105::Uint8
+    d106::Uint8
+    d107::Uint8
+    d108::Uint8
+    d109::Uint8
+    d110::Uint8
+    d111::Uint8
+    d112::Uint8
+    d113::Uint8
+    d114::Uint8
+    d115::Uint8
+    d116::Uint8
+    d117::Uint8
+    d118::Uint8
+    d119::Uint8
+    d120::Uint8
+    d121::Uint8
+    d122::Uint8
+    d123::Uint8
+    d124::Uint8
+    d125::Uint8
+    d126::Uint8
+    d127::Uint8
+    d128::Uint8
+    d129::Uint8
+    d130::Uint8
+    d131::Uint8
+    d132::Uint8
+    d133::Uint8
+    d134::Uint8
+    d135::Uint8
+    d136::Uint8
+    d137::Uint8
+    d138::Uint8
+    d139::Uint8
+    d140::Uint8
+    d141::Uint8
+    d142::Uint8
+    d143::Uint8
+    d144::Uint8
+    d145::Uint8
+    d146::Uint8
+    d147::Uint8
+    d148::Uint8
+    d149::Uint8
+    d150::Uint8
+    d151::Uint8
+    d152::Uint8
+    d153::Uint8
+    d154::Uint8
+    d155::Uint8
+    d156::Uint8
+    d157::Uint8
+    d158::Uint8
+    d159::Uint8
+    d160::Uint8
+    d161::Uint8
+    d162::Uint8
+    d163::Uint8
+    d164::Uint8
+    d165::Uint8
+    d166::Uint8
+    d167::Uint8
+    d168::Uint8
+    d169::Uint8
+    d170::Uint8
+    d171::Uint8
+    d172::Uint8
+    d173::Uint8
+    d174::Uint8
+    d175::Uint8
+    d176::Uint8
+    d177::Uint8
+    d178::Uint8
+    d179::Uint8
+    d180::Uint8
+    d181::Uint8
+    d182::Uint8
+    d183::Uint8
+    d184::Uint8
+    d185::Uint8
+    d186::Uint8
+    d187::Uint8
+    d188::Uint8
+    d189::Uint8
+    d190::Uint8
+    d191::Uint8
+    d192::Uint8
+    d193::Uint8
+    d194::Uint8
+    d195::Uint8
+    d196::Uint8
+    d197::Uint8
+    d198::Uint8
+    d199::Uint8
+    d200::Uint8
+    d201::Uint8
+    d202::Uint8
+    d203::Uint8
+    d204::Uint8
+    d205::Uint8
+    d206::Uint8
+    d207::Uint8
+    d208::Uint8
+    d209::Uint8
+    d210::Uint8
+    d211::Uint8
+    d212::Uint8
+    d213::Uint8
+    d214::Uint8
+    d215::Uint8
+    d216::Uint8
+    d217::Uint8
+    d218::Uint8
+    d219::Uint8
+    d220::Uint8
+    d221::Uint8
+    d222::Uint8
+    d223::Uint8
+    d224::Uint8
+    d225::Uint8
+    d226::Uint8
+    d227::Uint8
+    d228::Uint8
+    d229::Uint8
+    d230::Uint8
+    d231::Uint8
+    d232::Uint8
+    d233::Uint8
+    d234::Uint8
+    d235::Uint8
+    d236::Uint8
+    d237::Uint8
+    d238::Uint8
+    d239::Uint8
+    d240::Uint8
+    d241::Uint8
+    d242::Uint8
+    d243::Uint8
+    d244::Uint8
+    d245::Uint8
+    d246::Uint8
+    d247::Uint8
+    d248::Uint8
+    d249::Uint8
+    d250::Uint8
+    d251::Uint8
+    d252::Uint8
+    d253::Uint8
+    d254::Uint8
+    d255::Uint8
+    d256::Uint8
+    d257::Uint8
+    d258::Uint8
+    d259::Uint8
+    d260::Uint8
+    d261::Uint8
+    d262::Uint8
+    d263::Uint8
+    d264::Uint8
+    d265::Uint8
+    d266::Uint8
+    d267::Uint8
+    d268::Uint8
+    d269::Uint8
+    d270::Uint8
+    d271::Uint8
+    d272::Uint8
+    d273::Uint8
+    d274::Uint8
+    d275::Uint8
+    d276::Uint8
+    d277::Uint8
+    d278::Uint8
+    d279::Uint8
+    d280::Uint8
+    d281::Uint8
+    d282::Uint8
+    d283::Uint8
+    d284::Uint8
+    d285::Uint8
+    d286::Uint8
+    d287::Uint8
+    d288::Uint8
+    d289::Uint8
+    d290::Uint8
+    d291::Uint8
+    d292::Uint8
+    d293::Uint8
+    d294::Uint8
+    d295::Uint8
+    d296::Uint8
+    d297::Uint8
+    d298::Uint8
+    d299::Uint8
+    d300::Uint8
+    d301::Uint8
+    d302::Uint8
+    d303::Uint8
+    d304::Uint8
+    d305::Uint8
+    d306::Uint8
+    d307::Uint8
+    d308::Uint8
+    d309::Uint8
+    d310::Uint8
+    d311::Uint8
+    d312::Uint8
+    d313::Uint8
+    d314::Uint8
+    d315::Uint8
+    d316::Uint8
+    d317::Uint8
+    d318::Uint8
+    d319::Uint8
+    d320::Uint8
+    d321::Uint8
+    d322::Uint8
+    d323::Uint8
+    d324::Uint8
+    d325::Uint8
+    d326::Uint8
+    d327::Uint8
+    d328::Uint8
+    d329::Uint8
+    d330::Uint8
+    d331::Uint8
+    d332::Uint8
+    d333::Uint8
+    d334::Uint8
+    d335::Uint8
+    d336::Uint8
+    d337::Uint8
+    d338::Uint8
+    d339::Uint8
+    d340::Uint8
+    d341::Uint8
+    d342::Uint8
+    d343::Uint8
+    d344::Uint8
+    d345::Uint8
+    d346::Uint8
+    d347::Uint8
+    d348::Uint8
+    d349::Uint8
+    d350::Uint8
+    d351::Uint8
+    d352::Uint8
+    d353::Uint8
+    d354::Uint8
+    d355::Uint8
+    d356::Uint8
+    d357::Uint8
+    d358::Uint8
+    d359::Uint8
+    d360::Uint8
+    d361::Uint8
+    d362::Uint8
+    d363::Uint8
+    d364::Uint8
+    d365::Uint8
+    d366::Uint8
+    d367::Uint8
+    d368::Uint8
+    d369::Uint8
+    d370::Uint8
+    d371::Uint8
+    d372::Uint8
+    d373::Uint8
+    d374::Uint8
+    d375::Uint8
+    d376::Uint8
+    d377::Uint8
+    d378::Uint8
+    d379::Uint8
+    d380::Uint8
+    d381::Uint8
+    d382::Uint8
+    d383::Uint8
+    d384::Uint8
+    d385::Uint8
+    d386::Uint8
+    d387::Uint8
+    d388::Uint8
+    d389::Uint8
+    d390::Uint8
+    d391::Uint8
+    d392::Uint8
+    d393::Uint8
+    d394::Uint8
+    d395::Uint8
+    d396::Uint8
+    d397::Uint8
+    d398::Uint8
+    d399::Uint8
+    d400::Uint8
+    d401::Uint8
+    d402::Uint8
+    d403::Uint8
+    d404::Uint8
+    d405::Uint8
+    d406::Uint8
+    d407::Uint8
+    d408::Uint8
+    d409::Uint8
+    d410::Uint8
+    d411::Uint8
+    d412::Uint8
+    d413::Uint8
+    d414::Uint8
+    d415::Uint8
+    d416::Uint8
+    d417::Uint8
+    d418::Uint8
+    d419::Uint8
+    d420::Uint8
+    d421::Uint8
+    d422::Uint8
+    d423::Uint8
+    d424::Uint8
+    d425::Uint8
+    d426::Uint8
+    d427::Uint8
+    d428::Uint8
+    d429::Uint8
+    d430::Uint8
+    d431::Uint8
+    d432::Uint8
+    d433::Uint8
+    d434::Uint8
+    d435::Uint8
+    d436::Uint8
+    d437::Uint8
+    d438::Uint8
+    d439::Uint8
+    d440::Uint8
+    d441::Uint8
+    d442::Uint8
+    d443::Uint8
+    d444::Uint8
+    d445::Uint8
+    d446::Uint8
+    d447::Uint8
+    d448::Uint8
+    d449::Uint8
+    d450::Uint8
+    d451::Uint8
+    d452::Uint8
+    d453::Uint8
+    d454::Uint8
+    d455::Uint8
+    d456::Uint8
+    d457::Uint8
+    d458::Uint8
+    d459::Uint8
+    d460::Uint8
+    d461::Uint8
+    d462::Uint8
+    d463::Uint8
+    d464::Uint8
+    d465::Uint8
+    d466::Uint8
+    d467::Uint8
+    d468::Uint8
+    d469::Uint8
+    d470::Uint8
+    d471::Uint8
+    d472::Uint8
+    d473::Uint8
+    d474::Uint8
+    d475::Uint8
+    d476::Uint8
+    d477::Uint8
+    d478::Uint8
+    d479::Uint8
+    d480::Uint8
+    d481::Uint8
+    d482::Uint8
+    d483::Uint8
+    d484::Uint8
+    d485::Uint8
+    d486::Uint8
+    d487::Uint8
+    d488::Uint8
+    d489::Uint8
+    d490::Uint8
+    d491::Uint8
+    d492::Uint8
+    d493::Uint8
+    d494::Uint8
+    d495::Uint8
+    d496::Uint8
+    d497::Uint8
+    d498::Uint8
+    d499::Uint8
+    d500::Uint8
+    d501::Uint8
+    d502::Uint8
+    d503::Uint8
+    d504::Uint8
+    d505::Uint8
+    d506::Uint8
+    d507::Uint8
+    d508::Uint8
+    d509::Uint8
+    d510::Uint8
+    d511::Uint8
+    d512::Uint8
+end
+gc()
+
+# issue #10867
+@test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
+@test collect(enumerate((Tuple,3))) == [(1,Tuple), (2,3)]
+
+# issue #10878
+function g10878(x; kw...); end
+invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
+@code_typed invoke_g10878()
+
+# issue #10978
+typealias TupleType10978{T<:Tuple} Type{T}
+f10978(T::TupleType10978) = isa(T, TupleType10978)
+@test f10978(Tuple{Int})
+
+# issue #10995
+#typealias TupleType{T<:Tuple} Type{T};
+f10995(::Any) = (while false; end; nothing)
+f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
+g10995(x) = f10995(typeof(x))
+g10995((1, 2))
+@test g10995(UInt8) === nothing
+
+# issue #11149
+@noinline f11149(a,b,args...) = (a,b,args...)
+@test f11149(1,2,3) == invoke(f11149, Tuple{Int,Int,Int}, 1,2,3)
+
+# issue #11357
+function f11357()
+    x = (1,2,3)
+    i = (1,)
+    x[i...]
+end
+@test f11357() === 1
+
+# issue #11136
+type A11136 end
+type B11136 end
+let T = TypeVar(:T, true), TB = TypeVar(:T, B11136, true)
+    testintersect(Tuple{T, T}, Tuple{A11136, TB}, Bottom)
+end
+
+# issue #11367
+abstract Foo11367
+let T1 = TypeVar(:T1, true), T2 = TypeVar(:T2, Foo11367, true)
+    testintersect(Tuple{T1, T1}, Tuple{Type{BigInt}, T2}, Bottom)
+end
+
+# issue #11355
+function f11355{T<:Tuple}(sig::Type{T})
+    f11355(sig.parameters[1])
+end
+function f11355(arg::DataType)
+    if arg <: Tuple
+        return 200
+    end
+    return 100
+end
+let t = Tuple{Type{Vector{Int}}}
+    @test f11355(t) == 100
+    t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+    @test f11355(t) == 100
+end
+
+# issue #8283
+function func8283 end
+@test isa(func8283,Function) && isgeneric(func8283)
+@test_throws MethodError func8283()
+
+# issue #11243
+let a = [Pair(1,2), Pair("a","b")]
+    @test typeof(a) == Vector{Pair}
+    @test typeof(a) <: Vector{Pair}
+end
+
+# issue #11366
+f11366{T}(x::Type{Ref{T}}) = Ref{x}
+@test !isleaftype(Base.return_types(f11366, (Any,))[1])
+
+# issue #11065, #1571
+function f11065()
+    for i = 1:2
+        if i == 1
+            z = "z is defined"
+        elseif i == 2
+            print(z)
+        end
+    end
+end
+@test_throws UndefVarError f11065()
+
+# issue #11295
+function f11295(x...)
+    call = Expr(x...)
+end
+@test isa(f11295(:a,:b), Expr)
+
+# issue #11675
+immutable T11675{T}
+    x::T
+    T11675() = new()
+end
+let x = T11675{Union{}}()
+    function f11675(x)
+        x.x + 1
+    end
+    @test_throws UndefRefError f11675(x)
+end
+
+# issue #7864
+module M7864
+export x7864
+x7864 = 1
+end
+
+@test_throws UndefVarError x7864
+using M7864
+@test x7864 == 1
+
+# issue #11715
+f11715(x) = (x === Tuple{Any})
+@test f11715(Tuple{Any})
+
+# part of #11597
+# make sure invalid, partly-constructed types don't end up in the cache
+abstract C11597{T<:Union(Void, Int)}
+type D11597{T} <: C11597{T} d::T end
+@test_throws TypeError D11597(1.0)
+@test_throws TypeError repr(D11597(1.0))
+
+# issue #11772
+@test_throws UndefRefError (cell(5)...)
+
+# issue #11813
+let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
+    u32 = UInt32[0x3]
+    a[9:end] = reinterpret(UInt8, u32)
+    p = pointer(a)
+    @test (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
+    f11813(p) = (Int8(1),(Int8(2),Int32(3))) === unsafe_load(convert(Ptr{Tuple{Int8,Tuple{Int8,Int32}}},p))
+    @test f11813(p) === true # redundant comparison test seems to make this test more reliable, don't remove
+end
+let a = (1:1000...),
+    b = (1:1000...)
+    @test a == b
+    @test a === b
+    @test (a == b) === true
+    @test (a === b) === true
+end
+
+# issue 11858
+type Foo11858
+    x::Float64
+end
+
+type Bar11858
+    x::Float64
+end
+
+g11858(x::Float64) = x
+f11858(a) = for Baz in a
+    Baz(x) = Baz(float(x))
+end
+f11858(Any[Foo11858, Bar11858, g11858])
+
+@test g11858(1) == 1.0
+@test Foo11858(1).x == 1.0
+@test Bar11858(1).x == 1.0
+
+# issue 11904
+@noinline throw_error() = error()
+foo11904(x::Int) = x
+@inline function foo11904{S}(x::Nullable{S})
+    if isbits(S)
+        Nullable(foo11904(x.value), x.isnull)
+    else
+        throw_error()
+    end
+end
+
+@test !foo11904(Nullable(1)).isnull
+
+# issue 11874
+immutable Foo11874
+   x::Int
+end
+
+function bar11874(x)
+   y::Foo11874
+   y=x
+end
+
+Base.convert(::Type{Foo11874},x::Int) = float(x)
+
+@test_throws TypeError bar11874(1)
+
+# issue 9233
+try
+    # Seems to be evaluated and throw an error at compile time if not
+    # using `@eval`
+    @eval NTuple{Int, 1}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == Int
+end
+
+try
+    @eval NTuple{0x1, Int}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == 0x1
+end
+
+try
+    @eval Union{Int, 1}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Type
+    @test err.got == 1
+end
+
+# issue #10930
+@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+find_tvar10930{T<:Tuple}(sig::Type{T}) = 1
+function find_tvar10930(arg)
+    if arg<:Tuple
+        find_tvar10930(arg[random_var_name])
+    end
+    return 1
+end
+@test find_tvar10930(Vararg{Int}) === 1
+
+# issue #12003
+const DATE12003 = DateTime(1917,1,1)
+failure12003(dt=DATE12003) = Dates.year(dt)
+@test isa(failure12003(), Integer)

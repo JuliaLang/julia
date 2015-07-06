@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function test_all_combos()
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)
@@ -14,11 +16,11 @@ function test_all_combos()
                 @test first(dr) == f1
                 @test last(dr) == f1-one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
-                @test [dr] == T[]
+                @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
                 @test first(reverse(dr)) == f1-one(l1 - f1)
@@ -47,8 +49,8 @@ function test_all_combos()
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findin(dr,dr) == [1:len]
-                        @test length([dr]) == len
+                        @test findin(dr,dr) == [1:len;]
+                        @test length([dr;]) == len
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -66,11 +68,11 @@ function test_all_combos()
                 @test first(dr) == l1
                 @test last(dr) == l1+one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
-                @test [dr] == T[]
+                @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
                 @test first(reverse(dr)) == l1+one(l1 - f1)
@@ -99,8 +101,8 @@ function test_all_combos()
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findin(dr,dr) == [1:len]
-                        @test length([dr]) == len
+                        @test findin(dr,dr) == [1:len;]
+                        @test length([dr;]) == len
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -119,11 +121,11 @@ function test_all_combos()
                     @test first(dr) == f1
                     @test last(dr) == f1-one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
-                    @test [dr] == T[]
+                    @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
                     @test first(reverse(dr)) == f1-one(l1 - f1)
@@ -152,8 +154,8 @@ function test_all_combos()
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findin(dr,dr) == [1:len]
-                            @test length([dr]) == len
+                            @test findin(dr,dr) == [1:len;]
+                            @test length([dr;]) == len
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
@@ -171,11 +173,11 @@ function test_all_combos()
                     @test first(dr) == l1
                     @test last(dr) == l1+one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
-                    @test [dr] == T[]
+                    @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
                     @test first(reverse(dr)) == l1+one(l1 - f1)
@@ -204,8 +206,8 @@ function test_all_combos()
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findin(dr,dr) == [1:len]
-                            @test length([dr]) == len
+                            @test findin(dr,dr) == [1:len;]
+                            @test length([dr;]) == len
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
@@ -256,7 +258,7 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)),drs)
 @test map(length,drs) == map(x->size(x)[1],drs)
 @test map(length,drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))),drs)
 @test map(length,drs) == map(x->length(reverse(x)),drs)
-@test all(map(x->findin(x,x)==[1:length(x)],drs[1:4]))
+@test all(map(x->findin(x,x)==[1:length(x);],drs[1:4]))
 @test isempty(dr2)
 @test all(map(x->reverse(x) == range(last(x), -step(x), length(x)),drs))
 @test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
@@ -270,8 +272,8 @@ end)
 @test_throws MethodError dr + 1
 a = Dates.DateTime(2013,1,1)
 b = Dates.DateTime(2013,2,1)
-@test map!(x->x+Dates.Day(1),Array(Dates.DateTime,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1))]
-@test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1))]
+@test map!(x->x+Dates.Day(1),Array(Dates.DateTime,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
+@test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 
 @test map(x->a in x,drs[1:4]) == [true,true,false,true]
 @test a in dr
@@ -334,7 +336,7 @@ drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
           dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 
 @test map(length,drs) == map(x->size(x)[1],drs)
-@test all(map(x->findin(x,x)==[1:length(x)],drs[1:4]))
+@test all(map(x->findin(x,x) == [1:length(x);], drs[1:4]))
 @test isempty(dr2)
 @test all(map(x->reverse(x) == last(x):-step(x):first(x),drs))
 @test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
@@ -348,8 +350,8 @@ end)
 @test_throws MethodError dr + 1
 a = Dates.Date(2013,1,1)
 b = Dates.Date(2013,2,1)
-@test map!(x->x+Dates.Day(1),Array(Dates.Date,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1))]
-@test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1))]
+@test map!(x->x+Dates.Day(1),Array(Dates.Date,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
+@test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 
 @test map(x->a in x,drs[1:4]) == [true,true,false,true]
 @test a in dr
@@ -400,9 +402,9 @@ b = Dates.Date(2013,2,1)
 
 c = Dates.Date(2013,6,1)
 @test length(a:Dates.Month(1):c) == 6
-@test [a:Dates.Month(1):c] == [a + Dates.Month(1)*i for i in 0:5]
-@test [a:Dates.Month(2):Dates.Date(2013,1,2)] == [a]
-@test [c:Dates.Month(-1):a] == reverse([a:Dates.Month(1):c])
+@test [a:Dates.Month(1):c;] == [a + Dates.Month(1)*i for i in 0:5]
+@test [a:Dates.Month(2):Dates.Date(2013,1,2);] == [a]
+@test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
 @test length(range(Date(2000),366)) == 366
 function testlengths(n)
@@ -490,4 +492,10 @@ testmonthranges2(100000)
 
 # Issue 5
 lastdaysofmonth = [Dates.Date(2014,i,Dates.daysinmonth(2014,i)) for i=1:12]
-@test [Date(2014,1,31):Dates.Month(1):Date(2015)] == lastdaysofmonth
+@test [Date(2014,1,31):Dates.Month(1):Date(2015);] == lastdaysofmonth
+
+# Range addition/subtraction:
+let d = Dates.Day(1)
+    @test (Dates.Date(2000):d:Dates.Date(2001))+d == (Dates.Date(2000)+d:d:Dates.Date(2001)+d)
+    @test (Dates.Date(2000):d:Dates.Date(2001))-d == (Dates.Date(2000)-d:d:Dates.Date(2001)-d)
+end

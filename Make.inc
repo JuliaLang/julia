@@ -5,9 +5,16 @@
 ##   your local machine, in a file named `Make.user` in this directory
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
+OPENBLAS_SYMBOLSUFFIX=
+
+# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
+ifneq ($(OPENBLAS_TARGET_ARCH),)
+OPENBLAS_DYNAMIC_ARCH=0
+else
+OPENBLAS_DYNAMIC_ARCH=1
+endif
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
@@ -25,10 +32,10 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_MPFR=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
-USE_SYSTEM_MOJIBAKE=0
+USE_SYSTEM_LIBGIT2=0
+USE_SYSTEM_PATCHELF=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -53,6 +60,9 @@ endif
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
+
+# assume we don't have LIBSSP support in our compiler, will enable later if likely true
+HAVE_SSP = 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH=
@@ -79,6 +89,9 @@ else
 JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
+# Whether to use GPL libraries or not.
+USE_GPL_LIBS ?= 1
+
 # Directories where said libraries get installed to
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
 bindir = $(prefix)/bin
@@ -86,16 +99,23 @@ libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
 libexecdir = $(prefix)/libexec
 datarootdir = $(prefix)/share
+docdir = $(datarootdir)/doc/julia
+mandir = $(datarootdir)/man
+man1dir = $(mandir)/man1
 includedir = $(prefix)/include
 sysconfdir = $(prefix)/etc
 
 # Directories where things get built into
 build_prefix = $(JULIAHOME)/usr
+build_staging = $(build_prefix)-staging
 build_bindir = $(build_prefix)/bin
 build_libdir = $(build_prefix)/lib
 build_private_libdir = $(build_prefix)/lib/julia
 build_libexecdir = $(build_prefix)/libexec
 build_datarootdir = $(build_prefix)/share
+build_docdir = $(build_datarootdir)/doc/julia
+build_mandir = $(build_datarootdir)/man
+build_man1dir = $(build_mandir)/man1
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
@@ -106,7 +126,11 @@ libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+docdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
+
+INSTALL_F = $(JULIAHOME)/contrib/install.sh 644
+INSTALL_M = $(JULIAHOME)/contrib/install.sh 755
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
@@ -114,7 +138,6 @@ MULTIARCH = $(shell gcc -print-multiarch)
 private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
 libdir = $(prefix)/lib/$(MULTIARCH)/
 endif
-
 
 # LLVM Options
 LLVMROOT = $(build_prefix)
@@ -130,8 +153,15 @@ BUILD_LLDB = 0
 #XC_HOST = i686-w64-mingw32
 #XC_HOST = x86_64-w64-mingw32
 
+# Path to cmake (override in Make.user if needed)
+CMAKE ?= cmake
+
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
+
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+XC_HOST ?= $(shell uname -m)-w64-mingw32
+endif
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -187,6 +217,13 @@ endif
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
+# flag for disabling assertions
+ifeq ($(FORCE_ASSERTIONS), 1)
+DISABLE_ASSERTIONS =
+else
+DISABLE_ASSERTIONS = -DNDEBUG
+endif
+
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -215,18 +252,11 @@ else
 FC = $(CROSS_COMPILE)gfortran
 endif
 
-ifeq ($(USEIFC), 1)
-FC = ifort
-else
-FC = $(CROSS_COMPILE)gfortran
-endif
-
-STDLIBCPP_FLAG = 
+STDLIBCPP_FLAG =
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -237,7 +267,7 @@ else
 ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
-else 
+else
 USE_LIBCPP = 0
 endif
 USEGCC = 0
@@ -299,8 +329,15 @@ SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-CC := ccache $(CC)
-CXX := ccache $(CXX)
+# expand CC and CXX at declaration time because we will redefine them
+CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
+CXX_ARG  := $(CXX)        # the original definition and not the ccache version.
+CC_FULL  := ccache $(CC)  # Expand CC and CXX here already to avoid recursive
+CXX_FULL := ccache $(CXX) # referencing.
+CC        = $(CC_FULL)    # Add an extra indirection to make CC/CXX non-simple
+CXX       = $(CXX_FULL)   # vars (because of how -m$(BINARY) is added later on).
+CC_BASE   = ccache
+CXX_BASE  = ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -309,6 +346,9 @@ CXX += -Qunused-arguments -fcolor-diagnostics
 # http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
+else #USECCACHE
+CC_BASE = $(shell echo $(CC) | cut -d' ' -f1)
+CXX_BASE = $(shell echo $(CXX) | cut -d' ' -f1)
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -316,27 +356,35 @@ JCXXFLAGS += -std=c++11
 endif
 
 JFFLAGS = -O2 $(fPIC)
-JF2CFLAGS = -ff2c -fno-second-underscore
 ifneq ($(USEMSVC),1)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
-else
+else #USEMSVC
 CPP = $(CC) -EP
 AR := lib
 ifeq ($(ARCH),x86_64)
 AS := ml64
 else
 AS := ml
-endif
+endif #ARCH
 LD := link
-endif
+endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
+
+# file extensions
+ifeq ($(OS), WINNT)
+  SHLIB_EXT = dll
+else ifeq ($(OS), Darwin)
+  SHLIB_EXT = dylib
+else
+  SHLIB_EXT = so
+endif
 
 
 # if not absolute, then relative to the directory of the julia executable
-JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
+JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 ifeq ($(OS),WINNT)
@@ -350,9 +398,16 @@ include $(JULIAHOME)/Make.user
 endif
 
 ifeq ($(SANITIZE),1)
-JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
-JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
-LDFLAGS += -fsanitize=address
+ifeq ($(SANITIZE_MEMORY),1)
+SANITIZE_OPTS = -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+else
+SANITIZE_OPTS = -fsanitize=address -mllvm -asan-stack=0
+endif
+JCXXFLAGS += $(SANITIZE_OPTS)
+JCFLAGS += $(SANITIZE_OPTS)
+LDFLAGS += $(SANITIZE_OPTS)
+DEPS_CFLAGS += $(SANITIZE_OPTS)
+DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
 TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
@@ -373,12 +428,15 @@ endif
 #    if MARCH is set newer than the native processor, be forewarned that the compile might fail
 # JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
 #    since it is set equal to MARCH by default
-
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
+else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
 ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
@@ -421,17 +479,13 @@ AS += -q
 endif
 endif
 
-# Set some ARCH-specific flags
-ifneq ($(USEICC),1)
-ifneq ($(ARCH), arm)
-JCFLAGS += -m$(BINARY)
-JCXXFLAGS += -m$(BINARY)
-JFFLAGS += -m$(BINARY)
-endif
-endif
-
 JULIA_CPU_TARGET ?= native
-JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
+
+# Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
+ifneq ($(findstring $(JULIA_CPU_TARGET),i386 i486 i586 i686 pentium pentium2 pentium3),)
+$(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binary, \
+pass 'MARCH=i686 JULIA_CPU_TARGET=pentium4', or 'MARCH=pentium4' if not building any dependencies.)
+endif
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
@@ -440,25 +494,59 @@ endif
 
 ifeq ($(ARCH),i386)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i387)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i486)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i586)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i686)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),x86_64)
 BINARY=64
-else ifeq ($(ARCH),arm)
-BINARY=32
+ISX86=1
+else ifneq (,$(findstring arm,$(ARCH)))
+ISX86=0
+else ifneq (,$(findstring powerpc,$(ARCH)))
+ISX86=0
+else ifneq (,$(findstring ppc,$(ARCH)))
+ISX86=0
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
 
+# If we are running on ARM, set certain options automatically
+ifneq (,$(findstring arm,$(ARCH)))
+JCFLAGS += -fsigned-char
+
+LLVM_ASSERTIONS=1
+#LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
+LLVM_VER=3.6.1
+
+override USE_BLAS64=0
+override OPENBLAS_DYNAMIC_ARCH=0
+override OPENBLAS_TARGET_ARCH=ARMV7
+
+endif
+
+# Set some ARCH-specific flags
+ifneq ($(USEICC),1)
+ifeq ($(ISX86),1)
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
+CC_ARG += -m$(BINARY)
+CXX_ARG += -m$(BINARY)
+endif
+endif
+
 ifeq ($(USEGCC),1)
-ifeq ($(ARCH), arm)
-else ifneq ($(ARCH), ppc64)
+ifeq ($(ISX86),1)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
@@ -482,22 +570,29 @@ endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
-LLVM_LLC ?= llc$(EXE)
 JCPPFLAGS+=-DSYSTEM_LLVM
+LLVM_VER = $(shell $(LLVM_CONFIG) --version)
 else
 LLVM_CONFIG=$(build_bindir)/llvm-config$(EXE)
-LLVM_LLC=$(build_bindir)/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
-PCRE_CONFIG = pcre-config
+PCRE_CONFIG = pcre2-config
 else
-PCRE_CONFIG = $(build_bindir)/pcre-config
+PCRE_CONFIG = $(build_bindir)/pcre2-config
 endif
 
-# Use 64-bit libraries by default on 64-bit architectures
+# Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 USE_BLAS64 ?= 1
+else # non MKL system blas is most likely LP64
+USE_BLAS64 ?= 0
+endif
+else
+USE_BLAS64 ?= 1
+endif
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -551,17 +646,15 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV_INC = /usr/include
 else
   LIBUV = $(build_libdir)/libuv.a
-  LIBUV_INC = $(JULIAHOME)/deps/libuv/include
+  LIBUV_INC = $(build_includedir)
 endif
 
-ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
-  LIBMOJIBAKE = -lmojibake
+ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+  LIBUTF8PROC = -lutf8proc
+  UTF8PROC_INC = /usr/include
 else
-  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-    LIBMOJIBAKE = -lutf8proc
-  else
-    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
-  endif
+  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  UTF8PROC_INC = $(build_includedir)
 endif
 
 # OS specific stuff
@@ -596,18 +689,6 @@ else
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
-# file extensions
-ifeq ($(OS), WINNT)
-  SHLIB_EXT = dll
-  SHELL_EXT = bat
-else ifeq ($(OS), Darwin)
-  SHLIB_EXT = dylib
-  SHELL_EXT = sh
-else
-  SHLIB_EXT = so
-  SHELL_EXT = sh
-endif
-
 # --whole-archive
 ifeq ($(OS), Darwin)
   WHOLE_ARCHIVE = -Xlinker -all_load
@@ -618,8 +699,22 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--no-whole-archive $(LIBUNWIND)
+ifneq ($(SANITIZE),1)
+ifneq ($(SANITIZE_MEMORY),1)
+ifneq ($(LLVM_SANITIZE),1)
+OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+endif
+endif
+endif
 JLDFLAGS = -Wl,-Bdynamic
+ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
+JLIBLDFLAGS = -Wl,-Bsymbolic-functions
+else
+JLIBLDFLAGS =
+endif
+else #Linux
+JLIBLDFLAGS =
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -635,21 +730,23 @@ OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNW
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE =
 JLDFLAGS =
+HAVE_SSP = 1
 endif
 
 ifeq ($(OS), WINNT)
 ifneq ($(USEMSVC), 1)
+HAVE_SSP = 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-else
+else #USEMSVC
 OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
 JLDFLAGS = -stack:8388608
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0600
+JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM = 1
 endif
 
@@ -695,6 +792,13 @@ LIBFFTWNAME = libmkl_rt
 LIBFFTWFNAME = libmkl_rt
 endif
 
+ifeq ($(HAVE_SSP),1)
+JCPPFLAGS += -DHAVE_SSP=1
+ifeq ($(USEGCC),1)
+OSLIBS += -lssp
+endif
+endif
+
 # ATLAS
 
 # ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
@@ -714,11 +818,19 @@ LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
+# Renaming OpenBLAS symbols, see #4923 and #8734
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifeq ($(USE_BLAS64), 1)
+OPENBLAS_SYMBOLSUFFIX = 64_
+endif
+endif
+
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LDFLAGS += -L$(build_libdir) -lc++abi
 CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
 CPPFLAGS += -I$(build_includedir)/c++/v1
+CUSTOM_LD_LIBRARY_PATH = LD_LIBRARY_PATH="$(build_libdir)"
 ifeq ($(USEICC),1)
 CXXFLAGS += -cxxlib-nostd -static-intel
 CLDFLAGS += -static-intel
@@ -786,14 +898,23 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 endif
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
+JULIA_BUILD_MODE = release
+ifeq (,$(findstring release,$(MAKECMDGOALS)))
+ifneq (,$(findstring debug,$(MAKECMDGOALS)))
+JULIA_BUILD_MODE = debug
+endif
+endif
+
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
-JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
+JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 # Colors for make
 ifndef VERBOSE
 VERBOSE = 0
 endif
+
+WARNCOLOR="\033[33;1m"
 
 ifeq ($(VERBOSE), 0)
 
@@ -810,7 +931,7 @@ BINCOLOR="\033[37;1m"
 JULCOLOR="\033[34;1m"
 ENDCOLOR="\033[0m"
 
-GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
+GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
@@ -820,10 +941,10 @@ PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GO
 
 else
 QUIET_MAKE =
-PRINT_CC = echo $(1); $(1)
-PRINT_LINK = echo $(1); $(1)
-PRINT_PERL = echo $(1); $(1)
-PRINT_FLISP = echo $(1); $(1)
-PRINT_JULIA = echo $(1); $(1)
+PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif

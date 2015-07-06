@@ -1,7 +1,9 @@
 .. _man-integers-and-floating-point-numbers:
 
+.. currentmodule:: Base
+
 *************************************
- Integers and Floating-Point Numbers  
+ Integers and Floating-Point Numbers
 *************************************
 
 Integers and floating-point values are the basic building blocks of
@@ -26,36 +28,31 @@ The following are Julia's primitive numeric types:
 
 -  **Integer types:**
 
-===========  =======  ==============  ============== ==================
-Type         Signed?  Number of bits  Smallest value Largest value
------------  -------  --------------  -------------- ------------------
-``Int8``           ✓       8            -2^7             2^7 - 1
-``Uint8``                  8             0               2^8 - 1
-``Int16``          ✓       16           -2^15            2^15 - 1
-``Uint16``                 16            0               2^16 - 1
-``Int32``          ✓       32           -2^31            2^31 - 1
-``Uint32``                 32            0               2^32 - 1
-``Int64``          ✓       64           -2^63            2^63 - 1
-``Uint64``                 64            0               2^64 - 1
-``Int128``         ✓       128           -2^127          2^127 - 1
-``Uint128``                128           0               2^128 - 1
-``Bool``         N/A       8           ``false`` (0)  ``true`` (1)
-``Char``         N/A       32          ``'\0'``       ``'\Uffffffff'``
-===========  =======  ==============  ============== ==================
-
-``Char`` natively supports representation of
-`Unicode characters <http://en.wikipedia.org/wiki/Unicode>`_; see
-:ref:`man-strings` for more details.
+================  =======  ==============  ============== ==================
+Type              Signed?  Number of bits  Smallest value Largest value
+----------------  -------  --------------  -------------- ------------------
+:class:`Int8`        ✓         8            -2^7             2^7 - 1
+:class:`UInt8`                 8             0               2^8 - 1
+:class:`Int16`       ✓         16           -2^15            2^15 - 1
+:class:`UInt16`                16            0               2^16 - 1
+:class:`Int32`       ✓         32           -2^31            2^31 - 1
+:class:`UInt32`                32            0               2^32 - 1
+:class:`Int64`       ✓         64           -2^63            2^63 - 1
+:class:`UInt64`                64            0               2^64 - 1
+:class:`Int128`      ✓         128           -2^127          2^127 - 1
+:class:`UInt128`               128           0               2^128 - 1
+:class:`Bool`       N/A        8           ``false`` (0)  ``true`` (1)
+================  =======  ==============  ============== ==================
 
 -  **Floating-point types:**
 
-=========== ========= ==============
-Type        Precision Number of bits
------------ --------- --------------
-``Float16`` half_          16
-``Float32`` single_        32
-``Float64`` double_        64
-=========== ========= ==============
+================ ========= ==============
+Type             Precision Number of bits
+---------------- --------- --------------
+:class:`Float16` half_          16
+:class:`Float32` single_        32
+:class:`Float64` double_        64
+================ ========= ==============
 
 .. _half: http://en.wikipedia.org/wiki/Half-precision_floating-point_format
 .. _single: http://en.wikipedia.org/wiki/Single_precision_floating-point_format
@@ -90,7 +87,7 @@ system has a 32-bit architecture or a 64-bit architecture::
     julia> typeof(1)
     Int64
 
-The Julia internal variable ``WORD_SIZE`` indicates whether the target system
+The Julia internal variable :const:`WORD_SIZE` indicates whether the target system
 is 32-bit or 64-bit.::
 
     # 32-bit system:
@@ -100,22 +97,22 @@ is 32-bit or 64-bit.::
     # 64-bit system:
     julia> WORD_SIZE
     64
- 
-Julia also defines the types ``Int`` and ``Uint``, which are aliases for the
+
+Julia also defines the types :class:`Int` and :class:`UInt`, which are aliases for the
 system's signed and unsigned native integer types respectively.::
 
     # 32-bit system:
     julia> Int
     Int32
-    julia> Uint
-    Uint32
+    julia> UInt
+    UInt32
 
 
     # 64-bit system:
     julia> Int
     Int64
-    julia> Uint
-    Uint64
+    julia> UInt
+    UInt64
 
 Larger integer literals that cannot be represented using only 32 bits
 but can be represented in 64 bits always create 64-bit integers,
@@ -135,32 +132,32 @@ The size of the unsigned value is determined by the number of hex digits used:
     0x01
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> 0x123
     0x0123
 
     julia> typeof(ans)
-    Uint16
+    UInt16
 
     julia> 0x1234567
     0x01234567
 
     julia> typeof(ans)
-    Uint32
+    UInt32
 
     julia> 0x123456789abcdef
     0x0123456789abcdef
 
     julia> typeof(ans)
-    Uint64
+    UInt64
 
 This behavior is based on the observation that when one uses unsigned
 hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
 
-Recall that the variable ``ans`` is set to the value of the last expression
+Recall that the variable :data:`ans` is set to the value of the last expression
 evaluated in an interactive session. This does not occur when Julia code is
 run in other ways.
 
@@ -172,23 +169,23 @@ Binary and octal literals are also supported:
     0x02
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> 0o10
     0x08
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
 The minimum and maximum representable values of primitive numeric types
-such as integers are given by the ``typemin`` and ``typemax`` functions:
+such as integers are given by the :func:`typemin` and :func:`typemax` functions:
 
 .. doctest::
 
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
 
-    julia> for T = {Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128}
+    julia> for T in [Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128]
              println("$(lpad(T,7)): [$(typemin(T)),$(typemax(T))]")
            end
        Int8: [-128,127]
@@ -196,13 +193,13 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
       Int32: [-2147483648,2147483647]
       Int64: [-9223372036854775808,9223372036854775807]
      Int128: [-170141183460469231731687303715884105728,170141183460469231731687303715884105727]
-      Uint8: [0,255]
-     Uint16: [0,65535]
-     Uint32: [0,4294967295]
-     Uint64: [0,18446744073709551615]
-    Uint128: [0,340282366920938463463374607431768211455]
+      UInt8: [0,255]
+     UInt16: [0,65535]
+     UInt32: [0,4294967295]
+     UInt64: [0,18446744073709551615]
+    UInt128: [0,340282366920938463463374607431768211455]
 
-The values returned by ``typemin`` and ``typemax`` are always of the
+The values returned by :func:`typemin` and :func:`typemax` are always of the
 given argument type. (The above expression uses several features we have
 yet to introduce, including :ref:`for loops <man-loops>`,
 :ref:`man-strings`, and :ref:`man-string-interpolation`,
@@ -220,7 +217,7 @@ a wraparound behavior:
 
     julia> x = typemax(Int64)
     9223372036854775807
-    
+
     julia> x + 1
     -9223372036854775808
 
@@ -236,7 +233,7 @@ in :ref:`man-arbitrary-precision-arithmetic` is recommended instead.
 
 To minimize the practical impact of this overflow, integer addition,
 subtraction, multiplication, and exponentiation operands are promoted
-to ``Int`` or ``Uint`` from narrower integer types.  (However,
+to ``Int`` or ``UInt`` from narrower integer types.  (However,
 divisions, remainders, and bitwise operations do not promote narrower
 types.)
 
@@ -244,9 +241,9 @@ Division errors
 ~~~~~~~~~~~~~~~
 
 Integer division (the ``div`` function) has two exceptional cases: dividing by
-zero, and dividing the lowest negative number (``typemin``) by -1. Both of
-these cases throw a ``DivideError``. The remainder and modulus functions
-(``rem`` and ``mod``) throw a ``DivideError`` when their second argument is
+zero, and dividing the lowest negative number (:func:`typemin`) by -1. Both of
+these cases throw a :exc:`DivideError`. The remainder and modulus functions
+(``rem`` and ``mod``) throw a :exc:`DivideError` when their second argument is
 zero.
 
 Floating-Point Numbers
@@ -295,7 +292,7 @@ Values can be converted to ``Float32`` easily:
 
 .. doctest::
 
-    julia> float32(-1.5)
+    julia> Float32(-1.5)
     -1.5f0
 
     julia> typeof(ans)
@@ -322,10 +319,10 @@ only as a storage format. In calculations they'll be converted to ``Float32``:
 
 .. doctest::
 
-    julia> sizeof(float16(4.))
+    julia> sizeof(Float16(4.))
     2
 
-    julia> 2*float16(4.)
+    julia> 2*Float16(4.)
     8.0f0
 
 
@@ -341,10 +338,10 @@ be seen using the ``bits`` function: :
 
     julia> 0.0 == -0.0
     true
-    
+
     julia> bits(0.0)
     "0000000000000000000000000000000000000000000000000000000000000000"
-    
+
     julia> bits(-0.0)
     "1000000000000000000000000000000000000000000000000000000000000000"
 
@@ -357,7 +354,7 @@ There are three specified standard floating-point values that do not
 correspond to any point on the real number line:
 
 =========== =========== ===========  ================= =================================================================
-Special value                        Name              Description 
+Special value                        Name              Description
 -----------------------------------  ----------------- -----------------------------------------------------------------
 ``Float16`` ``Float32`` ``Float64``
 =========== =========== ===========  ================= =================================================================
@@ -410,7 +407,7 @@ floating-point values are the results of certain arithmetic operations:
     julia> 0 * Inf
     NaN
 
-The ``typemin`` and ``typemax`` functions also apply to floating-point
+The :func:`typemin` and :func:`typemax` functions also apply to floating-point
 types:
 
 .. doctest::
@@ -433,7 +430,7 @@ and so for many purposes it is important to know the distance between two
 adjacent representable floating-point numbers, which is often known as
 `machine epsilon <http://en.wikipedia.org/wiki/Machine_epsilon>`_.
 
-Julia provides the ``eps`` function, which gives the distance between ``1.0``
+Julia provides :func:`eps`, which gives the distance between ``1.0``
 and the next larger representable floating-point value:
 
 .. doctest::
@@ -448,7 +445,7 @@ and the next larger representable floating-point value:
     2.220446049250313e-16
 
 These values are ``2.0^-23`` and ``2.0^-52`` as ``Float32`` and ``Float64``
-values, respectively. The ``eps`` function can also take a
+values, respectively. The :func:`eps` function can also take a
 floating-point value as an argument, and gives the absolute difference
 between that value and the next representable floating point value. That
 is, ``eps(x)`` yields a value of the same type as ``x`` such that
@@ -476,7 +473,7 @@ number line near zero, and grow sparser exponentially as one moves farther away
 from zero. By definition, ``eps(1.0)`` is the same as ``eps(Float64)`` since
 ``1.0`` is a 64-bit floating-point value.
 
-Julia also provides the ``nextfloat`` and ``prevfloat`` functions which return
+Julia also provides the :func:`nextfloat` and :func:`prevfloat` functions which return
 the next largest or smallest representable floating-point number to the
 argument respectively: :
 
@@ -484,19 +481,19 @@ argument respectively: :
 
     julia> x = 1.25f0
     1.25f0
-    
+
     julia> nextfloat(x)
     1.2500001f0
-    
+
     julia> prevfloat(x)
     1.2499999f0
-    
+
     julia> bits(prevfloat(x))
     "00111111100111111111111111111111"
-    
+
     julia> bits(x)
     "00111111101000000000000000000000"
-    
+
     julia> bits(nextfloat(x))
     "00111111101000000000000000000001"
 
@@ -510,7 +507,7 @@ If a number doesn't have an exact floating-point representation, it must be
 rounded to an appropriate representable value, however, if wanted, the manner
 in which this rounding is done can be changed according to the rounding modes
 presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_::
-    
+
 
     julia> 1.1 + 0.1
     1.2000000000000002
@@ -520,9 +517,15 @@ presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>
            end
     1.2
 
-The default mode used is always ``RoundNearest``, which rounds to the nearest
+The default mode used is always :const:`RoundNearest`, which rounds to the nearest
 representable value, with ties rounded towards the nearest value with an even
 least significant bit.
+
+.. warning:: Rounding is generally only correct for basic arithmetic functions
+	     (:func:`+`, :func:`-`, :func:`*`, :func:`/` and :func:`sqrt`) and
+	     type conversion operations. Many other functions assume the
+	     default :const:`RoundNearest` mode is set, and can give erroneous
+	     results when operating under other rounding modes.
 
 Background and References
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -563,24 +566,26 @@ computation, and also in the following references:
 Arbitrary Precision Arithmetic
 ------------------------------
 
-To allow computations with arbitrary-precision integers and floating point numbers, 
-Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively. 
-The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
-integer and floating point numbers respectively. 
+To allow computations with arbitrary-precision integers and floating point numbers,
+Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively.
+The :class:`BigInt` and :class:`BigFloat` types are available in Julia for arbitrary precision
+integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, or from ``String``. 
-Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
-:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
+Constructors exist to create these types from primitive numerical types, and
+:func:`parse` can be use to construct them from :class:`AbstractString`\ s.  Once
+created, they participate in arithmetic with all other numeric types thanks to
+Julia's
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`:
 
 .. doctest::
 
     julia> BigInt(typemax(Int64)) + 1
     9223372036854775808
 
-    julia> BigInt("123456789012345678901234567890") + 1
+    julia> parse(BigInt, "123456789012345678901234567890") + 1
     123456789012345678901234567891
 
-    julia> BigFloat("1.23456789012345678901")
+    julia> parse(BigFloat, "1.23456789012345678901")
     1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00 with 256 bits of precision
 
     julia> BigFloat(2.0^66) / 3
@@ -590,46 +595,51 @@ Once created, they participate in arithmetic with all other numeric types thanks
     815915283247897734345611269596115894272000000000
 
 However, type promotion between the primitive types above and
-`BigInt`/`BigFloat` is not automatic and must be explicitly stated. :
+:class:`BigInt`/:class:`BigFloat` is not automatic and must be explicitly stated.
 
 .. doctest::
 
     julia> x = typemin(Int64)
     -9223372036854775808
-    
+
     julia> x = x - 1
     9223372036854775807
-    
+
     julia> typeof(x)
     Int64
 
     julia> y = BigInt(typemin(Int64))
     -9223372036854775808
-    
+
     julia> y = y - 1
     -9223372036854775809
-    
-    julia> typeof(y)
-    BigInt (constructor with 10 methods)
 
-The default precision (in number of bits of the significand) and rounding
-mode of `BigFloat` operations can be changed, and all further calculations 
-will take these changes in account:
+    julia> typeof(y)
+    Base.GMP.BigInt
+
+The default precision (in number of bits of the significand) and
+rounding mode of :class:`BigFloat` operations can be changed globally
+by calling :func:`set_bigfloat_precision` and
+:func:`set_rounding`, and all further calculations will take
+these changes in account.  Alternatively, the precision or the
+rounding can be changed only within the execution of a particular
+block of code by :func:`with_bigfloat_precision` or
+:func:`with_rounding`:
 
 .. doctest::
 
     julia> with_rounding(BigFloat,RoundUp) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
 
     julia> with_rounding(BigFloat,RoundDown) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
 
     julia> with_bigfloat_precision(40) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.1000000000004e+00 with 40 bits of precision
 
@@ -688,12 +698,22 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      DivideError()
+      ...
 
     julia> x(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      DivideError()
+      ...
 
-Both of these expressions are interpreted as function application: any
+Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
 parenthetical, is interpreted as a function applied to the values in
 parentheses (see :ref:`man-functions` for more about functions).
@@ -733,12 +753,12 @@ Literal zero and one
 Julia provides functions which return literal 0 and 1 corresponding to a
 specified type or the type of a given variable.
 
-===========  =====================================================
-Function     Description
------------  -----------------------------------------------------
-``zero(x)``  Literal zero of type ``x`` or type of variable ``x``
-``one(x)``   Literal one of type ``x`` or type of variable ``x``
-===========  =====================================================
+====================== =====================================================
+Function               Description
+---------------------- -----------------------------------------------------
+:func:`zero(x) <zero>` Literal zero of type ``x`` or type of variable ``x``
+:func:`one(x) <one>`   Literal one of type ``x`` or type of variable ``x``
+====================== =====================================================
 
 These functions are useful in :ref:`man-numeric-comparisons` to avoid overhead
 from unnecessary :ref:`type conversion <man-conversion-and-promotion>`.
@@ -749,7 +769,7 @@ Examples:
 
     julia> zero(Float32)
     0.0f0
-    
+
     julia> zero(1.0)
     0.0
 

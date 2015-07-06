@@ -12,9 +12,9 @@
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Function)
+                                nrow::Integer, ncol::Integer, combine::Union{Function,Base.Func})
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
     N = length(I)
@@ -47,6 +47,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         iind = I[k]
         jind = J[k]
         ((iind > 0) && (jind > 0)) || throw(BoundsError())
+        ((iind <= nrow) && (jind <= ncol)) || throw(BoundsError())
         p = Wj[iind]
         Vk = V[k]
         if Vk != 0
@@ -70,7 +71,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             j = Ri[p]
             pj = Wj[j]
             if pj >= p1
-                Rx[pj] = combine (Rx[pj], Rx[p])
+                Rx[pj] = combine(Rx[pj], Rx[p])
             else
                 Wj[j] = pdest
                 if pdest != p
@@ -94,7 +95,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     @simd for i=2:(ncol+1); @inbounds Wj[i] = 0; end
     @inbounds for j = 1:nrow
         p1 = Rp[j]
-        p2 = p1 + Rnz[j] - 1        
+        p2 = p1 + Rnz[j] - 1
         for p = p1:p2
             Wj[Ri[p]+1] += 1
         end
@@ -123,7 +124,7 @@ end
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+function transpose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
@@ -162,10 +163,10 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     nzval_T = Array(Tv, nnzS)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-    return transpose!(S, T)
+    return transpose!(T, S)
 end
 
-function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+function ctranspose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
@@ -196,7 +197,7 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
     return T
 end
 
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
+function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
     colptr_T = Array(Ti, nT+1)
@@ -204,7 +205,7 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     nzval_T = Array(Tv, nnzS)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-    return ctranspose!(S, T)
+    return ctranspose!(T, S)
 end
 
 # Compute the elimination tree of A using triu(A) returning the parent vector.
@@ -235,7 +236,7 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
         head[parent[j]] = j
     end
     stack = Ti[]
-    sizehint(stack, n)
+    sizehint!(stack, n)
     post = zeros(Ti,n)
     k = 1
     for j in 1:n
@@ -263,7 +264,7 @@ etree(A::SparseMatrixCSC) = etree(A, false)
 # based on cs_ereach p. 43, "Direct Methods for Sparse Linear Systems"
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval
-    s = Ti[]; sizehint(s, n)            # to be used as a stack
+    s = Ti[]; sizehint!(s, n)            # to be used as a stack
     visited = falses(n)
     visited[k] = true
     for p in Ap[k]:(Ap[k+1] - 1)
@@ -281,7 +282,7 @@ end
 # based on cs_permute p. 21, "Direct Methods for Sparse Linear Systems"
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    if length(pinv) != m || length(q) !=  n 
+    if length(pinv) != m || length(q) !=  n
         error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
     end
     if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
@@ -357,9 +358,19 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     A
 end
 
-droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, nothing)
-triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), nothing)
+
+immutable DropTolFun <: Func{4} end
+call(::DropTolFun, i,j,x,other) = abs(x)>other
+immutable DropZerosFun <: Func{4} end
+call(::DropZerosFun, i,j,x,other) = x!=0
+immutable TriuFun <: Func{4} end
+call(::TriuFun, i,j,x,other) = j>=i
+immutable TrilFun <: Func{4} end
+call(::TrilFun, i,j,x,other) = i>=j
+
+droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
+triu!(A::SparseMatrixCSC) = fkeep!(A, TriuFun(), nothing)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), nothing)
+tril!(A::SparseMatrixCSC) = fkeep!(A, TrilFun(), nothing)
 tril(A::SparseMatrixCSC) = tril!(copy(A))

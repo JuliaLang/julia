@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### truncation
 Base.trunc(dt::Date,p::Type{Year}) = Date(UTD(totaldays(year(dt),1,1)))
 Base.trunc(dt::Date,p::Type{Month}) = firstdayofmonth(dt)
@@ -22,7 +24,7 @@ lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
 firstdayofmonth(dt::Date) = Date(UTD(value(dt)-day(dt)+1))
 firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
-function lastdayofmonth(dt::Date) 
+function lastdayofmonth(dt::Date)
     y,m,d = yearmonthday(dt)
     return Date(UTD(value(dt)+daysinmonth(y,m)-d))
 end
@@ -128,13 +130,13 @@ function toprev(func::Function,dt::TimeType;step::Period=Day(-1),negate::Bool=fa
 end
 
 # Return the first TimeType that falls on dow in the Month or Year
-function tofirst(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tofirst(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? firstdayofmonth(dt) : firstdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(1),366)
 end
 
 # Return the last TimeType that falls on dow in the Month or Year
-function tolast(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tolast(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? lastdayofmonth(dt) : lastdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(-1),366)
 end

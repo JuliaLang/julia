@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const _fact_table64 =
     Int64[1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,
           87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,
           121645100408832000,2432902008176640000]
 
 const _fact_table128 =
-    Uint128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
+    UInt128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
             0x00000000000000000000000000000006, 0x00000000000000000000000000000018,
             0x00000000000000000000000000000078, 0x000000000000000000000000000002d0,
             0x000000000000000000000000000013b0, 0x00000000000000000000000000009d80,
@@ -31,111 +33,42 @@ function factorial_lookup(n::Integer, table, lim)
 end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
-factorial(n::Uint128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,Uint64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
+factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,Uint8,Int16,Uint16)) = factorial(int32(n))
-factorial(n::Union(Int32,Uint32)) = factorial_lookup(n, _fact_table64, 12)
+factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
+factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
+factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-function gamma(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64))
+function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
-    n > 20 && return gamma(float64(n))
-    @inbounds return float64(_fact_table64[n-1])
-end
-
-function factorial(n::Integer)
-    n < 0 && throw(DomainError())
-    local f::typeof(n*n), i::typeof(n*n)
-    f = 1
-    for i = 2:n
-        f *= i
-    end
-    return f
+    n > 20 && return gamma(Float64(n))
+    @inbounds return Float64(_fact_table64[n-1])
 end
 
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
-        return zero(T)
+        throw(DomainError())
     end
     f = one(T)
     while n > k
-        f *= n
+        f = Base.checked_mul(f,n)
         n -= 1
     end
     return f
 end
-
-function binomial{T<:Integer}(n::T, k::T)
-    k < 0 && return zero(T)
-    sgn = one(T)
-    if n < 0
-        n = -n + k -1
-        if isodd(k)
-            sgn = -sgn
-        end
-    end
-    k > n && return zero(T)
-    (k == 0 || k == n) && return sgn
-    k == 1 && return sgn*n
-    if k > (n>>1)
-        k = (n - k)
-    end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
-    while rr <= k
-        xt = div(widemul(x, nn), rr)
-        x = xt
-        x == xt || throw(OverflowError())
-        rr += 1
-        nn += 1
-    end
-    convert(T, copysign(x, sgn))
-end
+factorial(n::Integer, k::Integer) = factorial(promote(n, k)...)
 
 ## other ordering related functions ##
-
-function shuffle!(a::AbstractVector)
-    for i = length(a):-1:2
-        j = rand(1:i)
-        a[i], a[j] = a[j], a[i]
-    end
-    return a
-end
-
-shuffle(a::AbstractVector) = shuffle!(copy(a))
-
-function randperm(n::Integer)
-    a = Array(typeof(n), n)
-    a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(1:i)
-        a[i] = a[j]
-        a[j] = i
-    end
-    return a
-end
-
-function randcycle(n::Integer)
-    a = Array(typeof(n), n)
-    a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(1:i-1)
-        a[i] = a[j]
-        a[j] = i
-    end
-    return a
-end
-
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
+    k < 0 && throw(ArgumentError("permutation k must be ≥ 0, got $k"))
     n = length(a)
     n == 0 && return a
     f = factorial(oftype(k, n-1))
@@ -156,7 +89,7 @@ end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
 function nthperm{T<:Integer}(p::AbstractVector{T})
-    isperm(p) || error("argument is not a permutation")
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
     k, n = 1, length(p)
     for i = 1:n-1
         f = factorial(n-i)
@@ -173,7 +106,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("argument is not a permutation")
+            throw(ArgumentError("argument is not a permutation"))
         b[j] = i
     end
     b
@@ -241,9 +174,7 @@ immutable Combinations{T}
     t::Int
 end
 
-eltype(c::Combinations) = typeof(c.a)
-eltype{T}(c::Combinations{UnitRange{T}}) = Array{T,1}
-eltype{T}(c::Combinations{Range{T}}) = Array{T,1}
+eltype{T}(::Type{Combinations{T}}) = Vector{eltype(T)}
 
 length(c::Combinations) = binomial(length(c.a),c.t)
 
@@ -255,9 +186,9 @@ function combinations(a, t::Integer)
     Combinations(a, t)
 end
 
-start(c::Combinations) = [1:c.t]
+start(c::Combinations) = [1:c.t;]
 function next(c::Combinations, s)
-    comb = c.a[s]
+    comb = [c.a[si] for si in s]
     if c.t == 0
         # special case to generate 1 result for t==0
         return (comb,[length(c.a)+2])
@@ -281,22 +212,20 @@ immutable Permutations{T}
     a::T
 end
 
-eltype(c::Permutations) = typeof(c.a)
-eltype{T}(c::Permutations{UnitRange{T}}) = Array{T,1}
-eltype{T}(c::Permutations{Range{T}}) = Array{T,1}
+eltype{T}(::Type{Permutations{T}}) = Vector{eltype(T)}
 
-length(c::Permutations) = factorial(length(c.a))
+length(p::Permutations) = factorial(length(p.a))
 
 permutations(a) = Permutations(a)
 
-start(p::Permutations) = [1:length(p.a)]
+start(p::Permutations) = [1:length(p.a);]
 function next(p::Permutations, s)
+    perm = [p.a[si] for si in s]
     if length(p.a) == 0
         # special case to generate 1 result for len==0
-        return (p.a,[1])
+        return (perm,[1])
     end
     s = copy(s)
-    perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
     if k == 0
@@ -330,7 +259,7 @@ function nextpartition(n, as)
     if isempty(as);  return Int[n];  end
 
     xs = similar(as,0)
-    sizehint(xs,length(as)+1)
+    sizehint!(xs,length(as)+1)
 
     for i = 1:length(as)-1
         if as[i+1] == 1
@@ -400,7 +329,7 @@ function nextfixedpartition(n, m, bs)
     as = copy(bs)
     if isempty(as)
         # First iteration
-        as = [n-m+1, ones(Int, m-1)]
+        as = [n-m+1; ones(Int, m-1)]
     elseif as[2] < as[1]-1
         # Most common iteration
         as[1] -= 1
@@ -424,7 +353,7 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-let _nipartitions = Dict{(Int,Int),Int}()
+let _nipartitions = Dict{Tuple{Int,Int},Int}()
     global npartitions
     function npartitions(n::Int,m::Int)
         if n < m || m == 0
@@ -593,7 +522,7 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter
@@ -626,7 +555,7 @@ function nextprod(a::Vector{Int}, x)
         end
     end
     best = mx[end] < best ? mx[end] : best
-    return int(best)  # could overflow, but best to have predictable return type
+    return Int(best)  # could overflow, but best to have predictable return type
 end
 
 # For a list of integers i1, i2, i3, find the largest
@@ -634,12 +563,12 @@ end
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
-    first = int(prevpow(a[1], x))     # start at best case in first factor
+    first = Int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
     p::widen(Int) = first
     best = p
@@ -667,5 +596,50 @@ function prevprod(a::Vector{Int}, x)
         end
     end
     best = x >= p > best ? p : best
-    return int(best)
+    return Int(best)
+end
+
+const levicivita_lut = cat(3, [0 0  0;  0 0 1; 0 -1 0],
+                              [0 0 -1;  0 0 0; 1  0 0],
+                              [0 1  0; -1 0 0; 0  0 0])
+
+# Levi-Civita symbol of a permutation.
+# The parity is computed by using the fact that a permutation is odd if and
+# only if the number of even-length cycles is odd.
+# Returns 1 is the permutarion is even, -1 if it is odd and 0 otherwise.
+function levicivita{T<:Integer}(p::AbstractVector{T})
+    n = length(p)
+
+    if n == 3
+        @inbounds valid = (0 < p[1] <= 3) * (0 < p[2] <= 3) * (0 < p[3] <= 3)
+        return valid ? levicivita_lut[p[1], p[2], p[3]] : 0
+    end
+
+    todo = trues(n)
+    first = 1
+    cycles = flips = 0
+
+    while cycles + flips < n
+        first = findnext(todo, first)
+        (todo[first] $= true) && return 0
+        j = p[first]
+        (0 < j <= n) || return 0
+        cycles += 1
+        while j ≠ first
+            (todo[j] $= true) && return 0
+            j = p[j]
+            (0 < j <= n) || return 0
+            flips += 1
+        end
+    end
+
+    return iseven(flips) ? 1 : -1
+end
+
+# Computes the parity of a permutation using the levicivita function,
+# so you can ask iseven(parity(p)). If p is not a permutation throws an error.
+function parity{T<:Integer}(p::AbstractVector{T})
+    epsilon = levicivita(p)
+    epsilon == 0 && throw(ArgumentError("Not a permutation"))
+    epsilon == 1 ? 0 : 1
 end

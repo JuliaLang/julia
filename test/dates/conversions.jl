@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test conversion to and from unix
 @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000,1,1))) == DateTime(2000,1,1)
 @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
@@ -44,3 +46,28 @@
 @test typeof(Dates.now()) <: Dates.DateTime
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
+
+# Issue #9171, #9169
+let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minute(14*24*60), Dates.Second(14*24*60*60), Dates.Millisecond(14*24*60*60*1000)]
+    for i = 1:length(t)
+        Pi = typeof(t[i])
+        for j = 1:length(t)
+            @test t[i] == t[j]
+            @test Int(convert(Pi,t[j])) == Int(t[i])
+        end
+        for j = i+1:length(t)
+            Pj = typeof(t[j])
+            tj1 = t[j] + one(Pj)
+            @test t[i] < tj1
+            @test_throws InexactError Pi(tj1)
+            @test_throws InexactError Pj(Pi(typemax(Int64)))
+            @test_throws InexactError Pj(Pi(typemin(Int64)))
+        end
+    end
+end
+@test Dates.Year(3) == Dates.Month(36)
+@test Int(convert(Dates.Month, Dates.Year(3))) == 36
+@test Int(convert(Dates.Year, Dates.Month(36))) == 3
+@test Dates.Year(3) < Dates.Month(37)
+@test_throws InexactError convert(Dates.Year, Dates.Month(37))
+@test_throws InexactError Dates.Month(Dates.Year(typemax(Int64)))

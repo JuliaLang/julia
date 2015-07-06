@@ -107,11 +107,11 @@
     function rand(n) {
         var v, i;
         v = new Array(n);
-        
+
         for (i = 0; i < n; i++) {
             v[i] = Math.random();
         }
-        
+
         return v;
     }
 
@@ -148,7 +148,7 @@
         var v = rand(n);
         qsort_kernel(v, 0, n);
         return v;
-    } 
+    }
 
     tmin = Number.POSITIVE_INFINITY;
     for (i=0; i < 5; i++) {
@@ -204,15 +204,15 @@
         var subLen, len, i;
         subLen = sub.length;
         len = a.length;
-        
+
         for (i = 0; i < subLen; i++) {
             a[i] = sub[i] = gaussian();
         }
-        
+
         for (i = subLen; i < len; i++) {
             a[i] = gaussian();
         }
-        
+
         return a;
     }
 
@@ -220,7 +220,7 @@
         var i, j;
         i = 0;
         j = 0;
-        
+
         for (i = 0; i < m; i++) {
             for (j = 0; j < n; j++) {
                 dest[i*n+j] = src[j*m+i];
@@ -233,15 +233,15 @@
         i = 0;
         j = 0;
         k = 0;
-        
+
         for (i = 0; i < m; i++) {
             for (j = 0; j < n; j++) {
                 sum = 0.0;
-                
+
                 for (k = 0; k < l; k++) {
                     sum += A[i*l+k]*B[k*n+j];
                 }
-                
+
                 dest[i*n+j] = sum;
             }
         }
@@ -252,45 +252,45 @@
         a, b, c, d, aSub, bSub, cSub, dSub, v, w, i, j, k,
         trP, trQ, v1, v2, w1, w2;
         n = 5;
-        
+
         P = new Float64Array( 4*n*n );
         Q = new Float64Array( 4*n*n );
-        
+
         PTransposed = new Float64Array( P.length );
         QTransposed = new Float64Array( Q.length );
-        
+
         PMatMul = new Float64Array( n*n );
         QMatMul = new Float64Array( (2*n) * (2*n) );
-        
+
         a = new Float64Array( n*n );
         b = new Float64Array( n*n );
         c = new Float64Array( n*n );
         d = new Float64Array( n*n );
-        
+
         // the first n number of elements of a to d
         aSub = new Float64Array( n );
         bSub = new Float64Array( n );
         cSub = new Float64Array( n );
         dSub = new Float64Array( n );
-        
+
         v = new Float64Array( t );
         w = new Float64Array( t );
-        
+
         i = 0;
         j = 0;
         k = 0;
-        
+
         for (i = 0; i < t; i++) {
             a = randn( a, aSub );
             b = randn( b, bSub );
             c = randn( c, cSub );
             d = randn( d, dSub );
-            
+
             P.set( a, 0*n*n );
             P.set( b, 1*n*n );
             P.set( c, 2*n*n );
             P.set( d, 3*n*n );
-            
+
             for (j = 0; j < n; j++) {
                 Q.set( aSub, 2*n*j         );
                 Q.set( bSub, 2*n*j+n       );
@@ -305,30 +305,30 @@
                   }
                 */
             }
-            
+
             transpose( PTransposed, P, n, 4*n );
             matmulCopy( PMatMul, PTransposed, P, n, 4*n, n );
             matmulCopy( PMatMul, P, P, n, n, n);
             matmulCopy( PMatMul, P, P, n, n, n);
-            
+
             trP = 0;
             for (j = 0; j < n; j++) {
                 trP += PMatMul[(n+1)*j];
             }
             v[i] = trP;
-            
+
             transpose( QTransposed, Q, 2*n, 2*n );
             matmulCopy( QMatMul, QTransposed, Q, 2*n, 2*n, 2*n );
             matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
             matmulCopy( QMatMul, Q, Q, 2*n, 2*n, 2*n);
-            
+
             trQ = 0;
             for (j = 0; j < 2*n; j++) {
                 trQ += QMatMul[(2*n+1)*j];
             }
             w[i] = trQ;
         }
-        
+
         v1 = 0.0;
         v2 = 0.0;
         w1 = 0.0;
@@ -337,7 +337,7 @@
             v1 += v[i]; v2 += v[i]*v[i];
             w1 += w[i]; w2 += w[i]*w[i];
         }
-        
+
         return {
             s1: Math.sqrt((t*(t*v2-v1*v1))/((t-1)*v1*v1)),
             s2: Math.sqrt((t*(t*w2-w1*w1))/((t-1)*w1*w1))
@@ -362,11 +362,11 @@
     function randFloat64(n) {
         var v, i;
         v = new Float64Array(n);
-        
+
         for (i = 0; i < n; i++) {
             v[i] = Math.random();
         }
-        
+
         return v;
     }
 
@@ -399,19 +399,19 @@
         // custom multiplication routines, which
         // likely make use of such aligned memory.
         B = mattransp(B,l,n);
-        
+
         for (i = 0; i < m; i++) {
             for (j = 0; j < n; j++) {
                 total = 0.0;
-                
+
                 for (k = 0; k < l; k++) {
                     total += A[i*l+k]*B[j*l+k];
                 }
-                
+
                 C[i*n+j] = total;
             }
         }
-        
+
         return C;
     }
 
@@ -419,7 +419,7 @@
         var A, B;
         A = randFloat64(n*n);
         B = randFloat64(n*n);
-        
+
         return matmul(A, B, n, n, n);
     }
 

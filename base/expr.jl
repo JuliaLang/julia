@@ -1,19 +1,23 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## symbols ##
 
 symbol(s::Symbol) = s
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
-symbol(a::Array{Uint8,1}) =
-    ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
-symbol(x::Char) = symbol(string(x))
+symbol(a::Array{UInt8,1}) =
+    ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
+symbol(x...) = symbol(string(x...))
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
-gensym(a::Array{Uint8,1}) =
-    ccall(:jl_tagged_gensym, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
-gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
+gensym(a::Array{UInt8,1}) =
+    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
+gensym(ss::Union{ASCIIString, UTF8String}...) = map(gensym, ss)
+gensym(s::Symbol) =
+    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
 
 macro gensym(names...)
     blk = Expr(:block)
@@ -32,10 +36,9 @@ copy(e::Expr) = (n = Expr(e.head);
                  n.typ = e.typ;
                  n)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
-copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
+astcopy(x::Union{SymbolNode,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
@@ -47,7 +50,7 @@ function show(io::IO, tv::TypeVar)
         show(io, tv.lb)
         print(io, "<:")
     end
-    print(io, tv.name)
+    write(io, tv.name)
     if !is(tv.ub, Any)
         print(io, "<:")
         show(io, tv.ub)
@@ -69,6 +72,13 @@ end
 
 _inline(ex::Expr) = pushmeta!(ex, :inline)
 _inline(arg) = arg
+
+macro noinline(ex)
+    esc(_noinline(ex))
+end
+
+_noinline(ex::Expr) = pushmeta!(ex, :noinline)
+_noinline(arg) = arg
 
 ## some macro utilities ##
 
@@ -103,36 +113,64 @@ function localize_vars(expr, esca)
     Expr(:localize, :(()->($expr)), v...)
 end
 
-function pushmeta!(ex::Expr, sym::Symbol)
-    if ex.head == :function
+function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
+    if length(args) == 0
+        tag = sym
+    else
+        tag = Expr(sym, args...)
+    end
+    found, metaex = findmeta(ex)
+    if found
+        push!(metaex.args, tag)
+    else
         body::Expr = ex.args[2]
-        if !isempty(body.args) && isa(body.args[1], Expr) && (body.args[1]::Expr).head == :meta
-            push!((body.args[1]::Expr).args, sym)
-        else
-            unshift!(body.args, Expr(:meta, sym))
-        end
-    elseif (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
-        ex = Expr(:function, ex.args[1], Expr(:block, Expr(:meta, sym), ex.args[2]))
-#     else
-#         ex = Expr(:withmeta, ex, sym)
+        unshift!(body.args, Expr(:meta, tag))
     end
     ex
 end
 
 function popmeta!(body::Expr, sym::Symbol)
-    if isa(body.args[1],Expr) && (body.args[1]::Expr).head === :meta
-        metaargs = (body.args[1]::Expr).args
-        for i = 1:length(metaargs)
-            if metaargs[i] == sym
-                if length(metaargs) == 1
-                    shift!(body.args)        # get rid of :meta Expr
-                else
-                    deleteat!(metaargs, i)   # delete this portion of the metadata
+    body.head == :block || return false, []
+    found, metaex = findmeta_block(body)
+    if !found
+        return false, []
+    end
+    metaargs = metaex.args
+    for i = 1:length(metaargs)
+        if isa(metaargs[i], Symbol) && (metaargs[i]::Symbol) == sym
+            deleteat!(metaargs, i)
+            return true, []
+        elseif isa(metaargs[i], Expr) && (metaargs[i]::Expr).head == sym
+            ret = (metaargs[i]::Expr).args
+            deleteat!(metaargs, i)
+            return true, ret
+        end
+    end
+    false, []
+end
+popmeta!(arg, sym) = (false, [])
+
+function findmeta(ex::Expr)
+    if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
+        body::Expr = ex.args[2]
+        body.head == :block || error(body, " is not a block expression")
+        return findmeta_block(ex)
+    end
+    error(ex, " is not a function expression")
+end
+
+function findmeta_block(ex::Expr)
+    for a in ex.args
+        if isa(a, Expr)
+            if (a::Expr).head == :meta
+                return true, a::Expr
+            elseif (a::Expr).head == :block
+                found, exb = findmeta_block(a)
+                if found
+                    return found, exb
                 end
-                return true
             end
         end
     end
-    false
+    return false, Expr(:block)
 end
-popmeta!(arg, sym) = false

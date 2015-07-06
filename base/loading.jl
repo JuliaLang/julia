@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # require
 
-function find_in_path(name::String)
+function find_in_path(name::AbstractString)
     isabspath(name) && return name
     isfile(name) && return abspath(name)
     base = name
@@ -10,7 +12,7 @@ function find_in_path(name::String)
         name = string(base,".jl")
         isfile(name) && return abspath(name)
     end
-    for prefix in [Pkg.dir(), LOAD_PATH]
+    for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
@@ -28,7 +30,7 @@ function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
     file2 != nothing && return file2
-    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
     isfile(file2) ? file2 : nothing
 end
 
@@ -36,15 +38,14 @@ end
 package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
 package_locks = Dict{ByteString,Any}()
-require(fname::String) = require(bytestring(fname))
-require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
+require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
 # only broadcast top-level (not nested) requires and reloads
 toplevel_load = true
 
-function require(name::String)
+function require(name::AbstractString)
     path = find_in_node1_path(name)
-    path == nothing && error("$name not found")
+    path == nothing && throw(ArgumentError("$name not found in path"))
 
     if myid() == 1 && toplevel_load
         refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
@@ -59,31 +60,32 @@ end
 function _require(path)
     global toplevel_load
     if haskey(package_list,path)
-        wait(package_locks[path])
+        loaded, c = package_locks[path]
+        !loaded && wait(c)
     else
         last = toplevel_load
         toplevel_load = false
-        try 
+        try
             reload_path(path)
-        finally 
+        finally
             toplevel_load = last
         end
     end
 end
 
-function reload(name::String)
+function reload(name::AbstractString)
     global toplevel_load
     path = find_in_node1_path(name)
-    path == nothing && error("$name not found")
+    path == nothing && throw(ArgumentError("$name not found in path"))
     refs = nothing
     if myid() == 1 && toplevel_load
         refs = Any[ @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) ]
     end
     last = toplevel_load
     toplevel_load = false
-    try 
+    try
         reload_path(path)
-    finally 
+    finally
         toplevel_load = last
     end
     if refs !== nothing
@@ -94,12 +96,15 @@ end
 
 # remote/parallel load
 
-include_string(txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
+include_string(txt::ByteString, fname::ByteString) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
+          txt, sizeof(txt), fname, sizeof(fname))
 
-include_string(txt::String) = include_string(txt, "string")
+include_string(txt::AbstractString, fname::AbstractString) = include_string(bytestring(txt), bytestring(fname))
 
-function source_path(default::Union(String,Void)="")
+include_string(txt::AbstractString) = include_string(txt, "string")
+
+function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
@@ -115,7 +120,7 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::String)
+function include_from_node1(path::AbstractString)
     prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
@@ -140,10 +145,10 @@ function include_from_node1(path::String)
     result
 end
 
-function reload_path(path::String)
+function reload_path(path::AbstractString)
     had = haskey(package_list, path)
     if !had
-        package_locks[path] = RemoteRef()
+        package_locks[path] = (false, Condition())
     end
     package_list[path] = time()
     tls = task_local_storage()
@@ -158,13 +163,15 @@ function reload_path(path::String)
             tls[:SOURCE_PATH] = prev
         end
     end
-    if !isready(package_locks[path])
-        put!(package_locks[path],nothing)
+    reloaded, c = package_locks[path]
+    if !reloaded
+        package_locks[path] = (true, c)
+        notify(c, all=true)
     end
     nothing
 end
 
-function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
+function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
@@ -172,4 +179,4 @@ function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
                      :(eval(m,x) = Core.eval(m,x)),
                      :(include($path))))
 end
-evalfile(path::String, args::Vector) = evalfile(path, UTF8String[args...])
+evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])

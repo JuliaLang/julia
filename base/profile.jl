@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Profile
 
 import Base: hash, ==
@@ -21,11 +23,11 @@ end
 ####
 #### User-level functions
 ####
-function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = nothing)
+function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
-    delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
+    delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n == nothing && delay == nothing
-        return int(n_cur), delay_cur
+        return Int(n_cur), delay_cur
     end
     nnew = (n == nothing) ? n_cur : n
     delaynew = (delay == nothing) ? delay_cur : delay
@@ -33,7 +35,7 @@ function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = n
 end
 
 function init(n::Integer, delay::Float64)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
     end
@@ -41,7 +43,7 @@ end
 
 # init with default values
 # Use a max size of 1M profile samples, and fire timer every 1ms
-__init__() = init(1_000_000, 0.001)
+@windows? (__init__() = init(1_000_000, 0.01)) : (__init__() = init(1_000_000, 0.001))
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
@@ -51,7 +53,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = ge
     elseif format == :flat
         flat(io, data, lidict, C, combine, cols)
     else
-        error("output format ", format, " not recognized")
+        throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
 end
 print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
@@ -61,16 +63,16 @@ function retrieve()
     copy(data), getdict(data)
 end
 
-function getdict(data::Vector{Uint})
+function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{Uint, LineInfo}([ip=>lookup(ip) for ip in uip])
+    Dict{UInt, LineInfo}([ip=>lookup(ip) for ip in uip])
 end
 
-function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
+function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
     if filename == nothing && linerange == nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
-    filename == nothing && error("If supplying linerange, you must also supply the filename")
+    filename == nothing && throw(ArgumentError("if supplying linerange, you must also supply the filename"))
     if linerange == nothing
         return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
     else
@@ -79,8 +81,15 @@ function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = noth
 end
 
 callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector{Uint}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function, bt::Vector{UInt}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
+
+##
+## For --track-allocation
+##
+# Reset the malloc log. Used to avoid counting memory allocated during
+# compilation.
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
 
 
 ####
@@ -91,7 +100,7 @@ immutable LineInfo
     file::ByteString
     line::Int
     fromC::Bool
-    ip::Int
+    ip::Int64 # large enough that this struct can be losslessly read on any machine (32 or 64 bit)
 end
 
 const UNKNOWN = LineInfo("?", "?", -1, true, 0)
@@ -103,8 +112,8 @@ const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 #
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
-function hash(li::LineInfo, h::Uint)
-    h += itrunc(Uint,0xf4fbda67fe20ce88)
+function hash(li::LineInfo, h::UInt)
+    h += 0xf4fbda67fe20ce88 % UInt
     h = hash(li.line, h)
     h = hash(li.file, h)
     h = hash(li.func, h)
@@ -115,22 +124,23 @@ start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
 stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
 
-is_running() = bool(ccall(:jl_profile_is_running, Cint, ()))
+is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
-get_data_pointer() = convert(Ptr{Uint}, ccall(:jl_profile_get_data, Ptr{Uint8}, ()))
+get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-function lookup(ip::Uint)
+function lookup(ip::Ptr{Void})
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 5
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int(info[5]))
+        return LineInfo(string(info[1]), string(info[2]), Int(info[3]), info[4], Int64(info[5]))
     else
         return UNKNOWN
     end
 end
+lookup(ip::UInt) = lookup(convert(Ptr{Void},ip))
 
 error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
@@ -238,8 +248,8 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         wfile = maxfile
         wfunc = maxfunc
     else
-        wfile = ifloor(2*ntext/5)
-        wfunc = ifloor(3*ntext/5)
+        wfile = floor(Integer,2*ntext/5)
+        wfunc = floor(Integer,3*ntext/5)
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
     for i = 1:length(n)
@@ -273,12 +283,12 @@ end
 tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
 
 function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
-    nindent = min(ifloor(cols/2), level)
+    nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
     ntext = cols-nindent-ndigcounts-ndigline-5
-    widthfile = ifloor(0.4ntext)
-    widthfunc = ifloor(0.6ntext)
+    widthfile = floor(Integer,0.4ntext)
+    widthfunc = floor(Integer,0.6ntext)
     strs = Array(ByteString, length(lilist))
     showextra = false
     if level > nindent
@@ -411,7 +421,7 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     tree(io, bt[keep], counts[keep], lidict, level, combine, cols)
 end
 
-function callersf(matchfunc::Function, bt::Vector{Uint}, lidict)
+function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
     counts = Dict{LineInfo, Int}()
     lastmatched = false
     for id in bt

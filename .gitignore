@@ -4,6 +4,7 @@
 /dist-extras
 /julia
 /usr
+/usr-staging
 /Make.user
 /julia-*
 /source-dist.tmp
@@ -13,5 +14,12 @@
 *.dll
 *.do
 *.o
+*.obj
+*.so
 *.dylib
 *.dSYM
+*.jl.cov
+*.jl.mem
+*.ji
+
+.DS_Store

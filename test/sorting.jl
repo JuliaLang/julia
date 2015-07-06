@@ -1,34 +1,63 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+using Base.Order: Forward
+
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
+@test sort(['z':-1:'a';]) == ['a':'z';]
+@test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
+@test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
+let s = sub([1,2,3,4], 1:3)
+    r = sortperm!(s, [2,3,1])
+    @test r == [3,1,2]
+    @test r === s
+end
+@test_throws ArgumentError sortperm!(sub([1,2,3,4], 1:4), [2,3,1])
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
-let a=[1:10]
+let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
-        @test select(a, r) == [r]
-        @test select(a, r, rev=true) == (11 .- [r])
+        @test select(a, r) == [r;]
+        @test select(a, r, rev=true) == (11 .- [r;])
     end
 end
 @test sum(randperm(6)) == 21
 @test nthperm([0,1,2],3) == [1,0,2]
 
-@test searchsorted([1, 1, 2, 2, 3, 3], 0) == 1:0
-@test searchsorted([1, 1, 2, 2, 3, 3], 1) == 1:2
-@test searchsorted([1, 1, 2, 2, 3, 3], 2) == 3:4
-@test searchsorted([1, 1, 2, 2, 3, 3], 4) == 7:6
-@test searchsorted([1.0, 1, 2, 2, 3, 3], 2.5) == 5:4
+numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
+            UInt8, UInt16, UInt32, UInt64, UInt128,
+            Float16, Float32, Float64, BigInt, BigFloat]
 
-@test searchsorted([1:10], 1, by=(x -> x >= 5)) == 1:4
-@test searchsorted([1:10], 10, by=(x -> x >= 5)) == 5:10
-@test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
-@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
+@test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
+@test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
+@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Forward) == 6:10
+
+for R in numTypes, T in numTypes
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(1)) == 1:2
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(2)) == 3:4
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) == 7:6
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) == 5:4
+
+    @test searchsorted(1:3, T(0)) == 1:0
+    @test searchsorted(1:3, T(1)) == 1:1
+    @test searchsorted(1:3, T(2)) == 2:2
+    @test searchsorted(1:3, T(4)) == 4:3
+
+    @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
+    @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
+    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
+    @test searchsorted(ones(R, 15), T(1), 6, 10, Forward) == 6:10
+end
 
 for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
-    rgv, rgv_r = [rg], [rg_r]
+    rgv, rgv_r = [rg;], [rg_r;]
     for i = I
         @test searchsorted(rg,i) == searchsorted(rgv,i)
         @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
@@ -49,19 +78,49 @@ for i = 1:100
     @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
 end
 
-@test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10], 1, by=(x -> x >= 5))
-@test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10], 10, by=(x -> x >= 5))
+@test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10;], 1, by=(x -> x >= 5))
+@test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10;], 10, by=(x -> x >= 5))
 
 @test searchsorted([], 0) == 1:0
 @test searchsorted([1,2,3], 0) == 1:0
 @test searchsorted([1,2,3], 4) == 4:3
+
+# exercise the codepath in searchsorted* methods for ranges that check for zero step range
+immutable ConstantRange{T} <: Range{T}
+   val::T
+   len::Int
+end
+
+Base.length(r::ConstantRange) = r.len
+Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
+Base.step(r::ConstantRange) = 0
+
+r = ConstantRange(1, 5)
+
+@test searchsortedfirst(r, 1.0, Forward) == 1
+@test searchsortedfirst(r, 1, Forward) == 1
+@test searchsortedfirst(r, UInt(1), Forward) == 1
+
+@test searchsortedlast(r, 1.0, Forward) == 5
+@test searchsortedlast(r, 1, Forward) == 5
+@test searchsortedlast(r, UInt(1), Forward) == 5
 
 a = rand(1:10000, 1000)
 
 for alg in [InsertionSort, MergeSort]
     b = sort(a, alg=alg)
     @test issorted(b)
+
     ix = sortperm(a, alg=alg)
+    b = a[ix]
+    @test issorted(b)
+    @test a[ix] == b
+
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg)
+    b = a[ix][1:100]
+    @test issorted(b)
+
+    sortperm!(ix, a, alg=alg)
     b = a[ix]
     @test issorted(b)
     @test a[ix] == b
@@ -73,9 +132,27 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, rev=true)
     @test a[ix] == b
 
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg, rev=true)
+    b = a[ix][1:100]
+    @test issorted(b, rev=true)
+
+    sortperm!(ix, a, alg=alg, rev=true)
+    b = a[ix]
+    @test issorted(b, rev=true)
+    @test a[ix] == b
+
     b = sort(a, alg=alg, by=x->1/x)
     @test issorted(b, by=x->1/x)
     ix = sortperm(a, alg=alg, by=x->1/x)
+    b = a[ix]
+    @test issorted(b, by=x->1/x)
+    @test a[ix] == b
+
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), by=x->1/x)
+    b = a[ix][1:100]
+    @test issorted(b, by=x->1/x)
+
+    sortperm!(ix, a, alg=alg, by=x->1/x)
     b = a[ix]
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
@@ -106,7 +183,7 @@ b = sort(a, alg=QuickSort, by=x->1/x)
 
 ## more advanced sorting tests ##
 
-randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
+randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
@@ -117,7 +194,7 @@ end
 
 srand(0xdeadbeef)
 
-for n in [0:10, 100, 101, 1000, 1001]
+for n in [0:10; 100; 101; 1000; 1001]
     r = -5:5
     v = rand(r,n)
     h = hist(v,r)
@@ -169,14 +246,14 @@ for n in [0:10, 100, 101, 1000, 1001]
         # test float sorting with NaNs
         s = sort(v, alg=alg, rev=rev)
         @test issorted(s, rev=rev)
-        @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
+        @test reinterpret(UInt64,v[isnan(v)]) == reinterpret(UInt64,s[isnan(s)])
 
         # test float permutation with NaNs
         p = sortperm(v, alg=alg, rev=rev)
         @test isperm(p)
         vp = v[p]
         @test isequal(vp,s)
-        @test reinterpret(Uint64,vp) == reinterpret(Uint64,s)
+        @test reinterpret(UInt64,vp) == reinterpret(UInt64,s)
     end
 end
 
@@ -229,3 +306,13 @@ end
 @test sortperm([ 0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
+
+# issue #8825 - stability of min/max
+type Twain
+    a :: Int
+    b :: Int
+end
+Base.isless(x :: Twain, y :: Twain) = x.a < y.a
+let x = Twain(2,3), y = Twain(2,4)
+    @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
+end

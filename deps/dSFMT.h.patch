@@ -22,7 +22,7 @@
 +void dsfmt_fill_array_close1_open2(dsfmt_t *dsfmt, double array[], ptrdiff_t size);
  void dsfmt_chk_init_gen_rand(dsfmt_t *dsfmt, uint32_t seed, int mexp);
  void dsfmt_chk_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
- 			     int key_length, int mexp);
+                              int key_length, int mexp);
  const char *dsfmt_get_idstring(void);
  int dsfmt_get_min_array_size(void);
  
@@ -139,7 +139,7 @@
 +double dsfmt_genrand_open_open(dsfmt_t *dsfmt) {
      double *dsfmt64 = &dsfmt->status[0].d[0];
      union {
- 	double d;
+         double d;
 @@ -368,7 +374,7 @@
   * before this function. This function uses \b global variables.
   * @return double precision floating point pseudorandom number
@@ -209,7 +209,7 @@
   */
 -inline static void dsfmt_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
 +void dsfmt_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
- 				       int key_length) {
+                                        int key_length) {
      dsfmt_chk_init_by_array(dsfmt, init_key, key_length, DSFMT_MEXP);
  }
 @@ -475,7 +481,7 @@

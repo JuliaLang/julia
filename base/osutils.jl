@@ -1,9 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function is_unix(os::Symbol)
-    if (os==:Windows) return false; 
-    elseif (os==:Linux) return true; 
-    elseif (os==:FreeBSD) return true; 
-    elseif (os==:Darwin) return true; 
-    else error("unknown operating system")
+    if (os==:Windows) return false;
+    elseif (os==:Linux) return true;
+    elseif (os==:FreeBSD) return true;
+    elseif (os==:Darwin) return true;
+    else throw(ArgumentError("unknown operating system, $(repr(os))"))
     end
 end
 
@@ -48,21 +50,9 @@ end
 # Windows version macros
 
 @windows_only function windows_version()
-    verinfo = ccall(:GetVersion, Uint32, ())
+    verinfo = ccall(:GetVersion, UInt32, ())
     (verinfo & 0xFF, (verinfo >> 8) & 0xFF)
 end
 @unix_only windows_version() = (0,0)
 
-WINDOWS_XP_VER = (5,1)
-
-macro windowsxp(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end
-
-macro windowsxp_only(ex)
-    @windowsxp? esc(ex) : nothing
-end
-
-macro non_windowsxp_only(ex)
-    @windowsxp? nothing : esc(ex)
-end
+WINDOWS_VISTA_VER = (6,0)

@@ -1,53 +1,50 @@
-char(x) = convert(Char, x)
-char(x::FloatingPoint) = char(iround(x))
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-integer(x::Char) = int(x)
+convert(::Type{Char}, x::Float16) = Char(convert(UInt32, x))
+convert(::Type{Char}, x::Float32) = Char(convert(UInt32, x))
+convert(::Type{Char}, x::Float64) = Char(convert(UInt32, x))
 
-convert(::Type{Char}, x::Float16) = char(convert(Uint32, x))
-convert(::Type{Char}, x::Float32) = char(convert(Uint32, x))
-convert(::Type{Char}, x::Float64) = char(convert(Uint32, x))
+typemax(::Type{Char}) = Char(typemax(UInt32))
+typemin(::Type{Char}) = Char(typemin(UInt32))
 
-## char promotions ##
+size(c::Char) = ()
+size(c::Char,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
+ndims(c::Char) = 0
+ndims(::Type{Char}) = 0
+length(c::Char) = 1
+endof(c::Char) = 1
+getindex(c::Char) = c
+getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
+getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
+getindex(c::Char, I::Real...) = getindex(c, to_indexes(I...)...)
+first(c::Char) = c
+last(c::Char) = c
+eltype(c::Char) = Char
 
-promote_rule(::Type{Char}, ::Type{Int8})    = Int32
-promote_rule(::Type{Char}, ::Type{Uint8})   = Uint32
-promote_rule(::Type{Char}, ::Type{Int16})   = Int32
-promote_rule(::Type{Char}, ::Type{Uint16})  = Uint32
-promote_rule(::Type{Char}, ::Type{Int32})   = Int32
-promote_rule(::Type{Char}, ::Type{Uint32})  = Uint32
-promote_rule(::Type{Char}, ::Type{Int64})   = Int64
-promote_rule(::Type{Char}, ::Type{Uint64})  = Uint64
-promote_rule(::Type{Char}, ::Type{Int128})  = Int128
-promote_rule(::Type{Char}, ::Type{Uint128}) = Uint128
+start(c::Char) = false
+next(c::Char, state) = (c, true)
+done(c::Char, state) = state
+isempty(c::Char) = false
+in(x::Char, y::Char) = x == y
 
-## character operations & comparisons ##
+==(x::Char, y::Char) = UInt32(x) == UInt32(y)
+==(x::Char, y::Integer) = UInt32(x) == y
+==(x::Integer, y::Char) = x == UInt32(y)
 
-# numeric operations
-# TODO: this should be removed, but needs to be here as long as Char <: Integer
-+(x::Char   , y::Char   ) = int(x)+int(y)
+isless(x::Char, y::Char)    = isless(UInt32(x), UInt32(y))
+isless(x::Char, y::Integer) = isless(UInt32(x), y)
+isless(x::Integer, y::Char) = isless(x, UInt32(y))
 
-# ordinal operations
-+(x::Char   , y::Integer) = reinterpret(Char, int32(x)+int32(y))
-+(x::Integer, y::Char   ) = y+x
--(x::Char   , y::Char   ) = int(x)-int(y)
--(x::Char   , y::Integer) = reinterpret(Char, int32(x)-int32(y))
+-(x::Char, y::Char) = Int(x) - Int(y)
+-(x::Char, y::Integer) = reinterpret(Char, Int32(x) - Int32(y))
++(x::Char, y::Integer) = reinterpret(Char, Int32(x) + Int32(y))
++(x::Integer, y::Char) = y + x
 
-# bitwise operations
-(~)(x::Char) = char(~uint32(x))
-(&)(x::Char, y::Char) = char(uint32(x) & uint32(y))
-(|)(x::Char, y::Char) = char(uint32(x) | uint32(y))
-($)(x::Char, y::Char) = char(uint32(x) $ uint32(y))
+bswap(x::Char) = Char(bswap(UInt32(x)))
 
-bswap(x::Char) = char(bswap(uint32(x)))
-
-<<(x::Char, y::Int32)  = uint32(x) << y
->>(x::Char, y::Int32)  = uint32(x) >>> y
->>>(x::Char, y::Int32) = uint32(x) >>> y
-
-< (x::Char, y::Char) = uint32(x) <  uint32(y)
-<=(x::Char, y::Char) = uint32(x) <= uint32(y)
-
-## printing & showing characters ##
-
-print(io::IO, c::Char) = (write(io,c); nothing)
-show(io::IO, c::Char) = (print(io,'\''); print_escaped(io,utf32(c),"'"); print(io,'\''))
+print(io::IO, c::Char) = (write(io, c); nothing)
+function show(io::IO, c::Char)
+    print(io, '\'')
+    print_escaped(io, utf32(c), "'")
+    print(io, '\'')
+end

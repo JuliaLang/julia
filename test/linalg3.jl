@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -92,9 +94,15 @@ C = Array(Int, size(A, 1), size(B, 2))
 @test At_mul_B!(C, A, B) == A'*B
 @test A_mul_Bt!(C, A, B) == A*B'
 @test At_mul_Bt!(C, A, B) == A'*B'
+v = [1,2,3]
+C = Array(Int, 3, 3)
+@test A_mul_Bt!(C, v, v) == v*v'
+vf = map(Float64,v)
+C = Array(Float64, 3, 3)
+@test A_mul_Bt!(C, v, v) == v*v'
 
 # matrix algebra with subarrays of floats (stride != 1)
-A = reshape(float64(1:20),5,4)
+A = reshape(map(Float64,1:20),5,4)
 Aref = A[1:2:end,1:2:end]
 Asub = sub(A, 1:2:5, 1:2:4)
 b = [1.2,-2.5]
@@ -109,7 +117,7 @@ Asub = sub(Ai, 1:2:5, 1:2:4)
 
 # syrk & herk
 A = reshape(1:1503, 501, 3).-750.0
-res = float64([135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759])
+res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
 @test At_mul_B(A, A) == res
 @test A_mul_Bt(A',A') == res
 cutoff = 501
@@ -124,55 +132,50 @@ Aref = Ai[1:2:2*cutoff, 1:3]
 
 # Matrix exponential
 for elty in (Float32, Float64, Complex64, Complex128)
-        A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-        eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
-        183.765138646367 183.765138646366  163.679601723179;
-        71.797032399996  91.8825693231832 111.968106246371]')
-        @test_approx_eq expm(A1) eA1
+    A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+    eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
+                                 183.765138646367 183.765138646366  163.679601723179;
+                                 71.797032399996  91.8825693231832 111.968106246371]')
+    @test_approx_eq expm(A1) eA1
 
-        A2  = convert(Matrix{elty},
-            [29.87942128909879    0.7815750847907159 -2.289519314033932;
-            0.7815750847907159 25.72656945571064    8.680737820540137;
-            -2.289519314033932   8.680737820540137  34.39400925519054])
-        eA2 = convert(Matrix{elty},
-            [  5496313853692458.0 -18231880972009236.0 -30475770808580460.0;
-             -18231880972009252.0  60605228702221920.0 101291842930249760.0;
-             -30475770808580480.0 101291842930249728.0 169294411240851968.0])
-        @test_approx_eq expm(A2) eA2
+    A2  = convert(Matrix{elty},
+                  [29.87942128909879    0.7815750847907159 -2.289519314033932;
+                   0.7815750847907159 25.72656945571064    8.680737820540137;
+                   -2.289519314033932   8.680737820540137  34.39400925519054])
+    eA2 = convert(Matrix{elty},
+                  [  5496313853692458.0 -18231880972009236.0 -30475770808580460.0;
+                   -18231880972009252.0  60605228702221920.0 101291842930249760.0;
+                   -30475770808580480.0 101291842930249728.0 169294411240851968.0])
+    @test_approx_eq expm(A2) eA2
 
-        A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
-        eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
-        0.367879439109187 1.47151775849686  1.10363831732856;
-        0.135335281175235 0.406005843524598 0.541341126763207]')
-        @test_approx_eq expm(A3) eA3
+    A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
+    eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
+                                 0.367879439109187 1.47151775849686  1.10363831732856;
+                                 0.135335281175235 0.406005843524598 0.541341126763207]')
+    @test_approx_eq expm(A3) eA3
 
-        # issue 5116
-        A4  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
-        eA4 = [-0.999786072879326  -0.065407069689389   0.0   0.0
-                0.006540706968939  -0.999786072879326   0.0   0.0
-                0.0                 0.0                 1.0   0.0
-                0.013081413937878  -3.999572145758650   0.0   1.0]
-        @test_approx_eq expm(A4) eA4
+    # issue 5116
+    A4  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
+    eA4 = [-0.999786072879326  -0.065407069689389   0.0   0.0
+           0.006540706968939  -0.999786072879326   0.0   0.0
+           0.0                 0.0                 1.0   0.0
+           0.013081413937878  -3.999572145758650   0.0   1.0]
+    @test_approx_eq expm(A4) eA4
 
-        # issue 5116
-        A5  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
-        eA5 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0im
-                0.0+0.0im   1.543080634815244+0.0im   0.0-1.175201193643801im  0.0+0.0im
-                0.0+0.0im   0.0+1.175201193643801im   1.543080634815243+0.0im  0.0+0.0im
-                0.0+0.0im   0.0+0.0im                 0.0+0.0im                1.0+0.0im]
-        @test_approx_eq expm(A5) eA5
+    # issue 5116
+    A5  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
+    eA5 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0im
+            0.0+0.0im   1.543080634815244+0.0im   0.0-1.175201193643801im  0.0+0.0im
+            0.0+0.0im   0.0+1.175201193643801im   1.543080634815243+0.0im  0.0+0.0im
+            0.0+0.0im   0.0+0.0im                 0.0+0.0im                1.0+0.0im]
+    @test_approx_eq expm(A5) eA5
 
-        # Hessenberg
-        @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty},
-                        [4.000000000000000  -1.414213562373094  -1.414213562373095
-                        -1.414213562373095   4.999999999999996  -0.000000000000000
-                                         0  -0.000000000000002   3.000000000000000])
+    # Hessenberg
+    @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty},
+                                             [4.000000000000000  -1.414213562373094  -1.414213562373095
+                                              -1.414213562373095   4.999999999999996  -0.000000000000000
+                                              0  -0.000000000000002   3.000000000000000])
 end
-
-# Hermitian matrix exponential
-A1 = randn(4,4) + im*randn(4,4)
-A2 = A1 + A1'
-@test_approx_eq expm(A2) expm(Hermitian(A2))
 
 # matmul for types w/o sizeof (issue #1282)
 A = Array(Complex{Int},10,10)
@@ -183,7 +186,7 @@ A2 = A^2
 # test sparse matrix norms
 Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
 Ar = sprandn(10,10,.1)
-Ai = int(ceil(Ar*100))
+Ai = ceil(Int,Ar*100)
 @test_approx_eq norm(Ac,1)     norm(full(Ac),1)
 @test_approx_eq norm(Ac,Inf)   norm(full(Ac),Inf)
 @test_approx_eq vecnorm(Ac)    vecnorm(full(Ac))
@@ -194,9 +197,44 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
+# 2-argument version of scale
+a = reshape([1.:6;], (2,3))
+@test scale(a, 5.) == a*5
+@test scale(5., a) == a*5
+@test scale(a, [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale([1.; 2.], a) == a.*[1; 2]
+@test scale(a, [1; 2; 3]) == a.*[1 2 3]
+@test scale([1; 2], a) == a.*[1; 2]
+@test_throws DimensionMismatch scale(a, ones(2))
+@test_throws DimensionMismatch scale(ones(3), a)
+
+# 2-argument version of scale!
+@test scale!(copy(a), 5.) == a*5
+@test scale!(5., copy(a)) == a*5
+b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
+@test scale!(copy(b), 5.) == b*5
+@test scale!(copy(a), [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale!([1.; 2.], copy(a)) == a.*[1; 2]
+@test scale!(copy(a), [1; 2; 3]) == a.*[1 2 3]
+@test scale!([1; 2], copy(a)) == a.*[1; 2]
+@test_throws DimensionMismatch scale!(a, ones(2))
+@test_throws DimensionMismatch scale!(ones(3), a)
+
+# 3-argument version of scale!
+@test scale!(similar(a), 5., a) == a*5
+@test scale!(similar(a), a, 5.) == a*5
+@test scale!(similar(a), a, [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale!(similar(a), [1.; 2.], a) == a.*[1; 2]
+@test scale!(similar(a), a, [1; 2; 3]) == a.*[1 2 3]
+@test scale!(similar(a), [1; 2], a) == a.*[1; 2]
+@test_throws DimensionMismatch scale!(similar(a), a, ones(2))
+@test_throws DimensionMismatch scale!(similar(a), ones(3), a)
+@test_throws DimensionMismatch scale!(Array(Float64, 3, 2), a, ones(3))
+
 # scale real matrix by complex type
-@test_throws ErrorException scale!([1.0], 2.0im)
+@test_throws InexactError scale!([1.0], 2.0im)
 @test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
+@test isequal(scale(2.0im, [1.0]),             Complex{Float64}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])
 @test isequal(scale(Float64[1.0], 2.0f0im),    Complex{Float64}[2.0im])
@@ -207,6 +245,13 @@ Ai = int(ceil(Ar*100))
 
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
+
+@test_throws DimensionMismatch dot([1.0,2.0,3.0], 1:2, [3.5,4.5,5.5], 1:3)
+@test_throws BoundsError dot([1.0,2.0,3.0], 1:4, [3.5,4.5,5.5], 1:4)
+@test_throws BoundsError dot([1.0,2.0,3.0], 1:3, [3.5,4.5,5.5], 2:4)
+@test_throws DimensionMismatch dot(Complex128[1.0,2.0,3.0], 1:2, Complex128[3.5,4.5,5.5], 1:3)
+@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:4, Complex128[3.5,4.5,5.5], 1:4)
+@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:3, Complex128[3.5,4.5,5.5], 2:4)
 
 # issue #7181
 A = [ 1  5  9
@@ -237,3 +282,18 @@ A = [ 1  5  9
 @test diag(zeros(0,1),1) == []
 @test_throws BoundsError diag(zeros(0,1),-1)
 @test_throws BoundsError diag(zeros(0,1),2)
+
+vecdot_(x,y) = invoke(vecdot, (Any,Any), x,y) # generic vecdot
+let A = [1+2im 3+4im; 5+6im 7+8im], B = [2+7im 4+1im; 3+8im 6+5im]
+    @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float(A),float(B))
+    @test vecdot(Int[], Int[]) == 0 == vecdot_(Int[], Int[])
+    @test_throws MethodError vecdot(Any[], Any[])
+    @test_throws MethodError vecdot_(Any[], Any[])
+    for n1 = 0:2, n2 = 0:2, d in (vecdot, vecdot_)
+        if n1 != n2
+            @test_throws DimensionMismatch d(1:n1, 1:n2)
+        else
+            @test_approx_eq d(1:n1, 1:n2) vecnorm(1:n1)^2
+        end
+    end
+end

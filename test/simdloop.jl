@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function simd_loop_example_from_manual(x, y, z)
     s = zero(eltype(z))
     n = min(length(x),length(y),length(z))
@@ -60,10 +62,66 @@ let j=4
     # Index that is local to loop
     @simd for simd_loop_local=1:0 end
     simd_loop_local_present = true
-    try 
+    try
         simd_loop_local += 1
     catch
         simd_loop_local_present = false
     end
     @test !simd_loop_local_present
 end
+
+import Base.SimdLoop.SimdError
+
+# Test that @simd rejects inner loop body with invalid control flow statements
+# issue #8613
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 && break
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x < 5 && continue
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 || @goto exit_loop
+    end
+    @label exit_loop
+end))
+
+# @simd with cartesian iteration
+function simd_cartesian_range!(indexes, crng)
+    @simd for I in crng
+        push!(indexes, I)
+    end
+    indexes
+end
+
+crng = CartesianRange(CartesianIndex{4}(2,0,1,3),
+                      CartesianIndex{4}(4,1,1,5))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{2}(-1,1),
+                      CartesianIndex{2}(1,3))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{2}(-1,1),
+                      CartesianIndex{2}(-1,3))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{1}(2),
+                      CartesianIndex{1}(4))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{0}(),
+                      CartesianIndex{0}())
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)

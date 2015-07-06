@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Method and method-table pretty-printing
 
 function argtype_decl(n, t) # -> (argname, argtype)
@@ -12,22 +14,26 @@ function argtype_decl(n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    if t <: Vararg && t !== Union() && t.parameters[1] === Any
-        return string(s, "..."), ""
+    if isvarargtype(t)
+        if t.parameters[1] === Any
+            return string(s, "..."), ""
+        else
+            return s, string(t.parameters[1], "...")
+        end
     end
     return s, string(t)
 end
 
 function arg_decl_parts(m::Method)
     tv = m.tvars
-    if !isa(tv,Tuple)
-        tv = (tv,)
+    if !isa(tv,SimpleVector)
+        tv = svec(tv)
     end
     li = m.func.code
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig[i]) for i=1:length(m.sig)]
+    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
     return tv, decls, li.file, li.line
 end
 
@@ -39,7 +45,7 @@ function show(io::IO, m::Method)
     end
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls],
-                 ",", ",")
+                 ", ", ", ")
     print(io, ")")
     if line > 0
         print(io, " at ", file, ":", line)
@@ -55,8 +61,8 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     end
     d = mt.defs
     n = rest = 0
-    while !is(d,())
-        if max==-1 || n<max || (rest==0 && n==max && d.next === ())
+    while d !== nothing
+        if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
             println(io)
             show(io, d)
             n += 1
@@ -83,7 +89,7 @@ function url(m::Method)
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
         return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
-    else 
+    else
         try
             d = dirname(file)
             u = Git.readchomp(`config remote.origin.url`, dir=d)
@@ -91,7 +97,7 @@ function url(m::Method)
             root = cd(d) do # dir=d confuses --show-toplevel, apparently
                 Git.readchomp(`rev-parse --show-toplevel`)
             end
-            if beginswith(file, root)
+            if startswith(file, root)
                 commit = Git.readchomp(`rev-parse HEAD`, dir=d)
                 return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
             else
@@ -112,15 +118,15 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
         print(io,"</i>")
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>" 
-                      for d in decls], ",", ",")
+    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+                      for d in decls], ", ", ", ")
     print(io, ")")
     if line > 0
         u = url(m)
         if isempty(u)
             print(io, " at ", file, ":", line)
         else
-            print(io, """ at <a href="$u" target="_blank">""", 
+            print(io, """ at <a href="$u" target="_blank">""",
                   file, ":", line, "</a>")
         end
     end
@@ -132,7 +138,7 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     meths = n==1 ? "method" : "methods"
     print(io, "$n $meths for generic function <b>$name</b>:<ul>")
     d = mt.defs
-    while !is(d,())
+    while d !== nothing
         print(io, "<li> ")
         writemime(io, mime, d)
         d = d.next

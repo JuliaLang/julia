@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Sys
 
 export  CPU_CORES,
@@ -11,11 +13,7 @@ export  CPU_CORES,
         uptime,
         loadavg,
         free_memory,
-        total_memory,
-        dlext,
-        shlib_ext,
-        dllist,
-        dlpath
+        total_memory
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, uv_error
@@ -24,39 +22,37 @@ global CPU_CORES
 
 function init_sysinfo()
     # set CPU core count
-    global const CPU_CORES = int(
-        haskey(ENV,"JULIA_CPU_CORES") ?
-        ENV["JULIA_CPU_CORES"] :
-        ccall(:jl_cpu_cores, Int32, ())
-    )
+    global const CPU_CORES =
+        haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
+                                        Int(ccall(:jl_cpu_cores, Int32, ()))
     global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global const cpu_name = ccall(:jl_get_cpu_name, ByteString, ())
 end
 
 type UV_cpu_info_t
-    model::Ptr{Uint8}
+    model::Ptr{UInt8}
     speed::Int32
-    cpu_times!user::Uint64
-    cpu_times!nice::Uint64
-    cpu_times!sys::Uint64
-    cpu_times!idle::Uint64
-    cpu_times!irq::Uint64
+    cpu_times!user::UInt64
+    cpu_times!nice::UInt64
+    cpu_times!sys::UInt64
+    cpu_times!idle::UInt64
+    cpu_times!irq::UInt64
 end
 type CPUinfo
     model::ASCIIString
     speed::Int32
-    cpu_times!user::Uint64
-    cpu_times!nice::Uint64
-    cpu_times!sys::Uint64
-    cpu_times!idle::Uint64
-    cpu_times!irq::Uint64
+    cpu_times!user::UInt64
+    cpu_times!nice::UInt64
+    cpu_times!sys::UInt64
+    cpu_times!idle::UInt64
+    cpu_times!irq::UInt64
     CPUinfo(model,speed,u,n,s,id,ir)=new(model,speed,u,n,s,id,ir)
 end
 CPUinfo(info::UV_cpu_info_t) = CPUinfo(bytestring(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
-function show(io::IO, info::CPUinfo, header::Bool=true, prefix::String="    ")
+function show(io::IO, info::CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
@@ -121,7 +117,7 @@ function cpu_info()
         cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i))
     end
     ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
-    cpus
+    return cpus
 end
 
 function uptime()
@@ -136,87 +132,18 @@ function loadavg()
     return loadavg_
 end
 
-free_memory() = ccall(:uv_get_free_memory, Uint64, ())
-total_memory() = ccall(:uv_get_total_memory, Uint64, ())
+free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
-if OS_NAME === :Darwin
-    const dlext = "dylib"
-elseif OS_NAME === :Windows
-    const dlext = "dll"
-else
-    #assume OS_NAME === :Linux, or similar
-    const dlext = "so"
+function get_process_title()
+    buf = zeros(Uint8, 512)
+    err = ccall(:uv_get_process_title, Cint, (Ptr{Uint8}, Cint), buf, 512)
+    uv_error("get_process_title", err)
+    return bytestring(pointer(buf))
+end
+function set_process_title(title::AbstractString)
+    err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
+    uv_error("set_process_title", err)
 end
 
-# This is deprecated!  use dlext instead!
-const shlib_ext = dlext
-
-@linux_only begin
-    immutable dl_phdr_info
-        # Base address of object
-        addr::Cuint
-
-        # Null-terminated name of object
-        name::Ptr{Uint8}
-
-        # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Void}
-
-        # Number of program headers for this object
-        phnum::Cshort
-    end
-
-    # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{String,1}} )
-        di = unsafe_load(di_ptr)
-
-        # Skip over objects without a path (as they represent this own object)
-        name = bytestring(di.name)
-        if !isempty(name)
-            dynamic_libraries = unsafe_pointer_to_objref( dynamic_libraries_ptr )
-            push!(dynamic_libraries, name )
-        end
-        convert(Cint, 0)::Cint
-    end
-end #@linux_only
-
-function dllist()
-    dynamic_libraries = Array(String,0)
-
-    @linux_only begin
-        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{String,1}} ))
-        ccall( cglobal("dl_iterate_phdr"), Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries) )
-    end
-
-    @osx_only begin
-        numImages = ccall( cglobal("_dyld_image_count"), Cint, (), )
-
-        # start at 1 instead of 0 to skip self
-        for i in 1:numImages-1
-            name = bytestring(ccall( cglobal("_dyld_get_image_name"), Ptr{Uint8}, (Uint32,), uint32(i)))
-            push!(dynamic_libraries, name)
-        end
-    end
-
-    @windows_only begin
-        ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
-    end
-
-    dynamic_libraries
-end
-
-function dlpath( handle::Ptr{Void} )
-    p = ccall( :jl_pathname_for_handle, Ptr{Uint8}, (Ptr{Void},), handle )
-    s = bytestring(p)
-    @windows_only c_free(p)
-    return s
-end
-
-function dlpath{T<:Union(String, Symbol)}(libname::T)
-    handle = dlopen(libname)
-    path = dlpath(handle)
-    dlclose(handle)
-    return path
-end
-
-end
+end # module Sys

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # DateTime arithmetic
 a = Dates.DateTime(2013,1,1,0,0,0,1)
 b = Dates.DateTime(2013,1,1,0,0,0,0)

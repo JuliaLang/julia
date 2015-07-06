@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Meta
 #
 # convenience functions for metaprogramming
 #
 
-export quot, 
-       isexpr, 
+export quot,
+       isexpr,
        show_sexpr
 
 quot(ex) = Expr(:quote, ex)

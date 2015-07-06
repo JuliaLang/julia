@@ -2,32 +2,32 @@
 
 (define Instructions
   (let ((e (table))
-	(keys 
+	(keys
 	 [nop dup pop call tcall jmp brf brt jmp.l brf.l brt.l ret
-	  
+
 	  eq? eqv? equal? atom? not null? boolean? symbol?
 	  number? bound? pair? builtin? vector? fixnum? function?
-	  
+
 	  cons list car cdr set-car! set-cdr!
 	  apply
-	  
+
 	  + - * / div0 = < compare
-	  
+
 	  vector aref aset!
-	  
+
 	  loadt loadf loadnil load0 load1 loadi8
 	  loadv loadv.l
 	  loadg loadg.l
 	  loada loada.l loadc loadc.l
 	  setg setg.l
 	  seta seta.l removed-setc removed-setc.l
-	  
+
 	  closure argc vargc trycatch for tapply
 	  add2 sub2 neg largc lvargc
 	  loada0 loada1 loadc0 loadc1 call.l tcall.l
 	  brne brne.l cadr brnn brnn.l brn brn.l
 	  optargs brbound keyargs box box.l shift
-	  
+
 	  dummy_t dummy_f dummy_nil]))
     (for 0 (1- (length keys))
 	 (lambda (i)
@@ -180,7 +180,7 @@
 			   largc lvargc call.l tcall.l box.l)
 			  (io.write bcode (int32 nxt))
 			  (set! i (+ i 1)))
-			 
+
 			 ((optargs keyargs)  ; 2 int32 args
 			  (io.write bcode (int32 nxt))
 			  (set! i (+ i 1))
@@ -189,7 +189,7 @@
 			  (if (eq? vi 'keyargs)
 			      (begin (io.write bcode (int32 (aref v i)))
 				     (set! i (+ i 1)))))
-			 
+
 			 (else
 			  ; other number arguments are always uint8
 			  (io.write bcode (uint8 nxt))
@@ -825,43 +825,43 @@
 		 ((loadv.l loadg.l setg.l)
 		  (print-val (aref vals (ref-int32-LE code i)))
 		  (set! i (+ i 4)))
-		 
+
 		 ((loadv loadg setg)
 		  (print-val (aref vals (aref code i)))
 		  (set! i (+ i 1)))
-		 
+
 		 ((loada seta loadc call tcall list + - * / vector
 		   argc vargc loadi8 apply tapply closure box shift)
 		  (princ (number->string (aref code i)))
 		  (set! i (+ i 1)))
-		 
+
 		 ((loada.l seta.l loadc.l largc lvargc call.l tcall.l box.l)
 		  (princ (number->string (ref-int32-LE code i)))
 		  (set! i (+ i 4)))
-		 
+
 		 ((optargs keyargs)
 		  (princ (number->string (ref-int32-LE code i)) " ")
 		  (set! i (+ i 4))
 		  (princ (number->string (ref-int32-LE code i)))
 		  (set! i (+ i 4))
 		  (if (eq? inst 'keyargs)
-		      (begin 
+		      (begin
 			(princ " ")
 			(princ (number->string (ref-int32-LE code i)) " ")
 			(set! i (+ i 4)))))
-		 
+
 		 ((brbound)
 		  (princ (number->string (ref-int32-LE code i)) " ")
 		  (set! i (+ i 4)))
-		 
+
 		 ((jmp brf brt brne brnn brn)
 		  (princ "@" (hex5 (+ i -4 (ref-int16-LE code i))))
 		  (set! i (+ i 2)))
-		 
+
 		 ((jmp.l brf.l brt.l brne.l brnn.l brn.l)
 		  (princ "@" (hex5 (+ i -4 (ref-int32-LE code i))))
 		  (set! i (+ i 4)))
-		 
+
 		 (else #f)))))))
 
 ; From SRFI 89 by Marc Feeley (http://srfi.schemers.org/srfi-89/srfi-89.html)

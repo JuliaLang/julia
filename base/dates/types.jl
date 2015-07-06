@@ -1,33 +1,22 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 abstract AbstractTime
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
 
-immutable Year <: DatePeriod
-    value::Int64
+for T in (:Year,:Month,:Week,:Day)
+    @eval immutable $T <: DatePeriod
+        value::Int64
+        $T(v::Number) = new(v)
+    end
 end
-immutable Month <: DatePeriod
-    value::Int64
-end
-immutable Week <: DatePeriod
-    value::Int64
-end
-immutable Day <: DatePeriod
-    value::Int64
-end
-
-immutable Hour <: TimePeriod
-    value::Int64
-end
-immutable Minute <: TimePeriod
-    value::Int64
-end
-immutable Second <: TimePeriod
-    value::Int64
-end
-immutable Millisecond <: TimePeriod
-    value::Int64
+for T in (:Hour,:Minute,:Second,:Millisecond)
+    @eval immutable $T <: TimePeriod
+        value::Int64
+        $T(v::Number) = new(v)
+    end
 end
 
 # Instant types represent different monotonically increasing timelines
@@ -42,7 +31,7 @@ end
 UTM(x) = UTInstant(Millisecond(x))
 UTD(x) = UTInstant(Day(x))
 
-# Calendar types provide rules for interpretating instant 
+# Calendar types provide rules for interpretating instant
 # timelines in human-readable form.
 abstract Calendar <: AbstractTime
 
@@ -60,7 +49,7 @@ abstract TimeType <: AbstractTime
 # DateTime is a millisecond precision UTInstant interpreted by ISOCalendar
 immutable DateTime <: TimeType
     instant::UTInstant{Millisecond}
-end 
+end
 
 # DateTime is a day precision UTInstant interpreted by ISOCalendar
 immutable Date <: TimeType
@@ -146,15 +135,15 @@ DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),
 Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 
 # Traits, Equality
-Base.isfinite{T<:TimeType}(::Union(Type{T},T)) = true
+Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
-Base.precision(dt::DateTime) = Millisecond
-Base.precision(dt::Date) = Day
-Base.typemax(::Union(DateTime,Type{DateTime})) = DateTime(146138512,12,31,23,59,59)
-Base.typemin(::Union(DateTime,Type{DateTime})) = DateTime(-146138511,1,1,0,0,0)
-Base.typemax(::Union(Date,Type{Date})) = Date(252522163911149,12,31)
-Base.typemin(::Union(Date,Type{Date})) = Date(-252522163911150,1,1)
+Base.eps(dt::DateTime) = Millisecond(1)
+Base.eps(dt::Date) = Day(1)
+Base.typemax(::Union{DateTime,Type{DateTime}}) = DateTime(146138512,12,31,23,59,59)
+Base.typemin(::Union{DateTime,Type{DateTime}}) = DateTime(-146138511,1,1,0,0,0)
+Base.typemax(::Union{Date,Type{Date}}) = Date(252522163911149,12,31)
+Base.typemin(::Union{Date,Type{Date}}) = Date(-252522163911150,1,1)
 # Date-DateTime promotion, isless, ==
 Base.promote_rule(::Type{Date},x::Type{DateTime}) = DateTime
 Base.isless(x::Date,y::Date) = isless(value(x),value(y))

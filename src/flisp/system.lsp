@@ -710,7 +710,7 @@
 (define (expand e)
   ; symbol resolves to toplevel; i.e. has no shadowing definition
   (define (top? s env) (not (or (bound? s) (assq s env))))
-  
+
   (define (splice-begin body)
     (cond ((atom? body) body)
 	  ((equal? body '((begin)))
@@ -720,9 +720,9 @@
 	   (append (splice-begin (cdar body)) (splice-begin (cdr body))))
 	  (else
 	   (cons (car body) (splice-begin (cdr body))))))
-  
+
   (define *expanded* (list '*expanded*))
-  
+
   (define (expand-body body env)
     (if (atom? body) body
 	(let* ((body  (if (top? 'begin env)
@@ -754,19 +754,19 @@
 			   (set-car! body (cdar body)))
 		       (set! body (cdr body)))
 		ex-nondefs)))))
-  
+
   (define (expand-lambda-list l env)
     (if (atom? l) l
 	(cons (if (and (pair? (car l)) (pair? (cdr (car l))))
 		  (list (caar l) (expand-in (cadar l) env))
 		  (car l))
 	      (expand-lambda-list (cdr l) env))))
-  
+
   (define (l-vars l)
     (cond ((atom? l)       (list l))
 	  ((pair? (car l)) (cons (caar l) (l-vars (cdr l))))
 	  (else            (cons (car l)  (l-vars (cdr l))))))
-  
+
   (define (expand-lambda e env)
     (let ((formals (cadr e))
 	  (name    (lastcdr e))
@@ -776,7 +776,7 @@
 	`(lambda ,(expand-lambda-list formals env)
 	   ,.(expand-body body env)
 	   . ,name))))
-  
+
   (define (expand-define e env)
     (if (or (null? (cdr e)) (atom? (cadr e)))
 	(if (null? (cddr e))
@@ -789,7 +789,7 @@
 	  (let ((env   (nconc (map list vars) env)))
 	    `(define ,(cons name (expand-lambda-list formals env))
 	       ,.(expand-body body env))))))
-  
+
   (define (expand-let-syntax e env)
     (let ((binds (cadr e)))
       (cons 'begin
@@ -802,12 +802,12 @@
 				       env))
 			       binds)
 			  env)))))
-  
+
   ; given let-syntax definition environment (menv) and environment
   ; at the point of the macro use (lenv), return the environment to
   ; expand the macro use in. TODO
   (define (local-expansion-env menv lenv) menv)
-  
+
   (define (expand-in e env)
     (if (atom? e) e
 	(let* ((head (car e))

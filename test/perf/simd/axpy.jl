@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Compute y += a*x using @simd for vectors x and y
 function simd_axpy( a, x, y )
-    # LLVM's auto-vectorizer typically vectorizes this loop even without @simd 
+    # LLVM's auto-vectorizer typically vectorizes this loop even without @simd
     @simd for i=1:length(x)
         @inbounds y[i] += a*x[i]
     end

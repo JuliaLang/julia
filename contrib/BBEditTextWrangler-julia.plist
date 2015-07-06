@@ -4,13 +4,13 @@
 
 <plist version="1.0">
 
-<!--  
+<!--
       Julia codeless language module for BBEdit and TextWrangler text editors
-      
+
       version of 2014-09-10 20:17:45
-      
+
 -->
-      
+
 <dict>
 	<key>BBEditDocumentType</key>
 	<string>CodelessLanguageModule</string>
@@ -31,13 +31,13 @@
 
 	<key>BBLMColorsSyntax</key>
 	<true/>
-	
+
 	<key>BBLMScansFunctions</key>
     <true/>
 
     <key>BBLMKeywordList</key>
       <array>
-      <!-- these reserved words from julia-parser.scm added by hand --> 
+      <!-- these reserved words from julia-parser.scm added by hand -->
             <string>abstract</string>
             <string>baremodule</string>
             <string>begin</string>
@@ -69,12 +69,12 @@
             <string>typealias</string>
             <string>using</string>
             <string>while</string>
-      
-      <!-- dunno where this one is defined, added by hand --> 
-      
+
+      <!-- dunno where this one is defined, added by hand -->
+
             <string>typeof</string>
 
-      <!-- these generated from names(Base) --> 
+      <!-- these generated from names(Base) -->
               <string>@MIME</string>
               <string>@MIME_str</string>
               <string>@__FILE__</string>
@@ -106,14 +106,12 @@
               <string>@less</string>
               <string>@linux</string>
               <string>@linux_only</string>
-              <string>@mstr</string>
               <string>@non_windowsxp_only</string>
               <string>@osx</string>
               <string>@osx_only</string>
               <string>@parallel</string>
               <string>@printf</string>
               <string>@profile</string>
-              <string>@r_mstr</string>
               <string>@r_str</string>
               <string>@schedule</string>
               <string>@show</string>
@@ -1128,7 +1126,7 @@
     </array>
 
     <!-- these are the names(Base) ... strings that start with capital letter and are not functions. -->
-    
+
     <key>BBLMPredefinedNameList</key>
       <array>
               <string>AbstractMatrix</string>
@@ -1209,7 +1207,7 @@
               <string>LoadError</string>
               <string>LocalProcess</string>
               <string>MIME</string>
-              <string>MathConst</string>
+              <string>Irrational</string>
               <string>Matrix</string>
               <string>MersenneTwister</string>
               <string>Meta</string>
@@ -1278,7 +1276,6 @@
               <string>WString</string>
               <string>WeakKeyDict</string>
               <string>WeakRef</string>
-              <string>Woodbury</string>
               <string>Zip</string>
     </array>
 
@@ -1286,20 +1283,20 @@
 	<dict>
 		<key>Identifier and Keyword Character Class</key>
 		<string>A-Za-z0-9_!</string>
-        
+
 		<key>Escape Char in Strings 1</key>
 		<string>\</string>
 
 		<key>End-of-line Ends Strings 1</key>
 		<false/>
-		
+
 		<key>End-of-line Ends Strings 2</key>
 		<false/>
-        
+
         <!-- function-matching regex, might need tweaking -->
 		<key>Function Pattern</key>
         <string><![CDATA[
-        (?x: 
+        (?x:
             (?P<leadspace>^\s*)
             (?P<function>
                 function\s+
@@ -1312,7 +1309,7 @@
         )
         ]]>
         </string>
-        
+
         <!-- string-matching regex -->
         <key>String Pattern</key>
         <string><![CDATA[
@@ -1324,12 +1321,12 @@
             (`(\\"|[^`\r]|\\\r)*`)          (?# Back-quote)
         )
         ]]></string>
-	
+
      <!-- comment-matching regex - nicked from the BBEdit docs.
-          
+
           I can only do a single unnested multiline comment block, but
           perhaps some fiendishly cunning recursive regex could do nested multiline comments...?
-     
+
     -->
 	<key>Comment Pattern</key>
     <string><![CDATA[

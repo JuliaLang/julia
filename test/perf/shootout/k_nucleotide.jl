@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
 #
@@ -6,8 +8,8 @@
 
 import Base.isless
 
-function count(data::String, n::Int)
-    counts = Dict{String, Int}()
+function count(data::AbstractString, n::Int)
+    counts = Dict{AbstractString, Int}()
     top = length(data) - n + 1
     for i = 1:top
         s = data[i : i+n-1]
@@ -20,12 +22,12 @@ function count(data::String, n::Int)
     counts
 end
 
-function count_one(data::String, s::String)
+function count_one(data::AbstractString, s::AbstractString)
     count(data, length(s))[s]
 end
 
 type KNuc
-    name::String
+    name::AbstractString
     count::Int
 end
 
@@ -37,7 +39,7 @@ function isless(x::KNuc, y::KNuc)
     x.count > y.count
 end
 
-function sorted_array(m::Dict{String, Int})
+function sorted_array(m::Dict{AbstractString, Int})
     kn = Array(KNuc, length(m))
     i = 1
     for elem in m
@@ -81,7 +83,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
 
     arr1 = sorted_array(count(str, 1))
     arr2 = sorted_array(count(str, 2))
-
+    close(input)
 #    print_knucs(arr1)
 #    print_knucs(arr2)
 #    for s in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]

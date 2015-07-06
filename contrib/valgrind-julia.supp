@@ -1,0 +1,10 @@
+# https://github.com/JuliaLang/julia/issues/4533
+{
+   msync unwind
+   Memcheck:Param
+   msync(start)
+   ...
+   obj:*/libpthread*.so
+   ...
+   fun:rec_backtrace_ctx
+}

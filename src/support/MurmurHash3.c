@@ -16,20 +16,20 @@
 
 #if defined(_MSC_VER)
 
-#define FORCE_INLINE	__forceinline
+#define FORCE_INLINE    __forceinline
 
 #include <stdlib.h>
 
-#define ROTL32(x,y)	_rotl(x,y)
-#define ROTL64(x,y)	_rotl64(x,y)
+#define ROTL32(x,y)     _rotl(x,y)
+#define ROTL64(x,y)     _rotl64(x,y)
 
 #define BIG_CONSTANT(x) (x)
 
 // Other compilers
 
-#else	// defined(_MSC_VER)
+#else   // defined(_MSC_VER)
 
-#define	FORCE_INLINE inline __attribute__((always_inline))
+#define FORCE_INLINE inline __attribute__((always_inline))
 
 static inline uint32_t rotl32 ( uint32_t x, int8_t r )
 {
@@ -41,8 +41,8 @@ static inline uint64_t rotl64 ( uint64_t x, int8_t r )
   return (x << r) | (x >> (64 - r));
 }
 
-#define	ROTL32(x,y)	rotl32(x,y)
-#define ROTL64(x,y)	rotl64(x,y)
+#define ROTL32(x,y)     rotl32(x,y)
+#define ROTL64(x,y)     rotl64(x,y)
 
 #define BIG_CONSTANT(x) (x##LLU)
 
@@ -114,9 +114,9 @@ void MurmurHash3_x86_32 ( const void * key, int len,
     k1 *= c1;
     k1 = ROTL32(k1,15);
     k1 *= c2;
-    
+
     h1 ^= k1;
-    h1 = ROTL32(h1,13); 
+    h1 = ROTL32(h1,13);
     h1 = h1*5+0xe6546b64;
   }
 
@@ -143,7 +143,7 @@ void MurmurHash3_x86_32 ( const void * key, int len,
   h1 = fmix32(h1);
 
   *(uint32_t*)out = h1;
-} 
+}
 
 //-----------------------------------------------------------------------------
 
@@ -158,9 +158,9 @@ void MurmurHash3_x86_128 ( const void * key, const int len,
   uint32_t h3 = seed;
   uint32_t h4 = seed;
 
-  uint32_t c1 = 0x239b961b; 
+  uint32_t c1 = 0x239b961b;
   uint32_t c2 = 0xab0e9789;
-  uint32_t c3 = 0x38b34ae5; 
+  uint32_t c3 = 0x38b34ae5;
   uint32_t c4 = 0xa1e38b93;
 
   //----------

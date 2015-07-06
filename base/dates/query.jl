@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Date functions
 
 ### Core query functions
@@ -23,10 +25,10 @@ const VALUETODAYOFWEEK = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>englis
 const english_daysofweekabbr = Dict(1=>"Mon",2=>"Tue",3=>"Wed",
                                     4=>"Thu",5=>"Fri",6=>"Sat",7=>"Sun")
 const VALUETODAYOFWEEKABBR = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>english_daysofweekabbr)
-dayname(dt::Integer;locale::String="english") = VALUETODAYOFWEEK[locale][dt]
-dayabbr(dt::Integer;locale::String="english") = VALUETODAYOFWEEKABBR[locale][dt]
-dayname(dt::TimeType;locale::String="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
-dayabbr(dt::TimeType;locale::String="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+dayname(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dt]
+dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dt]
+dayname(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
+dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
 
 # Convenience methods for each day
 ismonday(dt::TimeType) = dayofweek(dt) == Mon
@@ -38,14 +40,14 @@ issaturday(dt::TimeType) = dayofweek(dt) == Sat
 issunday(dt::TimeType) = dayofweek(dt) == Sun
 
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
-dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 : 
+dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 :
     d < 15 ? 2 : d < 22 ? 3 : d < 29 ? 4 : 5)
 
 # Total number of a day of week in the month
 # e.g. are there 4 or 5 Mondays in this month?
-const TWENTYNINE = IntSet(1,8,15,22,29)
-const THIRTY = IntSet(1,2,8,9,15,16,22,23,29,30)
-const THIRTYONE = IntSet(1,2,3,8,9,10,15,16,17,22,23,24,29,30,31)
+const TWENTYNINE = IntSet([1,8,15,22,29])
+const THIRTY = IntSet([1,2,8,9,15,16,22,23,29,30])
+const THIRTYONE = IntSet([1,2,3,8,9,10,15,16,17,22,23,24,29,30,31])
 function daysofweekinmonth(dt::TimeType)
     y,m,d = yearmonthday(dt)
     ld = daysinmonth(y,m)
@@ -72,10 +74,10 @@ const englishabbr_months = Dict(1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
                                 5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
                                 10=>"Oct",11=>"Nov",12=>"Dec")
 const VALUETOMONTHABBR = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>englishabbr_months)
-monthname(dt::Integer;locale::String="english") = VALUETOMONTH[locale][dt]
-monthabbr(dt::Integer;locale::String="english") = VALUETOMONTHABBR[locale][dt]
-monthname(dt::TimeType;locale::String="english") = VALUETOMONTH[locale][month(dt)]
-monthabbr(dt::TimeType;locale::String="english") = VALUETOMONTHABBR[locale][month(dt)]
+monthname(dt::Integer;locale::AbstractString="english") = VALUETOMONTH[locale][dt]
+monthabbr(dt::Integer;locale::AbstractString="english") = VALUETOMONTHABBR[locale][dt]
+monthname(dt::TimeType;locale::AbstractString="english") = VALUETOMONTH[locale][month(dt)]
+monthabbr(dt::TimeType;locale::AbstractString="english") = VALUETOMONTHABBR[locale][month(dt)]
 
 daysinmonth(dt::TimeType) = ((y,m) = yearmonth(dt); return daysinmonth(y,m))
 

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable Complex{T<:Real} <: Number
     re::T
     im::T
@@ -44,20 +46,6 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
-complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
-complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
-complex128(z) = complex128(real(z), imag(z))
-complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
-complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
-complex64(z) = complex64(real(z), imag(z))
-complex32(r::Float16, i::Float16) = Complex{Float16}(r, i)
-complex32(r::Real, i::Real) = complex32(float16(r),float16(i))
-complex32(z) = complex32(real(z), imag(z))
-
-for fn in _numeric_conversion_func_names
-    @eval $fn(z::Complex) = Complex($fn(real(z)),$fn(imag(z)))
-end
-
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
@@ -88,14 +76,28 @@ function write(s::IO, z::Complex)
     write(s,imag(z))
 end
 
-
-## generic functions of complex numbers ##
+## equality and hashing of complex numbers ##
 
 ==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
 ==(z::Complex, x::Real) = isreal(z) && real(z) == x
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+
+if UInt === UInt64
+    const h_imag = 0x32a7a07f3e7cd1f9
+else
+    const h_imag = 0x3e7cd1f9
+end
+const hash_0_imag = hash(0, h_imag)
+
+function hash(z::Complex, h::UInt)
+    # TODO: with default argument specialization, this would be better:
+    # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
+    hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
+end
+
+## generic functions of complex numbers ##
 
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
@@ -117,7 +119,10 @@ sign(z::Complex) = z/abs(z)
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = Complex(x + real(z), imag(z))
 +(z::Complex, x::Real) = Complex(x + real(z), imag(z))
--(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
+function -(x::Real, z::Complex)
+    re = x - real(z)
+    Complex(re, oftype(re, -imag(z)))
+end
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 
 /(a::Real  , w::Complex) = a*inv(w)
@@ -144,17 +149,17 @@ function /{T<:Real}(a::Complex{T}, b::Complex{T})
     end
 end
 
-inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
+inv{T<:Union{Float16,Float32}}(z::Complex{T}) =
     oftype(z, conj(widen(z))/abs2(widen(z)))
 
-/{T<:Union(Float16,Float32)}(z::Complex{T}, w::Complex{T}) =
+/{T<:Union{Float16,Float32}}(z::Complex{T}, w::Complex{T}) =
     oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
 # the first step is to scale variables if appropriate ,then do calculations
 # in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
-# based on arxiv.1210.4539 
+# based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
@@ -286,7 +291,7 @@ angle(z::Complex) = atan2(imag(z), real(z))
 function log{T<:FloatingPoint}(z::Complex{T})
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = log(oftype(T,2))  #0.6931471805599453
+    const ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -338,12 +343,12 @@ function exp(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-zero(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
         er = exp(zr)
@@ -360,18 +365,18 @@ function expm1(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-one(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
-        erm1 = expm1(zr)        
+        erm1 = expm1(zr)
         if zi == 0
             Complex(erm1, zi)
-        else            
+        else
             er = erm1+one(erm1)
             wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
             Complex(wr, er*sin(zi))
@@ -391,9 +396,9 @@ function log1p{T}(z::Complex{T})
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
-        Complex(inf(T), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
+        Complex(T(Inf), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
     else
-        Complex(inf(T), nan(T))
+        Complex(T(Inf), T(NaN))
     end
 end
 
@@ -477,21 +482,19 @@ function ^{T<:Complex}(z::T, p::T)
 
     # apply some corrections to force known zeros
     if pim == 0
-        ip = itrunc(pr)
-        if ip == pr
+        if isinteger(pr)
             if zi == 0
                 im = copysign(zero(im), im)
             elseif zr == 0
-                if isodd(ip)
-                    re = copysign(zero(re), re)
-                else
+                if isinteger(0.5*pr) # pr is even
                     im = copysign(zero(im), im)
+                else
+                    re = copysign(zero(re), re)
                 end
             end
         else
             dr = pr*2
-            ip = itrunc(dr)
-            if ip == dr && zi == 0
+            if isinteger(dr) && zi == 0
                 if zr < 0
                     re = copysign(zero(re), re)
                 else
@@ -636,7 +639,7 @@ function acosh(z::Complex)
             return Complex(oftype(zr, NaN), oftype(zi, NaN))
         end
     elseif zr==-Inf && zi===-0.0 #Edge case is wrong - WHY?
-        return Complex(inf(zr), oftype(zi, -pi))
+        return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
@@ -691,4 +694,79 @@ function lexcmp(a::Complex, b::Complex)
     c = cmp(real(a), real(b))
     c == 0 || return c
     cmp(imag(a), imag(b))
+end
+
+#Rounding complex numbers
+# Superfluous tuple splatting in return arguments is a work around for 32-bit systems (#10027)
+#Requires two different RoundingModes for the real and imaginary components
+
+if WORD_SIZE==32
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex((round(real(z), RoundingMode{MR}()),
+             round(imag(z), RoundingMode{MI}()))...)
+end
+round(z::Complex) = Complex((round(real(z)), round(imag(z)))...)
+else
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex(round(real(z), RoundingMode{MR}()),
+            round(imag(z), RoundingMode{MI}()))
+end
+round(z::Complex) = Complex(round(real(z)), round(imag(z)))
+end
+
+@vectorize_1arg Complex round
+
+function round(z::Complex, digits::Integer, base::Integer=10)
+    Complex(round(real(z), digits, base),
+            round(imag(z), digits, base))
+end
+
+float{T<:FloatingPoint}(z::Complex{T}) = z
+float(z::Complex) = Complex(float(real(z)), float(imag(z)))
+@vectorize_1arg Complex float
+
+big{T<:FloatingPoint}(z::Complex{T}) = Complex{BigFloat}(z)
+big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
+
+## Array operations on complex numbers ##
+
+complex{T<:Complex}(A::AbstractArray{T}) = A
+
+function complex{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
+    convert(AbstractArray{typeof(complex(zero(T)))}, A)
+end
+
+big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigInt},N}, A)
+big{T<:FloatingPoint,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, A)
+
+## promotion to complex ##
+
+promote_array_type{S<:Union{Complex, Real}, AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+
+function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+    if size(A) != size(B); throw(DimensionMismatch()); end
+    F = similar(A, typeof(complex(zero(S),zero(T))))
+    for i in eachindex(A)
+        @inbounds F[i] = complex(A[i], B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Real, B::Array{T})
+    F = similar(B, typeof(complex(A,zero(T))))
+    for i in eachindex(B)
+        @inbounds F[i] = complex(A, B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Array{T}, B::Real)
+    F = similar(A, typeof(complex(zero(T),B)))
+    for i in eachindex(A)
+        @inbounds F[i] = complex(A[i], B)
+    end
+    return F
 end

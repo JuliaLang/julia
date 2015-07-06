@@ -49,7 +49,7 @@ void add_finalizer(cvalue_t *cv)
         size_t nn = (maxfinalizers==0 ? 256 : maxfinalizers*2);
         cvalue_t **temp = (cvalue_t**)realloc(Finalizers, nn*sizeof(value_t));
         if (temp == NULL)
-            lerror(MemoryError, "out of memory");
+            lerror(OutOfMemoryError, "out of memory");
         Finalizers = temp;
         maxfinalizers = nn;
     }
@@ -203,9 +203,14 @@ value_t cvalue_string(size_t sz)
     return cvalue(stringtype, sz);
 }
 
+value_t cvalue_static_cstrn(const char *str, size_t n)
+{
+    return cvalue_from_ref(stringtype, (char*)str, n, NIL);
+}
+
 value_t cvalue_static_cstring(const char *str)
 {
-    return cvalue_from_ref(stringtype, (char*)str, strlen(str), NIL);
+    return cvalue_static_cstrn(str, strlen(str));
 }
 
 value_t string_from_cstrn(char *str, size_t n)

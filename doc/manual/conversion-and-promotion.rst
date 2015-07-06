@@ -1,7 +1,7 @@
 .. _man-conversion-and-promotion:
 
 **************************
- Conversion and Promotion  
+ Conversion and Promotion
 **************************
 
 Julia has a system for promoting arguments of mathematical operators to
@@ -78,11 +78,11 @@ action:
     julia> typeof(x)
     Int64
 
-    julia> convert(Uint8, x)
+    julia> convert(UInt8, x)
     0x0c
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> convert(FloatingPoint, x)
     12.0
@@ -97,19 +97,27 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
-     in convert at base.jl:13
+    ERROR: MethodError: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
+    This may have arisen from a call to the constructor FloatingPoint(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      call{T}(::Type{T}, ::Any)
+      convert(::Type{FloatingPoint}, !Matched::Bool)
+      convert(::Type{FloatingPoint}, !Matched::Int8)
+      ...
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
+Therefore in Julia the dedicated :func:`parse` function must be used
+to perform this operation, making it more explicit.
 
 Defining New Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-To define a new conversion, simply provide a new method for ``convert``.
+To define a new conversion, simply provide a new method for :func:`convert`.
 That's really all there is to it. For example, the method to convert a
 number to a boolean is simply this::
 
@@ -144,7 +152,7 @@ to zero:
     false
 
 The method signatures for conversion methods are often quite a bit more
-involved than this example, especially for parametric types. The example 
+involved than this example, especially for parametric types. The example
 above is meant to be pedagogical, and is not the actual julia behaviour.
 This is the actual implementation in julia::
 
@@ -221,7 +229,7 @@ everything to do with converting between alternate representations. For
 instance, although every ``Int32`` value can also be represented as a
 ``Float64`` value, ``Int32`` is not a subtype of ``Float64``.
 
-Promotion to a common supertype is performed in Julia by the ``promote``
+Promotion to a common "greater" type is performed in Julia by the ``promote``
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
@@ -290,11 +298,11 @@ This allows calls like the following to work:
 
 .. doctest::
 
-    julia> Rational(int8(15),int32(-5))
+    julia> Rational(Int8(15),Int32(-5))
     -3//1
 
     julia> typeof(ans)
-    Rational{Int64} (constructor with 1 method)
+    Rational{Int32}
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions
@@ -320,16 +328,13 @@ promoted together, they should be promoted to 64-bit floating-point. The
 promotion type does not need to be one of the argument types, however;
 the following promotion rules both occur in Julia's standard library::
 
-    promote_rule(::Type{Uint8}, ::Type{Int8}) = Int
-    promote_rule(::Type{Char}, ::Type{Uint8}) = Int32
+    promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
+    promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 
-As a general rule, Julia promotes integers to `Int` during computation
-order to avoid overflow. In the latter case, the result type is
-``Int32`` since ``Int32`` is large enough to contain all possible
-Unicode code points, and numeric operations on characters always
-result in plain old integers unless explicitly cast back to characters
-(see :ref:`man-characters`). Also note that one does not need to
-define both ``promote_rule(::Type{A}, ::Type{B})`` and
+In the latter case, the result type is ``BigInt`` since ``BigInt`` is
+the only type large enough to hold integers for arbitrary-precision
+integer arithmetic.  Also note that one does not need to define both
+``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
 the way ``promote_rule`` is used in the promotion process.
 
@@ -342,7 +347,7 @@ would promote to, one can use ``promote_type``:
 
 .. doctest::
 
-    julia> promote_type(Int8, Uint16)
+    julia> promote_type(Int8, UInt16)
     Int64
 
 Internally, ``promote_type`` is used inside of ``promote`` to determine

@@ -38,7 +38,7 @@ On[Assert];
 (* recursive fib *)
 
 ClearAll[fib];
-fib = Compile[{{n, _Integer}}, 
+fib = Compile[{{n, _Integer}},
 	If[n < 2, n, fib[n - 1] + fib[n - 2]],
 	CompilationTarget -> "WVM"
 ];
@@ -219,11 +219,11 @@ ClearAll[randmatstat];
 randmatstat = Compile[{{t, _Integer}},
 	Module[
 		{
-			n = 5, 
-			v = ConstantArray[0., t], 
-			w = ConstantArray[0., t], 
-			a = {{0.}}, b = {{0.}}, 
-			c = {{0.}}, d = {{0.}}, 
+			n = 5,
+			v = ConstantArray[0., t],
+			w = ConstantArray[0., t],
+			a = {{0.}}, b = {{0.}},
+			c = {{0.}}, d = {{0.}},
 			P = {{0.}}, Q = {{0.}}
 		},
 		Do[
@@ -258,7 +258,7 @@ timeit[RandomReal[1, {1000, 1000}].RandomReal[1, {1000, 1000}], "rand_mat_mul"];
 
 (* only on unix systems *)
 If[ $OperatingSystem == "Linux"||$OperatingSystem == "MacOSX",
-	
+
 	ClearAll[printfd];
 	printfd[n_] := Module[
 		{stream},
@@ -270,7 +270,7 @@ If[ $OperatingSystem == "Linux"||$OperatingSystem == "MacOSX",
 		];
 		Close[stream];
 	];
-	
+
 	timeit[printfd[100000], "printfd"];
-	
+
 ];

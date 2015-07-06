@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Run as: fixup-libgfortran.sh <$private_libdir>
 
 if [ -z "$1" ]; then
@@ -39,12 +41,12 @@ find_shlib ()
 for lib in arpack openlibm openspecfun lapack; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgfortran) 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc_s) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libquadmath) 2>/dev/null)"
     fi
 done
 
 LIBGFORTRAN_DIRS=$(echo "$LIBGFORTRAN_DIRS" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
-echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
 
 # If only we could agree on something
 if [ "$UNAME" = "Linux" ]; then
@@ -64,6 +66,18 @@ for namext in $NAMEXTS; do
         fi
     done
 done
+
+# Add possible internal directories to LIBGFORTRAN_DIRS
+for lib in gfortran.3 quadmath.0 gcc_s.1 ; do
+    if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgfortran) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc_s) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libquadmath) 2>/dev/null)"
+    fi
+done
+
+LIBGFORTRAN_DIRS=$(echo "$LIBGFORTRAN_DIRS" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
+echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
 
 
 # Do the private_libdir libraries...

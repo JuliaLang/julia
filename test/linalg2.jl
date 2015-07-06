@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
 
 import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, UnitUpperTriangular, UnitLowerTriangular
 
 # basic tridiagonal operations
 n = 5
@@ -14,11 +16,6 @@ du = -rand(n-1)
 v = randn(n)
 B = randn(n,2)
 
-# Woodbury
-U = randn(n,2)
-V = randn(2,n)
-C = randn(2,2)
-
 for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Int
         srand(61516384)
@@ -27,20 +24,12 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         du = -rand(0:10, n-1)
         v = rand(1:100, n)
         B = rand(1:100, n, 2)
-
-        # Woodbury
-        U = rand(1:100, n, 2)
-        V = rand(1:100, 2, n)
-        C = rand(1:100, 2, 2)
-    else 
+    else
         d = convert(Vector{elty}, d)
         dl = convert(Vector{elty}, dl)
         du = convert(Vector{elty}, du)
         v = convert(Vector{elty}, v)
         B = convert(Matrix{elty}, B)
-        U = convert(Matrix{elty}, U)
-        V = convert(Matrix{elty}, V)
-        C = convert(Matrix{elty}, C)
     end
     ε = eps(abs2(float(one(elty))))
     T = Tridiagonal(dl, d, du)
@@ -74,6 +63,11 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test_approx_eq x invFv
     @test_approx_eq det(T) det(F)
 
+    @test_approx_eq T * UnitUpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UnitLowerTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * LowerTriangular(eye(n)) F*eye(n)
+
     # symmetric tridiagonal
     if elty <: Real
         Ts = SymTridiagonal(d, dl)
@@ -82,6 +76,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         Tldlt = ldltfact(Ts)
         x = Tldlt\v
         @test_approx_eq x invFsv
+        @test_approx_eq full(full(Tldlt)) Fs
     end
 
     # eigenvalues/eigenvectors of symmetric tridiagonal
@@ -92,25 +87,12 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @test_approx_eq abs(VT'Vecs) eye(elty, n)
     end
 
-    # Woodbury
-    W = Woodbury(T, U, C, V)
-    F = full(W)
-    @test_approx_eq W*v F*v
-    iFv = F\v
-    @test norm(W\v - iFv)/norm(iFv) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    @test abs((det(W) - det(F))/det(F)) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    iWv = similar(iFv)
-    if elty != Int
-        iWv = A_ldiv_B!(W, copy(v))
-        @test_approx_eq iWv iFv
-    end
-
     # Test det(A::Matrix)
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
     #  all determinants will be correct except for floating point errors.
-    
+
     # The determinant of the identity matrix should always be 1.
     for i = 1:10
         A = eye(elty, i)
@@ -126,7 +108,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # The determinant of a rotation matrix should always be 1.
     if elty != Int
-        for theta = convert(Vector{elty}, pi ./ [1:4])
+        for theta = convert(Vector{elty}, pi ./ [1:4;])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
             @test_approx_eq convert(elty, det(R)) one(elty)
@@ -152,7 +134,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq tril(LinAlg.BLAS.syr2k('L','N',U,V)) tril(U*V.' + V*U.')
     @test_approx_eq triu(LinAlg.BLAS.syr2k('U','N',U,V)) triu(U*V.' + V*U.')
     @test_approx_eq tril(LinAlg.BLAS.syr2k('L','T',U,V)) tril(U.'*V + V.'*U)
-    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)        
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)
 end
 
 for elty in (Complex64, Complex128)
@@ -167,66 +149,16 @@ for elty in (Complex64, Complex128)
     @test_approx_eq tril(LinAlg.BLAS.her2k('L','N',U,V)) tril(U*V' + V*U')
     @test_approx_eq triu(LinAlg.BLAS.her2k('U','N',U,V)) triu(U*V' + V*U')
     @test_approx_eq tril(LinAlg.BLAS.her2k('L','C',U,V)) tril(U'*V + V'*U)
-    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)        
-end
-
-# LAPACK tests
-srand(123)
-Ainit = randn(5,5)
-for elty in (Float32, Float64, Complex64, Complex128)
-    # syevr!
-    if elty == Complex64 || elty == Complex128
-        A = complex(Ainit, Ainit)
-    else
-        A = Ainit
-    end
-    A = convert(Array{elty, 2}, A)
-    Asym = A'A
-    vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
-    @test_approx_eq Z*scale(vals, Z') Asym
-    @test all(vals .> 0.0)
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
-    @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
-end
-
-# Test gglse
-for elty in (Float32, Float64, Complex64, Complex128)
-    A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
-    c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
-    B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
-    d = convert(Array{elty, 1}, [1, 3, -1])
-    @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
-end
-
-# Test givens rotations
-for elty in (Float32, Float64, Complex64, Complex128)
-    if elty <: Real
-        A = convert(Matrix{elty}, randn(10,10))
-    else
-        A = convert(Matrix{elty}, complex(randn(10,10),randn(10,10)))
-    end
-    Ac = copy(A)
-    R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
-    for j = 1:8
-        for i = j+2:10
-            G = givens(A, j+1, i, j)
-            A_mul_B!(G, A)
-            A_mul_Bc!(A, G)
-            A_mul_B!(G, R)
-        end
-    end
-    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
-    @test_approx_eq norm(R*eye(elty, 10)) one(elty)
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)
 end
 
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     if elty <: Real
-        x = convert(Vector{elty}, [1:3])
+        x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3],[1:3]))
+        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
     @test_approx_eq gradient(x) g
@@ -247,52 +179,20 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
             @test_approx_eq FJulia.ipiv FLAPACK[2]
             @test_approx_eq FJulia.info FLAPACK[3]
         end
-        
+
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A)) 
+        FJulia  = invoke(qrfact!, Tuple{AbstractMatrix, Type{Val{false}}},
+                         copy(A), Val{false})
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
     end
 end
 
-# Test rational matrices
-## Integrate in general tests when more linear algebra is implemented in julia
-a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
-b = rand(1:10,n,2)
-lua   = factorize(a)
-l,u,p = lua[:L], lua[:U], lua[:p]
-@test_approx_eq l*u a[p,:]
-@test_approx_eq l[invperm(p),:]*u a
-@test_approx_eq a * inv(lua) eye(n)
-@test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(float64(float(a)))
-## Hilbert Matrix (very ill conditioned)
-## Testing Rational{BigInt} and BigFloat version
-nHilbert = 50
-H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
-Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
-@test inv(H) == Hinv
-with_bigfloat_precision(2^10) do
-    @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
-end
-
-# Test balancing in eigenvector calculations
-for elty in (Float32, Float64, Complex64, Complex128)
-    A = convert(Matrix{elty}, [ 3.0     -2.0      -0.9     2*eps(real(one(elty)));
-                               -2.0      4.0       1.0    -eps(real(one(elty)));
-                               -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
-                               -0.5     -0.5       0.1     1.0])
-    F = eigfact(A,permute=false,scale=false)
-    @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
-    F = eigfact(A)
-    # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
-end
-
 # Tests norms
-nnorm = 1000
-mmat = 100
-nmat = 80
+nnorm = 10
+mmat = 10
+nmat = 8
 for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
     debug && println(elty)
 
@@ -321,17 +221,17 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     norm(x[1:1]) === norm(x[1], 2)
     norm(x[1:1]) === norm(x[1], Inf)
 
-    for i = 1:10    
-        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
+    for i = 1:10
+        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
             convert(Vector{elty}, randn(nnorm))
         xs = sub(x,1:2:nnorm)
-        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
-            convert(Vector{elty}, randn(nnorm))        
+        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+            convert(Vector{elty}, randn(nnorm))
         ys = sub(y,1:2:nnorm)
-        α = elty <: Integer ? randn() : 
-            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+        α = elty <: Integer ? randn() :
+            elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
         # Absolute homogeneity
         @test_approx_eq norm(α*x,-Inf) abs(α)*norm(x,-Inf)
@@ -340,7 +240,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test_approx_eq norm(α*x) abs(α)*norm(x) # two is default
         @test_approx_eq norm(α*x,3) abs(α)*norm(x,3)
         @test_approx_eq norm(α*x,Inf) abs(α)*norm(x,Inf)
-        
+
         @test_approx_eq norm(α*xs,-Inf) abs(α)*norm(xs,-Inf)
         @test_approx_eq norm(α*xs,-1) abs(α)*norm(xs,-1)
         @test_approx_eq norm(α*xs,1) abs(α)*norm(xs,1)
@@ -353,7 +253,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(x + y) <= norm(x) + norm(y) # two is default
         @test norm(x + y,3) <= norm(x,3) + norm(y,3)
         @test norm(x + y,Inf) <= norm(x,Inf) + norm(y,Inf)
-        
+
         @test norm(xs + ys,1) <= norm(xs,1) + norm(ys,1)
         @test norm(xs + ys) <= norm(xs) + norm(ys) # two is default
         @test norm(xs + ys,3) <= norm(xs,3) + norm(ys,3)
@@ -372,59 +272,92 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         A = ones(elty,10,10)
         As = sub(A,1:5,1:5)
         @test_approx_eq norm(A, 1) 10
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(A, 2) 10
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(A, 2) 10
         @test_approx_eq norm(A, Inf) 10
         @test_approx_eq norm(As, 1) 5
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(As, 2) 5
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(As, 2) 5
         @test_approx_eq norm(As, Inf) 5
 
     for i = 1:10
-        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
+        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
             convert(Matrix{elty}, randn(mmat, nmat))
         As = sub(A,1:nmat,1:nmat)
-        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
-            convert(Matrix{elty}, randn(mmat, nmat))        
+        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+            convert(Matrix{elty}, randn(mmat, nmat))
         Bs = sub(B,1:nmat,1:nmat)
         α = elty <: Integer ? randn() :
-            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+            elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
 
         # Absolute homogeneity
         @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
         @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
-        
+
         @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
         @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
 
         # Triangle inequality
         @test norm(A + B,1) <= norm(A,1) + norm(B,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(A + B) <= norm(A) + norm(B) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
         @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
-        
+
         @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
         @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
 
         # vecnorm:
         for p = -2:3
             @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
         end
+
+        # issue #10234
+        if elty <: FloatingPoint || elty <: Complex
+            let z = zeros(elty, 100)
+                z[1] = -Inf
+                for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
+                    @test norm(z, p) == (p < 0 ? 0 : Inf)
+                    @test norm(elty[Inf],p) == Inf
+                end
+            end
+        end
     end
 end
+
+# issue #10234
+@test norm(Any[Inf],-2) == norm(Any[Inf],-1) == norm(Any[Inf],1) == norm(Any[Inf],1.5) == norm(Any[Inf],2) == norm(Any[Inf],Inf) == Inf
+
+# overflow/underflow in norms:
+@test_approx_eq norm(Float64[1e-300, 1], -3)*1e300 1
+@test_approx_eq norm(Float64[1e300, 1], 3)*1e-300 1
 
 # Uniform scaling
 @test I[1,1] == 1 # getindex
 @test I[1,2] == 0 # getindex
 @test I === I' # transpose
+@test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
+@test zero(UniformScaling{Float32}) == UniformScaling(zero(Float32))
+@test zero(UniformScaling(rand(Complex128))) == zero(UniformScaling{Complex128})
+@test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
+@test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
+@test -one(UniformScaling(2)) == UniformScaling(-1)
+α = randn()
+@test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
+@test UniformScaling(α)./α == UniformScaling(1.0)
+@test α + UniformScaling(1.0) == UniformScaling(1.0) + α
+@test α - UniformScaling(1.0) == -(UniformScaling(1.0) - α)
 λ = complex(randn(),randn())
 J = UniformScaling(λ)
+@test ndims(J) == 2
+@test transpose(J) == J
 @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
 @test I + I === UniformScaling(2) # +
-B = randbool(2,2)
+@test inv(I) == I
+@test inv(J) == UniformScaling(inv(λ))
+B = bitrand(2,2)
 @test B + I == B + eye(B)
 @test I + B == B + eye(B)
 A = randn(2,2)
@@ -451,7 +384,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = LowerTriangular(randn(3,3))
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)
@@ -487,16 +420,16 @@ let
   a = [1, 2, 3]
   b = [4, 5, 6]
   @test kron(eye(2),eye(2)) == eye(4)
-  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]             
-  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]           
-  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]         
-  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]         
-  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]  
-  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3] 
-  @test kron(eye(2),2) == 2*eye(2)                        
-  @test kron(3,eye(3)) == 3*eye(3)                        
-  @test kron(a,2) == [2, 4, 6]                            
-  @test kron(b',2) == [8 10 12]                              
+  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]
+  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]
+  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]
+  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]
+  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
+  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
+  @test kron(eye(2),2) == 2*eye(2)
+  @test kron(3,eye(3)) == 3*eye(3)
+  @test kron(a,2) == [2, 4, 6]
+  @test kron(b',2) == [8 10 12]
 end
 
 # issue #4796
@@ -516,4 +449,3 @@ let
     Q=full(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
-

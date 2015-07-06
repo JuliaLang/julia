@@ -1,9 +1,11 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   sys.c
   I/O and operating system utility functions
 */
 #include "julia.h"
-#include "uv.h"
+#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,12 +43,17 @@
 #include <intrin.h>
 #endif
 
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-DLLEXPORT char *basename(char *);
 DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
@@ -58,8 +65,6 @@ DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     ios_getutf8(s, &wc);
     return wc;
 }
-
-DLLEXPORT size_t jl_ios_size(ios_t *s) { return s->size; }
 
 DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
@@ -286,11 +291,6 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     return (jl_value_t*)a;
 }
 
-void jl_free2(void *p, void *hint)
-{
-    free(p);
-}
-
 // -- syscall utilities --
 
 int jl_errno(void) { return errno; }
@@ -392,25 +392,21 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN=0;
-JL_STREAM *JL_STDOUT=0;
-JL_STREAM *JL_STDERR=0;
+JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 
-JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
+JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
+JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
+JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
 // CPUID
 
+#ifdef HAVE_CPUID
 DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
-#elif defined(__arm__)
-    CPUInfo[0] = 0x41; // ARMv7
-    CPUInfo[1] = 0; // godspeed
-    CPUInfo[2] = 0; // to anyone
-    CPUInfo[3] = 0; // using <v7
 #else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
@@ -429,6 +425,7 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
     );
 #endif
 }
+#endif
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 #ifdef __SSE__
@@ -495,7 +492,7 @@ DLLEXPORT jl_value_t *jl_is_char_signed()
 DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 {
     size_t i;
-    for(i=0; i < jl_tuple_len(dt->names); i++) {
+    for(i=0; i < jl_datatype_nfields(dt); i++) {
         offsets[i] = jl_field_offset(dt, i);
     }
 }
@@ -503,15 +500,15 @@ DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
-static long chachedPagesize = 0;
+static long cachedPagesize = 0;
 long jl_getpagesize(void)
 {
-    if (!chachedPagesize) {
+    if (!cachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
-        chachedPagesize = systemInfo.dwPageSize;
+        cachedPagesize = systemInfo.dwPageSize;
     }
-    return chachedPagesize;
+    return cachedPagesize;
 }
 #else
 long jl_getpagesize(void)
@@ -547,83 +544,37 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
-// Dynamic Library interrogation
-
-#ifdef __APPLE__
-// This code gratefully lifted from: http://stackoverflow.com/questions/20481058
-#ifdef __LP64__
-typedef struct mach_header_64 mach_header_t;
-typedef struct segment_command_64 segment_command_t;
-typedef struct nlist_64 nlist_t;
-#else
-typedef struct mach_header mach_header_t;
-typedef struct segment_command segment_command_t;
-typedef struct nlist nlist_t;
-#endif
-
-static const char *first_external_symbol_for_image(const mach_header_t *header)
+DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    Dl_info info;
-    if (dladdr(header, &info) == 0)
-        return NULL;
-
-    segment_command_t *seg_linkedit = NULL;
-    segment_command_t *seg_text = NULL;
-    struct symtab_command *symtab = NULL;
-
-    struct load_command *cmd = (struct load_command *)((intptr_t)header + sizeof(mach_header_t));
-    for (uint32_t i = 0; i < header->ncmds; i++, cmd = (struct load_command *)((intptr_t)cmd + cmd->cmdsize)) {
-        switch(cmd->cmd) {
-        case LC_SEGMENT:
-        case LC_SEGMENT_64:
-            if (!strcmp(((segment_command_t *)cmd)->segname, SEG_TEXT))
-                seg_text = (segment_command_t *)cmd;
-            else if (!strcmp(((segment_command_t *)cmd)->segname, SEG_LINKEDIT))
-                seg_linkedit = (segment_command_t *)cmd;
-            break;
-
-        case LC_SYMTAB:
-            symtab = (struct symtab_command *)cmd;
-            break;
-        }
-    }
-
-    if ((seg_text == NULL) || (seg_linkedit == NULL) || (symtab == NULL))
-        return NULL;
-
-    intptr_t file_slide = ((intptr_t)seg_linkedit->vmaddr - (intptr_t)seg_text->vmaddr) - seg_linkedit->fileoff;
-    intptr_t strings = (intptr_t)header + (symtab->stroff + file_slide);
-    nlist_t *sym = (nlist_t *)((intptr_t)header + (symtab->symoff + file_slide));
-
-    for (uint32_t i = 0; i < symtab->nsyms; i++, sym++) {
-        if ((sym->n_type & N_EXT) != N_EXT || !sym->n_value)
-            continue;
-
-        return (const char*)strings + sym->n_un.n_strx;
-    }
-
-    return NULL;
+    if (field > jl_datatype_nfields(ty))
+        jl_error("This type does not have that many fields");
+    return ty->fields[field].offset;
 }
-#endif
+
+DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
+{
+    return ty->alignment;
+}
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 {
     if (!uv_lib)
         return NULL;
-    
+
     void *handle = uv_lib->handle;
 #ifdef __APPLE__
+    // Iterate through all images currently in memory
     for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
-        const char *first_symbol = first_external_symbol_for_image((const mach_header_t *)_dyld_get_image_header(i));
-        if (first_symbol && strlen(first_symbol) > 1) {
-            handle = (void*)((intptr_t)handle | 1); // in order to trigger findExportedSymbol instead of findExportedSymbolInImageOrDependentImages. See `dlsym` implementation at http://opensource.apple.com/source/dyld/dyld-239.3/src/dyldAPIs.cpp
-            first_symbol++; // in order to remove the leading underscore
-            void *address = dlsym(handle, first_symbol);
-            Dl_info info;
-            if (dladdr(address, &info))
-                return info.dli_fname;
-        }
+        // dlopen() each image, check handle
+        const char *image_name = _dyld_get_image_name(i);
+        uv_lib_t *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *probe_handle = probe_lib->handle;
+        uv_dlclose(probe_lib);
+
+        // If the handle is the same as what was passed in (modulo mode bits), return this image name
+        if (((intptr_t)handle & (-4)) == ((intptr_t)probe_handle & (-4)))
+            return image_name;
     }
 
 #elif defined(_OS_WINDOWS_)
@@ -653,6 +604,15 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+    __msan_unpoison(&map,sizeof(struct link_map*));
+    if (map) {
+      __msan_unpoison(map, sizeof(struct link_map));
+      __msan_unpoison_string(map->l_name);
+    }
+#endif
+#endif
     if (map)
         return map->l_name;
 
@@ -690,6 +650,22 @@ DLLEXPORT void jl_raise_debugger(void)
 #else
     raise(SIGINT);
 #endif // _OS_WINDOWS_
+}
+
+DLLEXPORT jl_sym_t* jl_get_OS_NAME()
+{
+#if defined(_OS_WINDOWS_)
+    return jl_symbol("Windows");
+#elif defined(_OS_LINUX_)
+    return jl_symbol("Linux");
+#elif defined(_OS_FREEBSD_)
+    return jl_symbol("FreeBSD");
+#elif defined(_OS_DARWIN_)
+    return jl_symbol("Darwin");
+#else
+#warning OS_NAME is Unknown
+    return jl_symbol("Unknown");
+#endif
 }
 
 #ifdef __cplusplus

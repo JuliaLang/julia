@@ -17,7 +17,7 @@ extern "C" {
 // Cache locale object
 static int c_locale_initialized = 0;
 static locale_t c_locale;
- 
+
 locale_t get_c_locale()
 {
   if(!c_locale_initialized)
@@ -27,7 +27,7 @@ locale_t get_c_locale()
   }
   return c_locale;
 }
- 
+
 double strtod_c(const char *nptr, char **endptr)
 {
   return strtod_l(nptr, endptr, get_c_locale());
@@ -40,7 +40,7 @@ float strtof_c(const char *nptr, char **endptr)
 
 
 #else
-// This code path should be used for systems that do not support the strtod_l function 
+// This code path should be used for systems that do not support the strtod_l function
 // Currently this is MinGW/Windows
 
 // The following code is derived from the Python function _PyOS_ascii_strtod
@@ -131,12 +131,12 @@ double strtod_c(const char *nptr, char **endptr)
        the system strtod.  This ensures that the result of an underflow
        has the correct sign.  */
     p = nptr;
-    
+
     /* parse leading spaces */
     while (isspace((unsigned char)*p)) {
         p++;
     }
-    
+
     /* Process leading sign, if present */
     if (*p == '-') {
         negate = 1;
@@ -149,7 +149,7 @@ double strtod_c(const char *nptr, char **endptr)
     /* This code path is used for hex floats */
     if (*p == '0' && (*(p+1) == 'x' || *(p+1) == 'X'))
     {
-      digits_pos = p;    
+      digits_pos = p;
       p += 2;
       /* Check that what's left begins with a digit or decimal point */
       if (!isxdigit(*p) && *p != '.')
@@ -186,7 +186,7 @@ double strtod_c(const char *nptr, char **endptr)
               goto invalid_string;
           /* For the other cases, we need not convert the decimal
              point */
-      }    
+      }
     } else
     {
       /* Check that what's left begins with a digit or decimal point */

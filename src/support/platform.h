@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -77,6 +79,10 @@
 #define _CPU_X86_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
+#elif defined(__PPC64__)
+#define _CPU_PPC64_
+#elif defined(_ARCH_PPC)
+#define _CPU_PPC_
 #endif
 
 #if defined(_CPU_X86_64_)
@@ -90,12 +96,10 @@
 #  else
 #    define _P32
 #  endif
-#elif defined(_COMPILER_GCC_)
-#  if __x86_64__ || __ppc64__
+#elif __SIZEOF_POINTER__ == 8
 #    define _P64
-#  else
+#elif __SIZEOF_POINTER__ == 4
 #    define _P32
-#  endif
 #else
 #  error pointer size not known for your platform / compiler
 #endif

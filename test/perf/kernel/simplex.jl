@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const Basic = 1
 const AtLower = 2
 const AtUpper = 3
@@ -35,7 +37,7 @@ function doTwoPassRatioTest()
         for i in 1:n
             thisState = varstate[i]
             pivotElt = tabrow[i]
-            if (thisState == AtLower && pivotElt > pivotTol) || (thisState == AtUpper && pivotElt < -pivotTol) 
+            if (thisState == AtLower && pivotElt > pivotTol) || (thisState == AtUpper && pivotElt < -pivotTol)
                 candidates[ncandidates += 1] = i
                 ratio = 0.
                 if (pivotElt < 0.)

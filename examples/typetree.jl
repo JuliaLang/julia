@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module TypeTrees
 ##
 # Generate a text graphic of Julia modules type tree
@@ -26,17 +28,17 @@ function add_ttnode(subtypes::Dict{String, TTNode}, sname::String, t::Type)
 end
 
 # Get a string name for the type
-typ_name(t::UnionType) = string(t)
+typ_name(t::Union) = string(t)
 typ_name(t::TypeConstructor) = string(t)
 typ_name(t) = string(t.name)
 
 # Store a type and its type hierarchy chain
 # Recurse till we reach the top level type
-function store_type(sname::String, t::UnionType)
-    suptype = UnionType
+function store_type(sname::String, t::Union)
+    suptype = Union
     tnode = TTNode(sname, t)
 
-    # store unions under UnionType type
+    # store unions under Union type
     subtypes = store_type(typ_name(suptype), suptype)
     add_ttnode(subtypes, sname, tnode)
 
@@ -88,8 +90,8 @@ function store_all_from(m::Module)
 end
 
 type_props(typ) = ""
-type_props(typ::DataType) = string("<<", 
-                                 typ.abstract    ? " abstract"    : " concrete", 
+type_props(typ::DataType) = string("<<",
+                                 typ.abstract    ? " abstract"    : " concrete",
                                  typ.mutable     ? " mutable"     : " immutable",
                                  typ.pointerfree ? " pointerfree" : "",
                                  " size:", typ.size,
@@ -108,7 +110,7 @@ function print_tree(subtypes::Dict{String, TTNode}, pfx::String="")
 end
 
 
-# TODO: optionally take module names in command line 
+# TODO: optionally take module names in command line
 # TODO: sort output
 # TODO: option to list subtrees of type tree, or other symbol types
 const types_tree = Dict{String, TTNode}()
@@ -120,3 +122,7 @@ end
 # print_tree(types_tree)
 
 end # module
+
+if !isinteractive()
+    TypeTrees.print_tree(TypeTrees.types_tree)
+end

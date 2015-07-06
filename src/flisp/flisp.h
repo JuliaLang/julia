@@ -6,7 +6,7 @@
 
 #include "platform.h"
 #include "libsupport.h"
-#include "../../deps/libuv/include/uv.h"
+#include "uv.h"
 
 //#define MEMDEBUG
 //#define MEMDEBUG2
@@ -214,7 +214,7 @@ void bounds_error(char *fname, value_t arr, value_t ind) __attribute__ ((__noret
 void fl_savestate(fl_exception_context_t *_ctx);
 void fl_restorestate(fl_exception_context_t *_ctx);
 
-extern value_t ArgError, IOError, KeyError, MemoryError, EnumerationError;
+extern value_t ArgError, IOError, KeyError, OutOfMemoryError, EnumerationError;
 extern value_t UnboundError;
 
 static inline void argcount(char *fname, uint32_t nargs, uint32_t c)
@@ -346,6 +346,7 @@ size_t cvalue_arraylen(value_t v);
 value_t size_wrap(size_t sz);
 size_t tosize(value_t n, char *fname);
 value_t cvalue_string(size_t sz);
+value_t cvalue_static_cstrn(const char *str, size_t n);
 value_t cvalue_static_cstring(const char *str);
 value_t string_from_cstr(char *str);
 value_t string_from_cstrn(char *str, size_t n);
@@ -386,6 +387,7 @@ value_t cvalue_wchar(value_t *args, uint32_t nargs);
 
 void fl_init(size_t initial_heapsize);
 int fl_load_system_image(value_t ios);
+int fl_load_system_image_str(char* str, size_t len);
 
 /* julia extensions */
 DLLEXPORT int jl_id_char(uint32_t wc);

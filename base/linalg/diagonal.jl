@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Diagonal matrices
 
 immutable Diagonal{T} <: AbstractMatrix{T}
@@ -8,39 +10,56 @@ Diagonal(A::Matrix) = Diagonal(diag(A))
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
-convert{T}(::Type{Triangular}, A::Diagonal{T}) = Triangular{T, Diagonal{T}, :U, false}(A)
+convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
+convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
-function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
-    d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
+function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
+    if d[1] != d[2]
+        throw(ArgumentError("Diagonal matrix must be square"))
+    end
     return Diagonal{T}(Array(T,d[1]))
 end
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
-size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
+
+function size(D::Diagonal,d::Integer)
+    if d<1
+        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    end
+    return d<=2 ? length(D.diag) : 1
+end
 
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
-getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
 
-function getindex(D::Diagonal, i::Integer)
-    n = length(D.diag)
-    id = div(i-1, n)
-    id + id * n == i-1 && return D.diag[id+1]
-    zero(eltype(D.diag))
+getindex(D::Diagonal, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_getindex(D, i, j))
+unsafe_getindex{T}(D::Diagonal{T}, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(T)
+
+setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
+function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
+    if i == j
+        unsafe_setindex!(D.diag, v, i)
+    else
+        v == 0 || throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
+    end
+    D
 end
 
-ishermitian(D::Diagonal) = true
+ishermitian{T<:Real}(D::Diagonal{T}) = true
+ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
+
+factorize(D::Diagonal) = D
 
 tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
-
+-(A::Diagonal)=Diagonal(-A.diag)
 +(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 -(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
@@ -58,19 +77,27 @@ Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
-    length(v)==length(D.diag) || throw(DimensionMismatch(""))
+    if length(v) != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
+    end
     for i=1:length(D.diag)
         d = D.diag[i]
-        d==zero(T) && throw(SingularException(i))
+        if d == zero(T)
+            throw(SingularException(i))
+        end
         v[i] *= inv(d)
     end
     v
 end
 function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
-    size(V,1)==length(D.diag) || throw(DimensionMismatch(""))
+    if size(V,1) != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
+    end
     for i=1:length(D.diag)
         d = D.diag[i]
-        d==zero(T) && throw(SingularException(i))
+        if d == zero(T)
+            throw(SingularException(i))
+        end
         V[i,:] *= inv(d)
     end
     V
@@ -95,27 +122,54 @@ expm(D::Diagonal) = Diagonal(exp(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 
 #Linear solver
-function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::AbstractArray{TA,1})
-    m, n = size(A,2)==1 ? (size(A,1),1) : size(A)
-    m==length(D.diag) || throw(DimensionMismatch(""))
-    (m == 0 || n == 0) && return A
-    C = Array(typeof(one(TD)/one(TA)),size(A))
+function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+    end
+    (m == 0 || n == 0) && return B
     for j = 1:n
         for i = 1:m
             di = D.diag[i]
-            di==0 && throw(SingularException(i))
-            C[i,j] = A[i,j] / di
+            if di == 0
+                throw(SingularException(i))
+            end
+            B[i,j] /= di
         end
     end
-    return C
+    return B
 end
+\(D::Diagonal, B::StridedMatrix) = scale(1 ./ D.diag, B)
+\(D::Diagonal, b::StridedVector) = reshape(scale(1 ./ D.diag, reshape(b, length(b), 1)), length(b))
 \(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
 
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag)
     for i = 1:length(D.diag)
-        D.diag[i]==zero(T) && throw(SingularException(i))
-        Di[i]=inv(D.diag[i])
+        if D.diag[i] == zero(T)
+            throw(SingularException(i))
+        end
+        Di[i] = inv(D.diag[i])
+    end
+    Diagonal(Di)
+end
+
+function pinv{T}(D::Diagonal{T})
+    Di = similar(D.diag)
+    for i = 1:length(D.diag)
+        isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
+    end
+    Diagonal(Di)
+end
+function pinv{T}(D::Diagonal{T}, tol::Real)
+    Di = similar(D.diag)
+    if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
+    for i = 1:length(D.diag)
+        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
+            Di[i]=inv(D.diag[i])
+        else
+            Di[i]=zero(T)
+        end
     end
     Diagonal(Di)
 end

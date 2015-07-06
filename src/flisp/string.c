@@ -14,9 +14,13 @@
 #include <errno.h>
 
 #include "flisp.h"
+
 #if !defined(_OS_WINDOWS_)
 #include <sys/time.h>
 #endif /* !_OS_WINDOWS_ */
+
+#undef DLLEXPORT /* avoid conflicting definition */
+#include "utf8proc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,19 +57,13 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
-#if defined(_OS_WINDOWS_)
-extern int wcwidth(uint32_t c);
-#elif defined(_OS_LINUX_)
-extern int wcwidth(wchar_t c);
-#endif
-
 value_t fl_string_width(value_t *args, u_int32_t nargs)
 {
     argcount("string.width", nargs, 1);
     if (iscprim(args[0])) {
         cprim_t *cp = (cprim_t*)ptr(args[0]);
         if (cp_class(cp) == wchartype) {
-            int w = wcwidth(*(uint32_t*)cp_data(cp));
+            int w = utf8proc_charwidth(*(uint32_t*)cp_data(cp));
             if (w < 0)
                 return FL_F;
             return fixnum(w);

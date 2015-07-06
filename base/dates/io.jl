@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # TODO: optimize this
 function Base.string(dt::DateTime)
     y,m,d = yearmonthday(days(dt))
@@ -39,7 +41,7 @@ immutable DelimitedSlot{P<:AbstractTime} <: Slot{P}
     period::Type{P}
     width::Int
     option::Int
-    locale::String
+    locale::AbstractString
 end
 
 immutable FixedWidthSlot{P<:AbstractTime} <: Slot{P}
@@ -47,7 +49,7 @@ immutable FixedWidthSlot{P<:AbstractTime} <: Slot{P}
     period::Type{P}
     width::Int
     option::Int
-    locale::String
+    locale::AbstractString
 end
 
 immutable DateFormat
@@ -60,7 +62,7 @@ immutable DayOfWeekSlot <: AbstractTime end
 
 duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
 
-function DateFormat(f::String,locale::String="english")
+function DateFormat(f::AbstractString,locale::AbstractString="english")
     slots = Slot[]
     trans = []
     begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
@@ -69,13 +71,13 @@ function DateFormat(f::String,locale::String="english")
     for (i,k) in enumerate(s)
         k == "" && break
         tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
-        slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
+        slot = tran == "" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
         typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
-              'y' in k ? Year : 'm' in k ? Month : 
+              'y' in k ? Year : 'm' in k ? Month :
               'u' in k ? Month : 'U' in k ? Month :
-              'd' in k ? Day : 'H' in k ? Hour : 
-              'M' in k ? Minute : 'S' in k ? Second : Millisecond 
+              'd' in k ? Day : 'H' in k ? Hour :
+              'M' in k ? Minute : 'S' in k ? Second : Millisecond
         option = 'E' in k ? 2 : 'e' in k ? 1 :
                  'U' in k ? 2 : 'u' in k ? 1 : 0
         push!(slots,slot(i,typ,width,option,locale))
@@ -96,20 +98,20 @@ function slotparse(slot::Slot{Month},x)
         return Month(MONTHTOVALUE[slot.locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(parsefloat("."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
 slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)
-    endind = first(search(x,df.trans[slot.i],cursor+1))
+    endind = first(search(x,df.trans[slot.i],nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
         return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.period))
     end
-    return endind+1, slotparse(slot,x[cursor:(endind-1)])
+    return nextind(x,endind), slotparse(slot,x[cursor:(endind-1)])
 end
 getslot(x,slot,df,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)]))
 
-function parse(x::String,df::DateFormat)
+function parse(x::AbstractString,df::DateFormat)
     x = strip(replace(x, r"#.*$", ""))
     x = replace(x,df.begtran,"")
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
@@ -158,25 +160,25 @@ const ISODateTimeFormat = DateFormat("yyyy-mm-ddTHH:MM:SS.s")
 const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
-DateTime(dt::String,format::String;locale::String="english") = DateTime(dt,DateFormat(format,locale))
-DateTime(dt::String,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
+DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
+DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
 
-Date(dt::String,format::String;locale::String="english") = Date(dt,DateFormat(format,locale))
-Date(dt::String,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
+Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = Date(dt,DateFormat(format,locale))
+Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
 
-format(dt::TimeType,f::String;locale::String="english") = format(dt,DateFormat(f,locale))
+format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format(dt,DateFormat(f,locale))
 
 # vectorized
-DateTime{T<:String}(y::AbstractArray{T},format::String;locale::String="english") = DateTime(y,DateFormat(format,locale))
-function DateTime{T<:String}(y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
+DateTime{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(y,DateFormat(format,locale))
+function DateTime{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[DateTime(parse(y[i],df)...) for i in 1:length(y)], size(y))
 end
-Date{T<:String}(y::AbstractArray{T},format::String;locale::String="english") = Date(y,DateFormat(format,locale))
-function Date{T<:String}(y::AbstractArray{T},df::DateFormat=ISODateFormat)
+Date{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(y,DateFormat(format,locale))
+function Date{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateFormat)
     return reshape(Date[Date(parse(y[i],df)...) for i in 1:length(y)], size(y))
 end
 
-format{T<:TimeType}(y::AbstractArray{T},format::String;locale::String="english") = Dates.format(y,DateFormat(format,locale))
+format{T<:TimeType}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(y,DateFormat(format,locale))
 function format(y::AbstractArray{Date},df::DateFormat=ISODateFormat)
     return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
 end

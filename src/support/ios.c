@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -73,9 +75,12 @@ static int _enonfatal(int err)
 
 #define SLEEP_TIME 5//ms
 
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #define MAXSIZE ((1l << 31) - 1)   // OSX cannot handle blocks larger than this
 #define LIMIT_IO_SIZE(n) ((n) < MAXSIZE ? (n) : MAXSIZE)
+#elif defined(_OS_WINDOWS_)
+#define MAXSIZE (0x7fffffff)       // Windows read() takes a uint
+#define LIMIT_IO_SIZE(n) ((n) < (size_t)MAXSIZE ? (unsigned int)(n) : MAXSIZE)
 #else
 #define LIMIT_IO_SIZE(n) (n)
 #endif
@@ -246,7 +251,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
 
     while (n > 0) {
         avail = s->size - s->bpos;
-        
+
         if (avail > 0) {
             size_t ncopy = (avail >= n) ? n : avail;
             memcpy(dest, s->buf + s->bpos, ncopy);
@@ -261,14 +266,14 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
                 s->_eof = 1;
             return avail;
         }
-        
+
         dest += avail;
         n -= avail;
         tot += avail;
-        
+
         ios_flush(s);
         s->bpos = s->size = 0;
-        
+
         s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
             // doesn't fit comfortably in buffer; go direct
@@ -833,7 +838,7 @@ static void _ios_init(ios_t *s)
 
 /* stream object initializers. we do no allocation. */
 
-ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
+ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc)
 {
     int flags;
     int fd;
@@ -844,11 +849,10 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    size_t len = strlen(fname)+1;
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, len, NULL, 0);
+    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
     if (!wlen) goto open_file_err;
     wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, len, fname_w, wlen)) goto open_file_err;
+    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
     fd = _wopen(fname_w, flags | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
     fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);

@@ -1,5 +1,7 @@
 .. _man-faq:
 
+.. currentmodule:: Base
+
 ****************************
  Frequently Asked Questions
 ****************************
@@ -18,7 +20,7 @@ If memory usage is your concern, you can always replace objects with
 ones that consume less memory.  For example, if ``A`` is a
 gigabyte-sized array that you no longer need, you can free the memory
 with ``A = 0``.  The memory will be released the next time the garbage
-collector runs; you can force this to happen with ``gc()``.
+collector runs; you can force this to happen with :func:`gc`.
 
 How can I modify the declaration of a type/immutable in my session?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,7 +66,7 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
 
 But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
 
@@ -88,7 +90,7 @@ Here we created a function ``change_array!()``, that assigns ``5`` to the first 
 
 
 Can I use ``using`` or ``import`` inside a function?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 No, you are not allowed to have a ``using`` or ``import`` statement inside
 a function.  If you want to import a module but only use its symbols
@@ -102,7 +104,7 @@ inside a specific function or set of functions, you have two options:
         end
 
 
-    This loads the module Foo and defines a variable ``Foo`` that refers
+    This loads the module ``Foo`` and defines a variable ``Foo`` that refers
     to the module, but does not import any of the other symbols from the
     module into the current namespace.  You refer to the ``Foo`` symbols by
     their qualified names ``Foo.bar`` etc.
@@ -119,9 +121,73 @@ inside a specific function or set of functions, you have two options:
         end
         using Bar
 
-    This imports all the symbols from Foo, but only inside the module Bar.
+    This imports all the symbols from ``Foo``, but only inside the module ``Bar``.
 
+.. _man-slurping-splatting:
 
+What does the ``...`` operator do?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The two uses of the `...` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Many newcomers to Julia find the use of ``...`` operator confusing. Part of
+what makes the ``...`` operator confusing is that it means two different things
+depending on context.
+
+``...`` combines many arguments into one argument in function definitions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the context of function definitions, the ``...`` operator is used to combine
+many different arguments into a single argument. This use of ``...`` for
+combining many different arguments into a single argument is called slurping::
+
+    julia> function printargs(args...)
+               @printf("%s\n", typeof(args))
+               for (i, arg) in enumerate(args)
+                   @printf("Arg %d = %s\n", i, arg)
+               end
+           end
+    printargs (generic function with 1 method)
+
+    julia> printargs(1, 2, 3)
+    (Int64,Int64,Int64)
+    Arg 1 = 1
+    Arg 2 = 2
+    Arg 3 = 3
+
+If Julia were a language that made more liberal use of ASCII characters, the
+slurping operator might have been written as ``<-...`` instead of ``...``.
+
+``...`` splits one argument into many different arguments in function calls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In contrast to the use of the ``...`` operator to denote slurping many
+different arguments into one argument when defining a function, the ``...``
+operator is also used to cause a single function argument to be split apart
+into many different arguments when used in the context of a function call. This
+use of ``...`` is called splatting::
+
+    julia> function threeargs(a, b, c)
+               @printf("a = %s::%s\n", a, typeof(a))
+               @printf("b = %s::%s\n", b, typeof(b))
+               @printf("c = %s::%s\n", c, typeof(c))
+           end
+    threeargs (generic function with 1 method)
+
+    julia> vec = [1, 2, 3]
+    3-element Array{Int64,1}:
+     1
+     2
+     3
+
+    julia> threeargs(vec...)
+    a = 1::Int64
+    b = 2::Int64
+    c = 3::Int64
+
+If Julia were a language that made more liberal use of ASCII characters,
+the splatting operator might have been written as ``...->`` instead of ``...``.
 
 Types, type declarations, and constructors
 ------------------------------------------
@@ -166,13 +232,13 @@ Certain operations make mathematical sense but result in errors::
      in ^ at intfuncs.jl:84
 
 This behavior is an inconvenient consequence of the requirement for
-type-stability.  In the case of ``sqrt``, most users want
+type-stability.  In the case of :func:`sqrt`, most users want
 ``sqrt(2.0)`` to give a real number, and would be unhappy if it
 produced the complex number ``1.4142135623730951 + 0.0im``.  One could
-write the ``sqrt`` function to switch to a complex-valued output only
-when passed a negative number (which is what ``sqrt`` does in some
+write the :func:`sqrt` function to switch to a complex-valued output only
+when passed a negative number (which is what :func:`sqrt` does in some
 other languages), but then the result would not be `type-stable
-<#man-type-stable>`_ and the ``sqrt`` function would have poor
+<#man-type-stable>`_ and the :func:`sqrt` function would have poor
 performance.
 
 In these and other cases, you can get the result you want by choosing
@@ -193,7 +259,7 @@ Julia uses machine arithmetic for integer computations. This means that the rang
 
     julia> typemax(Int)
     9223372036854775807
-    
+
     julia> ans+1
     -9223372036854775808
 
@@ -210,7 +276,7 @@ premium, however, the alternatives are worse.
 
 One alternative to consider would be to check each integer operation for
 overflow and promote results to bigger integer types such as ``Int128`` or
-``BigInt`` in the case of overflow. Unfortunately, this introduces major
+:class:`BigInt` in the case of overflow. Unfortunately, this introduces major
 overhead on every integer operation (think incrementing a loop counter) – it
 requires emitting code to perform run-time overflow checks after arithmetic
 instructions and branches to handle potential overflows. Worse still, this
@@ -220,7 +286,7 @@ generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -251,17 +317,17 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
-    
+
     >> n + (n - 1)
     9223372036854775807
-    
+
     >> (n + n) - 1
     9223372036854775806
-    
+
 This makes it hard to write many basic integer algorithms since a lot of
 common techniques depend on the fact that machine addition with overflow *is*
 associative. Consider finding the midpoint between integer values ``lo`` and
@@ -269,7 +335,7 @@ associative. Consider finding the midpoint between integer values ``lo`` and
 
     julia> n = 2^62
     4611686018427387904
-    
+
     julia> (n + 2n) >>> 1
     6917529027641081856
 
@@ -277,9 +343,9 @@ See? No problem. That's the correct midpoint between 2^62 and 2^63, despite
 the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
 
     >> (n + 2*n)/2
-    
+
     ans =
-    
+
       4611686018427387904
 
 Oops. Adding a ``>>>`` operator to Matlab wouldn't help, because saturation
@@ -370,17 +436,15 @@ loop iteration, causing different outcomes depending on which iteration the
 failure occurs in. The compiler can unroll the loop, but it cannot
 algebraically reduce multiple operations into fewer equivalent operations.
 
-Saturated integer arithmetic is just one example of a really poor choice of
-language semantics that completely prevents effective performance
-optimization. There are many things that are difficult about C programming,
-but integer overflow is *not* one of them – especially on 64-bit systems. If
-my integers really might get bigger than 2^63-1, I can easily predict that. Am
-I looping over a number of actual things that are stored in the computer? Then
-it's not going to get that big. This is guaranteed, since I don't have that
-much memory. Am I counting things that occur in the real world? Unless they're
-grains of sand or atoms in the universe, 2^63-1 is going to be plenty big. Am
-I computing a factorial? Then sure, they might get that big – I should use a
-``BigInt``. See? Easy to distinguish.
+The most reasonable alternative to having integer arithmetic silently overflow
+is to do checked arithmetic everywhere, raising errors when adds, subtracts,
+and multiplies overflow, producing values that are not value-correct. In this
+`blog post <http://danluu.com/integer-overflow>`_, Dan Luu analyzes this and
+finds that rather than the trivial cost that this approach should in theory
+have, it ends up having a substantial cost due to compilers (LLVM and GCC)
+not gracefully optimizing around the added overflow checks. If this improves
+in the future, we could consider defaulting to checked integer arithmetic in
+Julia, but for now, we have to live with the possibility of overflow.
 
 
 .. _man-abstract-fields:
@@ -411,15 +475,15 @@ be inferred about an object of type ``MyAmbiguousType``:
     MyAmbiguousType(17)
 
     julia> typeof(b)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
     julia> typeof(c)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
 ``b`` and ``c`` have the same type, yet their underlying
 representation of data in memory is very different. Even if you stored
 just numeric values in field ``a``, the fact that the memory
-representation of a ``Uint8`` differs from a ``Float64`` also means
+representation of a ``UInt8`` differs from a ``Float64`` also means
 that the CPU needs to handle them using two different kinds of
 instructions.  Since the required information is not available in the
 type, such decisions have to be made at run-time. This slows
@@ -455,10 +519,10 @@ the wrapper object.  For example:
     MyStillAmbiguousType(3.2)
 
     julia> typeof(m)
-    MyType{Float64} (constructor with 1 method)
+    MyType{Float64}
 
     julia> typeof(t)
-    MyStillAmbiguousType (constructor with 2 methods)
+    MyStillAmbiguousType
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
@@ -471,7 +535,7 @@ to change the type of field ``a``:
 
     julia> t.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(t.a)
     Float32
 
@@ -482,10 +546,10 @@ change:
 
     julia> m.a = 4.5f0
     4.5
-    
+
     julia> typeof(m.a)
     Float64
-    
+
 The fact that the type of ``m.a`` is known from ``m``'s type---coupled
 with the fact that its type cannot change mid-function---allows the
 compiler to generate highly-optimized code for objects like ``m`` but
@@ -502,10 +566,10 @@ an abstract type:
 
     julia> typeof(m.a)
     Float64
-    
+
     julia> m.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(m.a)
     Float32
 
@@ -556,22 +620,22 @@ For example:
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
+    MySimpleContainer{UnitRange{Int64}}
 
-    julia> c = MySimpleContainer([1:3]);
+    julia> c = MySimpleContainer([1:3;]);
 
     julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}} (constructor with 1 method)
+    MySimpleContainer{Array{Int64,1}}
 
     julia> b = MyAmbiguousContainer(1:3);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
-    julia> b = MyAmbiguousContainer([1:3]);
+    julia> b = MyAmbiguousContainer([1:3;]);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
 For ``MySimpleContainer``, the object is fully-specified by its type
 and parameters, so the compiler can generate optimized functions. In
@@ -645,7 +709,7 @@ With this approach, one can write functions such as::
 
     julia> myfunc(MyContainer(1:3))
     2
-    
+
     julia> myfunc(MyContainer(1.0:3))
     3.0
 
@@ -684,6 +748,8 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
+.. _man-nothing:
+
 Nothingness and missing values
 ------------------------------
 
@@ -712,8 +778,105 @@ really be thought of as nothing but rather a tuple of zero values.
 
 In code written for Julia prior to version 0.4 you may occasionally see ``None``,
 which is quite different. It is the empty (or "bottom") type, a type with no values
-and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+and no subtypes (except itself). This is now written as ``Union{}`` (an empty union
 type). You will generally not need to use this type.
+
+Memory
+------
+
+Why does ``x += y`` allocate memory when ``x`` and ``y`` are arrays?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
+For arrays, this has the consequence that, rather than storing the
+result in the same location in memory as ``x``, it allocates a new
+array to store the result.
+
+While this behavior might surprise some, the choice is deliberate. The
+main reason is the presence of ``immutable`` objects within julia,
+which cannot change their value once created.  Indeed, a number is an
+immutable object; the statements ``x = 5; x += 1`` do not modify the
+meaning of ``5``, they modify the value bound to ``x``. For an
+immutable, the only way to change the value is to reassign it.
+
+To amplify a bit further, consider the following function::
+
+   function power_by_squaring(x, n::Int)
+       ispow2(n) || error("This implementation only works for powers of 2")
+       while n >= 2
+           x *= x
+           n >>= 1
+       end
+       x
+   end
+
+After a call like ``x = 5; y = power_by_squaring(x, 4)``, you would
+get the expected result: ``x == 5 && y == 625``.  However, now suppose
+that ``*=``, when used with matrices, instead mutated the left hand
+side.  There would be two problems:
+
+- For general square matrices, ``A = A*B`` cannot be implemented
+  without temporary storage: ``A[1,1]`` gets computed and stored on
+  the left hand side before you're done using it on the right hand
+  side.
+
+- Suppose you were willing to allocate a temporary for the computation
+  (which would eliminate most of the point of making ``*=`` work
+  in-place); if you took advantage of the mutability of ``x``, then
+  this function would behave differently for mutable vs. immutable
+  inputs. In particular, for immutable ``x``, after the call you'd
+  have (in general) ``y != x``, but for mutable ``x`` you'd have ``y
+  == x``.
+
+Because supporting generic programming is deemed more important than
+potential performance optimizations that can be achieved by other
+means (e.g., using explicit loops), operators like ``+=`` and ``*=``
+work by rebinding new values.
+
+Asynchronous IO and concurrent synchronous writes
+-------------------------------------------------
+
+Why do concurrent writes to the same stream result in inter-mixed output?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While the streaming I/O API is synchronous, the underlying implementation
+is fully asynchronous.
+
+The following::
+
+    @sync for i in 1:3
+        @async print(i, " Foo ", " Bar ")
+    end
+
+results in::
+    123 Foo  Foo  Foo  Bar  Bar  Bar
+
+This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
+internally, the writing of each argument yields to other tasks while waiting for
+that part of the I/O to complete.
+
+``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
+during a call. Consequently changing ``print`` to ``println`` in the above example
+results in::
+
+    1 Foo  Bar
+    2 Foo  Bar
+    3 Foo  Bar
+
+For other functions and streams, etc, you could lock your writes with a ``ReentrantLock``
+like this::
+
+    l = ReentrantLock()
+    @sync for i in 1:3
+        @async begin
+            lock(l)
+            try
+                print(i, " Foo ", " Bar ")
+            finally
+                unlock(l)
+            end
+    end
+
 
 Julia Releases
 ----------------
@@ -737,75 +900,3 @@ When are deprecated functions removed?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.
-
-Developing Julia
-----------------
-
-How do I debug julia's C code? (running the julia REPL from within a debugger like gdb)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-First, you should build the debug version of julia with ``make
-debug``.  Below, lines starting with ``(gdb)`` mean things you should
-type at the gdb prompt.
-
-From the shell
-^^^^^^^^^^^^^^
-
-The main challenge is that Julia and gdb each need to have their own
-terminal, to allow you to interact with them both.  One approach is to
-use gdb's ``attach`` functionality to debug an already-running julia
-session.  However, on many systems you'll need root access to get this
-to work. What follows is a method that can be implemented with just
-user-level permissions.
-
-The first time you do this, you'll need to define a script, here
-called ``oterm``, containing the following lines::
-
-    ps
-    sleep 600000
-
-Make it executable with ``chmod +x oterm``.
-
-Now:
-
-- From a shell (called shell 1), type ``xterm -e oterm &``. You'll see
-  a new window pop up; this will be called terminal 2.
-
-- From within shell 1, ``gdb julia-debug``. You can find this
-  executable within ``julia/usr/bin``.
-
-- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
-  number shown after ``pts/`` in terminal 2.
-
-- From within shell 1, ``(gdb) run``
-
-- From within terminal 2, issue any preparatory commands in Julia that
-  you need to get to the step you want to debug
-
-- From within shell 1, hit Ctrl-C
-
-- From within shell 1, insert your breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-- From within shell 1, ``(gdb) c`` to resume execution of julia
-
-- From within terminal 2, issue the command that you want to
-  debug. Shell 1 will stop at your breakpoint.
-
-
-Within emacs
-^^^^^^^^^^^^
-
-- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
-  within julia/usr/bin, or you can specify the full path)
-
-- ``(gdb) run``
-
-- Now you'll see the Julia prompt. Run any commands in Julia you need
-  to get to the step you want to debug.
-
-- Under emacs' "Signals" menu choose BREAK---this will return you to the ``(gdb)`` prompt
-
-- Set a breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-
-- Go back to the Julia prompt via ``(gdb) c``
-
-- Execute the Julia command you want to see running.

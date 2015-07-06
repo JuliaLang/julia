@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
@@ -44,7 +46,7 @@ function intersect(A::VersionSet, B::VersionSet)
     VersionSet(ivals)
 end
 ==(A::VersionSet, B::VersionSet) = A.intervals == B.intervals
-hash(s::VersionSet, h::Uint) = hash(s.intervals, h + itrunc(Uint,0x2fd2ca6efa023f44))
+hash(s::VersionSet, h::UInt) = hash(s.intervals, h + (0x2fd2ca6efa023f44 % UInt))
 deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = VersionSet(copy(vs.intervals))
 
 typealias Requires Dict{ByteString,VersionSet}
@@ -56,7 +58,7 @@ function merge_requires!(A::Requires, B::Requires)
     return A
 end
 
-satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
+satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
 immutable Available

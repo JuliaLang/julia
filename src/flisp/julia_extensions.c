@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+
+#include "utf8proc.h"
+#undef DLLEXPORT /* avoid conflicting definition */
+
 #include "flisp.h"
-#include "mojibake.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -160,17 +163,17 @@ static char *normalize(char *s)
     const int options = UTF8PROC_NULLTERM|UTF8PROC_STABLE|UTF8PROC_COMPOSE;
     ssize_t result;
     size_t newlen;
-    result = utf8proc_decompose((uint8_t*) s, 0, NULL, 0, options);
+    result = utf8proc_decompose((uint8_t*) s, 0, NULL, 0, (utf8proc_option_t)options);
     if (result < 0) goto error;
     newlen = result * sizeof(int32_t) + 1;
     if (newlen > buflen) {
         buflen = newlen * 2;
         buf = realloc(buf, buflen);
-        if (!buf) lerror(MemoryError, "error allocating UTF8 buffer");
+        if (!buf) lerror(OutOfMemoryError, "error allocating UTF8 buffer");
     }
-    result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, options);
+    result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, (utf8proc_option_t)options);
     if (result < 0) goto error;
-    result = utf8proc_reencode((int32_t*)buf,result, options);
+    result = utf8proc_reencode((int32_t*)buf,result, (utf8proc_option_t)options);
     if (result < 0) goto error;
     return (char*) buf;
 error:

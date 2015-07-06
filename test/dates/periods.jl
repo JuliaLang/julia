@@ -1,22 +1,32 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Period testing
 @test -Dates.Year(1) == Dates.Year(-1)
 @test Dates.Year(1) > Dates.Year(0)
 @test (Dates.Year(1) < Dates.Year(0)) == false
 @test Dates.Year(1) == Dates.Year(1)
+@test Dates.Year(1) != 1
 @test Dates.Year(1) + Dates.Year(1) == Dates.Year(2)
-@test Dates.Year(1) - Dates.Year(1) == Dates.Year(0)
-@test Dates.Year(1) * Dates.Year(1) == Dates.Year(1)
-@test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
-@test div(Dates.Year(10),Dates.Year(3)) == Dates.Year(3)
-@test div(Dates.Year(10),Dates.Year(4)) == Dates.Year(2)
+@test Dates.Year(1) - Dates.Year(1) == zero(Dates.Year)
+@test_throws MethodError Dates.Year(1) * Dates.Year(1) == Dates.Year(1)
+@test Dates.Year(10) % Dates.Year(4) == 2
+@test gcd(Dates.Year(10), Dates.Year(4)) == Dates.Year(2)
+@test lcm(Dates.Year(10), Dates.Year(4)) == Dates.Year(20)
+@test div(Dates.Year(10),Dates.Year(3)) == 3
+@test div(Dates.Year(10),Dates.Year(4)) == 2
+@test Dates.Year(10) / Dates.Year(4) == 2.5
 t = Dates.Year(1)
 t2 = Dates.Year(2)
-@test ([t,t,t,t,t] .+ Dates.Year(1)) == ([t2,t2,t2,t2,t2])
-@test (Dates.Year(1) .+ [t,t,t,t,t]) == ([t2,t2,t2,t2,t2])
-@test ([t2,t2,t2,t2,t2] .- Dates.Year(1)) == ([t,t,t,t,t])
-@test ([t,t,t,t,t] .* Dates.Year(1)) == ([t,t,t,t,t])
-@test ([t,t,t,t,t] .% t2) == ([t,t,t,t,t])
-@test div([t,t,t,t,t],Dates.Year(1)) == ([t,t,t,t,t])
+@test ([t,t,t,t,t] + Dates.Year(1)) == ([t2,t2,t2,t2,t2])
+@test (Dates.Year(1) + [t,t,t,t,t]) == ([t2,t2,t2,t2,t2])
+@test ([t2,t2,t2,t2,t2] - Dates.Year(1)) == ([t,t,t,t,t])
+@test_throws MethodError ([t,t,t,t,t] .* Dates.Year(1)) == ([t,t,t,t,t])
+@test ([t,t,t,t,t] * 1) == ([t,t,t,t,t])
+@test ([t,t,t,t,t] .% t2) == ([1,1,1,1,1])
+@test div([t,t,t,t,t],Dates.Year(1)) == ([1,1,1,1,1])
+@test mod([t,t,t,t,t],Dates.Year(2)) == ([1,1,1,1,1])
+@test [t,t,t] / t2 == [0.5,0.5,0.5]
+@test abs(-t) == t
 
 #Period arithmetic
 y = Dates.Year(1)
@@ -35,33 +45,33 @@ ms = Dates.Millisecond(1)
 @test Dates.Minute(mi) == mi
 @test Dates.Second(s) == s
 @test Dates.Millisecond(ms) == ms
-@test typeof(int8(y)) <: Int8
-@test typeof(uint8(y)) <: Uint8
-@test typeof(int16(y)) <: Int16
-@test typeof(uint16(y)) <: Uint16
-@test typeof(int32(y)) <: Int32
-@test typeof(uint32(y)) <: Uint32
-@test typeof(int64(y)) <: Int64
-@test typeof(uint64(y)) <: Uint64
-@test typeof(int128(y)) <: Int128
-@test typeof(uint128(y)) <: Uint128
+@test typeof(Int8(y)) <: Int8
+@test typeof(UInt8(y)) <: UInt8
+@test typeof(Int16(y)) <: Int16
+@test typeof(UInt16(y)) <: UInt16
+@test typeof(Int32(y)) <: Int32
+@test typeof(UInt32(y)) <: UInt32
+@test typeof(Int64(y)) <: Int64
+@test typeof(UInt64(y)) <: UInt64
+@test typeof(Int128(y)) <: Int128
+@test typeof(UInt128(y)) <: UInt128
 @test typeof(convert(BigInt,y)) <: BigInt
 @test typeof(convert(BigFloat,y)) <: BigFloat
 @test typeof(convert(Complex,y)) <: Complex
 @test typeof(convert(Rational,y)) <: Rational
-@test typeof(float16(y)) <: Float16
-@test typeof(float32(y)) <: Float32
-@test typeof(float64(y)) <: Float64
+@test typeof(Float16(y)) <: Float16
+@test typeof(Float32(y)) <: Float32
+@test typeof(Float64(y)) <: Float64
 @test Dates.Year(convert(Int8,1)) == y
-@test Dates.Year(convert(Uint8,1)) == y
+@test Dates.Year(convert(UInt8,1)) == y
 @test Dates.Year(convert(Int16,1)) == y
-@test Dates.Year(convert(Uint16,1)) == y
+@test Dates.Year(convert(UInt16,1)) == y
 @test Dates.Year(convert(Int32,1)) == y
-@test Dates.Year(convert(Uint32,1)) == y
+@test Dates.Year(convert(UInt32,1)) == y
 @test Dates.Year(convert(Int64,1)) == y
-@test Dates.Year(convert(Uint64,1)) == y
+@test Dates.Year(convert(UInt64,1)) == y
 @test Dates.Year(convert(Int128,1)) == y
-@test Dates.Year(convert(Uint128,1)) == y
+@test Dates.Year(convert(UInt128,1)) == y
 @test Dates.Year(convert(BigInt,1)) == y
 @test Dates.Year(convert(BigFloat,1)) == y
 @test Dates.Year(convert(Complex,1)) == y
@@ -77,53 +87,44 @@ ms = Dates.Millisecond(1)
 @test mi == mi
 @test s == s
 @test ms == ms
-@test_throws ArgumentError y != m
-@test_throws ArgumentError m != w
-@test_throws ArgumentError w != d
-@test_throws ArgumentError d != h
-@test_throws ArgumentError h != mi
-@test_throws ArgumentError mi != s
-@test_throws ArgumentError s != ms
-@test_throws ArgumentError ms != y
 y2 = Dates.Year(2)
 @test y < y2
 @test y2 > y
 @test y != y2
 
-@test Dates.Year(int8(1)) == y
-@test Dates.Year(uint8(1)) == y
-@test Dates.Year(int16(1)) == y
-@test Dates.Year(uint16(1)) == y
-@test Dates.Year(int(1)) == y
-@test Dates.Year(uint(1)) == y
-@test Dates.Year(int64(1)) == y
-@test Dates.Year(uint64(1)) == y
-@test Dates.Year(int128(1)) == y
-@test Dates.Year(uint128(1)) == y
+@test Dates.Year(Int8(1)) == y
+@test Dates.Year(UInt8(1)) == y
+@test Dates.Year(Int16(1)) == y
+@test Dates.Year(UInt16(1)) == y
+@test Dates.Year(Int(1)) == y
+@test Dates.Year(UInt(1)) == y
+@test Dates.Year(Int64(1)) == y
+@test Dates.Year(UInt64(1)) == y
+@test Dates.Year(UInt128(1)) == y
+@test Dates.Year(UInt128(1)) == y
 @test Dates.Year(big(1)) == y
 @test Dates.Year(BigFloat(1)) == y
 @test Dates.Year(float(1)) == y
-@test Dates.Year(float32(1)) == y
+@test Dates.Year(Float32(1)) == y
 @test Dates.Year(Rational(1)) == y
 @test Dates.Year(complex(1)) == y
 @test_throws InexactError Dates.Year(BigFloat(1.2)) == y
 @test_throws InexactError Dates.Year(1.2) == y
-@test_throws InexactError Dates.Year(float32(1.2)) == y
+@test_throws InexactError Dates.Year(Float32(1.2)) == y
 @test_throws InexactError Dates.Year(3//4) == y
 @test_throws InexactError Dates.Year(complex(1.2)) == y
-@test_throws InexactError Dates.Year(float16(1.2)) == y
+@test_throws InexactError Dates.Year(Float16(1.2)) == y
 @test Dates.Year(true) == y
 @test Dates.Year(false) != y
-@test Dates.Year('\x01') == y
 @test_throws MethodError Dates.Year(:hey) == y
 @test Dates.Year(real(1)) == y
-@test_throws ArgumentError Dates.Year(m) == y
-@test_throws ArgumentError Dates.Year(w) == y
-@test_throws ArgumentError Dates.Year(d) == y
-@test_throws ArgumentError Dates.Year(h) == y
-@test_throws ArgumentError Dates.Year(mi) == y
-@test_throws ArgumentError Dates.Year(s) == y
-@test_throws ArgumentError Dates.Year(ms) == y
+@test_throws InexactError Dates.Year(m) == y
+@test_throws MethodError Dates.Year(w) == y
+@test_throws MethodError Dates.Year(d) == y
+@test_throws MethodError Dates.Year(h) == y
+@test_throws MethodError Dates.Year(mi) == y
+@test_throws MethodError Dates.Year(s) == y
+@test_throws MethodError Dates.Year(ms) == y
 @test Dates.Year(Dates.Date(2013,1,1)) == Dates.Year(2013)
 @test Dates.Year(Dates.DateTime(2013,1,1)) == Dates.Year(2013)
 @test typeof(y+m) <: Dates.CompoundPeriod
@@ -134,37 +135,26 @@ y2 = Dates.Year(2)
 @test typeof(y+mi) <: Dates.CompoundPeriod
 @test typeof(y+s) <: Dates.CompoundPeriod
 @test typeof(y+ms) <: Dates.CompoundPeriod
-@test_throws ArgumentError y > m
-@test_throws ArgumentError d < w
+@test y > m
+@test d < w
 @test typemax(Dates.Year) == Dates.Year(typemax(Int64))
 @test typemax(Dates.Year) + y == Dates.Year(-9223372036854775808)
 @test typemin(Dates.Year) == Dates.Year(-9223372036854775808)
 #Period-Real arithmetic
-@test y + 1 == Dates.Year(2)
-@test 1 + y == Dates.Year(2)
-@test y + true == Dates.Year(2)
-@test true + y == Dates.Year(2)
-@test y + '\x01' == Dates.Year(2)
-@test '\x01' + y == Dates.Year(2)
-@test y + 1.0 == Dates.Year(2)
-@test_throws InexactError y + 1.2
-@test y + 1f0 == Dates.Year(2)
-@test_throws InexactError y + 1.2f0
-@test y + BigFloat(1) == Dates.Year(2)
-@test_throws InexactError y + BigFloat(1.2)
-@test y + 1.0 == Dates.Year(2)
-@test_throws InexactError y + 1.2
+@test_throws MethodError y + 1 == Dates.Year(2)
+@test_throws MethodError y + true == Dates.Year(2)
+@test_throws InexactError y + Dates.Year(1.2)
+@test y + Dates.Year(1f0) == Dates.Year(2)
 @test y * 4 == Dates.Year(4)
 @test y * 4f0 == Dates.Year(4)
 @test_throws InexactError y * 3//4 == Dates.Year(1)
 @test div(y,2) == Dates.Year(0)
-@test div(2,y) == Dates.Year(2)
-@test div(y,y) == Dates.Year(1)
+@test_throws MethodError div(2,y) == Dates.Year(2)
+@test div(y,y) == 1
 @test y*10 % 5 == Dates.Year(0)
-@test 5 % y*10 == Dates.Year(0)
-@test (y > 3) == false
-@test (4 < y) == false
-@test 1 == y
+@test_throws MethodError (y > 3) == false
+@test_throws MethodError (4 < y) == false
+@test 1 != y
 t = [y,y,y,y,y]
 @test t .+ Dates.Year(2) == [Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3)]
 dt = Dates.DateTime(2012,12,21)
@@ -219,54 +209,27 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Year(-1) < Dates.Year(1)
 @test !(Dates.Year(-1) > Dates.Year(1))
 @test Dates.Year(1) == Dates.Year(1)
-@test Dates.Year(1) == 1
-@test 1 == Dates.Year(1)
-@test (Dates.Year(1) < 1) == false
-@test (1 < Dates.Year(1)) == false
+@test Dates.Year(1) != 1
+@test 1 != Dates.Year(1)
 @test Dates.Month(-1) < Dates.Month(1)
 @test !(Dates.Month(-1) > Dates.Month(1))
 @test Dates.Month(1) == Dates.Month(1)
-@test Dates.Month(1) == 1
-@test 1 == Dates.Month(1)
-@test (Dates.Month(1) < 1) == false
-@test (1 < Dates.Month(1)) == false
 @test Dates.Day(-1) < Dates.Day(1)
 @test !(Dates.Day(-1) > Dates.Day(1))
 @test Dates.Day(1) == Dates.Day(1)
-@test Dates.Day(1) == 1
-@test 1 == Dates.Day(1)
-@test (Dates.Day(1) < 1) == false
-@test (1 < Dates.Day(1)) == false
 @test Dates.Hour(-1) < Dates.Hour(1)
 @test !(Dates.Hour(-1) > Dates.Hour(1))
 @test Dates.Hour(1) == Dates.Hour(1)
-@test Dates.Hour(1) == 1
-@test 1 == Dates.Hour(1)
-@test (Dates.Hour(1) < 1) == false
-@test (1 < Dates.Hour(1)) == false
 @test Dates.Minute(-1) < Dates.Minute(1)
 @test !(Dates.Minute(-1) > Dates.Minute(1))
 @test Dates.Minute(1) == Dates.Minute(1)
-@test Dates.Minute(1) == 1
-@test 1 == Dates.Minute(1)
-@test (Dates.Minute(1) < 1) == false
-@test (1 < Dates.Minute(1)) == false
 @test Dates.Second(-1) < Dates.Second(1)
 @test !(Dates.Second(-1) > Dates.Second(1))
 @test Dates.Second(1) == Dates.Second(1)
-@test Dates.Second(1) == 1
-@test 1 == Dates.Second(1)
-@test (Dates.Second(1) < 1) == false
-@test (1 < Dates.Second(1)) == false
 @test Dates.Millisecond(-1) < Dates.Millisecond(1)
 @test !(Dates.Millisecond(-1) > Dates.Millisecond(1))
 @test Dates.Millisecond(1) == Dates.Millisecond(1)
-@test Dates.Millisecond(1) == 1
-@test 1 == Dates.Millisecond(1)
-@test (Dates.Millisecond(1) < 1) == false
-@test (1 < Dates.Millisecond(1)) == false
-@test_throws ArgumentError Dates.Year(1) < Dates.Millisecond(1)
-@test_throws ArgumentError Dates.Year(1) == Dates.Millisecond(1)
+@test_throws MethodError Dates.Year(1) < Dates.Millisecond(1)
 
 @test Dates.Year("1") == y
 @test Dates.Month("1") == m
@@ -276,8 +239,8 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Minute("1") == mi
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
-@test_throws ErrorException Dates.Year("1.0")
-@test Dates.Year(parsefloat("1.0")) == y
+@test_throws ArgumentError Dates.Year("1.0")
+@test Dates.Year(parse(Float64,"1.0")) == y
 
 dt = Dates.DateTime(2014)
 @test typeof(Dates.Year(dt)) <: Dates.Year
@@ -314,3 +277,14 @@ dt = Dates.DateTime(2014)
 @test Dates.days(Dates.Hour(24)) == 1
 @test Dates.days(d) == 1
 @test Dates.days(w) == 7
+
+# issue #9214
+@test 2s + (7ms + 1ms) == (2s + 7ms) + 1ms == 1ms + (2s + 7ms) == 1ms + (1s + 7ms) + 1s == 1ms + (2s + 3d + 7ms) + (-3d) == (1ms + (2s + 3d)) + (7ms - 3d) == (1ms + (2s + 3d)) - (3d - 7ms)
+@test 1ms - (2s + 7ms) == -((2s + 7ms) - 1ms) == (-6ms) - 2s
+emptyperiod = ((y + d) - d) - y
+@test emptyperiod == ((d + y) - y) - d == ((d + y) - d) - y
+@test emptyperiod == 0ms
+@test string(emptyperiod) == "empty period"
+@test 8d - s == 1w + 23h + 59mi + 59s
+@test h + 3mi == 63mi
+@test y - m == 11m

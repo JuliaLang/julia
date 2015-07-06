@@ -1,7 +1,7 @@
 .. _man-unicode-input:
 
 ***************
- Unicode Input  
+ Unicode Input
 ***************
 
 .. only:: html

@@ -1,3 +1,33 @@
+# This file is a part of Julia, but is derived from
+# https://github.com/floitsch/double-conversion which has the following license
+#
+# Copyright 2006-2014, the V8 project authors. All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of Google Inc. nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 const kDoubleSignificandSize = 53
 
 function filldigits32fixedlength(n1,requested_len,buffer,len)
@@ -86,13 +116,13 @@ function fillfractionals(fractionals, exponent,
             digit = fractionals >> point
             buffer[len] = 0x30 + digit
             len += 1
-            fractionals -= uint64(digit) << point
+            fractionals -= UInt64(digit) << point
         end
         if ((fractionals >> (point - 1)) & 1) == 1
             len, decimal_point = roundup(buffer, len, decimal_point)
         end
     else
-        fract128 = uint128(fractionals) << 64
+        fract128 = UInt128(fractionals) << 64
         fract128 = shift(fract128,-exponent - 64)
         point = 128
         for i = 1:fractional_count
@@ -110,24 +140,24 @@ function fillfractionals(fractionals, exponent,
     return len, decimal_point
 end
 
-low(x) = uint64(x&0xffffffffffffffff)
-high(x) = uint64(x >>> 64)
-bitat(x::Uint128,y) = y >= 64 ? (int32(high(x) >> (y-64)) & 1) : (int32(low(x) >> y) & 1)
+low(x) = UInt64(x&0xffffffffffffffff)
+high(x) = UInt64(x >>> 64)
+bitat(x::UInt128,y) = y >= 64 ? (Int32(high(x) >> (y-64)) & 1) : (Int32(low(x) >> y) & 1)
 function divrem2(x,power)
     h = high(x)
     l = low(x)
     if power >= 64
-        result = int32(h >> (power - 64))
-        h -= uint64(result) << (power - 64)
-        return result, (uint128(h) << 64) + l
+        result = Int32(h >> (power - 64))
+        h -= UInt64(result) << (power - 64)
+        return result, (UInt128(h) << 64) + l
     else
-        part_low::Uint64 = l >> power
-        part_high::Uint64 = h << (64 - power)
-        result = int32(part_low + part_high)
-        return result, uint128(l - (part_low << power))
+        part_low::UInt64 = l >> power
+        part_high::UInt64 = h << (64 - power)
+        result = Int32(part_low + part_high)
+        return result, UInt128(l - (part_low << power))
     end
 end
-function shift(x::Uint128,amt)
+function shift(x::UInt128,amt)
     if amt == 0
       return x
     elseif amt == -64
@@ -139,13 +169,13 @@ function shift(x::Uint128,amt)
         h <<= -amt
         h += l >> (64 + amt)
         l <<= -amt
-        return (uint128(h) << 64) + l
+        return (UInt128(h) << 64) + l
     else
         h = high(x); l = low(x)
         l >>= amt
         l += h << (64 - amt)
         h >>= amt
-        return (uint128(h) << 64) + l
+        return (UInt128(h) << 64) + l
     end
 end
 
@@ -168,14 +198,14 @@ function trimzeros(buffer, len, decimal_point)
 end
 
 function fastfixedtoa(v,mode,fractional_count,buffer)
-    v = float64(v)
-    significand::Uint64 = _significand(v)
+    v = Float64(v)
+    significand::UInt64 = _significand(v)
     exponent = _exponent(v)
-    exponent > 20 && return false, 0, 0, buffer
-    fractional_count > 20 && return false, 0, 0, buffer
+    exponent > 20 && return false, 0, 0
+    fractional_count > 20 && return false, 0, 0
     len = 1
     if exponent + kDoubleSignificandSize > 64
-        kFive17 = divisor = int64(5)^17
+        kFive17 = divisor = Int64(5)^17
         divisor_power = 17
         dividend = significand
         if exponent > divisor_power
@@ -200,23 +230,23 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
         if integrals > 0xFFFFFFFF
             len = filldigits64(integrals,buffer,len)
         else
-            len = filldigits32(uint32(integrals),buffer,len)
+            len = filldigits32(integrals%UInt32,buffer,len)
         end
         decimal_point = len-1
         len, decimal_point = fillfractionals(fractionals,exponent,fractional_count,
-                                                    buffer,len, decimal_point)
+                                             buffer,len, decimal_point)
     elseif exponent < -128
         len = 1
         decimal_point = -fractional_count
     else
         decimal_point = 0
         len, decimal_point = fillfractionals(significand,exponent,fractional_count,
-                                                    buffer,len, decimal_point)
+                                             buffer,len, decimal_point)
     end
     len, decimal_point = trimzeros(buffer,len,decimal_point)
     buffer[len] = 0
     if (len-1) == 0
         decimal_point = -fractional_count
     end
-    return true, len, decimal_point, buffer
+    return true, len, decimal_point
 end

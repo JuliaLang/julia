@@ -1,17 +1,47 @@
+# This file is a part of Julia, but is derived from
+# https://github.com/floitsch/double-conversion which has the following license
+#
+# Copyright 2006-2014, the V8 project authors. All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of Google Inc. nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 immutable Float
-    s::Uint64
+    s::UInt64
     e::Int32
     de::Int32
 end
 
 Float() = Float(0,0,0)
-Float(x,y) = Float(x,y,int32(0))
+Float(x,y) = Float(x,y,Int32(0))
 Float(d::FloatingPoint) = Float(_significand(d), _exponent(d))
 
 # Consts
 const Float10MSBits = 0xFFC0000000000000 # used normalize(Float)
 const FloatSignMask = 0x8000000000000000 # used in normalize(Float)
-const FloatSignificandSize = int32(64)
+const FloatSignificandSize = Int32(64)
 
 function normalize(v::Float)
     f = v.s
@@ -29,55 +59,55 @@ end
 function normalize(v::Float64)
     s = _significand(v); e = _exponent(v)
     while (s & HiddenBit(Float64)) == 0
-        s <<= uint64(1)
-        e -= int32(1)
+        s <<= UInt64(1)
+        e -= Int32(1)
     end
-    s <<= uint64(FloatSignificandSize - SignificandSize(Float64))
-    e -=  int32( FloatSignificandSize - SignificandSize(Float64))
-    return Float(s, e)  
+    s <<= UInt64(FloatSignificandSize - SignificandSize(Float64))
+    e -=  Int32( FloatSignificandSize - SignificandSize(Float64))
+    return Float(s, e)
 end
 
 # Float128
-#DenormalExponent(::Type{Float128}) = int32(-ExponentBias(Float128) + 1)
+#DenormalExponent(::Type{Float128}) = Int32(-ExponentBias(Float128) + 1)
 #ExponentMask(::Type{Float128}) = 0x7fff0000000000000000000000000000
-#PhysicalSignificandSize(::Type{Float128}) = int32(112)
-#SignificandSize(::Type{Float128}) = int32(113)
-#ExponentBias(::Type{Float128}) = int32(0x00003fff + PhysicalSignificandSize(Float128))
+#PhysicalSignificandSize(::Type{Float128}) = Int32(112)
+#SignificandSize(::Type{Float128}) = Int32(113)
+#ExponentBias(::Type{Float128}) = Int32(0x00003fff + PhysicalSignificandSize(Float128))
 #SignificandMask(::Type{Float128}) = 0x0000ffffffffffffffffffffffffffff
 #HiddenBit(::Type{Float128}) = 0x00010000000000000000000000000000
-#uint_t(d::Float128) = reinterpret(Uint128,d)
+#uint_t(d::Float128) = reinterpret(UInt128,d)
 # Float64
-DenormalExponent(::Type{Float64}) = int32(-ExponentBias(Float64) + 1)
+DenormalExponent(::Type{Float64}) = Int32(-ExponentBias(Float64) + 1)
 ExponentMask(::Type{Float64}) = 0x7FF0000000000000
-PhysicalSignificandSize(::Type{Float64}) = int32(52)
-SignificandSize(::Type{Float64}) = int32(53)
-ExponentBias(::Type{Float64}) = int32(0x3FF + PhysicalSignificandSize(Float64))
+PhysicalSignificandSize(::Type{Float64}) = Int32(52)
+SignificandSize(::Type{Float64}) = Int32(53)
+ExponentBias(::Type{Float64}) = Int32(0x3FF + PhysicalSignificandSize(Float64))
 SignificandMask(::Type{Float64}) = 0x000FFFFFFFFFFFFF
 HiddenBit(::Type{Float64}) = 0x0010000000000000
-uint_t(d::Float64) = reinterpret(Uint64,d)
+uint_t(d::Float64) = reinterpret(UInt64,d)
 # Float32
-DenormalExponent(::Type{Float32}) = int32(-ExponentBias(Float32) + 1)
+DenormalExponent(::Type{Float32}) = Int32(-ExponentBias(Float32) + 1)
 ExponentMask(::Type{Float32}) = 0x7F800000
-PhysicalSignificandSize(::Type{Float32}) = int32(23)
-SignificandSize(::Type{Float32}) = int32(24)
-ExponentBias(::Type{Float32}) = int32(0x7F + PhysicalSignificandSize(Float32))
+PhysicalSignificandSize(::Type{Float32}) = Int32(23)
+SignificandSize(::Type{Float32}) = Int32(24)
+ExponentBias(::Type{Float32}) = Int32(0x7F + PhysicalSignificandSize(Float32))
 SignificandMask(::Type{Float32}) = 0x007FFFFF
 HiddenBit(::Type{Float32}) = 0x00800000
-uint_t(d::Float32) = reinterpret(Uint32,d)
+uint_t(d::Float32) = reinterpret(UInt32,d)
 # Float16
-DenormalExponent(::Type{Float16}) = int32(-ExponentBias(Float16) + 1)
+DenormalExponent(::Type{Float16}) = Int32(-ExponentBias(Float16) + 1)
 ExponentMask(::Type{Float16}) = 0x7c00
-PhysicalSignificandSize(::Type{Float16}) = int32(10)
-SignificandSize(::Type{Float16}) = int32(11)
-ExponentBias(::Type{Float16}) = int32(0x000f + PhysicalSignificandSize(Float16))
+PhysicalSignificandSize(::Type{Float16}) = Int32(10)
+SignificandSize(::Type{Float16}) = Int32(11)
+ExponentBias(::Type{Float16}) = Int32(0x000f + PhysicalSignificandSize(Float16))
 SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
-uint_t(d::Float16) = reinterpret(Uint16,d)
+uint_t(d::Float16) = reinterpret(UInt16,d)
 
 function _exponent{T<:FloatingPoint}(d::T)
   isdenormal(d) && return DenormalExponent(T)
-  biased_e::Int32 = int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
-  return int32(biased_e - ExponentBias(T))
+  biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
+  return Int32(biased_e - ExponentBias(T))
 end
 function _significand{T<:FloatingPoint}(d::T)
   s = uint_t(d) & SignificandMask(T)
@@ -105,19 +135,19 @@ end
 const FloatM32 = 0xFFFFFFFF
 
 function (*)(this::Float,other::Float)
-    a::Uint64 = this.s >> 32
-    b::Uint64 = this.s & FloatM32
-    c::Uint64 = other.s >> 32
-    d::Uint64 = other.s & FloatM32
-    ac::Uint64 = a * c
-    bc::Uint64 = b * c
-    ad::Uint64 = a * d
-    bd::Uint64 = b * d
-    tmp::Uint64 = (bd >> 32) + (ad & FloatM32) + (bc & FloatM32)
+    a::UInt64 = this.s >> 32
+    b::UInt64 = this.s & FloatM32
+    c::UInt64 = other.s >> 32
+    d::UInt64 = other.s & FloatM32
+    ac::UInt64 = a * c
+    bc::UInt64 = b * c
+    ad::UInt64 = a * d
+    bd::UInt64 = b * d
+    tmp::UInt64 = (bd >> 32) + (ad & FloatM32) + (bc & FloatM32)
     # By adding 1U << 31 to tmp we round the final result.
     # Halfway cases will be round up.
-    tmp += uint64(1) << 31
-    result_f::Uint64 = ac + (ad >> 32) + (bc >> 32) + (tmp >> 32)
+    tmp += UInt64(1) << 31
+    result_f::UInt64 = ac + (ad >> 32) + (bc >> 32) + (tmp >> 32)
     return Float(result_f,this.e + other.e + 64,this.de)
 end
 
@@ -219,7 +249,7 @@ const MinDecimalExponent = -348
 const MaxDecimalExponent = 340
 
 function binexp_cache(min_exponent,max_exponent)
-    k = iceil((min_exponent+63)*D_1_LOG2_10)
+    k = ceil(Integer,(min_exponent+63)*D_1_LOG2_10)
     index = div(CachedPowersOffset+k-1,DecimalExponentDistance) + 1
     cp = CachedPowers[index+1]
     return cp

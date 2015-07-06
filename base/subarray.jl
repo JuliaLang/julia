@@ -1,329 +1,524 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## subarrays ##
+typealias NonSliceIndex Union{Colon, Range{Int}, UnitRange{Int}, Array{Int,1}}
+typealias ViewIndex Union{Int, NonSliceIndex}
 
-typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int})
-
-type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
-    parent::A
+# LD is the last dimension up through which this object has efficient
+# linear indexing. If LD==length(I), then the object itself has efficient
+# linear indexing.
+immutable SubArray{T,N,P<:AbstractArray,I<:Tuple{Vararg{ViewIndex}},LD} <: AbstractArray{T,N}
+    parent::P
     indexes::I
     dims::NTuple{N,Int}
-    strides::Array{Int,1}  # for accessing parent with linear indexes
-    first_index::Int
-
-    # Note: no bounds-checking on construction. See issue #4044
-    #linear indexing constructor (scalar)
-    if N == 0 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(Int,))
-            new(p, i, (), Int[], i[1])
-        end
-    #linear indexing constructor (ranges)
-    elseif N == 1 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(UnitRange{Int},))
-            new(p, i, (length(i[1]),), [1], first(i[1]))
-        end
-        function SubArray(p::A, i::(Range{Int},))
-            new(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
-        end
-    else
-        function SubArray(p::A, i::I)
-            newdims = Array(Int, 0)
-            newstrides = Array(Int, 0)
-            newfirst = 1
-            pstride = 1
-            for j = 1:length(i)
-                if isa(i[j], Int)
-                    newfirst += (i[j]-1)*pstride
-                else
-                    push!(newdims, length(i[j]))
-                    #may want to return error if step(i[j]) <= 0
-                    push!(newstrides, isa(i[j],UnitRange) ? pstride :
-                         pstride * step(i[j]))
-                    newfirst += (first(i[j])-1)*pstride
-                end
-                pstride *= size(p,j)
-            end
-            new(p, i, tuple(newdims...), newstrides, newfirst)
-        end
-    end
+    first_index::Int   # for linear indexing and pointer
+    stride1::Int       # used only for linear indexing
 end
 
-#linear indexing sub (may want to rename as slice)
-function sub{T,N}(A::Array{T,N}, i::(Union(Range{Int}, UnitRange{Int}),))
-    SubArray{T,1,typeof(A),typeof(i)}(A, i)
-end
+typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}}
+typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}}
+typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
+typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
-# if `I` were a vector, index_ranges would do the following:
-# j = length(I)
-# while j > 0 && isa(I[j], Int)
-#     j -= 1
-# end
-# for i = 1:j
-#     if isa(I[i], Int)
-#         I[i] = I[i]:I[i]
-#     end
-# end
-to_range(j::Int) = j:j
-to_range(j::RangeIndex) = j
-index_ranges(I::Int...) = I
-index_ranges(i, I...) = tuple(to_range(i), index_ranges(I...)...)
+# Simple utilities
+eltype{T,N,P,I}(V::SubArray{T,N,P,I}) = T
+eltype{T,N,P,I}(::Type{SubArray{T,N,P,I}}) = T
+ndims{T,N,P,I}(V::SubArray{T,N,P,I}) = N
+ndims{T,N,P,I}(::Type{SubArray{T,N,P,I}}) = N
+size(V::SubArray) = V.dims
+# size(V::SubArray, d::Integer) = d <= ndims(V) ? (@inbounds ret = V.dims[d]; ret) : 1
+length(V::SubArray) = prod(V.dims)
 
-function sub_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,Int})
-    SubArray{T,L,typeof(A),typeof(i)}(A, i)
-end
+similar(V::SubArray, T, dims::Dims) = similar(V.parent, T, dims)
+copy(V::SubArray) = copy!(similar(V.parent, size(V)), V)
 
-function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    sub_internal(A, index_ranges(i...), index_shape(i...))
-end
-
-sub{N}(A::SubArray, i::NTuple{N,RangeIndex}) = sub(A, i...)
-
-sub(A::AbstractArray, i::RangeIndex...) = sub(A, i)
-
-function sub(A::SubArray, i::RangeIndex...)
-    L = length(i)
-    while L > 0 && isa(i[L], Int); L-=1; end
-    j = 1
-    newindexes = Array(RangeIndex,length(A.indexes))
-    for k = 1:length(A.indexes)
-        if isa(A.indexes[k], Int)
-            newindexes[k] = A.indexes[k]
-        else
-            r = A.indexes[k]
-            ri = (isa(i[j],Int) && j<=L) ? (i[j]:i[j]) : i[j]
-            newindexes[k] = step(r) == 1 ? (first(r)-1) + ri : first(r) + (ri-1)*step(r)
-            j += 1
-        end
-    end
-    ni = tuple(newindexes...)
-    SubArray{eltype(A),L,typeof(A.parent),typeof(ni)}(A.parent, ni)
-end
-
-# Drops all Ints from a tuple of RangeIndexes
-ranges_only(I::Int...) = ()
-ranges_only(i::Int, I...) = ranges_only(I...)
-ranges_only(i::Union(Range{Int}, UnitRange{Int}), I...) = tuple(i, ranges_only(I...)...)
-
-function slice_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,RangeIndex})
-    SubArray{T,L,typeof(A),typeof(i)}(A, i)
-end
-slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}) = slice_internal(A, i, ranges_only(i...))
-
-# Throw error on slice dimension mismatch
-slice{T,N,M}(A::AbstractArray{T,N}, i::NTuple{M,RangeIndex}) = throw(BoundsError())
-
-slice(A::AbstractArray, i::RangeIndex...) = slice(A, i)
-
-function slice(A::SubArray, i::RangeIndex...)
-    j = 1
-    newindexes = Array(RangeIndex,length(A.indexes))
-    for k = 1:length(A.indexes)
-        if isa(A.indexes[k], Int)
-            newindexes[k] = A.indexes[k]
-        else
-            r = A.indexes[k]
-            newindexes[k] = step(r) == 1 ? (first(r)-1) + i[j] : first(r) + (i[j]-1)*step(r)
-            j += 1
-        end
-    end
-    slice(A.parent, tuple(newindexes...))
-end
-
-# Colon translation
-sub(A::AbstractArray, I::Union(RangeIndex, Colon)...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
-slice(A::AbstractArray, I::Union(RangeIndex, Colon)...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
-
-
-### rename the old slice function ###
-##squeeze all dimensions of length 1
-#slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
-#slice{T,N}(s::SubArray{T,N}) =
-#    sub(s.parent, map(i->!isa(i, Int) && length(i)==1 ?i[1] : i, s.indexes))
-#
-##slice dimensions listed, error if any have length > 1
-##silently ignores dimensions that are greater than N
-#function slice{T,N}(a::AbstractArray{T,N}, sdims::Integer...)
-#    newdims = ()
-#    for i = 1:N
-#        next = 1:size(a, i)
-#        for j in sdims
-#            if i == j
-#                if size(a, i) != 1
-#                    error("dimension ", i, " has length greater than 1")
-#                end
-#                next = 1
-#                break
-#            end
-#        end
-#        newdims = tuple(newdims..., next)
-#    end
-#    sub(a, newdims)
-#end
-#function slice{T,N}(s::SubArray{T,N}, sdims::Integer...)
-#    newdims = ()
-#    for i = 1:length(s.indexes)
-#        next = s.indexes[i]
-#        for j in sdims
-#            if i == j
-#                if length(next) != 1
-#                    error("dimension ", i," has length greater than 1")
-#                end
-#                next = isa(next, Int) ? next : first(next)
-#                break
-#            end
-#        end
-#        newdims = tuple(newdims..., next)
-#    end
-#    sub(s.parent, newdims)
-#end
-### end commented code ###
-
-size(s::SubArray) = s.dims
-ndims{T,N}(s::SubArray{T,N}) = N
-
-parent(s::SubArray) = s.parent
-parentindexes(s::SubArray) = s.indexes
+parent(V::SubArray) = V.parent
+parentindexes(V::SubArray) = V.indexes
 
 parent(a::AbstractArray) = a
-parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
+parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
-copy(s::SubArray) = copy!(similar(s.parent, size(s)), s)
-similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
-
-getindex{T}(s::SubArray{T,0}) = s.parent[s.first_index]
-
-getindex{T}(s::SubArray{T,1}, i::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1]]
-getindex{T}(s::SubArray{T,1}, i::Integer, j::Integer) =
-    j==1 ? s.parent[s.first_index + (i-1)*s.strides[1]] : throw(BoundsError())
-getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
-getindex{T}(s::SubArray{T,3}, i::Integer, j::Integer, k::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3]]
-getindex{T}(s::SubArray{T,4}, i::Integer, j::Integer, k::Integer, l::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4]]
-getindex{T}(s::SubArray{T,5}, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4] + (m-1)*s.strides[5]]
-
-getindex(s::SubArray, i::Real) = getindex(s, to_index(i))
-getindex(s::SubArray, i0::Real, i1::Real) =
-    getindex(s, to_index(i0), to_index(i1))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, is::Real...) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), to_index(is)...)
-
-getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
-
-function getindex(s::SubArray, is::Integer...)
-    index = s.first_index
-    for i = 1:length(is)
-        isi = is[i]
-        if isi != 1
-            index += (is[i]-1)*s.strides[i]
-        end
-    end
-    s.parent[index]
+## SubArray creation
+# Drops singleton dimensions (those indexed with a scalar)
+slice(A::AbstractArray, I::ViewIndex...) = _slice(A, I)
+slice(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _slice(A, I)
+function _slice(A, I)
+    checkbounds(A, I...)
+    slice_unsafe(A, I)
 end
 
-function getindex_bool_1d(S::SubArray, I::AbstractArray{Bool})
-    n = sum(I)
-    out = similar(S, n)
-    c = 1
-    for i = 1:length(I)
-        if I[i]
-            out[c] = S[i]
-            c += 1
+# The most complicated part of this is matching the axes between the
+# input index tuples (denoted by J), the index tuples that get stored
+# in the view (denoted by I), and the overall dimensionality of the
+# view.
+# The complexities increase when you create a view-of-a-view, because
+# then there is also the index tuple of the parent view (denoted IV)
+# to consider.
+#
+# Examples:
+#    S1 = sub(A::Matrix, 2, 3:5)    ndims(S1) == length(I) == length(J) == 2
+#    S2 = slice(A::Matrix, 2, 3:5)  ndims(S2) == 1, length(I) == length(J) == 2
+#    S3 = sub(A::Matrix, 4:17)      ndims(S3) == length(I) == length(J) == 1
+#    S4 = sub(S2, 1:2)              ndims(S4) == length(J) == 1, length(I) == 2
+# S3 addresses the trailing dimensions of the parent by linear indexing.
+# For S4, J[1] corresponds to I[2], because of the slice along
+# dimension 1 in S2
+
+@generated function slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+    N = 0
+    sizeexprs = Array(Any, 0)
+    Jp = J.parameters
+    for Jindex = 1:length(Jp)
+        j = Jp[Jindex]
+        if !(j <: Real)
+            N += 1
+            push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :A, :J))
         end
     end
-    out
+    dims = :(tuple($(sizeexprs...)))
+    LD = subarray_linearindexing_dim(A, J)
+    strideexpr = stride1expr(A, Jp, :A, :J, LD)
+    exfirst = first_index_expr(:A, :J, length(Jp))
+    quote
+        $exfirst
+        SubArray{$T,$N,$A,$J,$LD}(A, J, $dims, f, $strideexpr)
+    end
 end
 
-getindex{T}(S::SubArray{T,1}, I::AbstractArray{Bool,1}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,2}, I::AbstractArray{Bool,2}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,3}, I::AbstractArray{Bool,3}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,4}, I::AbstractArray{Bool,4}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,5}, I::AbstractArray{Bool,5}) = getindex_bool_1d(S, I)
-
-getindex{T}(s::SubArray{T,1}, I::UnitRange{Int}) =
-    getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
-
-getindex{T}(s::SubArray{T,1}, I::Range{Int}) =
-    getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
-
-function getindex{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
-    t = Array(Int, length(I))
-    for i = 1:length(I)
-        t[i] = s.first_index + (I[i]-1)*s.strides[1]
-    end
-    getindex(s.parent, t)
+# Conventional style (drop trailing singleton dimensions, keep any
+# other singletons by converting them to ranges, e.g., 3:3)
+sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
+sub(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _sub(A, I)
+function _sub(A, I)
+    checkbounds(A, I...)
+    sub_unsafe(A, I)
 end
 
-function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
-    n = length(I)
-    newindexes = Any[s.indexes...]
-    pdims = parentdims(s)
-    havelinear = n < ndims(s)
-    for i = 1:n-havelinear
-        newindexes[pdims[i]] = s.indexes[pdims[i]][I[i]]
+@generated function sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+    sizeexprs = Array(Any, 0)
+    Itypes = Array(Any, 0)
+    Iexprs = Array(Any, 0)
+    Jp = J.parameters
+    N = length(Jp)
+    while N > 0 && Jp[N] <: Real
+        N -= 1
     end
-    if havelinear
-        newindexes = newindexes[1:pdims[n]]
-        newindexes[pdims[n]] = translate_linear_indexes(s, n, I[end], pdims)
-    end
-    newindexes
-end
-
-# translate a linear index vector I for dim n to a linear index vector for
-# the parent array
-function translate_linear_indexes(s, n, I, pdims)
-    idx = Array(Int, length(I))
-    ssztail = size(s)[n:end]
-    indexestail = s.indexes[pdims[n:end]]
-    # The next gets the strides of dimensions listed in pdims[n:end], relative to the stride of pdims[n]
-    pstrd = [1]
-    j = n+1
-    strd = 1
-    for i = pdims[n]+1:ndims(s.parent)
-        strd *= size(s.parent, i-1)
-        if j <= length(pdims) && i == pdims[j]
-            push!(pstrd, strd)
-            j += 1
+    for Jindex = 1:length(Jp)
+        j = Jp[Jindex]
+        if Jindex <= N
+            push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :A, :J))
+        end
+        if Jindex < N && j <: Real
+            push!(Itypes, UnitRange{Int})
+            push!(Iexprs, :(Int(J[$Jindex]):Int(J[$Jindex])))
+        else
+            push!(Itypes, j)
+            push!(Iexprs, :(J[$Jindex]))
         end
     end
-    # Compute the offset from any omitted dimensions
-    taildimsoffset = 0
-    for i = pdims[n]+1:ndims(s.parent)
-        thisI = s.indexes[i]
-        if isa(thisI, Integer)
-            taildimsoffset += (thisI-1)*stride(s.parent, i)
-        end
+    dims = :(tuple($(sizeexprs...)))
+    Iext = :(tuple($(Iexprs...)))
+    It = Tuple{Itypes...}
+    LD = subarray_linearindexing_dim(A, J)
+    strideexpr = stride1expr(A, Jp, :A, :J, LD)
+    exfirst = first_index_expr(:A, :J, length(Itypes))
+    quote
+        $exfirst
+        SubArray{$T,$N,$A,$It,$LD}(A, $Iext, $dims, f, $strideexpr)
     end
-    nd = length(pstrd)
-    for j=1:length(I)
-        su = ind2sub(ssztail,I[j])  # convert to particular location within indexes
-        K = taildimsoffset + 1
-        for k = 1:nd
-            K += pstrd[k]*(indexestail[k][su[k]]-1)   # convert to particular location in parent
-        end
-        idx[j] = K
-    end
-    idx
 end
 
+# Constructing from another SubArray
+# This "pops" the old SubArray and creates a more compact one
+@generated function slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+    N = 0
+    sizeexprs = Array(Any, 0)
+    indexexprs = Array(Any, 0)
+    Itypes = Array(Any, 0)
+    Jp = J.parameters
+    # The next two Ints, if nonzero, record information about the place
+    # in the index tuple at which trailing dimensions got packed into a
+    # single Vector{Int}. For stride1 computation, we need to keep track
+    # of whether the index that triggered this had uniform stride.
+    #   Iindex_lin is the spot in the resulting index tuple
+    #   Jindex_lin is the corresponding spot in the input index tuple
+    Iindex_lin = Jindex_lin = 0
+    # Linear indexing inference makes use of the following variables:
+    #   LD: the last dimension up through which linear indexing is efficient
+    #   isLDdone: true if we've quit incrementing LD
+    #   die_next_vector: if true, stop incrementing LD on the next
+    #      "extended" input index
+    #   jprev: holds the previous input index type
+    LD, die_next_vector, jprev, isLDdone = 0, false, Void, false  # for linear indexing inference
+    Jindex = 0
+    IVp = IV.parameters
+    for IVindex = 1:length(IVp)
+        iv = IVp[IVindex]
+        if iv <: Real
+            push!(indexexprs, :(V.indexes[$IVindex]))
+            push!(Itypes, iv)
+            if !isLDdone
+                LD += 1
+            end
+        else
+            Jindex += 1
+            j = Jp[Jindex]
+            if Jindex < length(Jp) || Jindex == NV || IVindex == length(IVp)
+                if !(j <: Real)
+                    N += 1
+                    push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
+                end
+                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(Itypes, rangetype(iv, j))
+            else
+                # We have a linear index that spans more than one
+                # dimension of the parent
+                N += 1
+                push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
+                push!(Itypes, Array{Int, 1})
+                Iindex_lin = length(Itypes)
+                Jindex_lin = Jindex
+                break
+            end
+            if !isLDdone
+                if LD < PLD
+                    LD += 1
+                    jprev, LD, die_next_vector, isdone = nextLD(jprev, j, LD, die_next_vector)
+                    isLDdone |= isdone
+                else
+                    if j <: Real
+                        LD += 1
+                    else
+                        isLDdone = true
+                    end
+                end
+            end
+        end
+    end
+    for Jind = Jindex+1:length(Jp)
+        j = Jp[Jind]
+        if !(j <: Real)
+            N += 1
+            push!(sizeexprs, dimsizeexpr(j, Jind, length(Jp), :V, :J))
+            isLDdone = true
+        elseif !isLDdone
+            LD += 1
+        end
+        push!(indexexprs, :(J[$Jind]))
+        push!(Itypes, j)
+    end
+    Inew = :(tuple($(indexexprs...)))
+    dims = :(tuple($(sizeexprs...)))
+    It = Tuple{Itypes...}
+    LD = max(LD, subarray_linearindexing_dim(PV, It))
+    strideexpr = stride1expr(PV, Itypes, :(V.parent), :Inew, LD, :J, Iindex_lin, Jindex_lin)
+    exfirst = first_index_expr(:(V.parent), :Inew, length(Itypes))
+    quote
+        Inew = $Inew
+        $exfirst
+        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
+    end
+end
+
+@generated function sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+    Jp = J.parameters
+    IVp = IV.parameters
+    N = length(Jp)
+    while N > 0 && Jp[N] <: Real
+        N -= 1
+    end
+    sizeexprs = Array(Any, 0)
+    indexexprs = Array(Any, 0)
+    Itypes = Array(Any, 0)
+    ItypesLD = Array(Any, 0)
+    preexprs = Array(Any, 0)
+    LD, die_next_vector, jprev, isLDdone = 0, false, Void, false
+    Jindex = 0
+    for IVindex = 1:length(IVp)
+        iv = IVp[IVindex]
+        if iv <: Real
+            push!(indexexprs, :(V.indexes[$IVindex]))
+            push!(Itypes, iv)
+            push!(ItypesLD, iv)
+            if !isLDdone
+                LD += 1
+            end
+        else
+            Jindex += 1
+            j = Jp[Jindex]
+            if Jindex <= N
+                push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
+            end
+            if Jindex < N && j <: Real
+                # convert scalar to a range
+                sym = gensym()
+                push!(preexprs, :($sym = reindex(V.indexes[$IVindex], Int(J[$Jindex]))))
+                push!(indexexprs, :($sym:$sym))
+                push!(Itypes, UnitRange{Int})
+                push!(ItypesLD, j)
+            elseif Jindex < length(Jp) || Jindex == NV || IVindex == length(IVp)
+                # simple indexing
+                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(Itypes, rangetype(iv, j))
+                push!(ItypesLD, Itypes[end])
+            else
+                # We have a linear index that spans more than one dimension of the parent
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
+                push!(Itypes, Array{Int, 1})
+                push!(ItypesLD, Itypes[end])
+                break
+            end
+            if !isLDdone
+                if LD < PLD
+                    LD += 1
+                    jprev, LD, die_next_vector, isdone = nextLD(jprev, j, LD, die_next_vector)
+                    isLDdone |= isdone
+                else
+                    if j <: Real
+                        LD += 1
+                    else
+                        isLDdone = true
+                    end
+                end
+            end
+        end
+    end
+    for Jind = Jindex+1:length(Jp)
+        j = Jp[Jind]
+        if Jind <= N
+            push!(sizeexprs, dimsizeexpr(j, Jind, length(Jp), :V, :J))
+        end
+        push!(indexexprs, :(J[$Jind]))
+        push!(Itypes, j)
+        push!(ItypesLD, Itypes[end])
+    end
+    Inew = :(tuple($(indexexprs...)))
+    dims = :(tuple($(sizeexprs...)))
+    It = Tuple{Itypes...}
+    LD = max(LD, subarray_linearindexing_dim(PV, It))
+    strideexpr = stride1expr(PV, ItypesLD, :(V.parent), :Inew, LD)
+    preex = isempty(preexprs) ? nothing : Expr(:block, preexprs...)
+    exfirst = first_index_expr(:(V.parent), :Inew, length(Itypes))
+    quote
+        $preex
+        Inew = $Inew
+        $exfirst
+        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
+    end
+end
+
+function rangetype(T1, T2)
+    rt = return_types(getindex, Tuple{T1, T2})
+    length(rt) == 1 || error("Can't infer return type")
+    rt[1]
+end
+
+reindex(a, b) = a[b]
+reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
+reindex(a::UnitRange, b::StepRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), step(b), length(b))
+reindex(a::StepRange, b::Range{Int}) = range(oftype(first(a), first(a)+(first(b)-1)*step(a)), step(a)*step(b), length(b))
+reindex(a, b::Int) = unsafe_getindex(a, b)
+
+dimsizeexpr(Itype, d::Int, len::Int, Asym::Symbol, Isym::Symbol) = :(length($Isym[$d]))
+function dimsizeexpr(Itype::Type{Colon}, d::Int, len::Int, Asym::Symbol, Isym::Symbol)
+    if d < len
+        :(size($Asym, $d))
+    else
+        :(tailsize($Asym, $d))
+    end
+end
+dimsize(P, d, I) = length(I)
+dimsize(P, d::Int, ::Colon) = size(P, d)
+dimsize(P, d::Dims, ::Colon) = prod(size(P)[d])
+function tailsize(P, d)
+    s = 1
+    for i = d:ndims(P)
+        s *= size(P, i)
+    end
+    s
+end
+
+@generated function linearindexing{T,N,P,I,LD}(A::SubArray{T,N,P,I,LD})
+    length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
+end
+@generated function linearindexing{A<:SubArray}(::Type{A})
+    T,N,P,I,LD = A.parameters
+    length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
+end
+
+getindex(::Colon, i) = to_index(i)
+unsafe_getindex(v::Colon, i) = to_index(i)
+
+step(::Colon) = 1
+first(::Colon) = 1
+isempty(::Colon) = false
+in(::Int, ::Colon) = true
+
+## Strides
+@generated function strides{T,N,P,I}(V::SubArray{T,N,P,I})
+    Ip = I.parameters
+    all(map(x->x<:Union{RangeIndex,Colon}, Ip)) || throw(ArgumentError("strides valid only for RangeIndex indexing"))
+    strideexprs = Array(Any, N+1)
+    strideexprs[1] = 1
+    i = 1
+    Vdim = 1
+    for i = 1:length(Ip)
+        if Ip[i] != Int
+            strideexprs[Vdim+1] = copy(strideexprs[Vdim])
+            strideexprs[Vdim] = :(step(V.indexes[$i])*$(strideexprs[Vdim]))
+            Vdim += 1
+        end
+        strideexprs[Vdim] = :(size(V.parent, $i) * $(strideexprs[Vdim]))
+    end
+    :(tuple($(strideexprs[1:N]...)))
+end
+
+stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
+
+function stride1expr(Atype::Type, Itypes, Aexpr, Isym, LD, Jsym=Isym, Iindex_lin=0, Jindex_lin=0)
+    if LD == 0
+        return 0
+    end
+    ex = 1
+    for d = 1:min(LD, length(Itypes))
+        I = Itypes[d]
+        if I <: Real
+            ex = :($ex * size($Aexpr, $d))
+        else
+            if d == Iindex_lin
+                ex = :($ex * step_sa($Jsym[$Jindex_lin]))
+            else
+                ex = :($ex * step($Isym[$d]))
+            end
+            break
+        end
+    end
+    ex
+end
+
+step_sa(arg) = step(arg)
+step_sa(::Integer) = 1
+
+# This might be conservative, but better safe than sorry
+function iscontiguous{T,N,P,I,LD}(::Type{SubArray{T,N,P,I,LD}})
+    Ip = I.parameters
+    LD == length(Ip) || return false
+    length(Ip) < 1 && return true
+    Ip[1] == Colon && return true
+    if Ip[1] <: UnitRange
+        # It might be stride1 == 1, or this might be because `sub` was
+        # used with an integer for the first index
+        for j = 2:length(Ip)
+            (Ip[j] == Colon || (Ip[j] <: AbstractVector)) && return false
+        end
+        return true
+    end
+    false
+end
+iscontiguous(S::SubArray) = iscontiguous(typeof(S))
+
+first_index(V::SubArray) = first_index(V.parent, V.indexes)
+function first_index(P::AbstractArray, indexes::Tuple)
+    f = 1
+    s = 1
+    for i = 1:length(indexes)
+        f += (first(indexes[i])-1)*s
+        s *= size(P, i)
+    end
+    f
+end
+
+function first_index_expr(Asym, Isym::Symbol, n::Int)
+    ex = :(f = s = 1)
+    for i = 1:n
+        ex = quote
+            $ex
+            if isempty($Isym[$i])
+                f = s = 0
+            else
+                f += (first($Isym[$i])-1)*s
+                s *= size($Asym, $i)
+            end
+        end
+    end
+    ex
+end
+
+# Detecting whether one can support fast linear indexing
+function nextLD(jprev, j, LD, die_next_vector)
+    isdone = false
+    if j <: Real
+        if jprev != Void && !(jprev <: Real)
+            die_next_vector = true
+        end
+    elseif die_next_vector || j <: Vector
+        LD -= 1
+        isdone = true
+    elseif j == Colon
+    elseif j <: UnitRange
+        die_next_vector = true
+    elseif j <: Range
+        if !(jprev == Void || jprev <: Real)
+            LD -= 1
+            isdone = true
+        end
+        die_next_vector = true
+    else
+        error("This shouldn't happen (linear indexing inference)")
+    end
+    jprev = j
+    return jprev, LD, die_next_vector, isdone
+end
+
+function subarray_linearindexing_dim{A<:AbstractArray}(::Type{A}, It::Type)
+    isa(Base.linearindexing(A), Base.LinearSlow) && return 0
+    isempty(It.parameters) && return 0
+    jprev = Void
+    LD = 0
+    die_next_vector = false
+    while LD < length(It.parameters)
+        LD += 1
+        I = It.parameters[LD]
+        jprev, LD, die_next_vector, isdone = nextLD(jprev, I, LD, die_next_vector)
+        if isdone
+            break
+        end
+    end
+    LD
+end
+
+unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
+    pointer(V.parent) + (V.first_index-1)*sizeof(T)
+
+unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{Void}}, V::SubArray{T,N,P,I}) =
+    convert(Ptr{Void}, unsafe_convert(Ptr{T}, V))
+
+pointer(V::SubArray, i::Int) = pointer(V, ind2sub(size(V), i))
+
+function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
+    index = first_index(V)
+    strds = strides(V)
+    for d = 1:length(is)
+        index += (is[d]-1)*strds[d]
+    end
+    return pointer(V.parent, index)
+end
+
+## Convert
+convert{T,S,N}(::Type{Array{T,N}}, V::SubArray{S,N}) = copy!(Array(T, size(V)), V)
+
+
+## Compatability
+# deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
     dimindex = Array(Int, nd)
     sp = strides(s.parent)
+    sv = strides(s)
     j = 1
     for i = 1:ndims(s.parent)
         r = s.indexes[i]
-        if j <= nd && (isa(r,Range) ? sp[i]*step(r) : sp[i]) == s.strides[j]
+        if j <= nd && (isa(r,Union{Colon,Range}) ? sp[i]*step(r) : sp[i]) == sv[j]
             dimindex[j] = i
             j += 1
         end
@@ -331,84 +526,144 @@ function parentdims(s::SubArray)
     dimindex
 end
 
-function getindex(s::SubArray, I::Union(Real,AbstractVector)...)
-    newindexes = translate_indexes(s, I...)
+## Scalar indexing
 
-    rs = index_shape(I...)
-    result = getindex(s.parent, newindexes...)
-    if isequal(rs, size(result))
-        return result
-    else
-        return reshape(result, rs)
+# While it'd be nice to explicitly check bounds against the SubArray dimensions,
+# the lack of an extensible @inbounds mechanism makes it difficult for users to
+# avoid the cost of the bounds check without rewriting their syntax to use the
+# unwieldy unsafe_getindex/unsafe_setindex! function calls. So instead we define
+# getindex to rely upon the bounds checks in the parent array. It's still
+# advantageous to define the unsafe_ variants without any bounds checks since
+# the abstract indexing fallbacks can make use of them.
+@generated function getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; getindex(V.parent, V.first_index + I[1] - 1))
+        end
+        return :($meta; getindex(V.parent, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        getindex(V.parent, $(idxs...))
+    end
+end
+@generated function unsafe_getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; unsafe_getindex(V.parent, V.first_index + I[1] - 1))
+        end
+        return :($meta; unsafe_getindex(V.parent, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        unsafe_getindex(V.parent, $(idxs...))
+    end
+end
+@generated function setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; setindex!(V.parent, v, V.first_index + I[1] - 1))
+        end
+        return :($meta; setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        setindex!(V.parent, v, $(idxs...))
+    end
+end
+@generated function unsafe_setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, I::Int...)
+    ni = length(I)
+    if ni == 1 && length(IV.parameters) == LD  # linear indexing
+        meta = Expr(:meta, :inline)
+        if iscontiguous(V)
+            return :($meta; unsafe_setindex!(V.parent, v, V.first_index + I[1] - 1))
+        end
+        return :($meta; unsafe_setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
+    end
+    Isyms = [:(I[$d]) for d = 1:ni]
+    exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
+    quote
+        $exhead
+        unsafe_setindex!(V.parent, v, $(idxs...))
     end
 end
 
-setindex!(s::SubArray, v, i::Integer) = setindex!(s, v, ind2sub(size(s), i)...)
+# Indexing with non-scalars. For now, this returns a copy, but changing that
+# is just a matter of deleting the explicit call to copy.
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(V, to_indexes(I...)...)
+unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
+unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = unsafe_getindex(V, to_indexes(I...)...)
 
-function setindex!(s::SubArray, v, is::Integer...)
-    index = s.first_index
-    for i = 1:length(is)
-        index += (is[i]-1)*s.strides[i]
+# Nonscalar setindex! falls back to the AbstractArray versions
+
+# NP is parent dimensionality, Itypes is the tuple typeof(V.indexes)
+# NP may not be equal to length(Itypes), because a view of a 2d matrix A
+# can be constructed as V = A[5:13] or as V = A[2:4, 1:3, 1].
+function index_generate(NP, Itypes, Vsym, Isyms)
+    Itypes = Itypes.parameters
+    if isempty(Isyms)
+        Isyms = Any[1]  # this handles the syntax getindex(V)
     end
-    s.parent[index] = v
-    return s
-end
-
-setindex!{T}(s::SubArray{T,0}, v) = setindex!(s.parent, v, s.first_index)
-
-
-setindex!{T}(s::SubArray{T,1}, v, i::Integer) =
-    setindex!(s.parent, v, s.first_index + (i-1)*s.strides[1])
-
-setindex!{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
-
-setindex!{T}(s::SubArray{T,3}, v, i::Integer, j::Integer, k::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3])
-
-setindex!{T}(s::SubArray{T,4}, v, i::Integer, j::Integer, k::Integer, l::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4])
-
-setindex!{T}(s::SubArray{T,5}, v, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4]+(m-1)*s.strides[5])
-
-setindex!{T}(s::SubArray{T,1}, v, I::UnitRange{Int}) =
-    setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
-
-setindex!{T}(s::SubArray{T,1}, v, I::Range{Int}) =
-    setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
-
-function setindex!{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
-    t = Array(Int, length(I))
-    for i = 1:length(I)
-        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    exhead = :nothing
+    NV = 0
+    for I in Itypes
+        NV += !(I == Int)
     end
-    setindex!(s.parent, v, t)
-end
-
-# to avoid ambiguity warning
-function setindex!(s::SubArray, v, I::Real)
-    newindexes = translate_indexes(s, (to_index(I),))
-    setindex!(s.parent, v, newindexes...)
-end
-function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
-    newindexes = translate_indexes(s, to_index(I)...)
-    setindex!(s.parent, v, newindexes...)
-end
-
-stride(s::SubArray, i::Integer) = i <= length(s.strides) ? s.strides[i] : s.strides[end]*s.dims[end]
-
-convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
-    pointer(x.parent) + (x.first_index-1)*sizeof(T)
-convert{T}(::Type{Ptr{Void}}, x::SubArray{T}) = convert(Ptr{Void}, convert(Ptr{T},x))
-convert{T,S,N}(::Type{Array{T,N}},A::SubArray{S,N}) = copy!(Array(T,size(A)), A)
-
-pointer(s::SubArray, i::Int) = pointer(s, ind2sub(size(s), i))
-
-function pointer(s::SubArray, is::(Int...))
-    index = s.first_index
-    for n = 1:length(is)
-        index += (is[n]-1)*s.strides[n]
+    if length(Isyms) < NV
+        # Linear indexing in the last index
+        n = NV - length(Isyms)
+        m = length(Isyms)
+        strides = [gensym() for i = 1:n]
+        indexes = [gensym() for i = 1:n+1]
+        resid = gensym()
+        linblock = Array(Expr, 2n+2)
+        linblock[1] = :($(strides[1]) = size($Vsym, $m))
+        for k = 2:n
+            m += 1
+            linblock[k] = :($(strides[k]) = $(strides[k-1]) * size($Vsym, $m))
+        end
+        k = n+1
+        linblock[k] = :($resid = $(Isyms[end])-1)
+        for i = n:-1:1
+            k += 1
+            linblock[k] = quote
+                $(indexes[i+1]), $resid = divrem($resid, $(strides[i]))
+                $(indexes[i+1]) += 1
+            end
+        end
+        linblock[end] = :($(indexes[1]) = $resid+1)
+        exhead = Expr(:block, linblock...)
+        pop!(Isyms)
+        append!(Isyms, indexes)
     end
-    return pointer(s.parent, index)
+    L = length(Itypes)
+    indexexprs = Array(Any, L)
+    j = 0
+    for i = 1:L
+        if Itypes[i] <: Real
+            indexexprs[i] = :($Vsym.indexes[$i])
+        else
+            j += 1
+            indexexprs[i] = :(unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))
+        end
+    end
+    # Note that we drop any extra indices. We're trusting that the indices are
+    # already checked to be in-bounds, so any extra indices must be 1 (and no-op)
+    if exhead == :nothing
+        exhead = Expr(:meta, :inline)
+    end
+    exhead, indexexprs
 end

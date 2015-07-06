@@ -1,8 +1,39 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # frexp,ldexp,significand,exponent
-@test frexp(12.8) == (0.8,4)
-@test ldexp(0.8,4) == 12.8
-@test significand(12.8) == 1.6
-@test exponent(12.8) == 3
+for T in (Float16,Float32,Float64)
+    for z in (zero(T),-zero(T))
+        frexp(z) === (z,0)
+        significand(z) === z
+        @test_throws DomainError exponent(z)
+    end
+
+    for (a,b) in [(T(12.8),T(0.8)),
+                  (prevfloat(realmin(T)), nextfloat(one(T),-2)),
+                  (nextfloat(zero(T),3), T(0.75)),
+                  (nextfloat(zero(T)), T(0.5))]
+
+        n = Int(log2(a/b))
+        @test frexp(a) == (b,n)
+        @test ldexp(b,n) == a
+        @test ldexp(a,-n) == b
+        @test significand(a) == 2b
+        @test exponent(a) == n-1
+
+        @test frexp(-a) == (-b,n)
+        @test ldexp(-b,n) == -a
+        @test ldexp(-a,-n) == -b
+        @test significand(-a) == -2b
+        @test exponent(-a) == n-1
+    end
+end
+
+for T in (Int, Float64, BigFloat)
+    @test_approx_eq deg2rad(T(180)) 1pi
+    @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
+    @test_approx_eq rad2deg([pi/T(4), pi/T(3)]) [45, 60]
+    @test_approx_eq rad2deg(T(1)*pi) 180
+end
 
 # degree-based trig functions
 for T = (Float32,Float64,Rational{Int})
@@ -11,7 +42,7 @@ for T = (Float32,Float64,Rational{Int})
         @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
         @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
     end
-    
+
     @test sind(convert(T,0.0))::fT === zero(fT)
     @test sind(convert(T,180.0))::fT === zero(fT)
     @test sind(convert(T,360.0))::fT === zero(fT)
@@ -55,7 +86,7 @@ end
 # check type stability
 for T = (Float32,Float64,BigFloat)
     for f = (sind,cosd,sinpi,cospi)
-        @test Base.return_types(f,(T,)) == [T]
+        @test Base.return_types(f,Tuple{T}) == [T]
     end
 end
 
@@ -68,20 +99,19 @@ end
 @test_approx_eq erfinv(0.84270079294971486934) 1
 @test_approx_eq erfcinv(0.15729920705028513066) 1
 @test_approx_eq dawson(1) 0.53807950691276841914
-# TODO: complex versions only supported on 64-bit for now
-@unix_only if WORD_SIZE==64
-    @test_approx_eq erf(1+2im) -0.53664356577856503399-5.0491437034470346695im
-    @test_approx_eq erfc(1+2im) 1.5366435657785650340+5.0491437034470346695im
-    @test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
-    @test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
-    @test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
-end
+
+@test_approx_eq erf(1+2im) -0.53664356577856503399-5.0491437034470346695im
+@test_approx_eq erfc(1+2im) 1.5366435657785650340+5.0491437034470346695im
+@test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
+@test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
+@test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
+
 for x in logspace(-200, -0.01)
     @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
     @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
     @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
     if x > 1e-20
-        xf = float32(x)
+        xf = Float32(x)
         @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
         @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
         @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
@@ -95,11 +125,27 @@ end
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
+@test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
 @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
 @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+@test_throws ArgumentError airyx(5,z)
+
+# bessely0, bessely1, besselj0, besselj1
+@test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
+@test_approx_eq besselj1(Float32(2.0)) besselj1(Float64(2.0))
+@test_approx_eq bessely0(Float32(2.0)) bessely0(Float64(2.0))
+@test_approx_eq bessely1(Float32(2.0)) bessely1(Float64(2.0))
+@test_approx_eq besselj0(2) besselj0(2.0)
+@test_approx_eq besselj1(2) besselj1(2.0)
+@test_approx_eq bessely0(2) bessely0(2.0)
+@test_approx_eq bessely1(2) bessely1(2.0)
+@test_approx_eq besselj0(2.0 + im) besselj(0, 2.0 + im)
+@test_approx_eq besselj1(2.0 + im) besselj(1, 2.0 + im)
+@test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
+@test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
@@ -117,12 +163,15 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(3,-3) -true_i33
 @test_approx_eq besseli(-3,-3) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
+@test_throws DomainError besseli(0.4,-1.0)
 
 # besselj
 @test besselj(0,0) == 1
 for i = 1:5
     @test besselj(i,0) == 0
     @test besselj(-i,0) == 0
+    @test besselj(-i,Float32(0)) == 0
+    @test besselj(-i,Float32(0)) == 0
 end
 
 j33 = besselj(3,3.)
@@ -160,21 +209,25 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 # bessely
 y33 = bessely(3,3.)
 @test bessely(3,3) == y33
+@test bessely(3.,3.) == y33
+@test_approx_eq bessely(3,Float32(3.)) y33
 @test_approx_eq bessely(-3,3) -y33
 @test_approx_eq y33 -0.53854161610503161800
 @test_throws DomainError bessely(3,-3)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
+@test_throws DomainError bessely(0.4,-1.0)
+@test_throws DomainError bessely(0.4,Float32(-1.0))
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
-    @test_approx_eq f(0,1) f(0,complex128(1))
-    @test_approx_eq f(0,1) f(0,complex64(1))
+    @test_approx_eq f(0,1) f(0,Complex128(1))
+    @test_approx_eq f(0,1) f(0,Complex64(1))
 end
 
 # scaled bessel[ijky] and hankelh[12]
 for x in (1.0, 0.0, -1.0), y in (1.0, 0.0, -1.0), nu in (1.0, 0.0, -1.0)
-    z = complex128(x + y * im)
+    z = Complex128(x + y * im)
     z == zero(z) || @test_approx_eq hankelh1x(nu, z) hankelh1(nu, z) * exp(-z * im)
     z == zero(z) || @test_approx_eq hankelh2x(nu, z) hankelh2(nu, z) * exp(z * im)
     (nu < 0 && z == zero(z)) || @test_approx_eq besselix(nu, z) besseli(nu, z) * exp(-abs(real(z)))
@@ -188,6 +241,10 @@ end
 @test_throws Base.Math.AmosException besseljx(-1, 0)
 @test besselkx(1, 0) == Inf
 @test_throws Base.Math.AmosException besselyx(1, 0)
+@test_throws DomainError besselix(0.4,-1.0)
+@test_throws DomainError besseljx(0.4, -1.0)
+@test_throws DomainError besselkx(0.4,-1.0)
+@test_throws DomainError besselyx(0.4,-1.0)
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
@@ -198,12 +255,23 @@ end
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
-@test gamma(1:25) == gamma(Float64[1:25])
-@test_approx_eq gamma(1/2) sqrt(π)
-@test_approx_eq gamma(-1/2) -2sqrt(π)
-@test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
+if Base.Math.libm == "libopenlibm"
+    @test gamma(Float64[1:25;]) == gamma(1:25)
+else
+    @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
+end
+for elty in (Float32, Float64)
+    @test_approx_eq gamma(convert(elty,1/2)) convert(elty,sqrt(π))
+    @test_approx_eq gamma(convert(elty,-1/2)) convert(elty,-2sqrt(π))
+    @test_approx_eq lgamma(convert(elty,-1/2)) convert(elty,log(abs(gamma(-1/2))))
+end
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
+@test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
+@test factorial(3.0) == gamma(4.0) == factorial(3)
+for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
+    @test factorial(x) == gamma(1+x)
+end
 
 # digamma
 for elty in (Float32, Float64)
@@ -257,6 +325,7 @@ end
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
 @test_approx_eq zeta(4) pi^4/90
+@test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
 
 # quadgk
 @test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
@@ -270,24 +339,8 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # Ensure subnormal flags functions don't segfault
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
-
-# isqrt (issue #4884)
-@test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == int128("13043817825332782212")
-@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
-@test isqrt(0) == 0
-for i = 1:1000
-    n = rand(Uint128)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-    n = rand(Uint64)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-end
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
 
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)
@@ -330,6 +383,7 @@ end
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), zeta(2 + 1im, -1.1+0im))
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), -1525.8095173321060982383023516086563741006869909580583246557 + 1719.4753293650912305811325486980742946107143330321249869576im)
+@test_approx_eq polygamma(3,5) polygamma(3,5.)
 
 @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
 @test let evalcounts=0
@@ -339,6 +393,10 @@ end
                     end, 1,2,3,4,5)
           evalcounts
       end == 1
+a0 = 1
+a1 = 2
+c = 3
+@test @evalpoly(c, a0, a1) == 7
 
 @test 1e-14 > err(eta(1+1e-9), 0.693147180719814213126976796937244130533478392539154928250926)
 @test 1e-14 > err(eta(1+5e-3), 0.693945708117842473436705502427198307157819636785324430166786)
@@ -357,4 +415,75 @@ end
 
 for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
     @test_approx_eq cis(z) exp(im*z)
+end
+
+# modf
+for elty in (Float32, Float64)
+    @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
+    @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
+    @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
+    @test_approx_eq modf( convert(elty,1.0) )[2] convert(elty,1.0)
+end
+
+# frexp
+for elty in (Float32, Float64)
+    @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
+    @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
+    @test_approx_eq frexp( convert(elty,10.5) )[1] convert(elty,0.65625)
+    @test frexp( convert(elty,10.5) )[2] == 4
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] convert(elty,0.5)
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
+    @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
+end
+
+# log/log1p
+# if using Tang's algorithm, should be accurate to within 0.56 ulps
+X = rand(100)
+for x in X
+    for n = -5:5
+        xn = ldexp(x,n)
+
+        for T in (Float32,Float64)
+            xt = T(x)
+
+            y = Base.Math.JuliaLibm.log(xt)
+            yb = log(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            y = Base.Math.JuliaLibm.log1p(xt)
+            yb = log1p(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            if n <= 0
+                y = Base.Math.JuliaLibm.log1p(-xt)
+                yb = log1p(big(-xt))
+                @test abs(y-yb) <= 0.56*eps(T(yb))
+            end
+        end
+    end
+end
+
+for n = 0:28
+    @test log(2,2^n) == n
+end
+with_bigfloat_precision(10_000) do
+    @test log(2,big(2)^100) == 100
+    @test log(2,big(2)^200) == 200
+    @test log(2,big(2)^300) == 300
+    @test log(2,big(2)^400) == 400
+end
+
+# test vectorization of 2-arg vectorized functions
+binary_math_functions = [
+    copysign, flipsign, log, atan2, hypot, max, min,
+    airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+    besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
+    polygamma, zeta, beta, lbeta,
+]
+for f in binary_math_functions
+    x = y = 2
+    v = [f(x,y)]
+    @test f([x],y) == v
+    @test f(x,[y]) == v
+    @test f([x],[y]) == v
 end

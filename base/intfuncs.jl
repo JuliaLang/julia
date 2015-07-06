@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)
@@ -11,7 +13,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union(Int64,Uint64,Int128,Uint128)}(a::T, b::T)
+function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -68,8 +70,8 @@ end
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
 to_power_type(x) = x
-function power_by_squaring(x, p::Integer)
-    x = to_power_type(x)
+function power_by_squaring(x_, p::Integer)
+    x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
@@ -140,7 +142,7 @@ ispow2(x::Integer) = count_ones(x)==1
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
-    n = iceil(log(a, x))
+    n = ceil(Integer,log(a, x))
     p = a^(n-1)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
@@ -148,7 +150,7 @@ end
 # largest a^n <= x, with integer n
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
-    n = ifloor(log(a, x))
+    n = floor(Integer,log(a, x))
     p = a^(n+1)
     p <= x ? p : a^n
 end
@@ -161,18 +163,18 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union(Uint8,Uint16,Uint32,Uint64))
+function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
 end
-function ndigits0z(x::Uint128)
+function ndigits0z(x::UInt128)
     n = 0
     while x > 0x8ac7230489e80000
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
-    return n + ndigits0z(uint64(x))
+    return n + ndigits0z(UInt64(x))
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
@@ -208,21 +210,21 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
 ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
+ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array(Uint8,i)
+    a = Array(UInt8,i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
@@ -234,7 +236,7 @@ end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array(Uint8,i)
+    a = Array(UInt8,i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
@@ -246,7 +248,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array(Uint8,i)
+    a = Array(UInt8,i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
@@ -258,7 +260,7 @@ end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array(Uint8,i)
+    a = Array(UInt8,i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -271,14 +273,14 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-const base36digits = ['0':'9','a':'z']
-const base62digits = ['0':'9','A':'Z','a':'z']
+const base36digits = ['0':'9';'a':'z']
+const base62digits = ['0':'9';'A':'Z';'a':'z']
 
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
-    if !(2 <= b <= 62) error("invalid base: $b") end
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array(Uint8,i)
+    a = Array(UInt8,i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)
@@ -287,7 +289,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -300,22 +302,22 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
-bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8,x),8)
-bits(x::Union(Int16,Uint16,Float16))      = bin(reinterpret(Uint16,x),16)
-bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
-bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
-bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
+bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
-    2 <= base || error("invalid base: $base")
+function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
+    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     m = max(pad,ndigits0z(n,base))
     a = zeros(T,m)
     digits!(a, n, base)
     return a
 end
 
-function digits!{T<:Integer}(a::Array{T,1}, n::Integer, base::T=10)
-    2 <= base || error("invalid base: $base")
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
+    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     for i = 1:length(a)
         a[i] = rem(n, base)
         n = div(n, base)
@@ -325,11 +327,49 @@ end
 
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
-function isqrt(x::Union(Int64,Uint64,Int128,Uint128))
+function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
     # too many bits.
     s = (s + div(x,s)) >> 1
     s*s > x ? s-1 : s
+end
+
+function factorial(n::Integer)
+    n < 0 && throw(DomainError())
+    local f::typeof(n*n), i::typeof(n*n)
+    f = 1
+    for i = 2:n
+        f *= i
+    end
+    return f
+end
+
+function binomial{T<:Integer}(n::T, k::T)
+    k < 0 && return zero(T)
+    sgn = one(T)
+    if n < 0
+        n = -n + k -1
+        if isodd(k)
+            sgn = -sgn
+        end
+    end
+    k > n && return zero(T)
+    (k == 0 || k == n) && return sgn
+    k == 1 && return sgn*n
+    if k > (n>>1)
+        k = (n - k)
+    end
+    x::T = nn = n - k + 1
+    nn += 1
+    rr = 2
+    while rr <= k
+        xt = div(widemul(x, nn), rr)
+        x = xt
+        x == xt || throw(OverflowError())
+        rr += 1
+        nn += 1
+    end
+    convert(T, copysign(x, sgn))
 end

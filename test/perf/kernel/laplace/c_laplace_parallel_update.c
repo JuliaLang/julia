@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include<stdio.h>
 #include "parameter.h"
 //#define N 150
@@ -25,7 +27,7 @@ main() {
     for(i=0; i<Niter; i++) {
         for(j=1; j<size_mat-1; j++)
             for(k=1; k<size_mat-1; k++)
-                u1[j][k] = ((u[j+1][k] + u[j-1][k]) * dy2 + 
+                u1[j][k] = ((u[j+1][k] + u[j-1][k]) * dy2 +
                    (u[j][k+1] + u[j][k-1]) * dx2) * (1.0 /(2*(dx2+dy2)));
 
         for(j=1; j<size_mat-1; j++)

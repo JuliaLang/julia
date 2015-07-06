@@ -21,10 +21,10 @@
 ;; distribute, sublicense, and/or sell copies of the Software, and to
 ;; permit persons to whom the Software is furnished to do so, subject to
 ;; the following conditions:
-;; 
+;;
 ;; The above copyright notice and this permission notice shall be
 ;; included in all copies or substantial portions of the Software.
-;; 
+;;
 ;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -35,9 +35,25 @@
 
 ;;; Code:
 
+;; We can't use cl-lib whilst supporting Emacs 23 users who don't use
+;; ELPA.
+(with-no-warnings
+  (require 'cl)) ;; incf, decf, plusp
+
 (defvar julia-mode-hook nil)
 
 (defvar julia-basic-offset)
+
+(defface julia-macro-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for Julia macro invocations."
+  :group 'julia-mode)
+
+(defface julia-quoted-symbol-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for quoted Julia symbols, e.g. :foo."
+  :group 'julia-mode)
+
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
@@ -47,10 +63,24 @@
 (when (not (fboundp 'ignore-errors))
   (defmacro ignore-errors (body) `(condition-case nil ,body (error nil))))
 
+(defun julia--regexp-opt (strings &optional paren)
+  "Emacs 23 provides `regexp-opt', but it does not support PAREN taking the value 'symbols.
+This function provides equivalent functionality, but makes no efforts to optimise the regexp."
+  (cond
+   ((>= emacs-major-version 24)
+    (regexp-opt strings paren))
+   ((not (eq paren 'symbols))
+    (regexp-opt strings paren))
+   ((null strings)
+    "")
+   ('t
+    (rx-to-string `(seq symbol-start (or ,@strings) symbol-end)))))
+
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?_ "w" table)   ; underscores in words
-    (modify-syntax-entry ?@ "w" table)
+    (modify-syntax-entry ?_ "_" table)
+    (modify-syntax-entry ?@ "_" table)
+    (modify-syntax-entry ?! "_" table)
     (modify-syntax-entry ?# "< 14" table)  ; # single-line and multiline start
     (modify-syntax-entry ?= ". 23bn" table)
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
@@ -60,11 +90,13 @@
     (modify-syntax-entry ?\] ")[ " table)
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
-    ;(modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
-    (modify-syntax-entry ?'  "." table)  ; character quote or transpose
+    ;; Here, we treat ' as punctuation (when it's used for transpose),
+    ;; see our use of `julia-char-regex' for handling ' as a character
+    ;; delimeter
+    (modify-syntax-entry ?'  "." table)
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?` "\"" table)
-    ;; (modify-syntax-entry ?\" "." table)
+
     (modify-syntax-entry ?. "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
@@ -79,24 +111,29 @@
     table)
   "Syntax table for `julia-mode'.")
 
-;; syntax table that holds within strings
-(defvar julia-mode-string-syntax-table
-  (let ((table (make-syntax-table)))
-    table)
-  "Syntax table for `julia-mode'.")
+(eval-when-compile
+  (defconst julia-char-regex
+    (rx (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+            (syntax open-parenthesis)
+            (syntax whitespace)
+            bol)
+        (group "'")
+        (group
+         (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
+             "\\\\"))
+        (group "'"))))
 
-;; disable " inside char quote
-(defvar julia-mode-char-syntax-table
-  (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?\" "." table)
-    table)
-  "Syntax table for `julia-mode'.")
-
-(defconst julia-string-regex
-  "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
-
-(defconst julia-char-regex
-  "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|$!\\^~\\\\;:]\\|^\\)\\('\\(\\([^']*?[^\\\\]\\)\\|\\(\\\\\\\\\\)\\)'\\)")
+(defconst julia-triple-quoted-string-regex
+  ;; We deliberately put a group on the first and last delimiter, so
+  ;; we can mark these as string delimiters for font-lock.
+  (rx (group "\"")
+      (group "\"\""
+             ;; After the delimiter, we're a sequence of
+             ;; non-backslashes or blackslashes paired with something.
+             (*? (or (not (any "\\"))
+                     (seq "\\" anything)))
+             "\"\"")
+      (group "\"")))
 
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
@@ -106,40 +143,46 @@
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx symbol-start "function"
+  (rx line-start (* (or space "@inline" "@noinline")) symbol-start
+      "function"
       (1+ space)
       ;; Don't highlight module names in function declarations:
-      (* (seq (1+ (or word ?_)) "."))
+      (* (seq (1+ (or word (syntax symbol))) "."))
       ;; The function name itself
-      (group (1+ (or word ?_ ?!)))))
+      (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-function-assignment-regex
-  (rx line-start symbol-start
-      (group (1+ (or word ?_ ?!)))
+  (rx line-start (* (or space "@inline" "@noinline")) symbol-start
+      (* (seq (1+ (or word (syntax symbol))) ".")) ; module name
+      (group (1+ (or word (syntax symbol))))
       (* space)
       (? "{" (* (not (any "}"))) "}")
       (* space)
-      "(" (* (not (any ")"))) ")"
+      "(" (* (or
+              (seq "(" (* (not (any "(" ")"))) ")")
+              (not (any "(" ")"))))
+      ")"
       (* space)
-      "="))
+      "="
+      (not (any "="))))
 
 (defconst julia-type-regex
-  (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
+  (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-type-annotation-regex
-  (rx "::" (group (1+ (or word ?_)))))
+  (rx "::" (0+ space) (group (1+ (or word (syntax symbol))))))
 
 ;;(defconst julia-type-parameter-regex
-;;  (rx symbol-start (1+ (or word ?_)) "{" (group (1+ (or word ?_))) "}"))
+;;  (rx symbol-start (1+ (or (or word (syntax symbol)) ?_)) "{" (group (1+ (or (or word (syntax symbol)) ?_))) "}"))
 
 (defconst julia-subtype-regex
-  (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
+  (rx "<:" (0+ space) (group (1+ (or word (syntax symbol)))) (0+ space) (or "\n" "{" "}" "end")))
 
 (defconst julia-macro-regex
-  (rx symbol-start (group  "@" (1+ (or word ?_ ?!)))))
+  (rx symbol-start (group "@" (1+ (or word (syntax symbol))))))
 
 (defconst julia-keyword-regex
-  (regexp-opt
+  (julia--regexp-opt
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
@@ -148,79 +191,135 @@
    'symbols))
 
 (defconst julia-builtin-regex
-  (regexp-opt
+  (julia--regexp-opt
    ;;'("error" "throw")
    '()
    'symbols))
 
+(defconst julia-builtin-types-regex
+  (julia--regexp-opt
+   '("Number" "Real" "BigInt" "Integer"
+     "UInt" "UInt8" "UInt16" "UInt32" "UInt64" "UInt128"
+     "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
+     "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
+     "Complex128" "Complex64"
+     "Bool"
+     "Cuchar" "Cshort" "Cushort" "Cint" "Cuint" "Clonglong" "Culonglong" "Cintmax_t" "Cuintmax_t"
+     "Cfloat" "Cdouble" "Cptrdiff_t" "Cssize_t" "Csize_t"
+     "Cchar" "Clong" "Culong" "Cwchar_t"
+     "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
+     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC" "BitArray"
+     "Range" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
+     "Tuple" "NTuple" "Vararg"
+     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "ObjectIdDict"
+     "AbstractRNG" "MersenneTwister"
+     )
+   'symbols))
+
+(defconst julia-quoted-symbol-regex
+  ;; :foo and :foo2 are valid, but :123 is not.
+  (rx (or whitespace "(" "[" "," "=")
+      (group ":" (or letter (syntax symbol)) (0+ (or word (syntax symbol))))))
+
 (defconst julia-font-lock-keywords
   (list
-   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|ObjectIdDict\\|SubString\\)\\>" .
-     font-lock-type-face)
-    (cons julia-keyword-regex 'font-lock-keyword-face)
-    (cons julia-macro-regex 'font-lock-keyword-face)
-    (cons
-     (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
-      'symbols)
-     'font-lock-constant-face)
-    (list julia-unquote-regex 2 'font-lock-constant-face)
-    (list julia-char-regex 2 'font-lock-string-face)
-    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    (list julia-function-regex 1 'font-lock-function-name-face)
-    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
-    (list julia-type-regex 1 'font-lock-type-face)
-    (list julia-type-annotation-regex 1 'font-lock-type-face)
-    ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
-    (list julia-subtype-regex 1 'font-lock-type-face)
-    (list julia-builtin-regex 1 'font-lock-builtin-face)
-))
+   ;; Ensure :: and <: aren't highlighted, so we don't confuse ::Foo with :foo.
+   ;; (in Emacs, keywords don't overlap).
+   (cons (rx (or "::" "<:")) ''default)
+   ;; Highlight quoted symbols before keywords, so :function is not
+   ;; highlighted as a keyword.
+   (list julia-quoted-symbol-regex 1 ''julia-quoted-symbol-face)
+   (cons julia-builtin-types-regex 'font-lock-type-face)
+   (cons julia-keyword-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex ''julia-macro-face)
+   (cons
+    (julia--regexp-opt
+     '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
+     'symbols)
+    'font-lock-constant-face)
+   (list julia-unquote-regex 2 'font-lock-constant-face)
+   (list julia-forloop-in-regex 1 'font-lock-keyword-face)
+   (list julia-function-regex 1 'font-lock-function-name-face)
+   (list julia-function-assignment-regex 1 'font-lock-function-name-face)
+   (list julia-type-regex 1 'font-lock-type-face)
+   (list julia-type-annotation-regex 1 'font-lock-type-face)
+   ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
+   (list julia-subtype-regex 1 'font-lock-type-face)
+   (list julia-builtin-regex 1 'font-lock-builtin-face)
+   ))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
-	"quote" "do" "immutable"))
+        "quote" "do" "immutable"))
 
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
 
-(defun julia-member (item lst)
-  (if (null lst)
-      nil
-    (or (equal item (car lst))
-	(julia-member item (cdr lst)))))
+(defun julia-stringify-triple-quote ()
+  "Put `syntax-table' property on triple-quoted string delimeters.
 
-(if (not (fboundp 'evenp))
-    (defun evenp (x) (zerop (% x 2))))
+Based on `python-syntax-stringify'."
+  (let* ((string-start-pos (- (point) 3))
+         (string-end-pos (point))
+         (ppss (prog2
+                   (backward-char 3)
+                   (syntax-ppss)
+                 (forward-char 3)))
+         (in-comment (nth 4 ppss))
+         (in-string (nth 8 ppss)))
+    (unless in-comment
+      (if in-string
+          ;; We're in a string, so this must be the closing triple-quote.
+          ;; Put | on the last " character.
+          (put-text-property (1- string-end-pos) string-end-pos
+                             'syntax-table (string-to-syntax "|"))
+        ;; We're not in a string, so this is the opening triple-quote.
+        ;; Put | on the first " character.
+        (put-text-property string-start-pos (1+ string-start-pos)
+                           'syntax-table (string-to-syntax "|"))))))
 
-(defun julia-find-comment-open (p0)
-  (if (< (point) p0)
-      nil
-    (if (and (equal (char-after (point)) ?#)
-	     (evenp (julia-strcount
-		     (buffer-substring p0 (point)) ?\")))
-	t
-      (if (= (point) p0)
-	  nil
-	(progn (backward-char 1)
-	       (julia-find-comment-open p0))))))
+(unless (< emacs-major-version 24)
+  (defconst julia-syntax-propertize-function
+    (syntax-propertize-rules
+     ("\"\"\""
+      (0 (ignore (julia-stringify-triple-quote))))
+     (julia-char-regex
+      (1 "\"") ; Treat ' as a string delimiter.
+      (2 ".") ; Don't highlight anything between.
+      (3 "\""))))) ; Treat the last " in """ as a string delimiter.
 
 (defun julia-in-comment ()
-  (save-excursion
-    (julia-find-comment-open (line-beginning-position))))
+  "Return non-nil if point is inside a comment.
+Handles both single-line and multi-line comments."
+  (nth 4 (syntax-ppss)))
 
-(defun julia-strcount (str chr)
-  (let ((i 0)
-	(c 0))
-    (while (< i (length str))
-      (if (equal (elt str i) chr)
-	  (setq c (+ c 1)))
-      (setq i (+ i 1)))
-    c))
+(defun julia-in-string ()
+  "Return non-nil if point is inside a string.
+Note this is Emacs' notion of what is highlighted as a string.
+As a result, it is true inside \"foo\", `foo` and 'f'."
+  (nth 3 (syntax-ppss)))
 
 (defun julia-in-brackets ()
-  (let ((before (buffer-substring (line-beginning-position) (point))))
-    (> (julia-strcount before ?[)
-       (julia-strcount before ?]))))
+  "Return non-nil if point is inside square brackets."
+  (let ((start-pos (point))
+        (open-count 0))
+    ;; Count all the [ and ] characters on the current line.
+    (save-excursion
+      (beginning-of-line)
+
+      (while (< (point) start-pos)
+        ;; Don't count [ or ] inside strings, characters or comments.
+        (unless (or (julia-in-string) (julia-in-comment))
+
+          (when (looking-at (rx "["))
+            (incf open-count))
+          (when (looking-at (rx "]"))
+            (decf open-count)))
+
+        (forward-char 1)))
+
+    ;; If we've opened more than we've closed, we're inside brackets.
+    (plusp open-count)))
 
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
@@ -229,9 +328,11 @@ a keyword if used as a field name, X.word, or quoted, :word."
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
+       (member (current-word t) kw-list)
        (not (julia-in-comment))
-       (not (julia-in-brackets))
-       (julia-member (current-word t) kw-list)))
+       ;; 'end' is not a keyword when used for indexing, e.g. foo[end-2]
+       (or (not (equal (current-word t) "end"))
+           (not (julia-in-brackets)))))
 
 ;; if backward-sexp gives an error, move back 1 char to move over the '('
 (defun julia-safe-backward-sexp ()
@@ -239,46 +340,81 @@ a keyword if used as a field name, X.word, or quoted, :word."
       (ignore-errors (backward-char))))
 
 (defun julia-last-open-block-pos (min)
-  "Move back and return the position of the last open block, if one found.
+  "Return the position of the last open block, if one found.
 Do not move back beyond position MIN."
-  (let ((count 0))
-    (while (not (or (> count 0) (<= (point) min)))
-      (julia-safe-backward-sexp)
-      (setq count
-	    (cond ((julia-at-keyword julia-block-start-keywords)
-		   (+ count 1))
-		  ((and (equal (current-word t) "end")
-			(not (julia-in-comment)) (not (julia-in-brackets)))
-		   (- count 1))
-		  (t count))))
-    (if (> count 0)
-	(point)
-      nil)))
+  (save-excursion
+    (let ((count 0))
+      (while (not (or (> count 0) (<= (point) min)))
+        (julia-safe-backward-sexp)
+        (setq count
+              (cond ((julia-at-keyword julia-block-start-keywords)
+                     (+ count 1))
+                    ;; fixme: breaks on strings
+                    ((and (equal (current-word t) "end")
+                          (not (julia-in-comment)) (not (julia-in-brackets)))
+                     (- count 1))
+                    (t count))))
+      (if (> count 0)
+          (point)
+        nil))))
 
 (defun julia-last-open-block (min)
   "Move back and return indentation level for last open block.
 Do not move back beyond MIN."
+  ;; Ensure MIN is not before the start of the buffer.
+  (setq min (max min (point-min)))
   (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
 
+(defsubst julia--safe-backward-char ()
+  "Move back one character, but don't error if we're at the
+beginning of the buffer."
+  (unless (eq (point) (point-min))
+    (backward-char)))
+
+(defvar julia-max-paren-lookback 400
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed parens.
+
+This variable has a major effect on indent performance if set too
+high.")
+
+(defvar julia-max-block-lookback 5000
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed blocks.
+
+This variable has a moderate effect on indent performance if set too
+high.")
+
 (defun julia-paren-indent ()
-  "Return indent by last opening paren."
-  (let* ((p (parse-partial-sexp
-             (save-excursion
-               ;; only indent by paren if the last open
-               ;; paren is closer than the last open
-               ;; block
-               (or (julia-last-open-block-pos (point-min))
-                   (point-min)))
-             (progn (beginning-of-line)
-                    (point))))
-         (pos (cadr p)))
-    (if (or (= 0 (car p)) (null pos))
-        nil
-      (progn (goto-char pos) (+ 1 (current-column))))))
+  "Return the column of the text following the innermost
+containing paren before point, so we can align succeeding code
+with it. Returns nil if we're not within nested parens."
+  (save-excursion
+    (let ((min-pos (max (- (point) julia-max-paren-lookback)
+                        (point-min)))
+          (open-count 0))
+      (while (and (> (point) min-pos)
+                  (not (plusp open-count)))
+
+        (when (looking-at (rx (any "[" "]" "(" ")")))
+          (unless (or (julia-in-string) (julia-in-comment))
+            (cond ((looking-at (rx (any "[" "(")))
+                   (incf open-count))
+                  ((looking-at (rx (any "]" ")")))
+                   (decf open-count)))))
+
+        (julia--safe-backward-char))
+
+      (if (plusp open-count)
+          (progn (forward-char 2)
+                 (while (looking-at (rx blank))
+                   (forward-char))
+                 (current-column))
+        nil))))
 
 (defun julia-indent-line ()
   "Indent current line of julia code."
@@ -286,31 +422,190 @@ Do not move back beyond MIN."
   (let* ((point-offset (- (current-column) (current-indentation))))
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (ignore-errors (julia-paren-indent)))
-         (save-excursion
-           (let ((endtok (progn
-                           (beginning-of-line)
-                           (forward-to-indentation 0)
-                           (julia-at-keyword julia-block-end-keywords))))
-             (ignore-errors (+ (julia-last-open-block (point-min))
-                               (if endtok (- julia-basic-offset) 0)))))
-         ;; previous line ends in =
-         (save-excursion
-           (if (and (not (equal (point-min) (line-beginning-position)))
-                    (progn
-                      (forward-line -1)
-                      (end-of-line) (backward-char 1)
-                      (equal (char-after (point)) ?=)))
-               (+ julia-basic-offset (current-indentation))
-             nil))
-         ;; take same indentation as previous line
-         (save-excursion (forward-line -1)
-                         (current-indentation))
-         0))
+     (or
+      ;; If we're inside an open paren, indent to line up arguments.
+      (save-excursion
+        (beginning-of-line)
+        (ignore-errors (julia-paren-indent)))
+      ;; If the previous line ends in =, increase the indent.
+      (ignore-errors ; if previous line is (point-min)
+        (save-excursion
+          (if (and (not (equal (point-min) (line-beginning-position)))
+                   (progn
+                     (forward-line -1)
+                     (end-of-line) (backward-char 1)
+                     (and (equal (char-after (point)) ?=)
+                          (not (julia-in-comment)))))
+              (+ julia-basic-offset (current-indentation))
+            nil)))
+      ;; Indent according to how many nested blocks we are in.
+      (save-excursion
+        (beginning-of-line)
+        (forward-to-indentation 0)
+        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
+          (ignore-errors (+ (julia-last-open-block (- (point) julia-max-block-lookback))
+                            (if endtok (- julia-basic-offset) 0)))))
+      ;; Otherwise, use the same indentation as previous line.
+      (save-excursion (forward-line -1)
+                      (current-indentation))
+      0))
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
       (move-to-column (+ (current-indentation) point-offset)))))
+
+(defmacro julia--should-indent (from to)
+  "Assert that we indent text FROM producing text TO in `julia-mode'."
+  `(with-temp-buffer
+     (julia-mode)
+     (insert ,from)
+     (indent-region (point-min) (point-max))
+     (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                    ,to))))
+
+;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
+;; when we define tests.
+(ignore-errors
+  (require 'ert)
+
+  (ert-deftest julia--test-indent-if ()
+    "We should indent inside if bodies."
+    (julia--should-indent
+     "
+if foo
+bar
+end"
+     "
+if foo
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-else ()
+    "We should indent inside else bodies."
+    (julia--should-indent
+     "
+if foo
+    bar
+else
+baz
+end"
+     "
+if foo
+    bar
+else
+    baz
+end"))
+
+  (ert-deftest julia--test-indent-toplevel ()
+    "We should not indent toplevel expressions. "
+    (julia--should-indent
+     "
+foo()
+bar()"
+     "
+foo()
+bar()"))
+
+  (ert-deftest julia--test-indent-nested-if ()
+    "We should indent for each level of indentation."
+    (julia--should-indent
+     "
+if foo
+    if bar
+bar
+    end
+end"
+     "
+if foo
+    if bar
+        bar
+    end
+end"))
+
+  (ert-deftest julia--test-indent-function ()
+    "We should indent function bodies."
+    (julia--should-indent
+     "
+function foo()
+bar
+end"
+     "
+function foo()
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-begin ()
+    "We should indent after a begin keyword."
+    (julia--should-indent
+     "
+@async begin
+bar
+end"
+     "
+@async begin
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-paren ()
+    "We should indent to line up with the text after an open paren."
+    (julia--should-indent
+     "
+foobar(bar,
+baz)"
+     "
+foobar(bar,
+       baz)"))
+
+  (ert-deftest julia--test-indent-paren-space ()
+    "We should indent to line up with the text after an open
+paren, even if there are additional spaces."
+    (julia--should-indent
+     "
+foobar( bar,
+baz )"
+     "
+foobar( bar,
+        baz )"))
+
+  (ert-deftest julia--test-indent-equals ()
+    "We should increase indent on a trailing =."
+    (julia--should-indent
+     "
+foo() =
+bar"
+     "
+foo() =
+    bar"))
+
+  (ert-deftest julia--test-indent-ignores-blank-lines ()
+    "Blank lines should not affect indentation of non-blank lines."
+    (julia--should-indent
+     "
+if foo
+        
+bar
+end"
+     "
+if foo
+    
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-comment-equal ()
+    "`=` at the end of comment should not increase indent level."
+    (julia--should-indent
+     "
+# a =
+# b =
+c"
+     "
+# a =
+# b =
+c"))
+
+  (defun julia--run-tests ()
+    (interactive)
+    (ert-run-tests-interactively "julia--test")))
 
 (defalias 'julia-mode-prog-mode
   (if (fboundp 'prog-mode)
@@ -344,16 +639,21 @@ Do not move back beyond MIN."
   (set (make-local-variable 'comment-start) "# ")
   (set (make-local-variable 'comment-start-skip) "#+\\s-*")
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-       (list
-	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-        (list
- 	(list julia-char-regex 2
- 	      julia-mode-char-syntax-table)
-        (list julia-string-regex 0
-              julia-mode-string-syntax-table)
-	))
+  (if (< emacs-major-version 24)
+      ;; Emacs 23 doesn't have syntax-propertize-function
+      (set (make-local-variable 'font-lock-syntactic-keywords)
+           (list
+            `(,julia-char-regex
+              (1 "\"") ; Treat ' as a string delimiter.
+              (2 ".") ; Don't highlight anything between the open and close '.
+              (3 "\"")); Treat the close ' as a string delimiter.
+            `(,julia-triple-quoted-string-regex
+              (1 "\"") ; Treat the first " in """ as a string delimiter.
+              (2 ".") ; Don't highlight anything between.
+              (3 "\"")))) ; Treat the last " in """ as a string delimiter.
+    ;; Emacs 24 and later has syntax-propertize-function, so use that instead.
+    (set (make-local-variable 'syntax-propertize-function)
+         julia-syntax-propertize-function))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
@@ -362,7 +662,7 @@ Do not move back beyond MIN."
 
 (defvar julia-latexsubs (make-hash-table :test 'equal))
 
-(defun julia-latexsub (arg)
+(defun julia-latexsub ()
   "Perform a LaTeX-like Unicode symbol substitution."
   (interactive "*i")
   (let ((orig-pt (point)))
@@ -385,8 +685,8 @@ Do not move back beyond MIN."
 (defun julia-latexsub-or-indent (arg)
   "Either indent according to mode or perform a LaTeX-like symbol substution"
   (interactive "*i")
-  (if (latexsub arg)
-      (indent-according-to-mode)))
+  (if (latexsub)
+      (indent-for-tab-command arg)))
 (define-key julia-mode-map (kbd "TAB") 'julia-latexsub-or-indent)
 
 (defalias 'latexsub-or-indent 'julia-latexsub-or-indent)
@@ -405,6 +705,7 @@ Do not move back beyond MIN."
 ;        println("(puthash \"$ks\" \"$vs\" julia-latexsubs)")
 ;    end
 ;end
+; (See Julia issue #8947 for why we don't use the Emacs tex input mode.)
 (puthash "\\textexclamdown" "¡" julia-latexsubs)
 (puthash "\\sterling" "£" julia-latexsubs)
 (puthash "\\yen" "¥" julia-latexsubs)
@@ -1091,6 +1392,7 @@ Do not move back beyond MIN."
 (puthash "\\vdash" "⊢" julia-latexsubs)
 (puthash "\\dashv" "⊣" julia-latexsubs)
 (puthash "\\top" "⊤" julia-latexsubs)
+(puthash "\\bot" "⊥" julia-latexsubs)
 (puthash "\\models" "⊧" julia-latexsubs)
 (puthash "\\vDash" "⊨" julia-latexsubs)
 (puthash "\\Vdash" "⊩" julia-latexsubs)
@@ -2862,9 +3164,67 @@ Do not move back beyond MIN."
 (puthash "\\mtteight" "𝟾" julia-latexsubs)
 (puthash "\\mttnine" "𝟿" julia-latexsubs)
 
+;; Code for `inferior-julia-mode'
+(require 'comint)
+
+(defgroup julia
+  '()
+  "Julia Programming Language."
+  :group 'languages
+  :prefix "julia-")
+
+(defcustom julia-program "julia"
+  "Path to the program used by `inferior-julia'."
+  :type 'string
+  :group 'julia)
+
+(defcustom julia-arguments '()
+  "Commandline arguments to pass to `julia-program'."
+  :type 'string
+  :group 'julia)
+
+(defvar julia-prompt-regexp "julia>"
+  "Regexp for matching `inferior-julia' prompt.")
+
+(defvar inferior-julia-mode-map
+  (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
+    ;; example definition
+    (define-key map (kbd "TAB") 'julia-latexsub-or-indent)
+    map)
+  "Basic mode map for `inferior-julia-mode'.")
+
+;;;###autoload
+(defun inferior-julia ()
+    "Run an inferior instance of `julia' inside Emacs."
+    (interactive)
+    (let ((julia-program julia-program)
+          (buffer (get-buffer-create "*Julia*")))
+      (when (not (comint-check-proc "*Julia*"))
+            (apply #'make-comint-in-buffer "Julia" "*Julia*" julia-program julia-arguments))
+      (pop-to-buffer-same-window "*Julia*")
+      (inferior-julia-mode)))
+
+(defun inferior-julia--initialize ()
+    "Helper function to initialize `inferior-julia'."
+    (setq comint-use-prompt-regexp t))
+
+(define-derived-mode inferior-julia-mode comint-mode "Julia"
+  "Major mode for `inferior-julia'.
+
+\\<inferior-julia-mode-map>"
+  nil "Julia"
+  (setq comint-prompt-regexp julia-prompt-regexp)
+  (setq comint-prompt-read-only t)
+  (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
+  (set (make-local-variable 'paragraph-start) julia-prompt-regexp)
+  (set (make-local-variable 'indent-line-function) 'julia-indent-line))
+
+(add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
+
 (provide 'julia-mode)
 
 ;; Local Variables:
 ;; coding: utf-8
+;; byte-compile-warnings: (not obsolete)
 ;; End:
 ;;; julia-mode.el ends here

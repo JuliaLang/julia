@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #define DEBUG_TYPE "lower_simd_loop"
 #undef DEBUG
 
@@ -5,11 +7,13 @@
 //     global function annotateSimdLoop: mark a loop as a SIMD loop.
 //     createLowerSimdLoopPass: construct LLVM for lowering a marked loop later.
 
-#include "llvm/Analysis/LoopPass.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/Support/Debug.h"
+#include "llvm-version.h"
+#include "support/dtypes.h"
+#include <llvm/Analysis/LoopPass.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/Support/Debug.h>
 #include <cstdio>
 
 namespace llvm {
@@ -26,7 +30,11 @@ bool annotateSimdLoop(BasicBlock* incr)
     // Lazy initialization
     if (!simd_loop_mdkind) {
         simd_loop_mdkind = getGlobalContext().getMDKindID("simd_loop");
+#ifdef LLVM36
+        simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>());
+#else
         simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
+#endif
     }
     // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
     // support putting metadata on blocks.  So instead, put the decoration on the last
@@ -145,7 +153,11 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     MDNode* n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
+#ifdef LLVM36
+        n = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(NULL));
+#else
         n = MDNode::get(getGlobalContext(), ArrayRef<Value*>(NULL));
+#endif
         n->replaceOperandWith(0,n);
         L->setLoopID(n);
     }
@@ -153,7 +165,11 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     MDNode* n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
     L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
 #endif
+#ifdef LLVM36
+    MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(n));
+#else
     MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
+#endif
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
     for(Loop::block_iterator BBI = L->block_begin(), E=L->block_end(); BBI!=E; ++BBI)
@@ -178,7 +194,7 @@ static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-Pass* createLowerSimdLoopPass() {
+DLLEXPORT Pass* createLowerSimdLoopPass() {
     return new LowerSIMDLoop();
 }
 

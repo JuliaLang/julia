@@ -1,5 +1,7 @@
 .. _man-arrays:
 
+.. currentmodule:: Base
+
 **************************
  Multi-dimensional Arrays
 **************************
@@ -29,7 +31,7 @@ technical computing languages pass arrays by value, and this is
 convenient in many cases. In Julia, modifications made to input arrays
 within a function will be visible in the parent function. The entire
 Julia array library ensures that inputs are not modified by library
-functions. User code, if it needs to exhibit similar behaviour, should
+functions. User code, if it needs to exhibit similar behavior, should
 take care to create a copy of inputs that it may modify.
 
 Arrays
@@ -38,17 +40,18 @@ Arrays
 Basic Functions
 ---------------
 
-=============== ==============================================================================
-Function        Description
-=============== ==============================================================================
-``eltype(A)``   the type of the elements contained in A
-``length(A)``   the number of elements in A
-``ndims(A)``    the number of dimensions of A
-``size(A)``     a tuple containing the dimensions of A
-``size(A,n)``   the size of A in a particular dimension
-``stride(A,k)`` the stride (linear index distance between adjacent elements) along dimension k
-``strides(A)``  a tuple of the strides in each dimension
-=============== ==============================================================================
+================================  ==============================================================================
+Function                          Description
+================================  ==============================================================================
+:func:`eltype(A) <eltype>`        the type of the elements contained in ``A``
+:func:`length(A) <length>`        the number of elements in ``A``
+:func:`ndims(A) <ndims>`          the number of dimensions of ``A``
+:func:`size(A) <size>`            a tuple containing the dimensions of ``A``
+:func:`size(A,n) <size>`          the size of ``A`` in a particular dimension
+:func:`eachindex(A) <eachindex>`  an efficient iterator for visiting each position in ``A``
+:func:`stride(A,k) <stride>`      the stride (linear index distance between adjacent elements) along dimension ``k``
+:func:`strides(A) <strides>`      a tuple of the strides in each dimension
+================================  ==============================================================================
 
 Construction and Initialization
 -------------------------------
@@ -58,41 +61,43 @@ the following list of such functions, calls with a ``dims...`` argument
 can either take a single tuple of dimension sizes or a series of
 dimension sizes passed as a variable number of arguments.
 
-===================================== =====================================================================
-Function                              Description
-===================================== =====================================================================
-``Array(type, dims...)``              an uninitialized dense array
-``cell(dims...)``                     an uninitialized cell array (heterogeneous array)
-``zeros(type, dims...)``              an array of all zeros of specified type, defaults to ``Float64`` if 
-                                      ``type`` not specified
-``zeros(A)``                          an array of all zeros of same element type and shape of ``A``
-``ones(type, dims...)``               an array of all ones of specified type, defaults to ``Float64`` if
-                                      if ``type`` not specified
-``ones(A)``                           an array of all ones of same element type and shape of ``A``
-``trues(dims...)``                    a ``Bool`` array with all values ``true``
-``falses(dims...)``                   a ``Bool`` array with all values ``false``
-``reshape(A, dims...)``               an array with the same data as the given array, but with
-                                      different dimensions.
-``copy(A)``                           copy ``A``
-``deepcopy(A)``                       copy ``A``, recursively copying its elements
-``similar(A, element_type, dims...)`` an uninitialized array of the same type as the given array
-                                      (dense, sparse, etc.), but with the specified element type and
-                                      dimensions. The second and third arguments are both optional,
-                                      defaulting to the element type and dimensions of ``A`` if omitted.
-``reinterpret(type, A)``              an array with the same binary data as the given array, but with the
-                                      specified element type
-``rand(dims)``                        ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
-                                      distributed values in [0,1)
-``randn(dims)``                       ``Array`` of ``Float64``\ s with random, iid and standard normally
-                                      distributed random values
-``eye(n)``                            ``n``-by-``n`` identity matrix
-``eye(m, n)``                         ``m``-by-``n`` identity matrix
-``linspace(start, stop, n)``          vector of ``n`` linearly-spaced elements from ``start`` to ``stop``
-``fill!(A, x)``                       fill the array ``A`` with the value ``x``
-``fill(x, dims)``                     create an array filled with the value ``x``
-===================================== =====================================================================
+=================================================== =====================================================================
+Function                                            Description
+=================================================== =====================================================================
+:func:`Array(type, dims...) <Array>`                an uninitialized dense array
+:func:`cell(dims...) <cell>`                        an uninitialized cell array (heterogeneous array)
+:func:`zeros(type, dims...) <zeros>`                an array of all zeros of specified type, defaults to ``Float64`` if
+                                                    ``type`` not specified
+:func:`zeros(A) <zeros>`                            an array of all zeros of same element type and shape of ``A``
+:func:`ones(type, dims...) <ones>`                  an array of all ones of specified type, defaults to ``Float64`` if
+                                                    ``type`` not specified
+:func:`ones(A) <ones>`                              an array of all ones of same element type and shape of ``A``
+:func:`trues(dims...) <trues>`                      a ``Bool`` array with all values ``true``
+:func:`falses(dims...) <falses>`                    a ``Bool`` array with all values ``false``
+:func:`reshape(A, dims...) <reshape>`               an array with the same data as the given array, but with
+                                                    different dimensions.
+:func:`copy(A) <copy>`                              copy ``A``
+:func:`deepcopy(A) <deepcopy>`                      copy ``A``, recursively copying its elements
+:func:`similar(A, element_type, dims...) <similar>` an uninitialized array of the same type as the given array
+                                                    (dense, sparse, etc.), but with the specified element type and
+                                                    dimensions. The second and third arguments are both optional,
+                                                    defaulting to the element type and dimensions of ``A`` if omitted.
+:func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
+                                                    specified element type
+:func:`rand(dims) <rand>`                           `:obj:`Array` of ``Float64``\ s with random, iid[#]_ and uniformly
+                                                    distributed values in the half-open interval [0, 1)
+:func:`randn(dims) <randn>`                         `:obj:`Array` of ``Float64``\ s with random, iid and standard normally
+                                                    distributed random values
+:func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
+:func:`eye(m, n) <eye>`                             ``m``-by-``n`` identity matrix
+:func:`linspace(start, stop, n) <linspace>`         range of ``n`` linearly spaced elements from ``start`` to ``stop``
+:func:`fill!(A, x) <fill!>`                         fill the array ``A`` with the value ``x``
+:func:`fill(x, dims) <fill>`                        create an array filled with the value ``x``
+=================================================== =====================================================================
 
 .. [#] *iid*, independently and identically distributed.
+
+The syntax ``[A, B, C, ...]`` constructs a 1-d array (vector) of its arguments.
 
 Concatenation
 -------------
@@ -100,27 +105,27 @@ Concatenation
 Arrays can be constructed and also concatenated using the following
 functions:
 
-================ ======================================================
-Function         Description
-================ ======================================================
-``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
-``vcat(A...)``   shorthand for ``cat(1, A...)``
-``hcat(A...)``   shorthand for ``cat(2, A...)``
-================ ======================================================
+=========================== ======================================================
+Function                    Description
+=========================== ======================================================
+:func:`cat(k, A...) <cat>`  concatenate input n-d arrays along the dimension ``k``
+:func:`vcat(A...) <vcat>`   shorthand for ``cat(1, A...)``
+:func:`hcat(A...) <hcat>`   shorthand for ``cat(2, A...)``
+=========================== ======================================================
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
 The concatenation functions are used so often that they have special syntax:
 
-=================== =========
+=================== =============
 Expression          Calls
-=================== =========
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
-=================== =========
+=================== =============
+``[A; B; C; ...]``  :func:`vcat`
+``[A B C ...]``     :func:`hcat`
+``[A B; C D; ...]`` :func:`hvcat`
+=================== =============
 
-``hvcat`` concatenates in both dimension 1 (with semicolons) and dimension 2
+:func:`hvcat` concatenates in both dimension 1 (with semicolons) and dimension 2
 (with spaces).
 
 Typed array initializers
@@ -129,20 +134,21 @@ Typed array initializers
 An array with a specific element type can be constructed using the syntax
 ``T[A, B, C, ...]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
+For example ``Any[x, y, z]`` constructs a heterogeneous array that can
+contain any values.
 
-Special syntax is available for constructing arrays with element type
-``Any``:
+Concatenation syntax can similarly be prefixed with a type to specify
+the element type of the result.
 
-=================== =========
-Expression          Yields
-=================== =========
-``{A B C ...}``     A 1xN ``Any`` array
-``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
-``{A B; C D; ...}`` A 2-d ``Any`` array
-=================== =========
+.. doctest::
 
-Note that this form does not do any concatenation; each argument becomes
-an element of the resulting array.
+    julia> [[1 2] [3 4]]
+    1x4 Array{Int64,2}:
+     1  2  3  4
+
+    julia> Int8[[1 2] [3 4]]
+    1x4 Array{Int8,2}:
+     1  2  3  4
 
 .. _comprehensions:
 
@@ -169,7 +175,7 @@ and its left and right neighbor along a 1-d grid. :
 
 .. testsetup:: *
 
-    srand(314)
+    srand(314);
 
 .. doctest:: array-rand
 
@@ -181,7 +187,7 @@ and its left and right neighbor along a 1-d grid. :
      0.699456
      0.977653
      0.994953
-     0.41084 
+     0.41084
      0.809411
 
     julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
@@ -190,7 +196,7 @@ and its left and right neighbor along a 1-d grid. :
      0.57468
      0.685417
      0.912429
-     0.8446  
+     0.8446
      0.656511
 
 .. note:: In the above example, ``x`` is declared as constant because type
@@ -204,17 +210,6 @@ that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
-Using curly brackets instead of square brackets is a shorthand notation for an
-array of type ``Any``:
-
-.. doctest::
-
-    julia> { i/2 for i = 1:3 }
-    3-element Array{Any,1}:
-     0.5
-     1.0
-     1.5
-
 .. _man-array-indexing:
 
 Indexing
@@ -224,20 +219,32 @@ The general syntax for indexing into an n-dimensional array A is::
 
     X = A[I_1, I_2, ..., I_n]
 
-where each I\_k may be:
+where each ``I_k`` may be:
 
-1. A scalar value
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+1. A scalar integer
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
-The result X generally has dimensions
+The result ``X`` generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
-``(i_1, i_2, ..., i_n)`` of X containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
-scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
+``(i_1, i_2, ..., i_n)`` of ``X`` containing the value
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions
+indexed with scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
 a dimension indexed by a boolean vector will be the number of true values in the vector.
+As a special part of this syntax, the ``end`` keyword may be used to represent the last
+index of each dimension within the indexing brackets, as determined by the size of the
+innermost array being indexed.
+
+Alternatively, single elements of a multidimensional array can be indexed as
+::
+
+    x = A[I]
+
+where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
+See :ref:`man-array-iteration` below.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
@@ -260,7 +267,7 @@ Example:
      7  11
 
 Empty ranges of the form ``n:n-1`` are sometimes used to indicate the inter-index
-location between ``n-1`` and ``n``.  For example, the ``searchsorted`` function uses 
+location between ``n-1`` and ``n``.  For example, the :func:`searchsorted` function uses
 this convention to indicate the insertion point of a value not found in a sorted
 array:
 
@@ -278,22 +285,23 @@ The general syntax for assigning values in an n-dimensional array A is::
 
     A[I_1, I_2, ..., I_n] = X
 
-where each I\_k may be:
+where each ``I_k`` may be:
 
-1. A scalar value
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+1. A scalar integer
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
 If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
 and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
 value is written to all referenced locations of ``A``.
 
-A boolean vector used as an index behaves as in ``getindex`` (it is first transformed
-with ``find``).
+A boolean vector used as an index behaves as in :func:`getindex` (it is first transformed
+with :func:`find`).
 
-Index assignment syntax is equivalent to a call to ``setindex!``::
+Index assignment syntax is equivalent to a call to :func:`setindex!`::
 
       setindex!(A, X, I_1, I_2, ..., I_n)
 
@@ -315,6 +323,49 @@ Example:
      1  -1  -1
      2  -1  -1
      3   6   9
+
+.. _man-array-iteration:
+
+Iteration
+---------
+
+The recommended ways to iterate over a whole array are
+::
+
+    for a in A
+        # Do something with the element a
+    end
+
+    for i in eachindex(A)
+        # Do something with i and/or A[i]
+    end
+
+The first construct is used when you need the value, but not index, of each element.  In the second construct, ``i`` will be an ``Int`` if ``A`` is an array
+type with fast linear indexing; otherwise, it will be a ``CartesianIndex``::
+
+    A = rand(4,3)
+    B = sub(A, 1:3, 2:3)
+    julia> for i in eachindex(B)
+               @show i
+           end
+           i = Base.IteratorsMD.CartesianIndex_2(1,1)
+           i = Base.IteratorsMD.CartesianIndex_2(2,1)
+           i = Base.IteratorsMD.CartesianIndex_2(3,1)
+           i = Base.IteratorsMD.CartesianIndex_2(1,2)
+           i = Base.IteratorsMD.CartesianIndex_2(2,2)
+           i = Base.IteratorsMD.CartesianIndex_2(3,2)
+
+In contrast with ``for i = 1:length(A)``, iterating with ``eachindex`` provides an efficient way to iterate over any array type.
+
+Array traits
+------------
+
+If you write a custom :obj:`AbstractArray` type, you can specify that it has fast linear indexing using
+::
+
+    Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
+
+This setting will cause ``eachindex`` iteration over a ``MyArray`` to use integers.  If you don't specify this trait, the default value ``LinearSlow()`` is used.
 
 Vectorized Operators and Functions
 ----------------------------------
@@ -353,18 +404,17 @@ elementwise::
     exponent eta zeta gamma
     hankelh1 hankelh2
      ceil  floor  round  trunc
-    iceil ifloor iround itrunc
     isfinite isinf isnan
     lbeta lfact lgamma
     log log10 log1p log2
     copysign max min significand
     sqrt hypot
 
-Note that there is a difference between ``min`` and ``max``, which operate
-elementwise over multiple array arguments, and ``minimum`` and ``maximum``, which
+Note that there is a difference between :func:`min` and :func:`max`, which operate
+elementwise over multiple array arguments, and :func:`minimum` and :func:`maximum`, which
 find the smallest and largest values within an array.
 
-Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
+Julia provides the :func:`@vectorize_1arg` and :func:`@vectorize_2arg`
 macros to automatically vectorize any function of one or two arguments
 respectively.  Each of these takes two arguments, namely the ``Type`` of
 argument (which is usually chosen to be the most general possible) and
@@ -408,7 +458,7 @@ vector to the size of the matrix:
      1.56851  1.86401  1.67846
 
 This is wasteful when dimensions get large, so Julia offers
-``broadcast``, which expands singleton dimensions in
+:func:`broadcast`, which expands singleton dimensions in
 array arguments to match the corresponding dimension in the other
 array without using extra memory, and applies the given
 function elementwise:
@@ -429,62 +479,66 @@ function elementwise:
      1.71056  0.847604
      1.73659  0.873631
 
-Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a ``broadcast!`` function to specify an explicit destination, and ``broadcast_getindex`` and ``broadcast_setindex!`` that broadcast the indices before indexing.
+Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.
 
 Implementation
 --------------
 
 The base array type in Julia is the abstract type
 ``AbstractArray{T,N}``. It is parametrized by the number of dimensions
-``N`` and the element type ``T``. ``AbstractVector`` and
-``AbstractMatrix`` are aliases for the 1-d and 2-d cases. Operations on
-``AbstractArray`` objects are defined using higher level operators and
+``N`` and the element type ``T``. :obj:`AbstractVector` and
+:obj:`AbstractMatrix` are aliases for the 1-d and 2-d cases. Operations on
+:obj:`AbstractArray` objects are defined using higher level operators and
 functions, in a way that is independent of the underlying storage.
 These operations generally work correctly as a fallback for any
 specific array implementation.
 
-The ``AbstractArray`` type includes anything vaguely array-like, and
+The :obj:`AbstractArray` type includes anything vaguely array-like, and
 implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
-generally implement at least ``size(A)`` (returing an ``Int`` tuple),
-``getindex(A,i)`` and ``getindex(A,i1,...,iN)`` (returning an element
-of type ``T``); mutable arrays should also implement ``setindex!``.  It
+generally implement at least :func:`size(A) <size>` (returning an ``Int`` tuple),
+:func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>`;
+mutable arrays should also implement :func:`setindex!`.  It
 is recommended that these operations have nearly constant time complexity,
 or technically Õ(1) complexity, as otherwise some array functions may
 be unexpectedly slow.   Concrete types should also typically provide
-a `similar(A,T=eltype(A),dims=size(A))` method, which is used to allocate
-a similar array for `copy` and other out-of-place operations.
+a :func:`similar(A,T=eltype(A),dims=size(A)) <similar>` method, which is used to allocate
+a similar array for :func:`copy` and other out-of-place operations.
+No matter how an ``AbstractArray{T,N}`` is represented internally,
+``T`` is the type of object returned by *integer* indexing (``A[1,
+..., 1]``, when ``A`` is not empty) and ``N`` should be the length of
+the tuple returned by :func:`size`.
 
-``DenseArray`` is an abstract subtype of ``AbstractArray`` intended
+:obj:`DenseArray` is an abstract subtype of :obj:`AbstractArray` intended
 to include all arrays that are laid out at regular offsets in memory,
 and which can therefore be passed to external C and Fortran functions
 expecting this memory layout.  Subtypes should provide a method
-``stride(A,k)`` that returns the "stride" of dimension ``k``:
+:func:`stride(A,k) <stride>` that returns the "stride" of dimension ``k``:
 increasing the index of dimension ``k`` by ``1`` should increase the
-index ``i`` of ``getindex(A,i)`` by ``stride(A,k)``.  If a
-pointer conversion method ``convert(Ptr{T}, A)`` is provided, the
+index ``i`` of :func:`getindex(A,i) <getindex>` by :func:`stride(A,k) <stride>`.  If a
+pointer conversion method :func:`convert(Ptr{T}, A) <convert>` is provided, the
 memory layout should correspond in the same way to these strides.
 
-The ``Array{T,N}`` type is a specific instance of ``DenseArray``
+The :obj:`Array` type is a specific instance of :obj:`DenseArray`
 where elements are stored in column-major order (see additional notes in
-:ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
+:ref:`man-performance-tips`). :obj:`Vector` and :obj:`Matrix` are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing,
 assignment, and a few other basic storage-specific operations are all
-that have to be implemented for ``Array``, so that the rest of the array
+that have to be implemented for `:obj:`Array`, so that the rest of the array
 library can be implemented in a generic manner.
 
-``SubArray`` is a specialization of ``AbstractArray`` that performs
-indexing by reference rather than by copying. A ``SubArray`` is created
-with the ``sub`` function, which is called the same way as ``getindex`` (with
-an array and a series of index arguments). The result of ``sub`` looks
-the same as the result of ``getindex``, except the data is left in place.
-``sub`` stores the input index vectors in a ``SubArray`` object, which
+:obj:`SubArray` is a specialization of :obj:`AbstractArray` that performs
+indexing by reference rather than by copying. A :obj:`SubArray` is created
+with the :func:`sub` function, which is called the same way as :func:`getindex` (with
+an array and a series of index arguments). The result of :func:`sub` looks
+the same as the result of :func:`getindex`, except the data is left in place.
+:func:`sub` stores the input index vectors in a :obj:`SubArray` object, which
 can later be used to index the original array indirectly.
 
-``StridedVector`` and ``StridedMatrix`` are convenient aliases defined
+:obj:`StridedVector` and :obj:`StridedMatrix` are convenient aliases defined
 to make it possible for Julia to call a wider range of BLAS and LAPACK
-functions by passing them either ``Array`` or ``SubArray`` objects, and
+functions by passing them either `:obj:`Array` or :obj:`SubArray` objects, and
 thus saving inefficiencies from memory allocation and copying.
 
 The following example computes the QR decomposition of a small section
@@ -508,7 +562,7 @@ stride parameters.
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
     julia> b = sub(a, 2:2:8,2:2:4)
-    4x2 SubArray{Float64,2,Array{Float64,2},(StepRange{Int64,Int64},StepRange{Int64,Int64})}:
+    4x2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
      0.537192  0.996234
      0.736979  0.228787
      0.991511  0.74485
@@ -566,27 +620,27 @@ beyond the point of insertion have to be moved one place over.
 All operations on sparse matrices are carefully implemented to exploit
 the CSC data structure for performance, and to avoid expensive operations.
 
-If you have data in CSC format from a different application or library, 
+If you have data in CSC format from a different application or library,
 and wish to import it in Julia, make sure that you use 1-based indexing.
-The row indices in every column need to be sorted. If your `SparseMatrixCSC` 
+The row indices in every column need to be sorted. If your :obj:`SparseMatrixCSC`
 object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
 
 In some applications, it is convenient to store explicit zero values
-in a `SparseMatrixCSC`. These *are* accepted by functions in ``Base``
+in a :obj:`SparseMatrixCSC`. These *are* accepted by functions in :mod:`Base`
 (but there is no guarantee that they will be preserved in mutating
 operations).  Such explicitly stored zeros are treated as structural
-nonzeros by many routines.  The ``nnz`` function returns the number of
+nonzeros by many routines.  The :func:`nnz` function returns the number of
 elements explicitly stored in the sparse data structure,
 including structural nonzeros. In order to count the exact number of actual
-values that are nonzero, use ``countnz``, which inspects every stored
+values that are nonzero, use :func:`countnz`, which inspects every stored
 element of a sparse matrix.
 
 Sparse matrix constructors
 --------------------------
 
 The simplest way to create sparse matrices is to use functions
-equivalent to the ``zeros`` and ``eye`` functions that Julia provides
+equivalent to the :func:`zeros` and :func:`eye` functions that Julia provides
 for working with dense matrices. To produce sparse matrices instead,
 you can use the same names with an ``sp`` prefix:
 
@@ -601,7 +655,7 @@ you can use the same names with an ``sp`` prefix:
             [2, 2]  =  1.0
             [3, 3]  =  1.0
 
-The ``sparse`` function is often a handy way to construct sparse
+The :func:`sparse` function is often a handy way to construct sparse
 matrices. It takes as its input a vector ``I`` of row indices, a
 vector ``J`` of column indices, and a vector ``V`` of nonzero
 values. ``sparse(I,J,V)`` constructs a sparse matrix such that
@@ -618,7 +672,7 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
             [5 ,  9]  =  3
             [3 , 18]  =  -5
 
-The inverse of the ``sparse`` function is ``findn``, which
+The inverse of the :func:`sparse` function is :func:`findn`, which
 retrieves the inputs used to create the sparse matrix.
 
 .. doctest::
@@ -630,7 +684,7 @@ retrieves the inputs used to create the sparse matrix.
     ([1,4,5,3],[4,7,9,18],[1,2,3,-5])
 
 Another way to create sparse matrices is to convert a dense matrix
-into a sparse matrix using the ``sparse`` function:
+into a sparse matrix using the :func:`sparse` function:
 
 .. doctest::
 
@@ -642,9 +696,8 @@ into a sparse matrix using the ``sparse`` function:
             [4, 4]  =  1.0
             [5, 5]  =  1.0
 
-You can go in the other direction using the ``dense`` or the ``full``
-function. The ``issparse`` function can be used to query if a matrix
-is sparse.
+You can go in the other direction using the :func:`full` function. The
+:func:`issparse` function can be used to query if a matrix is sparse.
 
 .. doctest::
 
@@ -659,7 +712,7 @@ matrices. Indexing of, assignment into, and concatenation of sparse
 matrices work in the same way as dense matrices. Indexing operations,
 especially assignment, are expensive, when carried out one element at
 a time. In many cases it may be better to convert the sparse matrix
-into ``(I,J,V)`` format using ``findnz``, manipulate the non-zeroes or
+into ``(I,J,V)`` format using :func:`findnz`, manipulate the non-zeroes or
 the structure in the dense vectors ``(I,J,V)``, and then reconstruct
 the sparse matrix.
 
@@ -677,41 +730,39 @@ reference.
 
 .. tabularcolumns:: |l|l|L|
 
-+-----------------------+-------------------+----------------------------------------+
-| Sparse                | Dense             | Description                            |
-+-----------------------+-------------------+----------------------------------------+
-| ``spzeros(m,n)``      | ``zeros(m,n)``    | Creates a *m*-by-*n* matrix of zeros.  |
-|                       |                   | (``spzeros(m,n)`` is empty.)           |
-+-----------------------+-------------------+----------------------------------------+
-| ``spones(S)``         | ``ones(m,n)``     | Creates a matrix filled with ones.     |
-|                       |                   | Unlike the dense version, ``spones``   |
-|                       |                   | has the same sparsity pattern as *S*.  |
-+-----------------------+-------------------+----------------------------------------+
-| ``speye(n)``          | ``eye(n)``        | Creates a *n*-by-*n* identity matrix.  |
-+-----------------------+-------------------+----------------------------------------+
-| ``full(S)``           | ``sparse(A)``     | Interconverts between dense            |
-|                       |                   | and sparse formats.                    |
-+-----------------------+-------------------+----------------------------------------+
-| ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *m*-by-*n* random matrix (of |
-|                       |                   | density *d*) with iid non-zero elements|
-|                       |                   | distributed uniformly on the           |
-|                       |                   | interval [0, 1].                       |
-+-----------------------+-------------------+----------------------------------------+
-| ``sprandn(m,n,d)``    | ``randn(m,n)``    | Creates a *m*-by-*n* random matrix (of |
-|                       |                   | density *d*) with iid non-zero elements|
-|                       |                   | distributed according to the standard  |
-|                       |                   | normal (Gaussian) distribution.        |
-+-----------------------+-------------------+----------------------------------------+
-| ``sprandn(m,n,d,X)``  | ``randn(m,n,X)``  | Creates a *m*-by-*n* random matrix (of |
-|                       |                   | density *d*) with iid non-zero elements|
-|                       |                   | distributed according to the *X*       |
-|                       |                   | distribution. (Requires the            |
-|                       |                   | ``Distributions`` package.)            |
-+-----------------------+-------------------+----------------------------------------+
-| ``sprandbool(m,n,d)`` | ``randbool(m,n)`` | Creates a *m*-by-*n* random matrix (of |
-|                       |                   | density *d*) with non-zero ``Bool``    |
-|                       |                   | elements with probability *d* (*d* =0.5|
-|                       |                   | for ``randbool``.)                     |
-+-----------------------+-------------------+----------------------------------------+
-
-
++----------------------------------------+----------------------------------+--------------------------------------------+
+| Sparse                                 | Dense                            | Description                                |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`spzeros(m,n) <spzeros>`         | :func:`zeros(m,n) <zeros>`       | Creates a *m*-by-*n* matrix of zeros.      |
+|                                        |                                  | (:func:`spzeros(m,n) <spzeros>` is empty.) |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`spones(S) <spones>`             | :func:`ones(m,n) <ones>`         | Creates a matrix filled with ones.         |
+|                                        |                                  | Unlike the dense version, :func:`spones`   |
+|                                        |                                  | has the same sparsity pattern as *S*.      |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`speye(n) <speye>`               | :func:`eye(n) <eye>`             | Creates a *n*-by-*n* identity matrix.      |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`full(S) <full>`                 | :func:`sparse(A) <sparse>`       | Interconverts between dense                |
+|                                        |                                  | and sparse formats.                        |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`sprand(m,n,d) <sprand>`         | :func:`rand(m,n) <rand>`         | Creates a *m*-by-*n* random matrix (of     |
+|                                        |                                  | density *d*) with iid non-zero elements    |
+|                                        |                                  | distributed uniformly on the               |
+|                                        |                                  | half-open interval [0, 1).                 |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`sprandn(m,n,d) <sprandn>`       | :func:`randn(m,n) <randn>`       | Creates a *m*-by-*n* random matrix (of     |
+|                                        |                                  | density *d*) with iid non-zero elements    |
+|                                        |                                  | distributed according to the standard      |
+|                                        |                                  | normal (Gaussian) distribution.            |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`sprandn(m,n,d,X) <sprandn>`     | :func:`randn(m,n,X) <randn>`     | Creates a *m*-by-*n* random matrix (of     |
+|                                        |                                  | density *d*) with iid non-zero elements    |
+|                                        |                                  | distributed according to the *X*           |
+|                                        |                                  | distribution. (Requires the                |
+|                                        |                                  | ``Distributions`` package.)                |
++----------------------------------------+----------------------------------+--------------------------------------------+
+| :func:`sprandbool(m,n,d) <sprandbool>` | :func:`rand(Bool,m,n) <rand>`    | Creates a *m*-by-*n* random matrix (of     |
+|                                        |                                  | density *d*) with non-zero  ``Bool``       |
+|                                        |                                  | elements with probability *d* (*d* =0.5    |
+|                                        |                                  | for :func:`rand(Bool) <rand>`.)            |
++----------------------------------------+----------------------------------+--------------------------------------------+

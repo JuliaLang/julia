@@ -1,6 +1,8 @@
-# editing
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function edit(file::String, line::Integer)
+# editing files
+
+function edit(file::AbstractString, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -24,44 +26,47 @@ function edit(file::String, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
-    if beginswith(edname, "emacs")
+    const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    if startswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim"
-        run(`$edpath $file +$line`)
-    elseif edname == "textmate" || edname == "mate"
+    elseif edname == "vi" || edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
+        run(`$edpath +$line $file`)
+    elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
-    elseif beginswith(edname, "subl")
+    elseif startswith(edname, "subl") || edname == "atom"
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`start /b $file`)
+        spawn(`cmd /c start /b $file`)
+        println(no_line_msg)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
-    elseif edname == "kate"
-        spawn(`$edpath $file -l $line`)
-    elseif edname == "nano"
-        run(`$edpath +$line $file`)
+        println(no_line_msg)
     else
         run(`$(shell_split(edpath)) $file`)
+        println(no_line_msg)
     end
     nothing
 end
-edit(file::String) = edit(file, 1)
-
-function less(file::String, line::Integer)
-    pager = get(ENV, "PAGER", "less")
-    run(`$pager +$(line)g $file`)
-end
-less(file::String) = less(file, 1)
-edit(f::Callable)               = edit(functionloc(f)...)
-edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
-less(f::Callable)               = less(functionloc(f)...)
-less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
 
 function edit( m::Method )
     tv, decls, file, line = arg_decl_parts(m)
     edit( string(file), line )
 end
 
+edit(file::AbstractString) = edit(file, 1)
+edit(f::Callable)          = edit(functionloc(f)...)
+edit(f::Callable, t::ANY)  = edit(functionloc(f,t)...)
+
+# terminal pager
+
+function less(file::AbstractString, line::Integer)
+    pager = get(ENV, "PAGER", "less")
+    run(`$pager +$(line)g $file`)
+end
+
+less(file::AbstractString) = less(file, 1)
+less(f::Callable)          = less(functionloc(f)...)
+less(f::Callable, t::ANY)  = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
@@ -80,7 +85,7 @@ end
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
-            success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
+            success(pipe(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
         error("no clipboard command found, please install xsel or xclip")
     end
@@ -103,18 +108,21 @@ end
 end
 
 @windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
-    function clipboard(x::String)
+    function clipboard(x::AbstractString)
+        if containsnul(x)
+            throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
+        end
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = utf16(x)
         # copy data to locked, allocated space
-        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Uint16}, (Uint16, Int32), 2, sizeof(x_u16)+2)
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{UInt16}, (UInt16, Int32), 2, sizeof(x_u16)+2)
         systemerror(:GlobalAlloc, p==C_NULL)
-        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), p)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), p)
         systemerror(:GlobalLock, plock==C_NULL)
-        ccall(:memcpy, Ptr{Uint16}, (Ptr{Uint16},Ptr{Uint16},Int), plock, x_u16, sizeof(x_u16)+2)
+        ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16},Ptr{UInt16},Int), plock, x_u16, sizeof(x_u16)+2)
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
-        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32, Ptr{Uint16}), 13, p)
+        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32, Ptr{UInt16}), 13, p)
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
@@ -122,13 +130,13 @@ end
 
     function clipboard()
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
-        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32,), 13)
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
         systemerror(:SetClipboardData, pdata==C_NULL)
         systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
-        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), pdata)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         systemerror(:GlobalLock, plock==C_NULL)
         s = utf8(utf16(plock))
-        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Uint16},), plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), plock))
         return s
     end
 end
@@ -155,7 +163,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(`lsb_release -ds` .> DevNull) end
+        @linux_only try lsb = readchomp(pipe(`lsb_release -ds`, stderr=DevNull)) end
         @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
@@ -169,7 +177,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         Sys.cpu_summary(io)
         println(io          )
     end
-    if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
+    if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas || blas_vendor() == :openblas64
         openblas_config = openblas_get_config()
         println(io,         "  BLAS: libopenblas (", openblas_config, ")")
     else
@@ -192,19 +200,34 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
 end
 versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
-# searching definitions
+# displaying type-ambiguity warnings
 
-function which(f::Callable, t::(Type...))
-    if !isgeneric(f)
-        throw(ErrorException("not a generic function, no methods available"))
+function code_warntype(io::IO, f, t::ANY)
+    global show_expr_type_emphasize
+    global may_show_expr_type_emphasize
+    state = show_expr_type_emphasize::Bool
+    ct = code_typed(f, t)
+    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = true
+    for ast in ct
+        println(io, "Variables:")
+        vars = ast.args[2][1]
+        for v in vars
+            print(io, "  ", v[1])
+            show_expr_type(io, v[2])
+            print(io, '\n')
+        end
+        print(io, "\nBody:\n  ")
+        show_unquoted(io, ast.args[3], 2)
+        print(io, '\n')
     end
-    ms = methods(f, t)
-    isempty(ms) && error("no method found for the specified argument types")
-    ms[1]
+    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = false
+    nothing
 end
+code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
+typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 
+gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
@@ -218,7 +241,7 @@ function gen_call_with_extracted_types(fcn, ex0)
                     Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
     end
     ex = expand(ex0)
-    exret = Expr(:call, :error, "expression is not a function call")
+    exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
@@ -248,7 +271,8 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
+for fname in [:which, :less, :edit, :code_typed, :code_warntype,
+              :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
@@ -264,20 +288,17 @@ function type_close_enough(x::ANY, t::ANY)
             !isleaftype(t) && x <: t)
 end
 
-function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
-    if isa(f,DataType)
-        methods(f) # force constructor creation
-    end
+function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     if !isa(f.env, MethodTable)
         return meths
     end
     d = f.env.defs
-    while !is(d,())
+    while d != nothing
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                      x != Any && x != ANY),
-               d.sig)
+               d.sig.parameters)
             push!(meths, d)
         end
         d = d.next
@@ -289,8 +310,8 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
-            f = eval(m, nm)
-            if isa(f, Callable)
+            f = getfield(m, nm)
+            if isa(f, Function)
                 methodswith(t, f, showparents, meths)
             end
         end
@@ -304,7 +325,7 @@ function methodswith(t::Type, showparents::Bool=false)
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
-            mod = eval(mainmod, nm)
+            mod = getfield(mainmod, nm)
             if isa(mod, Module)
                 append!(meths, methodswith(t, mod, showparents))
             end
@@ -313,14 +334,14 @@ function methodswith(t::Type, showparents::Bool=false)
     return unique(meths)
 end
 
-## file downloading ##
+# file downloading
 
 downloadcmd = nothing
-@unix_only function download(url::String, filename::String)
+@unix_only function download(url::AbstractString, filename::AbstractString)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
+            if success(pipe(`which $checkcmd`, DevNull))
                 downloadcmd = checkcmd
                 break
             end
@@ -338,19 +359,21 @@ downloadcmd = nothing
     filename
 end
 
-@windows_only function download(url::String, filename::String)
+@windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
+                (Ptr{Void},Cwstring,Cwstring,Cint,Ptr{Void}),C_NULL,url,filename,0,0)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
     filename
 end
 
-function download(url::String)
+function download(url::AbstractString)
     filename = tempname()
     download(url, filename)
 end
+
+# workspace management
 
 function workspace()
     last = Core.Main
@@ -367,19 +390,21 @@ function workspace()
     nothing
 end
 
-function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
-    if isa(tests,String)
+# testing
+
+function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
+    if isa(tests,AbstractString)
         tests = split(tests)
     end
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME,
+        run(setenv(`$(julia_cmd()) $(joinpath(JULIA_HOME,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)
-        error("A test has failed. Please submit a bug report including error messages\n" *
-            "above and the output of versioninfo():\n$(readall(buf))")
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(readall(buf))")
     end
 end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # usage: perfcomp.jl <baseline file> [<suite>]
 # This will run the specified suite (default "all") and compare it to stored
 # results in the baseline file. Only test names present in both will be
@@ -5,20 +7,21 @@
 # The file format is the output of running `make` in this directory.
 
 function readperf(f)
-    [ rstrip(l[1:19])=>[float64(l[20:27]),float64(l[29:36]),float64(l[38:45]),float64(l[47:54])] for l in eachline(f) ]
+    [ rstrip(l[1:19])=>[parse(Float64,l[20:27]),parse(Float64,l[29:36]),parse(Float64,l[38:45]),parse(Float64,l[47:54])] for l in eachline(f) ]
 end
 
 function main()
     baseline = readperf(open(ARGS[1]))
     torun = length(ARGS) > 1 ? ARGS[2] : "all"
-    io,p = readsfrom(`make -s $torun`)
+    e = haskey(ENV,"J") ? "JULIA_EXECUTABLE=$(ENV["J"])" : ""
+    io,p = open(`make $e -s $torun`, "r")
     newp = readperf(io)
-    
+
     names = sort(intersect(keys(baseline),keys(newp)))
-    
+
     means0 = [ baseline[n][3] for n in names ]
     means1 = [ newp[n][3] for n in names ]
-    
+
     change = (means0 - means1) ./ means0
 
     println("test name            old       new     % speedup  % st. dev")

@@ -1,14 +1,28 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Methods operating on different special matrix types
 
 #Interconversion between special matrix types
 convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{Triangular}, A::Diagonal) = Triangular(full(A), :L)
-convert(::Type{Triangular}, A::Bidiagonal) = Triangular(full(A), A.isupper ? :U : :L)
+convert(::Type{UpperTriangular}, A::Diagonal) = UpperTriangular(full(A), :L)
+convert(::Type{LowerTriangular}, A::Diagonal) = LowerTriangular(full(A), :L)
+convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
+convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 
-function convert(::Type{Diagonal}, A::Union(Bidiagonal, SymTridiagonal))
+function convert(::Type{UnitUpperTriangular}, A::Diagonal)
+    all(A.diag .== one(eltype(A))) || throw(ArgumentError("Matrix cannot be represented as UnitUpperTriangular"))
+    UnitUpperTriangular(full(A))
+end
+
+function convert(::Type{UnitLowerTriangular}, A::Diagonal)
+    all(A.diag .== one(eltype(A))) || throw(ArgumentError("Matrix cannot be represented as UnitLowerTriangular"))
+    UnitLowerTriangular(full(A))
+end
+
+function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
     all(A.ev .== 0) || throw(ArgumentError("Matrix cannot be represented as Diagonal"))
     Diagonal(A.dv)
 end
@@ -32,7 +46,7 @@ end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
     if all(A.dl .== 0) return Bidiagonal(A.d, A.du, true)
-    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, true)
+    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, false)
     else throw(ArgumentError("Matrix cannot be represented as Bidiagonal"))
     end
 end
@@ -42,27 +56,27 @@ function convert(::Type{SymTridiagonal}, A::Tridiagonal)
     SymTridiagonal(A.d, A.dl)
 end
 
-function convert(::Type{Diagonal}, A::Triangular)
+function convert(::Type{Diagonal}, A::AbstractTriangular)
     full(A) == diagm(diag(A)) || throw(ArgumentError("Matrix cannot be represented as Diagonal"))
     Diagonal(diag(A))
 end
 
-function convert(::Type{Bidiagonal}, A::Triangular)
+function convert(::Type{Bidiagonal}, A::AbstractTriangular)
     fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
         return Bidiagonal(diag(A), diag(fA,1), true)
     elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
-        return Bidiagonal(diag(A), diag(fA,-1), true)
+        return Bidiagonal(diag(A), diag(fA,-1), false)
     else
         throw(ArgumentError("Matrix cannot be represented as Bidiagonal"))
     end
 end
 
-convert(::Type{SymTridiagonal}, A::Triangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
+convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
 
-function convert(::Type{Tridiagonal}, A::Triangular)
+function convert(::Type{Tridiagonal}, A::AbstractTriangular)
     fA = full(A)
-    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1) 
+    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
         return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
     else
         throw(ArgumentError("Matrix cannot be represented as Tridiagonal"))
@@ -82,7 +96,7 @@ macro commutative(myexpr)
 end
 
 for op in (:+, :-)
-    SpecialMatrices = [:Diagonal, :Bidiagonal, :Tridiagonal, :Triangular, :Matrix]
+    SpecialMatrices = [:Diagonal, :Bidiagonal, :Tridiagonal, :Matrix]
     for (idx, matrixtype1) in enumerate(SpecialMatrices) #matrixtype1 is the sparser matrix type
         for matrixtype2 in SpecialMatrices[idx+1:end] #matrixtype2 is the denser matrix type
             @eval begin #TODO quite a few of these conversions are NOT defined...
@@ -93,14 +107,14 @@ for op in (:+, :-)
     end
 
     for  matrixtype1 in (:SymTridiagonal,)                      #matrixtype1 is the sparser matrix type
-        for matrixtype2 in (:Tridiagonal, :Triangular, :Matrix) #matrixtype2 is the denser matrix type
+        for matrixtype2 in (:Tridiagonal, :Matrix) #matrixtype2 is the denser matrix type
             @eval begin
                 ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
                 ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
             end
         end
     end
-    
+
     for matrixtype1 in (:Diagonal, :Bidiagonal) #matrixtype1 is the sparser matrix type
         for matrixtype2 in (:SymTridiagonal,)   #matrixtype2 is the denser matrix type
             @eval begin
@@ -111,7 +125,7 @@ for op in (:+, :-)
     end
 end
 
-A_mul_Bc!(A::Triangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc!(A::Triangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::Triangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
+A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
+A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
 

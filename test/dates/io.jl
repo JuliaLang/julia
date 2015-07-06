@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test string(Dates.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE
@@ -256,7 +258,7 @@ f = "y m d"
 # Vectorized
 dr = ["2000-01-01","2000-01-02","2000-01-03","2000-01-04","2000-01-05"
      ,"2000-01-06","2000-01-07","2000-01-08","2000-01-09","2000-01-10"]
-dr2 = [Dates.Date(2000):Dates.Date(2000,1,10)]
+dr2 = [Dates.Date(2000):Dates.Date(2000,1,10);]
 @test Dates.Date(dr) == dr2
 @test Dates.Date(dr,"yyyy-mm-dd") == dr2
 @test Dates.DateTime(dr) == Dates.DateTime(dr2)

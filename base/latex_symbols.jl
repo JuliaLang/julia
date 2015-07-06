@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Mapping from LaTeX math symbol to the corresponding Unicode codepoint.
 # This is used for tab substitution in the REPL.
 
@@ -20,12 +22,15 @@ for c in child_nodes(root(xdoc))
         if latex != nothing
             L = strip(content(latex))
             id = attribute(ce, "id")
-            U = string(map(s -> char(parseint(s, 16)),
+            U = string(map(s -> Char(parse(Int, s, 16)),
                            split(id[2:end], "-"))...)
             if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,ASCIIString)
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else
+                    if U[1] == '\u22a5' # unicode.xml incorrectly uses \perp for \bot
+                        L = "\\bot"
+                    end
                     push!(latexsym, (L, U))
                     push!(Ls, L)
                 end
@@ -48,10 +53,10 @@ open("unicode-math-table.tex") do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
-        c = char(parseint(x[2], 16))
+        c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
-            println("    \"", escape_string(x[3]), "\" => \"", 
+            println("    \"", escape_string(x[3]), "\" => \"",
                     escape_string("$c"), "\",  # ", x[5])
         end
     end
@@ -478,6 +483,7 @@ const latex_symbols = Dict(
     "\\exists" => "∃",
     "\\nexists" => "∄",
     "\\varnothing" => "∅",
+    "\\emptyset" => "∅",
     "\\nabla" => "∇",
     "\\in" => "∈",
     "\\notin" => "∉",
@@ -625,7 +631,7 @@ const latex_symbols = Dict(
     "\\vdash" => "⊢",
     "\\dashv" => "⊣",
     "\\top" => "⊤",
-    "\\perp" => "⊥",
+    "\\bot" => "⊥",
     "\\models" => "⊧",
     "\\vDash" => "⊨",
     "\\Vdash" => "⊩",
@@ -921,10 +927,12 @@ const latex_symbols = Dict(
     "\\Dashv" => "⫤",
     "\\interleave" => "⫴",
     "\\Elztdcol" => "⫶",
-    "\\openbracketleft" => "〚",
-    "\\openbracketright" => "〛",
-    "\\overbrace" => "︷",
-    "\\underbrace" => "︸",
+    "\\openbracketleft" => "⟦",
+    "\\llbracket" => "⟦",
+    "\\openbracketright" => "⟧",
+    "\\rrbracket" => "⟧",
+    "\\overbrace" => "⏞",
+    "\\underbrace" => "⏟",
 
 # 1607 symbols generated from unicode-math-table.tex:
     "\\Zbar" => "Ƶ",  # impedance (latin capital letter z with stroke)

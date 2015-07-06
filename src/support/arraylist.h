@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef ARRAYLIST_H
 #define ARRAYLIST_H
 
@@ -19,6 +21,7 @@ void arraylist_free(arraylist_t *a);
 
 void arraylist_push(arraylist_t *a, void *elt);
 void *arraylist_pop(arraylist_t *a);
+void arraylist_grow(arraylist_t *a, size_t n);
 
 #ifdef __cplusplus
 }

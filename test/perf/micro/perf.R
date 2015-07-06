@@ -32,7 +32,7 @@ timeit("fib", fib, 20)
 parseintperf = function(t) {
     for (i in 1:t) {
         # R doesn't support uint32 values
-        n = floor(2^31-1*runif(1))
+        n = floor(runif(1, min=0, max=2^31-1))
         s = sprintf("0x%x", n)
         m = as.numeric(s)
         assert(m == n)

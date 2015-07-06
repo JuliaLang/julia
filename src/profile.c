@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -27,6 +29,8 @@ DLLEXPORT int jl_profile_start_timer(void);
 volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
+    // Note: illegal to use jl_* functions from this thread
+
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
         fputs("failed to get timer resolution",stderr);
@@ -70,7 +74,7 @@ DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
-        hBtThread = CreateThread( 
+        hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
             profile_bt,            // thread function name
@@ -165,6 +169,7 @@ void *mach_profile_listener(void *arg)
 {
     (void)arg;
     int max_size = 512;
+    attach_exception_port();
     mach_profiler_thread = mach_thread_self();
     mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
     while (1) {
@@ -187,7 +192,7 @@ void *mach_profile_listener(void *arg)
             HANDLE_MACH_ERROR("thread_get_state",ret);
 
             // Initialize the unwind context with the suspend thread's state
-            unw_context_t uc; 
+            unw_context_t uc;
             memset(&uc,0,sizeof(unw_context_t));
             memcpy(&uc,&state,sizeof(x86_thread_state64_t));
 
@@ -216,7 +221,7 @@ void *mach_profile_listener(void *arg)
                 bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
             }
             else if (forceDwarf == -1) {
-                JL_PRINTF(JL_STDERR, "Warning: Profiler attempt to access an invalid memory location\n");
+                jl_safe_printf("Warning: Profiler attempt to access an invalid memory location\n");
             }
 
             forceDwarf = -2;
@@ -225,7 +230,7 @@ void *mach_profile_listener(void *arg)
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;
 
-            // We're done! Resume the thread. 
+            // We're done! Resume the thread.
             ret = thread_resume(main_thread);
             HANDLE_MACH_ERROR("thread_resume",ret)
 
@@ -254,13 +259,11 @@ DLLEXPORT int jl_profile_start_timer(void)
         // Alright, create a thread to serve as the listener for exceptions
         pthread_attr_t attr;
         if (pthread_attr_init(&attr) != 0) {
-            JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-            jl_exit(1);
+            jl_error("pthread_attr_init failed");
         }
         pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
         if (pthread_create(&profiler_thread,&attr,mach_profile_listener,NULL) != 0) {
-            JL_PRINTF(JL_STDERR, "pthread_create failed");
-            jl_exit(1);
+            jl_error("pthread_create failed");
         }
         pthread_attr_destroy(&attr);
 
@@ -430,7 +433,7 @@ DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (ptrint_t*) malloc(maxsize*sizeof(ptrint_t));
+    bt_data_prof = (ptrint_t*) calloc(maxsize, sizeof(ptrint_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;

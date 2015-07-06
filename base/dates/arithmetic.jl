@@ -1,14 +1,10 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Instant arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::Instant,y::Instant) = throw(ArgumentError("Operation not defined for Instants"))
-end
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods
 
 # TimeType arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::TimeType,y::TimeType) = throw(ArgumentError("Operation not defined for TimeTypes"))
-end
 (+)(x::TimeType) = x
 (-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
 
@@ -37,25 +33,25 @@ monthwrap(m1,m2) = (v = mod1(m1+m2,12); return v < 0 ? 12 + v : v)
 # the resulting year with wraparound behavior (i.e. 2000-12 + 1 == 2001)
 yearwrap(y,m1,m2) = y + fld(m1 + m2 - 1,12)
 
-function (+)(dt::DateTime,z::Month) 
+function (+)(dt::DateTime,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,value(z))
     mm = monthwrap(m,value(z)); ld = daysinmonth(ny,mm)
     return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
-function (+)(dt::Date,z::Month) 
+function (+)(dt::Date,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,value(z))
     mm = monthwrap(m,value(z)); ld = daysinmonth(ny,mm)
     return Date(ny,mm,d <= ld ? d : ld)
 end
-function (-)(dt::DateTime,z::Month) 
+function (-)(dt::DateTime,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,-value(z))
     mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
     return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
-function (-)(dt::Date,z::Month) 
+function (-)(dt::Date,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,-value(z))
     mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
@@ -63,8 +59,8 @@ function (-)(dt::Date,z::Month)
 end
 (+)(x::Date,y::Week) = return Date(UTD(value(x) + 7*value(y)))
 (-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
-(+)(x::Date,y::Day)  = return Date(UTD(value(x) + y))
-(-)(x::Date,y::Day)  = return Date(UTD(value(x) - y))
+(+)(x::Date,y::Day)  = return Date(UTD(value(x) + value(y)))
+(-)(x::Date,y::Day)  = return Date(UTD(value(x) - value(y)))
 (+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
 (-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
 (+)(y::Period,x::TimeType) = x + y

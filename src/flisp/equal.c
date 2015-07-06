@@ -225,12 +225,12 @@ static value_t cyc_compare(value_t a, value_t b, htable_t *table, int eq)
         function_t *fb = (function_t*)ptr(b);
         d = bounded_compare(fa->bcode, fb->bcode, 1, eq);
         if (numval(d) != 0) return d;
-        
+
         ca = eq_class(table, a);
         cb = eq_class(table, b);
         if (ca!=NIL && ca==cb)
             return fixnum(0);
-        
+
         eq_union(table, a, b, ca, cb);
         d = cyc_compare(fa->vals, fb->vals, table, eq);
         if (numval(d) != 0) return d;

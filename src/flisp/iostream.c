@@ -104,7 +104,7 @@ value_t fl_buffer(value_t *args, u_int32_t nargs)
     value_t f = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *s = value2c(ios_t*, f);
     if (ios_mem(s, 0) == NULL)
-        lerror(MemoryError, "buffer: could not allocate stream");
+        lerror(OutOfMemoryError, "buffer: could not allocate stream");
     return f;
 }
 

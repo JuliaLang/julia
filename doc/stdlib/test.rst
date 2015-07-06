@@ -1,20 +1,36 @@
+*****************************
+ Unit and Functional Testing
+*****************************
+
+Testing Base Julia
+------------------
+
+Julia is under rapid development and has an extensive test suite to
+verify functionality across multiple platforms. If you build Julia
+from source, you can run this test suite with ``make test``. In a
+binary install, you can run the test suite using ``Base.runtests()``.
+
+.. currentmodule:: Base
+
+.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``, which can be either a
+   string or an array of strings, using ``numcores`` processors. (not exported)
+
+
 .. module:: Base.Test
 
-Unit and Functional Testing
-===========================
+Test Framework
+--------------
 
 The ``Test`` module contains macros and functions related to testing.
 A default handler is provided to run the tests, and a custom one can be
 provided by the user by using the :func:`registerhandler` function.
 
-
-Overview
-________
-
 To use the default handler, the macro :func:`@test` can be used directly::
 
   julia> using Base.Test
-  
+
   julia> @test 1 == 1
 
   julia> @test 1 == 0
@@ -37,6 +53,7 @@ Another macro is provided to check if the given expression throws an exception o
 :func:`@test_throws`::
 
   julia> @test_throws ErrorException error("An error")
+  ErrorException("An error")
 
   julia> @test_throws BoundsError error("An error")
   ERROR: test failed: error("An error")
@@ -45,6 +62,7 @@ Another macro is provided to check if the given expression throws an exception o
    in do_test_throws at test.jl:55
 
   julia> @test_throws DomainError throw(DomainError())
+  DomainError()
 
   julia> @test_throws DomainError throw(EOFError())
   ERROR: test failed: throw(EOFError())
@@ -75,7 +93,7 @@ As floating point comparisons can be imprecise, two additional macros exist taki
    in test_approx_eq at test.jl:68
 
 Handlers
-________
+--------
 
 A handler is a function defined for three kinds of arguments: ``Success``, ``Failure``, ``Error``::
 
@@ -113,7 +131,7 @@ A different handler can be used for a block (with :func:`with_handler`)::
 The ``Success`` and ``Failure`` types include an additonal field, ``resultexpr``, which is a partially evaluated expression. For example, in a comparison it will contain an expression with the left and right sides evaluated.
 
 Macros
-______
+------
 
 .. function:: @test(ex)
 
@@ -122,6 +140,7 @@ ______
 .. function:: @test_throws(extype, ex)
 
    Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
+   The default handler returns the exception if it is of the expected type.
 
 .. function:: @test_approx_eq(a, b)
 
@@ -134,24 +153,9 @@ ______
    a margin of tolerance given by ``tol``.
 
 Functions
-_________
+---------
 
 .. function:: with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
 
-
-Testing Base Julia
-==================
-
-Julia is under rapid development and has an extensive test suite to
-verify functionality across multiple platforms. If you build Julia
-from source, you can run this test suite with ``make test``. In a
-binary install, you can run the test suite using ``Base.runtests()``.
-
-.. currentmodule:: Base
-
-.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
-
-   Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors.

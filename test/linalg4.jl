@@ -1,191 +1,103 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+using Base.Test
 debug = false
 
-import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
-
+n= 10 #Size of matrix to test
 srand(1)
 
-#Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
-function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
-    n = size(a, 1)
-    @test n==size(b,1) && size(a,2)==size(b,2)
-    error==nothing && (error=n^3*(eps(S)+eps(T)))
-    for i=1:n
-        ev1, ev2 = a[:,i], b[:,i]
-        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
-        if !isnan(deviation)
-            @test_approx_eq_eps deviation 0.0 error
-        end
-    end
-end
-
-##############################
-# Tests for special matrices #
-##############################
-
-n=12 #Size of matrix problem to test
-
-#Issue #7647: test xsyevr, xheevr, xstevr drivers
-for Mi7647 in (Symmetric(diagm([1.0:3.0])),
-               Hermitian(diagm([1.0:3.0])),
-               Hermitian(diagm(complex([1.0:3.0]))),
-               SymTridiagonal([1.0:3.0], zeros(2)))
-    debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
-    @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
-    @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
-    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0]
-end
-
-debug && println("Bidiagonal matrices")
-for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-    debug && println("elty is $(elty), relty is $(relty)")
-    dv = convert(Vector{elty}, randn(n))
-    ev = convert(Vector{elty}, randn(n-1))
-    b = convert(Matrix{elty}, randn(n, 2))
-    if (elty <: Complex)
-        dv += im*convert(Vector{elty}, randn(n))
-        ev += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Matrix{elty}, randn(n, 2))
-    end
-
-    debug && println("Test upper and lower bidiagonal matrices")
-    for isupper in (true, false)
-        debug && println("isupper is: $(isupper)")
-        T = Bidiagonal(dv, ev, isupper)
-
-        @test size(T, 1) == size(T, 2) == n
-        @test size(T) == (n, n)
-        @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
-        @test Bidiagonal(full(T), isupper) == T
-        z = zeros(elty, n)
-
-        debug && println("Idempotent tests")
-        for func in (conj, transpose, ctranspose)
-            @test func(func(T)) == T
-        end
-
-        debug && println("Linear solver")
-        Tfull = full(T)
-        condT = cond(complex128(Tfull))
-        x = T \ b
-        tx = Tfull \ b
-        @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
-
-        debug && println("Eigensystems")
-        d1, v1 = eig(T)
-        d2, v2 = eig((elty<:Complex?complex128:float64)(Tfull))
-        @test_approx_eq isupper?d1:reverse(d1) d2
-        if elty <: Real
-            test_approx_eq_vecs(v1, isupper?v2:v2[:,n:-1:1])
-        end
-
-        debug && println("Singular systems")
-        if (elty <: BlasReal)
-            @test_approx_eq svdvals(Tfull) svdvals(T)
-            u1, d1, v1 = svd(Tfull)
-            u2, d2, v2 = svd(T)
-            @test_approx_eq d1 d2
-            if elty <: Real
-                test_approx_eq_vecs(u1, u2)
-                test_approx_eq_vecs(v1, v2)
-            end
-            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1'-Tfull))
-        end
-
-        debug && println("Binary operations")
-        for isupper2 in (true, false) 
-            dv = convert(Vector{elty}, randn(n))
-            ev = convert(Vector{elty}, randn(n-1))
-            T2 = Bidiagonal(dv, ev, isupper2)
-            Tfull2 = full(T2)
-            for op in (+, -, *)
-                @test_approx_eq full(op(T, T2)) op(Tfull, Tfull2)
-            end
-        end
-    end
-end
-
-debug && println("Diagonal matrices")
-for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-    debug && println("elty is $(elty), relty is $(relty)")
-    d=convert(Vector{elty}, randn(n))
-    v=convert(Vector{elty}, randn(n))
-    U=convert(Matrix{elty}, randn(n,n))
-    if elty <: Complex
-        d+=im*convert(Vector{elty}, randn(n))
-        v+=im*convert(Vector{elty}, randn(n))
-        U+=im*convert(Matrix{elty}, randn(n,n))
-    end
-    D = Diagonal(d)
-    DM = diagm(d)
-
-    debug && println("Linear solve")
-    @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
-    @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
-    if relty != BigFloat
-        @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
-        @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
-    end
-
-    debug && println("Simple unary functions")
-    for func in (det, trace)
-        @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(elty<:Complex ? 2:1)
-    end
-    if relty <: BlasFloat
-        for func in (expm,)
-            @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
-        end
-    end
-    if elty <: BlasComplex
-        for func in (logdet, sqrtm)
-            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*2
-        end
-    end
-    debug && println("Binary operations")
-    d = convert(Vector{elty}, randn(n))
-    D2 = Diagonal(d)
-    DM2= diagm(d)
-    for op in (+, -, *)
-        @test_approx_eq full(op(D, D2)) op(DM, DM2)
-    end
-end
-
-
 debug && println("Test interconversion between special matrix types")
-a=[1.0:n]
-A=Diagonal(a)
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
-    debug && println("newtype is $(newtype)")
-    @test full(convert(newtype, A)) == full(A)
-end
-
-for isupper in (true, false)
-    debug && println("isupper is $(isupper)")
-    A=Bidiagonal(a, [1.0:n-1], isupper)
-    for newtype in [Bidiagonal, Tridiagonal, Triangular, Matrix]
+let a=[1.0:n;]
+    A=Diagonal(a)
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
     end
-    A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
-    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
-        debug && println("newtype is $(newtype)")
+    for newtype in [Base.LinAlg.UnitUpperTriangular, Base.LinAlg.UnitLowerTriangular]
+        @test_throws ArgumentError convert(newtype, A)
+        @test full(convert(newtype, Diagonal(ones(n)))) == eye(n)
+    end
+
+    for isupper in (true, false)
+        debug && println("isupper is $(isupper)")
+        A=Bidiagonal(a, [1.0:n-1;], isupper)
+        for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
+            debug && println("newtype is $(newtype)")
+            @test full(convert(newtype, A)) == full(A)
+            @test full(newtype(A)) == full(A)
+        end
+        @test_throws ArgumentError convert(SymTridiagonal, A)
+        A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
+        for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
+            debug && println("newtype is $(newtype)")
+            @test full(convert(newtype, A)) == full(A)
+            @test full(newtype(A)) == full(A)
+        end
+    end
+
+    A = SymTridiagonal(a, [1.0:n-1;])
+    for newtype in [Tridiagonal, Matrix]
         @test full(convert(newtype, A)) == full(A)
+    end
+    for newtype in [Diagonal, Bidiagonal]
+        @test_throws ArgumentError convert(newtype,A)
+    end
+    A = SymTridiagonal(a, zeros(n-1))
+    @test full(convert(Bidiagonal,A)) == full(A)
+
+    A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    for newtype in [SymTridiagonal, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    for newtype in [Diagonal, Bidiagonal]
+        @test_throws ArgumentError convert(newtype,A)
+    end
+    A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
+    @test full(convert(Bidiagonal, A)) == full(A)
+
+    A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A = UpperTriangular(full(Diagonal(a))) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, UpperTriangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A = UpperTriangular(triu(rand(n,n)))
+    for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
+        @test_throws ArgumentError convert(newtype,A)
     end
 end
 
-A=SymTridiagonal(a, [1.0:n-1])
-for newtype in [Tridiagonal, Matrix]
-    @test full(convert(newtype, A)) == full(A)
-end
-
-A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
-    @test full(convert(newtype, A)) == full(A)
-end
-
-A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
-    @test full(convert(newtype, A)) == full(A)
+# Binary ops among special types
+let a=[1.0:n;]
+    A=Diagonal(a)
+    Spectypes = [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+    for (idx, type1) in enumerate(Spectypes)
+        for type2 in Spectypes
+            B = convert(type1,A)
+            C = convert(type2,A)
+            @test_approx_eq full(B + C) full(A + A)
+            @test_approx_eq full(B - C) full(A - A)
+        end
+    end
+    B = SymTridiagonal(a, ones(n-1))
+    for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+        @test_approx_eq full(B + convert(Spectype,A)) full(B + A)
+        @test_approx_eq full(convert(Spectype,A) + B) full(B + A)
+        @test_approx_eq full(B - convert(Spectype,A)) full(B - A)
+        @test_approx_eq full(convert(Spectype,A) - B) full(A - B)
+    end
 end
 
 # Test generic cholfact!
@@ -197,25 +109,37 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     end
     A = convert(Matrix{elty}, A'A)
     for ul in (:U, :L)
-        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{Val{ul}}},copy(A), Val{ul}))
     end
 end
 
-# Issue #7886
-x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
-@test_approx_eq x [0,2]
-@test r == 1
+# Because transpose(x) == x
+@test_throws ErrorException transpose(qrfact(randn(3,3)))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3)))
+@test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException transpose(qrfact(big(randn(3,3))))
+@test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
+@test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
+@test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 
-# Issue #7933
-A7933 = [1 2; 3 4]
-B7933 = copy(A7933)
-C7933 = full(Symmetric(A7933))
-@test A7933 == B7933
-
-# Issues #8057 and #8058
-for f in (eigfact, eigvals)
-    for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
-        @test_throws ArgumentError f(A, 3, 2)
-        @test_throws ArgumentError f(A, 1:4)
-    end
+# test diag
+let A = eye(4)
+    @test diag(A) == ones(4)
+    @test diag(sub(A, 1:3, 1:3)) == ones(3)
 end
+
+# test triu/tril bounds checking
+A = rand(5,7)
+@test_throws(BoundsError,triu(A,8))
+@test_throws(BoundsError,triu(A,-6))
+@test_throws(BoundsError,tril(A,8))
+@test_throws(BoundsError,tril(A,-6))
+
+# test generic axpy
+x = ['a','b','c','d','e']
+y = ['a','b','c','d','e']
+α = 'f'
+@test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
+@test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
+@test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Test
 
 include("../perfutil.jl")
@@ -14,9 +16,9 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 function parseintperf(t)
     local n, m
     for i=1:t
-        n = rand(Uint32)
+        n = rand(UInt32)
         s = hex(n)
-        m = uint32(parseint(Int64,s,16))
+        m = UInt32(parse(Int64,s,16))
     end
     @test m == n
     return n
@@ -148,3 +150,5 @@ end
     printfd(1)
     @timeit printfd(100000) "printfd" "Printing to a file descriptor"
 end
+
+maxrss("micro")

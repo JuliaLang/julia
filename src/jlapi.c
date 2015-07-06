@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   jlapi.c
   miscellaneous functions for users of libjulia.so, to handle initialization
@@ -17,30 +19,11 @@ extern "C" {
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 DLLEXPORT char * __cdecl dirname(char *);
-DLLEXPORT char * __cdecl basename(char *);
 #else
 #include <libgen.h>
 #endif
 
-DLLEXPORT char *jl_locate_sysimg(char *jlhome, char *imgpath)
-{
-    if (jlhome == NULL) {
-        char *julia_path = (char*)malloc(512);
-        size_t path_size = 512;
-        uv_exepath(julia_path, &path_size);
-        julia_home = strdup(dirname(julia_path));
-        free(julia_path);
-    }
-    else {
-        julia_home = jlhome;
-    }
-    char path[512];
-    snprintf(path, sizeof(path), "%s%s%s",
-             julia_home, PATHSEPSTRING, imgpath);
-    return strdup(path);
-}
-
-DLLEXPORT void *jl_eval_string(char *str);
+DLLEXPORT void *jl_eval_string(const char *str);
 
 int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
@@ -50,39 +33,27 @@ int jl_is_initialized(void) { return jl_main_module!=NULL; }
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir. The default
 // is something like ../lib/julia/sys.ji
-DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path)
+DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path)
 {
     if (jl_is_initialized()) return;
     libsupport_init();
-    if (image_relative_path == NULL)
-        image_relative_path = JL_SYSTEM_IMAGE_PATH;
-    char *image_file = jl_locate_sysimg(julia_home_dir, image_relative_path);
-    julia_init(image_file);
-    jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
-                 jl_cstr_to_string(julia_home));
-    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
-    jl_eval_string("Base.early_init()");
-    jl_eval_string("Base.init_head_sched()");
-    jl_eval_string("Base.init_load_path()");
+    jl_options.julia_home = julia_home_dir;
+    if (image_relative_path != NULL)
+        jl_options.image_file = image_relative_path;
+    julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }
 
-DLLEXPORT void jl_init(char *julia_home_dir)
+DLLEXPORT void jl_init(const char *julia_home_dir)
 {
-    jl_init_with_image(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
+    jl_init_with_image(julia_home_dir, NULL);
 }
 
-DLLEXPORT void *jl_eval_string(char *str)
+DLLEXPORT void *jl_eval_string(const char *str)
 {
-#ifdef COPY_STACKS
-    int outside_task = (jl_root_task->stackbase == NULL);
-    if (outside_task) {
-        JL_SET_STACK_BASE;
-    }
-#endif
     jl_value_t *r;
     JL_TRY {
-        jl_value_t *ast = jl_parse_input_line(str);
+        jl_value_t *ast = jl_parse_input_line(str, strlen(str));
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval(ast);
         JL_GC_POP();
@@ -92,23 +63,18 @@ DLLEXPORT void *jl_eval_string(char *str)
         //jl_show(jl_stderr_obj(), jl_exception_in_transit);
         r = NULL;
     }
-#ifdef COPY_STACKS
-    if (outside_task) {
-        jl_root_task->stackbase = NULL;
-    }
-#endif
     return r;
 }
 
 DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_is_null(jl_exception_in_transit) ? NULL : 
+    return jl_exception_in_transit == jl_nothing ? NULL :
         jl_exception_in_transit;
 }
 
 DLLEXPORT void jl_exception_clear(void)
 {
-    jl_exception_in_transit = (jl_value_t*)jl_null;
+    jl_exception_in_transit = jl_nothing;
 }
 
 // get the name of a type as a string
@@ -271,6 +237,57 @@ DLLEXPORT int jl_is_debugbuild(void)
 #else
     return 0;
 #endif
+}
+
+DLLEXPORT jl_value_t *jl_get_julia_home(void)
+{
+    return jl_cstr_to_string(jl_options.julia_home);
+}
+
+DLLEXPORT jl_value_t *jl_get_julia_bin(void)
+{
+    return jl_cstr_to_string(jl_options.julia_bin);
+}
+
+DLLEXPORT jl_value_t *jl_get_image_file(void)
+{
+    return jl_cstr_to_string(jl_options.image_file);
+}
+
+DLLEXPORT int jl_ver_major(void)
+{
+    return JULIA_VERSION_MAJOR;
+}
+
+DLLEXPORT int jl_ver_minor(void)
+{
+    return JULIA_VERSION_MINOR;
+}
+
+DLLEXPORT int jl_ver_patch(void)
+{
+    return JULIA_VERSION_PATCH;
+}
+
+DLLEXPORT int jl_ver_is_release(void)
+{
+    return JULIA_VERSION_IS_RELEASE;
+}
+
+DLLEXPORT const char* jl_ver_string(void)
+{
+   return JULIA_VERSION_STRING;
+}
+
+// Create function versions of some useful macros
+#undef jl_astaggedvalue
+DLLEXPORT jl_taggedvalue_t *jl_astaggedvalue(jl_value_t *v) {
+    return jl_astaggedvalue__MACRO(v);
+}
+
+#undef jl_typeof
+DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v) {
+    return jl_typeof__MACRO(v);
 }
 
 #ifdef __cplusplus

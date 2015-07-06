@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Run various networking tests checking to see how we perform under large loads
 addprocs(1)
 
@@ -63,7 +65,7 @@ function test_send(exp)
         serv_sock = accept(server)
         bread = 0
         while bread < size
-            serv_data = read(serv_sock, Uint8, block)
+            serv_data = read(serv_sock, UInt8, block)
             @assert length(serv_data) == block
             bread += block
         end
@@ -77,7 +79,7 @@ function test_send(exp)
         take!(server_started)
         print("[CLIENT] Connecting to port $(port)\n")
         cli_sock = connect("localhost", port)
-        data = fill!(zeros(Uint8, block), int8(65))
+        data = fill!(zeros(UInt8, block), Int8(65))
         cli_bsent = 0
         while cli_bsent < size
             write(cli_sock, data)
@@ -113,22 +115,22 @@ test_send(9)
 
     bsent = 0
     bread = 0
-    
+
     @sync begin
         # Create an asynchronous task that can modify bread properly
         recv_task = @task begin
             while bread < xfer_size
-                data = read(s, Uint8, xfer_block)
+                data = read(s, UInt8, xfer_block)
                 @assert length(data) == xfer_block
                 bread += xfer_block
             end
         end
         Base.sync_add(recv_task)
         Base.enq_work(recv_task)
-        
+
         send_task = @task begin
             # write in chunks of xfer_block
-            data = fill!(zeros(Uint8, xfer_block), int8(65))
+            data = fill!(zeros(UInt8, xfer_block), Int8(65))
             while bsent < xfer_size
                 write(s, data)
                 bsent += xfer_block

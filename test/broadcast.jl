@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function as_sub(x::AbstractVector)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = sub(y, 2:2:length(y))
@@ -50,7 +52,7 @@ for arr in (identity, as_sub)
 
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_throws ErrorException broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws DimensionMismatch broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
     A = arr([1  0]); @test broadcast!(+, A, A, 2) == arr([3 2])
 
@@ -93,24 +95,24 @@ for arr in (identity, as_sub)
         bittest(f, ewf, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
-        bittest(f, ewf, arr(randbool(n1, n2, n3)), arr(randbool(n1, n2, n3)))
+        bittest(f, ewf, arr(bitrand(n1, n2, n3)), arr(bitrand(n1, n2, n3)))
     end
 end
 
 r1 = 1:1
 r2 = 1:5
 ratio = [1,1/2,1/3,1/4,1/5]
-@test r1.*r2 == [1:5]
+@test r1.*r2 == [1:5;]
 @test r1./r2 == ratio
-m = [1:2]'
+m = [1:2;]'
 @test m.*r2 == [1:5 2:2:10]
 @test_approx_eq m./r2 [ratio 2ratio]
-@test_approx_eq m./[r2] [ratio 2ratio]
+@test_approx_eq m./[r2;] [ratio 2ratio]
 
 @test @inferred([0,1.2].+reshape([0,-2],1,1,2)) == reshape([0 -2; 1.2 -0.8],2,1,2)
-rt = Base.return_types(.+, (Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(.+, Tuple{Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast, (Function, Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(broadcast, Tuple{Function, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast!, (Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}

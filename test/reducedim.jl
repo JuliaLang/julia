@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # main tests
 
 function safe_mapslices(op, A, region)
@@ -28,6 +30,25 @@ for region in Any[
     @test_approx_eq maxabs!(r, Areduc) safe_maxabs(Areduc, region)
     @test_approx_eq minabs!(r, Areduc) safe_minabs(Areduc, region)
 
+    # With init=false
+    r2 = similar(r)
+    fill!(r, 1)
+    @test_approx_eq sum!(r, Areduc, init=false) safe_sum(Areduc, region)+1
+    fill!(r, 2.2)
+    @test_approx_eq prod!(r, Areduc, init=false) safe_prod(Areduc, region)*2.2
+    fill!(r, 1.8)
+    @test_approx_eq maximum!(r, Areduc, init=false) fill!(r2, 1.8)
+    fill!(r, -0.2)
+    @test_approx_eq minimum!(r, Areduc, init=false) fill!(r2, -0.2)
+    fill!(r, 8.1)
+    @test_approx_eq sumabs!(r, Areduc, init=false) safe_sumabs(Areduc, region)+8.1
+    fill!(r, 8.1)
+    @test_approx_eq sumabs2!(r, Areduc, init=false) safe_sumabs2(Areduc, region)+8.1
+    fill!(r, 1.5)
+    @test_approx_eq maxabs!(r, Areduc, init=false) fill!(r2, 1.5)
+    fill!(r, -1.5)
+    @test_approx_eq minabs!(r, Areduc, init=false) fill!(r2, -1.5)
+
     @test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)
     @test_approx_eq prod(Areduc, region) safe_prod(Areduc, region)
     @test_approx_eq maximum(Areduc, region) safe_maximum(Areduc, region)
@@ -49,9 +70,26 @@ r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
 @test_approx_eq sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
 @test_approx_eq sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
 
+fill!(r, 4.2)
+@test_approx_eq sum!(r, Breduc, init=false) safe_sum(Breduc, 1)+4.2
+fill!(r, -6.3)
+@test_approx_eq sumabs!(r, Breduc, init=false) safe_sumabs(Breduc, 1)-6.3
+fill!(r, -1.1)
+@test_approx_eq sumabs2!(r, Breduc, init=false) safe_sumabs2(Breduc, 1)-1.1
+
+# Small arrays with init=false
+A = reshape(1:15, 3, 5)
+R = ones(Int, 3)
+@test sum!(R, A, init=false) == [36,41,46]
+R = ones(Int, 1, 5)
+@test sum!(R, A, init=false) == [7 16 25 34 43]
+R = [2]
+A = reshape(1:6, 3, 2)
+@test prod!(R, A, init=false) == [1440]
+
 # Small integers
 @test @inferred(sum(Int8[1], 1)) == [1]
-@test @inferred(sum(Uint8[1], 1)) == [1]
+@test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
 @test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
@@ -62,8 +100,8 @@ r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
 @test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
 
 # Heterogeneously typed arrays
-@test sum(Union(Float32, Float64)[1.0], 1) == [1.0]
-@test prod(Union(Float32, Float64)[1.0], 1) == [1.0]
+@test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
+@test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
@@ -72,7 +110,7 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
 
 # inferred return types
-rt = Base.return_types(reducedim, (Function, Array{Float64, 3}, Int, Float64))
+rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
 ## findmin/findmax
@@ -90,3 +128,17 @@ A = [1.0 3.0 6.0;
 @test std(FloatingPoint[1,2,3], 1) == [1.0]
 @test sum(Any[1 2;3 4],1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], 1)[1] == [5,5]
+
+# issue #10461
+Areduc = rand(3, 4, 5, 6)
+for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
+                                                     2 3], "hello"]
+    @test_throws ArgumentError sum(Areduc, region)
+    @test_throws ArgumentError prod(Areduc, region)
+    @test_throws ArgumentError maximum(Areduc, region)
+    @test_throws ArgumentError minimum(Areduc, region)
+    @test_throws ArgumentError sumabs(Areduc, region)
+    @test_throws ArgumentError sumabs2(Areduc, region)
+    @test_throws ArgumentError maxabs(Areduc, region)
+    @test_throws ArgumentError minabs(Areduc, region)
+end

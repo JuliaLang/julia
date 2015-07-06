@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # simple keyword args case
 kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(2) == 2

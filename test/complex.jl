@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+@test reim(2 + 3im) == (2, 3)
+
 # sqrt:
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))
@@ -196,6 +200,9 @@ end
 @test isequal(complex(-0.0,-0.0)^complex( 0.0,-0.0), complex(1.0,-0.0))
 @test isequal(complex(-0.0,-0.0)^complex(-0.0, 0.0), complex(1.0, 0.0))
 @test isequal(complex(-0.0,-0.0)^complex(-0.0,-0.0), complex(1.0, 0.0))
+
+@test_approx_eq complex(0.0,1.0)^complex(2.0,0) complex(-1.0, 0.0)
+@test_approx_eq complex(1.0,2.0)^complex(3.0,0) complex(-11.0, -2.0)
 
 # sinh: has properties
 #  sinh(conj(z)) = conj(sinh(z))
@@ -412,7 +419,7 @@ end
 
 @test_throws DomainError  tan(complex( Inf, 5.0))
 @test isequal(tan(complex( Inf, Inf)),complex( 0.0, 1.0))
-@test isequal(tan(complex( Inf,-Inf)),complex (0.0,-1.0))
+@test isequal(tan(complex( Inf,-Inf)),complex( 0.0,-1.0))
 @test isequal(tan(complex(-Inf, Inf)),complex(-0.0, 1.0))
 @test isequal(tan(complex(-Inf,-Inf)),complex(-0.0,-1.0))
 
@@ -704,7 +711,7 @@ function logacc(x::Float64,expected::Float64)
   (x == Inf || x == -Inf) && (return 0)
   isnan(x) && (return 0)
   ra = relacc(BigFloat(x),BigFloat(expected))
-  max(ifloor(-log2(ra)),0)
+  max(floor(Int,-log2(ra)),0)
 end
 # the robust division algorithm should have 53 or 52
 # bits accuracy for each of the hard divisions
@@ -720,7 +727,49 @@ end
 
 # inv
 @test inv(1e300+0im) == 1e-300 - 0.0im
+@test inv(0+1e300im) == 0.0 - 1e-300im
 
 # issue #7904
 @test log10(10+0im) === 1.0 + 0.0im
 @test log2(2+0im) === 1.0 + 0.0im
+
+# cis
+@test_approx_eq cis(0.0+1.0im) 0.367879441171442321595523770161460867445811131031767834507836+0.0im
+@test_approx_eq cis(1.0+0.0im) 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
+@test_approx_eq cis(pi) -1.0+0.0im
+@test_approx_eq cis(pi/2) 0.0+1.0im
+
+# exp2
+@test exp2(0.0+0.0im) == 1.0+0.0im
+@test exp2(1.0+0.0im) == 2.0+0.0im
+#wolframalpha
+@test_approx_eq exp2(1.0+3.0im) -0.9739888359315627962096198412+1.74681016354974281701922im
+
+# exp10
+@test exp10(0.0+0.0im) == 1.0+0.0im
+@test exp10(1.0+0.0im) == 10.0+0.0im
+#wolframalpha
+@test_approx_eq exp10(1.0+2.0im) -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
+
+# round #8291
+@test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
+@test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
+@test round([1:5;] + im) == [1:5;] + im
+@test round([1:5;] + 0.5im) == [1.0:5.0;]
+
+# float #8291
+@test float(Complex(1, 2)) == Complex(1.0, 2.0)
+@test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
+
+# Complex32 arithmetic #10003
+@test Float16(1)+Float16(1)im === Complex32(1, 1)
+@test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
+@test Float16(1)*im === Complex32(im)
+@test Float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+@test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
+
+# issue/PR #10148
+@test typeof(Int8(1) - im) == Complex{Int8}
+
+# issue #10926
+@test typeof(π - 1im) == Complex{Float64}

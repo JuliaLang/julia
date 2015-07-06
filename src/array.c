@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   array constructors and primitives
 */
@@ -13,6 +15,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
+
 
 // array constructors ---------------------------------------------------------
 
@@ -69,16 +74,15 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
-    size_t tsz = sizeof(jl_array_t);
-    tsz += ndimwords*sizeof(size_t);
+    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
     if (tot <= ARRAY_INLINE_NBYTES) {
         if (isunboxed && elsz >= 4)
-            tsz = (tsz+15)&-16; // align data area 16
+            tsz = JL_ARRAY_ALIGN(tsz, 16); // align data area 16
         size_t doffs = tsz;
         tsz += tot;
-        tsz = (tsz+15)&-16; // align whole object 16
-        a = (jl_array_t*)allocobj(tsz);
-        a->type = atype;
+        tsz = JL_ARRAY_ALIGN(tsz, 16); // align whole object 16
+        a = (jl_array_t*)jl_gc_allocobj(tsz);
+        jl_set_typeof(a, atype);
         a->how = 0;
         data = (char*)a + doffs;
         if (tot > 0 && !isunboxed) {
@@ -86,10 +90,10 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         }
     }
     else {
-        tsz = (tsz+15)&-16; // align whole object size 16
-        a = (jl_array_t*)allocobj(tsz);
+        tsz = JL_ARRAY_ALIGN(tsz, 16); // align whole object 16
+        a = (jl_array_t*)jl_gc_allocobj(tsz);
         JL_GC_PUSH1(&a);
-        a->type = atype;
+        jl_set_typeof(a, atype);
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->how = 2;
@@ -99,6 +103,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
             memset(data, 0, tot);
         JL_GC_POP();
     }
+    a->pooled = tsz <= GC_MAX_SZCLASS;
 
     a->data = data;
     if (elsz == 1) ((char*)data)[tot-1] = '\0';
@@ -140,15 +145,17 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *dims)
+jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *dims)
 {
     size_t i;
     jl_array_t *a;
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = (jl_array_t*)allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t) + 15)&-16);
-    a->type = atype;
+    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), 16);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
+    jl_set_typeof(a, atype);
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->ndims = ndims;
     a->offset = 0;
     a->data = NULL;
@@ -164,14 +171,22 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
     }
     JL_GC_PUSH1(&a);
 
-    jl_array_data_owner(a) = (jl_value_t*)data;
+    jl_array_t *owner = data;
+    // if data is itself a shared wrapper,
+    // owner should point back to the original array
+    if (owner->how == 3) {
+        owner = (jl_array_t*)jl_array_data_owner(owner);
+    }
+    assert(owner->how != 3);
+    jl_array_data_owner(a) = (jl_value_t*)owner;
+
     a->how = 3;
     a->data = data->data;
     a->isshared = 1;
     data->isshared = 1;
 
     if (ndims == 1) {
-        size_t l = jl_unbox_long(jl_tupleref(dims,0));
+        size_t l = ((size_t*)jl_data_ptr(dims))[0];
 #ifdef STORE_ARRAY_LEN
         a->length = l;
 #endif
@@ -183,7 +198,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
         size_t l=1;
         wideint_t prod;
         for(i=0; i < ndims; i++) {
-            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            adims[i] = ((size_t*)jl_data_ptr(dims))[i];
             prod = (wideint_t)l * (wideint_t)adims[i];
             if (prod > (wideint_t) MAXINTVAL)
                 jl_error("invalid Array dimensions");
@@ -212,8 +227,11 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     else
         elsz = sizeof(void*);
 
-    a = (jl_array_t*)allocobj((sizeof(jl_array_t)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
-    a->type = atype;
+    int ndimwords = jl_array_ndimwords(1);
+    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
+    jl_set_typeof(a, atype);
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -226,6 +244,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     if (own_buffer) {
         a->how = 2;
         jl_gc_track_malloced_array(a);
+        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
         a->how = 0;
@@ -237,16 +256,16 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     return a;
 }
 
-jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
+jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
                             int own_buffer)
 {
     size_t i, elsz, nel=1;
     jl_array_t *a;
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
     wideint_t prod;
 
     for(i=0; i < ndims; i++) {
-        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_tupleref(dims, i));
+        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_fieldref(dims, i));
         if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
@@ -260,8 +279,10 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
         elsz = sizeof(void*);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = (jl_array_t*)allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t)+15)&-16);
-    a->type = atype;
+    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), 16);
+    a = (jl_array_t*)jl_gc_allocobj(tsz);
+    jl_set_typeof(a, atype);
+    a->pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -275,6 +296,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     if (own_buffer) {
         a->how = 2;
         jl_gc_track_malloced_array(a);
+        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
         a->how = 0;
@@ -287,19 +309,19 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     else {
         size_t *adims = &a->nrows;
         for(i=0; i < ndims; i++) {
-            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            adims[i] = jl_unbox_long(jl_fieldref(dims, i));
         }
     }
     return a;
 }
 
-jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims)
+jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
 {
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
     size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)
-        adims[i] = jl_unbox_long(jl_tupleref(dims,i));
+        adims[i] = jl_unbox_long(jl_fieldref(dims,i));
     return _new_array(atype, ndims, adims);
 }
 
@@ -332,8 +354,8 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     // TODO: check type of array?
     jl_datatype_t *string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
-    jl_value_t *s = (jl_value_t*)alloc_2w();
-    s->type = (jl_value_t*)string_type;
+    jl_value_t *s = (jl_value_t*)jl_gc_alloc_1w();
+    jl_set_typeof(s, string_type);
     jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
 }
@@ -361,7 +383,7 @@ jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
 {
     jl_value_t *boxed_dim = jl_box_long(dim);
     JL_GC_PUSH1(&boxed_dim);
-    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, boxed_dim));
+    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_svec2(type, boxed_dim));
     JL_GC_POP();
     return ret;
 }
@@ -387,35 +409,25 @@ JL_CALLABLE(jl_f_arraylen)
 
 JL_CALLABLE(jl_f_arraysize)
 {
-    if (nargs != 2) {
-        JL_NARGS(arraysize, 1, 1);
-    }
+    JL_NARGS(arraysize, 2, 2);
     JL_TYPECHK(arraysize, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
     size_t nd = jl_array_ndims(a);
-    if (nargs == 2) {
-        JL_TYPECHK(arraysize, long, args[1]);
-        int dno = jl_unbox_long(args[1]);
-        if (dno < 1)
-            jl_error("arraysize: dimension out of range");
-        if (dno > nd)
-            return jl_box_long(1);
-        return jl_box_long((&a->nrows)[dno-1]);
-    }
-    jl_tuple_t *d = jl_alloc_tuple(nd);
-    JL_GC_PUSH1(&d);
-    size_t i;
-    for(i=0; i < nd; i++)
-        jl_tupleset(d, i, jl_box_long(jl_array_dim(a,i)));
-    JL_GC_POP();
-    return (jl_value_t*)d;
+    JL_TYPECHK(arraysize, long, args[1]);
+    int dno = jl_unbox_long(args[1]);
+    if (dno < 1)
+        jl_error("arraysize: dimension out of range");
+    if (dno > nd)
+        return jl_box_long(1);
+    return jl_box_long((&a->nrows)[dno-1]);
 }
 
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
-    jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
+    assert(i < jl_array_len(a));
     jl_value_t *elt;
     if (!a->ptrarray) {
+        jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
         elt = jl_new_bits(el_type, &((char*)a->data)[i*a->elsize]);
     }
     else {
@@ -440,13 +452,13 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
         i += ii * stride;
         size_t d = k>=nd ? 1 : jl_array_dim(a, k);
         if (k < nidxs-1 && ii >= d)
-            jl_throw(jl_bounds_exception);
+            jl_bounds_error_v((jl_value_t*)a, args, nidxs);
         stride *= d;
     }
     for(; k < nd; k++)
         stride *= jl_array_dim(a, k);
     if (i >= stride)
-        jl_throw(jl_bounds_exception);
+        jl_bounds_error_v((jl_value_t*)a, args, nidxs);
     return i;
 }
 
@@ -457,6 +469,13 @@ JL_CALLABLE(jl_f_arrayref)
     jl_array_t *a = (jl_array_t*)args[0];
     size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
     return jl_arrayref(a, i);
+}
+
+DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
+{
+    if (a->ptrarray)
+        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    return 1;
 }
 
 int jl_array_isdefined(jl_value_t **args0, int nargs)
@@ -490,6 +509,7 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
 
 void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
+    assert(i < jl_array_len(a));
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
     if (el_type != (jl_value_t*)jl_any_type) {
         if (!jl_subtype(rhs, el_type, 1))
@@ -500,6 +520,11 @@ void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
+        jl_value_t *owner = (jl_value_t*)a;
+        if (a->how == 3) {
+            owner = jl_array_data_owner(a);
+        }
+        jl_gc_wb(owner, rhs);
     }
 }
 
@@ -516,7 +541,7 @@ JL_CALLABLE(jl_f_arrayset)
 void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
-        jl_throw(jl_bounds_exception);
+        jl_bounds_error_int((jl_value_t*)a, i+1);
     char *ptail = (char*)a->data + i*a->elsize;
     if (a->ptrarray)
         memset(ptail, 0, a->elsize);
@@ -526,6 +551,9 @@ void jl_arrayunset(jl_array_t *a, size_t i)
 #define MALLOC_THRESH 1048576
 
 // allocate buffer of newlen elements, placing old data at given offset (in #elts)
+//     newlen: new length (#elts), including offset
+//     oldlen: old length (#elts), excluding offset
+//     offs: new offset
 static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, size_t offs)
 {
     size_t es = a->elsize;
@@ -540,7 +568,7 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     if (a->how == 2) {
         // already malloc'd - use realloc
         newdata = (char*)jl_gc_managed_realloc((char*)a->data - oldoffsnb, nbytes,
-                                               oldnbytes+oldoffsnb, a->isaligned);
+                                               oldnbytes+oldoffsnb, a->isaligned, (jl_value_t*)a);
         if (offs != a->offset) {
             memmove(&newdata[offsnb], &newdata[oldoffsnb], oldnbytes);
         }
@@ -569,6 +597,8 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     a->isshared = 0;
     if (a->ptrarray || es==1)
         memset(newdata+offsnb+oldnbytes, 0, nbytes-oldnbytes-offsnb);
+    if (a->how == 1)
+        jl_gc_wb_buf(a, newdata);
     a->maxsize = newlen;
 }
 
@@ -589,7 +619,7 @@ static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, si
     size_t xtra_elems_mem = (newlen - a->offset - alen - inc) * es;
     if (xtra_elems_mem > jl_arr_xtralloc_limit) {
         // prune down
-        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es); 
+        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es);
     }
     return newlen;
 }
@@ -603,7 +633,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
         while ((alen + inc) > newlen - a->offset)
             newlen *= 2;
-        
+
         newlen = limit_overallocation(a, alen, newlen, inc);
         array_resize_buffer(a, newlen, alen, a->offset);
     }
@@ -617,7 +647,7 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
-        jl_throw(jl_bounds_exception);
+        jl_bounds_error_int((jl_value_t*)a, a->nrows - dec);
     if (a->isshared) array_try_unshare(a);
     if (a->elsize > 0) {
         char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
@@ -663,7 +693,7 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
             size_t newlen = a->maxsize==0 ? inc*2 : a->maxsize*2;
             while (alen+2*inc > newlen-a->offset)
                 newlen *= 2;
-            
+
             newlen = limit_overallocation(a, alen, newlen, 2*inc);
             size_t center = (newlen - (alen + inc))/2;
             array_resize_buffer(a, newlen, alen, center+inc);
@@ -692,7 +722,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
-        jl_throw(jl_bounds_exception);
+        jl_bounds_error_int((jl_value_t*)a, dec);
     if (a->isshared) array_try_unshare(a);
     size_t es = a->elsize;
     size_t nb = dec*es;

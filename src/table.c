@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size
@@ -14,9 +16,16 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
     size_t i;
     void **ol = (void**)(*pa)->data;
     *pa = jl_alloc_cell_1d(newsz);
+    // we do not check the write barrier here
+    // because pa always points to a C stack location
+    // (see eqtable_put)
+    // it should be changed if this assumption no longer holds
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
             (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
+            jl_gc_wb(*pa, ol[i+1]);
+             // it is however necessary here because allocation
+            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
 }
@@ -40,6 +49,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     do {
         if (tab[index+1] == NULL) {
             tab[index] = key;
+            jl_gc_wb(a, key);
             return &tab[index+1];
         }
 
@@ -66,7 +76,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     jl_idtable_rehash(pa, newsz);
 
     a = *pa;
-    tab = (void**)a->data;    
+    tab = (void**)a->data;
     sz = hash_size(a);
     maxprobe = max_probe(sz);
 
@@ -108,6 +118,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
+    jl_gc_wb(h, val);
     return h;
 }
 
@@ -127,6 +138,7 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
     if (bp == NULL || *bp == NULL)
         return deflt;
     jl_value_t *val = (jl_value_t*)*bp;
+    *(bp-1) = jl_nothing; // clear the key
     *bp = NULL;
     return val;
 }

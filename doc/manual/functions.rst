@@ -1,7 +1,9 @@
 .. _man-functions:
 
+.. currentmodule:: Base
+
 ***********
- Functions  
+ Functions
 ***********
 
 In Julia, a function is an object that maps a tuple of argument values
@@ -51,24 +53,12 @@ and can be passed around like any value:
     julia> g(2,3)
     5
 
-There are two other ways that functions can be applied: using special
-operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the ``apply``
-function:
+As with variables, Unicode can also be used for function names:
 
 .. doctest::
 
-    julia> apply(f,2,3)
-    5
-
-The ``apply`` function applies its first argument — a function object —
-to its remaining arguments.
-
-As with variables, Unicode can also be used for function names::
-
     julia> ∑(x,y) = x + y
     ∑ (generic function with 1 method)
-
 
 Argument Passing Behavior
 -------------------------
@@ -146,10 +136,10 @@ Operators Are Functions
 -----------------------
 
 In Julia, most operators are just functions with support for special
-syntax. The exceptions are operators with special evaluation semantics
+syntax. (The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
 :ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
-their operands are not evaluated before evaluation of the operator.
+their operands are not evaluated before evaluation of the operator.)
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function:
 
@@ -164,7 +154,7 @@ just as you would any other function:
 The infix form is exactly equivalent to the function application form —
 in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
-``+`` and ``*`` just like you would with other function values:
+:func:`+` and :func:`*` just like you would with other function values:
 
 .. doctest:: f-plus
 
@@ -182,18 +172,19 @@ Operators With Special Names
 A few special expressions correspond to calls to functions with non-obvious
 names. These are:
 
-=================== ==============
+=================== ==================
 Expression          Calls
-=================== ==============
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
-``A'``              ``ctranspose``
-``A.'``             ``transpose``
-``1:n``             ``colon``
-``A[i]``            ``getindex``
-``A[i]=x``          ``setindex!``
-=================== ==============
+=================== ==================
+``[A B C ...]``     :func:`hcat`
+``[A, B, C, ...]``  :func:`vcat`
+``[A B; C D; ...]`` :func:`hvcat`
+``A'``              :func:`ctranspose`
+``A.'``             :func:`transpose`
+``1:n``             :func:`colon`
+``A[i]``            :func:`getindex`
+``A[i]=x``          :func:`setindex!`
+``A(x)``            :func:`call`
+=================== ==================
 
 These functions are included in the ``Base.Operators`` module even
 though they do not have operator-like names.
@@ -208,17 +199,22 @@ Functions in Julia are `first-class objects
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without being given a name:
+without being given a name, using either of these syntaxes:
 
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
     (anonymous function)
 
+    julia> function (x)
+               x^2 + 2x - 1
+           end
+    (anonymous function)
+
 This creates an unnamed function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
-other functions as arguments. A classic example is the ``map`` function,
+other functions as arguments. A classic example is :func:`map`,
 which applies a function to each value of an array and returns a new
 array containing the resulting values:
 
@@ -231,7 +227,7 @@ array containing the resulting values:
      2.0
 
 This is fine if a named function effecting the transform one wants
-already exists to pass as the first argument to ``map``. Often, however,
+already exists to pass as the first argument to :func:`map`. Often, however,
 a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
 function object without needing a name:
@@ -296,6 +292,8 @@ You can also return multiple values via an explicit usage of the
     end
 
 This has the exact same effect as the previous definition of ``foo``.
+
+.. _man-varargs-functions:
 
 Varargs Functions
 -----------------
@@ -416,11 +414,11 @@ Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore
 might not need to be passed explicitly in every call. For example, the
-library function ``parseint(num,base)`` interprets a string as a number
+library function :func:`parse(type,num,base) <parse>` interprets a string as a number
 in some base. The ``base`` argument defaults to ``10``. This behavior can be
 expressed concisely as::
 
-    function parseint(num, base=10)
+    function parse(type, num, base=10)
         ###
     end
 
@@ -430,18 +428,18 @@ specified:
 
 .. doctest::
 
-    julia> parseint("12",10)
+    julia> parse(Int,"12",10)
     12
 
-    julia> parseint("12",3)
+    julia> parse(Int,"12",3)
     5
 
-    julia> parseint("12")
+    julia> parse(Int,"12")
     12
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see :ref:`man-methods`).
+(see :ref:`man-note-on-optional-and-keyword-arguments`).
 
 
 Keyword Arguments
@@ -468,6 +466,16 @@ signature::
         ###
     end
 
+When the function is called, the semicolon is optional: one can
+either call ``plot(x, y, width=2)`` or ``plot(x, y; width=2)``, but
+the former style is more common.  An explicit semicolon is required only
+for passing varargs or computed keywords as described below.
+
+Keyword argument default values are evaluated only when necessary
+(when a corresponding keyword argument is not passed), and in
+left-to-right order. Therefore default expressions may refer to
+prior keyword arguments.
+
 Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
@@ -478,12 +486,14 @@ functions::
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
-Dictionaries can be used for this purpose.
+Dictionaries can also be used for this purpose.
 
-Keyword argument default values are evaluated only when necessary
-(when a corresponding keyword argument is not passed), and in
-left-to-right order. Therefore default expressions may refer to
-prior keyword arguments.
+In addition, one can also pass ``(key,value)`` tuples, or any iterable
+expression (such as a ``=>`` pair) that can be assigned to such a
+tuple, explicitly after a semicolon.  For example, ``plot(x, y;
+(:width,2))`` and ``plot(x, y; :width => 2)`` are equivalent to
+``plot(x, y, width=2)``.  This is useful in situations where the
+keyword name is computed at runtime.
 
 
 Evaluation Scope of Default Values
@@ -508,13 +518,13 @@ undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
 
 
-Block Syntax for Function Arguments
------------------------------------
+Do-Block Syntax for Function Arguments
+--------------------------------------
 
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially
 awkward to write when the function argument requires multiple lines. As
-an example, consider calling ``map`` on a function with several cases::
+an example, consider calling :func:`map` on a function with several cases::
 
     map(x->begin
                if x < 0 && iseven(x)
@@ -540,20 +550,20 @@ Julia provides a reserved word ``do`` for rewriting this code more clearly::
     end
 
 The ``do x`` syntax creates an anonymous function with argument ``x``
-and passes it as the first argument to ``map``. Similarly, ``do a,b``
+and passes it as the first argument to :func:`map`. Similarly, ``do a,b``
 would create a two-argument anonymous function, and a plain ``do``
 would declare that what follows is an anonymous function of the form
 ``() -> ...``.
 
 How these arguments are initialized depends on the "outer" function;
-here, ``map`` will sequentially set ``x`` to ``A``, ``B``, ``C``,
+here, :func:`map` will sequentially set ``x`` to ``A``, ``B``, ``C``,
 calling the anonymous function on each, just as would happen in the
 syntax ``map(func, [A, B, C])``.
 
 This syntax makes it easier to use functions to effectively extend the
 language, since calls look like normal code blocks. There are many
-possible uses quite different from ``map``, such as managing system
-state. For example, there is a version of ``open`` that runs code
+possible uses quite different from :func:`map`, such as managing system
+state. For example, there is a version of :func:`open` that runs code
 ensuring that the opened file is eventually closed::
 
     open("outfile", "w") do io
@@ -571,10 +581,10 @@ This is accomplished by the following definition::
         end
     end
 
-In contrast to the ``map`` example, here ``io`` is initialized by the
+In contrast to the :func:`map` example, here ``io`` is initialized by the
 *result* of ``open("outfile", "w")``.  The stream is then passed to
 your anonymous function, which performs the writing; finally, the
-``open`` function ensures that the stream is closed after your
+:func:`open` function ensures that the stream is closed after your
 function exits.  The ``try/finally`` construct will be described in
 :ref:`man-control-flow`.
 

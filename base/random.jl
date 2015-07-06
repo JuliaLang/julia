@@ -1,73 +1,145 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Random
 
 using Base.dSFMT
+using Base.GMP: GMP_VERSION, Limb
 
 export srand,
        rand, rand!,
        randn, randn!,
-       randbool,
-       AbstractRNG, RNG, MersenneTwister,
-       randmtzig_randn, randmtzig_exprnd
+       randexp, randexp!,
+       bitrand,
+       randstring,
+       randsubseq,randsubseq!,
+       shuffle,shuffle!,
+       randperm, randcycle,
+       AbstractRNG, RNG, MersenneTwister, RandomDevice,
+       GLOBAL_RNG
+
 
 abstract AbstractRNG
 
-type MersenneTwister <: AbstractRNG
-    state::DSFMT_state
-    seed::Union(Uint32,Vector{Uint32})
+abstract FloatInterval
+type CloseOpen <: FloatInterval end
+type Close1Open2 <: FloatInterval end
 
-    function MersenneTwister(seed::Vector{Uint32})
-        state = DSFMT_state()
-        dsfmt_init_by_array(state, seed)
-        return new(state, seed)
-    end
 
-    MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
-end
-
-function srand(r::MersenneTwister, seed)
-    r.seed = seed
-    dsfmt_init_gen_rand(r.state, seed)
-    return r
-end
-
-## initialization
-
-function srand()
+## RandomDevice
 
 @unix_only begin
-    try
-        srand("/dev/urandom")
-    catch
-        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(Uint64, time())
-        seed = hash(seed, uint64(getpid()))
-        try
-        seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
-        end
-        srand(seed)
+
+    immutable RandomDevice <: AbstractRNG
+        file::IOStream
+
+        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
     end
+
+    rand{ T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
 end
 
 @windows_only begin
-    a = zeros(Uint32, 2)
-    win32_SystemFunction036!(a)
-    srand(a)
+
+    immutable RandomDevice <: AbstractRNG
+        buffer::Vector{UInt128}
+
+        RandomDevice() = new(Array(UInt128, 1))
+    end
+
+    function rand{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, ::Type{T})
+        win32_SystemFunction036!(rd.buffer)
+        @inbounds return rd.buffer[1] % T
+    end
+
+    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
 end
+
+rand(rng::RandomDevice, ::Type{Close1Open2}) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(rng, UInt64) & 0x000fffffffffffff)
+
+rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
+
+
+## MersenneTwister
+
+const MTCacheLength = dsfmt_get_min_array_size()
+
+type MersenneTwister <: AbstractRNG
+    state::DSFMT_state
+    vals::Vector{Float64}
+    idx::Int
+    seed::Vector{UInt32}
+
+    MersenneTwister(seed) = srand(new(DSFMT_state(), Array(Float64, MTCacheLength)),
+                                  seed)
+    MersenneTwister() = MersenneTwister(0)
 end
+
+## Low level API for MersenneTwister
+
+@inline mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
+@inline mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
+@inline mt_setfull!(r::MersenneTwister) = r.idx = 0
+@inline mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
+@inline mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
+
+function gen_rand(r::MersenneTwister)
+    dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
+    mt_setfull!(r)
+end
+
+@inline reserve_1(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
+# `reserve` allows to call `rand_inbounds` n times
+# precondition: n <= MTCacheLength
+@inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
+
+# precondition: !mt_empty(r)
+@inline rand_inbounds(r::MersenneTwister, ::Type{Close1Open2}) = mt_pop!(r)
+@inline rand_inbounds(r::MersenneTwister, ::Type{CloseOpen}) = rand_inbounds(r, Close1Open2) - 1.0
+@inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen)
+
+# produce Float64 values
+@inline rand{I<:FloatInterval}(r::MersenneTwister, ::Type{I}) = (reserve_1(r); rand_inbounds(r, I))
+
+@inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
+@inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
+@inline rand_ui52(r::MersenneTwister) = rand_ui52_raw(r) & 0x000fffffffffffff
+@inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
+
+function srand(r::MersenneTwister, seed::Vector{UInt32})
+    r.seed = seed
+    dsfmt_init_by_array(r.state, r.seed)
+    mt_setempty!(r)
+    return r
+end
+
+
+## initialization
 
 __init__() = srand()
 
-## srand()
 
-function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
+## make_seed()
+# make_seed methods produce values of type Array{UInt32}, suitable for MersenneTwister seeding
+
+function make_seed()
+    try
+        return rand(RandomDevice(), UInt32, 4)
+    catch
+        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
+        seed = reinterpret(UInt64, time())
+        seed = hash(seed, UInt64(getpid()))
+        try
+        seed = hash(seed, parse(UInt64, readall(pipe(`ifconfig`, `sha1sum`))[1:40], 16))
+        end
+        return make_seed(seed)
+    end
 end
-srand(n::Integer) = srand(make_seed(n))
 
 function make_seed(n::Integer)
     n < 0 && throw(DomainError())
-    seed = Uint32[]
+    seed = UInt32[]
     while true
         push!(seed, n & 0xffffffff)
         n >>= 32
@@ -77,245 +149,521 @@ function make_seed(n::Integer)
     end
 end
 
-function srand(filename::String, n::Integer)
+function make_seed(filename::AbstractString, n::Integer)
     open(filename) do io
-        a = Array(Uint32, int(n))
+        a = Array(UInt32, Int(n))
         read!(io, a)
-        srand(a)
+        a
     end
 end
-srand(filename::String) = srand(filename, 4)
+
+## srand()
+
+srand(r::MersenneTwister) = srand(r, make_seed())
+srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
+srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
+
+
+function dsfmt_gv_srand()
+    # Temporary fix for #8874 and #9124: update global RNG for Rmath
+    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+1)
+    return GLOBAL_RNG
+end
+
+function srand()
+    srand(GLOBAL_RNG)
+    dsfmt_gv_srand()
+end
+
+function srand(seed::Union{Integer, Vector{UInt32}})
+    srand(GLOBAL_RNG, seed)
+    dsfmt_gv_srand()
+end
+
+function srand(filename::AbstractString, n::Integer=4)
+    srand(GLOBAL_RNG, filename, n)
+    dsfmt_gv_srand()
+end
+
+## Global RNG
+
+const GLOBAL_RNG = MersenneTwister()
+globalRNG() = GLOBAL_RNG
+
+# rand: a non-specified RNG defaults to GLOBAL_RNG
+
+@inline rand() = rand(GLOBAL_RNG, CloseOpen)
+@inline rand(T::Type) = rand(GLOBAL_RNG, T)
+rand(dims::Dims) = rand(GLOBAL_RNG, dims)
+rand(dims::Integer...) = rand(convert(Tuple{Vararg{Int}}, dims))
+rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
+rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
+rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
+
+rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
+rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
+
+rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
+rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Vararg{Int}}, dims))
 
 ## random floating point values
 
-rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
-rand() = dsfmt_gv_genrand_close_open()
+@inline rand(r::AbstractRNG) = rand(r, CloseOpen)
 
-rand(::Type{Float32}) = float32(rand())
-rand(::Type{Float16}) = float16(rand())
+# MersenneTwister & RandomDevice
+@inline rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float64}) = rand(r, CloseOpen)
 
-rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
+rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui10_raw(r::AbstractRNG)    = rand(r, UInt16)
+rand_ui23_raw(r::AbstractRNG)    = rand(r, UInt32)
 
+rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float16}) =
+    Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
+rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
+    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
 
 ## random integers
 
-dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
+@inline rand_ui52(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2)) & 0x000fffffffffffff
 
-rand(::Type{Uint8})   = itrunc(Uint8,rand(Uint32))
-rand(::Type{Uint16})  = itrunc(Uint16,rand(Uint32))
-rand(::Type{Uint32})  = dsfmt_randui32()
-rand(::Type{Uint64})  = dsfmt_randui64()
-rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
+# MersenneTwister
 
-rand(::Type{Int8})    = itrunc(Int8,rand(Uint32))
-rand(::Type{Int16})   = itrunc(Int16,rand(Uint32))
-rand(::Type{Int32})   = reinterpret(Int32,rand(Uint32))
-rand(::Type{Int64})   = reinterpret(Int64,rand(Uint64))
-rand(::Type{Int128})  = reinterpret(Int128,rand(Uint128))
+@inline rand{T<:Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
-# Arrays of random numbers
+function rand(r::MersenneTwister, ::Type{UInt64})
+    reserve(r, 2)
+    rand_ui52_raw_inbounds(r) << 32 $ rand_ui52_raw_inbounds(r)
+end
 
-rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
-rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
+function rand(r::MersenneTwister, ::Type{UInt128})
+    reserve(r, 3)
+    rand_ui52_raw_inbounds(r) % UInt128 << 96 $
+    rand_ui52_raw_inbounds(r) % UInt128 << 48 $
+    rand_ui52_raw_inbounds(r)
+end
 
-rand(dims::Dims) = rand(Float64, dims)
-rand(dims::Int...) = rand(Float64, dims)
+rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
+rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128))
 
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
+## random Complex values
 
-function rand!{T}(A::Array{T})
-    for i=1:length(A)
-        A[i] = rand(T)
+rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
+
+# random Char values
+# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
+function rand(r::AbstractRNG, ::Type{Char})
+    c = rand(r, 0x00000000:0x0010f7ff)
+    (c < 0xd800) ? Char(c) : Char(c+0x800)
+end
+
+## Arrays of random numbers
+
+rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
+rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Tuple{Vararg{Int}}, dims))
+
+rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
+# note: the above method would trigger an ambiguity warning if d1 was not separated out:
+# rand(r, ()) would match both this method and rand(r, dims::Dims)
+# moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
+
+function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
+    for i in eachindex(A)
+        @inbounds A[i] = rand(r, T)
     end
     A
 end
 
-function rand!(r::AbstractRNG, A::AbstractArray)
-    for i=1:length(A)
-        @inbounds A[i] = rand(r)
+# MersenneTwister
+
+function rand_AbstractArray_Float64!{I<:FloatInterval}(r::MersenneTwister, A::AbstractArray{Float64}, n=length(A), ::Type{I}=CloseOpen)
+    # what follows is equivalent to this simple loop but more efficient:
+    # for i=1:n
+    #     @inbounds A[i] = rand(r, I)
+    # end
+    m = 0
+    while m < n
+        s = mt_avail(r)
+        if s == 0
+            gen_rand(r)
+            s = mt_avail(r)
+        end
+        m2 = min(n, m+s)
+        for i=m+1:m2
+            @inbounds A[i] = rand_inbounds(r, I)
+        end
+        m = m2
     end
     A
 end
 
-rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
-rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
+rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
 
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{CloseOpen}) = dsfmt_fill_array_close_open!(s, A, n)
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{Close1Open2}) = dsfmt_fill_array_close1_open2!(s, A, n)
+
+function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n::Int=length(A), ::Type{I}=CloseOpen)
+    # depending on the alignment of A, the data written by fill_array! may have
+    # to be left-shifted by up to 15 bytes (cf. unsafe_copy! below) for
+    # reproducibility purposes;
+    # so, even for well aligned arrays, fill_array! is used to generate only
+    # the n-2 first values (or n-3 if n is odd), and the remaining values are
+    # generated by the scalar version of rand
+    if n > length(A)
+        error(BoundsError(A,n))
+    end
+    n2 = (n-2) ÷ 2 * 2
+    if n2 < dsfmt_get_min_array_size()
+        rand_AbstractArray_Float64!(r, A, n, I)
+    else
+        pA = pointer(A)
+        align = Csize_t(pA) % 16
+        if align > 0
+            pA2 = pA + 16 - align
+            fill_array!(r.state, pA2, n2, I) # generate the data in-place, but shifted
+            unsafe_copy!(pA, pA2, n2) # move the data to the beginning of the array
+        else
+            fill_array!(r.state, pA, n2, I)
+        end
+        for i=n2+1:n
+            @inbounds A[i] = rand(r, I)
+        end
+    end
+    A
+end
+
+@inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
+@inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
+
+function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2})
+    n = length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+    A128 = pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128)
+    @inbounds for i in 1:n128
+        u = A128[i]
+        u $= u << 26
+        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
+        # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
+        # the bits needing to be random are
+        # [1:10, 17:26, 33:42, 49:58] (for Float16)
+        # [1:23, 33:55] (for Float32)
+        # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
+        # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
+        # this is similar for the 64 high bits of u
+        A128[i] = mask128(u, T)
+    end
+    for i in 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T) + one(T)
+    end
+    A
+end
+
+function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen})
+    rand!(r, A, Close1Open2)
+    I32 = one(Float32)
+    for i in eachindex(A)
+        @inbounds A[i] = T(Float32(A[i])-I32) # faster than "A[i] -= one(T)" for T==Float16
+    end
+    A
+end
+
+rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
+
+
+function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
+    if n > length(A)
+        error(BoundsError(A,n))
+    end
+    Af = pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2n)
+    i = n
+    while true
+        rand!(r, Af, 2i, Close1Open2)
+        n < 5 && break
+        i = 0
+        @inbounds while n-i >= 5
+            u = A[i+=1]
+            A[n]    $= u << 48
+            A[n-=1] $= u << 36
+            A[n-=1] $= u << 24
+            A[n-=1] $= u << 12
+            n-=1
+        end
+    end
+    if n > 0
+        u = rand_ui2x52_raw(r)
+        for i = 1:n
+            @inbounds A[i] $= u << 12*i
+        end
+    end
+    A
+end
+
+function rand!{T<:Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128}}(r::MersenneTwister, A::Array{T})
+    n=length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128))
+    for i = 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T)
+    end
+    A
+end
 
 ## Generate random integer within a range
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
-rem_knuth(a::Uint, b::Uint) = a % (b + (b == 0)) + a * (b == 0)
+rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
-# that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
-maxmultiple(k::Uint32) = itrunc(Uint32, div(0x0000000100000000,k + (k == 0))*k - 1)
-maxmultiple(k::Uint64) = itrunc(Uint64, div(0x00000000000000010000000000000000, k + (k == 0))*k - 1)
-# maximum multiple of k within 1:typemax(Uint128)
-maxmultiple(k::Uint128) = div(typemax(Uint128), k + (k == 0))*k - 1
-# maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::Uint64) = itrunc(Uint64, div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1)
+# that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
+# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + one(k), k + (k == 0))*k + k - one(k))::T
 
-immutable RandIntGen{T<:Integer, U<:Unsigned}
+# maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
+maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - one(k))::Uint64; end
+
+abstract RangeGenerator
+
+immutable RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
     a::T   # first element of the range
     k::U   # range length or zero for full range
     u::U   # rejection threshold
 end
 # generators with 32, 128 bits entropy
-RandIntGen{T, U<:Union(Uint32, Uint128)}(a::T, k::U) = RandIntGen{T, U}(a, k, maxmultiple(k))
+RangeGeneratorInt{T, U<:Union{UInt32, UInt128}}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
-RandIntGen{T}(a::T, k::Uint64) = RandIntGen{T,Uint64}(a, k, maxmultiplemix(k))
-
-
+RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
 # generator for ranges
-RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), last(r) - first(r) + one(T))
+RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = begin
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    end
+    RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+end
 
 # specialized versions
-for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
-               (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
-               (Bool, Uint32), (Char, Uint32)]
+for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
+               (Int8, UInt32), (Int16, UInt32), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128),
+               (Bool, UInt32)]
 
-    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    @eval RangeGenerator(r::UnitRange{$T}) = begin
+        if isempty(r)
+            throw(ArgumentError("range must be non-empty"))
+        end
+        RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    end
 end
 
-# this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
-# RandIntGen is responsible for providing the right value of k
-function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
-    local x::Uint64
+if GMP_VERSION.major >= 6
+    immutable RangeGeneratorBigInt <: RangeGenerator
+        a::BigInt             # first
+        m::BigInt             # range length - 1
+        nlimbs::Int           # number of limbs in generated BigInt's
+        mask::Limb            # applied to the highest limb
+    end
+
+else
+    immutable RangeGeneratorBigInt <: RangeGenerator
+        a::BigInt             # first
+        m::BigInt             # range length - 1
+        limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
+        mask::Limb            # applied to the highest limb
+
+        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Array(Limb, nlimbs), mask)
+    end
+end
+
+
+
+function RangeGenerator(r::UnitRange{BigInt})
+    m = last(r) - first(r)
+    m < 0 && throw(ArgumentError("range must be non-empty"))
+    nd = ndigits(m, 2)
+    nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
+    highbits > 0 && (nlimbs += 1)
+    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    return RangeGeneratorBigInt(first(r), m, nlimbs, mask)
+end
+
+
+# this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
+# RangeGeneratorInt is responsible for providing the right value of k
+function rand{T<:Union{UInt64, Int64}}(rng::AbstractRNG, g::RangeGeneratorInt{T,UInt64})
+    local x::UInt64
     if (g.k - 1) >> 32 == 0
-        x = rand(Uint32)
+        x = rand(rng, UInt32)
         while x > g.u
-            x = rand(Uint32)
+            x = rand(rng, UInt32)
         end
     else
-        x = rand(Uint64)
+        x = rand(rng, UInt64)
         while x > g.u
-            x = rand(Uint64)
+            x = rand(rng, UInt64)
         end
     end
-    return reinterpret(T, reinterpret(Uint64, g.a) + rem_knuth(x, g.k))
+    return reinterpret(T, reinterpret(UInt64, g.a) + rem_knuth(x, g.k))
 end
 
-function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
-    x = rand(U)
+function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,U})
+    x = rand(rng, U)
     while x > g.u
-        x = rand(U)
+        x = rand(rng, U)
     end
-    itrunc(T, unsigned(g.a) + rem_knuth(x, g.k))
+    (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
-rand{T}(r::Range{T}) = r[rand(1:(length(r)))]
+if GMP_VERSION.major >= 6
+    # mpz_limbs_write and mpz_limbs_finish are available only in GMP version 6
+    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+        x = BigInt()
+        while true
+            # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
+            xd = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (Ptr{BigInt}, Clong), &x, g.nlimbs)
+            limbs = pointer_to_array(xd, g.nlimbs)
+            rand!(rng, limbs)
+            limbs[end] &= g.mask
+            ccall((:__gmpz_limbs_finish, :libgmp), Void, (Ptr{BigInt}, Clong), &x, g.nlimbs)
+            x <= g.m && break
+        end
+        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
+        return x
+    end
+else
+    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+        x = BigInt()
+        while true
+            rand!(rng, g.limbs)
+            g.limbs[end] &= g.mask
+            ccall((:__gmpz_import, :libgmp), Void,
+                  (Ptr{BigInt}, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Limb}),
+                  &x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
+            x <= g.m && break
+        end
+        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
+        return x
+    end
+end
 
-function rand!(g::RandIntGen, A::AbstractArray)
+rand{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+
+
+# Randomly draw a sample from an AbstractArray r
+# (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
+rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
+
+function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
     for i = 1 : length(A)
-        @inbounds A[i] = rand(g)
+        @inbounds A[i] = rand(rng, g)
     end
     return A
 end
 
-rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
+rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
 
-function rand!(r::Range, A::AbstractArray)
-    g = RandIntGen(1:(length(r)))
+function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
+    g = RangeGenerator(1:(length(r)))
     for i = 1 : length(A)
-        @inbounds A[i] = r[rand(g)]
+        @inbounds A[i] = r[rand(rng, g)]
     end
     return A
 end
 
-rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::Range, dims::Int...) = rand(r, dims)
+rand{T}(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) = rand!(rng, Array(T, dims), r)
+rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
 
+## random BitArrays (AbstractRNG)
 
-## random Bools
+function rand!(rng::AbstractRNG, B::BitArray)
+    length(B) == 0 && return B
+    Bc = B.chunks
+    rand!(rng, Bc)
+    Bc[end] &= Base._msk_end(B)
+    return B
+end
 
-rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
+bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
-randbool(dims::Dims) = rand!(BitArray(dims))
-randbool(dims::Int...) = rand!(BitArray(dims))
-
-randbool() = ((dsfmt_randui32() & 1) == 1)
-rand(::Type{Bool}) = randbool()
+bitrand(dims::Dims)   = rand!(BitArray(dims))
+bitrand(dims::Int...) = rand!(BitArray(dims))
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 ## Tables for normal variates
-const ki = 
-    Uint64[0x0007799ec012f7b3,                 0,0x0006045f4c7de363,0x0006d1aa7d5ec0a6,
-           0x000728fb3f60f778,0x0007592af4e9fbc0,0x000777a5c0bf655d,0x00078ca3857d2256,
-           0x00079bf6b0ffe58c,0x0007a7a34ab092ae,0x0007b0d2f20dd1cb,0x0007b83d3aa9cb52,
-           0x0007be597614224e,0x0007c3788631abea,0x0007c7d32bc192ef,0x0007cb9263a6e86d,
+const ki =
+    UInt64[0x0007799ec012f7b2,0x0000000000000000,0x0006045f4c7de363,0x0006d1aa7d5ec0a5,
+           0x000728fb3f60f777,0x0007592af4e9fbc0,0x000777a5c0bf655d,0x00078ca3857d2256,
+           0x00079bf6b0ffe58b,0x0007a7a34ab092ad,0x0007b0d2f20dd1cb,0x0007b83d3aa9cb52,
+           0x0007be597614224d,0x0007c3788631abe9,0x0007c7d32bc192ee,0x0007cb9263a6e86d,
            0x0007ced483edfa84,0x0007d1b07ac0fd39,0x0007d437ef2da5fc,0x0007d678b069aa6e,
-           0x0007d87db38c5c87,0x0007da4fc6a9ba63,0x0007dbf611b37f3c,0x0007dd7674d0f286,
-           0x0007ded5ce8205f7,0x0007e018307fb62c,0x0007e141081bd124,0x0007e2533d712de9,
-           0x0007e3514bbd7718,0x0007e43d54944b52,0x0007e5192f25ef43,0x0007e5e67481118d,
-           0x0007e6a6897c1ce2,0x0007e75aa6c7f64d,0x0007e803df8ee498,0x0007e8a326eb6273,
-           0x0007e93954717a28,0x0007e9c727f8648f,0x0007ea4d4cc85a3d,0x0007eacc5c4907a9,
-           0x0007eb44e0474cf6,0x0007ebb754e47419,0x0007ec242a3d8474,0x0007ec8bc5d69646,
-           0x0007ecee83d3d6e9,0x0007ed4cb8082f46,0x0007eda6aee01710,0x0007edfcae2dfe68,
-           0x0007ee4ef5dccd3f,0x0007ee9dc08c394f,0x0007eee9441a17c8,0x0007ef31b21b4fb2,
-           0x0007ef773846a8a7,0x0007efba00d35a17,0x0007effa32ccf69f,0x0007f037f25e1279,
-           0x0007f0736112d12c,0x0007f0ac9e145c26,0x0007f0e3c65e1fcc,0x0007f118f4ed8e55,
-           0x0007f14c42ed0dc9,0x0007f17dc7daa0c3,0x0007f1ad99aac6a5,0x0007f1dbcce80015,
-           0x0007f20874cf56bf,0x0007f233a36a3b9a,0x0007f25d69a604ae,0x0007f285d7694a92,
-           0x0007f2acfba75e3c,0x0007f2d2e4720909,0x0007f2f79f09c345,0x0007f31b37ec883c,
-           0x0007f33dbae36abc,0x0007f35f330f08d5,0x0007f37faaf2fa79,0x0007f39f2c805381,
-           0x0007f3bdc11f4f1d,0x0007f3db71b83851,0x0007f3f846bba121,0x0007f4144829f846,
-           0x0007f42f7d9a8b9e,0x0007f449ee420432,0x0007f463a0f8675e,0x0007f47c9c3ea77b,
-           0x0007f494e643cd8e,0x0007f4ac84e9c475,0x0007f4c37dc9cd51,0x0007f4d9d638a433,
-           0x0007f4ef934a5b6b,0x0007f504b9d5f33e,0x0007f5194e78b352,0x0007f52d55994a96,
-           0x0007f540d36aba0d,0x0007f553cbef0e78,0x0007f56642f9ec90,0x0007f5783c32f31e,
-           0x0007f589bb17f609,0x0007f59ac2ff1525,0x0007f5ab5718b15a,0x0007f5bb7a71427d,
-           0x0007f5cb2ff3100a,0x0007f5da7a67cebe,0x0007f5e95c7a24e8,0x0007f5f7d8b7171f,
-           0x0007f605f18f5ef4,0x0007f613a958ad0a,0x0007f621024ed7ea,0x0007f62dfe94f8cb,
+           0x0007d87db38c5c87,0x0007da4fc6a9ba62,0x0007dbf611b37f3b,0x0007dd7674d0f286,
+           0x0007ded5ce8205f6,0x0007e018307fb62b,0x0007e141081bd124,0x0007e2533d712de8,
+           0x0007e3514bbd7718,0x0007e43d54944b52,0x0007e5192f25ef42,0x0007e5e67481118d,
+           0x0007e6a6897c1ce2,0x0007e75aa6c7f64c,0x0007e803df8ee498,0x0007e8a326eb6272,
+           0x0007e93954717a28,0x0007e9c727f8648f,0x0007ea4d4cc85a3c,0x0007eacc5c4907a9,
+           0x0007eb44e0474cf6,0x0007ebb754e47419,0x0007ec242a3d8474,0x0007ec8bc5d69645,
+           0x0007ecee83d3d6e9,0x0007ed4cb8082f45,0x0007eda6aee0170f,0x0007edfcae2dfe68,
+           0x0007ee4ef5dccd3e,0x0007ee9dc08c394e,0x0007eee9441a17c7,0x0007ef31b21b4fb1,
+           0x0007ef773846a8a7,0x0007efba00d35a17,0x0007effa32ccf69f,0x0007f037f25e1278,
+           0x0007f0736112d12c,0x0007f0ac9e145c25,0x0007f0e3c65e1fcc,0x0007f118f4ed8e54,
+           0x0007f14c42ed0dc8,0x0007f17dc7daa0c3,0x0007f1ad99aac6a5,0x0007f1dbcce80015,
+           0x0007f20874cf56bf,0x0007f233a36a3b9a,0x0007f25d69a604ad,0x0007f285d7694a92,
+           0x0007f2acfba75e3b,0x0007f2d2e4720909,0x0007f2f79f09c344,0x0007f31b37ec883b,
+           0x0007f33dbae36abc,0x0007f35f330f08d5,0x0007f37faaf2fa79,0x0007f39f2c805380,
+           0x0007f3bdc11f4f1c,0x0007f3db71b83850,0x0007f3f846bba121,0x0007f4144829f846,
+           0x0007f42f7d9a8b9d,0x0007f449ee420432,0x0007f463a0f8675e,0x0007f47c9c3ea77b,
+           0x0007f494e643cd8e,0x0007f4ac84e9c475,0x0007f4c37dc9cd50,0x0007f4d9d638a432,
+           0x0007f4ef934a5b6a,0x0007f504b9d5f33d,0x0007f5194e78b352,0x0007f52d55994a96,
+           0x0007f540d36aba0c,0x0007f553cbef0e77,0x0007f56642f9ec8f,0x0007f5783c32f31e,
+           0x0007f589bb17f609,0x0007f59ac2ff1525,0x0007f5ab5718b15a,0x0007f5bb7a71427c,
+           0x0007f5cb2ff31009,0x0007f5da7a67cebe,0x0007f5e95c7a24e7,0x0007f5f7d8b7171e,
+           0x0007f605f18f5ef4,0x0007f613a958ad0a,0x0007f621024ed7e9,0x0007f62dfe94f8cb,
            0x0007f63aa036777a,0x0007f646e928065a,0x0007f652db488f88,0x0007f65e786213ff,
-           0x0007f669c22a7d8b,0x0007f674ba44645a,0x0007f67f623fc8dc,0x0007f689bb9ac294,
-           0x0007f693c7c22482,0x0007f69d881217a6,0x0007f6a6fdd6ac37,0x0007f6b02a4c61ee,
-           0x0007f6b90ea0a7f4,0x0007f6c1abf254c1,0x0007f6ca03521664,0x0007f6d215c2db82,
-           0x0007f6d9e43a355a,0x0007f6e16fa0b329,0x0007f6e8b8d23729,0x0007f6efc09e4569,
-           0x0007f6f687c84cc0,0x0007f6fd0f07ea0a,0x0007f703570925e2,0x0007f709606cad03,
-           0x0007f70f2bc80370,0x0007f714b9a5b292,0x0007f71a0a85725e,0x0007f71f1edc4d9e,
-           0x0007f723f714c17a,0x0007f728938ed843,0x0007f72cf4a03fa1,0x0007f7311a945a17,
-           0x0007f73505ac4bf8,0x0007f738b61f03bd,0x0007f73c2c193dc1,0x0007f73f67bd835d,
-           0x0007f74269242559,0x0007f745305b31a1,0x0007f747bd666429,0x0007f74a103f12ed,
-           0x0007f74c28d414f6,0x0007f74e0709a42e,0x0007f74faab939fa,0x0007f75113b16657,
-           0x0007f75241b5a156,0x0007f753347e16b9,0x0007f753ebb76b7d,0x0007f75467027d05,
-           0x0007f754a5f4199e,0x0007f754a814b208,0x0007f7546ce003af,0x0007f753f3c4bb2a,
-           0x0007f7533c240e92,0x0007f75245514f41,0x0007f7510e91726d,0x0007f74f971a9012,
-           0x0007f74dde135797,0x0007f74be2927972,0x0007f749a39e051d,0x0007f747202aba8b,
-           0x0007f744571b4e3d,0x0007f741473f9efe,0x0007f73def53dc44,0x0007f73a4dff9c00,
-           0x0007f73661d4deaf,0x0007f732294f0040,0x0007f72da2d19444,0x0007f728cca72bdb,
-           0x0007f723a5000367,0x0007f71e29f09628,0x0007f7185970156c,0x0007f7123156c102,
-           0x0007f70baf5c1e2d,0x0007f704d1150a24,0x0007f6fd93f1a4e6,0x0007f6f5f53b10b6,
-           0x0007f6edf211023f,0x0007f6e587671cea,0x0007f6dcb202167a,0x0007f6d36e749c65,
-           0x0007f6c9b91bf4c6,0x0007f6bf8e1c541b,0x0007f6b4e95ce015,0x0007f6a9c6835700,
-           0x0007f69e20ef5211,0x0007f691f3b517ec,0x0007f6853997f322,0x0007f677ed03ff1a,
+           0x0007f669c22a7d8a,0x0007f674ba446459,0x0007f67f623fc8db,0x0007f689bb9ac294,
+           0x0007f693c7c22481,0x0007f69d881217a6,0x0007f6a6fdd6ac36,0x0007f6b02a4c61ee,
+           0x0007f6b90ea0a7f4,0x0007f6c1abf254c0,0x0007f6ca03521664,0x0007f6d215c2db82,
+           0x0007f6d9e43a3559,0x0007f6e16fa0b329,0x0007f6e8b8d23729,0x0007f6efc09e4569,
+           0x0007f6f687c84cbf,0x0007f6fd0f07ea09,0x0007f703570925e2,0x0007f709606cad03,
+           0x0007f70f2bc8036f,0x0007f714b9a5b292,0x0007f71a0a85725d,0x0007f71f1edc4d9e,
+           0x0007f723f714c179,0x0007f728938ed843,0x0007f72cf4a03fa0,0x0007f7311a945a16,
+           0x0007f73505ac4bf8,0x0007f738b61f03bd,0x0007f73c2c193dc0,0x0007f73f67bd835c,
+           0x0007f74269242559,0x0007f745305b31a1,0x0007f747bd666428,0x0007f74a103f12ed,
+           0x0007f74c28d414f5,0x0007f74e0709a42d,0x0007f74faab939f9,0x0007f75113b16657,
+           0x0007f75241b5a155,0x0007f753347e16b8,0x0007f753ebb76b7c,0x0007f75467027d05,
+           0x0007f754a5f4199d,0x0007f754a814b207,0x0007f7546ce003ae,0x0007f753f3c4bb29,
+           0x0007f7533c240e92,0x0007f75245514f41,0x0007f7510e91726c,0x0007f74f971a9012,
+           0x0007f74dde135797,0x0007f74be2927971,0x0007f749a39e051c,0x0007f747202aba8a,
+           0x0007f744571b4e3c,0x0007f741473f9efe,0x0007f73def53dc43,0x0007f73a4dff9bff,
+           0x0007f73661d4deaf,0x0007f732294f003f,0x0007f72da2d19444,0x0007f728cca72bda,
+           0x0007f723a5000367,0x0007f71e29f09627,0x0007f7185970156b,0x0007f7123156c102,
+           0x0007f70baf5c1e2c,0x0007f704d1150a23,0x0007f6fd93f1a4e5,0x0007f6f5f53b10b6,
+           0x0007f6edf211023e,0x0007f6e587671ce9,0x0007f6dcb2021679,0x0007f6d36e749c64,
+           0x0007f6c9b91bf4c6,0x0007f6bf8e1c541b,0x0007f6b4e95ce015,0x0007f6a9c68356ff,
+           0x0007f69e20ef5211,0x0007f691f3b517eb,0x0007f6853997f321,0x0007f677ed03ff19,
            0x0007f66a08075bdc,0x0007f65b844ab75a,0x0007f64c5b091860,0x0007f63c8506d4bc,
-           0x0007f62bfa8798ff,0x0007f61ab34364b1,0x0007f608a65a599a,0x0007f5f5ca4737e8,
-           0x0007f5e214d05b49,0x0007f5cd7af7066e,0x0007f5b7f0e4c2a1,0x0007f5a169d68fcf,
-           0x0007f589d80596a6,0x0007f5712c8d0174,0x0007f557574c912b,0x0007f53c46c77193,
-           0x0007f51fe7feb9f3,0x0007f5022646ecfb,0x0007f4e2eb17ab1d,0x0007f4c21dd4a3d2,
+           0x0007f62bfa8798fe,0x0007f61ab34364b0,0x0007f608a65a599a,0x0007f5f5ca4737e8,
+           0x0007f5e214d05b48,0x0007f5cd7af7066e,0x0007f5b7f0e4c2a1,0x0007f5a169d68fcf,
+           0x0007f589d80596a5,0x0007f5712c8d0174,0x0007f557574c912b,0x0007f53c46c77193,
+           0x0007f51fe7feb9f2,0x0007f5022646ecfb,0x0007f4e2eb17ab1d,0x0007f4c21dd4a3d1,
            0x0007f49fa38ea394,0x0007f47b5ebb62eb,0x0007f4552ee27473,0x0007f42cf03d58f5,
-           0x0007f4027b4854a0,0x0007f3d5a44119e0,0x0007f3a63a8fb553,0x0007f37408155101,
-           0x0007f33ed05b55ec,0x0007f3064f9c183f,0x0007f2ca399c7ba1,0x0007f28a384bb940,
-           0x0007f245ea1b7a2c,0x0007f1fcdffe8f1c,0x0007f1ae9af758ce,0x0007f15a8917f27f,
-           0x0007f10001ccaaac,0x0007f09e413c418a,0x0007f034627733d8,0x0007efc15815b8d5,
-           0x0007ef43e2bf7f55,0x0007eeba84e31dff,0x0007ee237294df89,0x0007ed7c7c170141,
-           0x0007ecc2f0d95d3b,0x0007ebf377a46782,0x0007eb09d6deb286,0x0007ea00a4f17809,
-           0x0007e8d0d3da63d6,0x0007e771023b0fcf,0x0007e5d46c2f08d9,0x0007e3e937669691,
-           0x0007e195978f1176,0x0007deb2c0e05c1d,0x0007db0362002a1a,0x0007d6202c15143a,
-           0x0007cf4b8f00a2cc,0x0007c4fd24520efe,0x0007b362fbf81816,0x00078d2d25998e25]
-const wi = 
+           0x0007f4027b48549f,0x0007f3d5a44119df,0x0007f3a63a8fb552,0x0007f37408155100,
+           0x0007f33ed05b55ec,0x0007f3064f9c183e,0x0007f2ca399c7ba1,0x0007f28a384bb940,
+           0x0007f245ea1b7a2b,0x0007f1fcdffe8f1b,0x0007f1ae9af758cd,0x0007f15a8917f27e,
+           0x0007f10001ccaaab,0x0007f09e413c418a,0x0007f034627733d7,0x0007efc15815b8d5,
+           0x0007ef43e2bf7f55,0x0007eeba84e31dfe,0x0007ee237294df89,0x0007ed7c7c170141,
+           0x0007ecc2f0d95d3a,0x0007ebf377a46782,0x0007eb09d6deb285,0x0007ea00a4f17808,
+           0x0007e8d0d3da63d6,0x0007e771023b0fcf,0x0007e5d46c2f08d8,0x0007e3e937669691,
+           0x0007e195978f1176,0x0007deb2c0e05c1c,0x0007db0362002a19,0x0007d6202c151439,
+           0x0007cf4b8f00a2cb,0x0007c4fd24520efd,0x0007b362fbf81816,0x00078d2d25998e24]
+const wi =
     [1.7367254121602630e-15,9.5586603514556339e-17,1.2708704834810623e-16,
      1.4909740962495474e-16,1.6658733631586268e-16,1.8136120810119029e-16,
      1.9429720153135588e-16,2.0589500628482093e-16,2.1646860576895422e-16,
@@ -402,7 +750,7 @@ const wi =
      1.3446300925011171e-15,1.3693606835128518e-15,1.3979436672775240e-15,
      1.4319989869661328e-15,1.4744848603597596e-15,1.5317872741611144e-15,
      1.6227698675312968e-15]
-const fi = 
+const fi =
     [1.0000000000000000e+00,9.7710170126767082e-01,9.5987909180010600e-01,
      9.4519895344229909e-01,9.3206007595922991e-01,9.1999150503934646e-01,
      9.0872644005213032e-01,8.9809592189834297e-01,8.8798466075583282e-01,
@@ -491,73 +839,73 @@ const fi =
      1.2602859304985975e-03]
 
 ## Tables for exponential variates
-const ke = 
-Uint64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e08,
-       0x000d4ddb99075857,0x000de893fb8ca23e,0x000e4a8e87c4328e,0x000e8dff16ae1cba,
-       0x000ebf2deab58c5a,0x000ee49a6e8b9639,0x000f0204efd64ee5,0x000f19bdb8ea3c1c,
-       0x000f2d458bbe5bd2,0x000f3da104b78236,0x000f4b86d784571f,0x000f577ad8a7784f,
-       0x000f61de83da32ac,0x000f6afb7843cce7,0x000f730a57372b44,0x000f7a37651b0e68,
-       0x000f80a5bb6eea52,0x000f867189d3cb5c,0x000f8bb1b4f8fbbd,0x000f9079062292b9,
-       0x000f94d70ca8d43a,0x000f98d8c7dcaa99,0x000f9c8928abe083,0x000f9ff175b734a6,
-       0x000fa319996bc47e,0x000fa6085f8e9d08,0x000fa8c3a62e1991,0x000fab5084e1f660,
-       0x000fadb36c84cccb,0x000faff041086846,0x000fb20a6ea22bb9,0x000fb404fb42cb3d,
-       0x000fb5e295158174,0x000fb7a59e99727a,0x000fb95038c8789d,0x000fbae44ba684ec,
-       0x000fbc638d822e60,0x000fbdcf89209ffb,0x000fbf29a303cfc5,0x000fc0731df1089d,
-       0x000fc1ad1ed6c8b1,0x000fc2d8b02b5c8a,0x000fc3f6c4d92131,0x000fc5083ac9ba7d,
-       0x000fc60ddd1e9cd7,0x000fc7086622e825,0x000fc7f881009f0c,0x000fc8decb41ac71,
-       0x000fc9bbd623d7ec,0x000fca9027c5b26e,0x000fcb5c3c319c49,0x000fcc20864b4449,
-       0x000fccdd70a35d41,0x000fcd935e34bf80,0x000fce42ab0db8bd,0x000fceebace7ec02,
-       0x000fcf8eb3b0d0e7,0x000fd02c0a049b60,0x000fd0c3f59d199d,0x000fd156b7b5e27e,
-       0x000fd1e48d670342,0x000fd26daff73552,0x000fd2f2552684bf,0x000fd372af7233c2,
-       0x000fd3eeee528f62,0x000fd4673e73543b,0x000fd4dbc9e72ff8,0x000fd54cb856dc2c,
-       0x000fd5ba2f2c4119,0x000fd62451ba02c3,0x000fd68b415fcff5,0x000fd6ef1dabc161,
-       0x000fd75004790eb7,0x000fd7ae120c583f,0x000fd809612dbd0a,0x000fd8620b40effa,
-       0x000fd8b8285b78fe,0x000fd90bcf594b1d,0x000fd95d15efd426,0x000fd9ac10bfa70c,
-       0x000fd9f8d364df06,0x000fda437086566c,0x000fda8bf9e3c9ff,0x000fdad28062fed5,
-       0x000fdb17141bff2d,0x000fdb59c4648085,0x000fdb9a9fda83cd,0x000fdbd9b46e3ed4,
-       0x000fdc170f6b5d05,0x000fdc52bd81a3fb,0x000fdc8ccacd07ba,0x000fdcc542dd3902,
-       0x000fdcfc30bcb794,0x000fdd319ef77143,0x000fdd6597a0f60c,0x000fdd98245a48a3,
-       0x000fddc94e575271,0x000fddf91e64014f,0x000fde279ce914cb,0x000fde54d1f0a06b,
-       0x000fde80c52a47d0,0x000fdeab7def394e,0x000fded50345eb36,0x000fdefd5be59fa1,
-       0x000fdf248e39b26f,0x000fdf4aa064b4b0,0x000fdf6f98435894,0x000fdf937b6f30bb,
-       0x000fdfb64f414572,0x000fdfd818d48262,0x000fdff8dd07fed8,0x000fe018a08122c5,
-       0x000fe03767adaa5a,0x000fe05536c58a14,0x000fe07211ccb4c5,0x000fe08dfc94c532,
-       0x000fe0a8fabe8ca2,0x000fe0c30fbb87a6,0x000fe0dc3ecf3a5a,0x000fe0f48b107522,
-       0x000fe10bf76a82ef,0x000fe122869e4200,0x000fe1383b4327e1,0x000fe14d17c83188,
-       0x000fe1611e74c023,0x000fe1745169635a,0x000fe186b2a09177,0x000fe19843ef4e08,
-       0x000fe1a90705bf64,0x000fe1b8fd6fb37c,0x000fe1c828951444,0x000fe1d689ba4bfd,
-       0x000fe1e4220099a5,0x000fe1f0f26655a0,0x000fe1fcfbc726d4,0x000fe2083edc2831,
-       0x000fe212bc3bfeb4,0x000fe21c745adfe4,0x000fe225678a8895,0x000fe22d95fa23f4,
-       0x000fe234ffb62282,0x000fe23ba4a800d9,0x000fe2418495fddd,0x000fe2469f22bffb,
-       0x000fe24af3cce90e,0x000fe24e81ee9859,0x000fe25148bcda1a,0x000fe253474703fe,
-       0x000fe2547c75fdc6,0x000fe254e70b7550,0x000fe25485a0fd1a,0x000fe25356a71450,
-       0x000fe2515864173b,0x000fe24e88f316f2,0x000fe24ae64296fb,0x000fe2466e132f61,
-       0x000fe2411df611bd,0x000fe23af34b6f73,0x000fe233eb40bf42,0x000fe22c02cee01c,
-       0x000fe22336b81711,0x000fe2198385e5cd,0x000fe20ee586b707,0x000fe20358cb5dfc,
-       0x000fe1f6d92465b1,0x000fe1e9621f2c9e,0x000fe1daef02c8da,0x000fe1cb7accb0a6,
-       0x000fe1bb002d22ca,0x000fe1a9798349b9,0x000fe196e0d9140d,0x000fe1832fdebc44,
-       0x000fe16e5fe5f932,0x000fe15869dccfcf,0x000fe1414647fe78,0x000fe128ed3cf8b2,
-       0x000fe10f565b69cf,0x000fe0f478c633ab,0x000fe0d84b1bdd9e,0x000fe0bac36e6688,
-       0x000fe09bd73a6b5c,0x000fe07b7b5d920b,0x000fe059a40c26d2,0x000fe03644c5d7f9,
-       0x000fe011504979b3,0x000fdfeab887b95d,0x000fdfc26e94a448,0x000fdf986297e306,
-       0x000fdf6c83bb8663,0x000fdf3ec0193eee,0x000fdf0f04a5d30a,0x000fdedd3d1aa204,
-       0x000fdea953dcfc13,0x000fde7331e3100e,0x000fde3abe9626f3,0x000fddffdfb1dbd5,
-       0x000fddc2791ff351,0x000fdd826cd068c7,0x000fdd3f9a8d3857,0x000fdcf9dfc95b0d,
-       0x000fdcb1176a55fe,0x000fdc65198ba50c,0x000fdc15bb3b2daa,0x000fdbc2ce2dc4ae,
-       0x000fdb6c206aaaca,0x000fdb117becb4a2,0x000fdab2a6379bf1,0x000fda4f5fdfb4e9,
-       0x000fd9e76401f3a4,0x000fd97a67a9ce20,0x000fd9081922142a,0x000fd8901f2d4b02,
-       0x000fd812182170e1,0x000fd78d98e23cd4,0x000fd7022bb3f083,0x000fd66f4edf96ba,
-       0x000fd5d473200306,0x000fd530f9ccff94,0x000fd48432b7b351,0x000fd3cd59a8469f,
-       0x000fd30b9368f90a,0x000fd23dea45f500,0x000fd16349e2e04b,0x000fd07a7a3ef98b,
-       0x000fcf8219b5df06,0x000fce7895bcfcdf,0x000fcd5c220ad5e3,0x000fcc2aadbc17dd,
-       0x000fcae1d5e81fbd,0x000fc97ed4e778fa,0x000fc7fe6d4d720f,0x000fc65ccf39c2fc,
-       0x000fc4957623cb04,0x000fc2a2fc826dc8,0x000fc07ee19b01ce,0x000fbe213c1cf493,
-       0x000fbb8051ac1566,0x000fb890078d120e,0x000fb5411a5b9a96,0x000fb18000547134,
-       0x000fad334827f1e2,0x000fa839276708b9,0x000fa263b32e37ee,0x000f9b72d1c52cd1,
-       0x000f930a1a281a05,0x000f889f023d820a,0x000f7b577d2be5f4,0x000f69c650c40a8f,
-       0x000f51530f0916d9,0x000f2cb0e3c5933e,0x000eeefb15d605d9,0x000e6da6ecf27460]
+const ke =
+    UInt64[0x000e290a13924be3,0x0000000000000000,0x0009beadebce18bf,0x000c377ac71f9e08,
+           0x000d4ddb99075857,0x000de893fb8ca23e,0x000e4a8e87c4328d,0x000e8dff16ae1cb9,
+           0x000ebf2deab58c59,0x000ee49a6e8b9638,0x000f0204efd64ee4,0x000f19bdb8ea3c1b,
+           0x000f2d458bbe5bd1,0x000f3da104b78236,0x000f4b86d784571f,0x000f577ad8a7784f,
+           0x000f61de83da32ab,0x000f6afb7843cce7,0x000f730a57372b44,0x000f7a37651b0e68,
+           0x000f80a5bb6eea52,0x000f867189d3cb5b,0x000f8bb1b4f8fbbd,0x000f9079062292b8,
+           0x000f94d70ca8d43a,0x000f98d8c7dcaa99,0x000f9c8928abe083,0x000f9ff175b734a6,
+           0x000fa319996bc47d,0x000fa6085f8e9d07,0x000fa8c3a62e1991,0x000fab5084e1f660,
+           0x000fadb36c84cccb,0x000faff041086846,0x000fb20a6ea22bb9,0x000fb404fb42cb3c,
+           0x000fb5e295158173,0x000fb7a59e99727a,0x000fb95038c8789d,0x000fbae44ba684eb,
+           0x000fbc638d822e60,0x000fbdcf89209ffa,0x000fbf29a303cfc5,0x000fc0731df1089c,
+           0x000fc1ad1ed6c8b1,0x000fc2d8b02b5c89,0x000fc3f6c4d92131,0x000fc5083ac9ba7d,
+           0x000fc60ddd1e9cd6,0x000fc7086622e825,0x000fc7f881009f0b,0x000fc8decb41ac70,
+           0x000fc9bbd623d7ec,0x000fca9027c5b26d,0x000fcb5c3c319c49,0x000fcc20864b4449,
+           0x000fccdd70a35d40,0x000fcd935e34bf80,0x000fce42ab0db8bd,0x000fceebace7ec01,
+           0x000fcf8eb3b0d0e7,0x000fd02c0a049b60,0x000fd0c3f59d199c,0x000fd156b7b5e27e,
+           0x000fd1e48d670341,0x000fd26daff73551,0x000fd2f2552684be,0x000fd372af7233c1,
+           0x000fd3eeee528f62,0x000fd4673e73543a,0x000fd4dbc9e72ff7,0x000fd54cb856dc2c,
+           0x000fd5ba2f2c4119,0x000fd62451ba02c2,0x000fd68b415fcff4,0x000fd6ef1dabc160,
+           0x000fd75004790eb6,0x000fd7ae120c583f,0x000fd809612dbd09,0x000fd8620b40effa,
+           0x000fd8b8285b78fd,0x000fd90bcf594b1d,0x000fd95d15efd425,0x000fd9ac10bfa70c,
+           0x000fd9f8d364df06,0x000fda437086566b,0x000fda8bf9e3c9fe,0x000fdad28062fed5,
+           0x000fdb17141bff2c,0x000fdb59c4648085,0x000fdb9a9fda83cc,0x000fdbd9b46e3ed4,
+           0x000fdc170f6b5d04,0x000fdc52bd81a3fb,0x000fdc8ccacd07ba,0x000fdcc542dd3902,
+           0x000fdcfc30bcb793,0x000fdd319ef77143,0x000fdd6597a0f60b,0x000fdd98245a48a2,
+           0x000fddc94e575271,0x000fddf91e64014f,0x000fde279ce914ca,0x000fde54d1f0a06a,
+           0x000fde80c52a47cf,0x000fdeab7def394e,0x000fded50345eb35,0x000fdefd5be59fa0,
+           0x000fdf248e39b26f,0x000fdf4aa064b4af,0x000fdf6f98435894,0x000fdf937b6f30ba,
+           0x000fdfb64f414571,0x000fdfd818d48262,0x000fdff8dd07fed8,0x000fe018a08122c4,
+           0x000fe03767adaa59,0x000fe05536c58a13,0x000fe07211ccb4c5,0x000fe08dfc94c532,
+           0x000fe0a8fabe8ca1,0x000fe0c30fbb87a5,0x000fe0dc3ecf3a5a,0x000fe0f48b107521,
+           0x000fe10bf76a82ef,0x000fe122869e41ff,0x000fe1383b4327e1,0x000fe14d17c83187,
+           0x000fe1611e74c023,0x000fe1745169635a,0x000fe186b2a09176,0x000fe19843ef4e07,
+           0x000fe1a90705bf63,0x000fe1b8fd6fb37c,0x000fe1c828951443,0x000fe1d689ba4bfd,
+           0x000fe1e4220099a4,0x000fe1f0f26655a0,0x000fe1fcfbc726d4,0x000fe2083edc2830,
+           0x000fe212bc3bfeb4,0x000fe21c745adfe3,0x000fe225678a8895,0x000fe22d95fa23f4,
+           0x000fe234ffb62282,0x000fe23ba4a800d9,0x000fe2418495fddc,0x000fe2469f22bffb,
+           0x000fe24af3cce90d,0x000fe24e81ee9858,0x000fe25148bcda19,0x000fe253474703fe,
+           0x000fe2547c75fdc6,0x000fe254e70b754f,0x000fe25485a0fd1a,0x000fe25356a71450,
+           0x000fe2515864173a,0x000fe24e88f316f1,0x000fe24ae64296fa,0x000fe2466e132f60,
+           0x000fe2411df611bd,0x000fe23af34b6f73,0x000fe233eb40bf41,0x000fe22c02cee01b,
+           0x000fe22336b81710,0x000fe2198385e5cc,0x000fe20ee586b707,0x000fe20358cb5dfb,
+           0x000fe1f6d92465b1,0x000fe1e9621f2c9e,0x000fe1daef02c8da,0x000fe1cb7accb0a6,
+           0x000fe1bb002d22c9,0x000fe1a9798349b8,0x000fe196e0d9140c,0x000fe1832fdebc44,
+           0x000fe16e5fe5f931,0x000fe15869dccfcf,0x000fe1414647fe78,0x000fe128ed3cf8b2,
+           0x000fe10f565b69cf,0x000fe0f478c633ab,0x000fe0d84b1bdd9e,0x000fe0bac36e6688,
+           0x000fe09bd73a6b5b,0x000fe07b7b5d920a,0x000fe059a40c26d2,0x000fe03644c5d7f8,
+           0x000fe011504979b2,0x000fdfeab887b95c,0x000fdfc26e94a447,0x000fdf986297e305,
+           0x000fdf6c83bb8663,0x000fdf3ec0193eed,0x000fdf0f04a5d30a,0x000fdedd3d1aa204,
+           0x000fdea953dcfc13,0x000fde7331e3100d,0x000fde3abe9626f2,0x000fddffdfb1dbd5,
+           0x000fddc2791ff351,0x000fdd826cd068c6,0x000fdd3f9a8d3856,0x000fdcf9dfc95b0c,
+           0x000fdcb1176a55fe,0x000fdc65198ba50b,0x000fdc15bb3b2daa,0x000fdbc2ce2dc4ae,
+           0x000fdb6c206aaaca,0x000fdb117becb4a1,0x000fdab2a6379bf0,0x000fda4f5fdfb4e9,
+           0x000fd9e76401f3a3,0x000fd97a67a9ce1f,0x000fd90819221429,0x000fd8901f2d4b02,
+           0x000fd812182170e1,0x000fd78d98e23cd3,0x000fd7022bb3f082,0x000fd66f4edf96b9,
+           0x000fd5d473200305,0x000fd530f9ccff94,0x000fd48432b7b351,0x000fd3cd59a8469e,
+           0x000fd30b9368f90a,0x000fd23dea45f500,0x000fd16349e2e04a,0x000fd07a7a3ef98a,
+           0x000fcf8219b5df05,0x000fce7895bcfcde,0x000fcd5c220ad5e2,0x000fcc2aadbc17dc,
+           0x000fcae1d5e81fbc,0x000fc97ed4e778f9,0x000fc7fe6d4d720e,0x000fc65ccf39c2fc,
+           0x000fc4957623cb03,0x000fc2a2fc826dc7,0x000fc07ee19b01cd,0x000fbe213c1cf493,
+           0x000fbb8051ac1566,0x000fb890078d120e,0x000fb5411a5b9a95,0x000fb18000547133,
+           0x000fad334827f1e2,0x000fa839276708b9,0x000fa263b32e37ed,0x000f9b72d1c52cd1,
+           0x000f930a1a281a05,0x000f889f023d820a,0x000f7b577d2be5f3,0x000f69c650c40a8f,
+           0x000f51530f0916d8,0x000f2cb0e3c5933e,0x000eeefb15d605d8,0x000e6da6ecf27460]
 
-const we = 
+const we =
     [1.9311480126418366e-15,1.4178028487910829e-17,2.3278824993382448e-17,
      3.0487830247064320e-17,3.6665697714474878e-17,4.2179302189289733e-17,
      4.7222561556862764e-17,5.1911915446217879e-17,5.6323471083955047e-17,
@@ -644,7 +992,7 @@ const we =
      1.2174462832361815e-15,1.2581958069755114e-15,1.3060984107128082e-15,
      1.3642786158057857e-15,1.4384889932178723e-15,1.5412190700064194e-15,
      1.7091034077168055e-15]
-const fe = 
+const fe =
     [1.0000000000000000e+00,9.3814368086217470e-01,9.0046992992574648e-01,
      8.7170433238120359e-01,8.4778550062398961e-01,8.2699329664305032e-01,
      8.0842165152300838e-01,7.9152763697249562e-01,7.7595685204011555e-01,
@@ -732,91 +1080,108 @@ const fe =
      2.1459677437189063e-03,1.5362997803015724e-03,9.6726928232717454e-04,
      4.5413435384149677e-04]
 
-ziggurat_nor_r      = 3.6541528853610087963519472518
-ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
-ziggurat_exp_r      = 7.6971174701310497140446280481
 
-rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
-randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
-randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
-for (lhs, rhs) in (([], []), 
-                  ([:(state::DSFMT_state)], [:state]))
-    @eval begin                
-        function randmtzig_randn($(lhs...))
-            @inbounds begin
-                while true
-                    r = randi($(rhs...))
-                    rabs = int64(r>>1) # One bit for the sign
-                    idx = rabs & 0xFF
-                    x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
-                    if rabs < ki[idx+1]
-                        return x # 99.3% of the time we return here 1st try
-                    elseif idx == 0
-                        while true
-                            xx = -$(ziggurat_nor_inv_r)*log(rand($(rhs...)))
-                            yy = -log(rand($(rhs...)))
-                            if yy+yy > xx*xx
-                                return (rabs & 0x100) != 0x000000000 ? -$(ziggurat_nor_r)-xx : $(ziggurat_nor_r)+xx
-                            end
-                        end
-                    elseif (fi[idx] - fi[idx+1])*rand($(rhs...)) + fi[idx+1] < exp(-0.5*x*x)
-                        return x # return from the triangular area
-                    end
-                end
-            end
-        end    
+const ziggurat_nor_r      = 3.6541528853610087963519472518
+const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
+const ziggurat_exp_r      = 7.6971174701310497140446280481
 
-        function randmtzig_exprnd($(lhs...))
-            @inbounds begin
-                while true
-                    ri = randi($(rhs...))
-                    idx = ri & 0xFF
-                    x = ri*we[idx+1]
-                    if ri < ke[idx+1]
-                        return x # 98.9% of the time we return here 1st try
-                    elseif idx == 0
-                        return $(ziggurat_exp_r) - log(rand($(rhs...)))
-                    elseif (fe[idx] - fe[idx+1])*rand($(rhs...)) + fe[idx+1] < exp(-x)
-                        return x # return from the triangular area
-                    end
-                end
-            end
-        end       
+
+@inline function randn(rng::AbstractRNG=GLOBAL_RNG)
+    @inbounds begin
+        r = rand_ui52(rng)
+        rabs = Int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-randn() = randmtzig_randn()
-randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
-randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
-randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng.state);end;A)
+# this unlikely branch is put in a separate function for better efficiency
+function randn_unlikely(rng, idx, rabs, x)
+    @inbounds if idx == 0
+        while true
+            xx = -ziggurat_nor_inv_r*log(rand(rng))
+            yy = -log(rand(rng))
+            yy+yy > xx*xx && return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
+        end
+    elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
+        return x # return from the triangular area
+    else
+        return randn(rng)
+    end
+end
+
+function randn!(rng::AbstractRNG, A::AbstractArray{Float64})
+    for i in eachindex(A)
+        @inbounds A[i] = randn(rng)
+    end
+    A
+end
+
+randn!(A::AbstractArray{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
-randn(dims::Int...) = randn!(Array(Float64, dims...))
-randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
-randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
+randn(dims::Integer...) = randn!(Array(Float64, dims...))
+randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array(Float64, dims))
+randn(rng::AbstractRNG, dims::Integer...) = randn!(rng, Array(Float64, dims...))
+
+@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+    @inbounds begin
+        ri = rand_ui52(rng)
+        idx = ri & 0xFF
+        x = ri*we[idx+1]
+        ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
+        return randexp_unlikely(rng, idx, x)
+    end
+end
+
+function randexp_unlikely(rng, idx, x)
+    @inbounds if idx == 0
+        return ziggurat_exp_r - log(rand(rng))
+    elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
+        return x # return from the triangular area
+    else
+        return randexp(rng)
+    end
+end
+
+function randexp!(rng::AbstractRNG, A::Array{Float64})
+    for i in eachindex(A)
+        @inbounds A[i] = randexp(rng)
+    end
+    A
+end
+
+randexp!(A::Array{Float64}) = randexp!(GLOBAL_RNG, A)
+randexp(dims::Dims) = randexp!(Array(Float64, dims))
+randexp(dims::Int...) = randexp!(Array(Float64, dims))
+randexp(rng::AbstractRNG, dims::Dims) = randexp!(rng, Array(Float64, dims))
+randexp(rng::AbstractRNG, dims::Int...) = randexp!(rng, Array(Float64, dims))
+
 
 ## random UUID generation
 
 immutable UUID
-    value::Uint128
+    value::UInt128
 end
-UUID(u::String) = convert(UUID, u)
+UUID(u::AbstractString) = convert(UUID, u)
 
 function uuid4()
-    u = rand(Uint128)
+    u = rand(UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
     UUID(u)
 end
 
-function Base.convert(::Type{UUID}, s::String)
+function Base.convert(::Type{UUID}, s::AbstractString)
     s = lowercase(s)
 
     if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
-        error(ArgumentError("Malformed UUID string"))
+        throw(ArgumentError("Malformed UUID string"))
     end
 
-    u = uint128(0)
-    for i in [1:8, 10:13, 15:18, 20:23, 25:36]
+    u = UInt128(0)
+    for i in [1:8; 10:13; 15:18; 20:23; 25:36]
         u <<= 4
         d = s[i]-'0'
         u |= 0xf & (d-39*(d>9))
@@ -826,7 +1191,7 @@ end
 
 function Base.repr(u::UUID)
     u = u.value
-    a = Array(Uint8,36)
+    a = Array(UInt8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         d = u & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -838,5 +1203,99 @@ function Base.repr(u::UUID)
 end
 
 Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
+
+# return a random string (often useful for temporary filenames/dirnames)
+let b = UInt8['0':'9';'A':'Z';'a':'z']
+    global randstring
+    randstring(r::AbstractRNG, n::Int) = ASCIIString(b[rand(r, 1:length(b), n)])
+    randstring(r::AbstractRNG) = randstring(r,8)
+    randstring(n::Int) = randstring(GLOBAL_RNG, n)
+    randstring() = randstring(GLOBAL_RNG)
+end
+
+
+
+# Fill S (resized as needed) with a random subsequence of A, where
+# each element of A is included in S with independent probability p.
+# (Note that this is different from the problem of finding a random
+#  size-m subset of A where m is fixed!)
+function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
+    n = length(A)
+    p == 1 && return copy!(resize!(S, n), A)
+    empty!(S)
+    p == 0 && return S
+    nexpected = p * length(A)
+    sizehint!(S, round(Int,nexpected + 5*sqrt(nexpected)))
+    if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
+        for i = 1:n
+            rand(r) <= p && push!(S, A[i])
+        end
+    else
+        # Skip through A, in order, from each element i to the next element i+s
+        # included in S. The probability that the next included element is
+        # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
+        # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
+        # from this probability distribution via the discrete inverse-transform
+        # method: s = ceil(F^{-1}(u)) where u = rand(), which is simply
+        # s = ceil(log(rand()) / log1p(-p)).
+        # -log(rand()) is an exponential variate, so can use randexp().
+        L = -1 / log1p(-p) # L > 0
+        i = 0
+        while true
+            s = randexp(r) * L
+            s >= n - i && return S # compare before ceil to avoid overflow
+            push!(S, A[i += ceil(Int,s)])
+        end
+        # [This algorithm is similar in spirit to, but much simpler than,
+        #  the one by Vitter for a related problem in "Faster methods for
+        #  random sampling," Comm. ACM Magazine 7, 703-718 (1984).]
+    end
+    return S
+end
+randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
+
+randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
+randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
+
+
+function shuffle!(r::AbstractRNG, a::AbstractVector)
+    for i = length(a):-1:2
+        j = rand(r, 1:i)
+        a[i], a[j] = a[j], a[i]
+    end
+    return a
+end
+shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
+
+shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
+shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
+
+function randperm(r::AbstractRNG, n::Integer)
+    a = Array(typeof(n), n)
+    if n == 0
+       return a
+    end
+    a[1] = 1
+    @inbounds for i = 2:n
+        j = rand(r, 1:i)
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+function randcycle(r::AbstractRNG, n::Integer)
+    a = Array(typeof(n), n)
+    a[1] = 1
+    @inbounds for i = 2:n
+        j = rand(r, 1:i-1)
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 end # module

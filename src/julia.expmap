@@ -1,8 +1,7 @@
 {
   global:
     __asan*;
-    alloc_*w;
-    allocobj;
+    __stack_chk_guard;
     asprintf;
     bitvector_*;
     clock_now;
@@ -28,10 +27,12 @@
     rl_clear_input;
     save_arg_area_loc;
     u8_*;
-    wcwidth;
     uv_*;
     add_library_mapping;
     utf8proc_*;
+    jlbacktrace;
+    _IO_stdin_used;
+    __ZN4llvm23createLowerSimdLoopPassEv;
 
     /* freebsd */
     environ;

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
@@ -19,7 +21,7 @@ print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
     Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
-    if isa(s,String)
+    if isa(s,AbstractString)
         :(MIME{$(Expr(:quote, symbol(s)))})
     else
         :(MIME{symbol($s)})
@@ -35,22 +37,22 @@ end
 # in order to provide a way to export T as a given mime type.
 
 mimewritable{mime}(::MIME{mime}, x) =
-  method_exists(writemime, (IO, MIME{mime}, typeof(x)))
+  method_exists(writemime, Tuple{IO, MIME{mime}, typeof(x)})
 
 # it is convenient to accept strings instead of ::MIME
-writemime(io::IO, m::String, x) = writemime(io, MIME(m), x)
-mimewritable(m::String, x) = mimewritable(MIME(m), x)
+writemime(io::IO, m::AbstractString, x) = writemime(io, MIME(m), x)
+mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
 # MIME types are assumed to be binary data except for a set of types known
 # to be text data (possibly Unicode).  istext(m) returns whether
 # m::MIME is text data, and reprmime(m, x) returns x written to either
-# a string (for text m::MIME) or a Vector{Uint8} (for binary m::MIME),
+# a string (for text m::MIME) or a Vector{UInt8} (for binary m::MIME),
 # assuming the corresponding write_mime method exists.  stringmime
 # is like reprmime except that it always returns a string, which in the
 # case of binary data is Base64-encoded.
 #
-# Also, if reprmime is passed a String for a text type or Vector{Uint8} for
+# Also, if reprmime is passed a AbstractString for a text type or Vector{UInt8} for
 # a binary type, the argument is assumed to already be in the corresponding
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
@@ -59,13 +61,13 @@ macro textmime(mime)
     quote
         mimeT = MIME{symbol($mime)}
         # avoid method ambiguities with the general definitions below:
-        # (Q: should we treat Vector{Uint8} as a bytestring?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{Uint8}) = sprint(writemime, m, x)
-        Base.Multimedia.stringmime(m::mimeT, x::Vector{Uint8}) = reprmime(m, x)
+        # (Q: should we treat Vector{UInt8} as a bytestring?)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
+        Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
         Base.Multimedia.istext(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
-            Base.Multimedia.reprmime(m::mimeT, x::String) = x
+            Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
         Base.Multimedia.reprmime(m::mimeT, x) = sprint(writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
@@ -78,14 +80,14 @@ function reprmime(m::MIME, x)
     writemime(s, m, x)
     takebuf_array(s)
 end
-reprmime(m::MIME, x::Vector{Uint8}) = x
-stringmime(m::MIME, x) = base64(writemime, m, x)
-stringmime(m::MIME, x::Vector{Uint8}) = base64(write, x)
+reprmime(m::MIME, x::Vector{UInt8}) = x
+stringmime(m::MIME, x) = base64encode(writemime, m, x)
+stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 # it is convenient to accept strings instead of ::MIME
-istext(m::String) = istext(MIME(m))
-reprmime(m::String, x) = reprmime(MIME(m), x)
-stringmime(m::String, x) = stringmime(MIME(m), x)
+istext(m::AbstractString) = istext(MIME(m))
+reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
+stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
 for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/markdown", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
     @eval @textmime $mime
@@ -105,10 +107,10 @@ end
 abstract Display
 
 # it is convenient to accept strings instead of ::MIME
-display(d::Display, mime::String, x) = display(d, MIME(mime), x)
-display(mime::String, x) = display(MIME(mime), x)
-displayable(d::Display, mime::String) = displayable(d, MIME(mime))
-displayable(mime::String) = displayable(MIME(mime))
+display(d::Display, mime::AbstractString, x) = display(d, MIME(mime), x)
+display(mime::AbstractString, x) = display(MIME(mime), x)
+displayable(d::Display, mime::AbstractString) = displayable(d, MIME(mime))
+displayable(mime::AbstractString) = displayable(MIME(mime))
 
 # simplest display, which only knows how to display text/plain
 immutable TextDisplay <: Display
@@ -173,7 +175,7 @@ function display(m::MIME, x)
 end
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
-  method_exists(display, (D, MIME{mime}, Any))
+  method_exists(display, Tuple{D, MIME{mime}, Any})
 
 function displayable(m::MIME)
     for d in displays
@@ -198,7 +200,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union(MIME,String), x)
+function redisplay(m::Union{MIME,AbstractString}, x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], m, x) &&
             @try_display return redisplay(displays[i], m, x)
@@ -208,7 +210,7 @@ end
 
 # default redisplay is simply to call display
 redisplay(d::Display, x) = display(d, x)
-redisplay(d::Display, m::Union(MIME,String), x) = display(d, m, x)
+redisplay(d::Display, m::Union{MIME,AbstractString}, x) = display(d, m, x)
 
 ###########################################################################
 

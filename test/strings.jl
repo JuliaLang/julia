@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # string escaping & unescaping
 cx = Any[
     0x00000000      '\0'        "\\0"
@@ -52,7 +54,7 @@ cx = Any[
 ]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == cx[i,2]
+    @test cx[i,1] == convert(UInt32, cx[i,2])
     @test string(cx[i,2]) == unescape_string(cx[i,3])
     if isascii(cx[i,2]) || !isprint(cx[i,2])
         @test cx[i,3] == escape_string(string(cx[i,2]))
@@ -65,10 +67,10 @@ end
 
 for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
                      "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
-    c = char(i)
+    c = Char(i)
     cp = string(c,p)
-    op = string(char(div(i,8)), oct(i%8), p)
-    hp = string(char(div(i,16)), hex(i%16), p)
+    op = string(Char(div(i,8)), oct(i%8), p)
+    hp = string(Char(div(i,16)), hex(i%16), p)
     @test string(unescape_string(string("\\",oct(i,1),p))) == cp
     @test string(unescape_string(string("\\",oct(i,2),p))) == cp
     @test string(unescape_string(string("\\",oct(i,3),p))) == cp
@@ -133,34 +135,34 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # integer parsing
-@test is(parseint(Int32,"0",36),int32(0))
-@test is(parseint(Int32,"1",36),int32(1))
-@test is(parseint(Int32,"9",36),int32(9))
-@test is(parseint(Int32,"A",36),int32(10))
-@test is(parseint(Int32,"a",36),int32(10))
-@test is(parseint(Int32,"B",36),int32(11))
-@test is(parseint(Int32,"b",36),int32(11))
-@test is(parseint(Int32,"F",36),int32(15))
-@test is(parseint(Int32,"f",36),int32(15))
-@test is(parseint(Int32,"Z",36),int32(35))
-@test is(parseint(Int32,"z",36),int32(35))
+@test is(parse(Int32,"0",36),Int32(0))
+@test is(parse(Int32,"1",36),Int32(1))
+@test is(parse(Int32,"9",36),Int32(9))
+@test is(parse(Int32,"A",36),Int32(10))
+@test is(parse(Int32,"a",36),Int32(10))
+@test is(parse(Int32,"B",36),Int32(11))
+@test is(parse(Int32,"b",36),Int32(11))
+@test is(parse(Int32,"F",36),Int32(15))
+@test is(parse(Int32,"f",36),Int32(15))
+@test is(parse(Int32,"Z",36),Int32(35))
+@test is(parse(Int32,"z",36),Int32(35))
 
-@test parseint("0") == 0
-@test parseint("-0") == 0
-@test parseint("1") == 1
-@test parseint("-1") == -1
-@test parseint("9") == 9
-@test parseint("-9") == -9
-@test parseint("10") == 10
-@test parseint("-10") == -10
-@test parseint(Int64,"3830974272") == 3830974272
-@test parseint(Int64,"-3830974272") == -3830974272
-@test parseint('3') == 3
-@test parseint('3', 8) == 3
+@test parse(Int,"0") == 0
+@test parse(Int,"-0") == 0
+@test parse(Int,"1") == 1
+@test parse(Int,"-1") == -1
+@test parse(Int,"9") == 9
+@test parse(Int,"-9") == -9
+@test parse(Int,"10") == 10
+@test parse(Int,"-10") == -10
+@test parse(Int64,"3830974272") == 3830974272
+@test parse(Int64,"-3830974272") == -3830974272
+@test parse(Int,'3') == 3
+@test parse(Int,'3', 8) == 3
 
-parsebin(s) = parseint(s,2)
-parseoct(s) = parseint(s,8)
-parsehex(s) = parseint(s,16)
+parsebin(s) = parse(Int,s,2)
+parseoct(s) = parse(Int,s,8)
+parsehex(s) = parse(Int,s,16)
 
 @test parsebin("0") == 0
 @test parsebin("-0") == 0
@@ -202,57 +204,85 @@ parsehex(s) = parseint(s,16)
 @test parsehex("-10") == -16
 @test parsehex("0BADF00D") == 195948557
 @test parsehex("-0BADF00D") == -195948557
-@test parseint(Int64,"BADCAB1E",16) == 3135023902
-@test parseint(Int64,"-BADCAB1E",16) == -3135023902
-@test parseint(Int64,"CafeBabe",16) == 3405691582
-@test parseint(Int64,"-CafeBabe",16) == -3405691582
-@test parseint(Int64,"DeadBeef",16) == 3735928559
-@test parseint(Int64,"-DeadBeef",16) == -3735928559
+@test parse(Int64,"BADCAB1E",16) == 3135023902
+@test parse(Int64,"-BADCAB1E",16) == -3135023902
+@test parse(Int64,"CafeBabe",16) == 3405691582
+@test parse(Int64,"-CafeBabe",16) == -3405691582
+@test parse(Int64,"DeadBeef",16) == 3735928559
+@test parse(Int64,"-DeadBeef",16) == -3735928559
 
-@test parseint("2\n") == 2
-@test parseint("   2 \n ") == 2
-@test parseint(" 2 ") == 2
-@test parseint("2 ") == 2
-@test parseint(" 2") == 2
-@test parseint("+2\n") == 2
-@test parseint("-2") == -2
-@test_throws ErrorException parseint("   2 \n 0")
-@test_throws ErrorException parseint("2x")
-@test_throws ErrorException parseint("-")
+@test parse(Int,"2\n") == 2
+@test parse(Int,"   2 \n ") == 2
+@test parse(Int," 2 ") == 2
+@test parse(Int,"2 ") == 2
+@test parse(Int," 2") == 2
+@test parse(Int,"+2\n") == 2
+@test parse(Int,"-2") == -2
+@test_throws ArgumentError parse(Int,"   2 \n 0")
+@test_throws ArgumentError parse(Int,"2x")
+@test_throws ArgumentError parse(Int,"-")
 
-@test parseint("1234") == 1234
-@test parseint("0x1234") == 0x1234
-@test parseint("0o1234") == 0o1234
-@test parseint("0b1011") == 0b1011
-@test parseint("-1234") == -1234
-@test parseint("-0x1234") == -int(0x1234)
-@test parseint("-0o1234") == -int(0o1234)
-@test parseint("-0b1011") == -int(0b1011)
+# multibyte spaces
+@test parse(Int, "3\u2003\u202F") == 3
+@test_throws ArgumentError parse(Int, "3\u2003\u202F,")
+
+@test parse(Int,'a') == 10
+@test_throws ArgumentError parse(Int,typemax(Char))
+
+@test parse(Int,"1234") == 1234
+@test parse(Int,"0x1234") == 0x1234
+@test parse(Int,"0o1234") == 0o1234
+@test parse(Int,"0b1011") == 0b1011
+@test parse(Int,"-1234") == -1234
+@test parse(Int,"-0x1234") == -Int(0x1234)
+@test parse(Int,"-0o1234") == -Int(0o1234)
+@test parse(Int,"-0b1011") == -Int(0b1011)
 
 ## FIXME: #4905, do these tests for Int128/UInt128!
 for T in (Int8, Int16, Int32, Int64)
-    @test parseint(T,string(typemin(T))) == typemin(T)
-    @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws OverflowError parseint(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
+    @test parse(T,string(typemin(T))) == typemin(T)
+    @test parse(T,string(typemax(T))) == typemax(T)
+    @test_throws OverflowError parse(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
-for T in (Uint8,Uint16,Uint32,Uint64)
-    @test parseint(T,string(typemin(T))) == typemin(T)
-    @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws ErrorException parseint(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
+for T in (UInt8,UInt16,UInt32,UInt64)
+    @test parse(T,string(typemin(T))) == typemin(T)
+    @test parse(T,string(typemax(T))) == typemax(T)
+    @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
+
+@test lpad("foo", 3) == "foo"
+@test rpad("foo", 3) == "foo"
+@test lpad("foo", 5) == "  foo"
+@test rpad("foo", 5) == "foo  "
+@test lpad("foo", 5, "  ") == "  foo"
+@test rpad("foo", 5, "  ") == "foo  "
+@test lpad("foo", 6, "  ") == "   foo"
+@test rpad("foo", 6, "  ") == "foo   "
 
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
+@test strip("foobarfoo", ['f', 'o']) == "bar"
 
 # some test strings
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
+## generic string uses only endof and next ##
+
+immutable GenericString <: AbstractString
+    string::AbstractString
+end
+
+Base.endof(s::GenericString) = endof(s.string)
+Base.next(s::GenericString, i::Int) = next(s.string, i)
+
 # ascii search
-for str in [astr, Base.GenericString(astr)]
+for str in [astr, GenericString(astr)]
+    @test_throws BoundsError search(str, 'z', 0)
+    @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'x') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -266,6 +296,8 @@ for str in [astr, Base.GenericString(astr)]
     @test search(str, ',', 7) == 0
     @test search(str, '\n') == 14
     @test search(str, '\n', 15) == 0
+    @test_throws BoundsError search(str, 'ε', nextind(str,endof(str))+1)
+    @test_throws BoundsError search(str, 'a', nextind(str,endof(str))+1)
 end
 
 # ascii rsearch
@@ -287,24 +319,33 @@ for str in [astr]
 end
 
 # utf-8 search
-for str in (u8str, Base.GenericString(u8str))
+for str in (u8str, GenericString(u8str))
+    @test_throws BoundsError search(str, 'z', 0)
+    @test_throws BoundsError search(str, '∀', 0)
     @test search(str, 'z') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
     @test search(str, '∄') == 0
     @test search(str, '∀') == 1
-    @test search(str, '∀', 2) == 0
+    @test_throws UnicodeError search(str, '∀', 2)
+    @test search(str, '∀', 4) == 0
     @test search(str, '∃') == 13
-    @test search(str, '∃', 14) == 0
+    @test_throws UnicodeError search(str, '∃', 15)
+    @test search(str, '∃', 16) == 0
     @test search(str, 'x') == 26
     @test search(str, 'x', 27) == 43
     @test search(str, 'x', 44) == 0
     @test search(str, 'δ') == 17
-    @test search(str, 'δ', 18) == 33
-    @test search(str, 'δ', 34) == 0
+    @test_throws UnicodeError search(str, 'δ', 18)
+    @test search(str, 'δ', nextind(str,17)) == 33
+    @test search(str, 'δ', nextind(str,33)) == 0
     @test search(str, 'ε') == 5
-    @test search(str, 'ε', 6) == 54
-    @test search(str, 'ε', 55) == 0
+    @test search(str, 'ε', nextind(str,5)) == 54
+    @test search(str, 'ε', nextind(str,54)) == 0
+    @test search(str, 'ε', nextind(str,endof(str))) == 0
+    @test search(str, 'a', nextind(str,endof(str))) == 0
+    @test_throws BoundsError search(str, 'ε', nextind(str,endof(str))+1)
+    @test_throws BoundsError search(str, 'a', nextind(str,endof(str))+1)
 end
 
 # utf-8 rsearch
@@ -460,6 +501,47 @@ end
 @test search("foo,bar,baz", "az") == 10:11
 @test search("foo,bar,baz", "az", 12) == 0:-1
 
+# issue #9365
+# string search with a two-char UTF-8 (2 byte) string literal
+@test search("ééé", "éé") == 1:3
+@test search("ééé", "éé", 1) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test search("€€€", "€€") == 1:4
+@test search("€€€", "€€", 1) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test search("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 1:5
+@test search("\U1f596\U1f596\U1f596", "\U1f596\U1f596", 1) == 1:5
+
+# string search with a two-char UTF-8 (2 byte) string literal
+@test search("éé", "éé") == 1:3
+@test search("éé", "éé", 1) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test search("€€", "€€") == 1:4
+@test search("€€", "€€", 1) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test search("\U1f596\U1f596", "\U1f596\U1f596") == 1:5
+@test search("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1:5
+
+# string rsearch with a two-char UTF-8 (2 byte) string literal
+@test rsearch("ééé", "éé") == 3:5
+@test rsearch("ééé", "éé", endof("ééé")) == 3:5
+# string rsearch with a two-char UTF-8 (3 byte) string literal
+@test rsearch("€€€", "€€") == 4:7
+@test rsearch("€€€", "€€", endof("€€€")) == 4:7
+# string rsearch with a two-char UTF-8 (4 byte) string literal
+@test rsearch("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 5:9
+@test rsearch("\U1f596\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5:9
+
+# string rsearch with a two-char UTF-8 (2 byte) string literal
+@test rsearch("éé", "éé") == 1:3        # should really be 1:4!
+@test rsearch("éé", "éé", endof("ééé")) == 1:3
+# string search with a two-char UTF-8 (3 byte) string literal
+@test rsearch("€€", "€€") == 1:4        # should really be 1:6!
+@test rsearch("€€", "€€", endof("€€€")) == 1:4
+# string search with a two-char UTF-8 (4 byte) string literal
+@test rsearch("\U1f596\U1f596", "\U1f596\U1f596") == 1:5        # should really be 1:8!
+@test rsearch("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1:5
+
 # string rsearch with a two-char string literal
 @test rsearch("foo,bar,baz", "xx") == 0:-1
 @test rsearch("foo,bar,baz", "fo") == 1:2
@@ -475,8 +557,8 @@ end
 @test rsearch("foo,bar,baz", "az", 10) == 0:-1
 
 # array rsearch
-@test rsearch(Uint8[1,2,3],Uint8[2,3],3) == 2:3
-@test rsearch(Uint8[1,2,3],Uint8[2,3],1) == 0:-1
+@test rsearch(UInt8[1,2,3],UInt8[2,3],3) == 2:3
+@test rsearch(UInt8[1,2,3],UInt8[2,3],1) == 0:-1
 
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
@@ -491,6 +573,49 @@ end
 @test search("foo,bar,baz", r",b", 10) == 0:-1
 @test search("foo,bar,baz", r"az") == 10:11
 @test search("foo,bar,baz", r"az", 12) == 0:-1
+
+@test searchindex("foo", 'o') == 2
+@test searchindex("foo", 'o', 3) == 3
+
+# string searchindex with a two-char UTF-8 (2 byte) string literal
+@test searchindex("ééé", "éé") == 1
+@test searchindex("ééé", "éé", 1) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test searchindex("€€€", "€€") == 1
+@test searchindex("€€€", "€€", 1) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test searchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
+
+# string searchindex with a two-char UTF-8 (2 byte) string literal
+@test searchindex("éé", "éé") == 1
+@test searchindex("éé", "éé", 1) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test searchindex("€€", "€€") == 1
+@test searchindex("€€", "€€", 1) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
+
+# string rsearchindex with a two-char UTF-8 (2 byte) string literal
+@test rsearchindex("ééé", "éé") == 3
+@test rsearchindex("ééé", "éé", endof("ééé")) == 3
+# string rsearchindex with a two-char UTF-8 (3 byte) string literal
+@test rsearchindex("€€€", "€€") == 4
+@test rsearchindex("€€€", "€€", endof("€€€")) == 4
+# string rsearchindex with a two-char UTF-8 (4 byte) string literal
+@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596") == 5
+@test rsearchindex("\U1f596\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 5
+
+# string rsearchindex with a two-char UTF-8 (2 byte) string literal
+@test rsearchindex("éé", "éé") == 1
+@test rsearchindex("éé", "éé", endof("ééé")) == 1
+# string searchindex with a two-char UTF-8 (3 byte) string literal
+@test rsearchindex("€€", "€€") == 1
+@test rsearchindex("€€", "€€", endof("€€€")) == 1
+# string searchindex with a two-char UTF-8 (4 byte) string literal
+@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
+@test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 # split
 @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])
@@ -657,18 +782,41 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
+@test replace("foo", "oo", uppercase) == "fOO"
 
-# {begins,ends}with
-@test beginswith("abcd", 'a')
-@test beginswith("abcd", "a")
-@test beginswith("abcd", "ab")
-@test !beginswith("ab", "abcd")
-@test !beginswith("abcd", "bc")
+# chomp/chop
+@test chomp("foo\n") == "foo"
+@test chop("foob") == "foo"
+
+# lower and upper
+@test uppercase("aBc") == "ABC"
+@test uppercase('A') == 'A'
+@test uppercase('a') == 'A'
+@test lowercase("AbC") == "abc"
+@test lowercase('A') == 'a'
+@test lowercase('a') == 'a'
+@test uppercase('α') == '\u0391'
+@test lowercase('Δ') == 'δ'
+@test lowercase('\U118bf') == '\U118df'
+@test uppercase('\U1044d') == '\U10425'
+@test ucfirst("Abc") == "Abc"
+@test ucfirst("abc") == "Abc"
+@test lcfirst("ABC") == "aBC"
+@test lcfirst("aBC") == "aBC"
+
+# {starts,ends}with
+@test startswith("abcd", 'a')
+@test startswith("abcd", "a")
+@test startswith("abcd", "ab")
+@test !startswith("ab", "abcd")
+@test !startswith("abcd", "bc")
 @test endswith("abcd", 'd')
 @test endswith("abcd", "d")
 @test endswith("abcd", "cd")
 @test !endswith("abcd", "dc")
 @test !endswith("cd", "abcd")
+
+@test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
 
 # RepStrings and SubStrings
 u8str2 = u8str^2
@@ -712,6 +860,8 @@ ss=SubString(str2,1,4)  #empty source string
 ss=SubString(str2,1,1)  #empty source string, identical start and end index
 @test length(ss)==0
 
+@test SubString("foobar",big(1),big(3)) == "foo"
+
 str = "aa\u2200\u2222bb"
 u = SubString(str, 3, 6)
 @test length(u)==2
@@ -749,7 +899,7 @@ arr = ["a","b","c"]
 
 # string iteration, and issue #1454
 str = "é"
-str_a = [str...]
+str_a = vcat(str...)
 @test length(str_a)==1
 @test str_a[1] == str[1]
 
@@ -771,7 +921,7 @@ n = 3
 a = [3,1,2]
 @test """$(a[2])""" == "1"
 @test """$(a[3]+7)""" == "9"
-@test """$(ifloor(4.5))""" == "4"
+@test """$(floor(Int,4.5))""" == "4"
 nl = "
 "
 @test """
@@ -792,14 +942,14 @@ nl = "
       a
      b
        c""" == " a$(nl)b$(nl)  c"
-# note tab/space mixing
+# tabs + spaces
 @test """
-	a
-     b
-     """ == "   a$(nl)b$(nl)"
+	 a
+	 b
+	""" == " a$(nl) b$(nl)"
 @test """
       a
-       """ == "a$(nl)"
+       """ == "a$(nl) "
 s = "   p"
 @test """
       $s""" == "$s"
@@ -820,9 +970,8 @@ s = "   p"
       foo
       bar\t""" == "foo$(nl)bar\t"
 @test """
-      foo
-      \tbar
-       """ == "foo$(nl)       bar$(nl)"
+      $("\n      ")
+      """ == "\n      $(nl)"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
@@ -834,17 +983,17 @@ bin_val = hex2bytes(hex_str)
 bin_val = hex2bytes("07bf")
 @test bin_val[1] == 7
 @test bin_val[2] == 191
-@test typeof(bin_val) == Array{Uint8, 1}
+@test typeof(bin_val) == Array{UInt8, 1}
 @test length(bin_val) == 2
 
 # all valid hex chars
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEF0")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEF0")
 
 #non-hex characters
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
 
 # sizeof
 @test sizeof("abc") == 3
@@ -885,6 +1034,10 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%.4e" 1.2345) == "1.2345e+00"
 @test (@sprintf "%.0e" 3e142) == "3e+142"
 @test (@sprintf "%#.0e" 3e142) == "3.e+142"
+# hex float
+@test (@sprintf "%a" 1.5) == "0x1.8p+0"
+@test (@sprintf "%#.0a" 1.5) == "0x2.p+0"
+@test (@sprintf "%+30a" 1/3) == "         +0x1.5555555555555p-2"
 # chars
 @test (@sprintf "%c" 65) == "A"
 @test (@sprintf "%c" 'A') == "A"
@@ -900,27 +1053,27 @@ bin_val = hex2bytes("07bf")
 # combo
 @test (@sprintf "%f %d %d %f" 1.0 [3 4]... 5) == "1.000000 3 4 5.000000"
 # multi
-@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
+@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6;]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
 # comprehension
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
-@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
-@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+@test split(SubString(ascii("x"), 2, 0), "y") == AbstractString[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == AbstractString[""]
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
-@test float64(RevString("64")) === 46.0
+@test parse(Float64,RevString("64")) === 46.0
 
 # issue #6772
 @test float(SubString("10",1,1)) === 1.0
 @test float(SubString("1 0",1,1)) === 1.0
-@test float32(SubString("10",1,1)) === 1.0f0
+@test parse(Float32,SubString("10",1,1)) === 1.0f0
 
-for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt),
+for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
-    @test parseint(T,base(b,n),b) == n
+    @test parse(T,base(b,n),b) == n
 end
 
 # normalize_string (Unicode normalization etc.):
@@ -1005,18 +1158,29 @@ end
 # issue #6027
 let
     # make symbol with invalid char
-    sym = symbol(char(0xdcdb))
-    @test string(sym) == "\udcdb"
+    sym = symbol(Char(0xdcdb))
+    @test string(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
-    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
+    res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
+
+@test symbol("asdf") === :asdf
+@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
+@test :a < :b
+@test startswith(string(gensym("asdf")),"##asdf#")
+@test gensym("asdf") != gensym("asdf")
+@test gensym() != gensym()
+@test startswith(string(gensym()),"##")
+@test_throws ArgumentError symbol("ab\0")
+@test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
 let f =IOBuffer(),
     x = split("1 2 3")
     @test write(f, x) == 3
     @test takebuf_string(f) == "123"
-    @test invoke(write, (IO, AbstractArray), f, x) == 3
+    @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
     @test takebuf_string(f) == "123"
 end
 
@@ -1033,11 +1197,11 @@ end
 @test_throws BoundsError checkbounds("hello", 6)
 @test_throws BoundsError checkbounds("hello", 0:3)
 @test_throws BoundsError checkbounds("hello", 4:6)
-@test_throws BoundsError checkbounds("hello", [0:3])
-@test_throws BoundsError checkbounds("hello", [4:6])
+@test_throws BoundsError checkbounds("hello", [0:3;])
+@test_throws BoundsError checkbounds("hello", [4:6;])
 @test checkbounds("hello", 2)
 @test checkbounds("hello", 1:5)
-@test checkbounds("hello", [1:5])
+@test checkbounds("hello", [1:5;])
 
 
 # isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
@@ -1172,11 +1336,11 @@ let
         @test iscntrl(c) == false
     end
 
-    NBSP = char(0x0000A0)
-    ENSPACE = char(0x002002)
-    EMSPACE = char(0x002003)
-    THINSPACE = char(0x002009)
-    ZWSPACE = char(0x002060)
+    NBSP = Char(0x0000A0)
+    ENSPACE = Char(0x002002)
+    EMSPACE = Char(0x002003)
+    THINSPACE = Char(0x002009)
+    ZWSPACE = Char(0x002060)
 
     uspace = [ENSPACE, EMSPACE, THINSPACE]
     aspace = [' ']
@@ -1195,9 +1359,9 @@ let
 
     @test isspace(ZWSPACE) == false # zero-width space
 
-    acontrol = [ char(0x001c), char(0x001d), char(0x001e), char(0x001f)]
-    latincontrol = [ char(0x0080), char(0x0085) ]
-    ucontrol = [ char(0x200E), char(0x202E) ]
+    acontrol = [ Char(0x001c), Char(0x001d), Char(0x001e), Char(0x001f)]
+    latincontrol = [ Char(0x0080), Char(0x0085) ]
+    ucontrol = [ Char(0x200E), Char(0x202E) ]
 
     for c in vcat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
@@ -1207,7 +1371,7 @@ let
     end
 
     for c in ucontrol  #non-latin1 controls
-        if c!=char(0x0085)
+        if c!=Char(0x0085)
             @test iscntrl(c) == false
             @test isspace(c) == false
             @test isalnum(c) == false
@@ -1239,9 +1403,683 @@ end
 @test isdigit("23435")==true
 @test isalnum("23435")==true
 @test isalpha("23435")==false
-@test iscntrl( string(char(0x0080))) == true
+@test iscntrl( string(Char(0x0080))) == true
 @test ispunct( "‡؟჻") ==true
+
+@test isxdigit('0') == true
+@test isxdigit("0") == true
+@test isxdigit("a") == true
+@test isxdigit("g") == false
+
+# Issue #11140
+@test isvalid(utf32("a")) == true
+@test isvalid(utf32("\x00")) == true
+@test isvalid(UTF32String, UInt32[0xd800,0]) == false
+
+# Issue #11241
+
+@test isvalid(ASCIIString, "is_valid_ascii") == true
+@test isvalid(ASCIIString, "Σ_not_valid_ascii") == false
+
+# test all edge conditions
+for (val, pass) in (
+        (0, true), (0xd7ff, true),
+        (0xd800, false), (0xdfff, false),
+        (0xe000, true), (0xffff, true),
+        (0x10000, true), (0x10ffff, true),
+        (0x110000, false)
+    )
+    @test isvalid(Char, val) == pass
+end
+for (val, pass) in (
+        (b"\x00", true),
+        (b"\x7f", true),
+        (b"\x80", false),
+        (b"\xbf", false),
+        (b"\xc0", false),
+        (b"\xff", false),
+        (b"\xc0\x80", false),
+        (b"\xc1\x80", false),
+        (b"\xc2\x80", true),
+        (b"\xc2\xc0", false),
+        (b"\xed\x9f\xbf", true),
+        (b"\xed\xa0\x80", false),
+        (b"\xed\xbf\xbf", false),
+        (b"\xee\x80\x80", true),
+        (b"\xef\xbf\xbf", true),
+        (b"\xf0\x90\x80\x80", true),
+        (b"\xf4\x8f\xbf\xbf", true),
+        (b"\xf4\x90\x80\x80", false),
+        (b"\xf5\x80\x80\x80", false),
+        (b"\ud800\udc00", false),
+        (b"\udbff\udfff", false),
+        (b"\ud800\u0100", false),
+        (b"\udc00\u0100", false),
+        (b"\udc00\ud800", false)
+        )
+    @test isvalid(UTF8String, val) == pass
+end
+for (val, pass) in (
+        (UInt16[0x0000], true),
+        (UInt16[0xd7ff,0], true),
+        (UInt16[0xd800,0], false),
+        (UInt16[0xdfff,0], false),
+        (UInt16[0xe000,0], true),
+        (UInt16[0xffff,0], true),
+        (UInt16[0xd800,0xdc00,0], true),
+        (UInt16[0xdbff,0xdfff,0], true),
+        (UInt16[0xd800,0x0100,0], false),
+        (UInt16[0xdc00,0x0100,0], false),
+        (UInt16[0xdc00,0xd800,0], false)
+        )
+    @test isvalid(UTF16String, val) == pass
+end
+for (val, pass) in (
+        (UInt32[0x0000], true),
+        (UInt32[0xd7ff,0], true),
+        (UInt32[0xd800,0], false),
+        (UInt32[0xdfff,0], false),
+        (UInt32[0xe000,0], true),
+        (UInt32[0xffff,0], true),
+        (UInt32[0x100000,0], true),
+        (UInt32[0x10ffff,0], true),
+        (UInt32[0x110000,0], false),
+        )
+    @test isvalid(UTF32String, val) == pass
+end
+
+# Issue #11203
+@test isvalid(ASCIIString,UInt8[]) == true
+@test isvalid(UTF8String, UInt8[]) == true
+@test isvalid(UTF16String,UInt16[]) == true
+@test isvalid(UTF32String,UInt32[]) == true
+
+# Check UTF-8 characters
+# Check ASCII range (true),
+# then single continuation bytes and lead bytes with no following continuation bytes (false)
+for (rng,flg) in ((0:0x7f, true), (0x80:0xff, false))
+    for byt in rng
+        @test isvalid(UTF8String, UInt8[byt]) == flg
+    end
+end
+# Check overlong lead bytes for 2-character sequences (false)
+for byt = 0xc0:0xc1
+    @test isvalid(UTF8String, UInt8[byt,0x80]) == false
+end
+# Check valid lead-in to two-byte sequences (true)
+for byt = 0xc2:0xdf
+    for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test isvalid(UTF8String, UInt8[byt, cont]) == flg
+        end
+    end
+end
+# Check three-byte sequences
+for r1 in (0xe0:0xec, 0xee:0xef)
+    for byt = r1
+        # Check for short sequence
+        @test isvalid(UTF8String, UInt8[byt]) == false
+        for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+            for cont in rng
+                @test isvalid(UTF8String, UInt8[byt, cont]) == false
+                @test isvalid(UTF8String, UInt8[byt, cont, 0x80]) == flg
+            end
+        end
+    end
+end
+# Check hangul characters (0xd000-0xd7ff) hangul
+# Check for short sequence, or start of surrogate pair
+for (rng,flg) in ((0x00:0x7f, false), (0x80:0x9f, true), (0xa0:0xff, false))
+    for cont in rng
+        @test isvalid(UTF8String, UInt8[0xed, cont]) == false
+        @test isvalid(UTF8String, UInt8[0xed, cont, 0x80]) == flg
+    end
+end
+# Check valid four-byte sequences
+for byt = 0xf0:0xf4
+    if (byt == 0xf0)
+        r0 = ((0x00:0x8f, false), (0x90:0xbf, true), (0xc0:0xff, false))
+    elseif byt == 0xf4
+        r0 = ((0x00:0x7f, false), (0x80:0x8f, true), (0x90:0xff, false))
+    else
+        r0 = ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
+    end
+    for (rng,flg) in r0
+        for cont in rng
+            @test isvalid(UTF8String, UInt8[byt, cont]) == false
+            @test isvalid(UTF8String, UInt8[byt, cont, 0x80]) == false
+            @test isvalid(UTF8String, UInt8[byt, cont, 0x80, 0x80]) == flg
+        end
+    end
+end
+# Check five-byte sequences, should be invalid
+for byt = 0xf8:0xfb
+    @test isvalid(UTF8String, UInt8[byt, 0x80, 0x80, 0x80, 0x80]) == false
+end
+# Check six-byte sequences, should be invalid
+for byt = 0xfc:0xfd
+    @test isvalid(UTF8String, UInt8[byt, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+end
+# Check seven-byte sequences, should be invalid
+@test isvalid(UTF8String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+
+# 11482
+
+# isvalid
+let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
+    bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
+
+    @test !isvalid(bad32)
+    @test !isvalid(badch)
+    @test isvalid(s)
+    @test isvalid(u8)
+    @test isvalid(u16)
+    @test isvalid(u32)
+    @test isvalid(ASCIIString, s)
+    @test isvalid(UTF8String,  u8)
+    @test isvalid(UTF16String, u16)
+    @test isvalid(UTF32String, u32)
+end
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
+
+# Tests of join()
+@test join([]) == ""
+@test join(["a"],"?") == "a"
+@test join("HELLO",'-') == "H-E-L-L-O"
+@test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
+@test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
+
+# issue #9178 `join` calls `done()` twice on the iterables
+type i9178
+    nnext::Int64
+    ndone::Int64
+end
+Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
+Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
+Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
+@test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
+
+# make sure substrings handle last code unit even if not start of codepoint
+let s = "x\u0302"
+    @test s[1:3] == s
+end
+
+# reverseind
+for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
+    for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
+        for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
+            for c in ('X', 'δ', '\U0001d6a5')
+                T != ASCIIString || (isascii(prefix) && isascii(suffix) && isascii(c)) || continue
+                s = convert(T, string(prefix, c, suffix))
+                ri = search(reverse(s), c)
+                @test reverse(s) == RevString(s)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = RevString(s)
+                ri = search(reverse(s), c)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = convert(T, string(prefix, prefix, c, suffix, suffix))
+                pre = convert(T, prefix)
+                sb = SubString(s, nextind(pre, endof(pre)), endof(convert(T, string(prefix, prefix, c, suffix))))
+                ri = search(reverse(sb), c)
+                @test c == sb[reverseind(sb, ri)] == reverse(sb)[ri]
+            end
+        end
+    end
+end
+
+# issue #9781
+# float(SubString) wasn't tolerant of trailing whitespace, which was different
+# to "normal" strings. This also checks we aren't being too tolerant and allowing
+# any arbitrary trailing characters.
+@test parse(Float64,"1\n") == 1.0
+@test [parse(Float64,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parse(Float64,split("0,1 X\n",",")[2])
+@test parse(Float32,"1\n") == 1.0
+@test [parse(Float32,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parse(Float32,split("0,1 X\n",",")[2])
+
+#more ascii tests
+@test convert(ASCIIString, UInt8[32,107,75], "*") == " kK"
+@test convert(ASCIIString, UInt8[132,107,75], "*") == "*kK"
+@test convert(ASCIIString, UInt8[], "*") == ""
+@test convert(ASCIIString, UInt8[255], "*") == "*"
+
+@test ucfirst("Hola")=="Hola"
+@test ucfirst("hola")=="Hola"
+@test ucfirst("")==""
+@test ucfirst("*")=="*"
+
+@test lcfirst("Hola")=="hola"
+@test lcfirst("hola")=="hola"
+@test lcfirst("")==""
+@test lcfirst("*")=="*"
+
+#more UTF8String tests
+@test convert(UTF8String, UInt8[32,107,75], "*") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "*") == "*kK"
+@test convert(UTF8String, UInt8[32,107,75], "αβ") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
+@test convert(UTF8String, UInt8[], "*") == ""
+@test convert(UTF8String, UInt8[255], "αβ") == "αβ"
+
+# test AbstractString functions at beginning of string.jl
+immutable tstStringType <: AbstractString
+    data::Array{UInt8,1}
+end
+tstr = tstStringType("12");
+@test_throws ErrorException endof(tstr)
+@test_throws ErrorException next(tstr, Bool(1))
+
+gstr = GenericString("12");
+@test typeof(string(gstr))==GenericString
+@test bytestring()==""
+
+@test convert(Array{UInt8}, gstr) ==[49;50]
+@test convert(Array{Char,1}, gstr) ==['1';'2']
+@test convert(Symbol, gstr)==symbol("12")
+
+@test getindex(gstr, Bool(1))=='1'
+@test getindex(gstr,Bool(1):Bool(1))=="1"
+@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
+
+@test symbol(gstr)==symbol("12")
+
+@test_throws ErrorException sizeof(gstr)
+
+@test length(GenericString(""))==0
+
+@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
+
+@test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
+
+@test ind2chr(gstr,2)==2
+
+# issue #10307
+@test typeof(map(Int16,String[])) == Vector{Int16}
+
+for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
+    for i in [typemax(T), typemin(T)]
+        s = "$i"
+        @test get(tryparse(T, s)) == i
+    end
+end
+
+for T in [Int8, Int16, Int32, Int64, Int128]
+    for i in [typemax(T), typemin(T)]
+        f = "$(i)0"
+        @test isnull(tryparse(T, f))
+    end
+end
+
+# issue #11142
+s = "abcdefghij"
+sp = pointer(s)
+@test ascii(sp) == s
+@test ascii(sp,5) == "abcde"
+@test typeof(ascii(sp)) == ASCIIString
+@test typeof(utf8(sp)) == UTF8String
+s = "abcde\uff\u2000\U1f596"
+sp = pointer(s)
+@test utf8(sp) == s
+@test utf8(sp,5) == "abcde"
+@test typeof(utf8(sp)) == UTF8String
+
+@test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
+@test isnull(tryparse(BigInt, "1234567890-"))
+
+@test get(tryparse(Float64, "64")) == 64.0
+@test isnull(tryparse(Float64, "64o"))
+@test get(tryparse(Float32, "32")) == 32.0f0
+@test isnull(tryparse(Float32, "32o"))
+
+# issue #10994: handle embedded NUL chars for string parsing
+for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
+    @test_throws ArgumentError parse(T, "1\0")
+end
+for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float64, Float32]
+    @test isnull(tryparse(T, "1\0"))
+end
+let s = normalize_string("tést",:NFKC)
+    @test bytestring(Base.unsafe_convert(Cstring, s)) == s
+    @test bytestring(convert(Cstring, symbol(s))) == s
+    @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
+end
+let s = "ba\0d"
+    @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
+    @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
+end
+
+# issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
+a = UInt32[48,0]
+b = UTF32String(a)
+@test b=="0"
+a[1] = 65
+@test b=="A"
+c = Char['0','\0']
+d = UTF32String(c)
+@test d=="0"
+c[1] = 'A'
+@test d=="A"
+
+# Issue #11575
+# Test invalid sequences
+
+byt = 0x0 # Needs to be defined outside the try block!
+try
+    # Continuation byte not after lead
+    for byt in 0x80:0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[byt])
+    end
+
+    # Test lead bytes
+    for byt in 0xc0:0xff
+        # Single lead byte at end of string
+        @test_throws UnicodeError Base.checkstring(UInt8[byt])
+        # Lead followed by non-continuation character < 0x80
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0])
+        # Lead followed by non-continuation character > 0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0xc0])
+    end
+
+    # Test overlong 2-byte
+    for byt in 0x81:0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[0xc0,byt])
+    end
+    for byt in 0x80:0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[0xc1,byt])
+    end
+
+    # Test overlong 3-byte
+    for byt in 0x80:0x9f
+        @test_throws UnicodeError Base.checkstring(UInt8[0xe0,byt,0x80])
+    end
+
+    # Test overlong 4-byte
+    for byt in 0x80:0x8f
+        @test_throws UnicodeError Base.checkstring(UInt8[0xef,byt,0x80,0x80])
+    end
+
+    # Test 4-byte > 0x10ffff
+    for byt in 0x90:0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[0xf4,byt,0x80,0x80])
+    end
+    for byt in 0xf5:0xf7
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0x80])
+    end
+
+    # Test 5-byte
+    for byt in 0xf8:0xfb
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0x80,0x80])
+    end
+
+    # Test 6-byte
+    for byt in 0xfc:0xfd
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0x80,0x80,0x80])
+    end
+
+    # Test 7-byte
+    @test_throws UnicodeError Base.checkstring(UInt8[0xfe,0x80,0x80,0x80,0x80,0x80,0x80])
+
+    # Three and above byte sequences
+    for byt in 0xe0:0xef
+        # Lead followed by only 1 continuation byte
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80])
+        # Lead ended by non-continuation character < 0x80
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0])
+        # Lead ended by non-continuation character > 0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0xc0])
+    end
+
+    # 3-byte encoded surrogate character(s)
+    # Single surrogate
+    @test_throws UnicodeError Base.checkstring(UInt8[0xed,0xa0,0x80])
+    # Not followed by surrogate
+    @test_throws UnicodeError Base.checkstring(UInt8[0xed,0xa0,0x80,0xed,0x80,0x80])
+    # Trailing surrogate first
+    @test_throws UnicodeError Base.checkstring(UInt8[0xed,0xb0,0x80,0xed,0xb0,0x80])
+    # Followed by lead surrogate
+    @test_throws UnicodeError Base.checkstring(UInt8[0xed,0xa0,0x80,0xed,0xa0,0x80])
+
+    # Four byte sequences
+    for byt in 0xf0:0xf4
+        # Lead followed by only 2 continuation bytes
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80])
+        # Lead followed by non-continuation character < 0x80
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0])
+        # Lead followed by non-continuation character > 0xbf
+        @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0xc0])
+    end
+catch exp;
+    println("Error testing checkstring: $byt, $exp")
+    throw(exp)
+end
+
+# Surrogates
+@test_throws UnicodeError Base.checkstring(UInt16[0xd800])
+@test_throws UnicodeError Base.checkstring(UInt16[0xdc00])
+@test_throws UnicodeError Base.checkstring(UInt16[0xdc00,0xd800])
+
+# Surrogates in UTF-32
+@test_throws UnicodeError Base.checkstring(UInt32[0xd800])
+@test_throws UnicodeError Base.checkstring(UInt32[0xdc00])
+@test_throws UnicodeError Base.checkstring(UInt32[0xdc00,0xd800])
+
+# Characters > 0x10ffff
+@test_throws UnicodeError Base.checkstring(UInt32[0x110000])
+
+# Test valid sequences
+for (seq, res) in (
+    (UInt8[0x0],                (1,0,0,0,0)),   # Nul byte, beginning of ASCII range
+    (UInt8[0x7f],               (1,0,0,0,0)),   # End of ASCII range
+    (UInt8[0xc0,0x80],          (1,1,0,0,0)),   # Long encoded Nul byte (Modified UTF-8, Java)
+    (UInt8[0xc2,0x80],          (1,2,0,0,1)),   # \u80, beginning of Latin1 range
+    (UInt8[0xc3,0xbf],          (1,2,0,0,1)),   # \uff, end of Latin1 range
+    (UInt8[0xc4,0x80],          (1,4,0,0,1)),   # \u100, beginning of non-Latin1 2-byte range
+    (UInt8[0xdf,0xbf],          (1,4,0,0,1)),   # \u7ff, end of non-Latin1 2-byte range
+    (UInt8[0xe0,0xa0,0x80],     (1,8,0,1,0)),   # \u800, beginning of 3-byte range
+    (UInt8[0xed,0x9f,0xbf],     (1,8,0,1,0)),   # \ud7ff, end of first part of 3-byte range
+    (UInt8[0xee,0x80,0x80],     (1,8,0,1,0)),   # \ue000, beginning of second part of 3-byte range
+    (UInt8[0xef,0xbf,0xbf],     (1,8,0,1,0)),   # \uffff, end of 3-byte range
+    (UInt8[0xf0,0x90,0x80,0x80],(1,16,1,0,0)),  # \U10000, beginning of 4-byte range
+    (UInt8[0xf4,0x8f,0xbf,0xbf],(1,16,1,0,0)),  # \U10ffff, end of 4-byte range
+    (UInt8[0xed,0xa0,0x80,0xed,0xb0,0x80], (1,0x30,1,0,0)), # Overlong \U10000, (CESU-8)
+    (UInt8[0xed,0xaf,0xbf,0xed,0xbf,0xbf], (1,0x30,1,0,0)), # Overlong \U10ffff, (CESU-8)
+    (UInt16[0x0000],            (1,0,0,0,0)),   # Nul byte, beginning of ASCII range
+    (UInt16[0x007f],            (1,0,0,0,0)),   # End of ASCII range
+    (UInt16[0x0080],            (1,2,0,0,1)),   # Beginning of Latin1 range
+    (UInt16[0x00ff],            (1,2,0,0,1)),   # End of Latin1 range
+    (UInt16[0x0100],            (1,4,0,0,1)),   # Beginning of non-Latin1 2-byte range
+    (UInt16[0x07ff],            (1,4,0,0,1)),   # End of non-Latin1 2-byte range
+    (UInt16[0x0800],            (1,8,0,1,0)),   # Beginning of 3-byte range
+    (UInt16[0xd7ff],            (1,8,0,1,0)),   # End of first part of 3-byte range
+    (UInt16[0xe000],            (1,8,0,1,0)),   # Beginning of second part of 3-byte range
+    (UInt16[0xffff],            (1,8,0,1,0)),   # End of 3-byte range
+    (UInt16[0xd800,0xdc00],     (1,16,1,0,0)),  # \U10000, beginning of 4-byte range
+    (UInt16[0xdbff,0xdfff],     (1,16,1,0,0)),  # \U10ffff, end of 4-byte range
+    (UInt32[0x0000],            (1,0,0,0,0)),   # Nul byte, beginning of ASCII range
+    (UInt32[0x007f],            (1,0,0,0,0)),   # End of ASCII range
+    (UInt32[0x0080],            (1,2,0,0,1)),   # Beginning of Latin1 range
+    (UInt32[0x00ff],            (1,2,0,0,1)),   # End of Latin1 range
+    (UInt32[0x0100],            (1,4,0,0,1)),   # Beginning of non-Latin1 2-byte range
+    (UInt32[0x07ff],            (1,4,0,0,1)),   # End of non-Latin1 2-byte range
+    (UInt32[0x0800],            (1,8,0,1,0)),   # Beginning of 3-byte range
+    (UInt32[0xd7ff],            (1,8,0,1,0)),   # End of first part of 3-byte range
+    (UInt32[0xe000],            (1,8,0,1,0)),   # Beginning of second part of 3-byte range
+    (UInt32[0xffff],            (1,8,0,1,0)),   # End of 3-byte range
+    (UInt32[0x10000],           (1,16,1,0,0)),  # \U10000, beginning of 4-byte range
+    (UInt32[0x10ffff],          (1,16,1,0,0)),  # \U10ffff, end of 4-byte range
+    (UInt32[0xd800,0xdc00],     (1,0x30,1,0,0)),# Overlong \U10000, (CESU-8)
+    (UInt32[0xdbff,0xdfff],     (1,0x30,1,0,0)))# Overlong \U10ffff, (CESU-8)
+    @test Base.checkstring(seq) == res
+end
+
+# Test bounds checking
+@test_throws BoundsError Base.checkstring(b"abcdef", -10)
+@test_throws BoundsError Base.checkstring(b"abcdef", 0)
+@test_throws BoundsError Base.checkstring(b"abcdef", 7)
+@test_throws BoundsError Base.checkstring(b"abcdef", 3, -10)
+@test_throws BoundsError Base.checkstring(b"abcdef", 3, 0)
+@test_throws BoundsError Base.checkstring(b"abcdef", 3, 7)
+@test_throws ArgumentError Base.checkstring(b"abcdef", 3, 1)
+
+# iteration
+@test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
+@test [i for i in eachindex("ḟøøƀäṙ")] == [1, 4, 6, 8, 10, 12]
+@test [x for x in enumerate("ḟøøƀäṙ")] == [(1, 'ḟ'), (2, 'ø'), (3, 'ø'), (4, 'ƀ'), (5, 'ä'), (6, 'ṙ')]
+
+# issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
+str = "abcdef\uff\uffff\u10ffffABCDEF"
+@test typeof(uppercase("abcdef")) == ASCIIString
+@test typeof(uppercase(utf8(str))) == UTF8String
+@test typeof(uppercase(utf16(str))) == UTF16String
+@test typeof(uppercase(utf32(str))) == UTF32String
+@test typeof(lowercase("ABCDEF")) == ASCIIString
+@test typeof(lowercase(utf8(str))) == UTF8String
+@test typeof(lowercase(utf16(str))) == UTF16String
+@test typeof(lowercase(utf32(str))) == UTF32String
+
+foomap(ch) = (ch > 65)
+foobar(ch) = Char(0xd800)
+foobaz(ch) = Char(0x200000)
+@test_throws UnicodeError map(foomap, utf16(str))
+@test_throws UnicodeError map(foobar, utf16(str))
+@test_throws UnicodeError map(foobaz, utf16(str))
+
+# issue #11551 (#11004,#10959)
+function tstcvt(strUTF8::UTF8String, strUTF16::UTF16String)
+    @test utf16(strUTF8) == strUTF16
+    @test utf8(strUTF16) == strUTF8
+end
+
+# Create some ASCII, UTF8 and UTF16
+strAscii = "abcdefgh"
+strA_UTF8 = ("abcdefgh\uff")[1:8]
+strL_UTF8 = "abcdef\uff\uff"
+str2_UTF8 = "abcd\uff\uff\u7ff\u7ff"
+str3_UTF8 = "abcd\uff\uff\u7fff\u7fff"
+str4_UTF8 = "abcd\uff\u7ff\u7fff\U7ffff"
+strS_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\xed\xa0\x80\xed\xb0\x80")
+strC_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\U10000")
+strZ_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\xc0\x80")
+strz_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\0")
+
+strA_UTF16 = utf16(strA_UTF8)
+strL_UTF16 = utf16(strL_UTF8)
+str2_UTF16 = utf16(str2_UTF8)
+str3_UTF16 = utf16(str3_UTF8)
+str4_UTF16 = utf16(str4_UTF8)
+strS_UTF16 = utf16(strS_UTF8)
+
+@test utf8(strAscii) == strAscii
+@test utf16(strAscii) == strAscii
+
+tstcvt(strA_UTF8,strA_UTF16)
+tstcvt(strL_UTF8,strL_UTF16)
+tstcvt(str2_UTF8,str2_UTF16)
+tstcvt(str3_UTF8,str3_UTF16)
+tstcvt(str4_UTF8,str4_UTF16)
+
+# Test converting surrogate pairs
+@test utf16(strS_UTF8) == strC_UTF8
+@test utf8(strS_UTF16) == strC_UTF8
+
+# Test converting overlong \0
+# @test utf8(strZ_UTF8)  == strz_UTF8   # currently broken! (in utf8.jl)
+@test utf16(strZ_UTF8) == strz_UTF8
+
+# Test invalid sequences
+
+byt = 0x0
+for T in (UTF16String,) # UTF32String
+    try
+    # Continuation byte not after lead
+    for byt in 0x80:0xbf
+        @test_throws UnicodeError convert(T,  UTF8String(UInt8[byt]))
+    end
+
+    # Test lead bytes
+    for byt in 0xc0:0xff
+        # Single lead byte at end of string
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt]))
+        # Lead followed by non-continuation character < 0x80
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0]))
+        # Lead followed by non-continuation character > 0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0xc0]))
+    end
+
+    # Test overlong 2-byte
+    for byt in 0x81:0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[0xc0,byt]))
+    end
+    for byt in 0x80:0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[0xc1,byt]))
+    end
+
+    # Test overlong 3-byte
+    for byt in 0x80:0x9f
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[0xe0,byt,0x80]))
+    end
+
+    # Test overlong 4-byte
+    for byt in 0x80:0x8f
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[0xef,byt,0x80,0x80]))
+    end
+
+    # Test 4-byte > 0x10ffff
+    for byt in 0x90:0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[0xf4,byt,0x80,0x80]))
+    end
+    for byt in 0xf5:0xf7
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80,0x80]))
+    end
+
+    # Test 5-byte
+    for byt in 0xf8:0xfb
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80,0x80,0x80]))
+    end
+
+    # Test 6-byte
+    for byt in 0xfc:0xfd
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80,0x80,0x80,0x80]))
+    end
+
+    # Test 7-byte
+    @test_throws UnicodeError convert(T, UTF8String(UInt8[0xfe,0x80,0x80,0x80,0x80,0x80,0x80]))
+
+    # Three and above byte sequences
+    for byt in 0xe0:0xef
+        # Lead followed by only 1 continuation byte
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80]))
+        # Lead ended by non-continuation character < 0x80
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0]))
+        # Lead ended by non-continuation character > 0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0xc0]))
+    end
+
+    # 3-byte encoded surrogate character(s)
+    # Single surrogate
+    @test_throws UnicodeError convert(T, UTF8String(UInt8[0xed,0xa0,0x80]))
+    # Not followed by surrogate
+    @test_throws UnicodeError convert(T, UTF8String(UInt8[0xed,0xa0,0x80,0xed,0x80,0x80]))
+    # Trailing surrogate first
+    @test_throws UnicodeError convert(T, UTF8String(UInt8[0xed,0xb0,0x80,0xed,0xb0,0x80]))
+    # Followed by lead surrogate
+    @test_throws UnicodeError convert(T, UTF8String(UInt8[0xed,0xa0,0x80,0xed,0xa0,0x80]))
+
+    # Four byte sequences
+    for byt in 0xf0:0xf4
+        # Lead followed by only 2 continuation bytes
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80]))
+        # Lead followed by non-continuation character < 0x80
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80,0]))
+        # Lead followed by non-continuation character > 0xbf
+        @test_throws UnicodeError convert(T, UTF8String(UInt8[byt,0x80,0x80,0xc0]))
+    end
+    catch exp ;
+        println("Error checking $T: $byt")
+        throw(exp)
+    end
+end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Project Euler
 #
 #  problems: http://projecteuler.net/problems
@@ -46,7 +48,7 @@ end
 @test sum(1:100)^2 - sum((1:100).^2) == 25164150
 
 #7: 104743
-euler7(n) = primes(ifloor(n*log(n*log(n))))[n]
+euler7(n) = primes(floor(Int,n*log(n*log(n))))[n]
 @test euler7(10001) == 104743
 
 #8: 40824
@@ -67,7 +69,7 @@ end
 @test euler9(1000) == 31875000
 
 #10: 142913828922
-@test sum(int64(primes(2000000))) == 142913828922
+@test sum(map(Int64,primes(2000000))) == 142913828922
 
 #11: 70600674
 function euler11(grid,n)
@@ -213,7 +215,7 @@ let nums = [
     20849603980134001723930671666823555245252804609722
     53503534226472524250874054075591789781264330331690
 ]
-    @test sum(digits(sum(nums))[end-9:end].*int64(10).^(0:9)) == 5537376230
+    @test sum(digits(sum(nums))[end-9:end].*Int64(10).^(0:9)) == 5537376230
 end
 
 #14: 837799
@@ -254,7 +256,7 @@ end
 #23: 4179871
 
 #24: 2783915460
-@test nthperm!([0:9],1000000) == [2,7,8,3,9,1,5,4,6,0]
+@test nthperm!([0:9;],1000000) == [2,7,8,3,9,1,5,4,6,0]
 
 #25: 4782
 #26: 983

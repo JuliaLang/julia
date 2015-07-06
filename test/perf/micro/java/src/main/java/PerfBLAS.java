@@ -9,7 +9,7 @@ import org.jblas.DoubleMatrix;
 public class PerfBLAS {
 	private static final int NITER = 5;
 	private static Random rand = new Random(0);
-	
+
 	public static void main(String[] args) {
 
 		    long t, tmin;
@@ -48,7 +48,7 @@ public class PerfBLAS {
 		        t = System.nanoTime()-t;
 		        if (t < tmin) tmin = t;
 		    }
-		    assert(mandel_sum == 14720) : "value was "+mandel_sum; 
+		    assert(mandel_sum == 14720) : "value was "+mandel_sum;
 		    print_perf("mandel", tmin);
 
 		    // sort
@@ -77,7 +77,7 @@ public class PerfBLAS {
 		    }
 		    assert(Math.abs(pi-1.644834071848065) < 1e-12);
 		    print_perf("pi_sum", tmin);
-		    
+
 		    // rand mat stat
 		    double[] r;
 		    tmin = Long.MAX_VALUE;
@@ -88,7 +88,7 @@ public class PerfBLAS {
 		        if (t < tmin) tmin = t;
 		    }
 		    print_perf("rand_mat_stat", tmin);
-	  
+
 		    tmin = Long.MAX_VALUE;
 		    for (int i=0; i<NITER; ++i) {
 		        t = System.nanoTime();
@@ -98,8 +98,8 @@ public class PerfBLAS {
 		        if (t < tmin) tmin = t;
 		    }
 		    print_perf("rand_mat_mul", tmin);
-		    
-		    
+
+
 		    tmin = Long.MAX_VALUE;
 		    for (int i=0; i<NITER; ++i) {
 		        t = System.nanoTime();
@@ -108,7 +108,7 @@ public class PerfBLAS {
 		        if (t < tmin) tmin = t;
 		    }
 		    print_perf("sinc_sum", tmin);
-		    
+
 		    // printfd
 		    tmin = Long.MAX_VALUE;
 		    for (int i=0; i<NITER; ++i) {
@@ -133,17 +133,17 @@ public class PerfBLAS {
 			e.printStackTrace();
 		}
 	}
-	
-	
+
+
 	private static double sinc_sum(int n) {
-		
+
 		double total = 0;
 		for (int i=0; i < n; i++) {
 			double f= Math.PI*i;
 			double sinc = Math.sin(f)/f;
 			total+=sinc;
 		}
-		return total;		
+		return total;
 	}
 
 	private static DoubleMatrix randmatmul_JBLAS(int i) {
@@ -151,7 +151,7 @@ public class PerfBLAS {
 		DoubleMatrix b = DoubleMatrix.randn(i,i);
 		return a.mmul(b);
 	}
-	
+
 	private static double[] randmatstat_JBLAS(int t) {
 	    int n=5;
 	    DoubleMatrix p;
@@ -163,38 +163,38 @@ public class PerfBLAS {
 	    	DoubleMatrix b = DoubleMatrix.randn(n,n);
 	    	DoubleMatrix c = DoubleMatrix.randn(n,n);
 	    	DoubleMatrix d = DoubleMatrix.randn(n,n);
-	    	   	
+
 	    	p = DoubleMatrix.concatHorizontally(DoubleMatrix.concatHorizontally(a, b),DoubleMatrix.concatHorizontally(c, d));
 	    	q = DoubleMatrix.concatVertically(DoubleMatrix.concatHorizontally(a, b),DoubleMatrix.concatHorizontally(c, d));
-	    	  		    	
+
 	    	DoubleMatrix x = p.transpose().mmul(p);
 	    	x = x.mmul(x);
 	    	x = x.mmul(x);
 	    	v.data[i]=x.diag().sum();
-	    	
+
 	    	x = q.transpose().mmul(q);
 	    	x = x.mmul(x);
 	    	x = x.mmul(x);
 	    	w.data[i]=x.diag().sum();
-	    		    	
+
 	    }
-	    
+
 	    List<Double> vElements = v.elementsAsList();
 	    List<Double> wElements = w.elementsAsList();
-	    
+
 	    return new double[]{stdev(vElements)/mean(vElements),stdev(wElements)/mean(wElements)};
 	}
-	
+
     public static double stdev(List<Double> elements) {
         double m = mean(elements);
         double total = 0;
         for(Double d:elements) {
         	double dif = (d-m);
-        	total += dif*dif;       	
+        	total += dif*dif;
         }
         return Math.sqrt(total/(elements.size()-1));
     }
-   
+
 	public static double mean(List<Double> elements) {
 		double total = 0;
 		for(Double d:elements) {
@@ -202,7 +202,7 @@ public class PerfBLAS {
 		}
 	    return total/elements.size();
 	}
-	
+
 	private static void quicksort(double[] a, int lo, int hi) {
 	    int i = lo;
 	    int j = hi;
@@ -245,30 +245,20 @@ public class PerfBLAS {
 	    return sum;
 	}
 
-	private static int mandel(double zReal, double zImag) {
+	private static int mandel(double re, double im) {
 	    int n = 0;
-	    double cReal = zReal;
-	    double cImag = zImag;
+	    Complex z = new Complex(re, im);
+	    Complex c = new Complex(re, im);
 	    for (n=0; n<=79; ++n) {
-	        if (complexAbs(zReal,zImag) > 2.0) {
+	        if (Complex.abs(z) > 2.0) {
 	            n -= 1;
 	            break;
 	        }
-	        
-	        // z^2
-	        double zSquaredReal = zReal*zReal-zImag*zImag;
-	        double zSquaredImag = zReal*zImag+zImag*zReal;
-	        
-	        // +c
-	        zReal = zSquaredReal+cReal;
-	        zImag = zSquaredImag+cImag;
-	        
+
+	        // z = z*z + c
+	        z = Complex.add(Complex.mul(z, z), c);
 	    }
 	    return n+1;
-	}
-	
-	private static double complexAbs(double zReal, double zImag) {
-		return Math.sqrt(zReal*zReal + zImag*zImag);
 	}
 
 	private static int mandelperf() {
@@ -281,14 +271,14 @@ public class PerfBLAS {
 	    }
 	    return mandel_sum;
 	}
-	
+
 	private static void print_perf(String name, long t) {
 		System.out.printf("java,%s,%.6f\n", name, t/(double)1E6);
 	}
 
 	private static int fib(int n) {
 		return n < 2 ? n : fib(n-1) + fib(n-2);
-	}		
-	
+	}
+
 }
 

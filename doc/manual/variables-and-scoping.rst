@@ -1,5 +1,7 @@
 .. _man-variables-and-scoping:
 
+.. currentmodule:: Base
+
 ********************
  Scope of Variables
 ********************
@@ -24,18 +26,58 @@ The constructs introducing such blocks are:
 -  ``for`` loops
 -  ``try`` blocks
 -  ``catch`` blocks
+-  ``finally`` blocks
 -  ``let`` blocks
 -  ``type`` blocks.
 
 Notably missing from this list are
-:ref:`begin blocks <man-compound-expressions>`, which do
+:ref:`begin blocks <man-compound-expressions>` and :ref:`if blocks <man-conditional-evaluation>`, which do
 *not* introduce new scope blocks.
 
 Certain constructs introduce new variables into the current innermost
 scope. When a variable is introduced into a scope, it is also inherited
 by all inner scopes unless one of those inner scopes explicitly
-overrides it. These constructs which introduce new variables into the
-current scope are as follows:
+overrides it.
+
+Julia uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
+meaning that a function's scope does not inherit from its caller's
+scope, but from the scope in which the function was defined.
+For example, in the following code the ``x`` inside ``foo`` is found
+in the global scope (and if no global variable ``x`` existed, an
+undefined variable error would be raised)::
+
+    function foo()
+      x
+    end
+
+    function bar()
+      x = 1
+      foo()
+    end
+
+    x = 2
+
+    julia> bar()
+    2
+
+If ``foo`` is instead defined inside ``bar``, then it accesses
+the local ``x`` present in that function::
+
+    function bar()
+      function foo()
+        x
+      end
+      x = 1
+      foo()
+    end
+
+    x = 2
+
+    julia> bar()
+    1
+
+The constructs that introduce new variables into the current scope
+are as follows:
 
 -  A declaration ``local x`` or ``const x`` introduces a new local variable.
 -  A declaration ``global x`` makes ``x`` in the current scope and inner
@@ -131,9 +173,9 @@ even or odd::
     julia> odd(3)
     true
 
-Julia provides built-in, efficient functions to test this called
-``iseven`` and ``isodd`` so the above definitions should only be taken
-as examples.
+Julia provides built-in, efficient functions to test for oddness and evenness
+called :func:`iseven` and :func:`isodd` so the above definitions should only be
+taken as examples.
 
 Since functions can be used before they are defined, as long as they are
 defined by the time they are actually called, no syntax for forward
@@ -149,7 +191,7 @@ global scope. This is especially evident in the case of assignments:
     julia> for i = 1:1; y = 10; end
 
     julia> y
-    ERROR: y not defined
+    ERROR: UndefVarError: y not defined
 
     julia> y = 0
     0
@@ -172,16 +214,16 @@ Multiple variables can be declared global using the following syntax::
     function foo()
         global x=1, y="bar", z=3
     end
-    
+
     julia> foo()
     3
-    
+
     julia> x
     1
-    
+
     julia> y
     "bar"
-    
+
     julia> z
     3
 
@@ -242,16 +284,7 @@ block without creating any new bindings:
 
 .. doctest::
 
-    julia> begin
-             local x = 1
-             begin
-               local x = 2
-             end
-             x
-           end
-    ERROR: syntax: local "x" declared twice
-
-    julia> begin
+    julia> let
              local x = 1
              let
                local x = 2
@@ -260,9 +293,7 @@ block without creating any new bindings:
            end
     1
 
-The first example is invalid because you cannot declare the same
-variable as local in the same scope twice. The second example is valid
-since the ``let`` introduces a new scope block, so the inner local ``x``
+Since ``let`` introduces a new scope block, the inner local ``x``
 is a different variable than the outer local ``x``.
 
 For Loops and Comprehensions

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
 #
@@ -16,13 +18,13 @@ function ismandel(z::Complex128)
     return true
 end
 
-function draw_mandel(M::Array{Uint8, 2}, n::Int)
+function draw_mandel(M::Array{UInt8, 2}, n::Int)
     for y = 0:n-1
         ci = 2y/n - 1
         for x = 0:n-1
             c = complex(2x/n - 1.5, ci)
             if ismandel(c)
-                M[div(x, 8) + 1, y + 1] |= 1 << uint8(7 - x%8)
+                M[div(x, 8) + 1, y + 1] |= 1 << UInt8(7 - x%8)
             end
         end
     end
@@ -33,7 +35,7 @@ function mandelbrot(n::Int=200, outfile="mandelbrot-output-julia.txt")
         error("Error: n of $n is not divisible by 8")
     end
 
-    M = zeros(Uint8, div(n, 8), n)
+    M = zeros(UInt8, div(n, 8), n)
     draw_mandel(M, n)
 
     output = open(outfile, "w")

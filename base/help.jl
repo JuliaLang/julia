@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Help
 
 export help, apropos, @help
@@ -10,10 +12,10 @@ function clear_cache()
     global FUNCTION_DICT = nothing
 end
 
-function decor_help_desc(func::String, mfunc::String, desc::String)
+function decor_help_desc(func::AbstractString, mfunc::AbstractString, desc::AbstractString)
     sd = convert(Array{ByteString,1}, split(desc, '\n'))
     for i = 1:length(sd)
-        if beginswith(sd[i], func)
+        if startswith(sd[i], func)
             sd[i] = mfunc * sd[i][length(func)+1:end]
         else
             break
@@ -23,15 +25,14 @@ function decor_help_desc(func::String, mfunc::String, desc::String)
 end
 
 function helpdb_filename()
-    root = "$JULIA_HOME/../share/julia"
     file = "helpdb.jl"
     for loc in [Base.locale()]
-        fn = joinpath(root, loc, file)
+        fn = joinpath(JULIA_HOME, Base.DOCDIR, loc, file)
         if isfile(fn)
             return fn
         end
     end
-    joinpath(root, file)
+    joinpath(JULIA_HOME, Base.DOCDIR, file)
 end
 
 function init_help()
@@ -86,7 +87,19 @@ end
 
 func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
-function help(io::IO, fname::String, obj=0)
+module_defined(x::Symbol) = isdefined(x)
+module_defined(x::Expr) =
+    x.head == :. &&
+    module_defined(x.args[1]) &&
+    isdefined(eval(x.args[1]), x.args[2].value)
+
+function is_defined_in_module(name::AbstractString, obj::DataType, mod::AbstractString)
+    module_defined(parse(mod)) &&
+    isdefined(eval(parse(mod)), symbol(name)) &&
+    eval(parse("$mod.$name")) == obj
+end
+
+function help(io::IO, fname::AbstractString, obj=0)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
@@ -98,8 +111,15 @@ function help(io::IO, fname::String, obj=0)
         for mod in allmods
             mfname = isempty(mod) ? fname : mod * "." * fname
             if isgeneric(obj)
-                mf = eval(func_expr_from_symbols(map(symbol, split(mfname, "."))))
+                mf = eval(func_expr_from_symbols(map(symbol, split(mfname, r"(?<!\.)\."))))
                 if mf === obj
+                    append!(alldesc, FUNCTION_DICT[mfname])
+                    found = true
+                end
+            elseif isa(obj, DataType)
+                mfname = isempty(mod) ? fname : mod * "." * fname
+                if is_defined_in_module(fname, obj, mod) ||
+                   is_defined_in_module(fname, obj, "Base."*mod)
                     append!(alldesc, FUNCTION_DICT[mfname])
                     found = true
                 end
@@ -127,8 +147,9 @@ function help(io::IO, fname::String, obj=0)
                     println(io)
                 end
             end
-            if length(obj.names) > 0
-                println(io, "  fields   : ", obj.names)
+            fields = fieldnames(obj)
+            if !isempty(fields)
+                println(io, "  fields   : ", fields)
             end
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()
@@ -141,11 +162,11 @@ end
 
 apropos() = help()
 
-apropos(s::String) = apropos(STDOUT, s)
-function apropos(io::IO, txt::String)
+apropos(s::AbstractString) = apropos(STDOUT, s)
+function apropos(io::IO, txt::AbstractString)
     init_help()
     n = 0
-    r = Regex("\\Q$txt", Base.PCRE.CASELESS)
+    r = Regex("\\Q$txt", "i")
     for (func, entries) in FUNCTION_DICT
         if ismatch(r, func) || any(e->ismatch(r,e), entries)
             for desc in entries
@@ -164,8 +185,10 @@ function apropos(io::IO, txt::String)
     end
 end
 
+typename(t::DataType) = t.name.name
+
 help(io::IO, f::Function) = help(io, string(f), f)
-help(io::IO, t::DataType) = help(io, string(t.name), t)
+help(io::IO, t::DataType) = help(io, string(typename(t)), t)
 help(io::IO, t::Module) = help(io, string(t))
 
 function help(io::IO, x)
@@ -180,14 +203,14 @@ function help(io::IO, x)
 end
 
 help(args...) = help(STDOUT, args...)
-help(::IO, args...) = error("too many arguments to help()")
+help(::IO, args...) = throw(ArgumentError("too many arguments to help()"))
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true
 isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
                     || (ex.head == :quote && isname(ex.args[1])))
 
-macro help(ex)
+macro help_(ex)
     if ex === :? || ex === :help
         return Expr(:call, :help)
     elseif !isa(ex, Expr) || isname(ex)

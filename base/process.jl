@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 abstract AbstractCmd
 
 type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
-    env::Union(Array{ByteString},Void)
+    env::Union{Array{ByteString},Void}
     dir::UTF8String
     Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
 end
@@ -47,40 +49,19 @@ function show(io::IO, cmd::Cmd)
     (print_dir || print_env) && print(io, ")")
 end
 
-function show(io::IO, cmds::OrCmds)
-    if isa(cmds.a, AndCmds) || isa(cmds.a, CmdRedirect)
-        print(io, "(")
-        show(io, cmds.a)
-        print(io, ")")
-    else
-        show(io, cmds.a)
-    end
-    print(io, " |> ")
-    if isa(cmds.b, AndCmds) || isa(cmds.b, CmdRedirect)
-        print(io, "(")
-        show(io, cmds.b)
-        print(io, ")")
-    else
-        show(io, cmds.b)
-    end
+function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
+    print(io, "pipe(")
+    show(io, cmds.a)
+    print(io, ", ")
+    print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
+    show(io, cmds.b)
+    print(io, ")")
 end
 
 function show(io::IO, cmds::AndCmds)
-    if isa(cmds.a, OrCmds) || isa(cmds.a, CmdRedirect)
-        print(io, "(")
-        show(io, cmds.a)
-        print(io, ")")
-    else
-        show(io, cmds.a)
-    end
+    show(io, cmds.a)
     print(io, " & ")
-    if isa(cmds.b, OrCmds) || isa(cmds.b, CmdRedirect)
-        print(io, "(")
-        show(io, cmds.b)
-        print(io, ")")
-    else
-        show(io, cmds.b)
-    end
+    show(io, cmds.b)
 end
 
 const STDIN_NO  = 0
@@ -88,7 +69,7 @@ const STDOUT_NO = 1
 const STDERR_NO = 2
 
 immutable FileRedirect
-    filename::String
+    filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
         if lowercase(filename) == (@unix? "/dev/null" : "nul")
@@ -106,12 +87,11 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-# Not actually a pointer, but that's how we pass it through the C API
-# so it's fine
-uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd)
+# Not actually a pointer, but that's how we pass it through the C API so it's fine
+uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
+typealias Redirectable Union{AsyncStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -120,48 +100,77 @@ type CmdRedirect <: AbstractCmd
 end
 
 function show(io::IO, cr::CmdRedirect)
+    print(io, "pipe(")
+    show(io, cr.cmd)
+    print(io, ", ")
     if cr.stream_no == STDOUT_NO
-        show(io, cr.cmd)
-        print(io, " |> ")
-        show(io, cr.handle)
+        print(io, "stdout=")
     elseif cr.stream_no == STDERR_NO
-        show(io, cr.cmd)
-        print(io, " .> ")
-        show(io, cr.handle)
+        print(io, "stderr=")
     elseif cr.stream_no == STDIN_NO
-        show(io, cr.handle)
-        print(io, " |> ")
-        show(io, cr.cmd)
+        print(io, "stdin=")
     end
+    show(io, cr.handle)
+    print(io, ")")
 end
 
 
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
-ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
+ignorestatus(cmd::Union{OrCmds,AndCmds}) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
-setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[x for x in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
+# like bytestring(s), but throw an error if s contains NUL, since
+# libuv requires NUL-terminated strings
+function cstr(s)
+    if Base.containsnul(s)
+        throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
+    end
+    return bytestring(s)
+end
+
+setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[cstr(x) for x in env]; setenv(cmd, dir=dir); cmd)
+setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
+setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") = (cmd.env = ByteString[cstr(k*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
+setenv(cmd::Cmd; dir="") = (cmd.dir = cstr(dir); cmd)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
-(|>)(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
-(.>)(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
+redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
+redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
 
 # Stream Redirects
-(|>)(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
-(|>)(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDOUT_NO)
-(.>)(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
+redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
+redir_out(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDOUT_NO)
+redir_err(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
 
 # File redirects
-(|>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
-(|>)(src::String, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
-(.>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
-(>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
-(.>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
+redir_out(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
+redir_out(src::AbstractString, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
+redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
+redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
+redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
+function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+    if append && stdout === nothing && stderr === nothing
+        error("append set to true, but no output redirections specified")
+    end
+    if stdin !== nothing
+        cmd = redir_out(stdin, cmd)
+    end
+    if stdout !== nothing
+        cmd = append ? redir_out_append(cmd, stdout) : redir_out(cmd, stdout)
+    end
+    if stderr !== nothing
+        cmd = append ? redir_err_append(cmd, stderr) : redir_err(cmd, stderr)
+    end
+    return cmd
+end
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
+pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
+pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdin=src)
+
+pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
+
+typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -199,19 +208,20 @@ type ProcessChain
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
-typealias ProcessChainOrNot Union(Bool,ProcessChain)
+typealias ProcessChainOrNot Union{Bool,ProcessChain}
 
-function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
+function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
-    proc = c_malloc(_sizeof_uv_process)
+    proc = Libc.malloc(_sizeof_uv_process)
+    disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
-         cmd, argv, loop, proc, pp, uvtype(in),
-         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
+        (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
+        cmd, argv, loop, proc, pp, uvtype(in),
+        uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
+        pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
+        uv_jl_return_spawn::Ptr{Void})
     if error != 0
-        disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end
@@ -222,19 +232,23 @@ end
 function uvfinalize(proc::Process)
     proc.handle != C_NULL && ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     disassociate_julia_struct(proc)
-    proc.handle = 0
+    proc.handle = C_NULL
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
-    proc.exitcode = exit_status
+function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
+    data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
+    data == C_NULL && return
+    proc = unsafe_pointer_to_objref(data)::Process
+    proc.exitcode = Int32(exit_status)
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
+    nothing
 end
 
 function _uv_hook_close(proc::Process)
-    proc.handle = 0
+    proc.handle = C_NULL
     if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
 end
@@ -248,8 +262,8 @@ end
 function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
     out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
-    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)
@@ -270,8 +284,8 @@ end
 function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
     out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
-    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)
@@ -341,10 +355,9 @@ function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callba
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3]);
     @setup_stdio
-    ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
-    pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
+    pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                           in, out, err)
     @cleanup_stdio
     if isa(pc, ProcessChain)
@@ -423,10 +436,9 @@ end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
 # return a (Pipe,Process) pair to write/read to/from the pipeline
-function open(cmds::AbstractCmd, mode::String="r", stdio::AsyncStream=DevNull)
+function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
-        start_reading(out)
         (out, processes)
     elseif mode == "w"
         processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdio,STDERR))
@@ -458,16 +470,16 @@ end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = open(cmd, "r", stdin)
+    bytes = readbytes(out)
     !success(pc) && pipeline_error(pc)
-    wait_close(out)
-    return takebuf_array(out.buffer)
+    return bytes
 end
 
 function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
-function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream=DevNull)
+function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::AsyncStream=DevNull)
     open(cmd, "w", stdout) do io
         write(io, stdin)
     end
@@ -482,7 +494,8 @@ const SIGPIPE = 13
 function test_success(proc::Process)
     assert(process_exited(proc))
     if proc.exitcode < 0
-        error(UVError("could not start process "*string(proc.cmd), proc.exitcode))
+        #TODO: this codepath is not currently tested
+        throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
     proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
@@ -525,7 +538,7 @@ function kill(p::Process, signum::Integer)
         @assert p.handle != C_NULL
         _jl_kill(p, signum)
     else
-        int32(-1)
+        Int32(-1)
     end
 end
 kill(ps::Vector{Process}) = map(kill, ps)
@@ -551,45 +564,28 @@ process_signaled(s::Process) = (s.termsignal > 0)
 #process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
-    process_running (s) ? "ProcessRunning" :
+    process_running(s) ? "ProcessRunning" :
     process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
-    #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
+    #process_stopped(s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
+    process_exited(s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
-end
-
-# WARNING: do not call this and keep the returned array of pointers
-# around longer than the args vector and then use array of pointers.
-# this could cause a segfault. this is really just for use by the
-# spawn function below so that we can exec more efficiently.
-#
-function _jl_pre_exec(args::Vector{ByteString})
-    if length(args) < 1
-        error("too few arguments to exec")
-    end
-    ptrs = Array(Ptr{Uint8}, length(args)+1)
-    for i = 1:length(args)
-        ptrs[i] = args[i].data
-    end
-    ptrs[length(args)+1] = C_NULL
-    return ptrs
 end
 
 ## implementation of `cmd` syntax ##
 
 arg_gen()          = ByteString[]
-arg_gen(x::String) = ByteString[x]
+arg_gen(x::AbstractString) = ByteString[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
     if applicable(start, head)
         vals = ByteString[]
         for x in head
-            push!(vals, string(x))
+            push!(vals, cstr(string(x)))
         end
         return vals
     else
-        return ByteString[string(head)]
+        return ByteString[cstr(string(head))]
     end
 end
 
@@ -598,7 +594,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push!(vals, bytestring(h, t))
+        push!(vals, cstr(bytestring(h, t)))
     end
     vals
 end

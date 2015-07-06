@@ -1,4 +1,6 @@
-import Base: copy, ctranspose, getindex, showarray, transpose, one, zero
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv
 import Base.LinAlg: SingularException
 
 immutable UniformScaling{T<:Number}
@@ -7,7 +9,7 @@ end
 
 const I = UniformScaling(1)
 
-eltype{T}(J::UniformScaling{T}) = T
+eltype{T}(::Type{UniformScaling{T}}) = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
@@ -64,11 +66,11 @@ function -{TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
     B
 end
 
+inv(J::UniformScaling) = UniformScaling(inv(J.λ))
+
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(bitunpack(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, bitunpack(B))
-*(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
-*{Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
 *(A::AbstractMatrix, J::UniformScaling) = J.λ == 1 ? A : J.λ*A
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 1 ? A : J.λ*A
 
@@ -82,7 +84,7 @@ end
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\{T<:Number}(A::Union(Bidiagonal{T},Triangular{T}), J::UniformScaling) = inv(A)*J.λ
+\{T<:Number}(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) = inv(A)*J.λ
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = inv(A)*J.λ
 

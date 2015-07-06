@@ -1,13 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
-convert(::Type{Bool}, x::Real) = (x!=0)
+convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
-
-bool(x::Bool) = x
-bool(x::Number) = convert(Bool, x)
 
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
@@ -31,11 +30,11 @@ abs2(x::Bool) = x
 
 ## do arithmetic as Int ##
 
-+(x::Bool) =  int(x)
--(x::Bool) = -int(x)
++(x::Bool) =  Int(x)
+-(x::Bool) = -Int(x)
 
-+(x::Bool, y::Bool) = int(x) + int(y)
--(x::Bool, y::Bool) = int(x) - int(y)
++(x::Bool, y::Bool) = Int(x) + Int(y)
+-(x::Bool, y::Bool) = Int(x) - Int(y)
 *(x::Bool, y::Bool) = x & y
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))

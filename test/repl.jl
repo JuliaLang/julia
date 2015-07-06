@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # REPL tests
 using TestHelpers
 import Base: REPL, LineEdit
@@ -14,7 +16,7 @@ function fake_repl()
     Base.link_pipe(stderr_read,true,stderr_write,true)
 
     repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
-    stdin_write, stdout_read, stdout_read, repl
+    stdin_write, stdout_read, stderr_read, repl
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
@@ -25,11 +27,11 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-begin
-stdin_write, stdout_read, stdout_read, repl = fake_repl()
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.no_history_file = true
+repl.history_file = false
 
 repltask = @async begin
     Base.REPL.run_repl(repl)
@@ -60,6 +62,66 @@ write(stdin_write, '\x03')
 write(stdin_write, "\\alpha\t")
 readuntil(stdout_read,"α")
 write(stdin_write, '\x03')
+# Test cd feature in shell mode.  We limit to 40 characters when
+# calling readuntil() to suppress the warning it (currently) gives for
+# long strings.
+origpwd = pwd()
+tmpdir = mktempdir()
+write(stdin_write, ";")
+readuntil(stdout_read, "shell> ")
+write(stdin_write, "cd $(escape_string(tmpdir))\n")
+readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+readuntil(stdout_read, "\n")
+readuntil(stdout_read, "\n")
+@test pwd() == realpath(tmpdir)
+write(stdin_write, ";")
+readuntil(stdout_read, "shell> ")
+write(stdin_write, "cd -\n")
+readuntil(stdout_read, origpwd[max(1,end-39):end])
+readuntil(stdout_read, "\n")
+readuntil(stdout_read, "\n")
+@test pwd() == origpwd
+write(stdin_write, ";")
+readuntil(stdout_read, "shell> ")
+write(stdin_write, "cd\n")
+readuntil(stdout_read, homedir()[max(1,end-39):end])
+readuntil(stdout_read, "\n")
+readuntil(stdout_read, "\n")
+@test pwd() == homedir()
+rm(tmpdir)
+cd(origpwd)
+
+# Test that accepting a REPL result immediately shows up, not
+# just on the next keystroke
+write(stdin_write, "1+1\n") # populate history with a trivial input
+readline(stdout_read)
+write(stdin_write, "\e[A\n")
+t = Timer(10) do
+    isopen(t) || return
+    error("Stuck waiting for the repl to write `1+1`")
+end
+# yield make sure this got processed
+readuntil(stdout_read, "1+1")
+close(t)
+
+# Issue #10222
+# Test ignoring insert key in standard and prefix search modes
+write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
+@test search(readline(stdout_read), "[2h") == 0:-1
+readline(stdout_read)
+write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
+@test search(readline(stdout_read), "[2~") == 0:-1
+readline(stdout_read)
+write(stdin_write, "1+1\n") # populate history with a trivial input
+readline(stdout_read)
+write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
+readline(stdout_read)
+readline(stdout_read)
+write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
+readline(stdout_read)
+readline(stdout_read)
+
 # Close REPL ^D
 write(stdin_write, '\x04')
 wait(repltask)
@@ -73,6 +135,44 @@ function buffercontents(buf::IOBuffer)
     c
 end
 
+function AddCustomMode(repl)
+    # Custom REPL mode tests
+    foobar_mode = LineEdit.Prompt("Test";
+        prompt_prefix="\e[38;5;166m",
+        prompt_suffix=Base.text_colors[:white],
+        on_enter = s->true,
+        on_done = line->true)
+
+    main_mode = repl.interface.modes[1]
+    push!(repl.interface.modes,foobar_mode)
+
+    hp = main_mode.hist
+    hp.mode_mapping[:foobar] = foobar_mode
+    foobar_mode.hist = hp
+
+    const foobar_keymap = Dict{Any,Any}(
+        '<' => function (s,args...)
+            if isempty(s)
+                if !haskey(s.mode_state,foobar_mode)
+                    s.mode_state[foobar_mode] = LineEdit.init_state(repl.t,foobar_mode)
+                end
+                LineEdit.transition(s,foobar_mode)
+            else
+                LineEdit.edit_insert(s,'<')
+            end
+        end
+    )
+
+    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
+    mk = REPL.mode_keymap(main_mode)
+
+    b = Dict{Any,Any}[skeymap, mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    foobar_mode.keymap_dict = LineEdit.keymap(b)
+
+    main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap);
+    foobar_mode, search_prompt
+end
+
 # Test various history related issues
 begin
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
@@ -80,11 +180,12 @@ begin
     # gets displayed by intercepting the display
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 
-    interface = REPL.setup_interface(repl)
-    repl_mode = interface.modes[1]
-    shell_mode = interface.modes[2]
-    help_mode = interface.modes[3]
-    histp = interface.modes[4]
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+    histp = repl.interface.modes[4]
+    prefix_mode = repl.interface.modes[5]
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
@@ -119,7 +220,7 @@ begin
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
     # Some manual setup
-    s = LineEdit.init_state(repl.t, interface)
+    s = LineEdit.init_state(repl.t, repl.interface)
 
     # Test that navigating history skips invalid modes
     # (in both directions)
@@ -139,6 +240,19 @@ begin
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
+
+    # Test that the same holds for prefix search
+    ps = LineEdit.state(s, prefix_mode)
+    LineEdit.history_prev_prefix(ps, hp, "")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "2 + 2"
+    LineEdit.history_prev_prefix(ps, hp, "")
+    @test ps.parent == shell_mode
+    @test LineEdit.input_string(ps) == "ls"
+    LineEdit.history_prev_prefix(ps, hp, "sh")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "shell"
+    LineEdit.history_next_prefix(ps, hp, "sh")
 
     # Test that searching backwards puts you into the correct mode and
     # skips invalid modes.
@@ -161,7 +275,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
-    
+
     # Issue #7551
     # Enter search mode and try accepting an empty result
     REPL.history_reset_state(hp)
@@ -171,11 +285,33 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == cur_mode
     @test buffercontents(LineEdit.buffer(s)) == ""
+
+    # Test that new modes can be dynamically added to the REPL and will
+    # integrate nicely
+    foobar_mode, custom_histp = AddCustomMode(repl)
+
+    # ^R l, should now find `ls` in foobar mode
+    LineEdit.enter_search(s, histp, true)
+    ss = LineEdit.state(s, histp)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == foobar_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+
+    # Try the same for prefix search
+    LineEdit.history_next(s, hp)
+    LineEdit.history_prev_prefix(ps, hp, "l")
+    @test ps.parent == foobar_mode
+    @test LineEdit.input_string(ps) == "ls"
+
+    # Try entering search mode while in custom repl mode
+    LineEdit.enter_search(s, custom_histp, true)
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
+let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
@@ -190,7 +326,7 @@ rc != 0 && error("grantpt failed")
 rc = ccall(:unlockpt,Cint,(Cint,),fdm)
 rc != 0 && error("unlockpt")
 
-fds = ccall(:open,Cint,(Ptr{Uint8},Cint),ccall(:ptsname,Ptr{Uint8},(Cint,),fdm), O_RDWR|O_NOCTTY)
+fds = ccall(:open,Cint,(Ptr{UInt8},Cint),ccall(:ptsname,Ptr{UInt8},(Cint,),fdm), O_RDWR|O_NOCTTY)
 
 # slave
 slave   = RawFD(fds)
@@ -198,22 +334,28 @@ master = Base.TTY(RawFD(fdm); readable = true)
 
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
-p = spawn(setenv(`$exename -f --quiet`,nENV),slave,slave,slave)
-start_reading(master)
-Base.wait_readnb(master,1)
+p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+output = readuntil(master,"julia> ")
+if ccall(:jl_running_on_valgrind,Cint,()) == 0
+    # If --trace-children=yes is passed to valgrind, we will get a
+    # valgrind banner here, not just the prompt.
+    @test output == "julia> "
+end
 write(master,"1\nquit()\n")
 
 wait(p)
-
-ccall(:close,Cint,(Cint,),fds)
-output = readall(master)
-@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+output = readuntil(master,' ')
+@test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+@test nb_available(master) == 0
+ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
 close(master)
 
 end
 
 # Test stream mode
-outs, ins, p = readandwrite(`$exename -f --quiet`)
-write(ins,"1\nquit()\n")
-@test readall(outs) == "1\n"
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
+    write(ins,"1\nquit()\n")
+    @test readall(outs) == "1\n"
+end
 end

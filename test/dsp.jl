@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Filter
 b = [1., 2., 3., 4.]
 x = [1., 1., 0., 1., 1., 0., 0., 0.]
@@ -20,6 +22,16 @@ b = [0.003279216306360201,0.016396081531801006,0.03279216306360201,0.03279216306
 a = [1.0,-2.4744161749781606,2.8110063119115782,-1.703772240915465,0.5444326948885326,-0.07231566910295834]
 si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474106,0.07559488540931815]
 @test_approx_eq filt(b, a, ones(10), si) ones(10) # Shouldn't affect DC offset
+
+@test_throws ArgumentError filt!([1, 2], [1], [1], [1])
+@test xcorr([1, 2], [3, 4]) == [4, 11, 6]
+
+@test fftshift([1 2 3]) == [3 1 2]
+@test fftshift([1, 2, 3]) == [3, 1, 2]
+@test fftshift([1 2 3; 4 5 6]) == [6 4 5; 3 1 2]
+@test ifftshift([1 2 3]) == [2 3 1]
+@test ifftshift([1, 2, 3]) == [2, 3, 1]
+@test ifftshift([1 2 3; 4 5 6]) == [5 6 4; 2 3 1]
 
 # Convolution
 a = [1., 2., 1., 2.]
@@ -58,7 +70,7 @@ if Base.fftw_vendor() != :mkl
     Xidct!_1 = copy(true_Xdct_1); idct!(Xidct!_1,1)
     Xidct_2 = idct(true_Xdct_2,2)
     Xidct!_2 = copy(true_Xdct_2); idct!(Xidct!_2,2)
-    
+
     pXdct = plan_dct(X)(X)
     pXdct! = float(X); plan_dct!(pXdct!)(pXdct!)
     pXdct_1 = plan_dct(X,1)(X)

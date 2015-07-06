@@ -1,26 +1,28 @@
 .. module:: Base.Pkg
 
-Package Manager Functions
--------------------------
+***************************
+ Package Manager Functions
+***************************
 
 All package manager functions are defined in the ``Pkg`` module. None of the ``Pkg`` module's functions are exported;
 to use them, you'll need to prefix each function call with an explicit ``Pkg.``, e.g. ``Pkg.status()`` or ``Pkg.dir()``.
 
-.. function:: dir() -> String
+.. function:: dir() -> AbstractString
 
    Returns the absolute path of the package directory.
-   This defaults to ``joinpath(homedir(),".julia")`` on all platforms (i.e. ``~/.julia`` in UNIX shell syntax).
-   If the ``JULIA_PKGDIR`` environment variable is set, that path is used instead.
+   This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms
+   (i.e. ``~/.julia/v0.4`` in UNIX shell syntax).  If the ``JULIA_PKGDIR`` environment variable is set, then
+   that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``.
    If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
-.. function:: dir(names...) -> String
+.. function:: dir(names...) -> AbstractString
 
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
 
-.. function:: init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
+.. function:: init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.  
+   Initialize ``Pkg.dir()`` as a package directory.
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
    As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
    are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.
@@ -69,7 +71,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Returns a dictionary mapping installed package names to the installed version number of each package.
 
-.. function:: installed(pkg) -> Nothing | VersionNumber
+.. function:: installed(pkg) -> Void | VersionNumber
 
    If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``.
 
@@ -103,6 +105,9 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    It calls ``Pkg.resolve()`` to determine optimal package versions after.
    This is an inverse for both ``Pkg.checkout`` and ``Pkg.pin``.
 
+   You can also supply an iterable collection of package names, e.g.,
+   ``Pkg.free(("Pkg1", "Pkg2"))`` to free multiple packages at once.
+
 .. function:: build()
 
    Run the build scripts for all installed packages in depth-first recursive order.
@@ -114,7 +119,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: generate(pkg,license)
 
-   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"`` or ``"BSD"``.
+   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``, ``"BSD"`` or ``"ASL"``.
    If you want to make a package with a different license, you can edit it afterwards.
    Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``, ``README.md``, the julia entrypoint ``$pkg/src/$pkg.jl``, and a travis test file, ``.travis.yml``.
 
@@ -140,4 +145,3 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: test(pkgs...)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
-

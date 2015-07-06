@@ -1,7 +1,7 @@
 .. _man-interacting-with-julia:
 
 ************************
- Interacting With Julia 
+ Interacting With Julia
 ************************
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling julia with no arguments or double-clicking on the executable::
@@ -16,9 +16,9 @@ Julia comes with a full-featured interactive command-line REPL (read-eval-print 
      _/ |\__'_|_|_|\__'_|  |  Commit 64f437b (0 days old master)
     |__/                   |  x86_64-apple-darwin13.1.0
 
-    julia> 
+    julia>
 
-To exit the interactive session, type ``^D`` — the control key together with the ``d`` key on a blank line — or type ``quit()`` followed by the return or enter key. The REPL greets you with a banner and a ``julia>`` prompt.  
+To exit the interactive session, type ``^D`` — the control key together with the ``d`` key on a blank line — or type ``quit()`` followed by the return or enter key. The REPL greets you with a banner and a ``julia>`` prompt.
 
 The different prompt modes
 --------------------------
@@ -38,7 +38,7 @@ There are a number useful features unique to interactive work. In addition to sh
 .. doctest::
 
     julia> string(3 * 4);
-    
+
     julia> ans
     "12"
 
@@ -47,8 +47,8 @@ Help mode
 
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing ``?``.  Julia will attempt to print help or documentation for anything entered in help mode::
 
-    julia> ? # upon typing ?, the prompt changes (in place) to: help> 
-    
+    julia> ? # upon typing ?, the prompt changes (in place) to: help>
+
     help> string
     Base.string(xs...)
 
@@ -57,8 +57,8 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 In addition to function names, complete function calls may be entered to see which method is called for the given argument(s).  Macros, types and variables can also be queried::
 
     help> string(1)
-    string(x::Union(Int16,Int128,Int8,Int32,Int64)) at string.jl:1553
-    
+    string(x::Union{Int16,Int128,Int8,Int32,Int64}) at string.jl:1553
+
     help> @printf
     Base.@printf([io::IOStream], "%Fmt", args...)
 
@@ -66,12 +66,14 @@ In addition to function names, complete function calls may be entered to see whi
        string. Optionally, an IOStream may be passed as the first argument
        to redirect output.
 
-    help> String
-    DataType   : String
+    help> AbstractString
+    DataType   : AbstractString
       supertype: Any
-      subtypes : {DirectIndexString,GenericString,RepString,RevString{T<:String},RopeString,SubString{T<:String},UTF16String,UTF8String}
+      subtypes : Any[DirectIndexString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},UTF16String,UTF8String]
 
 Help mode can be exited by pressing backspace at the beginning of the line.
+
+.. _man-shell-mode:
 
 Shell mode
 ~~~~~~~~~~
@@ -80,8 +82,8 @@ Just as help mode is useful for quick access to documentation, another common ta
 
 ::
 
-    julia> ; # upon typing ;, the prompt changes (in place) to: shell> 
-    
+    julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
     shell> echo hello
     hello
 
@@ -159,13 +161,11 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | ``^T``                 | Transpose the characters about the cursor          |
 +------------------------+----------------------------------------------------+
-| Delete, ``^D``         | Forward delete one character (when buffer has text)|
-+------------------------+----------------------------------------------------+
 
 Customizing keybindings
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. The ``REPL.setup_interface()`` function must be called before the REPL is initialized, by registering the operation with ``atreplinit()``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
 
     import Base: LineEdit, REPL
 
@@ -176,7 +176,11 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
     )
 
-    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+    function customize_keys(repl)
+      repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    end
+
+    atreplinit(customize_keys)
 
 Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
 
@@ -189,7 +193,7 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     stride     strides     string      stringmime  strip
 
     julia> Stri
-    StridedArray    StridedVecOrMat  String
+    StridedArray    StridedVecOrMat  AbstractString
     StridedMatrix   StridedVector
 
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,

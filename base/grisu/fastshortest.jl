@@ -1,7 +1,37 @@
+# This file is a part of Julia, but is derived from
+# https://github.com/floitsch/double-conversion which has the following license
+#
+# Copyright 2006-2014, the V8 project authors. All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of Google Inc. nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 const kMinExp = -60
 const kMaxExp = -32
 
-function roundweed(buffer,len,rest,tk,unit,kappa,too_high::Uint64,unsafe_interval::Uint64)
+function roundweed(buffer,len,rest,tk,unit,kappa,too_high::UInt64,unsafe_interval::UInt64)
     small = too_high - unit
     big = too_high + unit
     while rest < small &&
@@ -21,7 +51,7 @@ function roundweed(buffer,len,rest,tk,unit,kappa,too_high::Uint64,unsafe_interva
 end
 
 const SmallPowersOfTen = [
-        0, 1, 10, 100, 1000, 10000, 100000, 
+        0, 1, 10, 100, 1000, 10000, 100000,
         1000000, 10000000, 100000000, 1000000000]
 
 function bigpowten(n,n_bits)
@@ -32,7 +62,7 @@ function bigpowten(n,n_bits)
 end
 
 function digitgen(low,w,high,buffer)
-    unit::Uint64 = 1
+    unit::UInt64 = 1
     one = Float(unit << -w.e, w.e)
     too_high = Float(high.s+unit,high.e)
     unsafe_interval = too_high - Float(low.s-unit,low.e)
@@ -40,16 +70,16 @@ function digitgen(low,w,high,buffer)
     fractionals = too_high.s & (one.s-1)
     divisor, kappa = bigpowten(integrals, 64 + one.e)
     len = 1
-    rest = uint64(0)
+    rest = UInt64(0)
     while kappa > 0
         digit = div(integrals,divisor)
         buffer[len] = 0x30 + digit
         len += 1
         integrals %= divisor
         kappa -= 1
-        rest = (uint64(integrals) << -one.e) + fractionals
+        rest = (UInt64(integrals) << -one.e) + fractionals
         if rest < unsafe_interval.s
-            r, kappa = roundweed(buffer, len, rest, uint64(divisor) << -one.e,
+            r, kappa = roundweed(buffer, len, rest, UInt64(divisor) << -one.e,
                         unit,kappa,(too_high - w).s,unsafe_interval.s)
             return r, kappa, len
         end
@@ -69,11 +99,11 @@ function digitgen(low,w,high,buffer)
                         unit,kappa,(too_high - w).s*unit,unsafe_interval.s)
             return r, kappa, len
         end
-    end    
+    end
 end
 
-function fastshortest(v,buffer=Array(Uint8,17))
-    f = normalize(float64(v))
+function fastshortest(v,buffer=Array(UInt8,17))
+    f = normalize(Float64(v))
     bound_minus, bound_plus = normalizedbound(v)
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)
@@ -84,5 +114,5 @@ function fastshortest(v,buffer=Array(Uint8,17))
     r, kappa, len = digitgen(scaled_bound_minus,scaled_w,
                              scaled_bound_plus,buffer)
     decimal_exponent = -cp.de + kappa
-    return r, len, decimal_exponent+len-1, buffer
+    return r, len, decimal_exponent+len-1
 end

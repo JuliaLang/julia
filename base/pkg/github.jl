@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module GitHub
 
 import Main, ..Git, ..Dir
@@ -31,12 +33,12 @@ function json()
     Main.JSON
 end
 
-function curl(url::String, opts::Cmd=``)
+function curl(url::AbstractString, opts::Cmd=``)
     success(`curl --version`) || error("using the GitHub API requires having `curl` installed")
     out, proc = open(`curl -i -s -S $opts $url`,"r")
     head = readline(out)
-    status = int(split(head,r"\s+";limit=3)[2])
-    header = Dict{String,String}()
+    status = parse(Int,split(head,r"\s+";limit=3)[2])
+    header = Dict{AbstractString,AbstractString}()
     for line in eachline(out)
         if !ismatch(r"^\s*$",line)
             (k,v) = split(line, r":\s*"; limit=2)
@@ -47,8 +49,8 @@ function curl(url::String, opts::Cmd=``)
     end
     error("strangely formatted HTTP response")
 end
-curl(url::String, data::Void, opts::Cmd=``) = curl(url,opts)
-curl(url::String, data, opts::Cmd=``) =
+curl(url::AbstractString, data::Void, opts::Cmd=``) = curl(url,opts)
+curl(url::AbstractString, data, opts::Cmd=``) =
     curl(url,`--data $(sprint(io->json().print(io,data))) $opts`)
 
 function delete_token()
@@ -57,14 +59,14 @@ function delete_token()
     info("Could not authenticate with existing token. Deleting token and trying again.")
 end
 
-function token(user::String=user())
+function token(user::AbstractString=user())
     tokfile = Dir.path(".github","token")
     isfile(tokfile) && return strip(readchomp(tokfile))
     status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
     tfa = false
 
     # Check for two-factor authentication
-    if status == 401 && get(header, "X-GitHub-OTP", "") |> x->beginswith(x, "required") && isinteractive()
+    if status == 401 && get(header, "X-GitHub-OTP", "") |> x->startswith(x, "required") && isinteractive()
         tfa = true
         info("Two-factor authentication in use.  Enter auth code.  (You may have to re-enter your password.)")
         print(STDERR, "Authentication code: ")
@@ -106,25 +108,25 @@ function token(user::String=user())
     return tok
 end
 
-function req(resource::String, data, opts::Cmd=``)
+function req(resource::AbstractString, data, opts::Cmd=``)
     url = "https://api.github.com/$resource"
     status, header, content = curl(url,data,`-u $(token()):x-oauth-basic $opts`)
     response = json().parse(content)
     status, response
 end
 
-GET(resource::String, data, opts::Cmd=``) = req(resource,data,opts)
-HEAD(resource::String, data, opts::Cmd=``) = req(resource,data,`-I $opts`)
-PUT(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PUT $opts`)
-POST(resource::String, data, opts::Cmd=``) = req(resource,data,`-X POST $opts`)
-PATCH(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PATCH $opts`)
-DELETE(resource::String, data, opts::Cmd=``) = req(resource,data,`-X DELETE $opts`)
+GET(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,opts)
+HEAD(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,`-I $opts`)
+PUT(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,`-X PUT $opts`)
+POST(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,`-X POST $opts`)
+PATCH(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,`-X PATCH $opts`)
+DELETE(resource::AbstractString, data, opts::Cmd=``) = req(resource,data,`-X DELETE $opts`)
 
 for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
-    @eval $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
+    @eval $m(resource::AbstractString, opts::Cmd=``) = $m(resource,nothing,opts)
 end
 
-function pushable(owner::String, repo::String, user::String=user())
+function pushable(owner::AbstractString, repo::AbstractString, user::AbstractString=user())
     status, response = HEAD("repos/$owner/$repo")
     status == 404 && error("repo $owner/$repo does not exist")
     status, response = GET("repos/$owner/$repo/collaborators/$user")
@@ -133,7 +135,7 @@ function pushable(owner::String, repo::String, user::String=user())
     error("unexpected API status code: $status – $(response["message"])")
 end
 
-function fork(owner::String, repo::String)
+function fork(owner::AbstractString, repo::AbstractString)
     status, response = POST("repos/$owner/$repo/forks")
     if status == 401
         delete_token()

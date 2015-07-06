@@ -1,9 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function convert(::Type{Float32}, val::Float16)
-    ival::Uint32 = reinterpret(Uint16, val)
-    sign::Uint32 = (ival & 0x8000) >> 15
-    exp::Uint32  = (ival & 0x7c00) >> 10
-    sig::Uint32  = (ival & 0x3ff) >> 0
-    ret::Uint32
+    ival::UInt32 = reinterpret(UInt16, val)
+    sign::UInt32 = (ival & 0x8000) >> 15
+    exp::UInt32  = (ival & 0x7c00) >> 10
+    sig::UInt32  = (ival & 0x3ff) >> 0
+    ret::UInt32
 
     if exp == 0
         if sig == 0
@@ -44,8 +46,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Array(Uint16, 512)
-const shifttable = Array(Uint8, 512)
+const basetable = Array(UInt16, 512)
+const shifttable = Array(UInt8, 512)
 
 for i = 0:255
     e = i - 127
@@ -78,11 +80,11 @@ for i = 0:255
 end
 
 function convert(::Type{Float16}, val::Float32)
-    f = reinterpret(Uint32, val)
+    f = reinterpret(UInt32, val)
     i = (f >> 23) & 0x1ff + 1
     sh = shifttable[i]
     f &= 0x007fffff
-    h::Uint16 = uint16(basetable[i] + (f >> sh))
+    h::UInt16 = basetable[i] + (f >> sh)
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
@@ -97,26 +99,28 @@ function convert(::Type{Float16}, val::Float32)
 end
 
 convert(::Type{Bool},    x::Float16) = (x!=0)
-convert(::Type{Int128},  x::Float16) = convert(Int128, float32(x))
-convert(::Type{Uint128}, x::Float16) = convert(Uint128, float32(x))
+convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
+convert(::Type{UInt128}, x::Float16) = convert(UInt128, Float32(x))
 
-convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, float32(x))
+convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 
-iround{T<:Integer}(::Type{T}, x::Float16) = iround(T, float32(x))
-itrunc{T<:Integer}(::Type{T}, x::Float16) = itrunc(T, float32(x))
+round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
+trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
+floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
+ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 
-round(x::Float16) = float16(round(float32(x)))
-trunc(x::Float16) = float16(trunc(float32(x)))
-floor(x::Float16) = float16(floor(float32(x)))
- ceil(x::Float16) = float16( ceil(float32(x)))
+round(x::Float16) = Float16(round(Float32(x)))
+trunc(x::Float16) = Float16(trunc(Float32(x)))
+floor(x::Float16) = Float16(floor(Float32(x)))
+ ceil(x::Float16) = Float16( ceil(Float32(x)))
 
-isnan(x::Float16)    = reinterpret(Uint16,x)&0x7fff  > 0x7c00
-isinf(x::Float16)    = reinterpret(Uint16,x)&0x7fff == 0x7c00
-isfinite(x::Float16) = reinterpret(Uint16,x)&0x7c00 != 0x7c00
+isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
+isinf(x::Float16)    = reinterpret(UInt16,x)&0x7fff == 0x7c00
+isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 
 function ==(x::Float16, y::Float16)
-    ix = reinterpret(Uint16,x)
-    iy = reinterpret(Uint16,y)
+    ix = reinterpret(UInt16,x)
+    iy = reinterpret(UInt16,y)
     if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
@@ -126,23 +130,44 @@ function ==(x::Float16, y::Float16)
     return ix == iy
 end
 
--(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) $ 0x8000)
-abs(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) & 0x7fff)
+-(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) $ 0x8000)
+abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) & 0x7fff)
 for op in (:+,:-,:*,:/,:\,:^)
-    @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
+    @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
+end
+function fma(a::Float16, b::Float16, c::Float16)
+    Float16(fma(Float32(a), Float32(b), Float32(c)))
+end
+function muladd(a::Float16, b::Float16, c::Float16)
+    Float16(muladd(Float32(a), Float32(b), Float32(c)))
 end
 for op in (:<,:<=,:isless)
-    @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
+    @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:sqrt)
+             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
-        $func(a::Float16) = float16($func(float32(a)))
-        $func(a::Complex32) = complex32($func(complex64(a)))
+        $func(a::Float16) = Float16($func(Float32(a)))
+        $func(a::Complex32) = Complex32($func(Complex64(a)))
     end
 end
-atan2(a::Float16, b::Float16) = float16(atan2(float32(a), float32(b)))
-hypot(a::Float16, b::Float16) = float16(hypot(float32(a), float32(b)))
-ldexp(a::Float16, b::Integer) = float16(ldexp(float32(a), b))
-exponent(x::Float16) = exponent(float32(x))
-^(x::Float16, y::Integer) = x^float16(y)
+
+for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
+    @eval begin
+        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(a)))
+    end
+end
+
+ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
+
+^(x::Float16, y::Integer) = Float16(Float32(x)^y)
+
+rationalize{T<:Integer}(::Type{T}, x::Float16; tol::Real=eps(x)) = rationalize(T, Float32(x); tol=tol)
+
+reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
+
+sign_mask(::Type{Float16}) =        0x8000
+exponent_mask(::Type{Float16}) =    0x7c00
+exponent_one(::Type{Float16}) =     0x3c00
+exponent_half(::Type{Float16}) =    0x3800
+significand_mask(::Type{Float16}) = 0x03ff

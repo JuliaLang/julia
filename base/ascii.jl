@@ -1,14 +1,16 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## from base/boot.jl:
 #
 # immutable ASCIIString <: DirectIndexString
-#     data::Array{Uint8,1}
+#     data::Array{UInt8,1}
 # end
 #
 
 ## required core functionality ##
 
 endof(s::ASCIIString) = length(s.data)
-getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
+getindex(s::ASCIIString, i::Int) = (x=s.data[i]; ifelse(x < 0x80, Char(x), '\ufffd'))
 
 ## overload methods for efficiency ##
 
@@ -17,8 +19,12 @@ sizeof(s::ASCIIString) = sizeof(s.data)
 getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,uint8(c),i) : 0
-rsearch(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? rsearch(s.data,uint8(c),i) : 0
+function search(s::ASCIIString, c::Char, i::Integer)
+    i == sizeof(s) + 1 && return 0
+    (i < 1 || i > sizeof(s)) && throw(BoundsError(s, i))
+    return c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
+end
+rsearch(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? rsearch(s.data,c%UInt8,i) : 0
 
 function string(c::ASCIIString...)
     if length(c) == 1
@@ -28,7 +34,7 @@ function string(c::ASCIIString...)
     for s in c
         n += length(s.data)
     end
-    v = Array(Uint8,n)
+    v = Array(UInt8,n)
     o = 1
     for s in c
         ls = length(s.data)
@@ -58,10 +64,10 @@ end
 function uppercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'a' <= d[i] <= 'z'
+        if 'a' <= Char(d[i]) <= 'z'
             td = copy(d)
             for j = i:length(td)
-                if 'a' <= td[j] <= 'z'
+                if 'a' <= Char(td[j]) <= 'z'
                     td[j] -= 32
                 end
             end
@@ -73,10 +79,10 @@ end
 function lowercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'A' <= d[i] <= 'Z'
+        if 'A' <= Char(d[i]) <= 'Z'
             td = copy(d)
             for j = i:length(td)
-                if 'A' <= td[j] <= 'Z'
+                if 'A' <= Char(td[j]) <= 'Z'
                     td[j] += 32
                 end
             end
@@ -90,7 +96,6 @@ reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
 
 ## outputing ASCII strings ##
 
-print(io::IO, s::ASCIIString) = (write(io, s);nothing)
 write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
@@ -98,8 +103,15 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{Uint8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
-function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIString)
+convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
+    isvalid(ASCIIString,a) || throw(ArgumentError("invalid ASCII sequence"))
+    return ASCIIString(a)
+end
+
+ascii(p::Ptr{UInt8}) = ASCIIString(bytestring(p))
+ascii(p::Ptr{UInt8}, len::Integer) = ascii(pointer_to_array(p, len))
+
+function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
     idx = 1
     iscopy = false
@@ -117,4 +129,4 @@ function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIStrin
     end
     convert(ASCIIString, a)
 end
-convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))
+convert(::Type{ASCIIString}, s::AbstractString) = ascii(bytestring(s))

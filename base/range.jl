@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## 1-dimensional ranges ##
 
-typealias Dims (Int...)
+typealias Dims Tuple{Vararg{Int}}
 
 abstract Range{T} <: AbstractArray{T,1}
 
@@ -14,44 +16,47 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange(start::T, step::S, stop::T)
-        if T<:FloatingPoint || S<:FloatingPoint
-            error("StepRange should not be used with floating point")
-        end
-        z = zero(S)
-        step == z && error("step cannot be zero")
-        step != step && error("step cannot be NaN")
+        new(start, step, steprange_last(start,step,stop))
+    end
+end
 
-        if stop == start
-            last = stop
+# to make StepRange constructor inlineable, so optimizer can see `step` value
+function steprange_last{T}(start::T, step, stop)
+    if isa(start,FloatingPoint) || isa(step,FloatingPoint)
+        throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    z = zero(step)
+    step == z && throw(ArgumentError("step cannot be zero"))
+
+    if stop == start
+        last = stop
+    else
+        if (step > z) != (stop > start)
+            # empty range has a special representation where stop = start-1
+            # this is needed to avoid the wrap-around that can happen computing
+            # start - step, which leads to a range that looks very large instead
+            # of empty.
+            if step > z
+                last = start - one(stop-start)
+            else
+                last = start + one(stop-start)
+            end
         else
-            if (step > z) != (stop > start)
-                # empty range has a special representation where stop = start-1
-                # this is needed to avoid the wrap-around that can happen computing
-                # start - step, which leads to a range that looks very large instead
-                # of empty.
-                if step > z
-                    last = start - one(stop-start)
+            diff = stop - start
+            if T<:Signed && (diff > zero(diff)) != (stop > start)
+                # handle overflowed subtraction with unsigned rem
+                if diff > zero(diff)
+                    remain = -convert(T, unsigned(-diff) % step)
                 else
-                    last = start + one(stop-start)
+                    remain = convert(T, unsigned(diff) % step)
                 end
             else
-                diff = stop - start
-                if T<:Signed && (diff > zero(diff)) != (stop > start)
-                    # handle overflowed subtraction with unsigned rem
-                    if diff > zero(diff)
-                        remain = -oftype(T, unsigned(-diff) % step)
-                    else
-                        remain = oftype(T, unsigned(diff) % step)
-                    end
-                else
-                    remain = steprem(start,stop,step)
-                end
-                last = stop - remain
+                remain = steprem(start,stop,step)
             end
+            last = stop - remain
         end
-
-        new(start, step, last)
     end
+    last
 end
 
 steprem(start,stop,step) = (stop-start) % step
@@ -61,10 +66,16 @@ StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
     stop::T
-
-    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-one(stop-start)))
+    UnitRange(start, stop) = new(start, unitrange_last(start,stop))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+
+unitrange_last(::Bool, stop::Bool) = stop
+unitrange_last{T<:Integer}(start::T, stop::T) =
+    ifelse(stop >= start, stop, convert(T,start-one(stop-start)))
+unitrange_last{T}(start::T, stop::T) =
+    ifelse(stop >= start, convert(T,start+floor(stop-start)),
+                          convert(T,start-one(stop-start)))
 
 colon(a::Real, b::Real) = colon(promote(a,b)...)
 
@@ -82,10 +93,12 @@ range{T}(a::T, len::Integer) =
 colon{A<:Real,C<:Real}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promote_type(A,C),c))
 
 colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
+colon{T<:Real}(start::T, step::T, stop::T) = StepRange(start, step, stop)
+colon{T<:Real}(start::T, step::Real, stop::T) = StepRange(promote(start, step, stop)...)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
-range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, a+step*(len-1))
+range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 
 ## floating point ranges
 
@@ -105,7 +118,7 @@ function rat(x)
     b = c = 0
     m = maxintfloat(Float32)
     while abs(y) <= m
-        f = itrunc(y)
+        f = trunc(Int,y)
         y -= f
         a, c = f*a + c, a
         b, d = f*b + d, b
@@ -117,8 +130,8 @@ function rat(x)
 end
 
 function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
-    step == 0                    && error("range step cannot be zero")
-    start == stop                && return FloatRange{T}(start,step,1,1)
+    step == 0 && throw(ArgumentError("range step cannot be zero"))
+    start == stop && return FloatRange{T}(start,step,1,1)
     (0 < step) != (start < stop) && return FloatRange{T}(start,step,0,1)
 
     # float range "lifting"
@@ -157,14 +170,85 @@ range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,o
 range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
 range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
-linrange(a::Real, b::Real, len::Integer) =
-    len >= 2           ? range(a, (b-a)/(len-1), len) :
-    len == 1 && a == b ? range(a, zero((b-a)/(len-1)), 1) :
-                         error("invalid range length")
+## linspace and logspace
+
+immutable LinSpace{T<:FloatingPoint} <: Range{T}
+    start::T
+    stop::T
+    len::T
+    divisor::T
+end
+
+function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
+    len == round(len) || throw(InexactError())
+    0 <= len || error("linspace($start, $stop, $len): negative length")
+    if len == 0
+        n = convert(T, 2)
+        if isinf(n*start) || isinf(n*stop)
+            start /= n; stop /= n; n = one(T)
+        end
+        return LinSpace(-start, -stop, -one(T), n)
+    end
+    if len == 1
+        start == stop || error("linspace($start, $stop, $len): endpoints differ")
+        return LinSpace(-start, -start, zero(T), one(T))
+    end
+    n = convert(T, len - 1)
+    len - n == 1 || error("linspace($start, $stop, $len): too long for $T")
+    a0, b = rat(start)
+    a = convert(T,a0)
+    if a/convert(T,b) == start
+        c0, d = rat(stop)
+        c = convert(T,c0)
+        if c/convert(T,d) == stop
+            e = lcm(b,d)
+            a *= div(e,b)
+            c *= div(e,d)
+            s = convert(T,n*e)
+            if isinf(a*n) || isinf(c*n)
+                s, p = frexp(s)
+                p = oftype(s,2)^p
+                a /= p; c /= p
+            end
+            if a*n/s == start && c*n/s == stop
+                return LinSpace(a, c, len, s)
+            end
+        end
+    end
+    a, c, s = start, stop, n
+    if isinf(a*n) || isinf(c*n)
+        s, p = frexp(s)
+        p = oftype(s,2)^p
+        a /= p; c /= p
+    end
+    if a*n/s == start && c*n/s == stop
+        return LinSpace(a, c, len, s)
+    end
+    return LinSpace(start, stop, len, n)
+end
+function linspace{T<:FloatingPoint}(start::T, stop::T, len::Real)
+    T_len = convert(T, len)
+    T_len == len || throw(InexactError())
+    linspace(start, stop, T_len)
+end
+linspace(start::Real, stop::Real, len::Real=50) =
+    linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., len)
+
+function show(io::IO, r::LinSpace)
+    print(io, "linspace(")
+    show(io, first(r))
+    print(io, ',')
+    show(io, last(r))
+    print(io, ',')
+    show(io, length(r))
+    print(io, ')')
+end
+
+logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations
 
-similar(r::Range, T::Type, dims::(Integer...)) = Array(T, dims...)
+similar(r::Range, T::Type, dims::Tuple{Vararg{Integer}}) = Array(T, dims...)
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
@@ -172,58 +256,63 @@ size(r::Range) = (length(r),)
 isempty(r::StepRange) =
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::UnitRange) = r.start > r.stop
-isempty(r::FloatRange) = length(r)==0
+isempty(r::FloatRange) = length(r) == 0
+isempty(r::LinSpace) = length(r) == 0
 
 step(r::StepRange) = r.step
 step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
+step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
 
 function length(r::StepRange)
-    n = integer(div(r.stop+r.step - r.start, r.step))
+    n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::UnitRange) = integer(r.stop - r.start + 1)
-length(r::FloatRange) = integer(r.len)
+length(r::UnitRange) = Integer(r.stop - r.start + 1)
+length(r::FloatRange) = Integer(r.len)
+length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
-function length{T<:Union(Int,Uint,Int64,Uint64)}(r::StepRange{T})
+function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
-        return checked_add(oftype(T, div(unsigned(r.stop - r.start), r.step)), one(T))
+        return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
     elseif r.step < -1
-        return checked_add(oftype(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+        return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
     else
         checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
     end
 end
 
-length{T<:Union(Int,Uint,Int64,Uint64)}(r::UnitRange{T}) =
+length{T<:Union{Int,UInt,Int64,UInt64}}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
-                Union(Int8,Uint8,Int16,Uint16,Int32,Uint32) :
-                Union(Int8,Uint8,Int16,Uint16))
+                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
+                Union{Int8,UInt8,Int16,UInt16})
     global length
 
     function length{T <: smallint}(r::StepRange{T})
-        isempty(r) && return int(0)
-        div(int(r.stop)+int(r.step) - int(r.start), int(r.step))
+        isempty(r) && return Int(0)
+        div(Int(r.stop)+Int(r.step) - Int(r.start), Int(r.step))
     end
 
-    length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
+    length{T <: smallint}(r::UnitRange{T}) = Int(r.stop) - Int(r.start) + 1
 end
 
-first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
-first(r::FloatRange) = r.start/r.divisor
+first{T}(r::OrdinalRange{T}) = convert(T, r.start)
+first{T}(r::FloatRange{T}) = convert(T, r.start/r.divisor)
+first{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.start/r.divisor)
 
 last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
-last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
+last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
+last{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.stop/r.divisor)
 
-minimum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : first(r)
-maximum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : last(r)
-minimum(r::Range)  = isempty(r) ? error("range must be non-empty") : min(first(r), last(r))
-maximum(r::Range)  = isempty(r) ? error("range must be non-empty") : max(first(r), last(r))
+minimum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
+maximum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
+minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
+maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
 ctranspose(r::Range) = [x for _=1, x=r]
 transpose(r::Range) = r'
@@ -235,63 +324,72 @@ copy(r::Range) = r
 ## iteration
 
 start(r::FloatRange) = 0
-next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
-done(r::FloatRange, i) = (length(r) <= i)
+done(r::FloatRange, i::Int) = length(r) <= i
+next{T}(r::FloatRange{T}, i::Int) =
+    (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+
+start(r::LinSpace) = 1
+done(r::LinSpace, i::Int) = length(r) < i
+next{T}(r::LinSpace{T}, i::Int) =
+    (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
 start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
-next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
+next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
 done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
 done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
-next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
+next{T}(r::UnitRange{T}, i) = (convert(T,i), i+1)
 done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 
 ## indexing
 
-getindex(r::Range, i::Real) = getindex(r, to_index(i))
+getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
 
-function getindex{T}(r::Range{T}, i::Integer)
-    1 <= i <= length(r) || error(BoundsError)
-    oftype(T, first(r) + (i-1)*step(r))
-end
-function getindex{T}(r::FloatRange{T}, i::Integer)
-    1 <= i <= length(r) || error(BoundsError)
-    oftype(T, (r.start + (i-1)*r.step)/r.divisor)
-end
+getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
 
-function check_indexingrange(s, r)
-    sl = length(s)
-    rl = length(r)
-    sl == 0 || 1 <= first(s) <= rl &&
-               1 <=  last(s) <= rl || throw(BoundsError())
-    sl
-end
+getindex{T}(r::LinSpace{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 
-function getindex(r::UnitRange, s::UnitRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::Range, ::Colon) = copy(r)
+unsafe_getindex(r::Range, ::Colon) = copy(r)
+
+getindex(r::UnitRange, s::UnitRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::UnitRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, sl)
+    range(st, length(s))
 end
 
-function getindex(r::UnitRange, s::StepRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::UnitRange, s::StepRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::StepRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, step(s), sl)
+    range(st, step(s), length(s))
 end
 
-function getindex(r::StepRange, s::Range{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::StepRange, s::Range{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::StepRange, s::Range{Int})
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    range(st, step(r)*step(s), sl)
+    range(st, step(r)*step(s), length(s))
 end
 
-function getindex(r::FloatRange, s::OrdinalRange)
-    sl = check_indexingrange(s, r)
-    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, sl, r.divisor)
+getindex(r::FloatRange, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::FloatRange, s::OrdinalRange)
+    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+end
+
+getindex(r::LinSpace, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    sl::T = length(s)
+    ifirst = first(s)
+    ilast = last(s)
+    vfirst::T = ((r.len - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
+    vlast::T = ((r.len - ilast) * r.start + (ilast - 1) * r.stop) / r.divisor
+    return linspace(vfirst, vlast, sl)
 end
 
 function show(io::IO, r::Range)
@@ -300,6 +398,7 @@ end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+==(r::OrdinalRange, s::OrdinalRange) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -326,7 +425,7 @@ intersect{T<:Integer}(i::Integer, r::UnitRange{T}) =
 intersect{T<:Integer}(r::UnitRange{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::StepRange{T2})
-    if length(s) == 0
+    if isempty(s)
         range(first(r), 0)
     elseif step(s) == 0
         intersect(first(s), r)
@@ -353,7 +452,7 @@ function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::UnitRange{T2})
 end
 
 function intersect(r::StepRange, s::StepRange)
-    if length(r) == 0 || length(s) == 0
+    if isempty(r) || isempty(s)
         return range(first(r), step(r), 0)
     elseif step(s) < 0
         return intersect(r, reverse(s))
@@ -415,11 +514,11 @@ function _findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::UnitRange{T2})
     lr = last(r)
     sr = step(r)
     if sr > 0
-        ifirst = fr >= fspan ? 1 : iceil((fspan-fr)/sr)+1
-        ilast = lr <= lspan ? length(r) : length(r) - iceil((lr-lspan)/sr)
+        ifirst = fr >= fspan ? 1 : ceil(Integer,(fspan-fr)/sr)+1
+        ilast = lr <= lspan ? length(r) : length(r) - ceil(Integer,(lr-lspan)/sr)
     elseif sr < 0
-        ifirst = fr <= lspan ? 1 : iceil((lspan-fr)/sr)+1
-        ilast = lr >= fspan ? length(r) : length(r) - iceil((lr-fspan)/sr)
+        ifirst = fr <= lspan ? 1 : ceil(Integer,(lspan-fr)/sr)+1
+        ilast = lr >= fspan ? length(r) : length(r) - ceil(Integer,(lr-fspan)/sr)
     else
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
@@ -441,37 +540,77 @@ end
 
 -(r::OrdinalRange) = range(-r.start, -step(r), length(r))
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
+-(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
 .+(x::Real, r::UnitRange)  = range(x + r.start, length(r))
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
+.+(x::Real, r::LinSpace)   = LinSpace(x + r.start, x + r.stop, r.len, r.divisor)
 .+(r::Range, x::Real)      = x + r
 #.+(r::FloatRange, x::Real) = x + r
 
 .-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
 .-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+.-(x::Real, r::LinSpace)   = LinSpace(x - r.start, x - r.stop, r.len, r.divisor)
 .-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
+.-(r::LinSpace, x::Real)   = LinSpace(r.start - x, r.stop - x, r.len, r.divisor)
 
 .*(x::Real, r::OrdinalRange) = range(x*r.start, x*step(r), length(r))
 .*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+.*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
 .*(r::Range, x::Real)        = x .* r
 .*(r::FloatRange, x::Real)   = x .* r
+.*(r::LinSpace, x::Real)     = x .* r
 
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
+./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
+
+promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
+    UnitRange{promote_type(T1,T2)}
+convert{T}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
+convert{T}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
+
+promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
+    StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) = r
+
+promote_rule{T1a,T1b,T2}(::Type{StepRange{T1a,T1b}},::Type{UnitRange{T2}}) =
+    StepRange{promote_type(T1a,T2),promote_type(T1b,T2)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::Range) =
+    StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
+convert{T}(::Type{StepRange}, r::UnitRange{T}) =
+    StepRange{T,T}(first(r), step(r), last(r))
 
 promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
     FloatRange{promote_type(T1,T2)}
+convert{T}(::Type{FloatRange{T}}, r::FloatRange{T}) = r
 convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
     FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
     FloatRange{promote_type(F,eltype(OR))}
 convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
-    FloatRange{T}(start(r), step(r), length(r), one(T))
+    FloatRange{T}(first(r), step(r), length(r), one(T))
+convert{T}(::Type{FloatRange}, r::OrdinalRange{T}) =
+    FloatRange{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
+promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
+    LinSpace{promote_type(T1,T2)}
+convert{T}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
+convert{T}(::Type{LinSpace{T}}, r::LinSpace) =
+    LinSpace{T}(r.start, r.stop, r.len, r.divisor)
+
+promote_rule{F,OR<:OrdinalRange}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T}(::Type{LinSpace{T}}, r::OrdinalRange) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
+    convert(LinSpace{typeof(float(first(r)))}, r)
+
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
@@ -494,11 +633,14 @@ convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
 
 ## concatenation ##
 
-function vcat{T}(r::Range{T})
-    n = length(r)
+function vcat{T}(rs::Range{T}...)
+    n::Int = 0
+    for ra in rs
+        n += length(ra)
+    end
     a = Array(T,n)
     i = 1
-    for x in r
+    for ra in rs, x in ra
         @inbounds a[i] = x
         i += 1
     end
@@ -506,22 +648,11 @@ function vcat{T}(r::Range{T})
 end
 
 convert{T}(::Type{Array{T,1}}, r::Range{T}) = vcat(r)
+collect(r::Range) = vcat(r)
 
-function vcat{T}(rs::Range{T}...)
-    n = sum(length,rs)::Int
-    a = Array(T,n)
-    i = 1
-    for r in rs
-        for x in r
-            @inbounds a[i] = x
-            i += 1
-        end
-    end
-    return a
-end
-
-reverse(r::OrdinalRange) = range(last(r), -step(r), length(r))
+reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
+reverse(r::LinSpace)     = LinSpace(r.stop, r.start, r.len, r.divisor)
 
 ## sorting ##
 
@@ -543,22 +674,28 @@ function sum{T<:Real}(r::Range{T})
                                      : (step(r) * l) * ((l-1)>>1))
 end
 
+function sum(r::FloatRange)
+    l = length(r)
+    if iseven(l)
+        s = r.step * (l-1) * (l>>1)
+    else
+        s = (r.step * l) * ((l-1)>>1)
+    end
+    return (l * r.start + s)/r.divisor
+end
+
+
 function mean{T<:Real}(r::Range{T})
-    isempty(r) && error("mean of an empty range is undefined")
+    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
     (first(r) + last(r)) / 2
 end
 
 median{T<:Real}(r::Range{T}) = mean(r)
 
-function map!(f::Callable, dest, r::Range)
-    i = 1
-    for ri in r dest[i] = f(ri); i+=1; end
-    dest
-end
-
 function in(x, r::Range)
-    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n = step(r) == 0 ? 1 : round(Integer,(x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(int(x)-first(r),step(r))==0)
+in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
+in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)

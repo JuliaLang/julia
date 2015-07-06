@@ -34,8 +34,7 @@ OBJECTS = \
 	int2str.obj \
 	libsupportinit.obj \
 	arraylist.obj \
-	asprintf.obj \
-	wcwidth.obj
+	asprintf.obj
 
 INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include
 CFLAGS = $(CFLAGS) -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
@@ -47,6 +46,6 @@ lib$(NAME).lib: $(OBJECTS)
 
 .c.obj:
 	$(CC) $(CFLAGS) $<
-	
+
 # vim: noexpandtab:ts=4:sw=4:
 

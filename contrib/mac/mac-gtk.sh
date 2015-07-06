@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #/bin/sh
 
-# This script will attempt to download and build GTK+-3, 
+# This script will attempt to download and build GTK+-3,
 # including dependencies, in ~/gtk (also puts stuff in
 # ~/.local, ~/Source, ~/.jhbuildrc*)
 # While this should work, it may be preferable to execute

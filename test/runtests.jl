@@ -1,50 +1,13 @@
-# linalg tests take the longest - start them off first
-testnames = [
-    "linalg", "core", "keywordargs", "numbers", "strings", "dates",
-    "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
-    "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "math",
-    "functional", "bigint", "sorting", "statistics", "spawn",
-    "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
-    "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
-    "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
-    "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "repl", "test", "goto",
-    "llvmcall", "grisu", "nullable", "meta", "staged", "profile"
-]
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
-    push!(testnames, "examples")
-end
-@unix_only push!(testnames, "unicode")
-
-# parallel tests depend on other workers - do them last
-push!(testnames, "parallel")
-
-tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
-
-if "linalg" in tests
-    # specifically selected case
-    filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/triangular", "linalg/tridiag"])
-end
-
-net_required_for = ["socket", "parallel"]
-net_on = true
-try
-    getipaddr()
-catch
-    warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
-    net_on = false
-end
-
+include("choosetests.jl")
+tests, net_on = choosetests(ARGS)
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
         n = min(8, CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)
-    else
-        filter!(x -> !(x in net_required_for), tests)
     end
 
     @everywhere include("testdefs.jl")

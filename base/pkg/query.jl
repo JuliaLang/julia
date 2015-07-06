@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Query
 
 import ...Pkg
@@ -64,11 +66,11 @@ function dependencies(avail::Dict, fix::Dict = Dict{ByteString,Fixed}("julia"=>F
     avail, conflicts
 end
 
-typealias PackageState Union(Void,VersionNumber)
+typealias PackageState Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    change = Array((ByteString,(PackageState,PackageState)),0)
-    remove = Array((ByteString,(PackageState,PackageState)),0)
+    change = Array(Tuple{ByteString,Tuple{PackageState,PackageState}},0)
+    remove = Array(Tuple{ByteString,Tuple{PackageState,PackageState}},0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
@@ -111,17 +113,10 @@ function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
     end
 end
 
-# Reduce the number of versions by creating equivalence classes, and retaining
-# only the highest version for each equivalence class.
-# Two versions are equivalent if:
-#   1) They appear together as dependecies of another package (i.e. for each
-#      dependency relation, they are both required or both not required)
-#   2) They have the same dependencies
-# Also, if there are explicitly required packages, dicards all versions outside
+# If there are explicitly required packages, dicards all versions outside
 # the allowed range (checking for impossible ranges while at it).
-function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
-    np = length(deps)
+# This is a pre-pruning step, so it also creates some structures which are later used by pruning
+function filter_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -138,7 +133,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             allowedp[vn] = vn in vs
         end
         @assert !isempty(allowedp)
-        @assert any(collect(values(allowedp)))
+        @assert any(values(allowedp))
     end
 
     filtered_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
@@ -154,10 +149,24 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         end
     end
 
+    return filtered_deps, allowed, vmask
+end
+
+# Reduce the number of versions by creating equivalence classes, and retaining
+# only the highest version for each equivalence class.
+# Two versions are equivalent if:
+#   1) They appear together as dependecies of another package (i.e. for each
+#      dependency relation, they are both required or both not required)
+#   2) They have the same dependencies
+# Preliminarily calls filter_versions.
+function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+
+    filtered_deps, allowed, vmask = filter_versions(reqs, deps)
+
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
-    alldeps = Set{(ByteString,VersionSet)}()
+    alldeps = Dict{ByteString,Set{VersionSet}}()
     for (p, fdepsp) in filtered_deps
 
         # Extract unique dependencies lists (aka classes), thereby
@@ -165,8 +174,9 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         uniqdepssets = unique(values(fdepsp))
 
         # Store all dependencies seen so far for later use
-        for a in uniqdepssets, r in a.requires
-            push!(alldeps, r)
+        for a in uniqdepssets, (rp,rvs) in a.requires
+            haskey(alldeps, rp) || (alldeps[rp] = Set{VersionSet}())
+            push!(alldeps[rp], rvs)
         end
 
         # If the package has just one version, it's uninteresting
@@ -191,7 +201,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     end
 
     # Produce dependency patterns.
-    for (p,vs) in alldeps
+    for (p,vss) in alldeps, vs in vss
         # packages with just one version, or dependencies
         # which do not distiguish between versions, are not
         # interesting
@@ -299,27 +309,11 @@ end
 prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) =
     prune_versions(Dict{ByteString,VersionSet}(), deps)
 
-# Build a subgraph incuding only the (direct and indirect) dependencies
-# of a given package set
-function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
-
-    np = length(deps)
-
-    staged = pkgs
-    allpkgs = pkgs
-    while !isempty(staged)
-        staged_next = Set{ByteString}()
-        for p in staged, a in values(deps[p]), rp in keys(a.requires)
-            if !(rp in allpkgs)
-                push!(staged_next, rp)
-            end
-        end
-        allpkgs = union(allpkgs, staged_next)
-        staged = staged_next
-    end
+# Build a graph restricted to a subset of the packages
+function subdeps(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
 
     sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
-    for p in allpkgs
+    for p in pkgs
         haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
         sub_depsp = sub_deps[p]
         for (vn, a) in deps[p]
@@ -328,6 +322,64 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     end
 
     return sub_deps
+end
+
+# Build a subgraph incuding only the (direct and indirect) dependencies
+# of a given package set
+function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
+
+    staged = pkgs
+    allpkgs = copy(pkgs)
+    while !isempty(staged)
+        staged_next = Set{ByteString}()
+        for p in staged, a in values(deps[p]), rp in keys(a.requires)
+            if !(rp in allpkgs)
+                push!(staged_next, rp)
+            end
+        end
+        union!(allpkgs, staged_next)
+        staged = staged_next
+    end
+
+    return subdeps(deps, allpkgs)
+end
+
+# Build a subgraph incuding only the (direct and indirect) dependencies and dependants
+# of a given package set
+function undirected_dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
+
+    graph = Dict{ByteString, Set{ByteString}}()
+
+    for (p,d) in deps
+        haskey(graph, p) || (graph[p] = Set{ByteString}())
+        for a in values(d), rp in keys(a.requires)
+            push!(graph[p], rp)
+            haskey(graph, rp) || (graph[rp] = Set{ByteString}())
+            push!(graph[rp], p)
+        end
+    end
+
+    staged = pkgs
+    allpkgs = copy(pkgs)
+    while !isempty(staged)
+        staged_next = Set{ByteString}()
+        for p in staged, rp in graph[p]
+            if !(rp in allpkgs)
+                push!(staged_next, rp)
+            end
+        end
+        union!(allpkgs, staged_next)
+        staged = staged_next
+    end
+
+    return subdeps(deps, allpkgs)
+end
+
+function filter_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+    deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)))
+    deps, _, _ = filter_versions(reqs, deps)
+
+    return deps
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})

@@ -1,19 +1,20 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef DIRPATH_H
 #define DIRPATH_H
 
 #ifdef _OS_WINDOWS_
-#define PATHSEP '\\'
 #define PATHSEPSTRING "\\"
-#define PATHLISTSEP ';'
 #define PATHLISTSEPSTRING ";"
-#define ISPATHSEP(c) ((c)=='/' || (c)=='\\')
-#define MAXPATHLEN 1024
+#ifdef _MSC_VER
+#define PATH_MAX MAX_PATH
+#endif
 #else
-#define PATHSEP '/'
 #define PATHSEPSTRING "/"
-#define PATHLISTSEP ':'
 #define PATHLISTSEPSTRING ":"
-#define ISPATHSEP(c) ((c)=='/')
+#ifndef PATH_MAX // many platforms don't have a max path, we define one anyways
+#define PATH_MAX 1024
+#endif
 #endif
 
 #endif

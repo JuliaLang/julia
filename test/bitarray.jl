@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(map(x->tc(x...), [zip(r1,r2)...]))
-tc{N}(r1::BitArray{N}, r2::Union(BitArray{N},Array{Bool,N})) = true
+tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 
@@ -26,6 +28,9 @@ let t0 = time()
     end
 end
 
+# empty bitvector
+@test BitVector() == BitVector(0)
+
 # vectors size
 v1 = 260
 # matrices size
@@ -46,7 +51,7 @@ for (sz,T) in allsizes
     @test isequal(convert(AbstractArray{Float64,ndims(b1)}, b1),
                   convert(AbstractArray{Float64,ndims(b1)}, bitunpack(b1)))
 
-    i1 = rand!(false:true, zeros(Bool, sz...))
+    i1 = rand!(zeros(Bool, sz...), false:true)
     @test isequal(bitunpack(bitpack(i1)), i1)
 end
 
@@ -54,7 +59,7 @@ timesofar("conversions")
 
 ## utility functions ##
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 @test isequal(fill!(b1, true), trues(size(b1)))
 @test isequal(fill!(b1, false), falses(size(b1)))
 
@@ -67,7 +72,7 @@ for (sz,T) in allsizes
 
     @check_bit_operation length(b1) Int
     @check_bit_operation ndims(b1)  Int
-    @check_bit_operation size(b1)   (Int...)
+    @check_bit_operation size(b1)   Tuple{Vararg{Int}}
 
     b2 = similar(b1)
     @check_bit_operation copy!(b2, b1) T
@@ -83,7 +88,6 @@ for (sz,T) in allsizes
     @check_bit_operation getindex(b1)         Bool
     @check_bit_operation setindex!(b1, true)  T
     @check_bit_operation setindex!(b1, false) T
-    @check_bit_operation setindex!(b1, 1.0)  T
 end
 
 # linear
@@ -93,7 +97,6 @@ for (sz,T) in allsizes[2:end]
     for j = 1:l
         @check_bit_operation getindex(b1, j) Bool
     end
-    @check_bit_operation getindex(b1, 100.0) Bool
 
     for j in [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, l-1, l]
         @check_bit_operation getindex(b1, 1:j)   BitVector
@@ -103,84 +106,61 @@ for (sz,T) in allsizes[2:end]
         m1 = j:(l-j)
         @check_bit_operation getindex(b1, m1) BitVector
     end
-    @check_bit_operation getindex(b1, 1.0:100.0) BitVector
 
-    t1 = find(randbool(l))
+    t1 = find(bitrand(l))
     @check_bit_operation getindex(b1, t1)        BitVector
-    @check_bit_operation getindex(b1, float(t1)) BitVector
 
     for j = 1:l
-        x = randbool()
+        x = rand(Bool)
         @check_bit_operation setindex!(b1, x, j) T
     end
 
-    x = randbool()
-    @check_bit_operation setindex!(b1, x, 100.0) T
     y = rand(0.0:1.0)
     @check_bit_operation setindex!(b1, y, 100) T
-    y = rand(0.0:1.0)
-    @check_bit_operation setindex!(b1, y, 100.0) T
 
     for j in [1, 63, 64, 65, 127, 128, 129, 191, 192, 193, l-1]
-        x = randbool()
+        x = rand(Bool)
         @check_bit_operation setindex!(b1, x, 1:j) T
-        b2 = randbool(j)
+        b2 = bitrand(j)
         @check_bit_operation setindex!(b1, b2, 1:j) T
-        x = randbool()
+        x = rand(Bool)
         @check_bit_operation setindex!(b1, x, j+1:l) T
-        b2 = randbool(l-j)
+        b2 = bitrand(l-j)
         @check_bit_operation setindex!(b1, b2, j+1:l) T
     end
     for j in [1, 63, 64, 65, 127, 128, 129, div(l,2)]
         m1 = j:(l-j)
-        x = randbool()
+        x = rand(Bool)
         @check_bit_operation setindex!(b1, x, m1) T
-        b2 = randbool(length(m1))
+        b2 = bitrand(length(m1))
         @check_bit_operation setindex!(b1, b2, m1) T
     end
-    x = randbool()
-    @check_bit_operation setindex!(b1, x, 1.0:100.0) T
-    b2 = randbool(100)
-    @check_bit_operation setindex!(b1, b2, 1.0:100.0) T
+    x = rand(Bool)
+    @check_bit_operation setindex!(b1, x, 1:100) T
+    b2 = bitrand(100)
+    @check_bit_operation setindex!(b1, b2, 1:100) T
 
     y = rand(0.0:1.0)
     @check_bit_operation setindex!(b1, y, 1:100) T
-    f2 = float(randbool(100))
-    @check_bit_operation setindex!(b1, f2, 1:100) T
-    f2 = float(randbool(100))
-    @check_bit_operation setindex!(b1, f2, 1.0:100.0) T
 
-    t1 = find(randbool(l))
-    x = randbool()
+    t1 = find(bitrand(l))
+    x = rand(Bool)
     @check_bit_operation setindex!(b1, x, t1) T
-    b2 = randbool(length(t1))
+    b2 = bitrand(length(t1))
     @check_bit_operation setindex!(b1, b2, t1) T
 
     y = rand(0.0:1.0)
     @check_bit_operation setindex!(b1, y, t1) T
-    f2 = float(randbool(length(t1)))
-    @check_bit_operation setindex!(b1, f2, t1) T
-
-    ft1 = float(t1)
-    x = randbool()
-    @check_bit_operation setindex!(b1, x, ft1) T
-    b2 = randbool(length(t1))
-    @check_bit_operation setindex!(b1, b2, ft1) T
-
-    y = rand(0.0:1.0)
-    @check_bit_operation setindex!(b1, y, ft1) T
-    f2 = float(randbool(length(t1)))
-    @check_bit_operation setindex!(b1, f2, ft1) T
 end
 
 # multidimensional
 
-rand_m1m2() = rand(1:n1), rand(1:n2) 
+rand_m1m2() = rand(1:n1), rand(1:n2)
 
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 
 m1, m2 = rand_m1m2()
-b2 = randbool(m1, m2)
+b2 = bitrand(m1, m2)
 @check_bit_operation copy!(b1, b2) BitMatrix
 
 function gen_getindex_data()
@@ -188,18 +168,23 @@ function gen_getindex_data()
     produce((m1, m2, Bool))
     m1, m2 = rand_m1m2()
     produce((m1, 1:m2, BitMatrix))
+    produce((m1, :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((m1, randperm(m2), BitMatrix))
     m1, m2 = rand_m1m2()
     produce((1:m1, m2, BitVector))
+    produce((:, m2, BitVector))
     m1, m2 = rand_m1m2()
     produce((1:m1, 1:m2, BitMatrix))
+    produce((:, :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((1:m1, randperm(m2), BitMatrix))
+    produce((:, randperm(m2), BitMatrix))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), m2, BitVector))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), 1:m2, BitMatrix))
+    produce((randperm(m1), :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), randperm(m2), BitMatrix))
 end
@@ -208,110 +193,97 @@ for (k1, k2, T) in Task(gen_getindex_data)
     # println(typeof(k1), " ", typeof(k2), " ", T) # uncomment to debug
     @check_bit_operation getindex(b1, k1, k2) T
     @check_bit_operation getindex(b1, k1, k2, 1) T
-
-    #@check_bit_operation getindex(b1, float(k1), k2) T
-    #@check_bit_operation getindex(b1, k1, float(k2)) T
-
-    @check_bit_operation getindex(b1, float(k1), float(k2)) T
-
-    @check_bit_operation getindex(b1, k1, k2, 1.0) T
-    #@check_bit_operation getindex(b1, float(k1), float(k2), 1.0) T
 end
 
 function gen_setindex_data()
     m1, m2 = rand_m1m2()
-    produce((randbool(), m1, m2))
+    produce((rand(Bool), m1, m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), m1, 1:m2))
-    produce((randbool(m2), m1, 1:m2))
+    produce((rand(Bool), m1, 1:m2))
+    produce((rand(Bool), m1, :))
+    produce((bitrand(m2), m1, 1:m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), m1, randperm(m2)))
-    produce((randbool(m2), m1, randperm(m2)))
+    produce((rand(Bool), m1, randperm(m2)))
+    produce((bitrand(m2), m1, randperm(m2)))
     m1, m2 = rand_m1m2()
-    produce((randbool(), 1:m1, m2))
-    produce((randbool(m1), 1:m1, m2))
+    produce((rand(Bool), 1:m1, m2))
+    produce((rand(Bool), :, m2))
+    produce((bitrand(m1), 1:m1, m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), 1:m1, 1:m2))
-    produce((randbool(m1, m2), 1:m1, 1:m2))
+    produce((rand(Bool), 1:m1, 1:m2))
+    produce((rand(Bool), :, :))
+    produce((bitrand(m1, m2), 1:m1, 1:m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), 1:m1, randperm(m2)))
-    produce((randbool(m1, m2), 1:m1, randperm(m2)))
+    produce((rand(Bool), 1:m1, randperm(m2)))
+    produce((rand(Bool), :, randperm(m2)))
+    produce((bitrand(m1, m2), 1:m1, randperm(m2)))
     m1, m2 = rand_m1m2()
-    produce((randbool(), randperm(m1), m2))
-    produce((randbool(m1), randperm(m1), m2))
+    produce((rand(Bool), randperm(m1), m2))
+    produce((bitrand(m1), randperm(m1), m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), randperm(m1), 1:m2))
-    produce((randbool(m1,m2), randperm(m1), 1:m2))
+    produce((rand(Bool), randperm(m1), 1:m2))
+    produce((rand(Bool), randperm(m1), :))
+    produce((bitrand(m1,m2), randperm(m1), 1:m2))
     m1, m2 = rand_m1m2()
-    produce((randbool(), randperm(m1), randperm(m2)))
-    produce((randbool(m1,m2), randperm(m1), randperm(m2)))
+    produce((rand(Bool), randperm(m1), randperm(m2)))
+    produce((bitrand(m1,m2), randperm(m1), randperm(m2)))
 end
 
 for (b2, k1, k2) in Task(gen_setindex_data)
     # println(typeof(b2), " ", typeof(k1), " ", typeof(k2)) # uncomment to debug
     @check_bit_operation setindex!(b1, b2, k1, k2) BitMatrix
-
-    @check_bit_operation setindex!(b1, float(b2), k1, k2) BitMatrix
-    @check_bit_operation setindex!(b1, b2, float(k1), k2) BitMatrix
-    #@check_bit_operation setindex!(b1, b2, k1, float(k2)) BitMatrix
-
-    #@check_bit_operation setindex!(b1, float(b2), float(k1), k2) BitMatrix
-    #@check_bit_operation setindex!(b1, float(b2), k1, float(k2)) BitMatrix
-    #@check_bit_operation setindex!(b1, b2, float(k1), float(k2)) BitMatrix
-
-    @check_bit_operation setindex!(b1, float(b2), float(k1), float(k2)) BitMatrix
 end
 
 m1, m2 = rand_m1m2()
-b2 = randbool(1, 1, m2)
+b2 = bitrand(1, 1, m2)
 @check_bit_operation setindex!(b1, b2, m1, 1:m2) BitMatrix
-x = randbool()
-b2 = randbool(1, m2, 1)
+x = rand(Bool)
+b2 = bitrand(1, m2, 1)
 @check_bit_operation setindex!(b1, x, m1, 1:m2, 1)  BitMatrix
 @check_bit_operation setindex!(b1, b2, m1, 1:m2, 1) BitMatrix
 
 for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
     for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
         for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
-            b1 = randbool(v1)
-            b2 = randbool(v1)
+            b1 = bitrand(v1)
+            b2 = bitrand(v1)
             @check_bit_operation copy!(b1, p1, b2, p2, n) BitVector
         end
     end
 end
 
 # logical indexing
-b1 = randbool(n1, n2)
-t1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
+t1 = bitrand(n1, n2)
 @test isequal(bitunpack(b1[t1]), bitunpack(b1)[t1])
 @test isequal(bitunpack(b1[t1]), bitunpack(b1)[bitunpack(t1)])
 
-t1 = randbool(n1)
-t2 = randbool(n2)
+t1 = bitrand(n1)
+t2 = bitrand(n2)
 @test isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[t1, t2])
 @test isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[bitunpack(t1), bitunpack(t2)])
 
 
-b1 = randbool(n1, n2)
-t1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
+t1 = bitrand(n1, n2)
 @check_bit_operation setindex!(b1, true, t1) BitMatrix
 
-t1 = randbool(n1, n2)
-b2 = randbool(countnz(t1))
+t1 = bitrand(n1, n2)
+b2 = bitrand(countnz(t1))
 @check_bit_operation setindex!(b1, b2, t1) BitMatrix
 
 m1 = rand(1:n1)
 m2 = rand(1:n2)
 
-t1 = randbool(n1)
-b2 = randbool(countnz(t1), m2)
+t1 = bitrand(n1)
+b2 = bitrand(countnz(t1), m2)
 k2 = randperm(m2)
 @check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
 @check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
 @check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
 
-t2 = randbool(n2)
-b2 = randbool(m1, countnz(t2))
+t2 = bitrand(n2)
+b2 = bitrand(m1, countnz(t2))
 k1 = randperm(m1)
 @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
 @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
@@ -324,7 +296,7 @@ timesofar("indexing")
 b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
-    x = randbool()
+    x = rand(Bool)
     push!(b1, x)
     push!(i1, x)
     @test isequal(bitunpack(b1), i1)
@@ -332,8 +304,8 @@ end
 
 for m1 = 0 : v1
     for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
-        b1 = randbool(m1)
-        b2 = randbool(m2)
+        b1 = bitrand(m1)
+        b2 = bitrand(m2)
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(append!(b1, b2)), append!(i1, i2))
@@ -342,15 +314,15 @@ end
 
 for m1 = 0 : v1
     for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
-        b1 = randbool(m1)
-        b2 = randbool(m2)
+        b1 = bitrand(m1)
+        b2 = bitrand(m2)
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
     jb = pop!(b1)
@@ -364,14 +336,14 @@ end
 b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
-    x = randbool()
+    x = rand(Bool)
     unshift!(b1, x)
     unshift!(i1, x)
     @test isequal(bitunpack(b1), i1)
 end
 
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
     jb = shift!(b1)
@@ -387,13 +359,13 @@ b1 = BitArray(0)
 i1 = bitunpack(b1)
 for m = 1 : v1
     j = rand(1:m)
-    x = randbool()
+    x = rand(Bool)
     @test insert!(b1, j, x) === b1
     insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     x = rand(0:1)
@@ -402,7 +374,7 @@ for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     @test isequal(bitunpack(b1), i1)
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
@@ -413,7 +385,7 @@ for m = v1 : -1 : 1
 end
 @test length(b1) == 0
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
@@ -423,7 +395,7 @@ for m = v1 : -1 : 1
 end
 @test length(b1) == 0
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     b = splice!(b1, j)
@@ -432,7 +404,7 @@ for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     @test b == i
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     deleteat!(b1, j)
@@ -440,7 +412,7 @@ for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     @test isequal(bitunpack(b1), i1)
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m1 = 1 : v1
     for m2 = m1 : v1
@@ -453,7 +425,7 @@ for m1 = 1 : v1
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m1 = 1 : v1
     for m2 = m1 : v1
@@ -465,14 +437,14 @@ for m1 = 1 : v1
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m1 = 1 : v1 + 1
     for m2 = m1 - 1 : v1
-        for v2 = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
+        for v2::Int = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
             b2 = copy(b1)
             i2 = copy(i1)
-            b3 = randbool(v2)
+            b3 = bitrand(v2)
             i3 = bitunpack(b3)
             b = splice!(b2, m1:m2, b3)
             i = splice!(i2, m1:m2, i3)
@@ -480,14 +452,14 @@ for m1 = 1 : v1 + 1
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
-            i3 = int(randbool(v2))
+            i3 = map(Int,bitrand(v2))
             b = splice!(b2, m1:m2, i3)
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
-            i3 = [j => rand(0:3) for j = 1:v2]
+            i3 = [j => rand(0:1) for j = 1:v2]
             b = splice!(b2, m1:m2, values(i3))
             i = splice!(i2, m1:m2, values(i3))
             @test isequal(bitunpack(b2), i2)
@@ -496,13 +468,13 @@ for m1 = 1 : v1 + 1
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m1 = 1 : v1
     for v2 = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
         b2 = copy(b1)
         i2 = copy(i1)
-        b3 = randbool(v2)
+        b3 = bitrand(v2)
         i3 = bitunpack(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
@@ -510,14 +482,14 @@ for m1 = 1 : v1
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
-        i3 = int(randbool(v2))
+        i3 = map(Int,bitrand(v2))
         b = splice!(b2, m1:m2, i3)
         i = splice!(i2, m1:m2, i3)
         @test isequal(bitunpack(b2), i2)
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
-        i3 = [j => rand(0:3) for j = 1:v2]
+        i3 = [j => rand(0:1) for j = 1:v2]
         b = splice!(b2, m1:m2, values(i3))
         i = splice!(i2, m1:m2, values(i3))
         @test isequal(bitunpack(b2), i2)
@@ -525,11 +497,11 @@ for m1 = 1 : v1
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 for m1 = 1 : v1 - 1
     for m2 = m1 + 1 : v1
-        locs = randbool(m2-m1+1)
+        locs = bitrand(m2-m1+1)
         m = [m1:m2...][locs]
         b2 = copy(b1)
         i2 = copy(i1)
@@ -539,7 +511,7 @@ for m1 = 1 : v1 - 1
     end
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 i1 = bitunpack(b1)
 empty!(b1)
 empty!(i1)
@@ -549,7 +521,7 @@ timesofar("dequeue")
 
 ## Unary operators ##
 
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 @check_bit_operation (~)(b1)  BitMatrix
 @check_bit_operation (!)(b1)  BitMatrix
 @check_bit_operation (-)(b1)  Matrix{Int}
@@ -570,8 +542,8 @@ timesofar("unary arithmetic")
 
 # Matrix{Bool}/Matrix{Bool}
 
-b1 = randbool(n1, n2)
-b2 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
+b2 = bitrand(n1, n2)
 @check_bit_operation (&)(b1, b2)  BitMatrix
 @check_bit_operation (|)(b1, b2)  BitMatrix
 @check_bit_operation ($)(b1, b2)  BitMatrix
@@ -587,12 +559,12 @@ b2 = trues(n1, n2)
 
 while true
     global b1
-    b1 = randbool(n1, n1)
-    if abs(det(float64(b1))) > 1e-6
+    b1 = bitrand(n1, n1)
+    if abs(det(Array{Float64}(b1))) > 1e-6
         break
     end
 end
-b2 = randbool(n1, n1)
+b2 = bitrand(n1, n1)
 
 @check_bit_operation (*)(b1, b2) Matrix{Int}
 @check_bit_operation (/)(b1, b1) Matrix{Float64}
@@ -606,7 +578,7 @@ b0 = falses(0)
 @check_bit_operation (*)(b0, b0') Matrix{Int}
 
 # Matrix{Bool}/Matrix{Int}
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 i2 = rand(1:10, n1, n2)
 @check_bit_operation (&)(b1, i2)  Matrix{Int}
 @check_bit_operation (|)(b1, i2)  Matrix{Int}
@@ -620,7 +592,7 @@ i2 = rand(1:10, n1, n2)
 @check_bit_operation mod(b1, i2)  Matrix{Int}
 
 # Matrix{Bool}/Matrix{Float64}
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 f2 = 1.0 .+ rand(n1, n2)
 @check_bit_operation (.*)(b1, f2) Matrix{Float64}
 @check_bit_operation (./)(b1, f2) Matrix{Float64}
@@ -629,10 +601,10 @@ f2 = 1.0 .+ rand(n1, n2)
 @check_bit_operation mod(b1, f2)  Matrix{Float64}
 
 # Number/Matrix
-b2 = randbool(n1, n2)
+b2 = bitrand(n1, n2)
 i1 = rand(1:10)
-u1 = uint8(i1)
-f1 = float64(i1)
+u1 = UInt8(i1)
+f1 = Float64(i1)
 ci1 = complex(i1)
 cu1 = complex(u1)
 cf1 = complex(f1)
@@ -644,17 +616,17 @@ cf1 = complex(f1)
 @check_bit_operation (.-)(i1, b2)  Matrix{Int}
 @check_bit_operation (.*)(i1, b2) Matrix{Int}
 
-@check_bit_operation (&)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (|)(u1, b2)  Matrix{Uint8}
-@check_bit_operation ($)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (.+)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (.-)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (.*)(u1, b2) Matrix{Uint8}
+@check_bit_operation (&)(u1, b2)  Matrix{UInt8}
+@check_bit_operation (|)(u1, b2)  Matrix{UInt8}
+@check_bit_operation ($)(u1, b2)  Matrix{UInt8}
+@check_bit_operation (.+)(u1, b2)  Matrix{UInt8}
+@check_bit_operation (.-)(u1, b2)  Matrix{UInt8}
+@check_bit_operation (.*)(u1, b2) Matrix{UInt8}
 
 for (x1,t1) = [(f1, Float64),
-              (ci1, Complex{Int}),
-              (cu1, Complex{Uint8}),
-              (cf1, Complex128)]
+               (ci1, Complex{Int}),
+               (cu1, Complex{UInt8}),
+               (cf1, Complex128)]
     @check_bit_operation (.+)(x1, b2)  Matrix{t1}
     @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
@@ -673,8 +645,8 @@ b2 = trues(n1, n2)
 @check_bit_operation mod(i1, b2)  Matrix{Int}
 
 @check_bit_operation (./)(u1, b2) Matrix{Float64}
-@check_bit_operation div(u1, b2)  Matrix{Uint8}
-@check_bit_operation mod(u1, b2)  Matrix{Uint8}
+@check_bit_operation div(u1, b2)  Matrix{UInt8}
+@check_bit_operation mod(u1, b2)  Matrix{UInt8}
 
 @check_bit_operation (./)(f1, b2) Matrix{Float64}
 @check_bit_operation div(f1, b2)  Matrix{Float64}
@@ -684,11 +656,11 @@ b2 = trues(n1, n2)
 @check_bit_operation (./)(cu1, b2) Matrix{Complex128}
 @check_bit_operation (./)(cf1, b2) Matrix{Complex128}
 
-b2 = randbool(n1, n2)
+b2 = bitrand(n1, n2)
 @check_bit_operation (.^)(false, b2) BitMatrix
 @check_bit_operation (.^)(true, b2)  BitMatrix
-@check_bit_operation (.^)(0x0, b2)   Matrix{Uint8}
-@check_bit_operation (.^)(0x1, b2)   Matrix{Uint8}
+@check_bit_operation (.^)(0x0, b2)   Matrix{UInt8}
+@check_bit_operation (.^)(0x1, b2)   Matrix{UInt8}
 @check_bit_operation (.^)(-1, b2)    Matrix{Int}
 @check_bit_operation (.^)(0, b2)     Matrix{Int}
 @check_bit_operation (.^)(1, b2)     Matrix{Int}
@@ -698,14 +670,14 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^)(1.0im, b2) Matrix{Complex128}
 @check_bit_operation (.^)(0im, b2)   Matrix{Complex{Int}}
 @check_bit_operation (.^)(1im, b2)   Matrix{Complex{Int}}
-@check_bit_operation (.^)(0x0im, b2) Matrix{Complex{Uint8}}
-@check_bit_operation (.^)(0x1im, b2) Matrix{Complex{Uint8}}
+@check_bit_operation (.^)(0x0im, b2) Matrix{Complex{UInt8}}
+@check_bit_operation (.^)(0x1im, b2) Matrix{Complex{UInt8}}
 
 # Matrix/Number
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 i2 = rand(1:10)
-u2 = uint8(i2)
-f2 = float64(i2)
+u2 = UInt8(i2)
+f2 = Float64(i2)
 ci2 = complex(i2)
 cu2 = complex(u2)
 cf2 = complex(f2)
@@ -737,15 +709,15 @@ cf2 = complex(f2)
 @check_bit_operation div(b1, i2)  Matrix{Int}
 @check_bit_operation mod(b1, i2)  Matrix{Int}
 
-@check_bit_operation (&)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (|)(b1, u2)  Matrix{Uint8}
-@check_bit_operation ($)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (.+)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (.-)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (.*)(b1, u2) Matrix{Uint8}
+@check_bit_operation (&)(b1, u2)  Matrix{UInt8}
+@check_bit_operation (|)(b1, u2)  Matrix{UInt8}
+@check_bit_operation ($)(b1, u2)  Matrix{UInt8}
+@check_bit_operation (.+)(b1, u2)  Matrix{UInt8}
+@check_bit_operation (.-)(b1, u2)  Matrix{UInt8}
+@check_bit_operation (.*)(b1, u2) Matrix{UInt8}
 @check_bit_operation (./)(b1, u2) Matrix{Float64}
-@check_bit_operation div(b1, u2)  Matrix{Uint8}
-@check_bit_operation mod(b1, u2)  Matrix{Uint8}
+@check_bit_operation div(b1, u2)  Matrix{UInt8}
+@check_bit_operation mod(b1, u2)  Matrix{UInt8}
 
 @check_bit_operation (.+)(b1, f2)  Matrix{Float64}
 @check_bit_operation (.-)(b1, f2)  Matrix{Float64}
@@ -759,9 +731,9 @@ cf2 = complex(f2)
 @check_bit_operation (.*)(b1, ci2) Matrix{Complex{Int}}
 @check_bit_operation (./)(b1, ci2) Matrix{Complex128}
 
-@check_bit_operation (.+)(b1, cu2)  Matrix{Complex{Uint8}}
-@check_bit_operation (.-)(b1, cu2)  Matrix{Complex{Uint8}}
-@check_bit_operation (.*)(b1, cu2) Matrix{Complex{Uint8}}
+@check_bit_operation (.+)(b1, cu2)  Matrix{Complex{UInt8}}
+@check_bit_operation (.-)(b1, cu2)  Matrix{Complex{UInt8}}
+@check_bit_operation (.*)(b1, cu2) Matrix{Complex{UInt8}}
 @check_bit_operation (./)(b1, cu2) Matrix{Complex128}
 
 @check_bit_operation (.+)(b1, cf2)  Matrix{Complex128}
@@ -793,8 +765,8 @@ timesofar("binary arithmetic")
 
 ## Binary comparison operators ##
 
-b1 = randbool(n1, n2)
-b2 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
+b2 = bitrand(n1, n2)
 @check_bit_operation (.==)(b1, b2) BitMatrix
 @check_bit_operation (.!=)(b1, b2) BitMatrix
 @check_bit_operation (.<)(b1, b2) BitMatrix
@@ -804,7 +776,7 @@ timesofar("binary comparison")
 
 ## Data movement ##
 
-b1 = randbool(s1, s2, s3, s4)
+b1 = bitrand(s1, s2, s3, s4)
 for d = 1 : 4
     j = rand(1:size(b1, d))
     #for j = 1 : size(b1, d)
@@ -813,17 +785,17 @@ for d = 1 : 4
     @check_bit_operation flipdim(b1, d) BitArray{4}
 end
 
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 for k = 1 : 4
     @check_bit_operation rotl90(b1, k) BitMatrix
 end
 
 for m = 0 : v1
-    b1 = randbool(m)
+    b1 = bitrand(m)
     @check_bit_operation reverse(b1) BitVector
 end
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(b1 << m, [ b1[m+1:end]; falses(m) ])
     @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
@@ -833,11 +805,23 @@ for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(rol(b1, m), ror(b1, -m))
 end
 
+b = bitrand(v1)
+i = bitrand(v1)
+for m = [rand(1:v1) 63 64 65 191 192 193 v1-1]
+    j = rand(1:m)
+    b1 = ror!(i, b, j)
+    i1 = ror!(b, j)
+    @test b1 == i1
+    b2 = rol!(i1, b1, j)
+    i2 = rol!(b1, j)
+    @test b2 == i2
+end
+
 timesofar("datamove")
 
 ## countnz & find ##
 
-for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
+for m = 0:v1, b1 in Any[bitrand(m), trues(m), falses(m)]
     @check_bit_operation countnz(b1) Int
 
     @check_bit_operation findfirst(b1) Int
@@ -868,14 +852,130 @@ for i = 3:v1-1
     end
 end
 
-b1 = randbool(n1, n2)
-@check_bit_operation findnz(b1) (Vector{Int}, Vector{Int}, BitArray)
+b1 = bitrand(n1, n2)
+@check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
 
 timesofar("nnz&find")
 
+## Findnext/findprev ##
+B = trues(100)
+B′ = falses(100)
+for i=1:100
+    @test findprev(B,i)     == findprev(B,true,i) == findprev(identity,B,i)
+          Base.findprevnot(B′,i) == findprev(!,B′,i)   == i
+end
+
+odds = bitbroadcast(isodd, 1:2000)
+evens = bitbroadcast(iseven, 1:2000)
+for i=1:2:2000
+    @test findprev(odds,i)  == Base.findprevnot(evens,i) == i
+    @test findnext(odds,i)  == Base.findnextnot(evens,i) == i
+    @test findprev(evens,i) == Base.findprevnot(odds,i)  == i-1
+    @test findnext(evens,i) == Base.findnextnot(odds,i)  == (i < 2000 ? i+1 : 0)
+end
+for i=2:2:2000
+    @test findprev(odds,i)  == Base.findprevnot(evens,i) == i-1
+    @test findprev(evens,i) == Base.findprevnot(odds,i)  == i
+    @test findnext(evens,i) == Base.findnextnot(odds,i)  == i
+    @test findnext(odds,i)  == Base.findnextnot(evens,i) == (i < 2000 ? i+1 : 0)
+end
+
+elts = (1:64:64*64+1) .+ (0:64)
+B1 = falses(maximum(elts))
+B1[elts] = true
+B1′ = ~B1
+B2 = fill!(Array(Bool, maximum(elts)), false)
+B2[elts] = true
+@test B1 == B2
+@test all(B1 .== B2)
+for i=1:length(maximum(elts))
+    @test findprev(B1,i) == findprev(B2, i) == Base.findprevnot(B1′, i) == findprev(!, B1′, i)
+    @test findnext(B1,i) == findnext(B2, i) == Base.findnextnot(B1′, i) == findnext(!, B1′, i)
+end
+B1 = ~B1
+B2 = ~B2
+B1′ = ~B1
+@test B1 == B2
+@test all(B1 .== B2)
+for i=1:length(maximum(elts))
+    @test findprev(B1,i) == findprev(B2, i) == Base.findprevnot(B1′, i) == findprev(!, B1′, i)
+    @test findnext(B1,i) == findnext(B2, i) == Base.findnextnot(B1′, i) == findnext(!, B1′, i)
+end
+
+B = falses(1000)
+B[77] = true
+B[777] = true
+B′ = ~B
+@test_throws BoundsError findprev(B, 1001)
+@test_throws BoundsError Base.findprevnot(B′, 1001)
+@test_throws BoundsError findprev(!, B′, 1001)
+@test_throws BoundsError findprev(identity, B, 1001)
+@test_throws BoundsError findprev(x->false, B, 1001)
+@test_throws BoundsError findprev(x->true, B, 1001)
+@test findprev(B, 1000) == Base.findprevnot(B′, 1000) == findprev(!, B′, 1000) == 777
+@test findprev(B, 777)  == Base.findprevnot(B′, 777)  == findprev(!, B′, 777)  == 777
+@test findprev(B, 776)  == Base.findprevnot(B′, 776)  == findprev(!, B′, 776)  == 77
+@test findprev(B, 77)   == Base.findprevnot(B′, 77)   == findprev(!, B′, 77)   == 77
+@test findprev(B, 76)   == Base.findprevnot(B′, 76)   == findprev(!, B′, 76)   == 0
+@test findprev(B, -1)   == Base.findprevnot(B′, -1)   == findprev(!, B′, -1)   == 0
+@test findprev(identity, B, -1) == findprev(x->false, B, -1) == findprev(x->true, B, -1) == 0
+@test_throws BoundsError findnext(B, -1)
+@test_throws BoundsError Base.findnextnot(B′, -1)
+@test_throws BoundsError findnext(!, B′, -1)
+@test_throws BoundsError findnext(identity, B, -1)
+@test_throws BoundsError findnext(x->false, B, -1)
+@test_throws BoundsError findnext(x->true, B, -1)
+@test findnext(B, 1)    == Base.findnextnot(B′, 1)    == findnext(!, B′, 1)    == 77
+@test findnext(B, 77)   == Base.findnextnot(B′, 77)   == findnext(!, B′, 77)   == 77
+@test findnext(B, 78)   == Base.findnextnot(B′, 78)   == findnext(!, B′, 78)   == 777
+@test findnext(B, 777)  == Base.findnextnot(B′, 777)  == findnext(!, B′, 777)  == 777
+@test findnext(B, 778)  == Base.findnextnot(B′, 778)  == findnext(!, B′, 778)  == 0
+@test findnext(B, 1001) == Base.findnextnot(B′, 1001) == findnext(!, B′, 1001) == 0
+@test findnext(identity, B, 1001) == findnext(x->false, B, 1001) == findnext(x->true, B, 1001) == 0
+
+@test findlast(B) == Base.findlastnot(B′) == 777
+@test findfirst(B) == Base.findfirstnot(B′) == 77
+
+emptyvec = BitVector(0)
+@test findprev(x->true, emptyvec, -1) == 0
+@test_throws BoundsError findprev(x->true, emptyvec, 1)
+@test_throws BoundsError findnext(x->true, emptyvec, -1)
+@test findnext(x->true, emptyvec, 1) == 0
+
+B = falses(10)
+@test findprev(x->true, B, 5) == 5
+@test findnext(x->true, B, 5) == 5
+@test findprev(x->true, B, -1) == 0
+@test findnext(x->true, B, 11) == 0
+@test findprev(x->false, B, 5) == 0
+@test findnext(x->false, B, 5) == 0
+@test findprev(x->false, B, -1) == 0
+@test findnext(x->false, B, 11) == 0
+@test_throws BoundsError findprev(x->true, B, 11)
+@test_throws BoundsError findnext(x->true, B, -1)
+
+for l = [1,63,64,65,127,128,129]
+    f = falses(l)
+    t = trues(l)
+    @test findprev(f, l) == Base.findprevnot(t, l) == 0
+    @test findprev(t, l) == Base.findprevnot(f, l) == l
+    B = falses(l)
+    B[end] = true
+    B′ = ~B
+    @test findprev(B, l) == Base.findprevnot(B′, l) == l
+    @test Base.findprevnot(B, l) == findprev(B′, l) == l-1
+    if l > 1
+        B = falses(l)
+        B[end-1] = true
+        B′ = ~B
+        @test findprev(B, l) == Base.findprevnot(B′, l) == l-1
+        @test Base.findprevnot(B, l) == findprev(B′, l) == l
+    end
+end
+
 ## Reductions ##
 
-b1 = randbool(s1, s2, s3, s4)
+b1 = bitrand(s1, s2, s3, s4)
 m1 = 1
 m2 = 3
 @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
@@ -897,7 +997,69 @@ timesofar("reductions")
 
 ## map over bitarrays ##
 
-# TODO (not implemented)
+p = falses(4)
+q = falses(4)
+p[1:2] = true
+q[[1,3]] = true
+
+@test map(~, p) == map(x->~x, p) == ~p
+@test map(identity, p) == map(x->x, p) == p
+
+@test map(&, p, q) == map((x,y)->x&y, p, q) == p & q
+@test map(|, p, q) == map((x,y)->x|y, p, q) == p | q
+@test map($, p, q) == map((x,y)->x$y, p, q) == p $ q
+
+@test map(^, p, q) == map((x,y)->x^y, p, q) == p .^ q
+@test map(*, p, q) == map((x,y)->x*y, p, q) == p .* q
+
+@test map(min, p, q) == map((x,y)->min(x,y), p, q) == min(p, q)
+@test map(max, p, q) == map((x,y)->max(x,y), p, q) == max(p, q)
+
+@test map(<, p, q)  == map((x,y)->x<y, p, q)  == (p .< q)
+@test map(<=, p, q) == map((x,y)->x<=y, p, q) == (p .<= q)
+@test map(==, p, q) == map((x,y)->x==y, p, q) == (p .== q)
+@test map(>=, p, q) == map((x,y)->x>=y, p, q) == (p .>= q)
+@test map(>, p, q)  == map((x,y)->x>y, p, q)  == (p .> q)
+@test map(!=, p, q) == map((x,y)->x!=y, p, q) == (p .!= q)
+
+# map!
+r = falses(4)
+@test map!(~, r, p) == map!(x->~x, r, p) == ~p == r
+@test map!(identity, r, p) == map!(x->x, r, p) == p == r
+
+@test map!(&, r, p, q) == map!((x,y)->x&y, r, p, q) == p & q == r
+@test map!(|, r, p, q) == map!((x,y)->x|y, r, p, q) == p | q == r
+@test map!($, r, p, q) == map!((x,y)->x$y, r, p, q) == p $ q == r
+
+@test map!(^, r, p, q) == map!((x,y)->x^y, r, p, q) == p .^ q == r
+@test map!(*, r, p, q) == map!((x,y)->x*y, r, p, q) == p .* q == r
+
+@test map!(min, r, p, q) == map!((x,y)->min(x,y), r, p, q) == min(p, q) == r
+@test map!(max, r, p, q) == map!((x,y)->max(x,y), r, p, q) == max(p, q) == r
+
+@test map!(<, r, p, q)  == map!((x,y)->x<y, r, p, q)  == (p .< q)  == r
+@test map!(<=, r, p, q) == map!((x,y)->x<=y, r, p, q) == (p .<= q) == r
+@test map!(==, r, p, q) == map!((x,y)->x==y, r, p, q) == (p .== q) == r
+@test map!(>=, r, p, q) == map!((x,y)->x>=y, r, p, q) == (p .>= q) == r
+@test map!(>, r, p, q)  == map!((x,y)->x>y, r, p, q)  == (p .> q)  == r
+@test map!(!=, r, p, q) == map!((x,y)->x!=y, r, p, q) == (p .!= q) == r
+
+for l=[0,1,63,64,65,127,128,129,255,256,257,6399,6400,6401]
+    p = bitrand(l)
+    q = bitrand(l)
+    @test map(~, p) == ~p
+    @test map(identity, p) == p
+    @test map(&, p, q) == p & q
+    @test map(|, p, q) == p | q
+    @test map($, p, q) == p $ q
+    r = BitVector(l)
+    @test map!(~, r, p) == ~p == r
+    @test map!(identity, r, p) == p == r
+    @test map!(~, r) == ~p == r
+    @test map!(&, r, p, q) == p & q == r
+    @test map!(|, r, p, q) == p | q == r
+    @test map!($, r, p, q) == p $ q == r
+end
 
 ## Filter ##
 
@@ -905,12 +1067,12 @@ timesofar("reductions")
 
 ## Transpose ##
 
-b1 = randbool(v1)
+b1 = bitrand(v1)
 @check_bit_operation transpose(b1) BitMatrix
 
 for m1 = 0 : n1
     for m2 = 0 : n2
-        b1 = randbool(m1, m2)
+        b1 = bitrand(m1, m2)
         @check_bit_operation transpose(b1) BitMatrix
     end
 end
@@ -919,7 +1081,7 @@ timesofar("transpose")
 
 ## Permutedims ##
 
-b1 = randbool(s1, s2, s3, s4)
+b1 = bitrand(s1, s2, s3, s4)
 p = randperm(4)
 @check_bit_operation permutedims(b1, p) BitArray{4}
 @check_bit_operation permutedims(b1, tuple(p...)) BitArray{4}
@@ -928,33 +1090,33 @@ timesofar("permutedims")
 
 ## Concatenation ##
 
-b1 = randbool(v1)
-b2 = randbool(v1)
+b1 = bitrand(v1)
+b2 = bitrand(v1)
 @check_bit_operation hcat(b1, b2) BitMatrix
 for m = 1 : v1 - 1
     @check_bit_operation vcat(b1[1:m], b1[m+1:end]) BitVector
 end
 
-b1 = randbool(n1, n2)
-b2 = randbool(n1)
-b3 = randbool(n1, n2)
-b4 = randbool(1, n2)
+b1 = bitrand(n1, n2)
+b2 = bitrand(n1)
+b3 = bitrand(n1, n2)
+b4 = bitrand(1, n2)
 @check_bit_operation hcat(b1, b2, b3) BitMatrix
 @check_bit_operation vcat(b1, b4, b3) BitMatrix
 
-b1 = randbool(s1, s2, s3, s4)
-b2 = randbool(s1, s3, s3, s4)
-b3 = randbool(s1, s2, s3, s1)
+b1 = bitrand(s1, s2, s3, s4)
+b2 = bitrand(s1, s3, s3, s4)
+b3 = bitrand(s1, s2, s3, s1)
 @check_bit_operation cat(2, b1, b2) BitArray{4}
 @check_bit_operation cat(4, b1, b3) BitArray{4}
 @check_bit_operation cat(6, b1, b1) BitArray{6}
 
-b1 = randbool(1, v1, 1)
+b1 = bitrand(1, v1, 1)
 @check_bit_operation cat(2, 0, b1, 1, 1, b1) Array{Int,3}
 @check_bit_operation cat(2, 3, b1, 4, 5, b1) Array{Int,3}
 @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
 
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 for m1 = 1 : n1 - 1
     for m2 = 1 : n2 - 1
         @test isequal([b1[1:m1,1:m2] b1[1:m1,m2+1:end]; b1[m1+1:end,1:m2] b1[m1+1:end,m2+1:end]], b1)
@@ -965,55 +1127,59 @@ timesofar("cat")
 
 # Linear algebra
 
-b1 = randbool(v1)
-b2 = randbool(v1)
+b1 = bitrand(v1)
+b2 = bitrand(v1)
 @check_bit_operation dot(b1, b2) Int
 
-b1 = randbool(n1, n2)
-for k = -max(n1,n2) : max(n1,n2)
+b1 = bitrand(n1, n2)
+for k = -n1 : n2
     @check_bit_operation tril(b1, k) BitMatrix
     @check_bit_operation triu(b1, k) BitMatrix
 end
 
-b1 = randbool(n1, n1)
+b1 = bitrand(n1, n1)
 @check_bit_operation istril(b1) Bool
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 @check_bit_operation istril(b1) Bool
-b1 = randbool(n2, n1)
-@check_bit_operation istril(b1) Bool
-
-b1 = tril(randbool(n1, n1))
-@check_bit_operation istril(b1) Bool
-b1 = tril(randbool(n1, n2))
-@check_bit_operation istril(b1) Bool
-b1 = tril(randbool(n2, n1))
+b1 = bitrand(n2, n1)
 @check_bit_operation istril(b1) Bool
 
-b1 = randbool(n1, n1)
+b1 = tril(bitrand(n1, n1))
+@check_bit_operation istril(b1) Bool
+b1 = tril(bitrand(n1, n2))
+@check_bit_operation istril(b1) Bool
+b1 = tril(bitrand(n2, n1))
+@check_bit_operation istril(b1) Bool
+
+b1 = bitrand(n1, n1)
 @check_bit_operation istriu(b1) Bool
-b1 = randbool(n1, n2)
+b1 = bitrand(n1, n2)
 @check_bit_operation istriu(b1) Bool
-b1 = randbool(n2, n1)
+b1 = bitrand(n2, n1)
 @check_bit_operation istriu(b1) Bool
 
-b1 = triu(randbool(n1, n1))
+b1 = triu(bitrand(n1, n1))
 @check_bit_operation istriu(b1) Bool
-b1 = triu(randbool(n1, n2))
+b1 = triu(bitrand(n1, n2))
 @check_bit_operation istriu(b1) Bool
-b1 = triu(randbool(n2, n1))
+b1 = triu(bitrand(n2, n1))
 @check_bit_operation istriu(b1) Bool
 
-b1 = randbool(n1)
-b2 = randbool(n2)
+b1 = bitrand(n1,n1)
+b1 |= b1.'
+@check_bit_operation issym(b1) Bool
+
+b1 = bitrand(n1)
+b2 = bitrand(n2)
 @check_bit_operation kron(b1, b2) BitVector
 
-b1 = randbool(s1, s2)
-b2 = randbool(s3, s4)
+b1 = bitrand(s1, s2)
+b2 = bitrand(s3, s4)
 @check_bit_operation kron(b1, b2) BitMatrix
 
-#b1 = randbool(v1)
+#b1 = bitrand(v1)
 #@check_bit_operation diff(b1) Vector{Int}
-#b1 = randbool(n1, n2)
+#b1 = bitrand(n1, n2)
 #@check_bit_operation diff(b1) Vector{Int}
 
 timesofar("linalg")
@@ -1021,3 +1187,64 @@ timesofar("linalg")
 # issue #7515
 @test sizeof(BitArray(64)) == 8
 @test sizeof(BitArray(65)) == 16
+
+#one
+@test bitunpack(one(BitMatrix(2,2))) == eye(2,2)
+@test_throws DimensionMismatch one(BitMatrix(2,3))
+
+#reshape
+a = trues(2,5)
+b = reshape(a,(5,2))
+@test b == trues(5,2)
+@test_throws DimensionMismatch reshape(a, (1,5))
+
+#resize!
+
+a = trues(5)
+@test_throws BoundsError resize!(a,-1)
+resize!(a, 3)
+@test a == trues(3)
+resize!(a, 5)
+@test a == append!(trues(3),falses(2))
+
+#flipbits!
+
+a = trues(5,5)
+flipbits!(a)
+@test a == falses(5,5)
+
+# findmax, findmin
+a = trues(0)
+@test_throws ArgumentError findmax(a)
+@test_throws ArgumentError findmin(a)
+
+a = falses(6)
+@test findmax(a) == (false,1)
+a = trues(6)
+@test findmin(a) == (true,1)
+a = bitpack([1,0,1,1,0])
+@test findmin(a) == (false,2)
+@test findmax(a) == (true,1)
+a = bitpack([0,0,1,1,0])
+@test findmin(a) == (false,1)
+@test findmax(a) == (true,3)
+
+#qr and svd
+
+A = bitrand(10,10)
+uA = bitunpack(A)
+@test svd(A) == svd(uA)
+@test qr(A) == qr(uA)
+
+#diag and diagm
+
+v = bitrand(10)
+uv = bitunpack(v)
+@test bitunpack(diagm(v)) == diagm(uv)
+v = bitrand(10,2)
+uv = bitunpack(v)
+@test_throws DimensionMismatch diagm(v)
+
+B = bitrand(10,10)
+uB = bitunpack(B)
+@test diag(uB) == bitunpack(diag(B))

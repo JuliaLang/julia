@@ -1,5 +1,6 @@
-Punctuation
------------
+*************
+ Punctuation
+*************
 
 Extended documentation for mathematical symbols & functions is :ref:`here <mathematical-operators>`.
 
@@ -12,10 +13,13 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    ``#``       begin single line comment
    ``#=``      begin multi-line comment (these are nestable)
    ``=#``      end multi-line comment
-   ``$``       xor operator, string and expression interpolation
+   ``$``       bitwise xor operator, string and expression interpolation
    ``%``       remainder operator
    ``^``       exponent operator
    ``&``       bitwise and
+   ``&&``      short-circuiting boolean and
+   ``|``       bitwise or
+   ``||``      short-circuiting boolean or
    ``*``       multiply, or matrix multiply
    ``()``      the empty tuple
    ``~``       bitwise not operator
@@ -26,7 +30,7 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    ``[;]``     also vertical concatenation
    ``[  ]``    with space-separated expressions, horizontal concatenation
    ``T{ }``    parametric type instantiation
-   ``{  }``    construct a cell array
+   ``{  }``    construct a cell array (deprecated in 0.4 in favor of ``Any[]``)
    ``;``       statement separator
    ``,``       separate function arguments or tuple components
    ``?``       3-argument conditional operator (conditional ? if_true : if_false)
