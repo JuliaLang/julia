@@ -319,6 +319,12 @@ Library improvements
 
     * `isapprox` now has simpler and more sensible default tolerances ([#12393]).
 
+  * Numbers
+
+    * `primes` is now faster and has been extended to generate the primes in a user defined closed interval ([#12025]).
+
+    * The function `primesmask` which generates a prime sieve for a user defined closed interval is now exported ([#12025]).
+
   * Random numbers
 
     * Streamlined random number generation APIs [#8246].
