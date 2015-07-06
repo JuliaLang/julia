@@ -238,6 +238,67 @@ function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractStr
 end
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
+"
+Converts a vector of `Char` to a `UTF8String`
+
+### Returns:
+*   `UTF8String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF8String}, chrs::Vector{Char})
+    len = sizeof(chrs)
+    # handle zero length string quickly
+    len == 0 && return empty_utf8
+    dat = reinterpret(UInt32, chrs)
+    # get number of bytes to allocate
+    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>2)
+    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
+    return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
+end
+
+"
+Converts an already validated vector of `UInt16` or `UInt32` to a `UTF8String`
+
+### Input Arguments:
+* `dat` Vector of code units (`UInt16` or `UInt32`), explicit `\0` is not converted
+* `len` length of output in bytes
+
+### Returns:
+* `UTF8String`
+"
+function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
+    buf = Vector{UInt8}(len)
+    out = 0
+    pos = 0
+    @inbounds while out < len
+        ch::UInt32 = dat[pos += 1]
+        # Handle ASCII characters
+        if ch <= 0x7f
+            buf[out += 1] = ch
+        # Handle 0x80-0x7ff
+        elseif ch < 0x800
+            buf[out += 1] = 0xc0 | (ch >>> 6)
+            buf[out += 1] = 0x80 | (ch & 0x3f)
+        # Handle 0x10000-0x10ffff (if input is UInt32)
+        elseif ch > 0xffff # this is only for T == UInt32, should not be generated for UInt16
+            output_utf8_4byte!(buf, out, ch)
+            out += 4
+        # Handle surrogate pairs
+        elseif is_surrogate_codeunit(ch)
+            output_utf8_4byte!(buf, out, get_supplementary(ch, dat[pos += 1]))
+            out += 4
+        # Handle 0x800-0xd7ff, 0xe000-0xffff UCS-2 characters
+        else
+            buf[out += 1] = 0xe0 | ((ch >>> 12) & 0x3f)
+            buf[out += 1] = 0x80 | ((ch >>> 6) & 0x3f)
+            buf[out += 1] = 0x80 | (ch & 0x3f)
+        end
+    end
+    UTF8String(buf)
+end
+
 utf8(p::Ptr{UInt8}) = UTF8String(bytestring(p))
 utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))
 
