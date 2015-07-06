@@ -70,7 +70,7 @@ jl_module_t *jl_new_main_module(void)
     return old_main;
 }
 
-jl_array_t *jl_module_init_order = NULL;
+extern jl_array_t *jl_module_init_order;
 
 // load time init procedure: in build mode, only record order
 void jl_module_load_time_initialize(jl_module_t *m)
