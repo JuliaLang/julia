@@ -445,9 +445,9 @@ Integers
    	julia> isprime(big(3))
    	true
 
-.. function:: primes(n)
+.. function:: primes([lo,] hi)
 
-   Returns a collection of the prime numbers <= ``n``.
+.. function:: primesmask([lo,] hi)
 
 .. function:: isodd(x::Integer) -> Bool
 
