@@ -34,26 +34,6 @@ function convert(::Type{UTF32String}, str::AbstractString)
 end
 
 "
-Converts a vector of `Char` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"
-function convert(::Type{UTF8String}, chrs::Vector{Char})
-    len = sizeof(chrs)
-    # handle zero length string quickly
-    len == 0 && return empty_utf8
-    dat = reinterpret(UInt32, chrs)
-    # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>2)
-    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
-    return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
-end
-
-"
 Converts a `UTF32String` to a `UTF8String`
 
 ### Returns:
@@ -159,28 +139,6 @@ function convert(::Type{UTF32String}, str::UTF16String)
 end
 
 "
-Converts a vector of `Char` to a `UTF16String`
-
-### Returns:
-*   `::UTF16String`
-
-### Throws:
-*   `UnicodeError`
-"
-function convert(::Type{UTF16String}, chrs::Vector{Char})
-    len = sizeof(chrs)
-    # handle zero length string quickly
-    len == 0 && return empty_utf16
-    dat = reinterpret(UInt32, chrs)
-    # get number of words to allocate
-    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
-    len += num4byte + 1
-    # optimized path, no surrogates
-    num4byte == 0 && @inbounds return fast_utf_copy(UTF16String, UInt16, len, dat)
-    return encode_to_utf16(dat, len)
-end
-
-"
 Converts a `UTF32String` to `UTF16String`
 
 ### Returns:
@@ -199,33 +157,6 @@ function convert(::Type{UTF16String}, str::UTF32String)
     # optimized path, no surrogates
     num4byte == 0 && @inbounds return UTF16String(copy!(Vector{UInt16}(len), dat))
     return encode_to_utf16(dat, len + num4byte)
-end
-
-"
-Converts an already validated UTF-32 encoded vector of `UInt32` to a `UTF16String`
-
-### Input Arguments:
-*   `dat::Vector{UInt32}` UTF-32 encoded data
-*   `len`                 length of output in 16-bit words
-
-### Returns:
-*   `::UTF16String`
-"
-function encode_to_utf16(dat, len)
-    buf = Vector{UInt16}(len)
-    @inbounds buf[len] = 0 # NULL termination
-    out = 0
-    pos = 0
-    @inbounds while out < len
-        ch = UInt32(dat[pos += 1])
-        if ch > 0xffff
-            # Output surrogate pair for 0x10000-0x10ffff
-            buf[out += 1] = 0xd7c0 + (ch >>> 10)
-            ch = 0xdc00 + (ch & 0x3ff)
-        end
-        buf[out += 1] = ch
-    end
-    UTF16String(buf)
 end
 
 convert(::Type{UTF32String}, c::Char)             = UTF32String(Char[c, Char(0)])
