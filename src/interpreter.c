@@ -371,7 +371,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         vnb  = eval(args[2], locals, nl, ngensym);
         if (!jl_is_long(vnb))
             jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
-        int32_t nb = jl_unbox_long(vnb);
+        ssize_t nb = jl_unbox_long(vnb);
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       ((jl_sym_t*)name)->name);
