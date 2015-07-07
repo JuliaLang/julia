@@ -42,7 +42,15 @@
 
 (defvar julia-mode-hook nil)
 
-(defvar julia-basic-offset)
+(defgroup julia ()
+  "Major mode for the julia programming language."
+  :group 'languages
+  :prefix "julia-")
+
+(defcustom julia-indent-offset 4
+  "Number of spaces per indentation level."
+  :type 'integer
+  :group 'julia)
 
 (defface julia-macro-face
   '((t :inherit font-lock-preprocessor-face))
@@ -367,7 +375,7 @@ Do not move back beyond MIN."
     (and pos
 	 (progn
 	   (goto-char pos)
-	   (+ julia-basic-offset (current-indentation))))))
+	   (+ julia-indent-offset (current-indentation))))))
 
 (defsubst julia--safe-backward-char ()
   "Move back one character, but don't error if we're at the
@@ -436,7 +444,7 @@ with it. Returns nil if we're not within nested parens."
                      (end-of-line) (backward-char 1)
                      (and (equal (char-after (point)) ?=)
                           (not (julia-in-comment)))))
-              (+ julia-basic-offset (current-indentation))
+              (+ julia-indent-offset (current-indentation))
             nil)))
       ;; Indent according to how many nested blocks we are in.
       (save-excursion
@@ -444,7 +452,7 @@ with it. Returns nil if we're not within nested parens."
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords)))
           (ignore-errors (+ (julia-last-open-block (- (point) julia-max-block-lookback))
-                            (if endtok (- julia-basic-offset) 0)))))
+                            (if endtok (- julia-indent-offset) 0)))))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
                       (current-indentation))
@@ -457,11 +465,12 @@ with it. Returns nil if we're not within nested parens."
 (defmacro julia--should-indent (from to)
   "Assert that we indent text FROM producing text TO in `julia-mode'."
   `(with-temp-buffer
-     (julia-mode)
-     (insert ,from)
-     (indent-region (point-min) (point-max))
-     (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                    ,to))))
+     (let ((julia-indent-offset 4))
+       (julia-mode)
+       (insert ,from)
+       (indent-region (point-min) (point-max))
+       (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                      ,to)))))
 
 ;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
 ;; when we define tests.
@@ -655,7 +664,6 @@ c"))
     (set (make-local-variable 'syntax-propertize-function)
          julia-syntax-propertize-function))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
-  (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
@@ -3166,12 +3174,6 @@ c"))
 
 ;; Code for `inferior-julia-mode'
 (require 'comint)
-
-(defgroup julia
-  '()
-  "Julia Programming Language."
-  :group 'languages
-  :prefix "julia-")
 
 (defcustom julia-program "julia"
   "Path to the program used by `inferior-julia'."
