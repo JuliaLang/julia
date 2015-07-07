@@ -1158,12 +1158,17 @@ DLLEXPORT void *jl_eval_string(const char *str);
 
 // external libraries
 enum JL_RTLD_CONSTANT {
-     JL_RTLD_LOCAL=0U, JL_RTLD_GLOBAL=1U, /* LOCAL=0 since it is the default */
-     JL_RTLD_LAZY=2U, JL_RTLD_NOW=4U,
+     JL_RTLD_LOCAL=1U,
+     JL_RTLD_GLOBAL=2U,
+     JL_RTLD_LAZY=4U,
+     JL_RTLD_NOW=8U,
      /* Linux/glibc and MacOS X: */
-     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U,
-     /* Linux/glibc: */ JL_RTLD_DEEPBIND=32U,
-     /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
+     JL_RTLD_NODELETE=16U,
+     JL_RTLD_NOLOAD=32U,
+     /* Linux/glibc: */
+     JL_RTLD_DEEPBIND=64U,
+     /* MacOS X 10.5+: */
+     JL_RTLD_FIRST=128U
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
@@ -1512,6 +1517,7 @@ typedef struct {
     int8_t fast_math;
     int8_t worker;
     int8_t handle_signals;
+    int8_t use_precompiled;
     const char *bindto;
     const char *outputbc;
     const char *outputo;
@@ -1546,12 +1552,19 @@ DLLEXPORT int jl_generating_output();
 #define JL_OPTIONS_STARTUPFILE_ON 1
 #define JL_OPTIONS_STARTUPFILE_OFF 2
 
+#define JL_OPTIONS_DEPWARN_OFF 0
+#define JL_OPTIONS_DEPWARN_ON 1
+#define JL_OPTIONS_DEPWARN_ERROR 2
+
 #define JL_OPTIONS_FAST_MATH_ON 1
 #define JL_OPTIONS_FAST_MATH_OFF 2
 #define JL_OPTIONS_FAST_MATH_DEFAULT 0
 
 #define JL_OPTIONS_HANDLE_SIGNALS_ON 1
 #define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
+
+#define JL_OPTIONS_USE_PRECOMPILED_YES 1
+#define JL_OPTIONS_USE_PRECOMPILED_NO 0
 
 // Version information
 #include "julia_version.h"

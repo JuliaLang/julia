@@ -147,7 +147,7 @@ copy(S::SparseMatrixCSC) =
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S))   = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array(Tv, length(S.nzval)))
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array(TvNew, length(S.nzval)))
-similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::NTuple{Integer}) = spzeros(Tv, d...)
+similar{Tv, N}(S::SparseMatrixCSC, ::Type{Tv}, d::NTuple{N, Integer}) = spzeros(Tv, d...)
 
 function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
     if Tv == TvS && Ti == TiS
@@ -2834,4 +2834,38 @@ function Base.centralize_sumabs2!{S,Tv,Ti}(R::AbstractArray{S}, A::SparseMatrixC
         end
     end
     return R
+end
+
+## Unitform matrix arithmetic
+
+function (+)(A::SparseMatrixCSC, J::UniformScaling)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, J.λ)
+    end
+    return sparse(i, j, nz)
+end
+
+function (-)(A::SparseMatrixCSC, J::UniformScaling)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, -J.λ)
+    end
+    return sparse(i, j, nz)
+end
+function (-)(J::UniformScaling, A::SparseMatrixCSC)
+    n = LinAlg.chksquare(A)
+    i, j, nz = findnz(A)
+    for k = 1:n
+        push!(i, k)
+        push!(j, k)
+        push!(nz, -J.λ)
+    end
+    return sparse(i, j, -nz)
 end

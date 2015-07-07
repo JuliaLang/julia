@@ -127,6 +127,9 @@ Language changes
   * Triple-quoted strings no longer treat tabs as 8 spaces. Instead, the
     longest common prefix of spaces and tabs is removed.
 
+  * `global x` in a nested scope is now a syntax error if `x` is local
+    to the enclosing scope ([#7264]/[#11985]).
+
 Command line option changes
 ---------------------------
 
@@ -339,6 +342,22 @@ Library improvements
 
 Deprecated or removed
 ---------------------
+
+  * several syntax whitespace insensitivities have been deprecated ([#11891]).
+    ```julia
+     # function call
+     f (x)
+
+     # getindex
+     x [17]
+     rand(2) [1]
+
+     # function definition
+     f (x) = x^2
+     function foo (x)
+	x^2
+     end
+    ```
 
   * indexing with Reals that are not subtypes of Integers (Rationals, FloatingPoint, etc.) has been deprecated ([#10458]).
 
@@ -1362,6 +1381,7 @@ Too numerous to mention.
 [#7234]: https://github.com/JuliaLang/julia/issues/7234
 [#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
+[#7264]: https://github.com/JuliaLang/julia/issues/7264
 [#7311]: https://github.com/JuliaLang/julia/issues/7311
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
@@ -1487,4 +1507,6 @@ Too numerous to mention.
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
 [#11741]: https://github.com/JuliaLang/julia/issues/11741
+[#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11985]: https://github.com/JuliaLang/julia/issues/11985

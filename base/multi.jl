@@ -140,14 +140,14 @@ function flush_gc_msgs(w::Worker)
     msgs = copy(w.add_msgs)
     if !isempty(msgs)
         empty!(w.add_msgs)
-        remote_do(w, add_clients, msgs...)
+        remote_do(w, add_clients, msgs)
     end
 
     msgs = copy(w.del_msgs)
     if !isempty(msgs)
         empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
-        remote_do(w, del_clients, msgs...)
+        remote_do(w, del_clients, msgs)
     end
 end
 
@@ -471,7 +471,7 @@ function del_client(pg, id, client)
     nothing
 end
 
-function del_clients(pairs::Tuple{Any,Any}...)
+function del_clients(pairs::Vector)
     for p in pairs
         del_client(p[1], p[2])
     end
@@ -507,7 +507,7 @@ function add_client(id, client)
     nothing
 end
 
-function add_clients(pairs::Tuple{Any,Any}...)
+function add_clients(pairs::Vector)
     for p in pairs
         add_client(p[1], p[2])
     end
@@ -779,7 +779,7 @@ function deliver_result(sock::IO, msg, oid, value)
 end
 
 # notify waiters that a certain job has finished or RemoteRef has been emptied
-notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
+notify_full( rv::RemoteValue) = notify(rv.full, work_result(rv))
 notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
@@ -1636,4 +1636,11 @@ function terminate_all_workers()
             end
         end
     end
+end
+
+function getindex(r::RemoteRef, args...)
+    if r.where == myid()
+        return getindex(fetch(r), args...)
+    end
+    return remotecall_fetch(r.where, getindex, r, args...)
 end

@@ -1006,3 +1006,10 @@ A1[2:5,1] = 1
 nonzeros(A1)[2:5]=0
 @test A1==A2
 @test sparse([1,1,0])!=sparse([0,1,1])
+
+# UniformScaling
+A = sprandn(10,10,0.5)
+@test A + I == full(A) + I
+@test I + A == I + full(A)
+@test A - I == full(A) - I
+@test I - A == I - full(A)

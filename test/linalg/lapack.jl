@@ -195,6 +195,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.gttrs!('N',zeros(elty,11),d,du,ones(elty,9),zeros(Base.LinAlg.BlasInt,10),b)
     @test_throws DimensionMismatch LAPACK.gttrs!('N',dl,d,zeros(elty,11),ones(elty,9),zeros(Base.LinAlg.BlasInt,10),b)
     @test_throws DimensionMismatch LAPACK.gttrs!('N',dl,d,du,ones(elty,9),zeros(Base.LinAlg.BlasInt,10),zeros(elty,11))
+    A = lufact(Tridiagonal(dl,d,du))
+    b  = rand(elty,10,5)
+    c = copy(b)
+    dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)
+    c = LAPACK.gttrs!('N',dl,d,du,du2,ipiv,c)
+    @test_approx_eq A\b c
 end
 
 #orglq and friends errors
@@ -216,7 +222,27 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,zeros(elty,11),rand(elty,10,10))
+
+    C = rand(elty,10,10)
+    V = rand(elty,10,10)
+    T = zeros(elty,10,11)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+    C = rand(elty,10,10)
+    V = rand(elty,11,10)
+    T = zeros(elty,10,10)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
+    T = zeros(elty,10,10)
+    V = rand(elty,11,10)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+    T = zeros(elty,10,10)
+    V = rand(elty,5,10)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+    C = rand(elty,10,10)
+    V = rand(elty,10,10)
+    T = zeros(elty,11,10)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
 end
+
 #sytri and sytrf
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
@@ -310,4 +336,14 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq A\B C
     @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
     @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
+end
+
+#gesvx
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    B = rand(elty,10,5)
+    C = copy(A)
+    D = copy(B)
+    X, rcond, f, b, r = LAPACK.gesvx!(C,D)
+    @test_approx_eq X A\B
 end

@@ -19,6 +19,7 @@
 *.dylib
 *.dSYM
 *.jl.cov
+*.jl.*.cov
 *.jl.mem
 *.ji
 

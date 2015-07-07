@@ -1252,7 +1252,8 @@ function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     end
     q = div(m,l)
     r = m - q*l
-    bytestring(p^q*p[1:chr2ind(p,r)]*s)
+    i = r != 0 ? chr2ind(p, r) : -1
+    bytestring(p^q*p[1:i]*s)
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
@@ -1264,7 +1265,8 @@ function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     end
     q = div(m,l)
     r = m - q*l
-    bytestring(s*p^q*p[1:chr2ind(p,r)])
+    i = r != 0 ? chr2ind(p, r) : -1
+    bytestring(s*p^q*p[1:i])
 end
 
 lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))

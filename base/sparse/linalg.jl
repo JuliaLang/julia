@@ -53,7 +53,6 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number
     end
     C
 end
-A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
     T = promote_type(TA,Tx)
@@ -98,6 +97,13 @@ for (f, op) in ((:Ac_mul_B, :ctranspose),
         end
     end
 end
+
+# For compatibility with dense multiplication API. Should be deleted when dense multiplication
+# API is updated to follow BLAS API.
+A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
+Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
+At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
+
 
 function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)

@@ -44,7 +44,7 @@
 
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
-//#define GC_VERIFY
+// #define GC_VERIFY
 
 // SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
 // This is not recommended, as the memory state after such an exception should

@@ -2744,11 +2744,11 @@ U+1F3ED           🏭            \\:factory:                                   
 U+1F3EE           🏮            \\:izakaya_lantern:                            IZAKAYA LANTERN
 U+1F3EF           🏯            \\:japanese_castle:                            JAPANESE CASTLE
 U+1F3F0           🏰            \\:european_castle:                            EUROPEAN CASTLE
-U+1F3FB           🏻             \\:skin-tone-2:                                (No Unicode name)
-U+1F3FC           🏼             \\:skin-tone-3:                                (No Unicode name)
-U+1F3FD           🏽             \\:skin-tone-4:                                (No Unicode name)
-U+1F3FE           🏾             \\:skin-tone-5:                                (No Unicode name)
-U+1F3FF           🏿             \\:skin-tone-6:                                (No Unicode name)
+U+1F3FB           🏻             \\:skin-tone-2:                                EMOJI MODIFIER FITZPATRICK TYPE-1-2
+U+1F3FC           🏼             \\:skin-tone-3:                                EMOJI MODIFIER FITZPATRICK TYPE-3
+U+1F3FD           🏽             \\:skin-tone-4:                                EMOJI MODIFIER FITZPATRICK TYPE-4
+U+1F3FE           🏾             \\:skin-tone-5:                                EMOJI MODIFIER FITZPATRICK TYPE-5
+U+1F3FF           🏿             \\:skin-tone-6:                                EMOJI MODIFIER FITZPATRICK TYPE-6
 U+1F400           🐀            \\:rat:                                        RAT
 U+1F401           🐁            \\:mouse2:                                     MOUSE
 U+1F402           🐂            \\:ox:                                         OX

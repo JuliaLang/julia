@@ -88,7 +88,7 @@ end
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+<( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)

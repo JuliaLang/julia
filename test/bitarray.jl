@@ -28,6 +28,9 @@ let t0 = time()
     end
 end
 
+# empty bitvector
+@test BitVector() == BitVector(0)
+
 # vectors size
 v1 = 260
 # matrices size

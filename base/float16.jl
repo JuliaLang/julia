@@ -107,7 +107,7 @@ convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
 trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
 floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
-ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
+ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 
 round(x::Float16) = Float16(round(Float32(x)))
 trunc(x::Float16) = Float16(trunc(Float32(x)))

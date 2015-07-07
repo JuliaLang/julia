@@ -178,7 +178,7 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
-< (x::Real, y::Real)     = (< )(promote(x,y)...)
+<( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 
 div(x::Real, y::Real) = div(promote(x,y)...)

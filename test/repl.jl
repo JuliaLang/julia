@@ -92,6 +92,19 @@ readuntil(stdout_read, "\n")
 rm(tmpdir)
 cd(origpwd)
 
+# Test that accepting a REPL result immediately shows up, not
+# just on the next keystroke
+write(stdin_write, "1+1\n") # populate history with a trivial input
+readline(stdout_read)
+write(stdin_write, "\e[A\n")
+t = Timer(10) do
+    isopen(t) || return
+    error("Stuck waiting for the repl to write `1+1`")
+end
+# yield make sure this got processed
+readuntil(stdout_read, "1+1")
+close(t)
+
 # Issue #10222
 # Test ignoring insert key in standard and prefix search modes
 write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
@@ -157,7 +170,7 @@ function AddCustomMode(repl)
     foobar_mode.keymap_dict = LineEdit.keymap(b)
 
     main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap);
-    foobar_mode
+    foobar_mode, search_prompt
 end
 
 # Test various history related issues
@@ -275,7 +288,7 @@ begin
 
     # Test that new modes can be dynamically added to the REPL and will
     # integrate nicely
-    foobar_mode = AddCustomMode(repl)
+    foobar_mode, custom_histp = AddCustomMode(repl)
 
     # ^R l, should now find `ls` in foobar mode
     LineEdit.enter_search(s, histp, true)
@@ -291,6 +304,9 @@ begin
     LineEdit.history_prev_prefix(ps, hp, "l")
     @test ps.parent == foobar_mode
     @test LineEdit.input_string(ps) == "ls"
+
+    # Try entering search mode while in custom repl mode
+    LineEdit.enter_search(s, custom_histp, true)
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)

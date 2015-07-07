@@ -257,8 +257,8 @@ typealias ExprNode Union{Expr, QuoteNode, SymbolNode, LineNumberNode,
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
-print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, -1); nothing)
-show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, -1)
+print(        io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, -1); nothing)
+show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, -1)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -595,6 +595,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :type) && nargs==3
         show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
         print(io, "end")
+
+    elseif is(head, :bitstype) && nargs == 2
+        print(io, "bitstype ")
+        show_list(io, args, ' ', indent)
 
     # empty return (i.e. "function f() return end")
     elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
