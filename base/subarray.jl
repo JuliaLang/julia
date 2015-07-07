@@ -576,7 +576,7 @@ end
         end
         return :($meta; setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
     end
-    Isyms = [:(I[$d]) for d = 1:ni]
+    Isyms = Any[:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
     quote
         $exhead
@@ -592,7 +592,7 @@ end
         end
         return :($meta; unsafe_setindex!(V.parent, v, V.first_index + V.stride1*(I[1]-1)))
     end
-    Isyms = [:(I[$d]) for d = 1:ni]
+    Isyms = Any[:(I[$d]) for d = 1:ni]
     exhead, idxs = index_generate(ndims(P), IV, :V, Isyms)
     quote
         $exhead
