@@ -42,7 +42,15 @@
 
 (defvar julia-mode-hook nil)
 
-(defvar julia-indent-offset)
+(defgroup julia ()
+  "Major mode for the julia programming language."
+  :group 'languages
+  :prefix "julia-")
+
+(defcustom julia-indent-offset 4
+  "Number of spaces per indentation level."
+  :type 'integer
+  :group 'julia)
 
 (defface julia-macro-face
   '((t :inherit font-lock-preprocessor-face))
@@ -655,7 +663,6 @@ c"))
     (set (make-local-variable 'syntax-propertize-function)
          julia-syntax-propertize-function))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
-  (set (make-local-variable 'julia-indent-offset) 4)
   (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
@@ -3166,12 +3173,6 @@ c"))
 
 ;; Code for `inferior-julia-mode'
 (require 'comint)
-
-(defgroup julia
-  '()
-  "Julia Programming Language."
-  :group 'languages
-  :prefix "julia-")
 
 (defcustom julia-program "julia"
   "Path to the program used by `inferior-julia'."
