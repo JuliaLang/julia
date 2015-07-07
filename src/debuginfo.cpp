@@ -300,7 +300,11 @@ public:
             sym_iter.getType(SymbolType);
 #           endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
+#           ifdef LLVM37
+            Addr = sym_iter.getAddress().get();
+#           else
             sym_iter.getAddress(Addr);
+#           endif
             sym_iter.getSection(Section);
             if (Section == EndSection) continue;
 #if defined(LLVM36)
@@ -320,14 +324,15 @@ public:
 #ifdef _OS_DARWIN_
 #   if defined(LLVM37)
             Size = Section->getSize();
+            sName = sym_iter.getName().get();
+#   else
+            sym_iter.getName(sName);
 #   endif
 #   if defined(LLVM36)
-            sym_iter.getName(sName);
             if (sName[0] == '_') {
                 sName = sName.substr(1);
             }
 #   else
-            sym_iter.getName(sName);
             Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
             if (!Addr && sName[0] == '_') {
                 sName = sName.substr(1);
