@@ -465,11 +465,12 @@ with it. Returns nil if we're not within nested parens."
 (defmacro julia--should-indent (from to)
   "Assert that we indent text FROM producing text TO in `julia-mode'."
   `(with-temp-buffer
-     (julia-mode)
-     (insert ,from)
-     (indent-region (point-min) (point-max))
-     (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                    ,to))))
+     (let ((julia-indent-offset 4))
+       (julia-mode)
+       (insert ,from)
+       (indent-region (point-min) (point-max))
+       (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                      ,to)))))
 
 ;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
 ;; when we define tests.
