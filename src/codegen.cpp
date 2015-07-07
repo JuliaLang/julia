@@ -1291,9 +1291,13 @@ void write_log_data(logdata_t logData, const char *extension)
     }
 }
 
+extern "C" int jl_getpid();
 extern "C" void jl_write_coverage_data(void)
 {
-    write_log_data(coverageData, ".cov");
+    std::ostringstream stm;
+    stm << jl_getpid();
+    std::string outf = "." + stm.str() + ".cov";
+    write_log_data(coverageData, outf.c_str());
 }
 
 // Memory allocation log (malloc_log)
