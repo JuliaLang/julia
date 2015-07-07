@@ -233,19 +233,27 @@ public:
         uint8_t *UnwindData = NULL;
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
+#  ifdef LLVM37
+            sName = sym_iter.getName().get();
+#  else
             sym_iter.getName(sName);
+#  endif
             if (sName.equals("__UnwindData")) {
+#  ifdef LLVM37
+                Addr = sym_iter.getAddress().get();
+#  else
                 sym_iter.getAddress(Addr);
+#  endif
                 sym_iter.getSection(Section);
-#ifdef LLVM36
+#  ifdef LLVM36
                 assert(Section->isText());
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
                 Addr += SectionAddr;
-#else
+#  else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
                 Section->getAddress(SectionAddr);
-#endif
+#  endif
                 UnwindData = (uint8_t*)Addr;
                 if (SectionAddrCheck)
                     assert(SectionAddrCheck == SectionAddr);
@@ -253,17 +261,21 @@ public:
                     SectionAddrCheck = SectionAddr;
             }
             if (sName.equals("__catchjmp")) {
+#  ifdef LLVM37
+                Addr = sym_iter.getAddress().get();
+#  else
                 sym_iter.getAddress(Addr);
+#  endif
                 sym_iter.getSection(Section);
-#ifdef LLVM36
+#  ifdef LLVM36
                 assert(Section->isText());
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
                 Addr += SectionAddr;
-#else
+#  else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
                 Section->getAddress(SectionAddr);
-#endif
+#  endif
                 catchjmp = (uint8_t*)Addr;
                 if (SectionAddrCheck)
                     assert(SectionAddrCheck == SectionAddr);
@@ -344,10 +356,11 @@ public:
 #   if defined(LLVM37)
             assert(obj.isELF());
             Size = ((llvm::object::ELFSymbolRef)sym_iter).getSize();
+            sName = sym_iter.getName().get();
 #   else
             sym_iter.getSize(Size);
-#   endif
             sym_iter.getName(sName);
+#   endif
 #   ifdef _CPU_X86_
             if (sName[0] == '_') sName = sName.substr(1);
 #   endif
