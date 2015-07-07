@@ -84,7 +84,7 @@ static const char opts[]  =
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // error and warning options
-    " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n\n"
+    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)\n\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -336,11 +336,13 @@ void parse_opts(int *argcp, char ***argvp)
             break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))
-                jl_options.depwarn = 1;
+                jl_options.depwarn = JL_OPTIONS_DEPWARN_ON;
             else if (!strcmp(optarg,"no"))
-                jl_options.depwarn = 0;
+                jl_options.depwarn = JL_OPTIONS_DEPWARN_OFF;
+            else if (!strcmp(optarg,"error"))
+                jl_options.depwarn = JL_OPTIONS_DEPWARN_ERROR;
             else
-                jl_errorf("julia: invalid argument to --depwarn={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --depwarn={yes|no|error} (%s)\n", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))
