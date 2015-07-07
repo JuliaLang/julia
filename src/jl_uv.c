@@ -655,7 +655,36 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
     }
     return 0;
 }
+
 #endif
+
+
+DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
+{
+#if defined(SO_REUSEPORT)
+    int fd = (handle)->io_watcher.fd;
+    int yes = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(yes))) {
+        return -1;
+    }
+    return 0;
+#else
+    return -1;
+#endif
+}
+
+DLLEXPORT int jl_tcp_getsockname_v4(uv_tcp_t *handle, uint32_t * ip, uint16_t * port)
+{
+    struct sockaddr_in name;
+    int len = sizeof(name);
+    if (uv_tcp_getsockname(handle, (struct sockaddr *)&name, &len)) {
+        return -1;
+    }
+
+    *ip = ntohl(name.sin_addr.s_addr);
+    *port = ntohs(name.sin_port);
+    return 0;
+}
 
 #ifndef _OS_WINDOWS_
 
