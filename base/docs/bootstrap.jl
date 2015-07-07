@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module DocBootstrap
 
 export @doc
@@ -8,7 +10,7 @@ _expand_ = nothing
 
 setexpand!(f) = global _expand_ = f
 
-macro doc (args...)
+macro doc(args...)
   _expand_(args...)
 end
 

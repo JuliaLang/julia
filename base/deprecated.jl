@@ -56,13 +56,18 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if JLOptions().depwarn != 0
+    opts = JLOptions()
+    if opts.depwarn > 0
         ln = unsafe_load(cglobal(:jl_lineno, Int))
         fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
-        warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
-             filename=fn, lineno=ln)
+        if opts.depwarn == 1 # raise a warning
+            warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
+                 filename=fn, lineno=ln)
+        elseif opts.depwarn == 2 # raise an error
+            throw(ErrorException(msg))
+        end
     end
 end
 
@@ -537,7 +542,13 @@ const UnionType = Union
 export UnionType
 
 const MathConst = Irrational
-export MathConst
+
+macro math_const(sym, val, def)
+    depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
+    :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
+end
+
+export MathConst, @math_const
 
 # 11280, mmap
 

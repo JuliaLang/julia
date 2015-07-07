@@ -40,6 +40,9 @@ b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{Complex{Int}}, (Ptr{Compl
 @test b == ci + 1 - 2im
 @test ci == 20+51im
 
+b = ccall((:cptest_static, "./libccalltest"), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &ci)
+@test unsafe_load(b) == ci
+Libc.free(convert(Ptr{Void},b))
 
 cf64 = 2.84+5.2im
 b = ccall((:cgtest, "./libccalltest"), Complex128, (Complex128,), cf64)

@@ -27,6 +27,7 @@ immutable JLOptions
     fast_math::Int8
     worker::Int8
     handle_signals::Int8
+    use_precompiled::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputo::Ptr{UInt8}

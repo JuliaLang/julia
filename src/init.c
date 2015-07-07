@@ -39,7 +39,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,6 +110,12 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
+#ifdef _OS_WINDOWS_
+// TODO remove this when using LLVM 3.5+
+                            JL_OPTIONS_USE_PRECOMPILED_NO,
+#else
+                            JL_OPTIONS_USE_PRECOMPILED_YES,
+#endif
                             NULL, // bindto
                             NULL, // outputbc
                             NULL, // outputo
@@ -923,12 +928,12 @@ static char *abspath(const char *in)
 #else
     DWORD n = GetFullPathName(in, 0, NULL, NULL);
     if (n <= 0) {
-        jl_error("fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed\n");
     }
     char *out = (char*)malloc(n);
     DWORD m = GetFullPathName(in, n, out, NULL);
     if (n != m + 1) {
-        jl_error("fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed\n");
     }
 #endif
     return out;
@@ -948,7 +953,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_error("fatal error: unexpected error while retrieving exepath\n");
     }
     if (path_size >= PATH_MAX) {
-        jl_error("fatal error: jl_compileropts.julia_bin path too long\n");
+        jl_error("fatal error: jl_options.julia_bin path too long\n");
     }
     jl_options.julia_bin = strdup(free_path);
     if (!jl_options.julia_home) {
@@ -968,7 +973,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_home, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
-                jl_error("fatal error: jl_compileropts.image_file path too long\n");
+                jl_error("fatal error: jl_options.image_file path too long\n");
             }
             jl_options.image_file = free_path;
         }

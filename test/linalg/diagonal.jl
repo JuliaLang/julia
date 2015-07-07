@@ -43,6 +43,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     end
 
     debug && println("Simple unary functions")
+    for op in (-,)
+      @test op(D)==op(DM)
+    end
+
     for func in (det, trace)
         @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(elty<:Complex ? 2:1)
     end

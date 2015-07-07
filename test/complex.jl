@@ -419,7 +419,7 @@ end
 
 @test_throws DomainError  tan(complex( Inf, 5.0))
 @test isequal(tan(complex( Inf, Inf)),complex( 0.0, 1.0))
-@test isequal(tan(complex( Inf,-Inf)),complex (0.0,-1.0))
+@test isequal(tan(complex( Inf,-Inf)),complex( 0.0,-1.0))
 @test isequal(tan(complex(-Inf, Inf)),complex(-0.0, 1.0))
 @test isequal(tan(complex(-Inf,-Inf)),complex(-0.0,-1.0))
 

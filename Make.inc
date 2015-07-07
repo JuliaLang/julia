@@ -384,12 +384,7 @@ endif
 
 
 # if not absolute, then relative to the directory of the julia executable
-# on windows, use .ji by default
-ifeq ($(OS),WINNT)
-JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
-else
 JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
-endif
 
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 ifeq ($(OS),WINNT)

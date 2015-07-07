@@ -3060,3 +3060,49 @@ end
 Base.convert(::Type{Foo11874},x::Int) = float(x)
 
 @test_throws TypeError bar11874(1)
+
+# issue 9233
+try
+    # Seems to be evaluated and throw an error at compile time if not
+    # using `@eval`
+    @eval NTuple{Int, 1}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == Int
+end
+
+try
+    @eval NTuple{0x1, Int}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == 0x1
+end
+
+try
+    @eval Union{Int, 1}
+catch err
+    @test isa(err, TypeError)
+    @test err.func == :apply_type
+    @test err.expected == Type
+    @test err.got == 1
+end
+
+# issue #10930
+@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+find_tvar10930{T<:Tuple}(sig::Type{T}) = 1
+function find_tvar10930(arg)
+    if arg<:Tuple
+        find_tvar10930(arg[random_var_name])
+    end
+    return 1
+end
+@test find_tvar10930(Vararg{Int}) === 1
+
+# issue #12003
+const DATE12003 = DateTime(1917,1,1)
+failure12003(dt=DATE12003) = Dates.year(dt)
+@test isa(failure12003(), Integer)

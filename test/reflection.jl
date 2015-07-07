@@ -184,7 +184,7 @@ let
     @test isgeneric(foo7648)
     @test Base.function_name(foo7648)==:foo7648
     @test Base.function_module(foo7648, (Any,))==TestMod7648
-    @test functionloc(foo7648, (Any,))[1] == abspath(joinpath(dirname(@__FILE__), "reflection.jl"))
+    @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test TestMod7648.TestModSub9475.foo7648.env.defs==@which foo7648(5)
     @test TestMod7648==@which foo7648
     @test TestMod7648.TestModSub9475==@which a9475

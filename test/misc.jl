@@ -34,13 +34,11 @@ let res = assert(true)
     @test res === nothing
 end
 let
-    try
+    ex = @test_throws AssertionError begin
         assert(false)
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
     end
+    @test isempty(ex.msg)
 end
 
 # test @assert macro
@@ -50,53 +48,44 @@ end
 @test_throws AssertionError (@assert false "this is a test" "another test")
 @test_throws AssertionError (@assert false :a)
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
     end
+    @test contains(ex.msg, "1 == 2")
 end
 # test @assert message
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 "this is a test"
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
     end
+    @test ex.msg == "this is a test"
 end
 # @assert only uses the first message string
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 "this is a test" "this is another test"
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
     end
+    @test ex.msg == "this is a test"
 end
 # @assert calls string() on second argument
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 :random_object
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
     end
+    @test !contains(ex.msg,  "1 == 2")
+    @test contains(ex.msg, "random_object")
 end
 # if the second argument is an expression, c
 let deepthought(x, y) = 42
-    try
-        @assert 1 == 2 string("the answer to the ultimate question: ", deepthought(6,9))
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "the answer to the ultimate question: 42"
+    ex = @test_throws AssertionError begin
+        @assert 1 == 2 string("the answer to the ultimate question: ",
+                              deepthought(6, 9))
     end
+    @test ex.msg == "the answer to the ultimate question: 42"
 end
 
 let # test the process title functions, issue #9957

@@ -187,7 +187,7 @@
                              str))
                        str))))
         (if (equal? str "--")
-            (syntax-deprecation-warning port str ""))
+            (syntax-deprecation port str ""))
         (string->symbol str))))
 
 (define (accum-digits c pred port lz)
@@ -510,20 +510,22 @@
 
 ;; --- misc ---
 
-(define (syntax-deprecation-warning s what instead)
-  (if *depwarn*
-    (io.write
-     *stderr*
-     (string
-      #\newline "WARNING: deprecated syntax \"" what "\""
-      (if (eq? current-filename 'none)
-          ""
-          (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
-      "."
-      (if (equal? instead "")
-          ""
-          (string #\newline "Use \"" instead "\" instead."))
-      #\newline))))
+(define (syntax-deprecation s what instead)
+  (if (or *depwarn* *deperror*)
+    (let ((msg (string
+		 #\newline
+		 (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
+	      (if (eq? current-filename 'none)
+		  ""
+		  (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
+	      "."
+	      (if (equal? instead "")
+		  ""
+		  (string #\newline "Use \"" instead "\" instead."))
+	      #\newline)))
+	  (if *deperror*
+	    (error msg)
+	    (io.write *stderr* msg)))))
 
 ;; --- parser ---
 
@@ -952,7 +954,12 @@
                    (eqv? t #\()))
           ex
           (case t
-            ((#\( )   (take-token s)
+            ((#\( )
+	     (if (ts:space? s)
+             (syntax-deprecation s
+                                 (string (deparse ex) " " (deparse t))
+                                 (string (deparse ex) (deparse t))))
+	     (take-token s)
              (let ((c
                     (let ((al (parse-arglist s #\) )))
                       (receive
@@ -968,7 +975,12 @@
                (if one-call
                    c
                    (loop c))))
-            ((#\[ )   (take-token s)
+            ((#\[ )
+	     (if (ts:space? s)
+             (syntax-deprecation-warning s
+                                         (string (deparse ex) " " (deparse t))
+                                         (string (deparse ex) (deparse t))))
+	     (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
@@ -976,7 +988,7 @@
                (if (null? al)
                    (if (dict-literal? ex)
                        (begin
-                         (syntax-deprecation-warning
+                         (syntax-deprecation
                           s (string #\( (deparse ex) #\) "[]")
                           (string (deprecated-dict-replacement ex) "()"))
                          (loop (list 'typed_dict ex)))
@@ -984,7 +996,7 @@
                    (case (car al)
                      ((dict)
                       (if (dict-literal? ex)
-                          (begin (syntax-deprecation-warning
+                          (begin (syntax-deprecation
                                   s (string #\( (deparse ex) #\) "[a=>b, ...]")
                                   (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
                                  (loop (list* 'typed_dict ex (cdr al))))
@@ -998,7 +1010,12 @@
                      ((dict_comprehension)
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
-            ((|.|) (take-token s)
+            ((|.|)
+             (if (ts:space? s)
+               (syntax-deprecation s
+                                           (string (deparse ex) " " (deparse t))
+                                           (string (deparse ex) (deparse t))))
+             (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
                      `(|.| ,ex ,(parse-atom s)))
@@ -1018,7 +1035,12 @@
 		 (error (string "space not allowed before \"" t "\"")))
 	     (take-token s)
              (loop (list t ex)))
-            ((#\{ )   (take-token s)
+            ((#\{ )
+             (if (ts:space? s)
+               (syntax-deprecation s
+                                   (string (deparse ex) " " (deparse t))
+                                   (string (deparse ex) (deparse t))))
+             (take-token s)
              (loop (list* 'curly ex
                           (map subtype-syntax (parse-arglist s #\} )))))
             ((#\")
@@ -1129,7 +1151,7 @@
            `(const ,expr)
            expr)))
     ((stagedfunction function macro)
-     (if (eq? word 'stagedfunction) (syntax-deprecation-warning s "stagedfunction" "@generated function"))
+     (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
      (let* ((paren (eqv? (require-token s) #\())
             (sig   (parse-call s)))
        (if (and (eq? word 'function) (not paren) (symbol? sig))
@@ -1357,6 +1379,10 @@
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
+        (if (ts:space? s)
+          (syntax-deprecation s
+                              (string (deparse word) " " (deparse nxt))
+                              (string (deparse word) (deparse nxt))))
         (take-token s)
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
@@ -1565,7 +1591,7 @@
                  (parse-dict-comprehension s first closer))
                 (else
                  (if (or (null? isdict) (not (car isdict)))
-                     (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
+                     (syntax-deprecation s "[a=>b, ...]" "Dict(a=>b, ...)"))
                  (parse-dict s first closer)))
               (let ((t (peek-token s)))
                 (cond ((or (eqv? t #\,) (eqv? t closer))
@@ -1664,9 +1690,14 @@
         (parse-string-literal- 0 p s custom))))
 
 (define (strip-leading-newline s)
-  (if (and (> (sizeof s) 0) (eqv? (string.char s 0) #\newline))
-      (string.tail s 1)
-      s))
+  (let ((n (sizeof s)))
+    (cond
+      ((and (> n 0) (eqv? (string.char s 0) #\newline))
+       (string.tail s 1))
+      ((and (> n 1) (eqv? (string.char s 0) #\return)
+                    (eqv? (string.char s 1) #\newline))
+       (string.tail s 2))
+      (else s))))
 
 (define (dedent-triplequoted-string lst)
   (let ((prefix (triplequoted-string-indentation lst)))
@@ -1934,28 +1965,28 @@
           ((eqv? t #\{ )
            (take-token s)
            (if (eqv? (require-token s) #\})
-               (begin (syntax-deprecation-warning s "{}" "[]")
+               (begin (syntax-deprecation s "{}" "[]")
                       (take-token s)
                       '(cell1d))
                (let ((vex (parse-cat s #\} #t)))
                  (if (null? vex)
-                     (begin (syntax-deprecation-warning s "{}" "[]")
+                     (begin (syntax-deprecation s "{}" "[]")
                             '(cell1d))
                      (case (car vex)
                        ((vect)
-                        (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
+                        (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
                         `(cell1d ,@(cdr vex)))
                        ((comprehension)
-                        (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
+                        (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
-                        (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
+                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
-                        (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
+                        (syntax-deprecation s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
                         `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((hcat)
-                        (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
+                        (syntax-deprecation s "{a b ...}" "Any[a b ...]")
                         `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
                        (else  ; (vcat ...)
                         (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
@@ -1970,7 +2001,7 @@
                                         (cddr vex)))
                                   (error "inconsistent shape in cell expression"))
                               (begin
-                                (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]")
+                                (syntax-deprecation s "{a b; c d}" "Any[a b; c d]")
                                 `(cell2d ,nr ,nc
                                          ,@(apply append
                                                   ;; transpose to storage order

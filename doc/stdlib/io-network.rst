@@ -243,7 +243,7 @@ General I/O
 
 .. function:: countlines(io,[eol::Char])
 
-   Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first
+   Read ``io`` until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first
    argument. EOL markers other than '\\n' are supported by passing them as the second argument.
 
 .. function:: PipeBuffer()

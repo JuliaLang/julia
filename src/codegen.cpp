@@ -1291,9 +1291,13 @@ void write_log_data(logdata_t logData, const char *extension)
     }
 }
 
+extern "C" int jl_getpid();
 extern "C" void jl_write_coverage_data(void)
 {
-    write_log_data(coverageData, ".cov");
+    std::ostringstream stm;
+    stm << jl_getpid();
+    std::string outf = "." + stm.str() + ".cov";
+    write_log_data(coverageData, outf.c_str());
 }
 
 // Memory allocation log (malloc_log)
@@ -1892,8 +1896,14 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
         expr = static_val;
 
     if (jl_is_module(expr)) {
-        Value *bp =
-            global_binding_pointer((jl_module_t*)expr, name, NULL, false, ctx);
+        jl_binding_t *bnd = NULL;
+        Value *bp = global_binding_pointer((jl_module_t*)expr, name, &bnd, false, ctx);
+        // TODO: refactor. this partially duplicates code in emit_var
+        if (bnd && bnd->value != NULL) {
+            if (bnd->constp && jl_isbits(jl_typeof(bnd->value)))
+                return emit_unboxed(bnd->value, ctx);
+            return tpropagate(bp, builder.CreateLoad(bp));
+        }
         // todo: use type info to avoid undef check
         return emit_checked_var(bp, name, ctx);
     }

@@ -71,7 +71,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             j = Ri[p]
             pj = Wj[j]
             if pj >= p1
-                Rx[pj] = combine (Rx[pj], Rx[p])
+                Rx[pj] = combine(Rx[pj], Rx[p])
             else
                 Wj[j] = pdest
                 if pdest != p

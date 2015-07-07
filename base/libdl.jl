@@ -11,38 +11,45 @@ const DL_LOAD_PATH = ByteString[]
 @osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
 
 # constants to match JL_RTLD_* in src/julia.h
-const RTLD_LOCAL     = 0x00000000
-const RTLD_GLOBAL    = 0x00000001
-const RTLD_LAZY      = 0x00000002
-const RTLD_NOW       = 0x00000004
-const RTLD_NODELETE  = 0x00000008
-const RTLD_NOLOAD    = 0x00000010
-const RTLD_DEEPBIND  = 0x00000020
-const RTLD_FIRST     = 0x00000040
+const RTLD_LOCAL     = 0x00000001
+const RTLD_GLOBAL    = 0x00000002
+const RTLD_LAZY      = 0x00000004
+const RTLD_NOW       = 0x00000008
+const RTLD_NODELETE  = 0x00000010
+const RTLD_NOLOAD    = 0x00000020
+const RTLD_DEEPBIND  = 0x00000040
+const RTLD_FIRST     = 0x00000080
 
 function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
-    hnd == C_NULL && error("NULL library handle")
+    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
 function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    hnd == C_NULL && error("NULL library handle")
+    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
 end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen(string(s), flags)
+dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen(string(s), flags)
 
 dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
 
+dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen_e(string(s), flags)
+
 dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
 
-dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen_e(string(s), flags)
+function dlclose(p::Ptr)
+    if p != C_NULL
+        ccall(:uv_dlclose,Void,(Ptr{Void},),p)
+        Libc.free(p)
+    end
+end
 
-dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); Libc.free(p); end
-
-function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
+function find_library(libnames::Vector, extrapaths::Vector=ASCIIString[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
@@ -61,8 +68,8 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
     return ""
 end
 
-function dlpath( handle::Ptr{Void} )
-    p = ccall( :jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle )
+function dlpath(handle::Ptr{Void})
+    p = ccall(:jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle)
     s = bytestring(p)
     @windows_only Libc.free(p)
     return s
