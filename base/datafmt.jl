@@ -48,7 +48,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(UInt8, (Int(fsz),), io)
+        Mmap.mmap(io, Vector{UInt8}, (Int(fsz),))
     end
 end
 

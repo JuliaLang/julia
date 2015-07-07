@@ -3,8 +3,7 @@
 module Libc
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time,
-    MS_ASYNC, MS_INVALIDATE, MS_SYNC, mmap, munmap, msync
+    errno, strerror, flush_cstdio, systemsleep, time
 
 include("errno.jl")
 
@@ -162,65 +161,5 @@ free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
 malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
-
-## mmap ##
-
-msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
-
-msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
-
-@unix_only begin
-# Low-level routines
-# These are needed for things like MAP_ANONYMOUS
-function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
-    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
-    # Check that none of the computations will overflow
-    if len < 0
-        throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    end
-    if len > typemax(Int)-pagesize
-        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
-    end
-    # Set the offset to a page boundary
-    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
-    len_page::Int = (offset-offset_page) + len
-    # Mmap the file
-    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
-    # Also return a pointer that compensates for any adjustment in the offset
-    return p, Int(offset-offset_page)
-end
-
-function munmap(p::Ptr,len::Integer)
-    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
-end
-
-const MS_ASYNC = 1
-const MS_INVALIDATE = 2
-const MS_SYNC = 4
-function msync(p::Ptr, len::Integer, flags::Integer)
-    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
-end
-msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
-end
-
-
-@windows_only begin
-function munmap(viewhandle::Ptr, mmaphandle::Ptr)
-    status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
-    status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle)!=0
-    if !status
-        error("could not unmap view: $(FormatMessage())")
-    end
-end
-
-function msync(p::Ptr, len::Integer)
-    status = ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len)!=0
-    if !status
-        error("could not msync: $(FormatMessage())")
-    end
-end
-
-end
 
 end # module
