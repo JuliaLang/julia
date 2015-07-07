@@ -214,6 +214,66 @@ end
 
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
+function test_channel(c)
+    put!(c, 1)
+    put!(c, "Hello")
+    put!(c, 5.0)
+
+    @test isready(c) == true
+    @test fetch(c) == 1
+    @test fetch(c) == 1   # Should not have been popped previously
+    @test take!(c) == 1
+    @test take!(c) == "Hello"
+    @test fetch(c) == 5.0
+    @test take!(c) == 5.0
+    @test isready(c) == false
+end
+
+test_channel(Channel(10))
+
+# Test remote channel...
+c = open(ChannelRef(id_other), Any, 10)
+
+put!(c, 1)
+remotecall_fetch(id_other, ch -> put!(ch, "Hello"), c)
+put!(c, 5.0)
+
+@test isready(c) == true
+@test remotecall_fetch(id_other, ch -> fetch(ch), c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take!(c) == 1
+@test remotecall_fetch(id_other, ch -> take!(ch), c) == "Hello"
+@test fetch(c) == 5.0
+@test remotecall_fetch(id_other, ch -> take!(ch), c) == 5.0
+@test remotecall_fetch(id_other, ch -> isready(ch), c) == false
+@test isready(c) == false
+
+c=Channel(Int)
+@test_throws MethodError put!(c, "Hello")
+
+c=Channel(256)
+# Test growth of channel
+@test c.store.szp1 <= 33
+for x in 1:40
+  put!(c, x)
+end
+@test c.store.szp1 <= 65
+for x in 1:39
+  take!(c)
+end
+for x in 1:64
+  put!(c, x)
+end
+@test (c.store.szp1 > 65) && (c.store.szp1 <= 129)
+for x in 1:39
+  take!(c)
+end
+@test fetch(c) == 39
+for x in 1:26
+  take!(c)
+end
+@test isready(c) == false
+
 
 # The below block of tests are usually run only on local development systems, since:
 # - addprocs tests are memory intensive

@@ -40,6 +40,8 @@ export
     BufferStream,
     CartesianIndex,
     CartesianRange,
+    Channel,
+    ChannelRef,
     Cmd,
     Colon,
     Complex,
