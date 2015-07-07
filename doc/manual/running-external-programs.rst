@@ -362,7 +362,7 @@ File Redirection
 
 In addition to pipelines between ``Cmd`` objects, Julia also supports redirection
 of standard input and output streams from/to files. File names, e.g. ``"junk.txt"``,
-are denoted in a pipeline by double-quoted literal strings or ``String`` variables::
+are denoted in a pipeline by double-quoted literal strings or ``AbstractString`` variables::
 
     julia> mystr = """Line 1
            Line 2
@@ -370,19 +370,20 @@ are denoted in a pipeline by double-quoted literal strings or ``String`` variabl
            """
     "Line 1\nLine 2\nLine 3\n"
     
-    julia> run(`echo $mystr` |> "junk.txt")
+    julia> run(pipe(`echo $mystr`, "junk.txt"))
     
-    julia> run("junk.txt" |> `cat`)
+    julia> file = "junk.txt"; run(pipe(file,`cat`))
     Line 1
     Line 2
     Line 3
 
 In the above example, any previous contents of ``junk.txt`` are destroyed.  If it is 
-desired to append new lines to the existing contents of the file, use the ``>>`` operator::
+desired to append new lines to the existing contents of the file, use
+the keyword arguments as shown below::
     
-    julia> run(`echo $mystr` >> "junk.txt")
+    julia>  run(pipe(`echo $mystr`, stdout="junk.txt", append=true))
     
-    julia> run("junk.txt" |> `cat`)
+    julia> run(pipe(file, `cat`))
     Line 1
     Line 2
     Line 3
