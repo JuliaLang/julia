@@ -293,13 +293,35 @@ function connect_w2w(pid::Int, config::WorkerConfig)
     (s,s)
 end
 
+const client_port = Ref{Cushort}(0)
+
+function socket_reuse_port()
+    s = TCPSocket()
+    try
+        client_host = Ref{Cuint}(0)
+        ccall(:jl_tcp_bind, Int32,
+                (Ptr{Void}, UInt16, UInt32, Cuint),
+                s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+
+        ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle) < 0 && throw(SystemError("setsockopt() SO_REUSEPORT : "))
+        ccall(:jl_tcp_getsockname_v4, Int32,
+                    (Ptr{Void}, Ref{Cuint}, Ref{Cushort}),
+                    s.handle, client_host, client_port) < 0 && throw(SystemError("getsockname() : "))
+    catch e
+        warn_once("Unable to reuse port : ", e)
+        # provide a clean new socket
+        return TCPSocket()
+    end
+    return s
+end
 
 function connect_to_worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
+    s = socket_reuse_port()
     if host == string(LPROC.bind_addr)
-        s = connect("127.0.0.1", UInt16(port))
+        s = connect(s, "127.0.0.1", UInt16(port))
     else
-        s = connect(host, UInt16(port))
+        s = connect(s, host, UInt16(port))
     end
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
