@@ -1904,7 +1904,8 @@ endif
 endif
 
 $(LIBGIT2_SRC_DIR)/build/Makefile: $(LIBGIT2_SRC_DIR)/CMakeLists.txt
-	cd $(LIBGIT2_SRC_DIR) && patch -p1 -f < ../libgit2_oldcmake.patch || true
+	-cd $(LIBGIT2_SRC_DIR) && patch -p1 -f < ../libgit2_oldcmake.patch
+	-cd $(LIBGIT2_SRC_DIR) && patch -p1 -f < ../libgit2_oldssl.patch
 	mkdir -p $(LIBGIT2_SRC_DIR)/build
 	cd $(LIBGIT2_SRC_DIR)/build/ && \
 	$(CMAKE) .. $(LIBGIT2_OPTS)
