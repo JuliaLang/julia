@@ -301,6 +301,7 @@ import .Dates: Date, DateTime, now
 include("deprecated.jl")
 
 # Some basic documentation
+include("docs/helpdb.jl")
 include("docs/basedocs.jl")
 
 function __init__()
