@@ -517,7 +517,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
             switch (S) {
             case MCDisassembler::Fail:
                 if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
 #elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
@@ -527,7 +527,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                     stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
 #endif
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
