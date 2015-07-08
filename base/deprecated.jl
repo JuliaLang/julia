@@ -353,7 +353,6 @@ end
 @deprecate strftime     Libc.strftime
 @deprecate strptime     Libc.strptime
 @deprecate flush_cstdio Libc.flush_cstdio
-@deprecate mmap         Libc.mmap
 @deprecate c_free       Libc.free
 @deprecate c_malloc     Libc.malloc
 @deprecate c_calloc     Libc.calloc
@@ -557,9 +556,9 @@ msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
 
 @unix_only begin
-
+export mmap
 function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
-    depwarn("`mmap` is deprecated, use `mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap)
+    depwarn("`mmap` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap)
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len < 0
@@ -613,7 +612,7 @@ end
 
 end
 
-@unix_only @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) mmap(s, Array{T,N}, dims, offset)
+@unix_only @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
 
 @windows_only begin
 type SharedMemSpec
@@ -623,13 +622,13 @@ type SharedMemSpec
 end
 export mmap_array
 function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
-    depwarn("`mmap_array` is deprecated, use `mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
+    depwarn("`mmap_array` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
     if isa(s,SharedMemSpec)
-        a = Mmap.AnonymousMmap(s.name, s.readonly, s.create)
+        a = Mmap.Anonymous(s.name, s.readonly, s.create)
     else
         a = s
     end
-    return mmap(a, Array{T,N}, dims, offset)
+    return Mmap.mmap(a, Array{T,N}, dims, offset)
 end
 end
 
