@@ -6,7 +6,7 @@
 template<class T> // for GlobalObject's
 static T* addComdat(T *G)
 {
-    if (imaging_mode) {
+    if (imaging_mode && (!G->isDeclarationForLinker())) {
         Comdat *jl_Comdat = shadow_module->getOrInsertComdat(G->getName());
         jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
         G->setComdat(jl_Comdat);
