@@ -5643,8 +5643,8 @@ extern "C" void jl_init_codegen(void)
     TheTriple.setEnvironment(Triple::ELF);
 #endif
 #endif
-   StringRef TheCPU = strcmp(jl_options.cpu_target,"native") ? StringRef(jl_options.cpu_target) : StringRef(sys::getHostCPUName());
-    if (TheCPU.empty() || TheCPU == StringRef("generic")) {
+    std::string TheCPU = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
+    if (TheCPU.empty() || TheCPU == "generic") {
         jl_printf(JL_STDERR, "warning: unable to determine host cpu name.\n");
 #ifdef _CPU_ARM_
         MAttrs.append(1, "+vfp2"); // the processors that don't have VFP are old and (hopefully) rare. this affects the platform calling convention.
