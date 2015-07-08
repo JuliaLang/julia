@@ -113,6 +113,8 @@ function test_scalar_indexing{T}(::Type{T}, shape)
             end
         end
     end
+    # Test zero-dimensional accesses
+    @test A[] == B[] == A[1] == B[1] == 1
     # Test multidimensional scalar indexed assignment
     C = T(Int, shape)
     i=0
@@ -159,6 +161,10 @@ function test_scalar_indexing{T}(::Type{T}, shape)
         end
     end
     @test C == B == A
+    # Test zero-dimensional setindex
+    A[] = 0; B[] = 0
+    @test A[] == B[] == 0
+    @test A == B
 end
 
 function test_vector_indexing{T}(::Type{T}, shape)
