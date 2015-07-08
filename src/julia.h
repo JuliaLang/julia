@@ -279,9 +279,9 @@ typedef struct _jl_datatype_t {
     uint8_t abstract;
     uint8_t mutabl;
     uint8_t pointerfree;
+    int32_t ninitialized;
     // hidden fields:
     uint32_t nfields;
-    int32_t ninitialized;
     uint32_t alignment : 31;  // strictest alignment over all fields
     uint32_t haspadding : 1;  // has internal undefined bytes
     uint32_t uid;
