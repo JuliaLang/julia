@@ -207,18 +207,6 @@ On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build J
 
 Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
 
-#### Google Compute Engine
-
-Google Compute Engine is evolving rapidly, as is Julia.  This section is current as of March 2014 and assumes working knowledge of Google Cloud Services.
-
-These notes apply to the Debian 7 image currently available on Google Compute Engine and Julia pre-0.3.  There are only two things you need to do:
-
-1. Install packages required to build on your instance:
-  ```
-  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev cmake
-  ```
-
-2. Now clone `JuliaLang:master`; you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
 
 #### Linux Build Troubleshooting
 
