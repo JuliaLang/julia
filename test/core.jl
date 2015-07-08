@@ -1048,8 +1048,6 @@ let
     @test Sum < -0.69
 end
 
-include("test_sourcepath.jl")
-
 # issue #2509
 immutable Foo2509; foo::Int; end
 @test Foo2509(1) != Foo2509(2)

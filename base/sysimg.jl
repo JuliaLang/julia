@@ -314,9 +314,8 @@ function __init__()
     init_parallel()
 end
 
+include = base_include
 include("precompile.jl")
-
-include = include_from_node1
 
 end # baremodule Base
 

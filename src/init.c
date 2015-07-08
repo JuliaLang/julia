@@ -1100,7 +1100,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_current_module = jl_core_module;
         jl_root_task->current_module = jl_current_module;
 
-        jl_load("boot.jl");
+        jl_load("boot.jl", sizeof("boot.jl"));
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -1285,28 +1285,43 @@ static void julia_save()
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
         jl_compile_all();
 
-    ios_t *s = NULL;
-    if (jl_options.outputo)
-        s = jl_create_system_image();
-
-    if (jl_options.outputji) {
-        if (s == NULL) {
-            jl_save_system_image(jl_options.outputji);
+    if (jl_options.incremental) {
+        jl_array_t *worklist = jl_module_init_order;
+        if (!worklist) {
+            jl_printf(JL_STDERR, "incremental output requested, but no modules defined during run");
+            return;
         }
-        else {
-            ios_t f;
-            if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-                jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
-            ios_write(&f, (const char*)s->buf, s->size);
-            ios_close(&f);
-        }
+        if (jl_options.outputji)
+            jl_save_incremental(jl_options.outputji, worklist);
+        if (jl_options.outputbc)
+            jl_printf(JL_STDERR, "incremental output to a .bc file is not implemented");
+        if (jl_options.outputo)
+            jl_printf(JL_STDERR, "incremental output to a .o file is not implemented");
     }
+    else {
+        ios_t *s = NULL;
+        if (jl_options.outputo)
+            s = jl_create_system_image();
 
-    if (jl_options.outputbc)
-        jl_dump_bitcode((char*)jl_options.outputbc);
+        if (jl_options.outputji) {
+            if (s == NULL) {
+                jl_save_system_image(jl_options.outputji);
+            }
+            else {
+                ios_t f;
+                if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
+                    jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
+                ios_write(&f, (const char*)s->buf, s->size);
+                ios_close(&f);
+            }
+        }
 
-    if (jl_options.outputo)
-        jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+        if (jl_options.outputbc)
+            jl_dump_bitcode((char*)jl_options.outputbc);
+
+        if (jl_options.outputo)
+            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+    }
 }
 
 jl_function_t *jl_typeinf_func=NULL;

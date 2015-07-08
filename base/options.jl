@@ -32,6 +32,7 @@ immutable JLOptions
     outputbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
+    incremental::Int8
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))

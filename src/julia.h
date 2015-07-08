@@ -687,6 +687,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
+#define jl_string_len(s)  (jl_array_len(((jl_array_t*)(s)->fieldptr[0])))
 #define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
@@ -1194,7 +1195,7 @@ void jl_compile(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-DLLEXPORT jl_value_t *jl_load(const char *fname);
+DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
@@ -1526,6 +1527,7 @@ typedef struct {
     const char *outputbc;
     const char *outputo;
     const char *outputji;
+    int8_t incremental;
 } jl_options_t;
 
 extern DLLEXPORT jl_options_t jl_options;
