@@ -2,8 +2,8 @@
 
 function message(c::GitCommit, raw::Bool=false)
     local msg_ptr::Ptr{UInt8}
-    msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), Ptr{UInt8}, (Ptr{Void},), c.ptr) :
-                   ccall((:git_commit_message, :libgit2), Ptr{UInt8}, (Ptr{Void},), c.ptr)
+    msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), CString, (Ptr{Void},), c.ptr) :
+                   ccall((:git_commit_message, :libgit2), CString, (Ptr{Void},), c.ptr)
     if msg_ptr == C_NULL
         return nothing
     end
