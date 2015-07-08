@@ -11,7 +11,10 @@ const IntTypes = (Int8, UInt8, Int16, UInt16, Int32, UInt32,
 for T in IntTypes
     @eval begin
         -(x::$T) = box($T,neg_int(unbox($T,x)))
-        +(x::$T, y::$T) = box($T, add_int(unbox($T,x),unbox($T,y)))
+
+        if T != Int  # don't overwrite definition from line 8
+            +(x::$T, y::$T) = box($T, add_int(unbox($T,x),unbox($T,y)))
+        end
         -(x::$T, y::$T) = box($T, sub_int(unbox($T,x),unbox($T,y)))
         *(x::$T, y::$T) = box($T, mul_int(unbox($T,x),unbox($T,y)))
     end
@@ -136,7 +139,9 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for T in IntTypes
     if issubtype(T,Signed)
-        @eval <( x::$T, y::$T) = slt_int(unbox($T,x),unbox($T,y))
+        if T != Int  # don't overwrite definition from line 8
+            @eval <( x::$T, y::$T) = slt_int(unbox($T,x),unbox($T,y))
+        end
         @eval <=(x::$T, y::$T) = sle_int(unbox($T,x),unbox($T,y))
     else
         @eval <( x::$T, y::$T) = ult_int(unbox($T,x),unbox($T,y))
