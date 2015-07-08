@@ -12,11 +12,11 @@ function argtype_decl(n, t) # -> (argname, argtype)
         s = s[1:i-1]
     end
     if t === Any && !isempty(s)
-        return s, ""
+        return s, "Any"
     end
     if isvarargtype(t)
         if t.parameters[1] === Any
-            return string(s, "..."), ""
+            return string(s, "..."), "Any"
         else
             return s, string(t.parameters[1], "...")
         end
