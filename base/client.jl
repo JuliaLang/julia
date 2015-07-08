@@ -274,7 +274,9 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # load file immediately on all processors
             if opts.load != C_NULL
-                require(bytestring(opts.load))
+                let file = bytestring(opts.load), cwd = pwd()
+                    @everywhere include($file, (1, $cwd))
+                end
             end
             # eval expression
             if opts.eval != C_NULL

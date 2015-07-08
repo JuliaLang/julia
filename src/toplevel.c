@@ -70,8 +70,6 @@ jl_module_t *jl_new_main_module(void)
     return old_main;
 }
 
-extern jl_array_t *jl_module_init_order;
-
 // load time init procedure: in build mode, only record order
 void jl_module_load_time_initialize(jl_module_t *m)
 {
@@ -567,7 +565,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     }
     JL_CATCH {
         jl_stop_parsing();
-        fn = jl_pchar_to_string(fname, strlen(fname));
+        fn = jl_pchar_to_string(fname, len);
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
         jl_filename = last_filename;
@@ -586,7 +584,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     return result;
 }
 
-jl_value_t *jl_load(const char *fname)
+jl_value_t *jl_load(const char *fname, size_t len)
 {
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
@@ -602,7 +600,7 @@ jl_value_t *jl_load(const char *fname)
     if (jl_start_parsing_file(fpath) != 0) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_value_t *result = jl_parse_eval_all(fpath, strlen(fpath));
+    jl_value_t *result = jl_parse_eval_all(fpath, len);
     if (fpath != fname) free(fpath);
     return result;
 }
@@ -610,7 +608,7 @@ jl_value_t *jl_load(const char *fname)
 // load from filename given as a ByteString object
 DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    return jl_load(jl_string_data(str));
+    return jl_load(jl_string_data(str), jl_string_len(str));
 }
 
 // type definition ------------------------------------------------------------
