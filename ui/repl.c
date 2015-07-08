@@ -573,7 +573,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
-    jl_atexit_hook();
+    jl_atexit_hook(ret);
     return ret;
 }
 

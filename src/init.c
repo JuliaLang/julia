@@ -548,9 +548,9 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-DLLEXPORT void jl_atexit_hook()
+DLLEXPORT void jl_atexit_hook(int exitcode)
 {
-    julia_save();
+    if (exitcode == 0) julia_save();
 #if defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif

@@ -446,7 +446,7 @@ DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 DLLEXPORT void jl_exit(int exitcode)
 {
     uv_tty_reset_mode();
-    jl_atexit_hook();
+    jl_atexit_hook(exitcode);
     exit(exitcode);
 }
 

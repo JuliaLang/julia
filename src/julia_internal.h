@@ -177,8 +177,6 @@ extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
 
-DLLEXPORT void jl_atexit_hook();
-
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define HAVE_CPUID
 #endif
