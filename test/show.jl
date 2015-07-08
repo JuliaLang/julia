@@ -269,3 +269,12 @@ end
 @test_repr "bitstype 100 B"
 @test repr(:(bitstype A B)) == ":(bitstype A B)"
 @test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
+
+oldout = STDOUT
+try
+    rd, wr = redirect_stdout()
+    @test dump(STDERR) == nothing
+    @test xdump(STDERR) == nothing
+finally
+    redirect_stdout(oldout)
+end
