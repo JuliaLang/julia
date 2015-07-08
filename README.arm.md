@@ -57,10 +57,9 @@ If you run into issues building LLVM, see these notes:
 
 # Raspberry Pi
 
-The Raspberry Pi ARM CPU is not correctly detected by LLVM. Before
-starting the build, `export JULIA_CPU_ARCH=arm1176jzf-s`. This tells
-LLVM that the CPU has VFP support. See the discussion in
-[#10917](https://github.com/JuliaLang/julia/issues/10917).
+The Raspberry Pi ARM CPU type is not detected by LLVM.
+Before starting the build, it is recommented to add `export JULIA_CPU_ARCH=arm1176jzf-s`
+to your Make.user file to tune the generated code for your CPU architecture.
 
 # Raspberry Pi 2
 
@@ -72,6 +71,10 @@ In the case of Raspberry Pi 2, download LLVM binaries from the LLVM website, sin
 ```
 override USE_SYSTEM_LLVM=1
 ```
+
+# SIGILL during sysimg.o creation
+
+Its likely that your cpu does not support VFP. File an issue on the Julia issue tracker with the contents of /proc/cpuinfo.
 
 
 # Chromebook
