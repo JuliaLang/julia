@@ -2071,10 +2071,14 @@
 (define (any-string-literal? e)
   (or (simple-string-literal? e)
       (and (length= e 3) (eq? (car e) 'macrocall)
-	   (simple-string-literal? (caddr e))
-	   (let ((mname (string (cadr e))))
-	     (equal? (string.sub mname (string.dec mname (length mname) 4))
-		     "_str")))))
+          (simple-string-literal? (caddr e))
+          (let ((mname (string (cadr e))))
+            ;; starts with `doc` and ends with `_str`
+            (and
+              (equal? (string.sub mname (string.dec mname (length mname) 4))
+               "_str")
+              (equal? (string.sub mname 0 3) "doc"))))))
+
 
 (define (parse-docstring s production)
   (let* ((isstr (eqv? (peek-token s) #\"))
