@@ -1133,18 +1133,18 @@ DLLEXPORT void jl_init(const char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
 DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac,char *av[]));
-DLLEXPORT void jl_atexit_hook(void);
+DLLEXPORT void jl_atexit_hook(int status);
 DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT void jl_preload_sysimg_so(const char *fname);
-DLLEXPORT ios_t *jl_create_system_image();
+DLLEXPORT ios_t *jl_create_system_image(void);
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t* worklist);
 DLLEXPORT jl_array_t *jl_restore_incremental(const char *fname);
 DLLEXPORT jl_array_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
-void jl_init_restored_modules();
+void jl_init_restored_modules(void);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
@@ -1276,7 +1276,7 @@ DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, jl_value_t *c);
 
 // interfacing with Task runtime
-DLLEXPORT void jl_yield();
+DLLEXPORT void jl_yield(void);
 
 // async signal handling ------------------------------------------------------
 
@@ -1530,7 +1530,7 @@ typedef struct {
 
 extern DLLEXPORT jl_options_t jl_options;
 
-DLLEXPORT int jl_generating_output();
+DLLEXPORT int jl_generating_output(void);
 
 // Settings for code_coverage and malloc_log
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated
