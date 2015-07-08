@@ -357,34 +357,29 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars)
+static void jl_gen_llvm_gv_array(llvm::Module *mod)
 {
-    // emit the variable table into the code image. used just before dumping bitcode.
-    // afterwards, call eraseFromParent on everything in globalvars to reset code generator.
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
-    globalvars.push_back(addComdat(new GlobalVariable(
-                    *mod,
-                    atype,
-                    true,
-                    GlobalVariable::ExternalLinkage,
-                    ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
-                    "jl_sysimg_gvars")));
-    globalvars.push_back(addComdat(new GlobalVariable(
-                    *mod,
-                    T_size,
-                    true,
-                    GlobalVariable::ExternalLinkage,
-                    ConstantInt::get(T_size,globalUnique+1),
-                    "jl_globalUnique")));
+    addComdat(new GlobalVariable(*mod,
+                                 atype,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
+                                 "jl_sysimg_gvars"));
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size,globalUnique+1),
+                                 "jl_globalUnique"));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
-    globalvars.push_back(addComdat(new GlobalVariable(
-                    *mod,
-                    feature_string->getType(),
-                    true,
-                    GlobalVariable::ExternalLinkage,
-                    feature_string,
-                    "jl_sysimg_cpu_target")));
+    addComdat(new GlobalVariable(*mod,
+                                 feature_string->getType(),
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 feature_string,
+                                 "jl_sysimg_cpu_target"));
 
 #ifdef HAVE_CPUID
     // For native also store the cpuid
@@ -392,28 +387,26 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        globalvars.push_back(addComdat(new GlobalVariable(
-                        *mod,
-                        T_int64,
-                        true,
-                        GlobalVariable::ExternalLinkage,
-                        ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                        "jl_sysimg_cpu_cpuid")));
+        addComdat(new GlobalVariable(*mod,
+                                     T_int64,
+                                     true,
+                                     GlobalVariable::ExternalLinkage,
+                                     ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
+                                     "jl_sysimg_cpu_cpuid"));
     }
 #endif
 }
 
-static void jl_sysimg_to_llvm(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars,
-                              const char *sysimg_data, size_t sysimg_len)
+static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len)
 {
     Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-    globalvars.push_back(addComdat(new GlobalVariable(*mod, data->getType(), true,
-                                                      GlobalVariable::ExternalLinkage,
-                                                      data, "jl_system_image_data")));
+    addComdat(new GlobalVariable(*mod, data->getType(), true,
+                                 GlobalVariable::ExternalLinkage,
+                                 data, "jl_system_image_data"));
     Constant *len = ConstantInt::get(T_size, sysimg_len);
-    globalvars.push_back(addComdat(new GlobalVariable(*mod, len->getType(), true,
-                                                      GlobalVariable::ExternalLinkage,
-                                                      len, "jl_system_image_size")));
+    addComdat(new GlobalVariable(*mod, len->getType(), true,
+                                 GlobalVariable::ExternalLinkage,
+                                 len, "jl_system_image_size"));
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)

@@ -396,9 +396,8 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars);
-static void jl_sysimg_to_llvm(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars,
-                              const char *sysimg_data, size_t sysimg_len);
+static void jl_gen_llvm_gv_array(llvm::Module *mod);
+static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len);
 
 extern "C"
 void jl_dump_bitcode(char *fname)
@@ -414,17 +413,15 @@ void jl_dump_bitcode(char *fname)
     std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
-    SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
-    jl_gen_llvm_gv_array(shadow_module, globalvars);
-    WriteBitcodeToFile(shadow_module, OS);
+    Module *bitcode = CloneModule(shadow_module);
+    jl_gen_llvm_gv_array(bitcode);
+    WriteBitcodeToFile(bitcode, OS);
 #else
-    jl_gen_llvm_gv_array(jl_Module, globalvars);
-    WriteBitcodeToFile(jl_Module, OS);
+    Module *bitcode = CloneModule(jl_Module);
+    jl_gen_llvm_gv_array(bitcode, globalvars);
+    WriteBitcodeToFile(bitcode, OS);
 #endif
-    for (SmallVectorImpl<GlobalVariable>::iterator *I = globalvars.begin(), *E = globalvars.end(); I != E; ++I) {
-        (*I)->eraseFromParent();
-    }
 }
 
 extern "C"
@@ -505,26 +502,24 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
         jl_error("Could not generate obj file for this target");
     }
 
-    SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
+    Module *objfile = CloneModule(shadow_module);
     if (sysimg_data)
-        jl_sysimg_to_llvm(shadow_module, globalvars, sysimg_data, sysimg_len);
-    jl_gen_llvm_gv_array(shadow_module, globalvars);
+        jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
+    jl_gen_llvm_gv_array(objfile);
     // Reset the target triple to make sure it matches the new target machine
 #ifdef LLVM37
-    shadow_module->setTargetTriple(TM->getTargetTriple().str());
-    shadow_module->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+    objfile->setTargetTriple(TM->getTargetTriple().str());
+    objfile->setDataLayout(TM->getDataLayout()->getStringRepresentation());
 #endif
-    PM.run(*shadow_module);
+    PM.run(*objfile);
 #else
+    Module *objfile = CloneModule(jl_Module);
     if (sysimg_data)
-        jl_sysimg_to_llvm(jl_Module, globalvars, sysimg_data, sysimg_len);
-    jl_gen_llvm_gv_array(jl_Module, globalvars);
-    PM.run(*jl_Module);
+        jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
+    jl_gen_llvm_gv_array(objfile);
+    PM.run(*objfile);
 #endif
-    for (SmallVectorImpl<GlobalVariable>::iterator *I = globalvars.begin(), *E = globalvars.end(); I != E; ++I) {
-        (*I)->eraseFromParent();
-    }
 }
 
 // aggregate of array metadata
