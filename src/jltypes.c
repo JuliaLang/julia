@@ -927,10 +927,18 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_tuple_type(b)) {
         return jl_type_intersect(b, a, penv,eqc,var);
     }
-    if (jl_is_ntuple_type(a) && jl_is_type_type(b)) {
-        jl_value_t *temp = a;
-        a = b;
-        b = temp;
+    if (jl_is_ntuple_type(a)) {
+        if (jl_is_ntuple_type(b)) {
+            jl_value_t *tag = intersect_tag((jl_datatype_t*)a,
+                                            (jl_datatype_t*)b, penv, eqc, var);
+            // The length parameter must be a TypeVar
+            return tag == jl_bottom_type ? jl_typeof(jl_emptytuple) : tag;
+        }
+        else if (jl_is_type_type(b)) {
+            jl_value_t *temp = a;
+            a = b;
+            b = temp;
+        }
     }
     // tag
     if (!jl_is_datatype(a) || !jl_is_datatype(b))
