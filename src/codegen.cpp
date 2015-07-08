@@ -5604,6 +5604,7 @@ extern "C" void jl_init_codegen(void)
     jl_mcjmm = new SectionMemoryManager();
 #endif
     const char *mattr[] = {
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #ifndef USE_MCJIT
         // Temporarily disable Haswell BMI2 features due to LLVM bug.
         "-bmi2", "-avx2",
@@ -5611,6 +5612,8 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         "-avx",
 #endif
+#endif
+        "", // padding to make sure this isn't an empty array (ref #11817)
     };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+sizeof(mattr)/sizeof(mattr[0]));
 #ifdef LLVM36
@@ -5640,14 +5643,17 @@ extern "C" void jl_init_codegen(void)
     TheTriple.setEnvironment(Triple::ELF);
 #endif
 #endif
+   StringRef TheCPU = strcmp(jl_options.cpu_target,"native") ? StringRef(jl_options.cpu_target) : StringRef(sys::getHostCPUName());
+    if (TheCPU.empty() || TheCPU == StringRef("generic")) {
+        jl_printf(JL_STDERR, "warning: unable to determine host cpu name.\n");
+#ifdef _CPU_ARM_
+        MAttrs.append(1, "+vfp2"); // the processors that don't have VFP are old and (hopefully) rare. this affects the platform calling convention.
+#endif
+    }
     TargetMachine *targetMachine = eb.selectTarget(
             TheTriple,
             "",
-#if LLVM35
-            strcmp(jl_options.cpu_target,"native") ? StringRef(jl_options.cpu_target) : sys::getHostCPUName(),
-#else
-            strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : "",
-#endif
+            TheCPU,
             MAttrs);
     jl_TargetMachine = targetMachine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
