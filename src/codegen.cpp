@@ -419,7 +419,7 @@ void jl_dump_bitcode(char *fname)
     WriteBitcodeToFile(bitcode, OS);
 #else
     Module *bitcode = CloneModule(jl_Module);
-    jl_gen_llvm_gv_array(bitcode, globalvars);
+    jl_gen_llvm_gv_array(bitcode);
     WriteBitcodeToFile(bitcode, OS);
 #endif
 }
