@@ -10,7 +10,7 @@ export doc
 
 const modules = Module[]
 
-const META′ = gensym("META")
+const META′ = :__META__
 
 @eval meta(mod) = mod.$META′
 
