@@ -2,6 +2,7 @@
 
 Oid(id::Oid) = id
 Oid(ptr::Ptr{Oid}) = unsafe_load(ptr)::Oid
+Oid(arr::Vector{UInt8}) = Oid(tuple(arr...))
 
 function Oid(ptr::Ptr{UInt8})
     if ptr == C_NULL
@@ -62,20 +63,15 @@ function Oid{T<:GitObject}(obj::T)
     return Oid(obj.ptr)
 end
 
-function hex(id::Oid)
-    _hexstr = zeros(UInt8, OID_HEXSZ)
-    ccall((:git_oid_nfmt, :libgit2), Void,
-          (Ptr{UInt8}, Csize_t, Ptr{Oid}), Ref(_hexstr), OID_HEXSZ, Ref(id))
-    return bytestring(_hexstr)
-end
+Base.hex(id::Oid) = join([hex(i,2) for i in id.val])
 
-raw(id::Oid) = hex2bytes(hex(id))
+raw(id::Oid) = collect(id.val)
 
 Base.string(id::Oid) = hex(id)
 
 Base.show(io::IO, id::Oid) = print(io, "Oid($(string(id)))")
 
-hash(id::Oid) = hash(hex(id))
+Base.hash(id::Oid) = hash(id.val)
 
 cmp(id1::Oid, id2::Oid) = int(ccall((:git_oid_cmp, :libgit2), Cint,
                                          (Ptr{Oid}, Ptr{Oid}), Ref(id1), Ref(id2)))
@@ -83,14 +79,15 @@ cmp(id1::Oid, id2::Oid) = int(ccall((:git_oid_cmp, :libgit2), Cint,
 Base.isequal(id1::Oid, id2::Oid) = cmp(id1, id2) == 0
 Base.isless(id1::Oid, id2::Oid)  = cmp(id1, id2) < 0
 
-iszero(id::Oid) = begin
-    bytes = raw(id)
-    for i=1:OID_RAWSZ
-        if bytes[i] != zero(UInt8)
-            return false
-        end
+function iszero(id::Oid)
+    for i in 1:OID_RAWSZ
+        id.val[i] != zero(UInt8) && return false
     end
     return true
 end
 
-#randoid() = bytestring(rand("0123456789abcdef".data,OID_HEXSZ))
+Base.zero(::Type{Oid}) = Oid()
+
+Base.rand(::Type{Oid}) = Oid(ntuple(x->rand(UInt8), OID_RAWSZ))
+
+Base.isequal(id1::Oid, id2::Oid) = id1.val == id2.val

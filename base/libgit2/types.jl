@@ -6,23 +6,11 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-#TODO: The Oid generated code should now use an immutable type that wraps an ntuple of length 20
-# immutable Oid
-#   id1::UInt8
-#   id2::UInt8
-#   ...
-#   id20::UInt8
-# end
-@eval begin
-    $(Expr(:type, false, :Oid,
-        Expr(:block,
-            [Expr(:(::), symbol("id$i"), :UInt8) for i=1:OID_RAWSZ]...)))
+immutable Oid
+    val::NTuple{OID_RAWSZ, UInt8}
+    Oid(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
-
-# default Oid constructor (all zeros)
-@generated function Oid()
-    return Expr(:call, :Oid, [:(zero(UInt8)) for _=1:OID_RAWSZ]...)
-end
+Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
 
 immutable TimeStruct
     time::Int64     # time in seconds from epoch
