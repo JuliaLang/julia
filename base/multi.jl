@@ -417,12 +417,6 @@ type RemoteRef
     function RemoteRef(pid::Integer)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
-        if mod(REQ_ID,200) == 0
-            # force gc after making a lot of refs since they take up
-            # space on the machine where they're stored, yet the client
-            # is responsible for freeing them.
-            gc()
-        end
         rr
     end
 
