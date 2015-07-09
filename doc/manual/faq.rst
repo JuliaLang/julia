@@ -6,6 +6,7 @@
  Frequently Asked Questions
 ****************************
 
+foop
 Sessions and the REPL
 ---------------------
 
