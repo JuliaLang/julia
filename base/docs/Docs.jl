@@ -370,6 +370,19 @@ The `->` is not required if the object is on the same line, e.g.
 
     @doc "foo" foo
 
+# Documenting objects after they are defined
+You can document an object after its definition by
+
+    @doc "foo" function_to_doc
+    @doc "bar" TypeToDoc
+
+For functions, this currently only support documenting the whole function
+Instead of a specific method. See Functions & Methods section below
+
+For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or
+`@doc "macro doc" :(string_macro"")` for string macros. Without the quote `:()`
+the expansion of the macro will be documented.
+
 # Retrieving Documentation
 You can retrieve docs for functions, macros and other objects as
 follows:
