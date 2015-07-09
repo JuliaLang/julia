@@ -2,6 +2,7 @@
 
 module Docs
 
+using Base.Meta
 import Base.Markdown: @doc_str, MD
 
 export doc
@@ -226,20 +227,6 @@ isexpr(x::Expr) = true
 isexpr(x) = false
 isexpr(x::Expr, ts...) = x.head in ts
 isexpr(x, ts...) = any(T->isa(T, Type) && isa(x, T), ts)
-
-function unblock(ex)
-    isexpr(ex, :block) || return ex
-    exs = filter(ex->!isexpr(ex, :line), ex.args)
-    length(exs) == 1 || return ex
-    # Recursive unblock'ing for macro expansion
-    return unblock(exs[1])
-end
-
-uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
-
-namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
-namify(ex::QuoteNode) = ex.value
-namify(sy::Symbol) = sy
 
 function mdify(ex)
     if isexpr(ex, AbstractString, :string)
