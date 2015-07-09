@@ -359,10 +359,9 @@ if VERSION < v"0.4.0-dev+3844"
         const malloc = Base.c_malloc
         const realloc = Base.c_realloc
         using Base: munmap, systemsleep
-        export FILE, MS_ASYNC, MS_INVALIDATE, MS_SYNC, TmStruct, calloc, errno,
-               flush_cstdio, free, gethostname, getpid, malloc, mmap, msync,
-               munmap, realloc, strerror, strftime, strptime, systemsleep,
-               time
+        export FILE, TmStruct, calloc, errno, flush_cstdio, free,
+               gethostname, getpid, malloc, msync, realloc, strerror,
+               strftime, strptime, systemsleep, time
     end
     @eval module Libdl
         using Base.Sys: dlext, dllist, dlpath
