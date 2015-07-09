@@ -10,12 +10,16 @@ export doc
 
 const modules = Module[]
 
-meta() = current_module().META
+const META′ = gensym("META")
+
+@eval meta(mod) = mod.$META′
+
+meta() = meta(current_module())
 
 macro init()
-    META = esc(:META)
+    META = esc(META′)
     quote
-        if !isdefined(:META)
+        if !isdefined($(Expr(:quote, META′)))
             const $META = ObjectIdDict()
             doc!($META, @doc_str $("Documentation metadata for `$(current_module())`."))
             push!(modules, current_module())
@@ -30,7 +34,7 @@ end
 
 function doc(obj)
     for mod in modules
-        haskey(mod.META, obj) && return mod.META[obj]
+        haskey(meta(mod), obj) && return meta(mod)[obj]
     end
 end
 
@@ -97,8 +101,8 @@ end
 function doc(f::Function)
     docs = []
     for mod in modules
-        if haskey(mod.META, f)
-            fd = mod.META[f]
+        if haskey(meta(mod), f)
+            fd = meta(mod)[f]
             length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
             if isa(fd, FuncDoc)
                 for m in fd.order
@@ -114,8 +118,8 @@ end
 
 function doc(f::Function, m::Method)
     for mod in modules
-        haskey(mod.META, f) && isa(mod.META[f], FuncDoc) && haskey(mod.META[f].meta, m) &&
-            return mod.META[f].meta[m]
+        haskey(meta(mod), f) && isa(meta(mod)[f], FuncDoc) && haskey(meta(mod)[f].meta, m) &&
+            return meta(mod)[f].meta[m]
     end
 end
 
@@ -168,8 +172,8 @@ end
 function doc(f::DataType)
     docs = []
     for mod in modules
-        if haskey(mod.META, f)
-            fd = mod.META[f]
+        if haskey(meta(mod), f)
+            fd = meta(mod)[f]
             if isa(fd, TypeDoc)
                 length(docs) == 0 && fd.main != nothing && push!(docs, fd.main)
                 for m in fd.order
@@ -189,8 +193,8 @@ isfield(x) = isexpr(x, :.) &&
 
 function fielddoc(T, k)
   for mod in modules
-    if haskey(mod.META, T) && isa(mod.META[T], TypeDoc) && haskey(mod.META[T].fields, k)
-      return mod.META[T].fields[k]
+    if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
+      return meta(mod)[T].fields[k]
     end
   end
   Text(sprint(io -> (print(io, "$T has fields: ");

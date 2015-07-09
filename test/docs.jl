@@ -142,10 +142,12 @@ const K = :K
 
 end
 
-@test DocsTest.META[DocsTest] == doc"DocsTest"
+import Base.Docs: meta
+
+@test meta(DocsTest)[DocsTest] == doc"DocsTest"
 
 let f = DocsTest.f
-    funcdoc = DocsTest.META[f]
+    funcdoc = meta(DocsTest)[f]
     order = [methods(f, sig)[1] for sig in [(Any,), (Any, Any)]]
     @test funcdoc.main == nothing
     @test funcdoc.order == order
@@ -154,40 +156,40 @@ let f = DocsTest.f
 end
 
 let g = DocsTest.g
-    funcdoc = DocsTest.META[g]
+    funcdoc = meta(DocsTest)[g]
     @test funcdoc.main == doc"g"
 end
 
 let AT = DocsTest.AT
-    @test DocsTest.META[AT] == doc"AT"
+    @test meta(DocsTest)[AT] == doc"AT"
 end
 
 let BT = DocsTest.BT
-    @test DocsTest.META[BT] == doc"BT"
+    @test meta(DocsTest)[BT] == doc"BT"
 end
 
 let T = DocsTest.T
-    typedoc = DocsTest.META[T]
+    typedoc = meta(DocsTest)[T]
     @test typedoc.main == doc"T"
     @test typedoc.fields[:x] == doc"T.x"
     @test typedoc.fields[:y] == doc"T.y"
 end
 
 let IT = DocsTest.IT
-    typedoc = DocsTest.META[IT]
+    typedoc = meta(DocsTest)[IT]
     @test typedoc.main == doc"IT"
     @test typedoc.fields[:x] == doc"IT.x"
     @test typedoc.fields[:y] == doc"IT.y"
 end
 
 let TA = DocsTest.TA
-    @test DocsTest.META[TA] == doc"TA"
+    @test meta(DocsTest)[TA] == doc"TA"
 end
 
 let mac = getfield(DocsTest, symbol("@mac"))
-    funcdoc = DocsTest.META[mac]
+    funcdoc = meta(DocsTest)[mac]
     @test funcdoc.main == doc"@mac"
 end
 
-@test DocsTest.META[:G] == doc"G"
-@test DocsTest.META[:K] == doc"K"
+@test meta(DocsTest)[:G] == doc"G"
+@test meta(DocsTest)[:K] == doc"K"
