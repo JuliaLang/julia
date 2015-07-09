@@ -1419,8 +1419,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     if (has_ntuple_intersect_tuple) {
         for(e=0; e < eqc.n; e+=2) {
             jl_value_t *val = eqc.data[e+1];
-            size_t dummy;
-            if (jl_get_size(val, &dummy)) break;
+            if (jl_is_long(val))
+                break;
         }
         if (e < eqc.n) {
             /*
