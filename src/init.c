@@ -169,7 +169,7 @@ static void jl_find_stack_bottom(void)
 // what to do on SIGINT
 DLLEXPORT void jl_sigint_action(void)
 {
-    if (exit_on_sigint) jl_exit(0);
+    if (exit_on_sigint) jl_exit(130); // 128+SIGINT
     jl_throw(jl_interrupt_exception);
 }
 
@@ -361,7 +361,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     else {
         jl_signal_pending = 0;
-        if (exit_on_sigint) jl_exit(0);
+        if (exit_on_sigint) jl_exit(130);
         if ((DWORD)-1 == SuspendThread(hMainThread)) {
             //error
             jl_safe_printf("error: SuspendThread failed\n");
@@ -766,7 +766,7 @@ void *mach_segv_listener(void *arg)
     while (1) {
         int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
         jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
-        jl_exit(1);
+        jl_exit(128+SIGSEGV);
     }
 }
 
