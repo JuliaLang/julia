@@ -49,4 +49,4 @@ build_script:
 test_script:
   - usr\bin\julia -e "versioninfo()"
   - copy usr\lib\julia\sys.ji local.ji && usr\bin\julia -J local.ji -e "true" && del local.ji
-  - cd test && ..\usr\bin\julia runtests.jl all
+  - cd test && ..\usr\bin\julia runtests.jl libgit2 repl pkg
