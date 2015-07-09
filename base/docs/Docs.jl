@@ -205,7 +205,7 @@ end
 
 doc(f, ::Method) = doc(f)
 
-# Modules
+# Modules
 
 function doc(m::Module)
     md = invoke(doc, Tuple{Any}, m)
@@ -231,7 +231,8 @@ function unblock(ex)
     isexpr(ex, :block) || return ex
     exs = filter(ex->!isexpr(ex, :line), ex.args)
     length(exs) == 1 || return ex
-    return exs[1]
+    # Recursive unblock'ing for macro expansion
+    return unblock(exs[1])
 end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
@@ -287,14 +288,29 @@ end
 fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def)
+    # Quote, Unblock and Macroexpand
+    # * Always do macro expansion unless it's a quote (for consistency)
+    # * Unblock before checking for Expr(:quote) to support `->` syntax
+    # * Unblock after macro expansion to recognize structures of
+    #   the generated AST
     def′ = unblock(def)
+    if !isexpr(def′, :quote)
+        def = macroexpand(def)
+        def′ = unblock(def)
+    elseif length(def′.args) == 1 && isexpr(def′.args[1], :macrocall)
+        # Special case for documenting macros after definition with
+        # `@doc "<doc string>" :@macro` or
+        # `@doc "<doc string>" :(str_macro"")` syntax.
+        #
+        # Allow more general macrocall for now unless it causes confusion.
+        return objdoc(meta, namify(def′.args[1]))
+    end
     isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
     isexpr(def′, :type) && return typedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :bitstype) && return namedoc(meta, def, def′.args[2])
     isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
     isexpr(def′, :module) && return namedoc(meta, def, def′.args[2])
     fexpr(def′) && return funcdoc(meta, def)
-    isexpr(def′, :macrocall) && (def = namify(def′))
     return objdoc(meta, def)
 end
 
@@ -354,6 +370,19 @@ The `->` is not required if the object is on the same line, e.g.
 
     @doc "foo" foo
 
+# Documenting objects after they are defined
+You can document an object after its definition by
+
+    @doc "foo" function_to_doc
+    @doc "bar" TypeToDoc
+
+For functions, this currently only support documenting the whole function
+Instead of a specific method. See Functions & Methods section below
+
+For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or
+`@doc "macro doc" :(string_macro"")` for string macros. Without the quote `:()`
+the expansion of the macro will be documented.
+
 # Retrieving Documentation
 You can retrieve docs for functions, macros and other objects as
 follows:
@@ -369,7 +398,7 @@ documented, as opposed to the whole function. Method docs are
 concatenated together in the order they were defined to provide docs
 for the function.
 """
-@doc
+:@Base.DocBootstrap.doc
 
 "`doc(obj)`: Get the doc metadata for `obj`."
 doc
