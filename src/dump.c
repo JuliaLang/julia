@@ -792,7 +792,14 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         else {
             if (v == t->instance) {
                 assert(mode != MODE_MODULE_POSTWORK);
+                if (mode == MODE_MODULE) {
+                    // also flag this in the backref table as special
+                    uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, v);
+                    assert(*bp != (uptrint_t)HT_NOTFOUND);
+                    *bp |= 1;
+                }
                 writetag(s, (jl_value_t*)Singleton_tag);
+                jl_serialize_value(s, t);
                 return;
             }
             if (t->size <= 255) {
@@ -981,7 +988,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     if (has_instance) {
         assert(mode != MODE_MODULE_POSTWORK); // there shouldn't be an instance on a type with uid = 0
         dt->instance = jl_deserialize_value(s, &dt->instance);
-        jl_set_typeof(dt->instance, dt);
         jl_gc_wb(dt, dt->instance);
     }
     if (tag == 5) {
@@ -1371,7 +1377,13 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         return v;
     }
     else if (vtag == (jl_value_t*)Singleton_tag) {
-        assert(mode != MODE_MODULE_POSTWORK);
+        if (mode == MODE_MODULE_POSTWORK) {
+            uptrint_t pos = backref_list.len;
+            arraylist_push(&backref_list, NULL);
+            jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
+            backref_list.items[pos] = dt->instance;
+            return dt->instance;
+        }
         jl_value_t *v = (jl_value_t*)jl_gc_alloc_0w();
         if (usetable) {
             uptrint_t pos = backref_list.len;
@@ -1382,6 +1394,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 arraylist_push(&flagref_list, (void*)pos);
             }
         }
+        jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL); // no loc, since if dt is replaced, then dt->instance would be also
+        jl_set_typeof(v, dt);
         return v;
     }
     assert(0);
@@ -1921,13 +1935,14 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
         while (j < flagref_list.len) {
             jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
             int offs = (int)(intptr_t)flagref_list.items[j+1];
-            if (*loc == (jl_value_t*)dt) {
+            jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+            if ((jl_value_t*)dt == o) {
                 if (t != dt) {
                     if (loc) *loc = (jl_value_t*)t;
                     if (offs > 0) backref_list.items[offs] = t;
                 }
             }
-            else if (*loc == v) {
+            else if (v == o) {
                 if (t->instance != v) {
                     *loc = t->instance;
                     if (offs > 0) backref_list.items[offs] = t->instance;
@@ -2088,7 +2103,7 @@ void jl_init_serializer(void)
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_globalref_type,
+                     jl_globalref_type, jl_typeof(jl_emptytuple),
 
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
