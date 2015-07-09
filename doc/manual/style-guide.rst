@@ -155,6 +155,26 @@ In this case :func:`cell(n) <cell>` is better. It is also more helpful to the co
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
 alternatives into one type.
 
+Prefer methods over direct field access
+---------------------------------------
+
+Idiomatic Julia code should treat a module's exported methods as the interface
+to its types. A type's fields are generally considered implementation details
+and user code should not be expected to access them directly. This has several
+benefits:
+
+- Package developers are free to change the implementation without breaking
+  user code
+- Methods can be passed to higher-order constructs like `map` (e.g.
+  `map(length, items))` rather than `[i.length for i in items]`)
+- Methods can be defined on abstract types
+- Methods can describe a conceptual operation that can be shared across
+  disparate types
+
+Julia's dispatch system encourages this style because `play(x::MyType)` only
+defines the `play` method on that particular type, leaving other types to have
+their own implementation.
+
 Use naming conventions consistent with Julia's ``base/``
 --------------------------------------------------------
 
