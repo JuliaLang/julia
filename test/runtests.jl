@@ -205,7 +205,7 @@ end
 @test isa(tryparse(Int64, "a"), Nullable{Int64})
 
 # Make sure exports from Libc and Libdl are defined
-for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:MS_SYNC,:munmap,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:MS_INVALIDATE,:MS_ASYNC,:time,:strerror,:gethostname,:free,:mmap]
+for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:time,:strerror,:gethostname,:free]
     Libc.(x)
 end
 for x in [:RTLD_LOCAL,:RTLD_GLOBAL,:find_library,:dlsym,:RTLD_LAZY,:RTLD_NODELETE,:DL_LOAD_PATH,:RTLD_NOW,:Libdl,:dlext,:dlsym_e,:RTLD_FIRST,:dlopen,:dllist,:dlpath,:RTLD_NOLOAD,:dlclose,:dlopen_e,:RTLD_DEEPBIND]
