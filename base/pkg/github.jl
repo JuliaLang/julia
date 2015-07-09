@@ -2,7 +2,10 @@
 
 module GitHub
 
-import Main, ..LibGit2, ..Dir, ...Pkg.PkgError
+import Main, ...LibGit2, ..Dir, ...Pkg.PkgError
+
+const GITHUB_REGEX =
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 const AUTH_NOTE = "Julia Package Manager"
 const AUTH_DATA = Dict{Any,Any}(
@@ -147,6 +150,11 @@ function fork(owner::AbstractString, repo::AbstractString)
     end
     status == 202 || throw(PkgError("forking $owner/$repo failed: $(response["message"])"))
     return response
+end
+
+function normalize_url(url::AbstractString)
+    m = match(GITHUB_REGEX,url)
+    m == nothing ? url : "https://github.com/$(m.captures[1]).git"
 end
 
 end # module

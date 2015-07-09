@@ -2,8 +2,8 @@
 
 module Generate
 
-import ..LibGit2, ..Read, ...Pkg.PkgError
-importall ..LibGit2
+import ...LibGit2, ..Read, ...Pkg.PkgError
+importall ...LibGit2
 
 copyright_year() =  string(Dates.year(Dates.today()))
 copyright_name(repo::GitRepo) = LibGit2.getconfig(repo, "user.name", "")

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const Cstring_NULL = convert(Cstring, Ptr{UInt8}(C_NULL))
+
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
@@ -37,83 +39,99 @@ SignatureStruct() = SignatureStruct(Ptr{UInt8}(0),
                                     Ptr{UInt8}(0),
                                     TimeStruct())
 
+# immutable StrArrayStruct
+#    strings::Ptr{Ptr{UInt8}}
+#    count::Csize_t
+# end
+# StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
+# function Base.finalize(sa::StrArrayStruct)
+#     sa_ptr = Ref(sa)
+#     ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
+#     return sa_ptr[]
+# end
+
 immutable StrArrayStruct
-   strings::Ptr{Ptr{UInt8}}
+   strings::Ptr{Cstring}
    count::Csize_t
 end
-StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
+StrArrayStruct() = StrArrayStruct(Ptr{Cstring}(C_NULL), zero(Csize_t))
 function Base.finalize(sa::StrArrayStruct)
     sa_ptr = Ref(sa)
     ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
     return sa_ptr[]
 end
 
-immutable StrArrayStruct2
-   strings::Ptr{Cstring}
-   count::Csize_t
-end
-StrArrayStruct2() = StrArrayStruct2(Ptr{Cstring}(C_NULL), zero(Csize_t))
-function Base.finalize(sa::StrArrayStruct2)
-    sa_ptr = Ref(sa)
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct2},), sa_ptr)
-    return sa_ptr[]
-end
-
-
-immutable CheckoutOptionsStruct
+immutable CheckoutOptions
     version::Cuint
+
     checkout_strategy::Cuint
+
     disable_filters::Cint
     dir_mode::Cuint
     file_mode::Cuint
     file_open_flags::Cint
+
     notify_flags::Cuint
     notify_cb::Ptr{Void}
     notify_payload::Ptr{Void}
+
     progress_cb::Ptr{Void}
     progress_payload::Ptr{Void}
-    paths::StrArrayStruct
-    baseline::Ptr{Void}
-    target_directory::Ptr{UInt8}
-    ancestor_label::Ptr{UInt8}
-    our_label::Ptr{UInt8}
-    their_label::Ptr{UInt8}
-end
-CheckoutOptionsStruct(; checkout_strategy::Cuint = GitConst.CHECKOUT_SAFE_CREATE,
-                        disable_filters::Cint = zero(Cint),
-                        dir_mode::Cuint = Cuint(0), # Cuint(0o755),
-                        file_mode::Cuint = Cuint(0), #Cuint(0o644),
-                        file_open_flags::Cint = zero(Cint),
-                        notify_flags::Cuint = GitConst.CHECKOUT_NOTIFY_NONE,
-                        notify_cb::Ptr{Void} = Ptr{Void}(0),
-                        notify_payload::Ptr{Void} = Ptr{Void}(0),
-                        progress_cb::Ptr{Void} = Ptr{Void}(0),
-                        progress_payload::Ptr{Void} = Ptr{Void}(0),
-                        paths::StrArrayStruct = StrArrayStruct(),
-                        baseline::Ptr{Void} = Ptr{Void}(0),
-                        target_directory::Ptr{UInt8} = Ptr{UInt8}(0),
-                        ancestor_label::Ptr{UInt8} =Ptr{UInt8}(0),
-                        our_label::Ptr{UInt8} = Ptr{UInt8}(0),
-                        their_label::Ptr{UInt8} = Ptr{UInt8}(0)
-)=CheckoutOptionsStruct(one(Cuint),
-                        checkout_strategy,
-                        disable_filters,
-                        dir_mode,
-                        file_mode,
-                        file_open_flags,
-                        notify_flags,
-                        notify_cb,
-                        notify_payload,
-                        progress_cb,
-                        progress_payload,
-                        paths,
-                        baseline,
-                        target_directory,
-                        ancestor_label,
-                        our_label,
-                        their_label)
 
-immutable RemoteCallbacksStruct
+    paths::StrArrayStruct
+
+    baseline::Ptr{Void}
+    baseline_index::Ptr{Void}
+
+    target_directory::Cstring
+    ancestor_label::Cstring
+    our_label::Cstring
+    their_label::Cstring
+
+    perfdata_cb::Ptr{Void}
+    perfdata_payload::Ptr{Void}
+end
+CheckoutOptions(; checkout_strategy::Cuint = GitConst.CHECKOUT_SAFE,
+                  disable_filters::Cint = zero(Cint),
+                  dir_mode::Cuint = Cuint(0), # Cuint(0o755),
+                  file_mode::Cuint = Cuint(0), #Cuint(0o644),
+                  file_open_flags::Cint = zero(Cint),
+                  notify_flags::Cuint = GitConst.CHECKOUT_NOTIFY_NONE,
+                  notify_cb::Ptr{Void} = Ptr{Void}(0),
+                  notify_payload::Ptr{Void} = Ptr{Void}(0),
+                  progress_cb::Ptr{Void} = Ptr{Void}(0),
+                  progress_payload::Ptr{Void} = Ptr{Void}(0),
+                  paths::StrArrayStruct = StrArrayStruct(),
+                  baseline::Ptr{Void} = Ptr{Void}(0),
+                  baseline_index::Ptr{Void} = Ptr{Void}(0),
+                  target_directory::Cstring = Cstring_NULL,
+                  ancestor_label::Cstring = Cstring_NULL,
+                  our_label::Cstring = Cstring_NULL,
+                  their_label::Cstring = Cstring_NULL,
+                  perfdata_cb::Ptr{Void} = Ptr{Void}(0),
+                  perfdata_payload::Ptr{Void} = Ptr{Void}(0)
+)=CheckoutOptions(one(Cuint),
+                  checkout_strategy,
+                  disable_filters,
+                  dir_mode,
+                  file_mode,
+                  file_open_flags,
+                  notify_flags,
+                  notify_cb,
+                  notify_payload,
+                  progress_cb,
+                  progress_payload,
+                  paths,
+                  baseline,
+                  baseline_index,
+                  target_directory,
+                  ancestor_label,
+                  our_label,
+                  their_label,
+                  perfdata_cb,
+                  perfdata_payload)
+
+immutable RemoteCallbacks
     version::Cuint
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -124,54 +142,72 @@ immutable RemoteCallbacksStruct
     pack_progress::Ptr{Void}
     push_transfer_progress::Ptr{Void}
     push_update_reference::Ptr{Void}
+    push_negotiation::Ptr{Void}
+    transport::Ptr{Void}
     payload::Ptr{Void}
 end
-RemoteCallbacksStruct() = RemoteCallbacksStruct(one(Cuint),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0),
-                                                Ptr{Void}(0))
+RemoteCallbacks() = RemoteCallbacks(one(Cuint),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0),
+                                    Ptr{Void}(0))
 
-immutable CloneOptionsStruct
+immutable FetchOptions
     version::Cuint
-    checkout_opts::CheckoutOptionsStruct
-    remote_callbacks::RemoteCallbacksStruct
+    callbacks::RemoteCallbacks
+    prune::Cint
+    update_fetchhead::Cint
+    download_tags::Cint
+end
+FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
+               prune::Cint = GitConst.FETCH_PRUNE_UNSPECIFIED,
+               update_fetchhead::Cint = one(Cint),
+               download_tags::Cint = GitConst.REMOTE_DOWNLOAD_TAGS_AUTO
+) = FetchOptions(one(Cuint),
+                 callbacks,
+                 prune,
+                 update_fetchhead,
+                 download_tags)
+
+immutable CloneOptions
+    version::Cuint
+    checkout_opts::CheckoutOptions
+    fetch_opts::FetchOptions
     bare::Cint
     localclone::Cint
-    checkout_branch::Ptr{UInt8}
-    signature::Ptr{Void}
+    checkout_branch::Cstring
     repository_cb::Ptr{Void}
     repository_cb_payload::Ptr{Void}
     remote_cb::Ptr{Void}
     remote_cb_payload::Ptr{Void}
 end
-CloneOptionsStruct(; checkout_opts::CheckoutOptionsStruct = CheckoutOptionsStruct(),
-                     remote_callbacks::RemoteCallbacksStruct = RemoteCallbacksStruct(),
-                     bare::Cint = zero(Cint),
-                     localclone::Cint = zero(Cint),
-                     checkout_branch::Ptr{UInt8} = Ptr{UInt8}(0),
-                     signature::Ptr{Void} = Ptr{Void}(0),
-                     repository_cb::Ptr{Void} = Ptr{Void}(0),
-                     repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
-                     remote_cb::Ptr{Void} = Ptr{Void}(0),
-                     remote_cb_payload::Ptr{Void} = Ptr{Void}(0)
-)=CloneOptionsStruct(one(Cuint),
-                     checkout_opts,
-                     remote_callbacks,
-                     bare,
-                     localclone,
-                     checkout_branch,
-                     signature,
-                     repository_cb,
-                     repository_cb_payload,
-                     remote_cb,
-                     remote_cb_payload)
+CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
+               fetch_opts::FetchOptions = FetchOptions(),
+               bare::Cint = zero(Cint),
+               localclone::Cint = GitConst.CLONE_LOCAL_AUTO,
+               checkout_branch::Cstring = Cstring_NULL,
+               repository_cb::Ptr{Void} = Ptr{Void}(0),
+               repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
+               remote_cb::Ptr{Void} = Ptr{Void}(0),
+               remote_cb_payload::Ptr{Void} = Ptr{Void}(0)
+)=CloneOptions(one(Cuint),
+               checkout_opts,
+               fetch_opts,
+               bare,
+               localclone,
+               checkout_branch,
+               repository_cb,
+               repository_cb_payload,
+               remote_cb,
+               remote_cb_payload)
 
 # git diff option struct
 immutable DiffOptionsStruct
@@ -301,19 +337,19 @@ IndexEntry() = IndexEntry(IndexTime(),
                           Ptr{UInt8}(0))
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
-immutable RebaseOptionsStruct
+immutable RebaseOptions
     version::Cuint
     quiet::Cint
     rewrite_notes_ref::Cstring
 end
-RebaseOptionsStruct()=RebaseOptionsStruct(one(Cuint), Cint(1), convert(Cstring, Ptr{UInt8}(C_NULL)))
+RebaseOptions()=RebaseOptions(one(Cuint), Cint(1), Cstring_NULL)
 
 immutable RebaseOperation
     optype::Cint
     id::Oid
     exec::Cstring
 end
-RebaseOperation()=RebaseOperation(Cint(0),Oid(),convert(Cstring, Ptr{UInt8}(C_NULL)))
+RebaseOperation()=RebaseOperation(Cint(0), Oid(), Cstring_NULL)
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
 # Abstract object types

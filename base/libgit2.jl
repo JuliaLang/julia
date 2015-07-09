@@ -2,13 +2,9 @@
 
 module LibGit2
 
-import ...Pkg.PkgError
+import Base: merge!, cat
 
-export with, with_warn
-export GitRepo, GitConfig, GitIndex
-
-const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+export with, GitRepo, GitConfig
 
 include("libgit2/const.jl")
 include("libgit2/types.jl")
@@ -29,17 +25,12 @@ include("libgit2/blob.jl")
 include("libgit2/diff.jl")
 include("libgit2/rebase.jl")
 include("libgit2/repl.jl")
-
+include("libgit2/utils.jl")
 
 immutable State
     head::Oid
     index::Oid
     work::Oid
-end
-
-function normalize_url(url::AbstractString)
-    m = match(GITHUB_REGEX,url)
-    m == nothing ? url : "https://github.com/$(m.captures[1]).git"
 end
 
 """Return HEAD Oid as string"""
@@ -115,22 +106,6 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     return files
 end
 
-function merge_base(one::AbstractString, two::AbstractString, repo::GitRepo)
-    oid1_ptr = Ref(Oid(one))
-    oid2_ptr = Ref(Oid(two))
-    moid_ptr = Ref(Oid())
-    moid = try
-        @check ccall((:git_merge_base, :libgit2), Cint,
-                (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
-                moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
-        moid_ptr[]
-    catch e
-        #warn("Pkg:",path(repo),"=>",e.msg)
-        Oid()
-    end
-    return moid
-end
-
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
     merge_base(a, b, repo) == A
@@ -187,9 +162,7 @@ function fetch{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        with(default_signature(repo)) do sig
-            fetch(rmt, sig, refspecs, msg="from $(url(rmt))")
-        end
+        fetch(rmt, refspecs, msg="from $(url(rmt))")
     catch err
         warn("fetch: $err")
     finally
@@ -209,9 +182,7 @@ function push{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        with(default_signature(repo)) do sig
-            push(rmt, sig, refspecs, force=force, msg="to $(url(rmt))")
-        end
+        push(rmt, refspecs, force=force, msg="to $(url(rmt))")
     catch err
         warn("push: $err")
     finally
@@ -222,13 +193,13 @@ end
 """ git branch """
 function branch(repo::GitRepo)
     head_ref = head(repo)
-    brnch = ""
     try
-        brnch = branch(head_ref)
+        branch(head_ref)
+    catch
+        ""
     finally
         finalize(head_ref)
     end
-    return brnch
 end
 
 """ git checkout [-b|-B] <branch> [<start-point>] [--track <remote>/<branch>] """
@@ -306,8 +277,8 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     try
         peeled = peel(obj, GitConst.OBJ_COMMIT)
         peeled == nothing && return
-        opts = force ? CheckoutOptionsStruct(checkout_strategy = GitConst.CHECKOUT_FORCE) :
-                           CheckoutOptionsStruct()
+        opts = force ? CheckoutOptions(checkout_strategy = GitConst.CHECKOUT_FORCE) :
+                       CheckoutOptions()
         try
             # detach commit
             obj_oid = Oid(peeled)
@@ -327,24 +298,18 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
 end
 
 """ git clone [-b <branch>] [--bare] <url> <dir> """
-function clone(url::AbstractString, path::AbstractString;
-               branch::AbstractString="",
-               bare::Bool = false,
+function clone(repo_url::AbstractString, repo_path::AbstractString;
+               checkout_branch::AbstractString="",
+               isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL)
     # setup colne options
-    clone_opts = CloneOptionsStruct(
-                    bare = Int32(bare),
-                    checkout_branch = isempty(branch) ? Ptr{UInt8}(C_NULL) : pointer(branch),
+    clone_opts = CloneOptions(
+                    bare = Int32(isbare),
+                    checkout_branch = isempty(checkout_branch) ? Cstring_NULL :
+                                      convert(Cstring, pointer(checkout_branch)),
                     remote_cb = remote_cb
                 )
-
-    # start cloning
-    clone_opts_ref = Ref(clone_opts)
-    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_clone, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Cstring, Cstring, Ref{CloneOptionsStruct}),
-            repo_ptr_ptr, url, path, clone_opts_ref)
-    return GitRepo(repo_ptr_ptr[])
+    return clone(repo_url, repo_path, clone_opts)
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """
@@ -417,7 +382,7 @@ function merge!(repo::GitRepo, committish::AbstractString=""; fast_forward::Bool
                 reset!(repo, brn_ref_oid, GitConst.RESET_HARD)
             elseif (ma & GitConst.MERGE_ANALYSIS_NORMAL == GitConst.MERGE_ANALYSIS_NORMAL)
                 fast_forward && return false # do not do merge
-                merge(repo, hua)
+                merge!(repo, hua)
                 cleanup(repo)
                 info("Review and commit merged changes.")
             else
@@ -507,7 +472,7 @@ function restore(s::State, repo::GitRepo)
     reset!(repo, GitConst.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
-        opts = CheckoutOptionsStruct(
+        opts = CheckoutOptions(
                 checkout_strategy = GitConst.CHECKOUT_FORCE |     # check the index out to work
                                     GitConst.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
         checkout_index(repo, Nullable(idx), options = opts)
@@ -530,7 +495,7 @@ end
 
 function __init__()
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
-    err > 0 || throw(PkgError("error initializing LibGit2 module"))
+    err > 0 || throw(ErrorException("error initializing LibGit2 module"))
     atexit() do
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end

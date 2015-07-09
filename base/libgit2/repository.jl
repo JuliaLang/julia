@@ -3,8 +3,8 @@
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{UInt8}), repo_ptr_ptr, path)
-    if err != Error.GIT_OK
+                (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
+    if err != Error.GIT_OK[]
         if repo_ptr_ptr[] != C_NULL
             finalize(GitRepo(repo_ptr_ptr[]))
         end
@@ -22,7 +22,7 @@ end
 function init(path::AbstractString, bare::Cuint = Cuint(0))
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_init, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{UInt8}, Cuint), repo_ptr_ptr, path, bare)
+                (Ptr{Ptr{Void}}, Cstring, Cuint), repo_ptr_ptr, path, bare)
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -45,7 +45,7 @@ end
 function revparse(repo::GitRepo, objname::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_revparse_single, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}), obj_ptr_ptr, repo.ptr, objname)
+            (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, objname)
     err != 0 && return nothing
     return GitAnyObject(obj_ptr_ptr[])
 end
@@ -73,9 +73,9 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
               obj_ptr_ptr, r.ptr, id_ptr, git_otype)
     end
-    if err == Error.ENOTFOUND
+    if err == Error.ENOTFOUND[]
         return nothing
-    elseif err != Error.GIT_OK
+    elseif err != Error.GIT_OK[]
         if obj_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(obj_ptr_ptr[]))
         end
@@ -89,7 +89,7 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
 end
 
 function gitdir(repo::GitRepo)
-    return bytestring(ccall((:git_repository_path, :libgit2), Ptr{UInt8},
+    return bytestring(ccall((:git_repository_path, :libgit2), Cstring,
                             (Ptr{Void},), repo.ptr))
 end
 
@@ -103,9 +103,9 @@ function peel(obj::GitObject, obj_type::Cint)
     git_otype = getobjecttype(obj_type)
     err = ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), peeled_ptr_ptr, obj.ptr, obj_type)
-    if err == Error.ENOTFOUND
+    if err == Error.ENOTFOUND[]
         return Oid()
-    elseif err != Error.GIT_OK
+    elseif err != Error.GIT_OK[]
         if peeled_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(peeled_ptr_ptr[]))
         end
@@ -115,24 +115,24 @@ function peel(obj::GitObject, obj_type::Cint)
 end
 
 function checkout_tree(repo::GitRepo, obj::GitObject;
-                       options::CheckoutOptionsStruct = CheckoutOptionsStruct())
+                       options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
+                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
                  repo.ptr, obj.ptr, Ref(options))
 end
 
 function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
-                        options::CheckoutOptionsStruct = CheckoutOptionsStruct())
+                        options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptionsStruct}),
+                 (Ptr{Void}, Ptr{Void}, Ptr{CheckoutOptions}),
                  repo.ptr,
                  isnull(idx) ? C_NULL : Base.get(idx).ptr,
                  Ref(options))
 end
 
-function checkout_head(repo::GitRepo; options::CheckoutOptionsStruct = CheckoutOptionsStruct())
+function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_head, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{CheckoutOptionsStruct}),
+                 (Ptr{Void}, Ptr{CheckoutOptions}),
                  repo.ptr, Ref(options))
 end
 
@@ -147,11 +147,18 @@ function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractS
 end
 
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
-               checkout_opts::CheckoutOptionsStruct = CheckoutOptionsStruct())
-    with(default_signature(repo)) do sig
-        msg = "pkg.libgit2.reset: moving to $(string(Oid(obj)))"
-        @check ccall((:git_reset, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptionsStruct}, Ptr{SignatureStruct}, Ptr{UInt8}),
-                      repo.ptr, obj.ptr, mode, Ref(checkout_opts), sig.ptr, msg)
-    end
+               checkout_opts::CheckoutOptions = CheckoutOptions())
+    @check ccall((:git_reset, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}, Ptr{SignatureStruct}, Ptr{UInt8}),
+                  repo.ptr, obj.ptr, mode, Ref(checkout_opts))
+end
+
+function clone(repo_url::AbstractString, repo_path::AbstractString,
+               clone_opts::CloneOptions = CloneOptions())
+    clone_opts_ref = Ref(clone_opts)
+    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_clone, :libgit2), Cint,
+            (Ptr{Ptr{Void}}, Cstring, Cstring, Ref{CloneOptions}),
+            repo_ptr_ptr, repo_url, repo_path, clone_opts_ref)
+    return GitRepo(repo_ptr_ptr[])
 end

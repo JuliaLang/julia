@@ -2,7 +2,7 @@
 
 module Pkg
 
-export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
+export Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
        update, resolve, register, tag, publish, generate, test,
        build, free, pin
@@ -14,7 +14,7 @@ type PkgError <: Exception
     msg::AbstractString
 end
 
-for file in split("git libgit2 dir github types reqs cache read query resolve write generate entry")
+for file in split("dir github types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd

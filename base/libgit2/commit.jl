@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function message(c::GitCommit, raw::Bool=false)
-    local msg_ptr::Ptr{UInt8}
-    msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), CString, (Ptr{Void},), c.ptr) :
-                   ccall((:git_commit_message, :libgit2), CString, (Ptr{Void},), c.ptr)
-    if msg_ptr == C_NULL
+    local msg_ptr::Cstring
+    msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
+                   ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
+    if msg_ptr == Cstring_NULL
         return nothing
     end
     return bytestring(msg_ptr)

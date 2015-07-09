@@ -81,42 +81,36 @@ end
 
 show(io::IO, mt::MethodTable) = show_method_table(io, mt)
 
-function inbase(m::Module)
-    if m == Base
-        true
-    else
-        parent = module_parent(m)
-        parent === m ? false : inbase(parent)
-    end
-end
-fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
-function url(m::Method)
-    M = m.func.code.module
-    (m.func.code.file == :null || m.func.code.file == :string) && return ""
-    file = string(m.func.code.file)
-    line = m.func.code.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-    if inbase(M)
-        return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
-    else
-        try
-            d = dirname(file)
-            u = Git.readchomp(`config remote.origin.url`, dir=d)
-            u = match(Git.GITHUB_REGEX,u).captures[1]
-            root = cd(d) do # dir=d confuses --show-toplevel, apparently
-                Git.readchomp(`rev-parse --show-toplevel`)
-            end
-            if startswith(file, root)
-                commit = Git.readchomp(`rev-parse HEAD`, dir=d)
-                return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
-            else
-                return fileurl(file)
-            end
-        catch
-            return fileurl(file)
-        end
-    end
-end
+inbase(m::Module) = m == Base ? true : m == Main ? false : inbase(module_parent(m))
+fileurl(file) = let f = find_source_file(file); f == nothing ? "" : "file://"*f; end
+#TODO: Convert to libgit2
+# function url(m::Method)
+#     M = m.func.code.module
+#     (m.func.code.file == :null || m.func.code.file == :string) && return ""
+#     file = string(m.func.code.file)
+#     line = m.func.code.line
+#     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+#     if inbase(M)
+#         return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
+#     else
+#         try
+#             d = dirname(file)
+#             u = Git.readchomp(`config remote.origin.url`, dir=d)
+#             u = match(Git.GITHUB_REGEX,u).captures[1]
+#             root = cd(d) do # dir=d confuses --show-toplevel, apparently
+#                 Git.readchomp(`rev-parse --show-toplevel`)
+#             end
+#             if startswith(file, root)
+#                 commit = Git.readchomp(`rev-parse HEAD`, dir=d)
+#                 return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
+#             else
+#                 return fileurl(file)
+#             end
+#         catch
+#             return fileurl(file)
+#         end
+#     end
+# end
 
 function writemime(io::IO, ::MIME"text/html", m::Method)
     print(io, m.func.code.name)
