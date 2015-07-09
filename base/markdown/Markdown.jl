@@ -21,7 +21,7 @@ include("render/latex.jl")
 
 include("render/terminal/render.jl")
 
-export readme, license, @md_str, @doc_str
+export readme, license, @md_str, @doc_markdown
 
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 parse_file(file::String; flavor = julia) = parse(readall(file), flavor = flavor)
@@ -51,8 +51,8 @@ macro md_str(s, t...)
     mdexpr(s, t...)
 end
 
-macro doc_str(s, t...)
-    docexpr(s, t...)
+macro doc_markdown(s, t...)
+    :(parse($(esc(s))))
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
