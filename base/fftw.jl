@@ -294,6 +294,109 @@ function fix_kinds(region, kinds)
     return kinds
 end
 
+immutable Identity
+end
+
+@inline call(::Identity, x) = x
+
+immutable ToReal
+end
+
+@inline call(::ToReal, x) = real(x)
+
+immutable PlanWrap{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrap{T}}, plan::P) = PlanWrap{T, P}(plan)
+
+function call{T<:fftwComplex}(w::PlanWrap{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    W = similar(Z, T)
+    execute(w.p.plan, Z, W)
+    return W
+end
+
+function call{T<:Number}(w::PlanWrap{T}, Z::StridedArray{T})
+    W = complexfloat(Z) # in-place transform
+    assert_applicable(w.p, W)
+    execute(w.p.plan, W, W)
+    return W
+end
+
+immutable PlanWrap!{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrap!{T}}, plan::P) = PlanWrap!{T, P}(plan)
+
+function call{T<:fftwComplex}(w::PlanWrap!{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    execute(w.p.plan, Z, Z)
+    return Z
+end
+
+immutable ScaleWrap{W, N}
+    w::W
+    nrm::N
+end
+
+call(w::ScaleWrap, Z) = scale!(w.w(Z), w.nrm)
+
+immutable PlanWrapR{Ti, To, Copy, Nd, P}
+    p::P
+    osize::NTuple{Nd, Int}
+end
+
+call{Ti, To, Copy, Nd, P}(::Type{PlanWrapR{Ti, To, Copy, Nd}}, p::P, osize) =
+    PlanWrapR{Ti, To, Copy, Nd, P}(p, (osize...))
+
+function call{Ti, To}(w::PlanWrapR{Ti, To, false}, Z::StridedArray{Ti})
+    assert_applicable(w.p, Z)
+    W = Array(To, w.osize...)
+    execute(w.p.plan, Z, W)
+    return W
+end
+
+function call{Ti, To}(w::PlanWrapR{Ti, To, true}, Z::StridedArray{Ti})
+    assert_applicable(w.p, Z)
+    W = Array(To, w.osize...)
+    execute(w.p.plan, copy(Z), W)
+    return W
+end
+
+immutable PlanWrapR2R{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrapR2R{T}}, plan::P) = PlanWrapR2R{T, P}(plan)
+
+function call{T<:fftwNumber}(w::PlanWrapR2R{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    W = similar(Z, T)
+    execute_r2r(w.p.plan, Z, W)
+    return W
+end
+
+function call{T<:Number}(w::PlanWrapR2R{T}, Z::StridedArray{T})
+    # Missing assert_applicable?
+    W = T <: Complex ? complexfloat(Z) : float(Z)
+    execute_r2r(w.p.plan, W, W)
+    return W
+end
+
+immutable PlanWrapR2R!{T, P}
+    p::P
+end
+
+call{T, P}(::Type{PlanWrapR2R!{T}}, plan::P) = PlanWrapR2R!{T, P}(plan)
+
+function call{T<:fftwNumber}(w::PlanWrapR2R!{T}, Z::StridedArray{T})
+    assert_applicable(w.p, Z)
+    execute_r2r(w.p.plan, Z, Z)
+    return Z
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -450,24 +553,14 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                          tlim::Real)
             Y = similar(X, T)
             p = Plan(X, Y, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                assert_applicable(p, Z)
-                W = similar(Z, T)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrap{T}(p)
         end
 
         function $plan_f{T<:Number}(X::StridedArray{T}, region,
                                     flags::Unsigned, tlim::Real)
             Y = complexfloat(X) # in-place transform
             p = Plan(Y, Y, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                W = complexfloat(Z) # in-place transform
-                assert_applicable(p, W)
-                execute(p.plan, W, W)
-                return W
-            end
+            return PlanWrap{T}(p)
         end
 
         function $plan_f!{T<:fftwComplex}(X::StridedArray{T},
@@ -475,11 +568,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                           flags::Unsigned,
                                                           tlim::Real)
             p = Plan(X, X, region, $direction, flags, tlim)
-            return Z::StridedArray{T} -> begin
-                assert_applicable(p, Z)
-                execute(p.plan, Z, Z)
-                return Z
-            end
+            return PlanWrap!{T}(p)
         end
 
         $f(X::StridedArray) = $f(X, 1:ndims(X))
@@ -514,14 +603,14 @@ for (f,fb) in ((:ifft,:bfft), (:ifft!,:bfft!))
         function $pf(X, region, flags, tlim)
             nrm = normalization(X, region)
             p = $pfb(X, region, flags, tlim)
-            return Z -> scale!(p(Z), nrm)
+            return ScaleWrap(p, nrm)
         end
         $pf(X, region, flags) = $pf(X, region, flags, NO_TIMELIMIT)
         $pf(X, region) = $pf(X, region, ESTIMATE, NO_TIMELIMIT)
         function $pf(X)
             nrm = normalization(X)
             p = $pfb(X)
-            return Z -> scale!(p(Z), nrm)
+            return ScaleWrap(p, nrm)
         end
     end
 end
@@ -553,12 +642,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
             p = Plan(X, Y, region, flags, tlim)
-            return Z::StridedArray{$Tr} -> begin
-                assert_applicable(p, Z)
-                W = Array($Tc, osize...)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrapR{$Tr, $Tc, false, ndims(X)}(p, osize)
         end
 
         # FFTW currently doesn't support PRESERVE_INPUT for
@@ -609,12 +693,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize[region] = d
             Y = Array($Tr, osize...)
             p = Plan(X, Y, region, flags | PRESERVE_INPUT, tlim)
-            return Z::StridedArray{$Tc} -> begin
-                assert_applicable(p, Z)
-                W = Array($Tr, osize...)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrapR{$Tc, $Tr, false, ndims(X)}(p, osize)
         end
 
         function plan_brfft(X::StridedArray{$Tc}, d::Integer, region,
@@ -629,13 +708,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             Y = Array($Tr, osize...)
             X = copy(X)
             p = Plan(X, Y, region, flags, tlim)
-            return Z::StridedArray{$Tc} -> begin
-                assert_applicable(p, Z)
-                Z = copy(Z)
-                W = Array($Tr, osize...)
-                execute(p.plan, Z, W)
-                return W
-            end
+            return PlanWrapR{$Tc, $Tr, true, ndims(X)}(p, osize)
         end
 
         rfft(X::StridedArray) = rfft(X, 1:ndims(X))
@@ -675,7 +748,7 @@ function plan_irfft(X::StridedArray, d::Integer, region, flags, tlim)
     osize = [size(X)...]
     osize[d1] = d
     nrm = 1 / prod(osize[[region...]])
-    return Z -> scale!(p(Z), nrm)
+    return ScaleWrap(p, nrm)
 end
 
 plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
@@ -697,19 +770,19 @@ rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
 irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
 brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
 
-plan_fft(x::Number) = x -> x
-plan_ifft(x::Number) = x -> x
-plan_bfft(x::Number) = x -> x
-plan_rfft(x::Real) = x -> x
-plan_irfft(x::Number, d::Integer) = (irfft(x,d); x -> real(x))
-plan_brfft(x::Number, d::Integer) = (brfft(x,d); x -> real(x))
+plan_fft(x::Number) = Identity()
+plan_ifft(x::Number) = Identity()
+plan_bfft(x::Number) = Identity()
+plan_rfft(x::Real) = Identity()
+plan_irfft(x::Number, d::Integer) = (irfft(x,d); ToReal())
+plan_brfft(x::Number, d::Integer) = (brfft(x,d); ToReal())
 
-plan_fft(x::Number, dims) = (fft(x,dims); x -> x)
-plan_ifft(x::Number, dims) = (ifft(x,dims); x -> x)
-plan_bfft(x::Number, dims) = (bfft(x,dims); x -> x)
-plan_rfft(x::Real, dims) = (rfft(x,dims); x -> x)
-plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); x -> real(x))
-plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); x -> real(x))
+plan_fft(x::Number, dims) = (fft(x,dims); Identity())
+plan_ifft(x::Number, dims) = (ifft(x,dims); Identity())
+plan_bfft(x::Number, dims) = (bfft(x,dims); Identity())
+plan_rfft(x::Real, dims) = (rfft(x,dims); Identity())
+plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); ToReal())
+plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); ToReal())
 
 plan_fft(x::Number, dims, flags) = plan_fft(x, dims)
 plan_ifft(x::Number, dims, flags) = plan_ifft(x, dims)
@@ -753,33 +826,20 @@ function plan_r2r{T<:fftwNumber}(
     X::StridedArray{T}, kinds, region, flags::Unsigned, tlim::Real)
     Y = similar(X, T)
     p = Plan_r2r(X, Y, region, kinds, flags, tlim)
-    return Z::StridedArray{T} -> begin
-        assert_applicable(p, Z)
-        W = similar(Z, T)
-        execute_r2r(p.plan, Z, W)
-        return W
-    end
+    return PlanWrapR2R{T}(p)
 end
 
 function plan_r2r{T<:Number}(X::StridedArray{T}, kinds, region,
                              flags::Unsigned, tlim::Real)
-    Y = T<:Complex ? complexfloat(X) : float(X)
+    Y = T <: Complex ? complexfloat(X) : float(X)
     p = Plan_r2r(Y, Y, region, kinds, flags, tlim)
-    return Z::StridedArray{T} -> begin
-        W = T<:Complex ? complexfloat(Z) : float(Z)
-        execute_r2r(p.plan, W, W)
-        return W
-    end
+    return PlanWrapR2R{T}(p)
 end
 
 function plan_r2r!{T<:fftwNumber}(
     X::StridedArray{T}, kinds,region,flags::Unsigned, tlim::Real)
     p = Plan_r2r(X, X, region, kinds, flags, tlim)
-    return Z::StridedArray{T} -> begin
-        assert_applicable(p, Z)
-        execute_r2r(p.plan, Z, Z)
-        return Z
-    end
+    return PlanWrapR2R!{T}(p)
 end
 
 for f in (:plan_r2r, :plan_r2r!)
