@@ -3082,6 +3082,14 @@ catch err
     @test err.got == 0x1
 end
 
+# 11996
+try
+    @eval NTuple{-1, Int}
+catch err
+    @test isa(err, ErrorException)
+    @test err.msg == "size or dimension is negative: -1"
+end
+
 try
     @eval Union{Int, 1}
 catch err
