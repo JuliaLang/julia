@@ -3061,43 +3061,13 @@ Base.convert(::Type{Foo11874},x::Int) = float(x)
 
 @test_throws TypeError bar11874(1)
 
-# issue 9233
-try
-    # Seems to be evaluated and throw an error at compile time if not
-    # using `@eval`
-    @eval NTuple{Int, 1}
-catch err
-    @test isa(err, TypeError)
-    @test err.func == :apply_type
-    @test err.expected == Int
-    @test err.got == Int
-end
-
-try
-    @eval NTuple{0x1, Int}
-catch err
-    @test isa(err, TypeError)
-    @test err.func == :apply_type
-    @test err.expected == Int
-    @test err.got == 0x1
-end
+# issue #9233
+@test_throws TypeError NTuple{Int, 1}
+@test_throws TypeError NTuple{0x1, Int}
 
 # 11996
-try
-    @eval NTuple{-1, Int}
-catch err
-    @test isa(err, ErrorException)
-    @test err.msg == "size or dimension is negative: -1"
-end
-
-try
-    @eval Union{Int, 1}
-catch err
-    @test isa(err, TypeError)
-    @test err.func == :apply_type
-    @test err.expected == Type
-    @test err.got == 1
-end
+@test_throws ErrorException NTuple{-1, Int}
+@test_throws TypeError Union{Int, 1}
 
 # issue #10930
 @test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
