@@ -135,11 +135,11 @@ typealias TA Union(T, IT)
 "@mac"
 macro mac() end
 
-"G"
-G = :G
-
-"K"
-const K = :K
+# "G"
+# G = :G
+#
+# "K"
+# const K = :K
 
 end
 
@@ -192,8 +192,8 @@ let mac = getfield(DocsTest, symbol("@mac"))
     @test funcdoc.main == doc"@mac"
 end
 
-@test meta(DocsTest)[:G] == doc"G"
-@test meta(DocsTest)[:K] == doc"K"
+# @test meta(DocsTest)[:G] == doc"G"
+# @test meta(DocsTest)[:K] == doc"K"
 
 # issue 11993
 # Check if we are documenting the expansion of the macro

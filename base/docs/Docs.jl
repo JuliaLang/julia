@@ -281,12 +281,15 @@ function docm(meta, def)
     @match def begin
         (f_(__) = _)          -> funcdoc(meta, def)
         function f_(__) _ end -> funcdoc(meta, def)
+        function f_ end       ->  objdoc(meta, def)
         macro m_(__) _ end    -> namedoc(meta, def, symbol("@", m))
         type T_ _ end         -> typedoc(meta, def, namify(T))
         immutable T_ _ end    -> typedoc(meta, def, namify(T))
         (abstract T_)         -> namedoc(meta, def, namify(T))
         (bitstype _ T_)       -> namedoc(meta, def, namify(T))
+        (typealias T_ _)      ->  objdoc(meta, def)
         module M_ _ end       -> namedoc(meta, def, M)
+        _Expr                 -> error("Unsupported @doc syntax $def")
         _                     -> objdoc(meta, def)
     end
 end
