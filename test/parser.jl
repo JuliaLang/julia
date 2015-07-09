@@ -146,3 +146,10 @@ macro test999_str(args...); args; end
 @test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
 @test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
 @test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
+
+# issue 11970
+@test parseall("""
+macro f(args...) end; @f ""
+""") == Expr(:toplevel,
+            Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
+            Expr(:macrocall, symbol("@f"), ""))
