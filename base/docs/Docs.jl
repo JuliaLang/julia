@@ -507,7 +507,7 @@ macro repl(ex)
                   haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
-            if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
+            if $(isfield(ex) && :(isa($(esc(ex.args[1])), DataType)))
                 $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
             else
                 # Backwards-compatible with the previous help system, for now
