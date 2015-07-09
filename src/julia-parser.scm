@@ -977,9 +977,9 @@
                    (loop c))))
             ((#\[ )
 	     (if (ts:space? s)
-             (syntax-deprecation-warning s
-                                         (string (deparse ex) " " (deparse t))
-                                         (string (deparse ex) (deparse t))))
+             (syntax-deprecation s
+                                 (string (deparse ex) " " (deparse t))
+                                 (string (deparse ex) (deparse t))))
 	     (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
@@ -2012,7 +2012,7 @@
                                      (cddr vex))
                                 (error "inconsistent shape in cell expression")
                                 (begin
-                                  (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
+                                  (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
                                   `(cell1d ,@(cdr vex)))))))))))
 
           ;; cat expression
