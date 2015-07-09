@@ -41,7 +41,7 @@ function repl_cmd(ex)
         end
         try
             repourl = cmd[2]
-            repo = clone(repourl, repopath, bare=("--bare" in cmd), )
+            repo = clone(repourl, repopath, isbare=("--bare" in cmd), )
             finalize(repo)
             println("Cloned $repourl into $repopath")
         catch ex

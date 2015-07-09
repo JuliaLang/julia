@@ -2,7 +2,7 @@
 
 module Read
 
-import ..LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError
+import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError
 using ..Types
 
 readstrip(path...) = strip(readall(joinpath(path...)))
@@ -119,9 +119,9 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     for (ver,info) in avail
         sha1 = info.sha1
         base = if cache_has_head && LibGit2.iscommit(sha1, crepo)
-            LibGit2.merge_base(head, sha1, crepo)
+            LibGit2.merge_base(crepo, head, sha1)
         elseif LibGit2.iscommit(sha1, prepo)
-            LibGit2.merge_base(head, sha1, prepo)
+            LibGit2.merge_base(prepo, head, sha1)
         else
             Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
             continue

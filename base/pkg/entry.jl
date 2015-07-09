@@ -3,8 +3,9 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..LibGit2, ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
-importall ..LibGit2
+import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
+import ...LibGit2
+importall ...LibGit2
 import ...Pkg.PkgError
 using ..Types
 
@@ -224,15 +225,15 @@ function clone(url_or_pkg::AbstractString)
     clone(url,pkg)
 end
 
-function checkout(pkg::AbstractString, branch::AbstractString, merge::Bool, pull::Bool)
+function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
             LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
             LibGit2.branch!(repo, branch, track=LibGit2.GitConst.REMOTE_ORIGIN)
-            merge && LibGit2.merge!(repo, fast_forward=true) # merge changes
-            if pull
+            do_merge && LibGit2.merge!(repo, fast_forward=true) # merge changes
+            if do_pull
                 info("Pulling $pkg latest $branch...")
                 LibGit2.fetch(repo)
                 LibGit2.merge!(repo, fast_forward=true)

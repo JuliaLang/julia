@@ -3,7 +3,7 @@
 function GitConfig(path::AbstractString)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_config_open_ondisk, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{UInt8}), cfg_ptr_ptr, path)
+                 (Ptr{Ptr{Void}}, Cstring), cfg_ptr_ptr, path)
     err !=0 && return nothing
     return GitConfig(cfg_ptr_ptr[])
 end

@@ -53,9 +53,9 @@ function peel(ref::GitReference, obj_type::Cint)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_reference_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, obj_type)
-    if err == Error.ENOTFOUND
+    if err == Error.ENOTFOUND[]
         return Oid()
-    elseif err != Error.GIT_OK
+    elseif err != Error.GIT_OK[]
         if obj_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(obj_ptr_ptr[]))
         end
@@ -116,9 +116,9 @@ function lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=
     err = ccall((:git_branch_lookup, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Cint),
                  ref_ptr_ptr, repo.ptr, branch_name, branch_type)
-    if err == Error.ENOTFOUND
+    if err == Error.ENOTFOUND[]
         return nothing
-    elseif err != Error.GIT_OK
+    elseif err != Error.GIT_OK[]
         if repo_ptr_ptr[] != C_NULL
             finalize(GitReference(ref_ptr_ptr[]))
         end

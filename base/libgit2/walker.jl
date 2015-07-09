@@ -11,7 +11,7 @@ function Base.start(w::GitRevWalker)
     id_ptr = Ref(Oid())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
                 (Ptr{Oid}, Ptr{Void}), id_ptr, w.ptr)
-    err != Error.GIT_OK && return (nothing, true)
+    err != Error.GIT_OK[] && return (nothing, true)
     return (id_ptr[], false)
 end
 
@@ -21,7 +21,7 @@ function Base.next(w::GitRevWalker, state)
     id_ptr = Ref(Oid())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
                 (Ptr{Oid}, Ptr{Void}), id_ptr, w.ptr)
-    err != Error.GIT_OK && return (state[1], (nothing, true))
+    err != Error.GIT_OK[] && return (state[1], (nothing, true))
     return (state[1], (id_ptr[], false))
 end
 

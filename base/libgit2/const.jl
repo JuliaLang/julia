@@ -40,8 +40,8 @@ module GitConst
     # checkout
     const CHECKOUT_NONE                    = Cuint(0)
     const CHECKOUT_SAFE                    = Cuint(1 << 0)
-    const CHECKOUT_SAFE_CREATE             = Cuint(1 << 1)
-    const CHECKOUT_FORCE                   = Cuint(1 << 2)
+    const CHECKOUT_FORCE                   = Cuint(1 << 1)
+    const CHECKOUT_RECREATE_MISSING        = Cuint(1 << 2)
     const CHECKOUT_ALLOW_CONFLICTS         = Cuint(1 << 4)
     const CHECKOUT_REMOVE_UNTRACKED        = Cuint(1 << 5)
     const CHECKOUT_REMOVE_IGNORED          = Cuint(1 << 6)
@@ -54,6 +54,9 @@ module GitConst
     const CHECKOUT_DISABLE_PATHSPEC_MATCH  = Cuint(1 << 13)
     const CHECKOUT_SKIP_LOCKED_DIRECTORIES = Cuint(1 << 18)
     const CHECKOUT_DONT_OVERWRITE_IGNORED  = Cuint(1 << 19)
+    const CHECKOUT_CONFLICT_STYLE_MERGE    = Cuint(1 << 20)
+    const CHECKOUT_CONFLICT_STYLE_DIFF3    = Cuint(1 << 21)
+    const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
 
     const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
     const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
@@ -191,4 +194,21 @@ module GitConst
     const CREDTYPE_SSH_KEY            = Cuint(1 << 1)
     const CREDTYPE_SSH_CUSTOM         = Cuint(1 << 2)
     const CREDTYPE_DEFAULT            = Cuint(1 << 3)
+
+    # fetch_prune
+    const FETCH_PRUNE_UNSPECIFIED = Cint(0)
+    const FETCH_PRUNE             = Cint(1)
+    const FETCH_NO_PRUNE          = Cint(2)
+
+    # remote_autotag
+    const REMOTE_DOWNLOAD_TAGS_UNSPECIFIED = Cint(0)
+    const REMOTE_DOWNLOAD_TAGS_AUTO        = Cint(1)
+    const REMOTE_DOWNLOAD_TAGS_NONE        = Cint(2)
+    const REMOTE_DOWNLOAD_TAGS_ALL         = Cint(3)
+
+    # clone
+    const CLONE_LOCAL_AUTO     = Cint(0)
+    const CLONE_LOCAL          = Cint(1)
+    const CLONE_NO_LOCAL       = Cint(2)
+    const CLONE_LOCAL_NO_LINKS = Cint(3)
 end

@@ -2,7 +2,7 @@
 
 module Cache
 
-import ..LibGit2, ..Dir, ...Pkg.PkgError
+import ...LibGit2, ..Dir, ...Pkg.PkgError
 using ..Types
 
 path(pkg::AbstractString) = abspath(".cache", pkg)
@@ -39,7 +39,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
         info("Cloning cache of $pkg from $url")
         try
             # clone repo, free it at the end
-            LibGit2.clone(url, cache, bare = true, remote_cb = LibGit2.mirror_cb)
+            LibGit2.clone(url, cache, isbare = true, remote_cb = LibGit2.mirror_cb)
         catch err
             isdir(cache) && rm(cache, recursive=true)
             throw(PkgError("Cannot clone $pkg from $url. $(err.msg)"))

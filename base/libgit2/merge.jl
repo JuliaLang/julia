@@ -41,12 +41,28 @@ function merge_analysis(repo::GitRepo, ann::GitAnnotated)
 end
 
 """ Merge changes into current head """
-function merge(repo::GitRepo, their_head::GitAnnotated;
+function merge!(repo::GitRepo, their_head::GitAnnotated;
                merge_opts = MergeOptionsStruct(),
-               checkout_opts = CheckoutOptionsStruct(checkout_strategy = GitConst.CHECKOUT_SAFE))
+               checkout_opts = CheckoutOptions(checkout_strategy = GitConst.CHECKOUT_SAFE))
     return @check ccall((:git_merge, :libgit2), Cint,
                          (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
-                          Ptr{MergeOptionsStruct}, Ptr{CheckoutOptionsStruct}),
+                          Ptr{MergeOptionsStruct}, Ptr{CheckoutOptions}),
                           repo.ptr, Ref{Ptr{Void}}(their_head.ptr), 1,
                           Ref(merge_opts), Ref(checkout_opts))
+end
+
+function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
+    oid1_ptr = Ref(Oid(one))
+    oid2_ptr = Ref(Oid(two))
+    moid_ptr = Ref(Oid())
+    moid = try
+        @check ccall((:git_merge_base, :libgit2), Cint,
+                (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
+                moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
+        moid_ptr[]
+    catch e
+        #warn("Pkg:",path(repo),"=>",e.msg)
+        Oid()
+    end
+    return moid
 end

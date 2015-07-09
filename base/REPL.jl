@@ -743,7 +743,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         complete = ShellCompletionProvider(repl),
         on_done = respond(repl, julia_prompt) do line
             line = strip(line)
-            :(Pkg.LibGit2.repl_cmd($line))
+            :(LibGit2.repl_cmd($line))
         end)
 
     ################################# Stage II #############################
