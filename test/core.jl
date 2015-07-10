@@ -3111,3 +3111,9 @@ f12092(x::Int, y) = 0
 f12092(x::Int,) = 1
 f12092(x::Int, y::Int...) = 2
 @test f12092(1) == 1
+
+# issue #12096
+let a = Val{Val{TypeVar(:_,Int,true)}}
+    @test_throws UndefRefError a.instance
+    @test !isleaftype(a)
+end
