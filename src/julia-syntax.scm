@@ -1299,6 +1299,8 @@
            (expand-binding-forms
             `(const (= ,(cadr e) ,(caddr e))))))
 
+      ((module) e)
+
       (else
        (map expand-binding-forms e))))))
 
@@ -1631,6 +1633,7 @@
    'inert identity
    'top   identity
    'line  identity
+   'module identity
 
    'lambda
    (lambda (e) (list* 'lambda (map expand-forms (cadr e)) (map expand-forms (cddr e))))
@@ -2566,14 +2569,7 @@
              (map-to-lff e dest tail)))
 
         ((module)
-         (if (and dest (not tail))
-             (let ((ex (to-lff (caddr e) dest tail))
-                   (fu (to-lff e #f #f)))
-               (cons (car ex)
-                     (append fu (cdr ex))))
-	     (if tail
-		 (cons `(return ,e) '())
-		 (cons e '()))))
+	 (cons e '()))
 
         ((symbolicgoto symboliclabel)
          (cons (if tail '(return (null)) '(null))
@@ -2611,7 +2607,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-        ((lambda scope-block)  '())
+        ((lambda scope-block module)  '())
         ((method)
          (let ((v (decl-var (method-expr-name e))))
            (if (or (not (symbol? v)) (memq v env))
@@ -2629,7 +2625,7 @@ So far only the second case can actually occur.
 (define (find-decls kind e)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'scope-block))
+      (cond ((memq (car e) '(lambda scope-block module))
              '())
             ((eq? (car e) kind)
              (list (decl-var (cadr e))))
@@ -2706,8 +2702,7 @@ So far only the second case can actually occur.
                                     vars)
                              ,(remove-local-decls body))))
 
-	    ((and (eq? (car e) 'module)
-		  (not (null? env)))
+	    ((eq? (car e) 'module)
 	     (error "module expression not at top level"))
 
             (else
@@ -3055,6 +3050,7 @@ So far only the second case can actually occur.
 				     (delete-duplicates
 				      (append sp (method-expr-static-parameters e))))
 		      ,(caddddr e))))
+	((module) e)
         (else (cons (car e)
                     (map (lambda (x) (analyze-vars x env captvars sp))
                          (cdr e)))))))
