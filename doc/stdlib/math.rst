@@ -1472,7 +1472,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
    the transform has conjugate symmetry in order to save roughly half
    the computational time and storage costs compared with :func:`fft`.
    If ``A`` has size ``(n_1, ..., n_d)``, the result has size
-   ``(floor(n_1/2)+1, ..., n_d)``.
+   ``(div(n_1,2)+1, ..., n_d)``.
 
    The optional ``dims`` argument specifies an iterable subset of one or
    more dimensions of ``A`` to transform, similar to :func:`fft`.  Instead
@@ -1487,9 +1487,10 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
    to transform, defaulting to ``1:ndims(A)``.
 
    ``d`` is the length of the transformed real array along the ``dims[1]``
-   dimension, which must satisfy ``d == floor(size(A,dims[1])/2)+1``.
-   (This parameter cannot be inferred from ``size(A)`` due to the
-   possibility of rounding by the ``floor`` function here.)
+   dimension, which must satisfy ``div(d,2)+1 == size(A,dims[1])``.
+   (This parameter cannot be inferred from ``size(A)`` since both
+   ``2*size(A,dims[1])-2`` as well as ``2*size(A,dims[1])-1`` are valid sizes
+   for the transformed real array.)
 
 .. function:: brfft(A, d [, dims])
 
