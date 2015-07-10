@@ -268,29 +268,31 @@ function free(pkg::AbstractString)
     end
 end
 
-# function free(pkgs)
-#     try
-#         for pkg in pkgs
-#             ispath(pkg,".git") || error("$pkg is not a git repo")
-#             Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
-#             avail = Read.available(pkg)
-#             isempty(avail) && error("$pkg cannot be freed – not a registered package")
-#             Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
-#             info("Freeing $pkg")
-#             vers = sort!(collect(keys(avail)), rev=true)
-#             for ver in vers
-#                 sha1 = avail[ver].sha1
-#                 Git.iscommit(sha1, dir=pkg) || continue
-#                 Git.run(`checkout -q $sha1`, dir=pkg)
-#                 break
-#             end
-#             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-#             error("can't find any registered versions of $pkg to checkout")
-#         end
-#     finally
-#         resolve()
-#     end
-# end
+function free(pkgs)
+    try
+        for pkg in pkgs
+            ispath(pkg,".git") || error("$pkg is not a git repo")
+            Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
+            avail = Read.available(pkg)
+            isempty(avail) && error("$pkg cannot be freed – not a registered package")
+            with(GitRepo, pkg) do repo
+                LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
+                info("Freeing $pkg")
+                vers = sort!(collect(keys(avail)), rev=true)
+                for ver in vers
+                    sha1 = avail[ver].sha1
+                    LibGit2.iscommit(sha1, repo) || continue
+                    LibGit2.checkout!(repo, sha1)
+                    break
+                end
+            end
+            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+            error("can't find any registered versions of $pkg to checkout")
+        end
+    finally
+        resolve()
+    end
+end
 
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
