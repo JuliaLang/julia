@@ -97,7 +97,7 @@ function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
 end
 
-inv(A::Eigen) = A.vectors/Diagonal(A.values)*A.vectors'
+inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
