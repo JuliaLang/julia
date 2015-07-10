@@ -351,6 +351,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
     jl_function_t *kwsorter;  // keyword argument sorter function
+    jl_module_t *module; // used for incremental serialization to locate original binding
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -924,7 +925,7 @@ DLLEXPORT jl_sym_t *jl_gensym(void);
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
-jl_function_t *jl_new_generic_function(jl_sym_t *name);
+jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_function_t *meth,
                    jl_svec_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
