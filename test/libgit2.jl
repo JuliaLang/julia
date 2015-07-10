@@ -143,26 +143,26 @@ temp_dir() do dir_cache
     # signature
     temp_dir() do dir
         path = joinpath(dir, "Example")
-        repo = LibGit2.clone(path_cache, path)
-        oid = "129eb39c8e0817c616296d1ac5f2cd1cf4f8b312"
-        c = LibGit2.get(LibGit2.GitCommit, repo, oid)
-        auth = LibGit2.author(c)
-        cmtr = LibGit2.committer(c)
-        cmsg = LibGit2.message(c)
-        @test isa(auth, LibGit2.Signature)
-        @test length(auth.name) > 0
-        @test isa(cmtr, LibGit2.Signature)
-        @test length(cmtr.email) > 0
-        @test length(cmsg) > 0
-        finalize(repo)
+        LibGit2.with(LibGit2.clone(path_cache, path)) do repo
+            oid = "129eb39c8e0817c616296d1ac5f2cd1cf4f8b312"
+            c = LibGit2.get(LibGit2.GitCommit, repo, oid)
+            auth = LibGit2.author(c)
+            cmtr = LibGit2.committer(c)
+            cmsg = LibGit2.message(c)
+            @test isa(auth, LibGit2.Signature)
+            @test length(auth.name) > 0
+            @test isa(cmtr, LibGit2.Signature)
+            @test length(cmtr.email) > 0
+            @test length(cmsg) > 0
 
-        sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
-        git_sig = convert(LibGit2.GitSignature, sig)
-        sig2 = LibGit2.Signature(git_sig)
-        finalize(git_sig)
-        @test sig.name == sig2.name
-        @test sig.email == sig2.email
-        @test sig.time == sig2.time
+            sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
+            git_sig = convert(LibGit2.GitSignature, sig)
+            sig2 = LibGit2.Signature(git_sig)
+            finalize(git_sig)
+            @test sig.name == sig2.name
+            @test sig.email == sig2.email
+            @test sig.time == sig2.time
+        end
     end
 
     # revwalk
@@ -187,39 +187,41 @@ temp_dir() do dir_cache
     temp_dir() do dir
         # clone repo
         path = joinpath(dir, "Example")
-        repo = LibGit2.clone(path_cache, path)
-        LibGit2.with(LibGit2.GitConfig, repo) do cfg
-            credentials!(cfg)
+        LibGit2.with(LibGit2.clone(path_cache, path)) do repo
+            LibGit2.with(LibGit2.GitConfig, repo) do cfg
+                credentials!(cfg)
+            end
+            cp(joinpath(path, "REQUIRE"), joinpath(path, "CCC"))
+            cp(joinpath(path, "REQUIRE"), joinpath(path, "AAA"))
+            LibGit2.add!(repo, "AAA")
+            @test_throws ErrorException LibGit2.transact(repo) do repo
+                mv(joinpath(path, "REQUIRE"), joinpath(path, "BBB"))
+                LibGit2.add!(repo, "BBB")
+                oid = LibGit2.commit(repo, "test commit")
+                error("Force recovery")
+            end
+            @test isfile(joinpath(path, "AAA"))
+            @test isfile(joinpath(path, "CCC"))
+            @test !isfile(joinpath(path, "BBB"))
+            @test isfile(joinpath(path, "REQUIRE"))
         end
-        cp(joinpath(path, "REQUIRE"), joinpath(path, "CCC"))
-        cp(joinpath(path, "REQUIRE"), joinpath(path, "AAA"))
-        LibGit2.add!(repo, "AAA")
-        @test_throws ErrorException LibGit2.transact(repo) do repo
-            mv(joinpath(path, "REQUIRE"), joinpath(path, "BBB"))
-            LibGit2.add!(repo, "BBB")
-            oid = LibGit2.commit(repo, "test commit")
-            error("Force recovery")
-        end
-        @test isfile(joinpath(path, "AAA"))
-        @test isfile(joinpath(path, "CCC"))
-        @test !isfile(joinpath(path, "BBB"))
-        @test isfile(joinpath(path, "REQUIRE"))
     end
 
     # branch
     temp_dir() do dir
         path = joinpath(dir, "Example")
-        repo = LibGit2.clone(path_cache, path)
-        LibGit2.with(LibGit2.GitConfig, repo) do cfg
-            credentials!(cfg)
-        end
-        brnch = LibGit2.branch(repo)
-        @test brnch == "master"
+        LibGit2.with(LibGit2.clone(path_cache, path)) do repo
+            LibGit2.with(LibGit2.GitConfig, repo) do cfg
+                credentials!(cfg)
+            end
+            brnch = LibGit2.branch(repo)
+            @test brnch == "master"
 
-        brnch_name = "test"
-        LibGit2.branch!(repo, brnch_name)
-        brnch = LibGit2.branch(repo)
-        @test brnch == brnch_name
+            brnch_name = "test"
+            LibGit2.branch!(repo, brnch_name)
+            brnch = LibGit2.branch(repo)
+            @test brnch == brnch_name
+        end
     end
 end
 

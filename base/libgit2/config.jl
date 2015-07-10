@@ -16,18 +16,31 @@ function GitConfig(r::GitRepo)
     return GitConfig(cfg_ptr_ptr[])
 end
 
-function GitConfig()
+function GitConfig(isglobal::Bool = true)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    ccall((:git_config_open_default, :libgit2), Cint,
-          (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
-    return GitConfig(cfg_ptr_ptr[])
+    @check ccall((:git_config_open_default, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+    cfg = GitConfig(cfg_ptr_ptr[])
+    if isglobal
+        glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+        @check ccall((:git_config_open_global, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}), glb_cfg_ptr_ptr, cfg.ptr)
+        finalize(cfg)
+        cfg = GitConfig(glb_cfg_ptr_ptr[])
+    end
+    return cfg
 end
 
 function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
-    str_ptr = Ref{Ptr{UInt8}}(C_NULL)
-    @check ccall((:git_config_get_string, :libgit2), Cint, #TODO: git_config_get_string_buf
-                (Ptr{Ptr{UInt8}}, Ptr{Void}, Cstring), str_ptr, c.ptr, name)
-    return bytestring(str_ptr[])
+    # str_ptr = Ref{Ptr{UInt8}}(C_NULL)
+    # @check ccall((:git_config_get_string, :libgit2), Cint, #TODO: git_config_get_string_buf
+    #             (Ptr{Ptr{UInt8}}, Ptr{Void}, Cstring), str_ptr, c.ptr, name)
+    buf_ptr = Ref(Buffer())
+    @check ccall((:git_config_get_string_buf, :libgit2), Cint,
+                (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ptr, c.ptr, name)
+    return with(buf_ptr[]) do buf
+        bytestring(buf.ptr, buf.size)
+    end
 end
 
 function get(::Type{Bool}, c::GitConfig, name::AbstractString)
