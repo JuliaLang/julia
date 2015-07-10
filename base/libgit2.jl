@@ -3,6 +3,7 @@
 module LibGit2
 
 import Base: merge!, cat
+import ..Pkg
 
 export with, GitRepo, GitConfig
 
@@ -115,7 +116,7 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
 
-        m = match(GITHUB_REGEX,url)
+        m = match(Pkg.GitHub.GITHUB_REGEX,url)
         if m != nothing
             push = "git@github.com:$(m.captures[1]).git"
             if push != url
@@ -213,11 +214,10 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
     if branch_ref == nothing
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-            head_ref = head(repo)
-            try
-                peel(head_ref, GitConst.OBJ_COMMIT)
-            finally
-                finalize(head_ref)
+             with(head(repo)) do head_ref
+                with(peel(GitCommit, head_ref)) do hrc
+                    Oid(hrc)
+                end
             end
         else
             Oid(commit)
@@ -226,9 +226,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         cmt =  get(GitCommit, repo, commit_id)
         try
-            branch_ref = create_branch(repo, cmt, branch_name,
-                force=force,
-                msg="pkg.libgit2.branch: moving to $branch_name")
+            branch_ref = create_branch(repo, cmt, branch_name, force=force)
         finally
             finalize(cmt)
         end
@@ -243,6 +241,11 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             catch
                 warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
             end
+        end
+
+        # checout selected branch
+        with(peel(GitTree, branch_ref)) do btree
+            checkout_tree(repo, btree)
         end
 
         # switch head to the branch
@@ -284,7 +287,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
             obj_oid = Oid(peeled)
             ref = create_reference(repo, obj_oid,
                 force=force,
-                msg="pkg.libgit2.checkout: moving from $head_name to $(string(obj_oid))")
+                msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
             finalize(ref)
 
             # checkout commit
@@ -299,14 +302,14 @@ end
 
 """ git clone [-b <branch>] [--bare] <url> <dir> """
 function clone(repo_url::AbstractString, repo_path::AbstractString;
-               checkout_branch::AbstractString="",
+               branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL)
     # setup colne options
     clone_opts = CloneOptions(
                     bare = Int32(isbare),
-                    checkout_branch = isempty(checkout_branch) ? Cstring_NULL :
-                                      convert(Cstring, pointer(checkout_branch)),
+                    checkout_branch = isempty(branch) ? Cstring_NULL :
+                                      convert(Cstring, pointer(branch)),
                     remote_cb = remote_cb
                 )
     return clone(repo_url, repo_path, clone_opts)

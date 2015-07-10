@@ -27,17 +27,6 @@ SignatureStruct() = SignatureStruct(Ptr{UInt8}(0),
                                     Ptr{UInt8}(0),
                                     TimeStruct())
 
-# immutable StrArrayStruct
-#    strings::Ptr{Ptr{UInt8}}
-#    count::Csize_t
-# end
-# StrArrayStruct() = StrArrayStruct(Ptr{UInt8}(0), zero(Csize_t))
-# function Base.finalize(sa::StrArrayStruct)
-#     sa_ptr = Ref(sa)
-#     ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
-#     return sa_ptr[]
-# end
-
 immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
