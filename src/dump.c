@@ -803,7 +803,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         else {
             if (v == t->instance) {
-                assert(mode != MODE_MODULE_POSTWORK);
                 if (mode == MODE_MODULE) {
                     // also flag this in the backref table as special
                     uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, v);
@@ -1048,6 +1047,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t **loc);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
 {
+    assert(!ios_eof(s));
     uint8_t tag = read_uint8(s);
     if (tag == Null_tag)
         return NULL;
@@ -1394,8 +1394,12 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)) {
                 if (jl_is_mtable(v))
                     arraylist_push(&methtable_list, v); // will resort this table, later
-                if (dt == jl_typename_type)
-                    ((jl_typename_t*)v)->uid = jl_assign_type_uid(); // make sure this has a new uid
+                if (dt == jl_typename_type) {
+                    jl_typename_t* tn = (jl_typename_t*)v;
+                    tn->uid = jl_assign_type_uid(); // make sure this has a new uid
+                    tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
+                    tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
+                }
             }
         }
         return v;
