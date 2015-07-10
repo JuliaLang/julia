@@ -161,7 +161,7 @@ c,r,res = test_complete(s)
 
 s = "\\a"
 c, r, res = test_complete(s)
-"\\alpha" in c
+("\\alpha" in c)
 @test r == 1:2
 @test s[r] == "\\a"
 

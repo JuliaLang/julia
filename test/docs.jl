@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Meta
+
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
@@ -20,7 +22,7 @@ end
 @doc ("I am a macro";)  :@ModuleMacroDoc.m
 
 @test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == ["I am a macro"]
+@test (@doc ModuleMacroDoc.@m) == "I am a macro"
 
 # apropos function testing
 
@@ -187,13 +189,13 @@ let TA = DocsTest.TA
     @test meta(DocsTest)[TA] == doc"TA"
 end
 
-let mac = getfield(DocsTest, symbol("@mac"))
+let mac = @var(DocsTest.@mac)
     funcdoc = meta(DocsTest)[mac]
-    @test funcdoc.main == doc"@mac"
+    @test funcdoc == doc"@mac"
 end
 
-@test meta(DocsTest)[:G] == doc"G"
-@test meta(DocsTest)[:K] == doc"K"
+@test meta(DocsTest)[@var(DocsTest.G)] == doc"G"
+@test meta(DocsTest)[@var(DocsTest.K)] == doc"K"
 
 # issue 11993
 # Check if we are documenting the expansion of the macro

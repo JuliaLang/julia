@@ -2,6 +2,7 @@
 
 module Docs
 
+using Base.Meta
 import Base.Markdown: @doc_str, MD
 
 export doc
@@ -220,26 +221,19 @@ end
 
 const keywords = Dict{Symbol,Any}()
 
+# Bindings
+
+function doc(b::Meta.Binding)
+    d = invoke(doc, (Any,), b)
+    d != nothing ? d : doc(b[])
+end
+
 # Usage macros
 
 isexpr(x::Expr) = true
 isexpr(x) = false
 isexpr(x::Expr, ts...) = x.head in ts
 isexpr(x, ts...) = any(T->isa(T, Type) && isa(x, T), ts)
-
-function unblock(ex)
-    isexpr(ex, :block) || return ex
-    exs = filter(ex->!isexpr(ex, :line), ex.args)
-    length(exs) == 1 || return ex
-    # Recursive unblock'ing for macro expansion
-    return unblock(exs[1])
-end
-
-uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
-
-namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
-namify(ex::QuoteNode) = ex.value
-namify(sy::Symbol) = sy
 
 function mdify(ex)
     if isexpr(ex, AbstractString, :string)
@@ -285,41 +279,59 @@ function objdoc(meta, def)
     end
 end
 
-fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
+function vardoc(meta, def, name)
+    quote
+        @init
+        f = $(esc(def))
+        # @var isn't found – bug?
+        doc!(Meta.@var($(esc(name))), $(mdify(meta)))
+        f
+    end
+end
 
 function docm(meta, def)
-    # Quote, Unblock and Macroexpand
-    # * Always do macro expansion unless it's a quote (for consistency)
-    # * Unblock before checking for Expr(:quote) to support `->` syntax
-    # * Unblock after macro expansion to recognize structures of
-    #   the generated AST
-    def′ = unblock(def)
-    if !isexpr(def′, :quote)
-        def = macroexpand(def)
-        def′ = unblock(def)
-    elseif length(def′.args) == 1 && isexpr(def′.args[1], :macrocall)
-        # Special case for documenting macros after definition with
-        # `@doc "<doc string>" :@macro` or
-        # `@doc "<doc string>" :(str_macro"")` syntax.
-        #
-        # Allow more general macrocall for now unless it causes confusion.
-        return objdoc(meta, namify(def′.args[1]))
+    @match def begin
+        :(@m_)      -> return vardoc(meta, nothing, m)
+          m_""      -> return vardoc(meta, nothing, m)
+        (@var x_)   -> vardoc(meta, def, x)
     end
-    isexpr(def′, :macro) && return namedoc(meta, def, symbol("@", namify(def′)))
-    isexpr(def′, :type) && return typedoc(meta, def, namify(def′.args[2]))
-    isexpr(def′, :bitstype) && return namedoc(meta, def, def′.args[2])
-    isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
-    isexpr(def′, :module) && return namedoc(meta, def, def′.args[2])
-    fexpr(def′) && return funcdoc(meta, def)
-    return objdoc(meta, def)
+    def = macroexpand(def)
+    @match def begin
+        (f_(__) = _)          -> funcdoc(meta, def)
+        function f_(__) _ end -> funcdoc(meta, def)
+        function f_ end       ->  objdoc(meta, def)
+        macro m_(__) _ end    ->  vardoc(meta, def, symbol("@", m))
+
+        type T_ _ end         -> typedoc(meta, def, namify(T))
+        immutable T_ _ end    -> typedoc(meta, def, namify(T))
+        (abstract T_)         -> namedoc(meta, def, namify(T))
+        (bitstype _ T_)       -> namedoc(meta, def, namify(T))
+        (typealias T_ _)      ->  objdoc(meta, def)
+
+        module M_ _ end       -> namedoc(meta, def, M)
+
+        (x_ = _)              ->  vardoc(meta, def, namify(x))
+        (const x_ = _)        ->  vardoc(meta, def, namify(x))
+
+        _Expr                 -> error("Unsupported @doc syntax $def")
+        _                     -> objdoc(meta, def)
+    end
 end
 
 function docm(ex)
     isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
-    isexpr(ex, :->) && return docm(ex.args...)
-    isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
-    isexpr(ex, :macrocall) && (ex = namify(ex))
-    :(doc($(esc(ex))))
+    @match ex begin
+        (meta_ -> def_) -> docm(meta, def)
+        f_(__)          -> :(doc($(esc(f))), @which $(esc(ex)))
+
+        (@m_)           -> :(doc(Meta.@var($(esc(ex)))))
+        (_.@m_)         -> :(doc(Meta.@var($(esc(ex)))))
+        (_._)           -> :(doc(Meta.@var($(esc(ex)))))
+        (@var x_)       -> :(doc(Meta.@var($(esc(x)))))
+
+        _Symbol         -> :(doc(Meta.@var($(esc(ex)))))
+        _               -> :(doc($(esc(ex))))
+    end
 end
 
 # Not actually used; bootstrap version in bootstrap.jl
@@ -524,7 +536,7 @@ macro repl(ex)
                   haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
-            if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
+            if $(isfield(ex) && :(isa($(esc(ex.args[1])), DataType)))
                 $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
             else
                 # Backwards-compatible with the previous help system, for now
