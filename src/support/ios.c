@@ -838,6 +838,25 @@ static void _ios_init(ios_t *s)
 
 /* stream object initializers. we do no allocation. */
 
+#if !defined(_OS_WINDOWS_)
+static int open_cloexec(const char *path, int flags, mode_t mode)
+{
+#ifdef O_CLOEXEC
+    static int no_cloexec=0;
+
+    if (!no_cloexec) {
+        int fd = open(path, flags | O_CLOEXEC, mode);
+        if (fd != -1)
+            return fd;
+        if (errno != EINVAL)
+            return -1;
+        no_cloexec = 1;
+    }
+#endif
+    return open(path, flags, mode);
+}
+#endif
+
 ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc)
 {
     int flags;
@@ -855,7 +874,7 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
     fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
 #else
-    fd = open(fname, flags | O_CLOEXEC, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
+    fd = open_cloexec(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
     s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
