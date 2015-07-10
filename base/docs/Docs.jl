@@ -12,7 +12,7 @@ const modules = Module[]
 
 const META′ = :__META__
 
-meta(mod) = mod.(META′)
+@eval meta(mod) = mod.$META′
 
 meta() = meta(current_module())
 
