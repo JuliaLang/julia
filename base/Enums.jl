@@ -2,6 +2,8 @@
 
 module Enums
 
+using Base.Meta
+
 export Enum, @enum
 
 abstract Enum
@@ -24,41 +26,26 @@ end
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 macro enum(T,syms...)
-    if isempty(syms)
-        throw(ArgumentError("no arguments given for Enum $T"))
-    end
-    if isa(T,Symbol)
-        typename = T
-    else
-        throw(ArgumentError("invalid type expression for enum $T"))
-    end
-    vals = Array(Tuple{Symbol,Integer},0)
+    isempty(syms) && throw(ArgumentError("no arguments given for Enum $T"))
+    isa(T,Symbol) ? (typename = T) : throw(ArgumentError("invalid type expression for enum $T"))
+    vals = Tuple{Symbol,Integer}[]
     lo = hi = 0
     i = -1
     enumT = typeof(i)
     hasexpr = false
     for s in syms
-        if isa(s,Symbol)
-            if i == typemax(typeof(i))
-                i = widen(i) + one(i)
-            else
-                i += one(i)
-            end
-        elseif isa(s,Expr) &&
-               (s.head == :(=) || s.head == :kw) &&
-               length(s.args) == 2 && isa(s.args[1],Symbol)
-            i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
-            s = s.args[1]
-            hasexpr = true
-        else
-            throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
+        isexpr(s, :kw) && (s.head = :(=))
+        @match s begin
+            s_Symbol          -> i == typemax(typeof(i)) ?
+                                   (i = widen(i) + one(i)) :
+                                   (i += one(i))
+            (ss_Symbol = ii_) -> (s, i, hasexpr) = (ss, eval(ii), true)
+            _                 -> throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
-        if !isa(i, Integer)
+        isa(i, Integer) ||
             throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
-        end
-        if !Base.isidentifier(s)
+        Base.isidentifier(s) ||
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier."))
-        end
         push!(vals, (s,i))
         I = typeof(i)
         if length(vals) == 1
