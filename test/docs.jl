@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Meta
+
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
@@ -135,11 +137,11 @@ typealias TA Union(T, IT)
 "@mac"
 macro mac() end
 
-# "G"
-# G = :G
-#
-# "K"
-# const K = :K
+"G"
+G = :G
+
+"K"
+const K = :K
 
 end
 
@@ -192,8 +194,8 @@ let mac = getfield(DocsTest, symbol("@mac"))
     @test funcdoc.main == doc"@mac"
 end
 
-# @test meta(DocsTest)[:G] == doc"G"
-# @test meta(DocsTest)[:K] == doc"K"
+@test meta(DocsTest)[@var(DocsTest.G)] == doc"G"
+@test meta(DocsTest)[@var(DocsTest.K)] == doc"K"
 
 # issue 11993
 # Check if we are documenting the expansion of the macro

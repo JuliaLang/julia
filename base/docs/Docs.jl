@@ -221,6 +221,13 @@ end
 
 const keywords = Dict{Symbol,Any}()
 
+# Bindings
+
+function doc(b::Meta.Binding)
+    d = invoke(doc, (Any,), b)
+    d != nothing ? d : doc(b[])
+end
+
 # Usage macros
 
 isexpr(x::Expr) = true
@@ -272,10 +279,21 @@ function objdoc(meta, def)
     end
 end
 
+function vardoc(meta, def, name)
+    quote
+        @init
+        f = $(esc(def))
+        # @var isn't found – bug?
+        doc!(Meta.@var($(esc(name))), $(mdify(meta)))
+        f
+    end
+end
+
 function docm(meta, def)
     @match def begin
-        :(@m_) -> return objdoc(meta, m)
-          m_"" -> return objdoc(meta, m)
+        :(@m_)      -> return objdoc(meta, m)
+          m_""      -> return objdoc(meta, m)
+        (@var x_)   -> vardoc(meta, def, x)
     end
     def = macroexpand(def)
     @match def begin
@@ -283,12 +301,18 @@ function docm(meta, def)
         function f_(__) _ end -> funcdoc(meta, def)
         function f_ end       ->  objdoc(meta, def)
         macro m_(__) _ end    -> namedoc(meta, def, symbol("@", m))
+
         type T_ _ end         -> typedoc(meta, def, namify(T))
         immutable T_ _ end    -> typedoc(meta, def, namify(T))
         (abstract T_)         -> namedoc(meta, def, namify(T))
         (bitstype _ T_)       -> namedoc(meta, def, namify(T))
         (typealias T_ _)      ->  objdoc(meta, def)
+
         module M_ _ end       -> namedoc(meta, def, M)
+
+        (x_ = _)              ->  vardoc(meta, def, namify(x))
+        (const x_ = _)        ->  vardoc(meta, def, namify(x))
+
         _Expr                 -> error("Unsupported @doc syntax $def")
         _                     -> objdoc(meta, def)
     end
@@ -299,8 +323,13 @@ function docm(ex)
     @match ex begin
         (meta_ -> def_) -> docm(meta, def)
         f_(__)          -> :(doc($(esc(f))), @which $(esc(ex)))
-        (@m_)           -> :(doc($(esc(m))))
-        (M_.@m_)        -> :(doc($(esc(:($M.$m)))))
+
+        (@m_)           -> :(doc(Meta.@var($(esc(ex)))))
+        (_.@m_)         -> :(doc(Meta.@var($(esc(ex)))))
+        (_._)           -> :(doc(Meta.@var($(esc(ex)))))
+        (@var x_)       -> :(doc(Meta.@var($(esc(x)))))
+
+        _Symbol         -> :(doc(Meta.@var($(esc(ex)))))
         _               -> :(doc($(esc(ex))))
     end
 end
