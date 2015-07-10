@@ -780,6 +780,15 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 edit_insert(s, '?')
             end
         end,
+        '§' => function (s,o...)
+            if !isempty(s)
+                try
+                    line = parse(LineEdit.input_string(s))
+                    LineEdit.edit_clear(s)
+                    LineEdit.edit_insert(s,string(macroexpand(line)))
+                end
+            end
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s,o...)->begin
