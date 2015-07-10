@@ -721,6 +721,18 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_function(v)) {
         writetag(s, jl_function_type);
+        if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) {
+            if (jl_is_gf(v)) {
+                jl_methtable_t *mt = jl_gf_mtable(v);
+                if (mt->module && !module_in_worklist(mt->module)) {
+                    write_int8(s, 1);
+                    jl_serialize_value(s, (jl_value_t*)mt->module);
+                    jl_serialize_value(s, (jl_value_t*)mt->name);
+                    return;
+                }
+            }
+            write_int8(s, 0);
+        }
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);
@@ -846,20 +858,22 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
 }
 
-static void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, jl_methtable_t *mt, int8_t iskw)
+static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t iskw)
 {
     if (iskw) {
         if (!mt->kwsorter)
             return;
         assert(jl_is_gf(mt->kwsorter));
+        assert(mt->module == jl_gf_mtable(mt->kwsorter)->module);
         mt = jl_gf_mtable(mt->kwsorter);
         assert(!mt->kwsorter);
     }
+    assert(mt->module);
     jl_methlist_t *ml = mt->defs;
     while (ml != (void*)jl_nothing) {
         if (module_in_worklist(ml->func->linfo->module)) {
-            jl_serialize_value(s, m);
-            jl_serialize_value(s, name);
+            jl_serialize_value(s, mt->module);
+            jl_serialize_value(s, mt->name);
             write_int8(s, iskw);
             jl_serialize_value(s, ml->sig);
             jl_serialize_value(s, ml->func);
@@ -882,15 +896,13 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
-                if (jl_is_function(b->value)) {
+                if (jl_is_function(b->value) && jl_is_gf(b->value)) {
                     jl_function_t *gf = (jl_function_t*)b->value;
-                    if (jl_is_gf(gf)) {
-                        // TODO: verify this is not an alternative name for the gf
-                        jl_methtable_t *mt = jl_gf_mtable(gf);
-                        jl_serialize_methtable_from_mod(s, m, b->name, mt, 0);
-                        jl_serialize_methtable_from_mod(s, m, b->name, mt, 1);
+                    jl_methtable_t *mt = jl_gf_mtable(gf);
+                    if (mt->name == b->name && mt->module == m) {
+                        jl_serialize_methtable_from_mod(s, mt, 0);
+                        jl_serialize_methtable_from_mod(s, mt, 1);
                     }
-                    //TODO: look in datatype cache?
                 }
                 else if (jl_is_module(b->value)) {
                     jl_module_t *child = (jl_module_t*)b->value;
@@ -1194,6 +1206,18 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         return (jl_value_t*)tv;
     }
     else if (vtag == (jl_value_t*)jl_function_type) {
+        if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) {
+            int ref_only = read_int8(s);
+            if (ref_only) {
+                int pos = backref_list.len;
+                arraylist_push(&backref_list, NULL);
+                jl_module_t *module = (jl_module_t*)jl_deserialize_value(s, NULL);
+                jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
+                jl_value_t *f = jl_get_global(module, name);
+                backref_list.items[pos] = f;
+                return f;
+            }
+        }
         jl_function_t *f =
             (jl_function_t*)newobj((jl_value_t*)jl_function_type, NWORDS(sizeof(jl_function_t)));
         if (usetable)
@@ -1426,7 +1450,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
         if (iskw) {
             jl_methtable_t* mt = jl_gf_mtable(gf);
             if (!mt->kwsorter) {
-                mt->kwsorter = jl_new_generic_function(jl_gf_name(gf));
+                mt->kwsorter = jl_new_generic_function(jl_gf_name(gf), mt->module);
                 jl_gc_wb(mt, mt->kwsorter);
             }
             gf = mt->kwsorter;
