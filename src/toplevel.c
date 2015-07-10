@@ -679,7 +679,8 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     if (bnd)
         bnd->constp = 1;
     if (*bp == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name);
+        jl_module_t *module = (bnd ? bnd->owner : NULL);
+        gf = (jl_value_t*)jl_new_generic_function(name, module);
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
@@ -709,6 +710,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                                     jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
                                     jl_value_t *call_func, int iskw)
 {
+    jl_module_t *module = (bnd ? bnd->owner : NULL);
     // argdata is svec({types...}, svec(typevars...))
     jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
@@ -780,8 +782,11 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
             }
         }
         if (iskw) {
-            bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
-            bp_owner = (jl_value_t*)((jl_function_t*)gf)->env;
+            jl_methtable_t *mt = jl_gf_mtable(gf);
+            assert(!module);
+            module = mt->module;
+            bp = (jl_value_t**)&mt->kwsorter;
+            bp_owner = (jl_value_t*)mt;
             gf = *bp;
         }
     }
@@ -814,7 +819,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         bnd->constp = 1;
     }
     if (*bp == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name);
+        gf = (jl_value_t*)jl_new_generic_function(name, module);
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
