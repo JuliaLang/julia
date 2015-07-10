@@ -38,6 +38,18 @@ function Base.finalize(sa::StrArrayStruct)
     return sa_ptr[]
 end
 
+immutable Buffer
+    ptr::Ptr{Cchar}
+    asize::Csize_t
+    size::Csize_t
+end
+Buffer() = Buffer(Ptr{Cchar}(C_NULL), zero(Csize_t), zero(Csize_t))
+function Base.finalize(buf::Buffer)
+    buf_ptr = Ref(buf)
+    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
+    return buf_ptr[]
+end
+
 immutable CheckoutOptions
     version::Cuint
 
