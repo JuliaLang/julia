@@ -38,7 +38,6 @@
                 ((lambda)       tab)
                 ((local local!) tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
-		((module)       '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
