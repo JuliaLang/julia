@@ -291,8 +291,8 @@ end
 
 function docm(meta, def)
     @match def begin
-        :(@m_)      -> return objdoc(meta, m)
-          m_""      -> return objdoc(meta, m)
+        :(@m_)      -> return vardoc(meta, nothing, m)
+          m_""      -> return vardoc(meta, nothing, m)
         (@var x_)   -> vardoc(meta, def, x)
     end
     def = macroexpand(def)
@@ -300,7 +300,7 @@ function docm(meta, def)
         (f_(__) = _)          -> funcdoc(meta, def)
         function f_(__) _ end -> funcdoc(meta, def)
         function f_ end       ->  objdoc(meta, def)
-        macro m_(__) _ end    -> namedoc(meta, def, symbol("@", m))
+        macro m_(__) _ end    ->  vardoc(meta, def, symbol("@", m))
 
         type T_ _ end         -> typedoc(meta, def, namify(T))
         immutable T_ _ end    -> typedoc(meta, def, namify(T))

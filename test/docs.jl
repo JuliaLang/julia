@@ -22,7 +22,7 @@ end
 @doc ("I am a macro";)  :@ModuleMacroDoc.m
 
 @test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == ["I am a macro"]
+@test (@doc ModuleMacroDoc.@m) == "I am a macro"
 
 # apropos function testing
 
@@ -189,9 +189,9 @@ let TA = DocsTest.TA
     @test meta(DocsTest)[TA] == doc"TA"
 end
 
-let mac = getfield(DocsTest, symbol("@mac"))
+let mac = @var(DocsTest.@mac)
     funcdoc = meta(DocsTest)[mac]
-    @test funcdoc.main == doc"@mac"
+    @test funcdoc == doc"@mac"
 end
 
 @test meta(DocsTest)[@var(DocsTest.G)] == doc"G"
