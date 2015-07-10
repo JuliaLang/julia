@@ -77,6 +77,10 @@ let a=[1.0:n;]
     for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
+    A = Diagonal(a)
+    for newtype in [UpperTriangular, LowerTriangular]
+        @test full(convert(newtype,A)) == full(A)
+    end
 end
 
 # Binary ops among special types
