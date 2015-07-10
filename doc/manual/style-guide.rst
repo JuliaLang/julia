@@ -166,10 +166,10 @@ benefits:
 - Package developers are free to change the implementation without breaking
   user code
 - Methods can be passed to higher-order constructs like `map` (e.g.
-  `map(length, items))` rather than `[i.length for i in items]`)
+  `map(imag, zs))` rather than `[z.im for z in zs]`)
 - Methods can be defined on abstract types
 - Methods can describe a conceptual operation that can be shared across
-  disparate types
+  disparate types (`real(z)` works on Complex numbers or Quaternions)
 
 Julia's dispatch system encourages this style because `play(x::MyType)` only
 defines the `play` method on that particular type, leaving other types to have
