@@ -168,10 +168,42 @@ function trymatch(pat, ex)
     end
 end
 
+# Typed bindings
+
+immutable TypeBind
+    name::Symbol
+    ts::Set{Any}
+end
+
+istb(s) = false
+istb(s::Symbol) = !(endswith(string(s), "_") || endswith(string(s), "_str")) && contains(string(s), "_")
+
+tbname(s::Symbol) = symbol(split(string(s), "_")[1])
+tbname(s::TypeBind) = s.name
+
+totype(s::Symbol) = string(s)[1] in 'A':'Z' ? s : Expr(:quote, s)
+
+function tbnew(s::Symbol)
+    istb(s) || return s
+    ts = map(symbol, split(string(s), "_"))
+    name = shift!(ts)
+    ts = map(totype, ts)
+    Expr(:$, :(Base.Meta.TypeBind($(Expr(:quote, name)), Set{Any}([$(ts...)]))))
+end
+
+match_inner(b::TypeBind, ex, env) =
+    any(T -> (isa(T, Type) && isa(ex, T)) || isexpr(ex, T), b.ts) ?
+        (env[tbname(b)] = ex; env) : nomatch(b, ex)
+
+subtb(s) = s
+subtb(s::Symbol) = tbnew(s)
+subtb(s::Expr) = Expr(subtb(s.head), map(subtb, s.args)...)
+
 # @match macro
 
 allbindings(pat, bs) =
     isbinding(pat) || (isslurp(pat) && pat ≠ :__) ? push!(bs, bname(pat)) :
+    istb(pat) ? push!(bs, tbname(pat)) :
     isexpr(pat, :$) ? bs :
     isa(pat, Expr) ? map(pat -> allbindings(pat, bs), [pat.head, pat.args...]) :
     bs
@@ -192,10 +224,12 @@ function makeclause(line, els = nothing)
     env = trymatch(:(pat_ -> yes_), line)
     env == nothing && error("Invalid match clause $line")
     pat, yes = env[:pat], env[:yes]
+    bs = allbindings(pat)
+    pat = subtb(pat)
     quote
         env = trymatch($(Expr(:quote, pat)), ex)
         if env != nothing
-            $(bindinglet(allbindings(pat), esc(yes)))
+            $(bindinglet(bs, esc(yes)))
         else
             $els
         end
