@@ -2,7 +2,22 @@
 
 module Docs
 
-import Base.Markdown: @doc_str, MD
+# import Base.Markdown: @doc_str, MD
+
+type MDDoc{T}
+    content::T
+end
+
+==(a::MDDoc, b::MDDoc) = a.content == b.content
+
+Base.print(io::IO, t::MDDoc) = print(io, t.content)
+Base.writemime(io::IO, ::MIME"text/plain", t::MDDoc) = print(io, t)
+
+export @doc_str
+
+macro doc_str(s)
+    :(MDDoc($s))
+end
 
 export doc
 
@@ -212,7 +227,8 @@ function doc(m::Module)
     md == nothing || return md
     readme = Pkg.dir(string(m), "README.md")
     if isfile(readme)
-        return Markdown.parse_file(readme)
+        # return Markdown.parse_file(readme)
+        return Text(readall(readme))
     end
 end
 
@@ -243,7 +259,7 @@ namify(sy::Symbol) = sy
 
 function mdify(ex)
     if isexpr(ex, AbstractString, :string)
-        :(Markdown.parse($(esc(ex))))
+        :(Base.Docs.MDDoc($(esc(ex))))
     else
         esc(ex)
     end
@@ -492,7 +508,8 @@ end
 
 # MD support
 
-catdoc(md::MD...) = MD(md...)
+# catdoc(md::MD...) = MD(md...)
+catdoc(ms::MDDoc...) = MDDoc(join(map(m->m.content, ms), "\n"))
 
 # REPL help
 
@@ -507,9 +524,9 @@ repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    Markdown.with_output_format(:cyan, io) do io
+    # Markdown.with_output_format(:cyan, io) do io
         println(io, s)
-    end
+    # end
     print_correction(io, s)
 end
 
@@ -617,15 +634,16 @@ end
 
 function printmatch(io::IO, word, match)
     is, _ = bestmatch(word, match)
-    Markdown.with_output_format(:fade, io) do io
+    # Markdown.with_output_format(:fade, io) do io
         for (i, char) = enumerate(match)
             if i in is
-                Markdown.with_output_format(print, :bold, io, char)
+                # Markdown.with_output_format(print, :bold, io, char)
+                print(io, char)
             else
                 print(io, char)
             end
         end
-    end
+    # end
 end
 
 printmatch(args...) = printfuzzy(STDOUT, args...)

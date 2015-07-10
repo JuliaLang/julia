@@ -20,7 +20,6 @@ export
     Serializer,
     SparseMatrix,
     Docs,
-    Markdown,
 
 # Types
     AbstractMatrix,

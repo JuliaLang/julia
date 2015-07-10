@@ -2,7 +2,7 @@
 
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type"
 
 macro macro_doctest() end
 @doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
