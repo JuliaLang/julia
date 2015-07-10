@@ -42,14 +42,7 @@ import Base: div, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
 for op in (:+,:-,:lcm,:gcd)
     @eval ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
 end
-for op in (:.+, :.-)
-    op_ = symbol(string(op)[2:end])
-    @eval begin
-        ($op){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(Y::StridedArray{P},x::P) = ($op)(Y,x)
-    end
-end
+
 for op in (:/,:%,:div,:mod)
     @eval begin
         ($op){P<:Period}(x::P,y::P) = ($op)(value(x),value(y))
@@ -61,7 +54,7 @@ end
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
 *(y::Real,x::Period) = x * y
 .*{P<:Period}(y::Real, X::StridedArray{P}) = X .* y
-for (op,Ty,Tz) in ((:.+,:P,:P),(:.-,:P,:P), (:.*,Real,:P),
+for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:./,:P,Float64), (:./,Real,:P),
                    (:.%,:P,Int64), (:.%,Integer,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
@@ -192,6 +185,7 @@ function Base.string(x::CompoundPeriod)
     end
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
+
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x,y])
 (+)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,y))
@@ -202,6 +196,29 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
 (-)(y::Union{Period,CompoundPeriod},x::CompoundPeriod) = (-x) + y
+
+GeneralPeriod = Union{Period,CompoundPeriod}
+(+)(x::GeneralPeriod) = x
+(+){P<:GeneralPeriod}(x::StridedArray{P}) = x
+
+for op in (:.+, :.-)
+    op_ = symbol(string(op)[2:end])
+    @eval begin
+        function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
+            Z = similar(X, CompoundPeriod)
+            for i = 1:length(X)
+                @inbounds Z[i] = ($op_)(X[i],y)
+            end
+            return Z
+        end
+        ($op){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = ($op)(Y,x)
+        ($op_){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
+            reshape(CompoundPeriod[($op_)(X[i],Y[i]) for i in eachindex(X, Y)], promote_shape(size(X),size(Y)))
+    end
+end
+
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(y::Period, x::CompoundPeriod) = x == y
 (==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
