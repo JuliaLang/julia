@@ -18,6 +18,8 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
+using Base.Meta
+
 macro deprecate(old,new)
     meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
@@ -34,13 +36,8 @@ macro deprecate(old,new)
     elseif isa(old,Expr) && old.head == :call
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
-        oldsym = if isa(old.args[1],Symbol)
-            old.args[1]
-        elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]
-        else
-            error("invalid usage of @deprecate")
-        end
+        oldsym = uncurly(old.args[1])
+        isa(oldsym, Symbol) || error("invalid usage of @deprecate")
         oldname = Expr(:quote, oldsym)
         Expr(:toplevel,
             Expr(:export,esc(oldsym)),
