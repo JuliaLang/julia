@@ -6,7 +6,7 @@ export Enum, @enum
 
 abstract Enum
 
-Base.convert{T<:Integer}(::Type{T},x::Enum) = convert(T, x.val)
+Base.convert{T<:Integer}(::Type{T}, x::Enum) = convert(T, Intrinsics.box(Int32, x))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
@@ -27,80 +27,64 @@ macro enum(T,syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
-    if isa(T,Symbol)
-        typename = T
-    else
+    if !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
+    typename = T
     vals = Array(Tuple{Symbol,Integer},0)
     lo = hi = 0
-    i = -1
-    enumT = typeof(i)
+    i = Int32(-1)
     hasexpr = false
     for s in syms
         if isa(s,Symbol)
             if i == typemax(typeof(i))
-                i = widen(i) + one(i)
-            else
-                i += one(i)
+                throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
             end
+            i += one(i)
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1],Symbol)
             i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
+            if !isa(i, Integer)
+                throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
+            end
+            i = convert(Int32, i)
             s = s.args[1]
             hasexpr = true
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
-        if !isa(i, Integer)
-            throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
-        end
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier."))
         end
         push!(vals, (s,i))
-        I = typeof(i)
         if length(vals) == 1
-            enumT = I
             lo = hi = i
         else
-            enumT = promote_type(enumT,I)
             lo = min(lo, i)
             hi = max(hi, i)
         end
     end
-    if !hasexpr
-        n = length(vals)
-        enumT = n <= typemax(Int8) ? Int8 :
-                n <= typemax(Int16) ? Int16 :
-                n <= typemax(Int32) ? Int32 : Int64
-    end
-    values = enumT[i[2] for i in vals]
+    values = Int32[i[2] for i in vals]
     if hasexpr && values != unique(values)
         throw(ArgumentError("values for Enum $typename are not unique"))
     end
-    lo = convert(enumT, lo)
-    hi = convert(enumT, hi)
-    vals = map(x->(x[1],convert(enumT,x[2])), vals)
     blk = quote
         # enum definition
-        immutable $(esc(T)) <: Enum
-            val::$enumT
-            function Base.convert(::Type{$(esc(typename))}, x::Integer)
-                $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-                new(x)
-            end
+        bitstype 32 $(esc(T)) <: Enum
+        function Base.convert(::Type{$(esc(typename))}, x::Integer)
+            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
+            Intrinsics.box($(esc(typename)), convert(Int32, x))
         end
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless(x.val, y.val)
+        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless(Int32(x), Int32(y))
         let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
             Base.instances(::Type{$(esc(typename))}) = insts
         end
         function Base.print(io::IO,x::$(esc(typename)))
             for (sym, i) in $vals
-                if i == x.val
+                if i == Int32(x)
                     print(io, sym); break
                 end
             end
