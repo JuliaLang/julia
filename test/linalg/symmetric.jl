@@ -84,18 +84,23 @@ let n=10
             @test_approx_eq Symmetric(asym)*x+y asym*x+y
         end
 
+        C = zeros(eltya,n,n)
         # mat * mat
         if eltya <: Complex
             @test_approx_eq Hermitian(asym) * a asym * a
             @test_approx_eq a * Hermitian(asym) a * asym
             @test_approx_eq Hermitian(asym) * Hermitian(asym) asym*asym
             @test_throws DimensionMismatch Hermitian(asym) * ones(eltya,n+1)
+            Base.LinAlg.A_mul_B!(C,a,asym)
+            @test_approx_eq C a*asym
         end
         if eltya <: Real && eltya != Int
             @test_approx_eq Symmetric(asym) * Symmetric(asym) asym*asym
             @test_approx_eq Symmetric(asym) * a asym * a
             @test_approx_eq a * Symmetric(asym) a * asym
             @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
+            Base.LinAlg.A_mul_B!(C,a,asym)
+            @test_approx_eq C a*asym
         end
 
         # solver
@@ -108,6 +113,21 @@ let n=10
         @test_approx_eq inv(Hermitian(asym)) inv(asym)
         if eltya <: Real && eltya != Int
             @test_approx_eq inv(Symmetric(asym)) inv(asym)
+        end
+
+        # conversion
+        @test Symmetric(asym) == convert(Symmetric,Symmetric(asym))
+        if eltya <: Real && eltya != Int
+            typs = [Float16,Float32,Float64]
+            for typ in typs
+                @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
+            end
+        end
+        if eltya <: Complex && eltya != Int
+            typs = [Complex64,Complex128]
+            for typ in typs
+                @test Hermitian(convert(Matrix{typ},asym)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(asym))
+            end
         end
     end
 end
