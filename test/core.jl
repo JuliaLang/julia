@@ -3062,8 +3062,17 @@ Base.convert(::Type{Foo11874},x::Int) = float(x)
 @test_throws TypeError bar11874(1)
 
 # issue #9233
-@test_throws TypeError NTuple{Int, 1}
-@test_throws TypeError NTuple{0x1, Int}
+let
+    err = @test_throws TypeError NTuple{Int, 1}
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == Int
+
+    err = @test_throws TypeError NTuple{0x1, Int}
+    @test err.func == :apply_type
+    @test err.expected == Int
+    @test err.got == 0x1
+end
 
 # 11996
 @test_throws ErrorException NTuple{-1, Int}
