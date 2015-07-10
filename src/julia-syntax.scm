@@ -3033,6 +3033,10 @@ So far only the second case can actually occur.
               `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
                      ,@vs)
               env captvars sp))))
+	((with-static-parameters)
+	 ;; (with-static-parameters func_expr sp_1 sp_2 ...)
+	 (analyze-vars (cadr e) env captvars
+		       (delete-duplicates (append sp (cddr e)))))
         ((method)
          (let ((vi (var-info-for (method-expr-name e) env)))
            (if vi

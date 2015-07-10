@@ -198,6 +198,8 @@ static jl_value_t *full_list_of_lists(value_t e, int expronly)
     return (jl_value_t*)ar;
 }
 
+static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
+
 static jl_value_t *scm_to_julia(value_t e, int expronly)
 {
     int en = jl_gc_enable(0);
@@ -317,7 +319,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     jl_cellset(ex->args, i, scm_to_julia_(car_(e), eo));
                     e = cdr_(e);
                 }
-                return (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec);
+                jl_lambda_info_t *nli = jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec);
+                resolve_globals(nli->ast, nli);
+                return (jl_value_t*)nli;
             }
 
             e = cdr_(e);
@@ -969,6 +973,63 @@ jl_value_t *skip_meta(jl_array_t *body)
         && jl_array_len(body) > 1)
         body1 = jl_cellref(body,1);
     return body1;
+}
+
+static int in_vinfo_array(jl_array_t *a, jl_value_t *v)
+{
+    size_t i, l=jl_array_len(a);
+    for(i=0; i<l; i++) {
+        if (jl_cellref(jl_cellref(a,i),0) == v)
+            return 1;
+    }
+    return 0;
+}
+
+static int in_sym_array(jl_array_t *a, jl_value_t *v)
+{
+    size_t i, l=jl_array_len(a);
+    for(i=0; i<l; i++) {
+        if (jl_cellref(a,i) == v)
+            return 1;
+    }
+    return 0;
+}
+
+static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
+{
+    if (jl_is_symbol(expr)) {
+        if (lam->module == NULL)
+            return expr;
+        int is_local = in_vinfo_array(jl_lam_vinfo((jl_expr_t*)lam->ast), expr) ||
+            in_vinfo_array(jl_lam_capt((jl_expr_t*)lam->ast), expr) ||
+            in_sym_array(jl_lam_staticparams((jl_expr_t*)lam->ast), expr);
+        if (!is_local)
+            return jl_module_globalref(lam->module, (jl_sym_t*)expr);
+    }
+    else if (jl_is_lambda_info(expr)) {
+        jl_lambda_info_t *l = (jl_lambda_info_t*)expr;
+        (void)resolve_globals(l->ast, l);
+    }
+    else if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        if (e->head == lambda_sym) {
+            (void)resolve_globals(jl_exprarg(e,2), lam);
+        }
+        else if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
+                 e->head == global_sym || e->head == quote_sym || e->head == inert_sym ||
+                 e->head == line_sym || e->head == meta_sym) {
+        }
+        else {
+            size_t i = 0;
+            if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
+                e->head == bitstype_sym || e->head == macro_sym || e->head == module_sym)
+                i++;
+            for(; i < jl_array_len(e->args); i++) {
+                jl_exprargset(e, i, resolve_globals(jl_exprarg(e,i), lam));
+            }
+        }
+    }
+    return expr;
 }
 
 #ifdef __cplusplus
