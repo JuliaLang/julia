@@ -2542,7 +2542,7 @@ static int jl_tuple_morespecific_(jl_datatype_t *cdt, jl_datatype_t *pdt, int in
         int cseq = (ci<cl) && jl_is_vararg_type(child[ci]);
         int pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
         if (ci >= cl)
-            return some_morespecific || pi>=pl || (pseq && !invariant);
+            return 1;
         if (pi >= pl)
             return some_morespecific;
         jl_value_t *ce = child[ci];
