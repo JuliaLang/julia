@@ -105,11 +105,7 @@ macro ccallable(def)
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
-                if isa(a,Expr) && a.head === :(::)
-                    a.args[2]
-                else
-                    :Any
-                end
+                isa(a,Expr) && a.head === :(::) ? a.args[2] : :Any
             end
             return quote
                 $(esc(def))
