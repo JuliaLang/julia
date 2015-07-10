@@ -3098,3 +3098,9 @@ failure12003(dt=DATE12003) = Dates.year(dt)
 @test_throws ErrorException bitstype 0 SPJa12023
 @test_throws ErrorException bitstype 4294967312 SPJb12023
 @test_throws ErrorException bitstype -4294967280 SPJc12023
+
+# issue #12092
+f12092(x::Int, y) = 0
+f12092(x::Int,) = 1
+f12092(x::Int, y::Int...) = 2
+@test f12092(1) == 1
