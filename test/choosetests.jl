@@ -15,12 +15,13 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "core", "keywordargs", "numbers", "strings",
+        "linalg", "core", "keywordargs", "numbers", "printf",
+        "char", "string", "triplequote", "unicode",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
         "abstractarray", "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall", "unicode",
+        "operators", "path", "ccall", "parse",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
@@ -29,7 +30,7 @@ function choosetests(choices = [])
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
-        "base64", "parser", "serialize", "functors", "char", "misc",
+        "base64", "serialize", "functors", "misc",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int"
     ]
 
