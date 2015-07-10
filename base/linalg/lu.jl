@@ -135,6 +135,16 @@ function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
     end
 end
 
+function show{T,S<:StridedMatrix}(io::IO, F::LU{T,S})
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "L:")
+    show(io, F[:U])
+    println(io, "\nU:")
+    show(io, F[:L])
+    println(io, "\nP:")
+    show(io, F[:P])
+end
+
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
 A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), b[ipiv2perm(A.ipiv, length(b))]))
 A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B[ipiv2perm(A.ipiv, size(B, 1)),:]))

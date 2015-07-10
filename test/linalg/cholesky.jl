@@ -49,6 +49,7 @@ debug && println("(Automatic) upper Cholesky factor")
         @inferred cholfact(apd)
         @inferred chol(apd)
         capd  = factorize(apd)
+        show(IOBuffer(), capd)
         r     = capd[:U]
         κ     = cond(apd, 1) #condition number
 
