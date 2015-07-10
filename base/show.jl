@@ -253,7 +253,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
 typealias ExprNode Union{Expr, QuoteNode, SymbolNode, LineNumberNode,
-                         LabelNode, GotoNode, TopNode}
+                         LabelNode, GotoNode, TopNode, GlobalRef}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
@@ -410,6 +410,7 @@ show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.name,')')
+show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
     print(io, ex.name)
@@ -494,7 +495,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # function call
     elseif head == :call && nargs >= 1
         func = args[1]
-        func_prec = operator_precedence(func)
+        fname = isa(func,GlobalRef) ? func.name : func
+        func_prec = operator_precedence(fname)
+        if func_prec > 0 || fname in uni_ops
+            func = fname
+        end
         func_args = args[2:end]
 
         if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
@@ -502,8 +507,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
         # scalar multiplication (i.e. "100x")
-        if (func == :(*) && length(func_args)==2 &&
-            isa(func_args[1], Real) && isa(func_args[2], Symbol))
+        if (func == :(*) &&
+            length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
             else
