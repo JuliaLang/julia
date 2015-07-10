@@ -3094,10 +3094,17 @@ const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
 
-# #12023 Test error checking in bitstype
+# issue #12023 Test error checking in bitstype
 @test_throws ErrorException bitstype 0 SPJa12023
 @test_throws ErrorException bitstype 4294967312 SPJb12023
 @test_throws ErrorException bitstype -4294967280 SPJc12023
+
+# issue #12089
+type A12089{K, N}
+    sz::NTuple{N, Int}
+    A12089(sz::NTuple{N, Int}) = new(sz)
+end
+A12089{-1, 1}((1,))
 
 # issue #12092
 f12092(x::Int, y) = 0
