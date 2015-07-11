@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Core.Intrinsics.ccall
-ccall(:jl_new_main_module, Any, ())
 
 baremodule Base
 
