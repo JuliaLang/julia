@@ -47,7 +47,7 @@ end
 
 function _include_from_serialized(content::Vector{UInt8})
     m = ccall(:jl_restore_incremental_from_buf, UInt, (Ptr{Uint8},Int), content, sizeof(content))
-    return m
+    return m != 0
 end
 
 function _require_from_serialized(node::Int, path_to_try::ByteString)
@@ -63,8 +63,8 @@ function _require_from_serialized(node::Int, path_to_try::ByteString)
             refs = Any[ @spawnat p _include_from_serialized(content) for p in others]
             successes = Any[ fetch(ref) for ref in refs ]
             for (id, ref) in zip(others, refs)
-                if fetch(ref) != 0
-                    warn("node state is inconsistent: node $i failed to load serialized cache from :node $id:$path_to_try.")
+                if fetch(ref)
+                    warn("node state is inconsistent: node $id failed to load serialized cache from :node $node:$path_to_try.")
                 end
             end
             return true
