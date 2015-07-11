@@ -166,9 +166,9 @@ new definitions of them. A module also automatically contains a definition
 of the ``eval`` function, which evaluates expressions within the context of
 that module.
 
-If these definitions are not wanted, modules can be defined using the
-keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
-``module`` looks like this::
+If these ``Base`` definitions are not wanted, modules can be defined using the
+keyword ``baremodule`` instead (note: ``Core`` is still imported, as per above).
+In terms of ``baremodule``, a standard ``module`` looks like this::
 
     baremodule Mod
 
