@@ -295,9 +295,10 @@ static void jl_serialize_globalvals(ios_t *s)
     for(i=0; i < len; i+=2) {
         void *offs = p[i+1];
         if (offs != HT_NOTFOUND) {
+            uintptr_t pos = offs - HT_NOTFOUND - 1;
             int32_t gv = jl_get_llvm_gv((jl_value_t*)p[i]);
             if (gv != 0) {
-                write_int32(s, (int)(intptr_t)offs);
+                write_int32(s, pos);
                 write_int32(s, gv);
             }
         }
@@ -450,7 +451,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
             // also flag this in the backref table as special
             uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, dt);
             assert(*bp != (uptrint_t)HT_NOTFOUND);
-            *bp |= 1;
+            *bp |= 1; assert(((uptrint_t)HT_NOTFOUND)|1);
         }
     }
     else if (dt == jl_int32_type)
@@ -512,8 +513,10 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         write_int8(s, ref_only);
     }
     jl_serialize_value(s, m->parent);
-    if (ref_only)
+    if (ref_only) {
+        assert(m->parent != m);
         return;
+    }
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
@@ -606,13 +609,14 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else {
         bp = ptrhash_bp(&backref_table, v);
         if (*bp != HT_NOTFOUND) {
+            uintptr_t pos = *bp - HT_NOTFOUND - 1;
             if ((uptrint_t)*bp < 65536) {
                 write_uint8(s, ShortBackRef_tag);
-                write_uint16(s, (uptrint_t)*bp);
+                write_uint16(s, pos);
             }
             else {
                 write_uint8(s, BackRef_tag);
-                write_int32(s, (uptrint_t)*bp);
+                write_int32(s, pos);
             }
             return;
         }
@@ -632,7 +636,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)
             pos <<= 1;
-        ptrhash_put(&backref_table, v, (void*)pos);
+        ptrhash_put(&backref_table, v, HT_NOTFOUND + pos + 1);
     }
 
     size_t i;
@@ -807,7 +811,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                     // also flag this in the backref table as special
                     uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, v);
                     assert(*bp != (uptrint_t)HT_NOTFOUND);
-                    *bp |= 1;
+                    *bp |= 1; assert(((uptrint_t)HT_NOTFOUND)|1);
                 }
                 writetag(s, (jl_value_t*)Singleton_tag);
                 jl_serialize_value(s, t);
@@ -1876,7 +1880,7 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     JL_SIGATOMIC_BEGIN();
     arraylist_new(&reinit_list, 0);
     htable_new(&backref_table, 5000);
-    ptrhash_put(&backref_table, jl_main_module, (void*)(uintptr_t)0);
+    ptrhash_put(&backref_table, jl_main_module, HT_NOTFOUND + 1);
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
