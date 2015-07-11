@@ -87,7 +87,8 @@ type ScaledPlan{T,P,N} <: Plan{T}
     pinv::Plan
     ScaledPlan(p, scale) = new(p, scale)
 end
-ScaledPlan{P<:Plan,N<:Number}(p::P, scale::N) = ScaledPlan{eltype(P),P,N}(p, scale)
+call{T,P,N}(::Type{ScaledPlan{T}}, p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
+ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)
@@ -105,7 +106,7 @@ summary(p::ScaledPlan) = string(p.scale, " * ", summary(p.p))
 *(p::Plan, I::UniformScaling) = ScaledPlan(p, I.λ)
 
 # Normalization for ifft, given unscaled bfft, is 1/prod(dimensions)
-normalization(T, sz, region) = one(T) / prod([sz...][[region...]])
+normalization(T, sz, region) = (one(T) / prod([sz...][[region...]]))::T
 normalization(X, region) = normalization(real(eltype(X)), size(X), region)
 
 plan_ifft(x::AbstractArray, region; kws...) =

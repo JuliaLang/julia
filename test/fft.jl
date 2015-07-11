@@ -309,7 +309,7 @@ for x in (randn(10),randn(10,12))
     @inferred rfft(x)
     @inferred brfft(x,18)
     @inferred brfft(y,10)
-    for f in (fft,plan_fft,bfft,plan_bfft,fft_)
+    for f in (fft,plan_fft,bfft,plan_bfft,fft_,ifft,plan_ifft)
         @inferred f(x)
         @inferred f(z)
     end
