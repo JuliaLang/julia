@@ -1368,7 +1368,11 @@ static Value *emit_gep_knownidx(Value *strct, ArrayRef<Value *> idxs, jl_datatyp
     Type *strctty = julia_struct_to_llvm((jl_value_t*)jt);
     if (strct->getType() == jl_pvalue_llvmt)
         strct = builder.CreateBitCast(strct, PointerType::get(strctty,0));
+#ifdef LLVM37
     return builder.CreateInBoundsGEP(strctty, strct, idxs);
+#else
+    return builder.CreateInBoundsGEP(strct, idxs);
+#endif
 }
 
 static Value *emit_gep_knownidx(Value *strct, unsigned idx, jl_datatype_t *jt)

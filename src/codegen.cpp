@@ -2588,9 +2588,15 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass",ctx->f);
                                     builder.CreateCondBr(bndacc, passBB, failBB);
                                     builder.SetInsertPoint(failBB);
+#ifdef LLVM37
                                     builder.CreateCall(prepare_call(jlboundserror_func), {
                                         boxed(strct, ctx), boxed(idxval, ctx, (jl_value_t*)idxty)
                                     });
+#else
+                                    builder.CreateCall2(prepare_call(jlboundserror_func),
+                                        boxed(strct, ctx), boxed(idxval, ctx, (jl_value_t*)idxty)
+                                    );
+#endif
                                     builder.CreateUnreachable();
                                     builder.SetInsertPoint(passBB);
                             }
