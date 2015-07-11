@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# token type on which to dispatch testing methods in order to avoid potential
+# name conflicts elsewhere in the base test suite
+type TestAbstractArray end
+
 ## Tests for the abstract array interfaces with minimally defined array types
 
 # A custom linear fast array type with 24 elements that doesn't rely upon Array storage
@@ -70,7 +74,7 @@ Base.setindex!{T}(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int)
 
 import Base: trailingsize
 const can_inline = Base.JLOptions().can_inline != 0
-function test_scalar_indexing{T}(::Type{T}, shape)
+function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(1:N, shape)
     B = T(A)
@@ -178,7 +182,7 @@ function test_scalar_indexing{T}(::Type{T}, shape)
     @test A == B
 end
 
-function test_vector_indexing{T}(::Type{T}, shape)
+function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(1:N, shape)
     B = T(A)
@@ -191,7 +195,7 @@ function test_vector_indexing{T}(::Type{T}, shape)
     @test B[1:end,1:end] == A[1:end,1:end] == reshape(1:N, shape[1], prod(shape[2:end]))
 end
 
-function test_primitives{T}(::Type{T}, shape)
+function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(1:N, shape)
     B = T(A)
@@ -226,8 +230,14 @@ function test_primitives{T}(::Type{T}, shape)
     @test convert(Array, X) == X
 end
 
-function test_in_bounds()
-    @test Base.in_bounds((5, 5, 5), 5) == true
+function test_in_bounds(::Type{TestAbstractArray})
+    n = rand(2:5)
+    dims = tuple(rand(2:5, n)...)
+    len = prod(dims)
+    for i in 1:len
+        @test Base.in_bounds(dims, i) == true
+    end
+    @test Base.in_bounds(dims, len + 1) == false
 end
 
 type UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
@@ -238,7 +248,7 @@ Base.linearindexing(::UnimplementedSlowArray) = Base.LinearSlow()
 
 type UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
-function test_getindex_internals{T}(::Type{T}, shape)
+function test_getindex_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(1:N, shape)
     B = T(A)
@@ -249,7 +259,7 @@ function test_getindex_internals{T}(::Type{T}, shape)
     @test Base.unsafe_getindex(B) == 1
 end
 
-function test_getindex_internals()
+function test_getindex_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
     @test_throws ErrorException getindex(U, 1)
@@ -258,7 +268,7 @@ function test_getindex_internals()
     @test_throws ErrorException Base.unsafe_getindex(V, 1, 1)
 end
 
-function test_setindex!_internals{T}(::Type{T}, shape)
+function test_setindex!_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(1:N, shape)
     B = T(A)
@@ -267,7 +277,7 @@ function test_setindex!_internals{T}(::Type{T}, shape)
     @test B[1] == 1
 end
 
-function test_setindex!_internals()
+function test_setindex!_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
     @test_throws ErrorException setindex!(U, 1)
@@ -275,7 +285,7 @@ function test_setindex!_internals()
     @test_throws ErrorException Base.unsafe_setindex!(U, 1, 1)
 end
 
-function test_get()
+function test_get(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     B = TSlow([1:24...])
 
@@ -283,7 +293,7 @@ function test_get()
     @test get(B, (), 0) == TSlow(Int, 0)
 end
 
-function test_cat()
+function test_cat(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
@@ -346,7 +356,7 @@ function test_cat()
     @test_throws ArgumentError Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
 end
 
-function test_ind2sub()
+function test_ind2sub(::Type{TestAbstractArray})
     n = rand(2:5)
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
@@ -358,7 +368,7 @@ function test_ind2sub()
     end
 end
 
-function test_cartesianmap()
+function test_cartesianmap(::Type{TestAbstractArray})
     f(x, y, z, B::Array) = push!(B, (x, y, z))
     B = NTuple{3, Int}[]
     cartesianmap(f, (3, 3, 3, 1), B)
@@ -374,7 +384,7 @@ Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
 Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
 
-function test_map()
+function test_map(::Type{TestAbstractArray})
 
     for typ in (Float16, Float32, Float64,
                 Int8, Int16, Int32, Int64, Int128,
@@ -412,13 +422,13 @@ function test_map()
     @test map(f, Int[], Int[], Complex{Int}[]) == Number[]
 end
 
-function test_map_promote()
+function test_map_promote(::Type{TestAbstractArray})
     A = [1:10...]
     f(x) = iseven(x) ? 1.0 : 1
     @test Base.map_promote(f, A) == fill(1.0, 10)
 end
 
-function test_UInt_indexing()
+function test_UInt_indexing(::Type{TestAbstractArray})
     A = [1:100...]
     _A = Expr(:quote, A)
     for i in 1:100
@@ -433,36 +443,41 @@ function test_UInt_indexing()
     end
 end
 
-function test_vcat_depwarn()
+function test_vcat_depwarn(::Type{TestAbstractArray})
     if (Base.JLOptions()).depwarn > 1
         @test_throws ErrorException [1:10]
         @test_throws ErrorException [[1, 2], [3, 4]]
         @test_throws ErrorException [[1, 2], [3, 4], [5, 6]]
     else
-        [1:10]
-        [[1, 2], [3, 4]]
-        [[1, 2], [3, 4], [5, 6]]
-        nothing
+        olderr = STDERR
+        try
+            rd, wr = redirect_stderr()
+            @test [1:10] == [1:10...]
+            @test [[1, 2], [3, 4]] == [1, 2, 3, 4]
+            @test [[1, 2], [3, 4], [5, 6]] == [1, 2, 3, 4, 5, 6]
+        finally
+            redirect_stderr(olderr)
+        end
     end
 end
 
 #----- run tests -------------------------------------------------------------#
 
 for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
-    test_scalar_indexing(T, shape)
-    test_vector_indexing(T, shape)
-    test_primitives(T, shape)
-    test_getindex_internals(T, shape)
-    test_setindex!_internals(T, shape)
+    test_scalar_indexing(T, shape, TestAbstractArray)
+    test_vector_indexing(T, shape, TestAbstractArray)
+    test_primitives(T, shape, TestAbstractArray)
+    test_getindex_internals(T, shape, TestAbstractArray)
+    test_setindex!_internals(T, shape, TestAbstractArray)
 end
-test_in_bounds()
-test_getindex_internals()
-test_setindex!_internals()
-test_get()
-test_cat()
-test_ind2sub()
-test_cartesianmap()
-test_map()
-test_map_promote()
-test_UInt_indexing()
-test_vcat_depwarn()
+test_in_bounds(TestAbstractArray)
+test_getindex_internals(TestAbstractArray)
+test_setindex!_internals(TestAbstractArray)
+test_get(TestAbstractArray)
+test_cat(TestAbstractArray)
+test_ind2sub(TestAbstractArray)
+test_cartesianmap(TestAbstractArray)
+test_map(TestAbstractArray)
+test_map_promote(TestAbstractArray)
+test_UInt_indexing(TestAbstractArray)
+test_vcat_depwarn(TestAbstractArray)
