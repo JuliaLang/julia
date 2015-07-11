@@ -239,23 +239,26 @@ cost{T<:fftwDouble}(plan::FFTWPlan{T}) =
 cost{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_cost,libfftwf), Float64, (PlanPtr,), plan)
 
-let add=[0.0], mul=[0.0], fma=[0.0]
-    global arithmetic_ops
-    function arithmetic_ops{T<:fftwDouble}(plan::FFTWPlan{T})
-        ccall((:fftw_flops,libfftw), Void,
-              (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}),
-              plan, add, mul, fma)
-        (int64(add[1]), int64(mul[1]), int64(fma[1]))
-    end
-    function arithmetic_ops{T<:fftwSingle}(plan::FFTWPlan{T})
-        ccall((:fftwf_flops,libfftwf), Void,
-              (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}),
-              plan, add, mul, fma)
-        (int64(add[1]), int64(mul[1]), int64(fma[1]))
-    end
+function arithmetic_ops{T<:fftwDouble}(plan::FFTWPlan{T})
+    # Change to individual Ref after we can allocate them on stack
+    ref = Ref{NTuple{3, Float64}}()
+    ptr = Ptr{Float64}(Base.unsafe_convert(Ptr{NTuple{3, Float64}}, ref))
+    ccall((:fftw_flops,libfftw), Void,
+          (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}),
+          plan, ptr, ptr + 8, ptr + 16)
+    (round(Int64, ref[][1]), round(Int64, ref[][2]), round(Int64, ref[][3]))
 end
-flops(plan::FFTWPlan) = let ops=arithmetic_ops(plan)
-    ops[1] + ops[2] + 2*ops[3] # add + mul + 2*fma
+function arithmetic_ops{T<:fftwSingle}(plan::FFTWPlan{T})
+    # Change to individual Ref after we can allocate them on stack
+    ref = Ref{NTuple{3, Float64}}()
+    ptr = Ptr{Float64}(Base.unsafe_convert(Ptr{NTuple{3, Float64}}, ref))
+    ccall((:fftwf_flops,libfftwf), Void,
+          (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}),
+          plan, ptr, ptr + 8, ptr + 16)
+    (round(Int64, ref[][1]), round(Int64, ref[][2]), round(Int64, ref[][3]))
+end
+flops(plan::FFTWPlan) = let ops = arithmetic_ops(plan)
+    ops[1] + ops[2] + 2 * ops[3] # add + mul + 2*fma
 end
 
 # Pretty-printing plans
