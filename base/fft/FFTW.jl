@@ -200,12 +200,12 @@ end
 abstract FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T}
 for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
     @eval begin
-        type $P{T<:fftwNumber,K,inplace} <: FFTWPlan{T,K,inplace}
+        type $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
             plan::PlanPtr
-            sz::Dims # size of array on which plan operates (Int tuple)
-            osz::Dims # size of output array (Int tuple)
-            istride::Dims # strides of input
-            ostride::Dims # strides of output
+            sz::NTuple{N, Int} # size of array on which plan operates (Int tuple)
+            osz::NTuple{N, Int} # size of output array (Int tuple)
+            istride::NTuple{N, Int} # strides of input
+            ostride::NTuple{N, Int} # strides of output
             ialign::Int32 # alignment mod 16 of input
             oalign::Int32 # alignment mod 16 of input
             flags::UInt32 # planner flags
@@ -219,7 +219,7 @@ for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
                 return p
             end
         end
-        $P{T<:fftwNumber}(plan::PlanPtr, flags::Integer, R::Any, X::StridedArray{T}, Y::StridedArray, K) = $P{T,K,pointer(X) == pointer(Y)}(plan, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y), flags, R)
+        $P{T<:fftwNumber,N}(plan::PlanPtr, flags::Integer, R::Any, X::StridedArray{T,N}, Y::StridedArray, K) = $P{T,K,pointer(X) == pointer(Y),N}(plan, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y), flags, R)
     end
 end
 
@@ -576,28 +576,28 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     plan_f! = symbol("plan_",f,"!")
     idirection = -direction
     @eval begin
-        function $plan_f{T<:fftwComplex}(X::StridedArray{T}, region;
-                                         flags::Integer=ESTIMATE,
-                                         timelimit::Real=NO_TIMELIMIT)
+        function $plan_f{T<:fftwComplex,N}(X::StridedArray{T,N}, region;
+                                           flags::Integer=ESTIMATE,
+                                           timelimit::Real=NO_TIMELIMIT)
             cFFTWPlan(X, fakesimilar(flags, X, T), region,
-                      $direction, flags,timelimit)::cFFTWPlan{T,$direction,false}
+                      $direction, flags,timelimit)::cFFTWPlan{T,$direction,false,N}
         end
 
-        function $plan_f!{T<:fftwComplex}(X::StridedArray{T}, region;
-                                          flags::Integer=ESTIMATE,
-                                          timelimit::Real=NO_TIMELIMIT)
-            cFFTWPlan(X, X, region, $direction, flags, timelimit)::cFFTWPlan{T,$direction,true}
+        function $plan_f!{T<:fftwComplex,N}(X::StridedArray{T,N}, region;
+                                            flags::Integer=ESTIMATE,
+                                            timelimit::Real=NO_TIMELIMIT)
+            cFFTWPlan(X, X, region, $direction, flags, timelimit)::cFFTWPlan{T,$direction,true,N}
         end
         $plan_f{T<:fftwComplex}(X::StridedArray{T}; kws...) =
             $plan_f(X, 1:ndims(X); kws...)
         $plan_f!{T<:fftwComplex}(X::StridedArray{T}; kws...) =
             $plan_f!(X, 1:ndims(X); kws...)
 
-        function plan_inv{T<:fftwComplex,inplace}(p::cFFTWPlan{T,$direction,inplace})
+        function plan_inv{T<:fftwComplex,N,inplace}(p::cFFTWPlan{T,$direction,inplace,N})
             X = Array(T, p.sz)
             Y = inplace ? X : fakesimilar(p.flags, X, T)
             ScaledPlan(cFFTWPlan(X, Y, p.region, $idirection,
-                                 p.flags, NO_TIMELIMIT)::cFFTWPlan{T,$idirection,inplace},
+                                 p.flags, NO_TIMELIMIT)::cFFTWPlan{T,$idirection,inplace,N},
                        normalization(X, p.region))
         end
     end
@@ -627,15 +627,17 @@ end
 for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     # Note: use $FORWARD and $BACKWARD below because of issue #9775
     @eval begin
-        function plan_rfft(X::StridedArray{$Tr}, region;
-                           flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
+        function plan_rfft{N}(X::StridedArray{$Tr,N}, region;
+                              flags::Integer=ESTIMATE,
+                              timelimit::Real=NO_TIMELIMIT)
             osize = rfft_output_size(X, region)
             Y = flags&ESTIMATE != 0 ? FakeArray($Tc,osize...) : Array($Tc,osize...)
-            rFFTWPlan(X, Y, region, flags, timelimit)::rFFTWPlan{$Tr,$FORWARD,false}
+            rFFTWPlan(X, Y, region, flags, timelimit)::rFFTWPlan{$Tr,$FORWARD,false,N}
         end
 
-        function plan_brfft(X::StridedArray{$Tc}, d::Integer, region;
-                            flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
+        function plan_brfft{N}(X::StridedArray{$Tc,N}, d::Integer, region;
+                               flags::Integer=ESTIMATE,
+                               timelimit::Real=NO_TIMELIMIT)
             osize = brfft_output_size(X, d, region)
             Y = flags&ESTIMATE != 0 ? FakeArray($Tr,osize...) : Array($Tr,osize...)
 
@@ -647,25 +649,25 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             else
                 Xc = copy(X)
                 rFFTWPlan(X, Y, region, flags, timelimit)
-            end::rFFTWPlan{$Tc,$BACKWARD,false}
+            end::rFFTWPlan{$Tc,$BACKWARD,false,N}
         end
 
         plan_rfft(X::StridedArray{$Tr};kws...)=plan_rfft(X,1:ndims(X);kws...)
         plan_brfft(X::StridedArray{$Tr};kws...)=plan_brfft(X,1:ndims(X);kws...)
 
-        function plan_inv(p::rFFTWPlan{$Tr,$FORWARD,false})
+        function plan_inv{N}(p::rFFTWPlan{$Tr,$FORWARD,false,N})
             X = Array($Tr, p.sz)
             Y = p.flags&ESTIMATE != 0 ? FakeArray($Tc,p.osz) : Array($Tc,p.osz)
             ScaledPlan(rFFTWPlan(Y, X, p.region,
                                  length(p.region)<=1 ? p.flags | PRESERVE_INPUT
-                                 : p.flags, NO_TIMELIMIT)::rFFTWPlan{$Tc,$BACKWARD,false},
+                                 : p.flags, NO_TIMELIMIT)::rFFTWPlan{$Tc,$BACKWARD,false,N},
                        normalization(X, p.region))
         end
 
-        function plan_inv(p::rFFTWPlan{$Tc,$BACKWARD,false})
+        function plan_inv{N}(p::rFFTWPlan{$Tc,$BACKWARD,false,N})
             X = Array($Tc, p.sz)
             Y = p.flags&ESTIMATE != 0 ? FakeArray($Tr,p.osz) : Array($Tr,p.osz)
-            ScaledPlan(rFFTWPlan(Y, X, p.region, p.flags, NO_TIMELIMIT)::rFFTWPlan{$Tr,$FORWARD,false},
+            ScaledPlan(rFFTWPlan(Y, X, p.region, p.flags, NO_TIMELIMIT)::rFFTWPlan{$Tr,$FORWARD,false,N},
                        normalization(Y, p.region))
         end
 
