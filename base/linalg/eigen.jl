@@ -90,11 +90,17 @@ end
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : maximum(v)
+    if iseltype(v,Complex)
+        throw(DomainError())
+    end
+    maximum(v)
 end
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
+    if iseltype(v,Complex)
+        throw(DomainError())
+    end
+    minimum(v)
 end
 
 inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
