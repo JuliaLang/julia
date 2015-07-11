@@ -321,6 +321,7 @@ const getfield_tfunc = function (A, s0, name)
 end
 add_tfunc(getfield, 2, 2, (A,s,name)->getfield_tfunc(A,s,name)[1])
 add_tfunc(setfield!, 3, 3, (o, f, v)->v)
+add_tfunc(modifyelement, 3, 3, (args...)->Void)
 const fieldtype_tfunc = function (A, s, name)
     if isType(s)
         s = s.parameters[1]

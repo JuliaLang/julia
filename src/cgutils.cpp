@@ -1091,9 +1091,9 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
         }
         else {
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(jlboundserror_func), { a, i });
+            builder.CreateCall(prepare_call(jlboundserrorint_func), { a, i });
 #else
-            builder.CreateCall2(prepare_call(jlboundserror_func), a, i);
+            builder.CreateCall2(prepare_call(jlboundserrorint_func), a, i);
 #endif
         }
         builder.CreateUnreachable();
@@ -1363,6 +1363,35 @@ static Value *emit_getfield_unknownidx(Value *strct, Value *idx, jl_datatype_t *
     return NULL;
 }
 
+static Value *emit_gep_knownidx(Value *strct, ArrayRef<Value *> idxs, jl_datatype_t *jt)
+{
+    Type *strctty = julia_struct_to_llvm((jl_value_t*)jt);
+    if (strct->getType() == jl_pvalue_llvmt)
+        strct = builder.CreateBitCast(strct, PointerType::get(strctty,0));
+    return builder.CreateInBoundsGEP(strctty, strct, idxs);
+}
+
+static Value *emit_gep_knownidx(Value *strct, unsigned idx, jl_datatype_t *jt)
+{
+    Value *addr;
+    if (strct->getType() == jl_pvalue_llvmt) {
+        addr = builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
+                              ConstantInt::get(T_size, jl_field_offset(jt,idx)));
+    }
+    else if (strct->getType()->isPointerTy()) { // something stack allocated
+#       ifdef LLVM37
+        addr = builder.CreateConstInBoundsGEP2_32(
+            cast<PointerType>(strct->getType()->getScalarType())->getElementType(),
+            strct, 0, idx);
+#       else
+        addr = builder.CreateConstInBoundsGEP2_32(strct, 0, idx);
+#       endif
+    } else {
+        assert(false && "Cannot call GEP on this");
+    }
+    return addr;
+}
+
 static Value *emit_getfield_knownidx(Value *strct, unsigned idx, jl_datatype_t *jt, jl_codectx_t *ctx)
 {
     jl_value_t *jfty = jl_field_type(jt,idx);
@@ -1375,39 +1404,31 @@ static Value *emit_getfield_knownidx(Value *strct, unsigned idx, jl_datatype_t *
     if (elty == T_void)
         return ghostValue(jfty);
     Value *fldv = NULL;
-    if (strct->getType() == jl_pvalue_llvmt) {
-        Value *addr =
-            builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
-                              ConstantInt::get(T_size, jl_field_offset(jt,idx)));
-        MDNode *tbaa = jt->mutabl ? tbaa_user : tbaa_immut;
-        if (jl_field_isptr(jt,idx)) {
-            Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt)));
-            if (idx >= (unsigned)jt->ninitialized)
-                null_pointer_check(fldv, ctx);
-            return fldv;
+
+    if (strct->getType() == jl_pvalue_llvmt || strct->getType()->isPointerTy()) {
+        Value *addr = emit_gep_knownidx(strct, idx, jt);
+        if (strct->getType() == jl_pvalue_llvmt) {
+            MDNode *tbaa = jt->mutabl ? tbaa_user : tbaa_immut;
+            if (jl_field_isptr(jt,idx)) {
+                Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt)));
+                if (idx >= (unsigned)jt->ninitialized)
+                    null_pointer_check(fldv, ctx);
+                return fldv;
+            }
+            else {
+                int align = jl_field_offset(jt,idx);
+                if (align & 1) align = 1;
+                else if (align & 2) align = 2;
+                else if (align & 4) align = 4;
+                else if (align & 8) align = 8;
+                else align = 16;
+                return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa, align);
+            }
+        } else {
+            assert(!jt->mutabl);
+            return typed_load(addr, NULL, jfty, ctx, NULL);
         }
-        else {
-            int align = jl_field_offset(jt,idx);
-            if (align & 1) align = 1;
-            else if (align & 2) align = 2;
-            else if (align & 4) align = 4;
-            else if (align & 8) align = 8;
-            else align = 16;
-            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa, align);
-        }
-    }
-    else if (strct->getType()->isPointerTy()) { // something stack allocated
-#       ifdef LLVM37
-        Value *addr = builder.CreateConstInBoundsGEP2_32(
-            cast<PointerType>(strct->getType()->getScalarType())->getElementType(),
-            strct, 0, idx);
-#       else
-        Value *addr = builder.CreateConstInBoundsGEP2_32(strct, 0, idx);
-#       endif
-        assert(!jt->mutabl);
-        return typed_load(addr, NULL, jfty, ctx, NULL);
-    }
-    else {
+    } else {
         assert(strct->getType()->isVectorTy());
         fldv = builder.CreateExtractElement(strct, ConstantInt::get(T_int32, idx));
         if (jfty == (jl_value_t*)jl_bool_type) {

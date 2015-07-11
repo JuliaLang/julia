@@ -3106,3 +3106,22 @@ end
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
+
+# Julep #11902
+x11902 = Ref{Tuple{Int64,Int64}}()
+x11902[1] = 1
+@test x11902.x[1] == 1
+x11902[2] = 2
+@test x11902.x == (1,2)
+@test_throws BoundsError x11902[0] = 1
+@test_throws BoundsError x11902[3] = 1
+try
+    x11902[3] = 1
+catch e
+    @test e.i == (3,)
+end
+
+x11902 = Ref{Tuple{Ref{Int64},Int64}}()
+@test_throws ErrorException x11902[1] = Ref{Int64}()
+x11902 = Ref{Ref{Int64}}()
+@test_throws MethodError x11902[1] = Ref{Int64}()

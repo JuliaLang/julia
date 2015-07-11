@@ -288,6 +288,7 @@ static Function *jlthrow_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlundefvarerror_func;
+static Function *jlboundserrorint_func;
 static Function *jlboundserror_func;
 static Function *jluboundserror_func;
 static Function *jlvboundserror_func;
@@ -2487,6 +2488,123 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         // TODO: faster code for integer index
+    }
+    else if (f->fptr == &jl_f_modifyelement && nargs == 3) {
+        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
+        // First check if this is a constant index
+        bool isconstidx = jl_is_long(args[2]);
+        if (!isconstidx && jl_is_tuple(args[2])) {
+            isconstidx = true;
+            jl_datatype_t *tt = (jl_datatype_t*)jl_typeof(args[2]);
+            for (size_t i = 0; i < jl_nfields(args[2]); ++i) {
+                if ((jl_datatype_t*)jl_field_type(tt, i) != jl_long_type) {
+                    isconstidx = false;
+                    break;
+                }
+            }
+        }
+
+        rt1 = (jl_value_t*)sty;
+        if (jl_is_ref_type((jl_value_t*)sty)) {
+            jl_datatype_t *tt = (jl_datatype_t*)jl_tparam0(sty);
+            if (jl_is_tuple_type(tt)){
+                Value *addr = NULL;
+                Value *strct = NULL;
+                jl_datatype_t *fieldty;
+                if (isconstidx) {
+                    if (jl_is_long(args[2])) {
+                        size_t idx = jl_unbox_long(args[2]) - 1;
+                        if (idx < jl_datatype_nfields(sty)) {
+                            Value *strct = emit_expr(args[1], ctx);
+                            addr = emit_gep_knownidx(strct, idx, sty);
+                            fieldty = (jl_datatype_t*)jl_field_type(tt, idx);
+                        }
+                    }
+                    else {
+                        // First check bounds, then emit code
+                        bool boundsok = true;
+                        fieldty = tt;
+                        for (size_t i = 0; i < jl_nfields(args[2]); ++i) {
+                            unsigned idx = jl_unbox_long(jl_get_nth_field(args[2],i))-1;
+                            if (idx >= jl_datatype_nfields(fieldty)) {
+                                boundsok = false;
+                                break;
+                            }
+                            fieldty = (jl_datatype_t*)jl_field_type(fieldty, idx);
+                        }
+                        if (boundsok) {
+                            Value *strct = emit_expr(args[1], ctx);
+                            std::vector<Value *> idxs;
+                            idxs.push_back(ConstantInt::get(T_int32, 0));
+                            idxs.push_back(ConstantInt::get(T_int32, 0));
+                            for (size_t i = 0; i < jl_nfields(args[2]); ++i)
+                                idxs.push_back(ConstantInt::get(T_int32, jl_unbox_long(jl_get_nth_field(args[2],i))-1));
+                            addr = emit_gep_knownidx(strct, idxs, sty);
+                        }
+                    }
+                } else {
+                    // Not const index, first check if the tuple is homogeneous to the required depth
+                    jl_datatype_t *idxty = (jl_datatype_t*)expr_type(args[2], ctx);
+                    int depth = idxty == jl_long_type ? 1 : jl_is_tuple_type(idxty) ?
+                        jl_svec_len(idxty->types) : 0;
+                    if (depth != 0) {
+                        fieldty = tt;
+                        bool ishomogeneous = true;
+                        for (size_t i = 0; i < depth; ++i) {
+                            if (!is_tupletype_homogeneous(fieldty->types)) {
+                                ishomogeneous = false;
+                                break;
+                            }
+                            fieldty = (jl_datatype_t*)jl_field_type(fieldty,0);
+                        }
+                        if (ishomogeneous) {
+                            // Now we know we can emit this efficiently
+                            strct = emit_expr(args[1], ctx);
+                            Value *idxval = emit_expr(args[2], ctx);
+                            // Emit boundscheck
+                            std::vector<Value *> idxs;
+                            idxs.push_back(ConstantInt::get(T_int32, 0));
+                            idxs.push_back(ConstantInt::get(T_int32, 0));
+                            fieldty = tt;
+                            Value *bndacc = ConstantInt::get(T_int1, 1);
+                            for (size_t i = 0; i < depth; ++i) {
+                                Value *idx = builder.CreateSub(
+                                    emit_getfield_knownidx(idxval, i, idxty, ctx),
+                                    ConstantInt::get(T_size, 1));
+                                // For bounds check
+                                Value *ok = builder.CreateICmpULT(idx,
+                                    ConstantInt::get(T_size, jl_datatype_nfields(fieldty)));
+                                bndacc = builder.CreateAnd(ok,bndacc);
+                                idxs.push_back(idx);
+                                fieldty = (jl_datatype_t*)jl_field_type(fieldty,0);
+                            }
+                            if (((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
+                                 jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+                                 jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON) {
+                                    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+                                    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass",ctx->f);
+                                    builder.CreateCondBr(bndacc, passBB, failBB);
+                                    builder.SetInsertPoint(failBB);
+                                    builder.CreateCall(prepare_call(jlboundserror_func), {
+                                        boxed(strct, ctx), boxed(idxval, ctx, (jl_value_t*)idxty)
+                                    });
+                                    builder.CreateUnreachable();
+                                    builder.SetInsertPoint(passBB);
+                            }
+                            addr = emit_gep_knownidx(strct, idxs, sty);
+                        }
+                    }
+                }
+
+                if (addr != NULL) {
+                    int align = jl_datatype_size(fieldty);
+                    typed_store(addr, ConstantInt::get(T_int32, 0), emit_expr(args[3], ctx),
+                        (jl_value_t*)fieldty, ctx, tbaa_user, strct, align);
+                    JL_GC_POP();
+                    return ghostValue(jl_typeof(jl_nothing));
+                }
+            }
+        }
     }
     else if (f->fptr == &jl_f_nfields && nargs==1) {
         if (ctx->vaStack && symbol_eq(args[1], ctx->vaName) && !ctx->vars[ctx->vaName].isAssigned) {
@@ -5059,6 +5177,16 @@ static void init_julia_llvm_env(Module *m)
     jlundefvarerror_func->setDoesNotReturn();
     add_named_global(jlundefvarerror_func, (void*)&jl_undefined_var_error);
 
+    std::vector<Type*> args2_boundserror(0);
+    args2_boundserror.push_back(jl_pvalue_llvmt);
+    args2_boundserror.push_back(jl_pvalue_llvmt);
+    jlboundserror_func =
+        Function::Create(FunctionType::get(T_void, args2_boundserror, false),
+                         Function::ExternalLinkage,
+                         "jl_bounds_error", m);
+    jlboundserror_func->setDoesNotReturn();
+    add_named_global(jlboundserror_func, (void*)&jl_bounds_error);
+
     std::vector<Type*> args2_boundserrorv(0);
     args2_boundserrorv.push_back(jl_pvalue_llvmt);
     args2_boundserrorv.push_back(T_psize);
@@ -5070,15 +5198,15 @@ static void init_julia_llvm_env(Module *m)
     jlboundserrorv_func->setDoesNotReturn();
     add_named_global(jlboundserrorv_func, (void*)&jl_bounds_error_ints);
 
-    std::vector<Type*> args2_boundserror(0);
-    args2_boundserror.push_back(jl_pvalue_llvmt);
-    args2_boundserror.push_back(T_size);
-    jlboundserror_func =
-        Function::Create(FunctionType::get(T_void, args2_boundserror, false),
+    std::vector<Type*> args2_boundserrorint(0);
+    args2_boundserrorint.push_back(jl_pvalue_llvmt);
+    args2_boundserrorint.push_back(T_size);
+    jlboundserrorint_func =
+        Function::Create(FunctionType::get(T_void, args2_boundserrorint, false),
                          Function::ExternalLinkage,
                          "jl_bounds_error_int", m);
-    jlboundserror_func->setDoesNotReturn();
-    add_named_global(jlboundserror_func, (void*)&jl_bounds_error_int);
+    jlboundserrorint_func->setDoesNotReturn();
+    add_named_global(jlboundserrorint_func, (void*)&jl_bounds_error_int);
 
     std::vector<Type*> args3_vboundserror(0);
     args3_vboundserror.push_back(jl_ppvalue_llvmt);
@@ -5190,6 +5318,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_isdefined] = jlcall_func_to_llvm("jl_f_isdefined", (void*)&jl_f_isdefined, m);
     builtin_func_map[jl_f_get_field] = jlcall_func_to_llvm("jl_f_get_field", (void*)&jl_f_get_field, m);
     builtin_func_map[jl_f_set_field] = jlcall_func_to_llvm("jl_f_set_field", (void*)&jl_f_set_field, m);
+    builtin_func_map[jl_f_modifyelement] = jlcall_func_to_llvm("jl_f_modifyelement", (void*)&jl_f_modifyelement, m);
     builtin_func_map[jl_f_field_type] = jlcall_func_to_llvm("jl_f_field_type", (void*)&jl_f_field_type, m);
     builtin_func_map[jl_f_nfields] = jlcall_func_to_llvm("jl_f_nfields", (void*)&jl_f_nfields, m);
     builtin_func_map[jl_f_new_expr] = jlcall_func_to_llvm("jl_f_new_expr", (void*)&jl_f_new_expr, m);

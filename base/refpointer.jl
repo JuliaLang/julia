@@ -37,6 +37,11 @@ function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
 end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
+function setindex!{T<:Tuple}(x::RefValue{T}, val, idxs...)
+    Core.modifyelement(x, idxs, val)
+    val
+end
+
 ### Methods for a Ref object that is backed by an array at index i
 immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A

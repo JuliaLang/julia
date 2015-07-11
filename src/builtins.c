@@ -717,6 +717,57 @@ JL_CALLABLE(jl_f_set_field)
     return args[2];
 }
 
+static uint8_t *_getelmentptr(uint8_t *ptr, size_t idx, jl_datatype_t *st)
+{
+    if (idx >= jl_datatype_nfields(st))
+        jl_bounds_error_int((jl_value_t*)st, idx+1);
+    return (uint8_t*)(ptr + jl_field_offset(st,idx));
+}
+
+JL_CALLABLE(jl_f_modifyelement)
+{
+    JL_NARGS(modifyelement, 3, 3)
+    jl_value_t *v = args[0];
+    jl_value_t *vt = jl_typeof(v);
+    if (!jl_is_ref_type(vt))
+        jl_type_error("modifyelement", (jl_value_t*)jl_ref_type, v);
+    jl_value_t *tt = jl_tparam0(vt);
+    if (!jl_is_datatype(tt))
+        jl_type_error("modifyelement", (jl_value_t*)jl_datatype_type, v);
+    if (!jl_is_tuple_type(tt))
+        jl_type_error("modifyelement", (jl_value_t*)jl_tuple_type, v);
+    if (!jl_isbits(tt))
+        jl_error("modifyelement currently only applies to isbits tuples");
+    jl_datatype_t *st = (jl_datatype_t*)tt;
+    uint8_t *ptr = (uint8_t*)v;
+    jl_value_t *tpl_type = (jl_value_t*)st;
+    if (jl_is_long(args[1])) {
+        size_t idx = jl_unbox_long(args[1])-1;
+        ptr = _getelmentptr(ptr, idx, st);
+        tpl_type = jl_field_type(tpl_type, idx);
+    } else {
+        jl_value_t *idxval = NULL;
+        JL_TYPECHK(modifyelement, tuple, args[1]);
+        JL_GC_PUSH2(&idxval, &tpl_type);
+        for (int idx = 0; idx < jl_nfields(args[1]); ++idx) {
+            idxval = jl_get_nth_field(args[1], idx);
+            if (!jl_is_long(idxval))
+                jl_error("modifyelement can only take Ints or tuples thereof");
+            size_t tplidx = jl_unbox_long(idxval)-1;
+            if (!jl_is_datatype(tpl_type))
+                jl_type_error("modifyelement", (jl_value_t*)jl_datatype_type, tpl_type);
+            ptr = _getelmentptr(ptr, tplidx, (jl_datatype_t*)tpl_type);
+            tpl_type = jl_field_type(tpl_type, tplidx);
+        }
+        JL_GC_POP();
+    }
+    if (jl_typeof(args[2]) != tpl_type)
+        jl_type_error("modifyelement", (jl_value_t*)tpl_type, args[2]);
+    jl_assign_bits(ptr,args[2]);
+    jl_gc_wb(args[0],args[2]);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_field_type)
 {
     JL_NARGS(fieldtype, 2, 2);
@@ -1186,6 +1237,7 @@ void jl_init_primitives(void)
     // functions for internal use
     add_builtin_func("getfield",  jl_f_get_field);
     add_builtin_func("setfield!",  jl_f_set_field);
+    add_builtin_func("modifyelement", jl_f_modifyelement);
     add_builtin_func("fieldtype", jl_f_field_type);
     add_builtin_func("nfields", jl_f_nfields);
     add_builtin_func("_expr", jl_f_new_expr);

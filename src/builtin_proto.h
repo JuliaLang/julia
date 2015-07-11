@@ -24,6 +24,7 @@ JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_svec);
 JL_CALLABLE(jl_f_get_field);
 JL_CALLABLE(jl_f_set_field);
+JL_CALLABLE(jl_f_modifyelement);
 JL_CALLABLE(jl_f_field_type);
 JL_CALLABLE(jl_f_arraylen);
 JL_CALLABLE(jl_f_arrayref);
