@@ -229,6 +229,7 @@ function base_include(content::Nullable{ByteString}, path::AbstractString, relat
         end
     end
 end
+base_include(content::AbstractString, path::AbstractString, relative_to=nothing) = base_include(Nullable{ByteString}(content), path, relative_to)
 base_include(path::AbstractString, relative_to=nothing) = base_include(Nullable{ByteString}(), path, relative_to)
 include_string(txt::AbstractString, fname::AbstractString="none") = base_include(Nullable{ByteString}(bytestring(txt)), bytestring(fname))
 
