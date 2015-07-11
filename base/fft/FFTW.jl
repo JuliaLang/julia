@@ -73,20 +73,19 @@ typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
 # since it is not written to.  Hence, it is convenient to create an
 # array-like type that carries a size and a stride like a "real" array
 # but which is converted to C_NULL as a pointer.
-immutable FakeArray{T}
-    sz::Dims
-    st::Dims
+immutable FakeArray{T, N} <: DenseArray{T, N}
+    sz::NTuple{N, Int}
+    st::NTuple{N, Int}
 end
 size(a::FakeArray) = a.sz
 strides(a::FakeArray) = a.st
-ndims(a::FakeArray) = length(a.sz)
 unsafe_convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
-FakeArray(T, sz::Dims) = FakeArray{T}(sz, colmajorstrides(sz))
-FakeArray(T, sz::Int...) = FakeArray(T, sz)
+FakeArray{T, N}(::Type{T}, sz::NTuple{N, Int}) =
+    FakeArray{T, N}(sz, colmajorstrides(sz))
+FakeArray{T}(::Type{T}, sz::Int...) = FakeArray(T, sz)
 fakesimilar(flags, X, T) = flags & ESTIMATE != 0 ? FakeArray(T, size(X)) : Array(T, size(X))
 alignment_of(A::FakeArray) = Int32(0)
-typealias StridedArrayish{T} Union(StridedArray{T}, FakeArray{T})
 
 ## Julia wrappers around FFTW functions
 
@@ -220,7 +219,7 @@ for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
                 return p
             end
         end
-        $P{T<:fftwNumber}(plan::PlanPtr, flags::Integer, R::Any, X::StridedArrayish{T}, Y::StridedArrayish, K) = $P{T,K,pointer(X) == pointer(Y)}(plan, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y), flags, R)
+        $P{T<:fftwNumber}(plan::PlanPtr, flags::Integer, R::Any, X::StridedArray{T}, Y::StridedArray, K) = $P{T,K,pointer(X) == pointer(Y)}(plan, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y), flags, R)
     end
 end
 
@@ -410,7 +409,7 @@ unsafe_execute!{T<:fftwSingle}(plan::r2rFFTWPlan{T},
 #    re-use the table of trigonometric constants from the first plan.
 
 # Compute dims and howmany for FFTW guru planner
-function dims_howmany(X::StridedArrayish, Y::StridedArrayish,
+function dims_howmany(X::StridedArray, Y::StridedArray,
                       sz::Array{Int,1}, region)
     reg = [region...]
     if length(unique(reg)) < length(reg)
@@ -456,7 +455,7 @@ end
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
 
-    @eval function cFFTWPlan(X::StridedArrayish{$Tc}, Y::StridedArrayish{$Tc},
+    @eval function cFFTWPlan(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
                              region, direction::Integer,
                              flags::Integer, timelimit::Real)
         set_timelimit($Tr, timelimit)
@@ -476,7 +475,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          direction < 0 ? FORWARD : BACKWARD)
     end
 
-    @eval function rFFTWPlan(X::StridedArrayish{$Tr}, Y::StridedArrayish{$Tc},
+    @eval function rFFTWPlan(X::StridedArray{$Tr}, Y::StridedArray{$Tc},
                              region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
@@ -495,7 +494,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan(plan, flags, R, X, Y, FORWARD)
     end
 
-    @eval function rFFTWPlan(X::StridedArrayish{$Tc}, Y::StridedArrayish{$Tr},
+    @eval function rFFTWPlan(X::StridedArray{$Tc}, Y::StridedArray{$Tr},
                              region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
@@ -514,7 +513,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan(plan, flags, R, X, Y, BACKWARD)
     end
 
-    @eval function r2rFFTWPlan(X::StridedArrayish{$Tr}, Y::StridedArrayish{$Tr},
+    @eval function r2rFFTWPlan(X::StridedArray{$Tr}, Y::StridedArray{$Tr},
                                region, kinds,
                                flags::Integer, timelimit::Real)
         R = copy(region)
@@ -535,7 +534,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
     end
 
     # support r2r transforms of complex = transforms of real & imag parts
-    @eval function r2rFFTWPlan(X::StridedArrayish{$Tc}, Y::StridedArrayish{$Tc},
+    @eval function r2rFFTWPlan(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
                                region, kinds,
                                flags::Integer, timelimit::Real)
         R = copy(region)

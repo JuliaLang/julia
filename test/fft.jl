@@ -309,9 +309,14 @@ for x in (randn(10),randn(10,12))
     @inferred rfft(x)
     @inferred brfft(x,18)
     @inferred brfft(y,10)
-    for f in (fft,plan_fft,bfft,plan_bfft,fft_,ifft,plan_ifft)
-        @inferred f(x)
+    for f in (plan_bfft!, plan_fft!, plan_ifft!,
+              plan_bfft, plan_fft, plan_ifft,
+              fft, bfft, fft_, ifft)
         @inferred f(z)
+    end
+    for f in (plan_bfft, plan_fft, plan_ifft,
+              plan_rfft, fft, bfft, fft_, ifft)
+        @inferred f(x)
     end
     # note: inference doesn't work for plan_fft_ since the
     #       algorithm steps are included in the CTPlan type
