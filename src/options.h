@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
@@ -25,13 +27,13 @@
 // (Experimental) codegen support for thread-local storage
 // #define CODEGEN_TLS
 
+// (Experimental) Use MCJIT ELF, even where it's not the native format
+// #define FORCE_ELF
+
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
 
 // GC options -----------------------------------------------------------------
-
-// only one GC is supported at this time
-#define JL_GC_MARKSWEEP
 
 // debugging options
 
@@ -42,7 +44,12 @@
 
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
-//#define GC_VERIFY
+// #define GC_VERIFY
+
+// SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
+// This is not recommended, as the memory state after such an exception should
+// be considered untrusted, but can be helpful during development
+// #define SEGV_EXCEPTION
 
 // profiling options
 

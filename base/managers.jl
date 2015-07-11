@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Built-in SSH and Local Managers
 
 immutable SSHManager <: ClusterManager
@@ -97,7 +99,9 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     host = machine_def[1]
 
     # Build up the ssh command
-    cmd = `cd $dir && $exename $exeflags` # launch julia
+    tval = haskey(ENV, "JULIA_WORKER_TIMEOUT") ? `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"]);` : ``
+
+    cmd = `cd $dir && $tval $exename $exeflags` # launch julia
     cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
     cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
 
@@ -107,11 +111,12 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     wconfig.io = io
     wconfig.host = host
+    wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
     wconfig.count = cnt
-    wconfig.max_parallel = get(params, :max_parallel, Nullable{Integer}())
+    wconfig.max_parallel = params[:max_parallel]
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -125,7 +130,7 @@ function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symb
             host = get(config.host)
             sshflags = get(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
-                println("Error sending a Ctrl-C to julia worker $id on $machine")
+                println("Error sending a Ctrl-C to julia worker $id on $host")
             end
         else
             # This state can happen immediately after an addprocs
@@ -206,6 +211,8 @@ end
 immutable DefaultClusterManager <: ClusterManager
 end
 
+const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.connect_at)
         # this is a worker-to-worker setup call.
@@ -216,6 +223,8 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.io)
         (bind_addr, port) = read_worker_host_port(get(config.io))
         pubhost=get(config.host, bind_addr)
+        config.host = pubhost
+        config.port = port
     else
         pubhost=get(config.host)
         port=get(config.port)
@@ -238,14 +247,22 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     end
 
     if tunnel
+        if !haskey(tunnel_hosts_map, pubhost)
+            tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
+        end
+        sem = tunnel_hosts_map[pubhost]
+
         sshflags = get(config.sshflags)
-        (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        acquire(sem)
+        try
+            (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        finally
+            release(sem)
+        end
     else
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
 
-    config.host = pubhost
-    config.port = port
     config.bind_addr = bind_addr
 
     # write out a subset of the connect_at required for further worker-worker connection setups

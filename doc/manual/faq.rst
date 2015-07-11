@@ -475,10 +475,10 @@ be inferred about an object of type ``MyAmbiguousType``:
     MyAmbiguousType(17)
 
     julia> typeof(b)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
     julia> typeof(c)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
 ``b`` and ``c`` have the same type, yet their underlying
 representation of data in memory is very different. Even if you stored
@@ -519,10 +519,10 @@ the wrapper object.  For example:
     MyStillAmbiguousType(3.2)
 
     julia> typeof(m)
-    MyType{Float64} (constructor with 1 method)
+    MyType{Float64}
 
     julia> typeof(t)
-    MyStillAmbiguousType (constructor with 2 methods)
+    MyStillAmbiguousType
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
@@ -620,22 +620,22 @@ For example:
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
+    MySimpleContainer{UnitRange{Int64}}
 
-    julia> c = MySimpleContainer([1:3]);
+    julia> c = MySimpleContainer([1:3;]);
 
     julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}} (constructor with 1 method)
+    MySimpleContainer{Array{Int64,1}}
 
     julia> b = MyAmbiguousContainer(1:3);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
-    julia> b = MyAmbiguousContainer([1:3]);
+    julia> b = MyAmbiguousContainer([1:3;]);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
 For ``MySimpleContainer``, the object is fully-specified by its type
 and parameters, so the compiler can generate optimized functions. In
@@ -778,7 +778,7 @@ really be thought of as nothing but rather a tuple of zero values.
 
 In code written for Julia prior to version 0.4 you may occasionally see ``None``,
 which is quite different. It is the empty (or "bottom") type, a type with no values
-and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+and no subtypes (except itself). This is now written as ``Union{}`` (an empty union
 type). You will generally not need to use this type.
 
 Memory

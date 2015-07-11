@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Printf
 using Base.Grisu
 export @printf, @sprintf
 
 ### printf formatter generation ###
-const SmallFloatingPoint = Union(Float64,Float32,Float16)
-const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,UInt128,Int128)
+const SmallFloatingPoint = Union{Float64,Float32,Float16}
+const SmallNumber = Union{SmallFloatingPoint,Base.Signed64,Base.Unsigned64,UInt128,Int128}
 
 function gen(s::AbstractString)
     args = []
@@ -1039,7 +1041,7 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    blk
+    Expr(:let, blk)
 end
 
 macro printf(args...)
@@ -1057,9 +1059,9 @@ macro sprintf(args...)
     !isempty(args) || throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
-    blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(blk.args, :(takebuf_string(out)))
-    blk
+    letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
+    push!(letexpr.args[1].args, :(takebuf_string(out)))
+    letexpr
 end
 
 end # module

@@ -30,7 +30,7 @@ CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 ifneq ($(USEMSVC), 1)
-CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS)"
@@ -143,14 +143,6 @@ endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
-ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
-endif
-endif
-ifeq ($(BUILD_OS),WINNT)
-ifeq ($(OS),WINNT)
-MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
-endif
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
@@ -215,7 +207,7 @@ $(build_prefix): | $(DIRS)
 MAKE_DESTDIR = DESTDIR="$(build_staging)/$1"
 define make-install
 	rm -rf $(build_staging)/$1
-	$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
+	+$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
 	mkdir -p $(build_prefix)
 	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
 endef
@@ -233,7 +225,7 @@ endef
 #
 # also, define a Makefile variable VARNAME_GIT_URL to use as the clone origin
 # and a Makefile variable VARNAME_TAR_URL to use as the clone origin when NO_GIT is set
-# this will pass along the VARNAME_BRANCH target in $1 for its use
+# this will pass along the VARNAME_SHA1 target in $1 for its use
 #
 # this defines rules for:
 #   VARNAME_SRC_DIR = source directory for the output
@@ -250,7 +242,7 @@ $1:
 	touch -c $1/$3
 $1/$3: $1.version | $1
 	cd $1 && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $1 && git checkout -q --detach remotes/origin/$$($2_BRANCH)
+	cd $1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
 # also allow backwards compatibility with an existing git-submodule:
@@ -261,9 +253,9 @@ ifeq (exists, $$(shell [ -d $$(JULIAHOME)/.git/modules/deps/$1 ] && echo exists 
 $1/$4: $$(JULIAHOME)/.git/modules/deps/$1/HEAD
 endif
 else # NO_GIT
-$2_SRC_DIR = $1-$$($2_BRANCH)
+$2_SRC_DIR = $1-$$($2_SHA1)
 $$($2_SRC_DIR).tar.gz:
-	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_BRANCH))
+	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $$($2_SRC_DIR)/$3: $$($2_SRC_DIR).tar.gz
 	$$(JLCHECKSUM) $$($2_SRC_DIR).tar.gz
 	mkdir -p $$($2_SRC_DIR) && \
@@ -403,12 +395,12 @@ endif # ARCH == ppc64
 
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
-LLVM_CC = CFLAGS="-fsanitize=memory -fsanitize-memory-track-origins"
+LLVM_CC = CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 else
-LLVM_CC = CFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="$(CFLAGS) -fsanitize=address"
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
@@ -473,12 +465,7 @@ llvm-$(LLVM_VER)/python2_path:
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python" && \
 	ln -sf /usr/bin/python2-config "llvm-$(LLVM_VER)/python2_path/python-config"
-ifeq ($(LLVM_VER), 3.2)
-## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
-llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
-else
-  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
-endif
+LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 ifeq ($(BUILD_LLDB),1)
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
@@ -652,8 +639,7 @@ endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS))
+	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH")
 	touch -c $@
 
 reinstall-llvm:
@@ -701,7 +687,10 @@ endif
 
 UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS)"
+endif
+ifneq ($(VERBOSE), 0)
+UV_MFLAGS += V=1
 endif
 ifneq ($(USEMSVC), 1)
 UV_FLAGS = $(UV_MFLAGS)
@@ -741,44 +730,50 @@ install-libuv: $(UV_OBJ_TARGET)
 
 ## PCRE ##
 
-PCRE_SRC_TARGET = pcre-$(PCRE_VER)/.libs/libpcre.$(SHLIB_EXT)
-PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre.$(SHLIB_EXT)
+PCRE_SRC_TARGET = pcre2-$(PCRE_VER)/.libs/libpcre2-8.$(SHLIB_EXT)
+PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
-pcre-$(PCRE_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
-pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
+# Force optimization for PCRE flags (Issue #11668)
+PCRE_CFLAGS = -O3
+ifneq ($(OS),WINNT)
+PCRE_LDFLAGS = "-Wl,-rpath,'$(build_libdir)'"
+endif
+
+pcre2-$(PCRE_VER).tar.bz2:
+	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
+pcre2-$(PCRE_VER)/configure: pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
 	touch -c $@
-pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
-	cd pcre-$(PCRE_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit --includedir=$(build_includedir)
+pcre2-$(PCRE_VER)/config.status: pcre2-$(PCRE_VER)/configure
+	cd pcre2-$(PCRE_VER) && \
+	./configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	touch -c $@
-$(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD)
+$(PCRE_SRC_TARGET): pcre2-$(PCRE_VER)/config.status
+	$(MAKE) -C pcre2-$(PCRE_VER) $(LIBTOOL_CCLD)
 	touch -c $@
-pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
+pcre2-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 ifneq ($(OS),WINNT)
-	$(MAKE) -C pcre-$(PCRE_VER) check -j1
+	$(MAKE) -C pcre2-$(PCRE_VER) check -j1
 endif
 endif
 	echo 1 > $@
-$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
-	$(call make-install,pcre-$(PCRE_VER),$(LIBTOOL_CCLD))
-	$(INSTALL_NAME_CMD)libpcre.$(SHLIB_EXT) $@
+$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre2-$(PCRE_VER)/checked
+	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
+	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $@
 	touch -c $@
 
 clean-pcre:
-	-$(MAKE) -C pcre-$(PCRE_VER) clean
+	-$(MAKE) -C pcre2-$(PCRE_VER) clean
 	-rm -f $(build_shlibdir)/libpcre*
 distclean-pcre: clean-pcre
-	-rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
+	-rm -rf pcre2-$(PCRE_VER).tar.bz2 pcre2-$(PCRE_VER)
 
-get-pcre: pcre-$(PCRE_VER).tar.bz2
-configure-pcre: pcre-$(PCRE_VER)/config.status
+get-pcre: pcre2-$(PCRE_VER).tar.bz2
+configure-pcre: pcre2-$(PCRE_VER)/config.status
 compile-pcre: $(PCRE_SRC_TARGET)
-check-pcre: pcre-$(PCRE_VER)/checked
+check-pcre: pcre2-$(PCRE_VER)/checked
 install-pcre: $(PCRE_OBJ_TARGET)
 
 
@@ -790,6 +785,9 @@ $(eval $(call git-external,openlibm,OPENLIBM,Makefile,libopenlibm.$(SHLIB_EXT)))
 OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE = $(OPENLIBM_SRC_DIR)/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+ifeq (CYGWIN,$(findstring CYGWIN,$(BUILD_OS)))
+OPENLIBM_FLAGS += OPENLIBM_HOME="$(call cygpath_w,$(abspath $(OPENLIBM_SRC_DIR)))"
+endif
 
 $(OPENLIBM_OBJ_SOURCE): $(OPENLIBM_SRC_DIR)/Makefile
 	$(MAKE) -C $(OPENLIBM_SRC_DIR) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
@@ -804,7 +802,7 @@ clean-openlibm:
 	-rm $(OPENLIBM_OBJ_TARGET)
 	-rm $(build_libdir)/libopenlibm.a
 
-get-openlibm: openlibm/Makefile
+get-openlibm: $(OPENLIBM_SRC_DIR)/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
@@ -815,9 +813,15 @@ OPENSPECFUN_GIT_URL = git://github.com/JuliaLang/openspecfun.git
 OPENSPECFUN_TAR_URL = https://api.github.com/repos/JuliaLang/openspecfun/tarball/$1
 $(eval $(call git-external,openspecfun,OPENSPECFUN,Makefile,libopenspecfun.$(SHLIB_EXT)))
 
+# issue 8799
+OPENSPECFUN_CFLAGS = -O3 -std=c99
+ifeq ($(USEICC),1)
+  OPENSPECFUN_CFLAGS += -fp-model precise
+endif
+
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = $(OPENSPECFUN_SRC_DIR)/libopenspecfun.$(SHLIB_EXT)
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)"
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(CFLAGS) $(OPENSPECFUN_CFLAGS)"
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
@@ -874,7 +878,7 @@ $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 $(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
 	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(build_includedir)
 	cp $< $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libDSFMT.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
 
 clean-dsfmt:
 	-rm -f dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
@@ -962,7 +966,7 @@ $(eval $(call git-external,openblas,OPENBLAS,Makefile,libopenblas.$(SHLIB_EXT)))
 
 OPENBLAS_OBJ_SOURCE = $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" LDFLAGS="$(LDFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -1127,7 +1131,7 @@ endif
 
 libgfortblas.$(SHLIB_EXT): gfortblas.c gfortblas.alias
 	$(CC) -Wall -O3 $(CPPFLAGS) $(CFLAGS) $(fPIC) -shared $< -o $@ -pipe \
-				-Wl,-reexport_framework,vecLib -Wl,-alias_list,gfortblas.alias
+				-Wl,-reexport_framework,Accelerate -Wl,-alias_list,gfortblas.alias
 $(build_shlibdir)/libgfortblas.$(SHLIB_EXT): libgfortblas.$(SHLIB_EXT)
 	cp -f $< $@
 	$(INSTALL_NAME_CMD)libgfortblas.$(SHLIB_EXT) $@
@@ -1224,7 +1228,7 @@ ARPACK_OBJ_TARGET = $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(ARPACK_CFLAGS)"
+ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
@@ -1386,6 +1390,11 @@ else ifeq ($(OS), Linux)
 endif
 	touch -c $@
 
+ifneq ($(PATCHELF),patchelf)
+$(FFTW_DOUBLE_OBJ_TARGET): $(PATCHELF)
+$(FFTW_SINGLE_OBJ_TARGET): $(PATCHELF)
+endif
+
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
 	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
@@ -1428,9 +1437,10 @@ UTF8PROC_SRC_TARGET = $(UTF8PROC_SRC_DIR)/libutf8proc.a
 UTF8PROC_OBJ_LIB    = $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER = $(build_includedir)/utf8proc.h
 UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+UTF8PROC_CFLAGS     = -O2
 
 $(UTF8PROC_SRC_TARGET): $(UTF8PROC_SRC_DIR)/Makefile
-	$(MAKE) -C $(UTF8PROC_SRC_DIR) cc="$(CC) -O2 -std=c99 $(fPIC) -DUTF8PROC_EXPORTS $(DEPS_CFLAGS)" AR="$(AR)" libutf8proc.a
+	$(MAKE) -C $(UTF8PROC_SRC_DIR) CC="$(CC) $(DEPS_CFLAGS)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)" libutf8proc.a
 	touch -c $@
 $(UTF8PROC_SRC_DIR)/checked: $(UTF8PROC_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1574,8 +1584,8 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 LIBUNWIND_TARGET_OBJ = $(build_libdir)/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
-LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
-LIBUNWIND_CPPFLAGS = $(CPPFLAGS)
+LIBUNWIND_CFLAGS = -U_FORTIFY_SOURCE $(fPIC)
+LIBUNWIND_CPPFLAGS =
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@
@@ -1586,7 +1596,7 @@ libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
-	./configure $(CONFIGURE_COMMON) CPPFLAGS="$(LIBUNWIND_CPPFLAGS)" CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
+	./configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
 	touch -c $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
@@ -1619,7 +1629,7 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="$(CFLAGS) -ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="$(LDFLAGS) -Wl,-macosx_version_min,10.7"
 
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
@@ -1706,10 +1716,22 @@ endif
 
 ## MPFR ##
 
+ifeq ($(USE_SYSTEM_MPFR), 0)
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
+endif
+endif
+ifeq ($(BUILD_OS),WINNT)
+ifeq ($(OS),WINNT)
+MPFR_OPTS += --disable-thread-safe CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
+endif
+endif
+
+
 MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET = $(build_shlibdir)/libmpfr.$(SHLIB_EXT)
 ifeq ($(OS),Darwin)
-MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
+MPFR_CHECK_MFLAGS = LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 ifneq ($(SANITIZE),)
@@ -1845,7 +1867,7 @@ $(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
 	"$(shell ./find_python2)" $< $@
 ifeq ($(BUILD_OS), WINNT)
-	[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J $@\\bin $@\\Scripts
+	-[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J $@\\bin $@\\Scripts
 endif
 	touch -c $@
 
@@ -1863,7 +1885,11 @@ install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## libgit2
 
-LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
+LIBGIT2_GIT_URL = git://github.com/libgit2/libgit2.git
+LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
+$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_EXT)))
+
+LIBGIT2_OBJ_SOURCE = $(LIBGIT2_SRC_DIR)/build/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 LIBGIT2_OPTS = $(CMAKE_COMMON) -DTHREADSAFE=ON
@@ -1872,33 +1898,29 @@ LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres` -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif
 
-libgit2-$(LIBGIT2_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
-libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
-	mkdir -p libgit2-$(LIBGIT2_VER)/build
-	cd libgit2-$(LIBGIT2_VER)/build/ && \
+$(LIBGIT2_SRC_DIR)/build/Makefile: $(LIBGIT2_SRC_DIR)/CMakeLists.txt
+	-cd $(LIBGIT2_SRC_DIR) && patch -p1 -f < ../libgit2_oldcmake.patch
+	-cd $(LIBGIT2_SRC_DIR) && patch -p1 -f < ../libgit2_oldssl.patch
+	mkdir -p $(LIBGIT2_SRC_DIR)/build
+	cd $(LIBGIT2_SRC_DIR)/build/ && \
 	$(CMAKE) .. $(LIBGIT2_OPTS)
 	touch -c $@
-$(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
-	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build
+$(LIBGIT2_OBJ_SOURCE): $(LIBGIT2_SRC_DIR)/build/Makefile
+	$(MAKE) -C $(LIBGIT2_SRC_DIR)/build
 	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
+$(LIBGIT2_SRC_DIR)/build/checked: $(LIBGIT2_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build test
+	$(MAKE) -C $(LIBGIT2_SRC_DIR)/build test
 endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
-	#$$(call make-install,libgit2-$(LIBGIT2_VER)/build,)
+	#$$(call make-install,$(LIBGIT2_SRC_DIR)/build,)
 ifeq ($(OS),Linux)
 	# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
@@ -1911,15 +1933,13 @@ endif
 	touch -c $@
 
 clean-libgit2:
-	-rm -rf libgit2-$(LIBGIT2_VER)/build/
+	-rm -rf $(LIBGIT2_SRC_DIR)/build/
 	-rm -f $(LIBGIT2_OBJ_TARGET)
-distclean-libgit2:
-	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
-get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
-configure-libgit2: libgit2-$(LIBGIT2_VER)/build/Makefile
+get-libgit2: $(LIBGIT2_SRC_DIR)/CMakeLists.txt
+configure-libgit2: $(LIBGIT2_SRC_DIR)/build/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
-check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
+check-libgit2: $(LIBGIT2_SRC_DIR)/build/checked
 install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##

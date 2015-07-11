@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(map(x->tc(x...), [zip(r1,r2)...]))
-tc{N}(r1::BitArray{N}, r2::Union(BitArray{N},Array{Bool,N})) = true
+tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 
@@ -25,6 +27,9 @@ let t0 = time()
         t0 = t1
     end
 end
+
+# empty bitvector
+@test BitVector() == BitVector(0)
 
 # vectors size
 v1 = 260
@@ -163,18 +168,23 @@ function gen_getindex_data()
     produce((m1, m2, Bool))
     m1, m2 = rand_m1m2()
     produce((m1, 1:m2, BitMatrix))
+    produce((m1, :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((m1, randperm(m2), BitMatrix))
     m1, m2 = rand_m1m2()
     produce((1:m1, m2, BitVector))
+    produce((:, m2, BitVector))
     m1, m2 = rand_m1m2()
     produce((1:m1, 1:m2, BitMatrix))
+    produce((:, :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((1:m1, randperm(m2), BitMatrix))
+    produce((:, randperm(m2), BitMatrix))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), m2, BitVector))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), 1:m2, BitMatrix))
+    produce((randperm(m1), :, BitMatrix))
     m1, m2 = rand_m1m2()
     produce((randperm(m1), randperm(m2), BitMatrix))
 end
@@ -190,24 +200,29 @@ function gen_setindex_data()
     produce((rand(Bool), m1, m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), m1, 1:m2))
+    produce((rand(Bool), m1, :))
     produce((bitrand(m2), m1, 1:m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), m1, randperm(m2)))
     produce((bitrand(m2), m1, randperm(m2)))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), 1:m1, m2))
+    produce((rand(Bool), :, m2))
     produce((bitrand(m1), 1:m1, m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), 1:m1, 1:m2))
+    produce((rand(Bool), :, :))
     produce((bitrand(m1, m2), 1:m1, 1:m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), 1:m1, randperm(m2)))
+    produce((rand(Bool), :, randperm(m2)))
     produce((bitrand(m1, m2), 1:m1, randperm(m2)))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), randperm(m1), m2))
     produce((bitrand(m1), randperm(m1), m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), randperm(m1), 1:m2))
+    produce((rand(Bool), randperm(m1), :))
     produce((bitrand(m1,m2), randperm(m1), 1:m2))
     m1, m2 = rand_m1m2()
     produce((rand(Bool), randperm(m1), randperm(m2)))
@@ -1117,7 +1132,7 @@ b2 = bitrand(v1)
 @check_bit_operation dot(b1, b2) Int
 
 b1 = bitrand(n1, n2)
-for k = -max(n1,n2) : max(n1,n2)
+for k = -n1 : n2
     @check_bit_operation tril(b1, k) BitMatrix
     @check_bit_operation triu(b1, k) BitMatrix
 end
@@ -1197,3 +1212,39 @@ resize!(a, 5)
 a = trues(5,5)
 flipbits!(a)
 @test a == falses(5,5)
+
+# findmax, findmin
+a = trues(0)
+@test_throws ArgumentError findmax(a)
+@test_throws ArgumentError findmin(a)
+
+a = falses(6)
+@test findmax(a) == (false,1)
+a = trues(6)
+@test findmin(a) == (true,1)
+a = bitpack([1,0,1,1,0])
+@test findmin(a) == (false,2)
+@test findmax(a) == (true,1)
+a = bitpack([0,0,1,1,0])
+@test findmin(a) == (false,1)
+@test findmax(a) == (true,3)
+
+#qr and svd
+
+A = bitrand(10,10)
+uA = bitunpack(A)
+@test svd(A) == svd(uA)
+@test qr(A) == qr(uA)
+
+#diag and diagm
+
+v = bitrand(10)
+uv = bitunpack(v)
+@test bitunpack(diagm(v)) == diagm(uv)
+v = bitrand(10,2)
+uv = bitunpack(v)
+@test_throws DimensionMismatch diagm(v)
+
+B = bitrand(10,10)
+uB = bitunpack(B)
+@test diag(uB) == bitunpack(diag(B))

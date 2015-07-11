@@ -1,5 +1,7 @@
-a = BigInt("123456789012345678901234567890")
-b = BigInt("123456789012345678901234567891")
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+a = parse(BigInt,"123456789012345678901234567890")
+b = parse(BigInt,"123456789012345678901234567891")
 
 @test typeof(a+1) == BigInt
 @test a+1 == b
@@ -11,20 +13,20 @@ b = BigInt("123456789012345678901234567891")
 @test !(b < a)
 @test !(b <= a)
 
-c = BigInt("246913578024691357802469135780")
+c = parse(BigInt,"246913578024691357802469135780")
 @test typeof(a * 2) == BigInt
 @test a*2 == c
 @test c-a == a
 @test c == a + a
 @test c+1 == a+b
 
-d = BigInt("-246913578024691357802469135780")
+d = parse(BigInt,"-246913578024691357802469135780")
 @test typeof(d) == BigInt
 @test d == -c
 
 ee = typemax(Int64)
 @test typeof(BigInt(ee)) == BigInt
-@test BigInt(ee)+1 == BigInt("9223372036854775808")
+@test BigInt(ee)+1 == parse(BigInt,"9223372036854775808")
 
 #Multiple calls for sanity check, since we're doing direct memory manipulation
 @test string(a) == "123456789012345678901234567890"
@@ -163,58 +165,58 @@ end
 @test gcd(BigInt(48), BigInt(180)) == 12
 @test lcm(BigInt(48), BigInt(180)) == 720
 
-@test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
+@test factorial(BigInt(40)) == parse(BigInt,"815915283247897734345611269596115894272000000000")
 @test binomial(BigInt(1), -1) == BigInt(0)
 @test binomial(BigInt(1), 2)  == BigInt(0)
-@test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
-@test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
+@test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")
+@test binomial(BigInt(113), BigInt(42)) == parse(BigInt,"18672199984318438125634054194360")
 
 a = rand(1:100, 10000)
 b = map(BigInt, a)
 @test sum(a) == sum(b)
 
 # Iterated arithmetic
-a = BigInt("315135")
-b = BigInt("12412")
-c = BigInt("3426495623485904783478347")
-d = BigInt("-1398984130")
-f = BigInt("2413804710837418037418307081437315263635345357386985747464")
-g = BigInt("-1")
+a = parse(BigInt,"315135")
+b = parse(BigInt,"12412")
+c = parse(BigInt,"3426495623485904783478347")
+d = parse(BigInt,"-1398984130")
+f = parse(BigInt,"2413804710837418037418307081437315263635345357386985747464")
+g = parse(BigInt,"-1")
 
-@test +(a, b) == BigInt("327547")
-@test +(a, b, c) == BigInt("3426495623485904783805894")
-@test +(a, b, c, d) == BigInt("3426495623485903384821764")
-@test +(a, b, c, d, f) == BigInt("2413804710837418037418307081437318690130968843290370569228")
-@test +(a, b, c, d, f, g) == BigInt("2413804710837418037418307081437318690130968843290370569227")
+@test +(a, b) == parse(BigInt,"327547")
+@test +(a, b, c) == parse(BigInt,"3426495623485904783805894")
+@test +(a, b, c, d) == parse(BigInt,"3426495623485903384821764")
+@test +(a, b, c, d, f) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569228")
+@test +(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569227")
 
-@test *(a, b) == BigInt("3911455620")
-@test *(a, b, c) == BigInt("13402585563389346256121263521460140")
-@test *(a, b, c, d) == BigInt("-18750004504148804423388563022070650287578200")
-@test *(a, b, c, d, f) == BigInt("-45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
-@test *(a, b, c, d, f, g) == BigInt("45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
+@test *(a, b) == parse(BigInt,"3911455620")
+@test *(a, b, c) == parse(BigInt,"13402585563389346256121263521460140")
+@test *(a, b, c, d) == parse(BigInt,"-18750004504148804423388563022070650287578200")
+@test *(a, b, c, d, f) == parse(BigInt,"-45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
+@test *(a, b, c, d, f, g) == parse(BigInt,"45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 
-@test ($)(a, b) == BigInt("327299")
-@test ($)(a, b, c) == BigInt("3426495623485904783798472")
-@test ($)(a, b, c, d) == BigInt("-3426495623485906178489610")
-@test ($)(a, b, c, d, f) == BigInt("-2413804710837418037418307081437316711364709261074607933698")
-@test ($)(a, b, c, d, f, g) == BigInt("2413804710837418037418307081437316711364709261074607933697")
+@test ($)(a, b) == parse(BigInt,"327299")
+@test ($)(a, b, c) == parse(BigInt,"3426495623485904783798472")
+@test ($)(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
+@test ($)(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
+@test ($)(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
-@test (&)(a, b) == BigInt("124")
-@test (&)(a, b, c) == BigInt("72")
-@test (&)(a, b, c, d) == BigInt("8")
-@test (&)(a, b, c, d, f) == BigInt("8")
-@test (&)(a, b, c, d, f, g) == BigInt("8")
+@test (&)(a, b) == parse(BigInt,"124")
+@test (&)(a, b, c) == parse(BigInt,"72")
+@test (&)(a, b, c, d) == parse(BigInt,"8")
+@test (&)(a, b, c, d, f) == parse(BigInt,"8")
+@test (&)(a, b, c, d, f, g) == parse(BigInt,"8")
 
-@test (|)(a, b) == BigInt("327423")
-@test (|)(a, b, c) == BigInt("3426495623485904783802111")
-@test (|)(a, b, c, d) == BigInt("-1396834561")
-@test (|)(a, b, c, d, f) == BigInt("-1358954753")
-@test (|)(a, b, c, d, f, g) == BigInt("-1")
+@test (|)(a, b) == parse(BigInt,"327423")
+@test (|)(a, b, c) == parse(BigInt,"3426495623485904783802111")
+@test (|)(a, b, c, d) == parse(BigInt,"-1396834561")
+@test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
+@test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
 
 @test isprime(BigInt(1000000007))
 @test isprime(BigInt(1000000007), 1)
 @test isprime(BigInt(10000000019))
-@test isprime(BigInt("359334085968622831041960188598043661065388726959079837"))
+@test isprime(parse(BigInt,"359334085968622831041960188598043661065388726959079837"))
 @test !isprime(BigInt(1))
 @test !isprime(BigInt(10000000020))
 
@@ -258,7 +260,7 @@ s = string(n)
 
 # serialization (#5133)
 let
-    n = BigInt("359334085968622831041960188598043661065388726959079837")
+    n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
     b = IOBuffer()
     serialize(b,n)
     seek(b,0)

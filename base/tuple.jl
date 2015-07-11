@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## indexing ##
 
 length(t::Tuple) = nfields(t)
@@ -22,11 +24,11 @@ indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state
 
 # eltype
 
+eltype(::Type{Tuple{}}) = Bottom
 eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
 
-ntuple(n::Integer, f::Function) = ntuple(f, n) # TODO: deprecate this?
 ntuple(f::Function, n::Integer) =
     n<=0 ? () :
     n==1 ? (f(1),) :
@@ -34,7 +36,18 @@ ntuple(f::Function, n::Integer) =
     n==3 ? (f(1),f(2),f(3),) :
     n==4 ? (f(1),f(2),f(3),f(4),) :
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-    tuple(ntuple(n-2,f)..., f(n-1), f(n))
+    tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
+
+ntuple(f, ::Type{Val{0}}) = ()
+ntuple(f, ::Type{Val{1}}) = (f(1),)
+ntuple(f, ::Type{Val{2}}) = (f(1),f(2))
+ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
+ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
+ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
+@generated function ntuple{N}(f, ::Type{Val{N}})
+    M = N-5
+    :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
+end
 
 # 0 argument function
 map(f) = f()
@@ -86,7 +99,7 @@ const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
 hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
 hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(x), h)))
+hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(tail(x)), h)))
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
@@ -120,7 +133,12 @@ prod(x::Tuple{}) = 1
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 
 all(x::Tuple{}) = true
-all(x::Tuple{Any, Vararg{Any}}) = (&)(x...)
+all(x::Tuple{Bool}) = x[1]
+all(x::Tuple{Bool, Bool}) = x[1]&x[2]
+all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
+# use generic reductions for the rest
 
 any(x::Tuple{}) = false
-any(x::Tuple{Any, Vararg{Any}}) = |(x...)
+any(x::Tuple{Bool}) = x[1]
+any(x::Tuple{Bool, Bool}) = x[1]|x[2]
+any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Issue #6573
 srand(0); rand(); x = rand(384);
 @test find(x .== rand()) == []
@@ -8,8 +10,8 @@ srand(0); rand(); x = rand(384);
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
-@test(typeof(rand(false:true)) == Bool)
-
+@test(typeof(rand(false:true)) === Bool)
+@test(typeof(rand(Char)) === Char)
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
@@ -107,10 +109,10 @@ end
 # Test ziggurat tables
 ziggurat_table_size = 256
 nmantissa           = Int64(2)^51 # one bit for the sign
-ziggurat_nor_r      = BigFloat("3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
+ziggurat_nor_r      = parse(BigFloat,"3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
 nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
 emantissa           = Int64(2)^52
-ziggurat_exp_r      = BigFloat("7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
+ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
 const ki = Array(UInt64, ziggurat_table_size)
@@ -290,7 +292,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
-    for T in [Base.IntTypes..., Bool, Float16, Float32, Float64]
+    for T in [Base.IntTypes..., Bool, Char, Float16, Float32, Float64]
         a0 = rand(rng..., T)       ::T
         a1 = rand(rng..., T, 5)    ::Vector{T}
         a2 = rand(rng..., T, 2, 3) ::Array{T, 2}

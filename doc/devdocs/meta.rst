@@ -10,8 +10,8 @@ that a given block of code has special properties: you might always
 want to inline it, or you might want to turn on special compiler
 optimization passes.  Starting with version 0.4, julia has a
 convention that these instructions can be placed inside a ``:meta``
-expression, which must be the first expression in the body of a
-function.
+expression, which is typically (but not necessarily) the first
+expression in the body of a function.
 
 ``:meta`` expressions are created with macros. As an example, consider
 the implementation of the ``@inline`` macro::

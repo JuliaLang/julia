@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # raytracer.jl
 # This is a translation from Java/C++ of the raytracer located at
 #   http://www.ffconsultancy.com/languages/ray_tracer/

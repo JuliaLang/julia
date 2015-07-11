@@ -45,7 +45,6 @@ own licenses:
 Julia's standard library uses the following external libraries, which have
 their own licenses:
 
-- [AMOS](http://www.netlib.org/slatec/guide) [public domain]
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE) [BSD-3]
 - [ATLAS](http://math-atlas.sourceforge.net/faq.html#license) [BSD-3]
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @unix_only begin
     const path_separator    = "/"
     const path_separator_re = r"/+"
@@ -113,7 +115,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
         buflength = p
         buf = zeros(UInt16,buflength)
         p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
-            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
+            UInt32, (Cwstring, UInt32, Ptr{UInt16}, Ptr{Void}),
             path, buflength, buf, C_NULL)
         systemerror(:realpath, p == 0)
         if (p < buflength)
@@ -124,7 +126,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 end
 
 @unix_only function realpath(path::AbstractString)
-    p = ccall(:realpath, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}), path, C_NULL)
+    p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
     Libc.free(p)

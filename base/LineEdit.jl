@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module LineEdit
 
 using ..Terminals
@@ -26,6 +28,10 @@ type MIState
     key_repeats::Int
 end
 MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
+
+function show(io::IO, s::MIState)
+    print(io, "MI State (", s.current_mode, " active)")
+end
 
 type Prompt <: TextInterface
     prompt
@@ -273,7 +279,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     end
 
     # Same issue as above. TODO: We should figure out
-    # how to refactor this to avoid duplcating functionality.
+    # how to refactor this to avoid duplicating functionality.
     if curs_pos == cols
         if line_pos == 0
             write(termbuf, "\n")
@@ -604,7 +610,7 @@ function edit_clear(s::MIState)
 end
 
 function replace_line(s::PromptState, l::IOBuffer)
-    s.input_buffer = l
+    s.input_buffer = copy(l)
 end
 
 function replace_line(s::PromptState, l)
@@ -878,7 +884,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union(Function, KeyAlias, Void)), source)
+    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)
@@ -888,7 +894,7 @@ function keymap_merge(target,source)
         # We first resolve redirects in the source
         value = source[key]
         visited = Array(Any,0)
-        while isa(value, Union(Char,AbstractString))
+        while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
                 error("Eager redirection cycle detected for key " * escape_string(key))
@@ -900,7 +906,7 @@ function keymap_merge(target,source)
             value = source[value]
         end
 
-        if isa(value, Union(Char,AbstractString))
+        if isa(value, Union{Char,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
                 error("Could not find redirected value " * escape_string(source[key]))
@@ -1050,10 +1056,18 @@ type PrefixSearchState <: ModeState
     response_buffer::IOBuffer
     ias::InputAreaState
     indent::Int
+    # The modal interface state, if present
+    mi
     #The prompt whose input will be replaced by the matched history
     parent
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
         new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
+end
+
+function show(io::IO, s::PrefixSearchState)
+    print(io, "PrefixSearchState ", isdefined(s,:parent) ?
+     string("(", s.parent, " active)") : "(no parent)", " for ",
+     isdefined(s,:mi) ? s.mi : "no MI")
 end
 
 input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
@@ -1083,9 +1097,17 @@ function reset_state(s::PrefixSearchState)
     end
 end
 
-function transition(s::PrefixSearchState, mode)
+function transition(f::Function, s::PrefixSearchState, mode)
+    if isdefined(s,:mi)
+        transition(f,s.mi,mode)
+    end
     s.parent = mode
     s.histprompt.parent_prompt = mode
+    if isdefined(s,:mi)
+        transition(f,s.mi,s.histprompt)
+    else
+        f()
+    end
 end
 
 replace_line(s::PrefixSearchState, l::IOBuffer) = s.response_buffer = l
@@ -1128,8 +1150,9 @@ end
 
 function accept_result(s, p)
     parent = state(s, p).parent
-    replace_line(state(s, parent), state(s, p).response_buffer)
-    transition(s, parent)
+    transition(s, parent) do
+        replace_line(state(s, parent), state(s, p).response_buffer)
+    end
 end
 
 function copybuf!(dst::IOBuffer, src::IOBuffer)
@@ -1142,27 +1165,33 @@ end
 
 function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
     # a bit of hack to help fix #6325
-    buf = buffer(s)
+    buf = copy(buffer(s))
+    parent = mode(s)
     p.hp.last_mode = mode(s)
-    p.hp.last_buffer = copy(buf)
+    p.hp.last_buffer = buf
 
-    ss = state(s, p)
-    ss.parent = mode(s)
-    ss.backward = backward
-    truncate(ss.query_buffer, 0)
-    copybuf!(ss.response_buffer, buf)
-    transition(s, p)
+    transition(s, p) do
+        ss = state(s, p)
+        ss.parent = parent
+        ss.backward = backward
+        truncate(ss.query_buffer, 0)
+        copybuf!(ss.response_buffer, buf)
+    end
 end
 
 function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
-    buf = buffer(s)
+    buf = copy(buffer(s))
+    parent = mode(s)
 
+    transition(s, p) do
+        pss = state(s, p)
+        pss.parent = parent
+        pss.prefix = bytestring(pointer(buf.data), position(buf))
+        copybuf!(pss.response_buffer, buf)
+        pss.indent = state(s, parent).indent
+        pss.mi = s
+    end
     pss = state(s, p)
-    pss.parent = mode(s)
-    pss.prefix = bytestring(pointer(buf.data), position(buf))
-    copybuf!(pss.response_buffer, buf)
-    pss.indent = state(s, mode(s)).indent
-    transition(s, p)
     if backward
         history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
     else
@@ -1254,8 +1283,8 @@ function setup_search_keymap(hp)
     (p, skeymap)
 end
 
-keymap(state, p::Union(HistoryPrompt,PrefixHistoryPrompt)) = p.keymap_dict
-keymap_data(state, ::Union(HistoryPrompt, PrefixHistoryPrompt)) = state
+keymap(state, p::Union{HistoryPrompt,PrefixHistoryPrompt}) = p.keymap_dict
+keymap_data(state, ::Union{HistoryPrompt, PrefixHistoryPrompt}) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 
@@ -1480,7 +1509,7 @@ function activate(p::TextInterface, s::MIState, termbuf)
 end
 activate(m::ModalInterface, s::MIState, termbuf) = activate(s.current_mode, s, termbuf)
 
-function transition(s::MIState, mode)
+function transition(f::Function, s::MIState, mode)
     if mode == :abort
         s.aborted = true
         return
@@ -1489,12 +1518,17 @@ function transition(s::MIState, mode)
         reset_state(s)
         return
     end
+    if !haskey(s.mode_state,mode)
+        s.mode_state[mode] = init_state(terminal(s), mode)
+    end
     termbuf = TerminalBuffer(IOBuffer())
     s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf)
     s.current_mode = mode
+    f()
     activate(mode, s.mode_state[mode], termbuf)
     write(terminal(s), takebuf_array(termbuf.out_stream))
 end
+transition(s::MIState, mode) = transition((args...)->nothing, s, mode)
 
 function reset_state(s::PromptState)
     if s.input_buffer.size != 0
@@ -1567,7 +1601,6 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     raw!(term, true)
     enable_bracketed_paste(term)
     try
-        Base.start_reading(term)
         activate(prompt, s, term)
         while true
             map = keymap(s, prompt)
@@ -1583,14 +1616,11 @@ function prompt!(term, prompt, s = init_state(term, prompt))
                 state = :done
             end
             if state == :abort
-                Base.stop_reading(term)
                 return buffer(s), false, false
             elseif state == :done
-                Base.stop_reading(term)
                 return buffer(s), true, false
             elseif state == :suspend
                 @unix_only begin
-                    Base.stop_reading(term)
                     return buffer(s), true, true
                 end
             else

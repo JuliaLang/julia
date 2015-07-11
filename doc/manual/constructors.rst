@@ -121,7 +121,7 @@ Now ``OrderedPair`` objects can only be constructed such that
 
     julia> OrderedPair(2,1)
     ERROR: out of order
-     in OrderedPair at none:5
+     in call at none:5
 
 You can still reach in and directly change the field values to violate
 this invariant, but messing around with an object's internals uninvited is
@@ -265,7 +265,7 @@ access to an uninitialized reference is an immediate error:
 .. doctest::
 
     julia> z.xx
-    ERROR: access to undefined reference
+    ERROR: UndefRefError: access to undefined reference
 
 This avoids the need to continually check for ``null`` values.
 However, not all object fields are references. Julia considers some
@@ -323,7 +323,14 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Int64, ::Float64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Int64, ::Float64)
+    This may have arisen from a call to the constructor Point{T<:Real}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+     in call at base.jl:41
 
     ## explicit T ##
 
@@ -332,7 +339,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
-     in Point at no file
+     in call at no file
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -410,14 +417,22 @@ creates a point of type ``Point{Float64}``:
     Point{Float64}(1.0,2.5)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64}
 
 However, other similar calls still don't work:
 
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Float64, ::Int64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Float64, ::Int64)
+    This may have arisen from a call to the constructor Point{T<:Real}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+      ...
+     in call at base.jl:41
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -540,7 +555,7 @@ whose real and imaginary parts are rationals:
     -3//5 + 4//5*im
 
     julia> typeof(ans)
-    Complex{Rational{Int64}} (constructor with 1 method)
+    Complex{Rational{Int64}}
 
     julia> ans <: Complex{Rational}
     false
@@ -551,6 +566,8 @@ return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
 it is short, self-contained, and implements an entire basic Julia type.
+
+.. _constructors-call-and-conversion:
 
 Constructors, Call, and Conversion
 ----------------------------------

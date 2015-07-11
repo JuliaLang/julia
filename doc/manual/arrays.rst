@@ -84,9 +84,9 @@ Function                                            Description
                                                     defaulting to the element type and dimensions of ``A`` if omitted.
 :func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
                                                     specified element type
-:func:`rand(dims) <rand>`                           ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
+:func:`rand(dims) <rand>`                           `:obj:`Array` of ``Float64``\ s with random, iid[#]_ and uniformly
                                                     distributed values in the half-open interval [0, 1)
-:func:`randn(dims) <randn>`                         ``Array`` of ``Float64``\ s with random, iid and standard normally
+:func:`randn(dims) <randn>`                         `:obj:`Array` of ``Float64``\ s with random, iid and standard normally
                                                     distributed random values
 :func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
 :func:`eye(m, n) <eye>`                             ``m``-by-``n`` identity matrix
@@ -175,7 +175,7 @@ and its left and right neighbor along a 1-d grid. :
 
 .. testsetup:: *
 
-    srand(314)
+    srand(314);
 
 .. doctest:: array-rand
 
@@ -222,9 +222,10 @@ The general syntax for indexing into an n-dimensional array A is::
 where each ``I_k`` may be:
 
 1. A scalar integer
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
 The result ``X`` generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
@@ -239,6 +240,7 @@ innermost array being indexed.
 
 Alternatively, single elements of a multidimensional array can be indexed as
 ::
+
     x = A[I]
 
 where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
@@ -285,10 +287,11 @@ The general syntax for assigning values in an n-dimensional array A is::
 
 where each ``I_k`` may be:
 
-1. A scalar value
-2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
-3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+1. A scalar integer
+2. A ``Range`` of the form ``a:b``, or ``a:b:c``
+3. A ``:`` or ``Colon()`` to select entire dimensions
+4. An arbitrary integer vector, including the empty vector ``[]``
+5. A boolean vector
 
 If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
 and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
@@ -357,7 +360,7 @@ In contrast with ``for i = 1:length(A)``, iterating with ``eachindex`` provides 
 Array traits
 ------------
 
-If you write a custom ``AbstractArray`` type, you can specify that it has fast linear indexing using
+If you write a custom :obj:`AbstractArray` type, you can specify that it has fast linear indexing using
 ::
 
     Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
@@ -483,14 +486,14 @@ Implementation
 
 The base array type in Julia is the abstract type
 ``AbstractArray{T,N}``. It is parametrized by the number of dimensions
-``N`` and the element type ``T``. ``AbstractVector`` and
-``AbstractMatrix`` are aliases for the 1-d and 2-d cases. Operations on
-``AbstractArray`` objects are defined using higher level operators and
+``N`` and the element type ``T``. :obj:`AbstractVector` and
+:obj:`AbstractMatrix` are aliases for the 1-d and 2-d cases. Operations on
+:obj:`AbstractArray` objects are defined using higher level operators and
 functions, in a way that is independent of the underlying storage.
 These operations generally work correctly as a fallback for any
 specific array implementation.
 
-The ``AbstractArray`` type includes anything vaguely array-like, and
+The :obj:`AbstractArray` type includes anything vaguely array-like, and
 implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
@@ -507,7 +510,7 @@ No matter how an ``AbstractArray{T,N}`` is represented internally,
 ..., 1]``, when ``A`` is not empty) and ``N`` should be the length of
 the tuple returned by :func:`size`.
 
-``DenseArray`` is an abstract subtype of ``AbstractArray`` intended
+:obj:`DenseArray` is an abstract subtype of :obj:`AbstractArray` intended
 to include all arrays that are laid out at regular offsets in memory,
 and which can therefore be passed to external C and Fortran functions
 expecting this memory layout.  Subtypes should provide a method
@@ -517,25 +520,25 @@ index ``i`` of :func:`getindex(A,i) <getindex>` by :func:`stride(A,k) <stride>`.
 pointer conversion method :func:`convert(Ptr{T}, A) <convert>` is provided, the
 memory layout should correspond in the same way to these strides.
 
-The ``Array{T,N}`` type is a specific instance of ``DenseArray``
+The :obj:`Array` type is a specific instance of :obj:`DenseArray`
 where elements are stored in column-major order (see additional notes in
-:ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
+:ref:`man-performance-tips`). :obj:`Vector` and :obj:`Matrix` are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing,
 assignment, and a few other basic storage-specific operations are all
-that have to be implemented for ``Array``, so that the rest of the array
+that have to be implemented for `:obj:`Array`, so that the rest of the array
 library can be implemented in a generic manner.
 
-``SubArray`` is a specialization of ``AbstractArray`` that performs
-indexing by reference rather than by copying. A ``SubArray`` is created
+:obj:`SubArray` is a specialization of :obj:`AbstractArray` that performs
+indexing by reference rather than by copying. A :obj:`SubArray` is created
 with the :func:`sub` function, which is called the same way as :func:`getindex` (with
 an array and a series of index arguments). The result of :func:`sub` looks
 the same as the result of :func:`getindex`, except the data is left in place.
-:func:`sub` stores the input index vectors in a ``SubArray`` object, which
+:func:`sub` stores the input index vectors in a :obj:`SubArray` object, which
 can later be used to index the original array indirectly.
 
-``StridedVector`` and ``StridedMatrix`` are convenient aliases defined
+:obj:`StridedVector` and :obj:`StridedMatrix` are convenient aliases defined
 to make it possible for Julia to call a wider range of BLAS and LAPACK
-functions by passing them either ``Array`` or ``SubArray`` objects, and
+functions by passing them either `:obj:`Array` or :obj:`SubArray` objects, and
 thus saving inefficiencies from memory allocation and copying.
 
 The following example computes the QR decomposition of a small section
@@ -559,7 +562,7 @@ stride parameters.
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
     julia> b = sub(a, 2:2:8,2:2:4)
-    4x2 SubArray{Float64,2,Array{Float64,2},(StepRange{Int64,Int64},StepRange{Int64,Int64})}:
+    4x2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
      0.537192  0.996234
      0.736979  0.228787
      0.991511  0.74485
@@ -619,12 +622,12 @@ the CSC data structure for performance, and to avoid expensive operations.
 
 If you have data in CSC format from a different application or library,
 and wish to import it in Julia, make sure that you use 1-based indexing.
-The row indices in every column need to be sorted. If your `SparseMatrixCSC`
+The row indices in every column need to be sorted. If your :obj:`SparseMatrixCSC`
 object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
 
 In some applications, it is convenient to store explicit zero values
-in a `SparseMatrixCSC`. These *are* accepted by functions in ``Base``
+in a :obj:`SparseMatrixCSC`. These *are* accepted by functions in :mod:`Base`
 (but there is no guarantee that they will be preserved in mutating
 operations).  Such explicitly stored zeros are treated as structural
 nonzeros by many routines.  The :func:`nnz` function returns the number of

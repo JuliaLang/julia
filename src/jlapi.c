@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   jlapi.c
   miscellaneous functions for users of libjulia.so, to handle initialization
@@ -51,7 +53,7 @@ DLLEXPORT void *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
-        jl_value_t *ast = jl_parse_input_line(str);
+        jl_value_t *ast = jl_parse_input_line(str, strlen(str));
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval(ast);
         JL_GC_POP();

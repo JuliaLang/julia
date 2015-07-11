@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ###### Functors ######
 
 # Note that functors are merely used as internal machinery to enhance code
@@ -21,6 +23,9 @@ call(::ExpFun, x) = exp(x)
 
 immutable LogFun <: Func{1} end
 call(::LogFun, x) = log(x)
+
+immutable ConjFun <: Func{1} end
+call(::ConjFun, x) = conj(x)
 
 immutable AndFun <: Func{2} end
 call(::AndFun, x, y) = x & y

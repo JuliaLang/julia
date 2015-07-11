@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # TODO: optimize this
 function Base.string(dt::DateTime)
     y,m,d = yearmonthday(days(dt))
@@ -69,7 +71,7 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
     for (i,k) in enumerate(s)
         k == "" && break
         tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
-        slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
+        slot = tran == "" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
         typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
               'y' in k ? Year : 'm' in k ? Month :
@@ -100,12 +102,12 @@ slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Bas
 slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)
-    endind = first(search(x,df.trans[slot.i],cursor+1))
+    endind = first(search(x,df.trans[slot.i],nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
         return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.period))
     end
-    return endind+1, slotparse(slot,x[cursor:(endind-1)])
+    return nextind(x,endind), slotparse(slot,x[cursor:(endind-1)])
 end
 getslot(x,slot,df,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)]))
 

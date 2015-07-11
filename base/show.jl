@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 show(x) = show(STDOUT::IO, x)
 
 print(io::IO, s::Symbol) = (write(io,s);nothing)
@@ -65,16 +67,16 @@ function show(io::IO, x::IntrinsicFunction)
     print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
-function show(io::IO, x::UnionType)
+function show(io::IO, x::Union)
     print(io, "Union")
-    show_delim_array(io, x.types, '(', ',', ')', false)
+    show_delim_array(io, x.types, '{', ',', '}', false)
 end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
+    if (length(x.parameters) > 0 || x.name === Tuple.name) && x != Tuple
         print(io, '{')
         n = length(x.parameters)
         for i = 1:n
@@ -120,9 +122,13 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(UInt(p), WORD_SIZE>>2))")
 
 function show(io::IO, p::Pair)
+    isa(p.first,Pair) && print(io, "(")
     show(io, p.first)
+    isa(p.first,Pair) && print(io, ")")
     print(io, "=>")
+    isa(p.second,Pair) && print(io, "(")
     show(io, p.second)
+    isa(p.second,Pair) && print(io, ")")
 end
 
 function show(io::IO, m::Module)
@@ -153,7 +159,13 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 x = itr[i]
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 newline && multiline && println(io)
-                compact ? showcompact_lim(io, x) : show(io, x)
+                if !isbits(x) && is(x, itr)
+                    print(io, "#= circular reference =#")
+                elseif compact
+                    showcompact_lim(io, x)
+                else
+                    show(io, x)
+                end
             end
             i += 1
             if i > i1+l-1
@@ -187,7 +199,11 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, 
             x, state = next(itr,state)
             multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
             newline && multiline && println(io)
-            show(io, x)
+            if !isbits(x) && is(x, itr)
+                print(io, "#= circular reference =#")
+            else
+                show(io, x)
+            end
             i1 += 1
             if done(itr,state) || i1 > n
                 delim_one && first && print(io, delim)
@@ -236,10 +252,13 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 #   eval(parse("Set{Int64}([2,3,1])”) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
-                         LabelNode, GotoNode, TopNode)
-print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex); nothing)
-show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, 0)
+typealias ExprNode Union{Expr, QuoteNode, SymbolNode, LineNumberNode,
+                         LabelNode, GotoNode, TopNode, GlobalRef}
+# Operators have precedence levels from 1-N, and show_unquoted defaults to a
+# precedence level of 0 (the fourth argument). The top-level print and show
+# methods use a precedence of -1 to specially allow space-separated macro syntax
+print(        io::IO, ex::ExprNode)    = (show_unquoted(io, ex, 0, -1); nothing)
+show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, -1)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -247,7 +266,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 ## AST printing constants ##
 
 const indent_width = 4
-const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
+const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>)])
@@ -274,8 +293,8 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
-isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{UInt8},), s) != 0
-operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Ptr{UInt8},), s))
+isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
 
@@ -296,6 +315,7 @@ unquoted(ex::Expr)       = ex.args[1]
 ## AST printing helpers ##
 
 const indent_width = 4
+may_show_expr_type_emphasize = false
 show_expr_type_emphasize = false
 
 function show_expr_type(io::IO, ty)
@@ -328,7 +348,7 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
-        show_unquoted(io, ex, ind)
+        show_unquoted(io, ex, ind, -1)
     end
     print(io, '\n', " "^indent)
 end
@@ -374,9 +394,9 @@ function show_call(io::IO, head, func, func_args, indent)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ',', indent, 0)
+        show_list(io, func_args[2:end], ',', indent)
         print(io, "; ")
-        show_list(io, func_args[1].args, ',', indent, 0)
+        show_list(io, func_args[1].args, ',', indent)
         print(io, cl)
     else
         show_enclosed_list(io, op, func_args, ",", cl, indent)
@@ -390,6 +410,7 @@ show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.name,')')
+show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
     print(io, ex.name)
@@ -421,7 +442,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "end")
         else
             print(io, ":(")
-            show_unquoted(io, value, indent+indent_width, 0)
+            show_unquoted(io, value, indent+indent_width, -1)
             print(io, ")")
         end
     end
@@ -450,7 +471,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix_any && nargs==2) || (is(head,:(:)) && nargs==3)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
-        if func_prec < prec
+        if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, true)
         else
             show_list(io, args, head_, indent, func_prec, true)
@@ -471,15 +492,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         head !== :row && print(io, cl)
 
-    # function declaration (like :call but always printed with parens)
-    # (:calldecl is a "fake" expr node created when we find a :function expr)
-    elseif head == :calldecl && nargs >= 1
-        show_call(io, head, args[1], args[2:end], indent)
-
     # function call
-    elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
+    elseif head == :call && nargs >= 1
         func = args[1]
-        func_prec = operator_precedence(func)
+        fname = isa(func,GlobalRef) ? func.name : func
+        func_prec = operator_precedence(fname)
+        if func_prec > 0 || fname in uni_ops
+            func = fname
+        end
         func_args = args[2:end]
 
         if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
@@ -487,8 +507,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
         # scalar multiplication (i.e. "100x")
-        if (func == :(*) && length(func_args)==2 &&
-            isa(func_args[1], Real) && isa(func_args[2], Symbol))
+        if (func == :(*) &&
+            length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
             else
@@ -522,10 +542,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
             end
 
-        # normal function (i.e. "f(x,y)" or "A[x,y]")
+        # normal function (i.e. "f(x,y)")
         else
             show_call(io, head, func, func_args, indent)
         end
+
+    # other call-like expressions ("A[1,2]", "T{X,Y}")
+    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl
+        show_call(io, head, ex.args[1], ex.args[2:end], indent)
 
     # comprehensions
     elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 3
@@ -577,6 +601,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
         print(io, "end")
 
+    elseif is(head, :bitstype) && nargs == 2
+        print(io, "bitstype ")
+        show_list(io, args, ' ', indent)
+
     # empty return (i.e. "function f() return end")
     elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
         print(io, head)
@@ -598,7 +626,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_list(io, args, ", ", indent)
 
     elseif is(head, :macrocall) && nargs >= 1
-        show_list(io, args, ' ', indent)
+        # Use the functional syntax unless specifically designated with prec=-1
+        if prec >= 0
+            show_call(io, :call, ex.args[1], ex.args[2:end], indent)
+        else
+            show_list(io, args, ' ', indent)
+        end
 
     elseif is(head, :typealias) && nargs == 2
         print(io, "typealias ")
@@ -692,7 +725,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # print anything else as "Expr(head, args...)"
     else
         show_type = false
-        show_expr_type_emphasize::Bool = in(ex.head, (:lambda, :method))
+        show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool && in(ex.head, (:lambda, :method))
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -788,7 +821,7 @@ xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
                 show(io, x); println(io))
 
 # Types
-xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
+xdump(fn::Function, io::IO, x::Union, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
     fields = fieldnames(x)
@@ -833,7 +866,7 @@ function dumptype(io::IO, x, n::Int, indent)
                                 length(t.parameters) > 0 ? "{$targs}" : "",
                                 " = ", t)
                     end
-                elseif isa(t, UnionType)
+                elseif isa(t, Union)
                     if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end
@@ -863,6 +896,7 @@ xdump(fn::Function, io::IO, args...) = throw(ArgumentError("invalid arguments to
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
 xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
+xdump(arg::IO) = xdump(xdump, STDOUT::IO, arg)
 
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
@@ -872,6 +906,7 @@ dump(io::IO, x::AbstractString, n::Int, indent) =
                 show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 dump(io::IO, args...) = throw(ArgumentError("invalid arguments to dump"))
+dump(arg::IO) = xdump(dump, STDOUT::IO, arg)
 dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
 
 function dump(io::IO, x::Dict, n::Int, indent)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Set tests
 
 # Construction, collect
@@ -85,7 +87,25 @@ push!(c,200)
 s = Set([1])
 @test isequal(sizehint!(s, 10), Set([1]))
 @test isequal(empty!(s), Set())
-# TODO: rehash
+
+# rehash!
+let
+    # Use a pointer type to have defined behavior for uninitialized
+    # array element
+    s = Set(["a", "b", "c"])
+    Base.rehash!(s)
+    k = s.dict.keys
+    Base.rehash!(s)
+    @test length(k) == length(s.dict.keys)
+    for i in 1:length(k)
+        if isdefined(k, i)
+            @test k[i] == s.dict.keys[i]
+        else
+            @test !isdefined(s.dict.keys, i)
+        end
+    end
+    s == Set(["a", "b", "c"])
+end
 
 # start, done, next
 for data_in in ((7,8,4,5),

@@ -45,7 +45,7 @@ Instead of directly sorting an array, you can compute a permutation of the array
 
 .. testsetup::
 
-   srand(1)
+   srand(1);
 
 .. doctest::
 

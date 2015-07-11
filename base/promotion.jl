@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## type join (closest common ancestor, or least upper bound) ##
 
 typejoin() = Bottom
@@ -17,9 +19,9 @@ function typejoin(a::ANY, b::ANY)
     if isa(b,TypeVar)
         return typejoin(a, b.ub)
     end
-    if isa(a,UnionType) || isa(b,UnionType)
-        u = Union(a, b)
-        if !isa(u,UnionType)
+    if isa(a,Union) || isa(b,Union)
+        u = Union{a, b}
+        if !isa(u,Union)
             return u
         end
         return reduce(typejoin, Bottom, u.types)
@@ -176,7 +178,7 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
-< (x::Real, y::Real)     = (< )(promote(x,y)...)
+<( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 
 div(x::Real, y::Real) = div(promote(x,y)...)
@@ -215,7 +217,8 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 ($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
 
 =={T<:Number}(x::T, y::T) = x === y
-<{T<:Real}(x::T, y::T) = no_op_err("<", T)
+ <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
+<={T<:Real}(x::T, y::T) = no_op_err("<=", T)
 
 div{T<:Real}(x::T, y::T) = no_op_err("div", T)
 fld{T<:Real}(x::T, y::T) = no_op_err("fld", T)

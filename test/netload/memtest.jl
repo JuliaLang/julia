@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable RUsage
     ru_utime_sec::Clong         #  user CPU time used
     ru_utime_usec::Clong        #  user CPU time used

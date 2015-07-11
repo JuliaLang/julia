@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # tests related to functional programming functions and styles
 
 # map -- array.jl
@@ -19,7 +21,7 @@ end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Array(Union(),0))), Array{Union(),1})
+@test isequal(typeof(map(x -> x, Array(Union{},0))), Array{Union{},1})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)

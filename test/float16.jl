@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 f = Float16(2.)
 g = Float16(1.)

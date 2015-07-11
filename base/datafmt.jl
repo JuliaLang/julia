@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## file formats ##
 
 module DataFmt
@@ -11,28 +13,15 @@ export countlines, readdlm, readcsv, writedlm, writecsv
 const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
-countlines(nameorfile) = countlines(nameorfile, '\n')
-function countlines(filename::AbstractString, eol::Char)
-    open(filename) do io
-        countlines(io, eol)
-    end
-end
-function countlines(io::IO, eol::Char)
-    if !isascii(eol)
-        throw(ArgumentError("only ASCII line terminators are supported"))
-    end
+countlines(f::AbstractString,eol::Char='\n') = open(io->countlines(io,eol),f)::Int
+function countlines(io::IO, eol::Char='\n')
+    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     a = Array(UInt8, 8192)
     nl = 0
-    preceded_by_eol = true
     while !eof(io)
         nb = readbytes!(io, a)
-        for i=1:nb
-            if Char(a[i]) == eol
-                preceded_by_eol = true
-            elseif preceded_by_eol
-                preceded_by_eol = false
-                nl+=1
-            end
+        @simd for i=1:nb
+            @inbounds nl += a[i] == eol
         end
     end
     nl
@@ -59,7 +48,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(UInt8, (Int(fsz),), io)
+        Mmap.mmap(io, Vector{UInt8}, (Int(fsz),))
     end
 end
 
@@ -287,7 +276,7 @@ const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quo
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
-    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
+    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
         !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
@@ -334,13 +323,13 @@ function colval{T<:Integer, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int,
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
@@ -358,7 +347,7 @@ function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Arra
         isnull(nb) || (cells[row,col] = get(nb); return false)
 
         # check float64
-        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
         isnull(nf64) || (cells[row,col] = get(nf64); return false)
     end
     cells[row,col] = SubString(sbuff, startpos, endpos)

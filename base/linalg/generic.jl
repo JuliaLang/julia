@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## linalg.jl: Some generic Linear Algebra definitions
 
 scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
@@ -60,14 +62,17 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
+###########################################################################################
+# Inner products and norms
+
 # special cases of vecnorm; note that they don't need to handle isempty(x)
 function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    minabs = abs(v)
+    minabs = norm(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        minabs = Base.scalarmin(minabs, abs(v))
+        minabs = Base.scalarmin(minabs, norm(v))
     end
     return float(minabs)
 end
@@ -75,10 +80,10 @@ end
 function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    maxabs = abs(v)
+    maxabs = norm(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        maxabs = Base.scalarmax(maxabs, abs(v))
+        maxabs = Base.scalarmax(maxabs, norm(v))
     end
     return float(maxabs)
 end
@@ -86,12 +91,12 @@ end
 function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
-    av = float(abs(v))
+    av = float(norm(v))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while !done(x, s)
         (v, s) = next(x, s)
-        sum += abs(v)
+        sum += norm(v)
     end
     return convert(T, sum)
 end
@@ -103,11 +108,11 @@ function generic_vecnorm2(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
     scale::promote_type(Float64, T) = 1/maxabs
-    y = abs(v)*scale
+    y = norm(v)*scale
     sum::promote_type(Float64, T) = y*y
     while !done(x, s)
         (v, s) = next(x, s)
-        y = abs(v)*scale
+        y = norm(v)*scale
         sum += y*y
     end
     return convert(T, maxabs * sqrt(sum))
@@ -124,22 +129,22 @@ function generic_vecnormp(x, p)
         T = typeof(maxabs)
         spp::promote_type(Float64, T) = p
         scale::promote_type(Float64, T) = 1/maxabs
-        ssum::promote_type(Float64, T) = (abs(v)*scale)^spp
+        ssum::promote_type(Float64, T) = (norm(v)*scale)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            ssum += (abs(v)*scale)^spp
+            ssum += (norm(v)*scale)^spp
         end
         return convert(T, maxabs * ssum^inv(spp))
     else # -1 ≤ p ≤ 1, no need for rescaling
         s = start(x)
         (v, s) = next(x, s)
-        av = float(abs(v))
+        av = float(norm(v))
         T = typeof(av)
         pp::promote_type(Float64, T) = p
         sum::promote_type(Float64, T) = av^pp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += abs(v)^pp
+            sum += norm(v)^pp
         end
         return convert(T, sum^inv(pp))
     end
@@ -153,13 +158,20 @@ vecnormp(x, p) = generic_vecnormp(x, p)
 
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
-    p == 2 && return vecnorm2(itr)
-    p == 1 && return vecnorm1(itr)
-    p == Inf && return vecnormInf(itr)
-    p == 0 && return convert(typeof(float(real(zero(eltype(itr))))),
-                             countnz(itr))
-    p == -Inf && return vecnormMinusInf(itr)
-    vecnormp(itr,p)
+    if p == 2
+        return vecnorm2(itr)
+    elseif p == 1
+        return vecnorm1(itr)
+    elseif p == Inf
+        return vecnormInf(itr)
+    elseif p == 0
+        return convert(typeof(float(real(zero(eltype(itr))))),
+               countnz(itr))
+    elseif p == -Inf
+        return vecnormMinusInf(itr)
+    else
+        vecnormp(itr,p)
+    end
 end
 vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 
@@ -174,7 +186,7 @@ function norm1{T}(A::AbstractMatrix{T})
         for j = 1:n
             nrmj::Tsum = 0
             for i = 1:m
-                nrmj += abs(A[i,j])
+                nrmj += norm(A[i,j])
             end
             nrm = max(nrm,nrmj)
         end
@@ -196,7 +208,7 @@ function normInf{T}(A::AbstractMatrix{T})
         for i = 1:m
             nrmi::Tsum = 0
             for j = 1:n
-                nrmi += abs(A[i,j])
+                nrmi += norm(A[i,j])
             end
             nrm = max(nrm,nrmi)
         end
@@ -204,14 +216,70 @@ function normInf{T}(A::AbstractMatrix{T})
     return convert(Tnorm, nrm)
 end
 function norm{T}(A::AbstractMatrix{T}, p::Real=2)
-    p == 2 && return norm2(A)
-    p == 1 && return norm1(A)
-    p == Inf && return normInf(A)
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    if p == 2
+        return norm2(A)
+    elseif p == 1
+        return norm1(A)
+    elseif p == Inf
+        return normInf(A)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
 end
 
 norm(x::Number, p::Real=2) =
     p == 0 ? convert(typeof(real(x)), ifelse(x != 0, 1, 0)) : abs(x)
+
+function vecdot(x::AbstractVector, y::AbstractVector)
+    lx = length(x)
+    if lx != length(y)
+        throw(DimensionMismatch("Vector x has length $lx, but vector y has length $(length(y))"))
+    end
+    if lx == 0
+        return dot(zero(eltype(x)), zero(eltype(y)))
+    end
+    s = dot(x[1], y[1])
+    @inbounds for i = 2:lx
+        s += dot(x[i], y[i])
+    end
+    s
+end
+
+function vecdot(x, y) # arbitrary iterables
+    ix = start(x)
+    if done(x, ix)
+        if !isempty(y)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+        end
+        return dot(zero(eltype(x)), zero(eltype(y)))
+    end
+    iy = start(y)
+    if done(y, iy)
+        throw(DimensionMismatch("x and y are of different lengths!"))
+    end
+    (vx, ix) = next(x, ix)
+    (vy, iy) = next(y, iy)
+    s = dot(vx, vy)
+    while !done(x, ix)
+        if done(y, iy)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+        end
+        (vx, ix) = next(x, ix)
+        (vy, iy) = next(y, iy)
+        s += dot(vx, vy)
+    end
+    if !done(y, iy)
+            throw(DimensionMismatch("x and y are of different lengths!"))
+    end
+    return s
+end
+
+vecdot(x::Number, y::Number) = conj(x) * y
+
+dot(x::Number, y::Number) = vecdot(x, y)
+dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
+
+###########################################################################################
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
@@ -240,7 +308,9 @@ function inv{T}(A::AbstractMatrix{T})
 end
 
 function \{T}(A::AbstractMatrix{T}, B::AbstractVecOrMat{T})
-    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    if size(A,1) != size(B,1)
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    end
     factorize(A)\B
 end
 function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
@@ -264,7 +334,9 @@ condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = no
 
 function issym(A::AbstractMatrix)
     m, n = size(A)
-    m==n || return false
+    if m != n
+        return false
+    end
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != transpose(A[j,i])
             return false
@@ -277,7 +349,9 @@ issym(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
-    m==n || return false
+    if m != n
+        return false
+    end
     for i = 1:n, j = i:n
         if A[i,j] != ctranspose(A[j,i])
             return false
@@ -308,8 +382,11 @@ function istril(A::AbstractMatrix)
     return true
 end
 
+isdiag(A::AbstractMatrix) = istril(A) && istriu(A)
+
 istriu(x::Number) = true
 istril(x::Number) = true
+isdiag(x::Number) = true
 
 linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T}) = [ones(T, size(X,1)) X] \ y
 
@@ -348,14 +425,18 @@ end
 #                                          for BlasFloat Arrays)
 function axpy!(alpha, x::AbstractArray, y::AbstractArray)
     n = length(x)
-    n==length(y) || throw(DimensionMismatch())
+    if n != length(y)
+        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+    end
     for i = 1:n
         @inbounds y[i] += alpha * x[i]
     end
     y
 end
 function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    length(x)==length(y) || throw(DimensionMismatch())
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y) || length(rx) != length(ry)
         throw(BoundsError())
     end
@@ -368,8 +449,12 @@ end
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
-    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
+    if !(1 <= col <= n)
+        throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    end
     @inbounds begin
         ξ1 = A[row,col]
         normu = abs2(ξ1)
@@ -389,9 +474,15 @@ function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
 end
 function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
-    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
-    row <= col || error("col cannot be larger than row")
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
+    if !(1 <= col <= n)
+        throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    end
+    if row > col
+        throw(ArgumentError("row cannot be larger than col"))
+    end
     @inbounds begin
         ξ1 = A[row,col]
         normu = abs2(ξ1)
@@ -411,7 +502,9 @@ function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
 end
 function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     m, n = size(A)
-    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    if !(1 <= row <= m)
+        throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    end
     @inbounds begin
         ξ1 = A[row,row]
         normu = abs2(A[row,row])
@@ -430,10 +523,15 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     conj(ξ1/ν)
 end
 
-function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
+function det{T}(A::AbstractMatrix{T})
+    if istriu(A) || istril(A)
+        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        return convert(S, det(UpperTriangular(A)))
+    end
     return det(lufact(A))
 end
 det(x::Number) = x
 
 logdet(A::AbstractMatrix) = logdet(lufact(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+

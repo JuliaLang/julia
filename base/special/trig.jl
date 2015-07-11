@@ -1,3 +1,6 @@
+# This file is a part of Julia. Except for the *_kernel functions (see below),
+# license is MIT: http://julialang.org/license
+
 immutable DoubleFloat64
     hi::Float64
     lo::Float64
@@ -6,7 +9,7 @@ immutable DoubleFloat32
     hi::Float64
 end
 
-# kernel_* functions are only valid for |x| < pi/4 = 0.7854
+# *_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
 # which are made available under the following licence:
 

@@ -31,9 +31,11 @@ Basic functions
 
    Returns the number of elements in A
 
-.. function:: eachindex(A)
+.. function:: eachindex(A...)
 
-   Creates an iterable object for visiting each index of an AbstractArray ``A`` in an efficient manner. For array types that have opted into fast linear indexing (like ``Array``), this is simply the range ``1:length(A)``. For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. Example for a sparse 2-d array::
+   Creates an iterable object for visiting each index of an AbstractArray ``A`` in an efficient manner. For array types that have opted into fast linear indexing (like ``Array``), this is simply the range ``1:length(A)``. For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+   Example for a sparse 2-d array::
 
     julia> A = sprand(2, 3, 0.5)
     2x3 sparse matrix with 4 Float64 entries:
@@ -59,13 +61,20 @@ Basic functions
     (iter.I_1,iter.I_2) = (2,3)
     A[iter] = 0.8090413606455655
 
+If you supply more than one ``AbstractArray`` argument, ``eachindex``
+will create an iterable object that is fast for all arguments (a
+``UnitRange`` if all inputs have fast linear indexing, a
+CartesianRange otherwise).  If the arrays have different sizes and/or
+dimensionalities, ``eachindex`` returns an interable that spans the
+largest range along each dimension.
+
 .. function:: Base.linearindexing(A)
 
    ``linearindexing`` defines how an AbstractArray most efficiently accesses its elements.  If ``Base.linearindexing(A)`` returns ``Base.LinearFast()``, this means that linear indexing with only one index is an efficient operation.  If it instead returns ``Base.LinearSlow()`` (by default), this means that the array intrinsically accesses its elements with indices specified for every dimension.  Since converting a linear index to multiple indexing subscripts is typically very expensive, this provides a traits-based mechanism to enable efficient generic code for all array types.
 
    An abstract array subtype ``MyArray`` that wishes to opt into fast linear indexing behaviors should define ``linearindexing`` in the type-domain::
 
-   Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+       Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 
 .. function:: countnz(A)
 
@@ -216,11 +225,11 @@ Indexing, Assignment, and Concatenation
 
 .. function:: getindex(A, inds...)
 
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
 .. function:: sub(A, inds...)
 
-   Returns a SubArray, which stores the input ``A`` and ``inds`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
+   Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
 .. function:: parent(A)
 
@@ -236,8 +245,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: slice(A, inds...)
 
-   Create a view of the given indexes of array ``A``, dropping dimensions indexed with
-   scalars.
+   Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 
 .. function:: setindex!(A, X, inds...)
 

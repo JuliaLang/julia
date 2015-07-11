@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Advisory reentrant lock
 type ReentrantLock
     locked_by::Nullable{Task}
@@ -22,16 +24,38 @@ function lock(rl::ReentrantLock)
     end
 end
 
-unlock(o::Any) = unlock(o.lock)
-
 function unlock(rl::ReentrantLock)
     rl.reentrancy_cnt = rl.reentrancy_cnt - 1
+    if rl.reentrancy_cnt < 0
+        error("unlock count must match lock count")
+    end
     if rl.reentrancy_cnt == 0
         rl.locked_by = nothing
         notify(rl.cond_wait)
-    elseif rl.reentrancy_cnt < 0
-        AssertionError("unlock count must match lock count")
     end
-    rl
+    return rl
+end
+
+type Semaphore
+    sem_size::Int
+    curr_cnt::Int
+    cond_wait::Condition
+    Semaphore(sem_size) = new(sem_size, 0, Condition())
+end
+
+function acquire(s::Semaphore)
+    while true
+        if s.curr_cnt < s.sem_size
+            s.curr_cnt = s.curr_cnt + 1
+            return
+        else
+            wait(s.cond_wait)
+        end
+    end
+end
+
+function release(s::Semaphore)
+    s.curr_cnt = s.curr_cnt - 1
+    notify(s.cond_wait; all=false)
 end
 

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # require
 
 function find_in_path(name::AbstractString)
@@ -36,7 +38,6 @@ end
 package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
 package_locks = Dict{ByteString,Any}()
-require(fname::AbstractString) = require(bytestring(fname))
 require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
 # only broadcast top-level (not nested) requires and reloads
@@ -95,12 +96,15 @@ end
 
 # remote/parallel load
 
-include_string(txt::AbstractString, fname::AbstractString) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Ptr{UInt8}), txt, fname)
+include_string(txt::ByteString, fname::ByteString) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
+          txt, sizeof(txt), fname, sizeof(fname))
+
+include_string(txt::AbstractString, fname::AbstractString) = include_string(bytestring(txt), bytestring(fname))
 
 include_string(txt::AbstractString) = include_string(txt, "string")
 
-function source_path(default::Union(AbstractString,Void)="")
+function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Method and method-table pretty-printing
 
 function argtype_decl(n, t) # -> (argname, argtype)
@@ -43,7 +45,7 @@ function show(io::IO, m::Method)
     end
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls],
-                 ",", ",")
+                 ", ", ", ")
     print(io, ")")
     if line > 0
         print(io, " at ", file, ":", line)
@@ -117,7 +119,7 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     end
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
-                      for d in decls], ",", ",")
+                      for d in decls], ", ", ", ")
     print(io, ")")
     if line > 0
         u = url(m)

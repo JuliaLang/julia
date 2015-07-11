@@ -101,7 +101,7 @@ exception is thrown, otherwise, the left-hand value is returned:
 .. doctest::
 
     julia> (1+2)::FloatingPoint
-    ERROR: type: typeassert: expected FloatingPoint, got Int64
+    ERROR: TypeError: typeassert: expected FloatingPoint, got Int64
 
     julia> (1+2)::Int
     3
@@ -198,8 +198,8 @@ predefined abstract type that all objects are instances of and all types
 are subtypes of. In type theory, :obj:`Any` is commonly called "top"
 because it is at the apex of the type graph. Julia also has a predefined
 abstract "bottom" type, at the nadir of the type graph, which is written as
-``Union()``. It is the exact opposite of :obj:`Any`: no object is an instance
-of ``Union()`` and all types are supertypes of ``Union()``.
+``Union{}``. It is the exact opposite of :obj:`Any`: no object is an instance
+of ``Union{}`` and all types are supertypes of ``Union{}``.
 
 Let's consider some of the abstract types that make up Julia's numerical
 hierarchy::
@@ -384,7 +384,7 @@ New objects of composite type ``Foo`` are created by applying the
     Foo("Hello, world.",23,1.5)
 
     julia> typeof(foo)
-    Foo (constructor with 2 methods)
+    Foo
 
 When a type is applied like a function it is called a *constructor*.
 Two constructors are generated automatically (these are called *default
@@ -401,7 +401,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
-     in Foo at no file
+     in call at no file
 
 You may find a list of field names using the ``fieldnames`` function.
 
@@ -555,8 +555,8 @@ A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 ``Union`` function::
 
-    julia> IntOrString = Union(Int,AbstractString)
-    Union(AbstractString,Int64)
+    julia> IntOrString = Union{Int,AbstractString}
+    Union{AbstractString,Int64}
 
     julia> 1 :: IntOrString
     1
@@ -565,7 +565,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(AbstractString,Int64), got Float64
+    ERROR: type: typeassert: expected Union{AbstractString,Int64}, got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer.
@@ -633,10 +633,10 @@ unlimited number of types: ``Point{Float64}``, ``Point{AbstractString}``,
 .. doctest::
 
     julia> Point{Float64}
-    Point{Float64} (constructor with 1 method)
+    Point{Float64}
 
     julia> Point{AbstractString}
-    Point{AbstractString} (constructor with 1 method)
+    Point{AbstractString}
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
 floating-point values, while the type ``Point{AbstractString}`` is a "point"
@@ -646,7 +646,7 @@ However, ``Point`` itself is also a valid type object:
 .. doctest::
 
     julia> Point
-    Point{T} (constructor with 1 method)
+    Point{T}
 
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
@@ -729,7 +729,7 @@ as a constructor accordingly:
     Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64}
 
 For the default constructor, exactly one argument must be supplied for
 each field:
@@ -737,10 +737,24 @@ each field:
 .. doctest::
 
     julia> Point{Float64}(1.0)
-    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{Float64}}, ::Float64)
+    This may have arisen from a call to the constructor Point{Float64}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T}(::Any, !Matched::Any)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+     in call at base.jl:40
 
     julia> Point{Float64}(1.0,2.0,3.0)
-    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{Float64}}, ::Float64, ::Float64, ::Float64)
+    This may have arisen from a call to the constructor Point{Float64}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T}(::Any, ::Any)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+     in call at base.jl:41
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -758,22 +772,29 @@ implied value of the parameter type ``T`` is unambiguous:
     Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64}
 
     julia> Point(1,2)
     Point{Int64}(1,2)
 
     julia> typeof(ans)
-    Point{Int64} (constructor with 1 method)
+    Point{Int64}
 
 In the case of ``Point``, the type of ``T`` is unambiguously implied if
 and only if the two arguments to ``Point`` have the same type. When this
-isn't the case, the constructor will fail with a no method error:
+isn't the case, the constructor will fail with a :exc:`MethodError`:
 
 .. doctest::
 
     julia> Point(1,2.5)
-    ERROR: `Point{T}` has no method matching Point{T}(::Int64, ::Float64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T}}, ::Int64, ::Float64)
+    This may have arisen from a call to the constructor Point{T}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T}(::T, !Matched::T)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+     in call at base.jl:41
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -881,10 +902,10 @@ subtypes of :obj:`Real`:
     Pointy{Real}
 
     julia> Pointy{AbstractString}
-    ERROR: type: Pointy: in T, expected T<:Real, got Type{AbstractString}
+    ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
 
     julia> Pointy{1}
-    ERROR: type: Pointy: in T, expected T<:Real, got Int64
+    ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
 same manner::
@@ -917,7 +938,7 @@ function itself. The salient aspects of a function's arguments are their
 order and their types. Therefore a tuple type is similar to a
 parameterized immutable type where each parameter is the type
 of one field. For example, a 2-element tuple type resembles the following
-immutable type:
+immutable type::
 
     immutable Tuple2{A,B}
       a::A
@@ -1172,10 +1193,10 @@ objects, they also have types, and we can ask what their types are:
     julia> typeof(Rational)
     DataType
 
-    julia> typeof(Union(Real,Float64,Rational))
+    julia> typeof(Union{Real,Float64,Rational})
     DataType
 
-    julia> typeof(Union(Real,ASCIIString))
+    julia> typeof(Union{Real,ASCIIString})
     UnionType
 
 What if we repeat the process? What is the type of a type of a type?
@@ -1213,8 +1234,8 @@ Only declared types (:obj:`DataType`) have unambiguous supertypes:
 If you apply :func:`super` to other type objects (or non-type objects), a
 :exc:`MethodError` is raised::
 
-    julia> super(Union(Float64,Int64))
-    ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
+    julia> super(Union{Float64,Int64})
+    ERROR: `super` has no method matching super(::Type{Union{Float64,Int64}})
 
 "Value types"
 -------------
@@ -1276,9 +1297,14 @@ To construct an object representing a missing value of type ``T``, use the
 
 .. doctest::
 
-    julia> x1 = Nullable{Int}()
+    julia> x1 = Nullable{Int64}()
+    Nullable{Int64}()
+
     julia> x2 = Nullable{Float64}()
-    julia> x3 = Nullable{Vector{Int}}()
+    Nullable{Float64}()
+
+    julia> x3 = Nullable{Vector{Int64}}()
+    Nullable{Array{Int64,1}}()
 
 To construct an object representing a non-missing value of type ``T``, use the
 ``Nullable(x::T)`` function:
@@ -1292,7 +1318,7 @@ To construct an object representing a non-missing value of type ``T``, use the
     Nullable(1.0)
 
     julia> x3 = Nullable([1, 2, 3])
-    Nullable([1, 2, 3])
+    Nullable([1,2,3])
 
 Note the core distinction between these two ways of constructing a :obj:`Nullable`
 object: in one style, you provide a type, ``T``, as a function parameter; in
@@ -1320,7 +1346,7 @@ You can safely access the value of an :obj:`Nullable` object using :func:`get`:
 
     julia> get(Nullable{Float64}())
     ERROR: NullException()
-     in get at nullable.jl:26
+     in get at nullable.jl:28
 
     julia> get(Nullable(1.0))
     1.0

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Grigoriadis Khachiyan Matrix Games.
 #
 # Example run: gk(10000, [0.1])

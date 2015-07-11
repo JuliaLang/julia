@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module REPLCompletions
 
 export completions, shell_completions, bslash_completions
@@ -24,7 +26,7 @@ function complete_symbol(sym, ffunc)
 
     mod = context_module
     lookup_module = true
-    t = Union()
+    t = Union{}
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
@@ -108,10 +110,16 @@ function complete_keyword(s::ByteString)
 end
 
 function complete_path(path::AbstractString, pos)
-    if ismatch(r"^~(?:/|$)", path)
-        path = homedir() * path[2:end]
+    if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
+        else
+            dir, prefix = splitdir(homedir() * path[2:end])
+        end
+    else
+        dir, prefix = splitdir(path)
     end
-    dir, prefix = splitdir(path)
     local files
     try
         if length(dir) == 0
@@ -229,7 +237,7 @@ function complete_methods(ex_org::Expr)
     t_in = Tuple{args_ex...} # Input types
     for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union() &&
+        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union{} &&
             push!(out,string(method))
     end
     return out
@@ -294,7 +302,7 @@ function completions(string, pos)
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
+           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end

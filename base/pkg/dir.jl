@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Dir
 
 import ..Pkg: DEFAULT_META, META_BRANCH
@@ -41,9 +43,11 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Git.set_remote_url(meta, dir=metadata_dir)
         return
     end
+    local temp_dir
     try
         mkpath(dir)
-        Base.cd(dir) do
+        temp_dir = mktempdir(dir)
+        Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
             run(`git clone -q -b $branch $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
@@ -54,8 +58,14 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
                 close(io)
             end
         end
+        #Move TEMP to METADATA
+        Base.mv(joinpath(temp_dir,"METADATA"), metadata_dir)
+        Base.mv(joinpath(temp_dir,"REQUIRE"), joinpath(dir,"REQUIRE"))
+        Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
+        rm(temp_dir)
     catch e
         ispath(metadata_dir) && rm(metadata_dir, recursive=true)
+        ispath(temp_dir) && rm(temp_dir, recursive=true)
         rethrow(e)
     end
 end

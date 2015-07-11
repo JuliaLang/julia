@@ -220,14 +220,14 @@ and ``quote .. end`` blocks are treated identically.
 .. doctest::
 
     julia> ex = quote
-            x = 1
-            y = 2
-            x + y
-        end
+               x = 1
+               y = 2
+               x + y
+           end
     quote  # none, line 2:
-    x = 1 # line 3:
-    y = 2 # line 4:
-    x + y
+        x = 1 # line 3:
+        y = 2 # line 4:
+        x + y
     end
 
     julia> typeof(ex)
@@ -297,7 +297,7 @@ at global scope using :func:`eval`:
     :(a + b)
 
     julia> eval(ex)
-    ERROR: a not defined
+    ERROR: UndefVarError: b not defined
 
     julia> a = 1; b = 2;
 
@@ -316,7 +316,7 @@ module's environment:
     :(x = 1)
 
     julia> x
-    ERROR: x not defined
+    ERROR: UndefVarError: x not defined
 
     julia> eval(ex)
     1
@@ -525,7 +525,7 @@ is to call the :func:`show` function within the macro body::
     julia> @showarg(1+1)
     :(1 + 1)
 
-    julia> @showarg(println("Yo!")
+    julia> @showarg(println("Yo!"))
     :(println("Yo!"))
 
 
@@ -545,8 +545,7 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    ERROR: assertion failed: 1 == 0
-     in error at error.jl:21
+    ERROR: AssertionError: 1 == 0
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
@@ -591,14 +590,14 @@ function:
     :(if a == b
             nothing
         else
-            Base.error("assertion failed: a == b")
+            Base.throw(Base.AssertionError("a == b"))
         end)
 
     julia> macroexpand(:(@assert a==b "a should equal b!"))
     :(if a == b
             nothing
         else
-            Base.error("assertion failed: a should equal b!")
+            Base.throw(Base.AssertionError("a should equal b!"))
         end)
 
 There is yet another case that the actual :obj:`@assert` macro handles: what
@@ -613,7 +612,7 @@ Compare:
 .. doctest::
 
     julia> typeof(:("a should equal b"))
-    ASCIIString (constructor with 2 methods)
+    ASCIIString
 
     julia> typeof(:("a ($a) should equal b ($b)!"))
     Expr
@@ -918,20 +917,23 @@ function ``foo`` as
 Note that the body returns a quoted expression, namely ``:(x*x)``, rather
 than just the value of ``x*x``.
 
-From the callers perspective, they are very similar to regular functions;
+From the caller's perspective, they are very similar to regular functions;
 in fact, you don't have to know if you're calling a regular or generated
 function or a - the syntax and result of the call is just the same.
 Let's see how ``foo`` behaves:
 
 .. doctest::
 
-    julia> x = foo(2); # note: not printing the result
-    Int64              # this is the println() statement in the body
+    # note: output is from println() statement in the body
+    julia> x = foo(2);
+    Int64
+
     julia> x           # now we print x
     4
 
     julia> y = foo("bar");
     ASCIIString
+
     julia> y
     "barbar"
 
@@ -948,7 +950,7 @@ used?
     julia> foo(4)
     16
 
-Note that there is no printout of ``Int64``. The body of the generated
+Note that there is no printout of :obj:`Int64`. The body of the generated
 function is only executed *once* (not entirely true, see note below) when
 the method for that specific set of argument types is compiled. After that,
 the expression returned from the generated function on the first invocation
@@ -963,7 +965,7 @@ like for macros, the use of `eval` in a generated function is a sign that
 you're doing something the wrong way.)
 
 The example generated function ``foo`` above did not do anything a normal
-function ``foo(x)=x*x`` could not do, except printing the the type on the
+function ``foo(x)=x*x`` could not do, except printing the type on the
 first invocation (and incurring a higher compile-time cost). However, the
 power of a generated function lies in its ability to compute different quoted
 expression depending on the types passed to it:
@@ -977,17 +979,19 @@ expression depending on the types passed to it:
                   return :(x)
               end
           end
-    bar (generic function with 1 method)
+   bar (generic function with 1 method)
 
-    julia> bar(4)
-    16
-    julia> bar("baz")
-    "baz"
+   julia> bar(4)
+   16
+   julia> bar("baz")
+   "baz"
 
 (although of course this contrived example is easily implemented using
 multiple dispatch...)
 
-We can, of course, abuse this to produce some interesting behavior::
+We can, of course, abuse this to produce some interesting behavior:
+
+..doctest ::
 
    julia> @generated function baz(x)
               if rand() < .9
@@ -996,12 +1000,14 @@ We can, of course, abuse this to produce some interesting behavior::
                   return :("boo!")
               end
           end
+   baz (generic function with 1 method)
+
 
 Since the body of the generated function is non-deterministic, its behavior
 is undefined; the expression returned on the *first* invocation will be
 used for *all* subsequent invocations with the same type (again, with the
 exception covered by the disclaimer above). When we call the generated
-function with ``x`` of a new type, ``rand()`` will be called again to
+function with ``x`` of a new type, :func:`rand` will be called again to
 see which method body to use for the new type. In this case, for one
 *type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
 
@@ -1024,7 +1030,7 @@ work, let's use them to build some more advanced functionality...
 An advanced example
 ~~~~~~~~~~~~~~~~~~~
 
-Julia's base library has a function ``sub2ind`` function to calculate a
+Julia's base library has a :func:`sub2ind` function to calculate a
 linear index into an n-dimensional array, based on a set of n multilinear
 indices - in other words, to calculate the index ``i`` that can be used to
 index into an array ``A`` using ``A[i]``, instead of ``A[x,y,z,...]``. One
@@ -1056,7 +1062,9 @@ information of the arguments. Thus, we can utilize generated functions to
 move the iteration to compile-time; in compiler parlance, we use generated
 functions to manually unroll the loop. The body becomes almost identical,
 but instead of calculating the linear index, we build up an *expression*
-that calculates the index::
+that calculates the index:
+
+.. code-block:: julia
 
     @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
         ex = :(I[$N] - 1)
@@ -1069,26 +1077,32 @@ that calculates the index::
 **What code will this generate?**
 
 An easy way to find out, is to extract the body into another (regular)
-function::
+function:
 
-    @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
-        sub2ind_gen_impl(dims, I...)
-    end
+.. doctest::
 
-    function sub2ind_gen_impl{N}(dims::Type{NTuple{N}}, I...)
-        length(I) == N || return :(error("partial indexing is unsupported"))
-        ex = :(I[$N] - 1)
-        for i = N-1:-1:1
-            ex = :(I[$i] - 1 + dims[$i]*$ex)
-        end
-        return :($ex + 1)
-    end
+   julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
+              sub2ind_gen_impl(dims, I...)
+          end
+   sub2ind_gen (generic function with 1 method)
+
+   julia> function sub2ind_gen_impl{N}(dims::Type{NTuple{N}}, I...)
+              length(I) == N || return :(error("partial indexing is unsupported"))
+              ex = :(I[$N] - 1)
+              for i = N-1:-1:1
+                  ex = :(I[$i] - 1 + dims[$i]*$ex)
+              end
+              return :($ex + 1)
+          end
+   sub2ind_gen_impl (generic function with 1 method)
 
 We can now execute ``sub2ind_gen_impl`` and examine the expression it
-returns::
+returns:
 
-    julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
-    :(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)
+.. doctest::
+
+   julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
+   :(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)
 
 So, the method body that will be used here doesn't include a loop at all
 - just indexing into the two tuples, multiplication and addition/subtraction.

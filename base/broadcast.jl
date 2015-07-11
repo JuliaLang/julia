@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Broadcast
 
 using ..Cartesian
@@ -20,13 +22,13 @@ longer_tuple(x::Tuple, retx::Tuple, y::Tuple, rety::Tuple) =
     longer_tuple(droparg1(x...), retx, droparg1(y...), rety)
 longer_tuple(x::Tuple, y::Tuple) = longer_tuple(x, x, y, y)
 
-longer_size(x::Union(AbstractArray,Number)) = size(x)
-longer_size(x::Union(AbstractArray,Number), y::Union(AbstractArray,Number)...) =
+longer_size(x::Union{AbstractArray,Number}) = size(x)
+longer_size(x::Union{AbstractArray,Number}, y::Union{AbstractArray,Number}...) =
     longer_tuple(size(x), longer_size(y...))
 
 # Calculate the broadcast shape of the arguments, or error if incompatible
 broadcast_shape() = ()
-function broadcast_shape(As::Union(AbstractArray,Number)...)
+function broadcast_shape(As::Union{AbstractArray,Number}...)
     sz = longer_size(As...)
     nd = length(sz)
     bshape = ones(Int, nd)
@@ -46,7 +48,7 @@ function broadcast_shape(As::Union(AbstractArray,Number)...)
 end
 
 # Check that all arguments are broadcast compatible with shape
-function check_broadcast_shape(shape::Dims, As::Union(AbstractArray,Number)...)
+function check_broadcast_shape(shape::Dims, As::Union{AbstractArray,Number}...)
     for A in As
         if ndims(A) > length(shape)
             throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
@@ -183,7 +185,7 @@ end
 function gen_broadcast_function(genbody::Function, nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
-    @eval begin
+    @eval let
         local _F_
         function _F_(B, $(As...))
             $body
@@ -195,7 +197,7 @@ end
 function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
-    @eval begin
+    @eval let
         local _F_
         function _F_(B::BitArray, $(As...))
             $body
@@ -205,9 +207,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union(Array,BitArray,Number)                   ,
+    ((BitArray                          , Union{Array,BitArray,Number}                   ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union(Array,BitArray,Number)                   ,
+     (Any                               , Union{Array,BitArray,Number}                   ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
@@ -271,7 +273,7 @@ end
             X = x
             # To call setindex_shape_check, we need to create fake 1-d indexes of the proper size
             @nexprs $N d->(fakeI_d = 1:shape_d)
-            Base.setindex_shape_check(X, (@ntuple $N fakeI)...)
+            @ncall $N Base.setindex_shape_check X shape
             k = 1
             @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
                 @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
@@ -316,8 +318,8 @@ function .\(A::AbstractArray, B::AbstractArray)
     broadcast!(\, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
-typealias RatIntT{T<:Integer} Union(Type{Rational{T}},Type{T})
-typealias CRatIntT{T<:Integer} Union(Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T})
+typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
+typealias CRatIntT{T<:Integer} Union{Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T}}
 type_rdiv{T<:Integer,S<:Integer}(::RatIntT{T}, ::RatIntT{S}) =
     Rational{promote_type(T,S)}
 type_rdiv{T<:Integer,S<:Integer}(::CRatIntT{T}, ::CRatIntT{S}) =

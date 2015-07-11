@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## symbols ##
 
 symbol(s::Symbol) = s
@@ -13,7 +15,7 @@ gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
-gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
+gensym(ss::Union{ASCIIString, UTF8String}...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
 
@@ -36,7 +38,7 @@ copy(e::Expr) = (n = Expr(e.head);
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union(SymbolNode,Expr)) = copy(x)
+astcopy(x::Union{SymbolNode,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
@@ -117,45 +119,58 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     else
         tag = Expr(sym, args...)
     end
-
-    if ex.head == :function
+    found, metaex = findmeta(ex)
+    if found
+        push!(metaex.args, tag)
+    else
         body::Expr = ex.args[2]
-        if !isempty(body.args) && isa(body.args[1], Expr) && (body.args[1]::Expr).head == :meta
-            push!((body.args[1]::Expr).args, tag)
-        elseif isempty(body.args)
-            push!(body.args, Expr(:meta, tag))
-            push!(body.args, nothing)
-        else
-            unshift!(body.args, Expr(:meta, tag))
-        end
-    elseif (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
-        ex = Expr(:function, ex.args[1], Expr(:block, Expr(:meta, tag), ex.args[2]))
-#     else
-#         ex = Expr(:withmeta, ex, sym)
+        unshift!(body.args, Expr(:meta, tag))
     end
     ex
 end
 
 function popmeta!(body::Expr, sym::Symbol)
-    if isa(body.args[1],Expr) && (body.args[1]::Expr).head === :meta
-        metaargs = (body.args[1]::Expr).args
-        for i = 1:length(metaargs)
-            if (isa(metaargs[i], Symbol) && metaargs[i] == sym) ||
-               (isa(metaargs[i], Expr) && metaargs[i].head == sym)
-                if length(metaargs) == 1
-                    shift!(body.args)        # get rid of :meta Expr
-                else
-                    deleteat!(metaargs, i)   # delete this portion of the metadata
-                end
+    body.head == :block || return false, []
+    found, metaex = findmeta_block(body)
+    if !found
+        return false, []
+    end
+    metaargs = metaex.args
+    for i = 1:length(metaargs)
+        if isa(metaargs[i], Symbol) && (metaargs[i]::Symbol) == sym
+            deleteat!(metaargs, i)
+            return true, []
+        elseif isa(metaargs[i], Expr) && (metaargs[i]::Expr).head == sym
+            ret = (metaargs[i]::Expr).args
+            deleteat!(metaargs, i)
+            return true, ret
+        end
+    end
+    false, []
+end
+popmeta!(arg, sym) = (false, [])
 
-                if isa(metaargs[i], Symbol)
-                    return (true, [])
-                elseif isa(metaargs[i], Expr)
-                    return (true, metaargs[i].args)
+function findmeta(ex::Expr)
+    if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
+        body::Expr = ex.args[2]
+        body.head == :block || error(body, " is not a block expression")
+        return findmeta_block(ex)
+    end
+    error(ex, " is not a function expression")
+end
+
+function findmeta_block(ex::Expr)
+    for a in ex.args
+        if isa(a, Expr)
+            if (a::Expr).head == :meta
+                return true, a::Expr
+            elseif (a::Expr).head == :block
+                found, exb = findmeta_block(a)
+                if found
+                    return found, exb
                 end
             end
         end
     end
-    return (false, [])
+    return false, Expr(:block)
 end
-popmeta!(arg, sym) = (false, [])

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))

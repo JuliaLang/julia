@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
@@ -187,19 +189,20 @@ end
 
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
-function serialize(s, S::SharedArray)
-    serialize_type(s, typeof(S))
+function serialize(s::SerializationState, S::SharedArray)
+    Serializer.serialize_cycle(s, S) && return
+    Serializer.serialize_type(s, typeof(S))
     for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
-            writetag(s, UndefRefTag)
+            Serializer.writetag(s.io, Serializer.UNDEFREF_TAG)
         else
             serialize(s, getfield(S, n))
         end
     end
 end
 
-function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
-    S = invoke(deserialize, (Any, DataType), s, t)
+function deserialize{T,N}(s::SerializationState, t::Type{SharedArray{T,N}})
+    S = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     init_loc_flds(S)
     S
 end
@@ -210,7 +213,8 @@ convert(::Type{Array}, S::SharedArray) = S.s
 getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-@generated function getindex(S::SharedArray, I::Union(Real,AbstractVector)...)
+getindex(S::SharedArray, I::Colon) = getindex(S.s, I)
+@generated function getindex(S::SharedArray, I::Union{Real,AbstractVector,Colon}...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -221,7 +225,8 @@ end
 setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
 setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
-@generated function setindex!(S::SharedArray, x, I::Union(Real,AbstractVector)...)
+setindex!(S::SharedArray, x, I::Colon) = setindex!(S.s, x, I)
+@generated function setindex!(S::SharedArray, x, I::Union{Real,AbstractVector,Colon}...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -247,7 +252,7 @@ function rand!{T}(S::SharedArray{T})
 end
 
 function randn!(S::SharedArray)
-    f = S->map!(x->randn, S.loc_subarr_1d)
+    f = S->map!(x->randn(), S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(p, f, S)
     end
@@ -261,15 +266,15 @@ end
 shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 
 # rand variant with range
-function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...)
+function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
         SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     else
         SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     end
 end
-shmem_rand(TR::Union(DataType, UnitRange), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
-shmem_rand(TR::Union(DataType, UnitRange), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
 
 shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
@@ -387,11 +392,11 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    mmap_array(T, dims, s, zero(FileOffset), grow=false)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset); grow=false)
 end
 
-shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{UInt8},), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{UInt8}, Int, Int), shm_seg_name, oflags, permissions)
+shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Cstring, Int, Int), shm_seg_name, oflags, permissions)
 
 end # @unix_only
 
@@ -400,8 +405,8 @@ end # @unix_only
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
-    s = SharedMemSpec(shm_seg_name, readonly, create)
-    mmap_array(T, dims, s, zero(FileOffset))
+    s = Mmap.Anonymous(shm_seg_name, readonly, create)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset))
 end
 
 # no-op in windows

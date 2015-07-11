@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Floating point numbers - basic tests
 @test isapprox(4.00000000000001, 4.0)

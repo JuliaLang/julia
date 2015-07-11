@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.REPLCompletions
 
 module CompletionFoo
@@ -375,6 +377,19 @@ c, r, res = test_scomplete(s)
     @test "Pkg" in c
     @test r == 6:7
     @test s[r] == "Pk"
+
+    # Tests homedir expansion
+    let
+        path = homedir()
+        dir = joinpath(path, "tmpfoobar")
+        mkdir(dir)
+        s = "\"~/tmpfoob"
+        c,r = test_complete(s)
+        @test "tmpfoobar/" in c
+        @test r == 4:10
+        @test s[r] == "tmpfoob"
+        rm(dir)
+    end
 end
 
 let #test that it can auto complete with spaces in file/path

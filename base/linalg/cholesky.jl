@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ##########################
 # Cholesky Factorization #
 ##########################
@@ -77,19 +79,21 @@ function chol{T}(A::AbstractMatrix{T})
     S = promote_type(typeof(chol(one(T))), Float32)
     chol!(copy_oftype(A, S))
 end
-function chol{T}(A::AbstractMatrix{T}, uplo::Union(Type{Val{:L}}, Type{Val{:U}}))
+function chol{T}(A::AbstractMatrix{T}, uplo::Union{Type{Val{:L}}, Type{Val{:U}}})
     S = promote_type(typeof(chol(one(T))), Float32)
     chol!(copy_oftype(A, S), uplo)
 end
 function chol!(x::Number, uplo)
     rx = real(x)
-    rx == abs(x) || throw(DomainError())
+    if rx != abs(x)
+        throw(DomainError("x must be positive semidefinite"))
+    end
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
 chol(x::Number, uplo::Symbol=:U) = chol!(x, uplo)
 
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) =
     _cholfact!(A, pivot, uplo, tol=tol)
 function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U; tol=0.0)
     return Cholesky(chol!(A, Val{uplo}).data, uplo)
@@ -99,7 +103,7 @@ function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
-cholfact!(A::StridedMatrix, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) = Cholesky(chol!(A, Val{uplo}).data, uplo)
+cholfact!(A::StridedMatrix, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) = Cholesky(chol!(A, Val{uplo}).data, uplo)
 
 # function cholfact!{T<:BlasFloat,S}(C::Cholesky{T,S})
 #     _, info = LAPACK.potrf!(C.uplo, C.factors)
@@ -107,11 +111,11 @@ cholfact!(A::StridedMatrix, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type
 #     C
 # end
 
-# cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+# cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) =
 #     cholfact!(copy(A), uplo, pivot, tol=tol)
 
 
-cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) =
     cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, pivot; tol = tol)
 # _cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
 #     cholfact!(A, uplo, pivot, tol = tol)
@@ -147,8 +151,8 @@ full(F::CholeskyPivoted) = (ip=invperm(F[:p]); (F[:L] * F[:U])[ip,ip])
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
 
-size(C::Union(Cholesky, CholeskyPivoted)) = size(C.factors)
-size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.factors, d)
+size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
+size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
 function getindex{T,S}(C::Cholesky{T,S}, d::Symbol)
     d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.factors : C.factors')

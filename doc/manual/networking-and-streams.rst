@@ -103,7 +103,7 @@ are ``Hello, World!``::
     IOStream(<file hello.txt>)
 
     julia> readlines(f)
-    1-element Array{Union(ASCIIString,UTF8String),1}:
+    1-element Array{Union{ASCIIString,UTF8String},1}:
      "Hello, World!\n"
 
 If you want to write to a file, you can open it with the write (``"w"``) flag::

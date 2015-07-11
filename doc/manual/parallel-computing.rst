@@ -633,7 +633,7 @@ object (with appropriate fields initialized) to ``launched`` ::
      port::Nullable{Integer}
 
      # Used when launching additional workers at a host
-     count::Nullable{Union(Int, Symbol)}
+     count::Nullable{Union{Int, Symbol}}
      exename::Nullable{AbstractString}
      exeflags::Nullable{Cmd}
 

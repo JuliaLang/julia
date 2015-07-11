@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Grisu
 
 export print_shortest
@@ -171,6 +173,6 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode, n::Int)
 end
 
 print_shortest(io::IO, x::FloatingPoint, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
-print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
+print_shortest(io::IO, x::Union{FloatingPoint,Integer}) = print_shortest(io, float(x), false)
 
 end # module

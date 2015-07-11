@@ -191,7 +191,7 @@ global scope. This is especially evident in the case of assignments:
     julia> for i = 1:1; y = 10; end
 
     julia> y
-    ERROR: y not defined
+    ERROR: UndefVarError: y not defined
 
     julia> y = 0
     0
@@ -284,16 +284,7 @@ block without creating any new bindings:
 
 .. doctest::
 
-    julia> begin
-             local x = 1
-             begin
-               local x = 2
-             end
-             x
-           end
-    ERROR: syntax: local "x" declared twice
-
-    julia> begin
+    julia> let
              local x = 1
              let
                local x = 2
@@ -302,9 +293,7 @@ block without creating any new bindings:
            end
     1
 
-The first example is invalid because you cannot declare the same
-variable as local in the same scope twice. The second example is valid
-since the ``let`` introduces a new scope block, so the inner local ``x``
+Since ``let`` introduces a new scope block, the inner local ``x``
 is a different variable than the outer local ``x``.
 
 For Loops and Comprehensions

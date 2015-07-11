@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 if [ $# -lt 3 ]; then
     echo "Usage: $0 library old_prefix new_prefix action"

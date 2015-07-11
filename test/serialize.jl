@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Test
 
 function create_serialization_stream(f::Function)
@@ -8,20 +10,20 @@ end
 
 # Tags
 create_serialization_stream() do s
-    Base.writetag(s, Bool)
-    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
+    Serializer.writetag(s, Serializer.sertag(Bool))
+    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Base.write_as_tag(s, Bool)
-    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
+    Serializer.write_as_tag(s, Serializer.sertag(Bool))
+    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Base.write_as_tag(s, Symbol)
+    Serializer.write_as_tag(s, Serializer.sertag(Symbol))
     data = takebuf_array(s)
     @test data[end-1] == 0x00
-    @test data[end] == UInt8(Base.ser_tag[Symbol])
+    @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
 
 # Boolean & Empty & Nothing
@@ -57,12 +59,15 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(len, i->0x1)
+    lt = ntuple(i->0x1, len)
     serialize(s, lt)
+
+    serialize(s, Tuple{})
 
     seek(s, 0)
     @test deserialize(s) === tpl
     @test deserialize(s) === lt
+    @test deserialize(s) === Tuple{}
 end
 
 # Symbol
@@ -272,4 +277,27 @@ create_serialization_stream() do s
     n = deserialize(s)
     @test isa(n, Nullable)
     @test !isdefined(n, :value)
+end
+
+# cycles
+create_serialization_stream() do s
+    A = Any[1,2,3,4,5]
+    A[3] = A
+    serialize(s, A)
+    seekstart(s)
+    b = deserialize(s)
+    @test b[3] === b
+    @test b[1] == 1
+    @test b[5] == 5
+    @test length(b) == 5
+    @test isa(b,Vector{Any})
+end
+
+# Regex
+create_serialization_stream() do s
+    r1 = r"a?b.*"
+    serialize(s, r1)
+    seekstart(s)
+    r2 = deserialize(s)
+    @test r1 == r2
 end

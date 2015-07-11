@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,
 # or Cygwin or Linux assuming make, curl, p7zip, and mingw64-$ARCH-gcc-g++
@@ -38,10 +40,13 @@ echo "" > get-deps.log
 if [ "$ARCH" = x86_64 ]; then
   bits=64
   archsuffix=64
+  exc=seh
   echo "override MARCH = x86-64" >> Make.user
+  echo 'USE_BLAS64 = 1' >> Make.user
 else
   bits=32
   archsuffix=86
+  exc=sjlj
   echo "override MARCH = i686" >> Make.user
   echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
 fi
@@ -92,7 +97,6 @@ done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
 done
-sed -i 's/int32/Int32/g' base/pcre_h.jl
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
@@ -102,10 +106,10 @@ rm -f usr/bin/libjulia-debug.dll
 mingw=http://sourceforge.net/projects/mingw
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
-    f=mingw-w$bits-bin-$ARCH-20140102.7z
+    f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     if ! [ -e $f ]; then
       echo "Downloading $f"
-      $curlflags -O $mingw-w64-dgn/files/mingw-w64/$f
+      $curlflags -O $mingw-w64/files/Toolchains%20targetting%20Win$bits/Personal%20Builds/mingw-builds/4.9.2/threads-win32/$exc/$f
     fi
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
@@ -176,6 +180,7 @@ echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
 echo 'LIBBLASNAME = libopenblas' >> Make.user
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
 echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
+echo 'JULIA_SYSIMG_BUILD_FLAGS=--output-ji ../usr/lib/julia/sys.ji' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
@@ -184,9 +189,9 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 echo 'override STAGE1_DEPS = libuv' >> Make.user
 echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
-make -C deps get-libuv
 
 if [ -n "$USEMSVC" ]; then
+  make -C deps get-libuv
   # Create a modified version of compile for wrapping link
   sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
     -e 's|$dir/$lib|$dir/lib$lib|g' deps/libuv/compile > linkld
@@ -204,6 +209,9 @@ if [ -n "$USEMSVC" ]; then
   echo 'override STAGE1_DEPS += dsfmt' >> Make.user
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
+  make check-whitespace
+  make VERBOSE=1 -C base version_git.jl.phony
+  echo 'NO_GIT = 1' >> Make.user
 fi
 
 cat Make.user

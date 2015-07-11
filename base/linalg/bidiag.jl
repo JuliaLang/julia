@@ -1,10 +1,16 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Bidiagonal matrices
 type Bidiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T} # diagonal
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
     function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
-        length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch())
+        if length(ev)==length(dv)-1
+            new(dv, ev, isupper)
+        else
+            throw(DimensionMismatch("Length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
+        end
     end
 end
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
@@ -85,7 +91,6 @@ for func in (:round, :trunc, :floor, :ceil)
     @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
 end
 
-
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
@@ -102,7 +107,7 @@ function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     elseif -size(M,1)<n<size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(BoundsError())
+        throw(BoundsError("Matrix size is $(size(M)), n is $n"))
     end
 end
 
@@ -128,7 +133,7 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular)
+SpecialMatrix = Union{Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular}
 *(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 #Generic multiplication
@@ -137,13 +142,33 @@ for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
 end
 
 #Linear solvers
-A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(transpose(A), b)
-Ac_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
-for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
-    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
-        tmp = similar(B[:,1])
+A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
+At_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(transpose(A), b)
+Ac_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(ctranspose(A), b)
+function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
+    nA,mA = size(A)
+    tmp = similar(B,size(B,1))
+    n = size(B, 1)
+    if nA != n
+        throw(DimensionMismatch("Size of A is ($nA,$mA), corresponding dimension of B is $n"))
+    end
+    for i = 1:size(B,2)
+        copy!(tmp, 1, B, (i - 1)*n + 1, n)
+        A_ldiv_B!(A, tmp)
+        copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
+    end
+    B
+end
+A_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = A_ldiv_B!(A,copy(B))
+
+for func in (:Ac_ldiv_B!, :At_ldiv_B!)
+    @eval function ($func)(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
+        nA,mA = size(A)
+        tmp = similar(B,size(B,1))
         n = size(B, 1)
+        if mA != n
+            throw(DimensionMismatch("Size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+        end
         for i = 1:size(B,2)
             copy!(tmp, 1, B, (i - 1)*n + 1, n)
             ($func)(A, tmp)
@@ -152,25 +177,15 @@ for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
         B
     end
 end
-for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!)
-    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
-        tmp = similar(B[:, 2])
-        m, n = size(B)
-        nm = n*m
-        for i = 1:size(B, 1)
-            copy!(tmp, 1, B, i:m:nm, n)
-            ($func)(A, tmp)
-            copy!(B, i:m:nm, tmp, 1, n)
-        end
-        B
-    end
-end
+Ac_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = Ac_ldiv_B!(A,copy(B))
+At_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = At_ldiv_B!(A,copy(B))
 
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
     N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch())
-
+    if N != length(b) || N != length(x)
+        throw(DimensionMismatch())
+    end
     if !A.isupper #do forward substitution
         for j = 1:N
             x[j] = b[j]

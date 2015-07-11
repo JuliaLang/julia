@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
 @test ip"192.0xFFF" == IPv4(192,0,15,255)
@@ -95,6 +97,7 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
 
 # test invalid port
@@ -159,7 +162,7 @@ begin
     close(a)
     close(b)
 end
-begin
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))

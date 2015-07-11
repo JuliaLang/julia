@@ -346,6 +346,7 @@ size_t cvalue_arraylen(value_t v);
 value_t size_wrap(size_t sz);
 size_t tosize(value_t n, char *fname);
 value_t cvalue_string(size_t sz);
+value_t cvalue_static_cstrn(const char *str, size_t n);
 value_t cvalue_static_cstring(const char *str);
 value_t string_from_cstr(char *str);
 value_t string_from_cstrn(char *str, size_t n);

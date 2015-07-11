@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # fallback text/plain representation of any type:
 writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
 
@@ -33,7 +35,7 @@ end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) =
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
+writemime(io::IO, ::MIME"text/plain", t::Union{KeyIterator, ValueIterator}) =
     showkv(io, t, limit=true)
 
 
@@ -76,37 +78,38 @@ function showerror(io::IO, ex::TypeError)
     end
 end
 
-function showerror(io::IO, ex, bt)
+function showerror(io::IO, ex, bt; backtrace=true)
     try
         showerror(io, ex)
     finally
-        show_backtrace(io, bt)
+        backtrace && show_backtrace(io, bt)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt)
+function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
-    showerror(io, ex.error, bt)
+    showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError, bt)
-    println(io, "DomainError:")
+function showerror(io::IO, ex::DomainError, bt; backtrace=true)
+    print(io, "DomainError:")
     for b in bt
-        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
         if length(code) == 5 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                println(io,"$(code[1]) will only return a complex result if called with a complex argument.")
+                println(io,"\n$(code[1]) will only return a complex result if called with a complex argument.")
                 print(io, "try $(code[1]) (complex(x))")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring
-                println(io, "Cannot raise an integer x to a negative power -n. Make x a float by adding")
+                println(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
                 print(io, "a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
         end
     end
-    show_backtrace(io, bt)
+    backtrace && show_backtrace(io, bt)
+    nothing
 end
 
 showerror(io::IO, ex::SystemError) = print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
@@ -122,48 +125,60 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
+    # ex.args is a tuple type if it was thrown from `invoke` and is
+    # a tuple of the arguments otherwise.
+    is_arg_types = isa(ex.args, DataType)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
-    name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
-    if isa(ex.f, DataType)
-        print(io, "`$(ex.f)` has no method matching $(ex.f)(")
+    if isa(ex.f, Tuple)
+        f = ex.f[1]
+        print(io, "<inline> ")
+    else
+        f = ex.f
+    end
+    name = isgeneric(f) ? f.env.name : :anonymous
+    if isa(f, DataType)
+        print(io, "`$(f)` has no method matching $(f)(")
     else
         print(io, "`$(name)` has no method matching $(name)(")
     end
-    for (i, arg) in enumerate(ex.args)
-        if isa(arg, Type) && arg != typeof(arg)
-            print(io, "::Type{$(arg)}")
-        else
-            print(io, "::$(typeof(arg))")
-        end
-        i == length(ex.args) || print(io, ", ")
+    for (i, typ) in enumerate(arg_types_param)
+        print(io, "::$typ")
+        i == length(arg_types_param) || print(io, ", ")
     end
     print(io, ")")
-    # Check for local functions that shaddow methods in Base
+    # Check for local functions that shadow methods in Base
     if isdefined(Base, name)
-        f = eval(Base, name)
-        if f !== ex.f && isgeneric(f) && applicable(f, ex.args...)
+        basef = eval(Base, name)
+        if basef !== ex.f && isgeneric(basef) && method_exists(basef, arg_types)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
     end
-    # Check for row vectors used where a column vector is intended.
-    vec_args = []
-    hasrows = false
-    for arg in ex.args
-        isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
-        hasrows |= isrow
-        push!(vec_args, isrow ? vec(arg) : arg)
-    end
-    if hasrows && applicable(ex.f, vec_args...)
-        print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
-        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
-        print(io, "\nYou can convert to a column vector with the vec() function.")
+    if !is_arg_types
+        # Check for row vectors used where a column vector is intended.
+        vec_args = []
+        hasrows = false
+        for arg in ex.args
+            isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
+            hasrows |= isrow
+            push!(vec_args, isrow ? vec(arg) : arg)
+        end
+        if hasrows && applicable(f, vec_args...)
+            print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
+            print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
+            print(io, "\nYou can convert to a column vector with the vec() function.")
+        end
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if ex.f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
+    if (f == Base.convert && !isempty(arg_types_param) && !is_arg_types &&
+        isa(arg_types_param[1], DataType) &&
+        arg_types_param[1].name === Type.name)
+        construct_type = arg_types_param[1].parameters[1]
         println(io)
-        print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...),")
+        print(io, "This may have arisen from a call to the constructor $construct_type(...),")
         print(io, "\nsince type constructors fall back to convert methods.")
     end
     show_method_candidates(io, ex)
@@ -173,18 +188,26 @@ const UNSHOWN_METHODS = ObjectIdDict(
     which(call, Tuple{Type, Vararg{Any}}) => true
 )
 function show_method_candidates(io::IO, ex::MethodError)
+    is_arg_types = isa(ex.args, DataType)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = arg_types.parameters
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
+    if isa(ex.f, Tuple)
+        f = ex.f[1]
+    else
+        f = ex.f
+    end
 
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = ex.f in [convert, getindex, setindex!]
-    funcs = [ex.f]
+    special = f in [convert, getindex, setindex!]
+    funcs = [f]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
-    ex.f === convert && push!(funcs, call)
+    f === convert && push!(funcs, call)
 
     for func in funcs
         name = isgeneric(func) ? func.env.name : :anonymous
@@ -204,7 +227,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                 show_delim_array(buf, tv, '{', ',', '}', false)
             end
             print(buf, "(")
-            t_i = Any[Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
+            t_i = Any[arg_types_param...]
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
                 i > (use_constructor_syntax ? 2 : 1) && print(buf, ", ")
@@ -221,10 +244,10 @@ function show_method_candidates(io::IO, ex::MethodError)
                 t_in = typeintersect(Tuple{sig[1:i]...}, Tuple{t_i[1:j]...})
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
-                t_in === Union() && special && i == 1 && break
+                t_in === Union{} && special && i == 1 && break
                 if use_constructor_syntax && i == 1
                     right_matches += i
-                elseif t_in === Union()
+                elseif t_in === Union{}
                     if Base.have_color
                         Base.with_output_color(:red, buf) do buf
                             print(buf, "::$sigstr")
@@ -246,7 +269,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
-                for t in typeof(ex.args).parameters[length(sig):end]
+                for t in arg_types_param[length(sig):end]
                     if t <: sig[end].parameters[1]
                         right_matches += 1
                     end
@@ -331,7 +354,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i], true)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, true)
         if lkup === nothing
             continue
         end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Query
 
 import ...Pkg
@@ -64,7 +66,7 @@ function dependencies(avail::Dict, fix::Dict = Dict{ByteString,Fixed}("julia"=>F
     avail, conflicts
 end
 
-typealias PackageState Union(Void,VersionNumber)
+typealias PackageState Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     change = Array(Tuple{ByteString,Tuple{PackageState,PackageState}},0)

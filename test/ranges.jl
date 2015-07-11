@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # ranges
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
@@ -241,6 +243,10 @@ end
 @test all(((5:-1:1) + [1:5;]) .== 6)
 @test all(([1:5;] - (1:5)) .== 0)
 @test all(((1:5) - [1:5;]) .== 0)
+
+# exercise fallback addition of ranges
+@test ((linspace(1.,5.,5) - linspace(1.,5.,5)) == zeros(5))
+@test_throws DimensionMismatch (linspace(1.,5.,5) - linspace(1.,5.,6))
 
 # tricky floating-point ranges
 
@@ -494,3 +500,88 @@ end
 @test eltype(0:1//3:10) <: Rational
 @test (0:1//3:10)[1] == 0
 @test (0:1//3:10)[2] == 1//3
+
+# converting ranges (issue #10965)
+@test promote(0:1, UInt8(2):UInt8(5)) === (0:1, 2:5)
+@test convert(UnitRange{Int}, 0:5) === 0:5
+@test convert(UnitRange{Int128}, 0:5) === Int128(0):Int128(5)
+
+@test promote(0:1:1, UInt8(2):UInt8(1):UInt8(5)) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int,Int}, 0:1:1) === 0:1:1
+@test convert(StepRange{Int128,Int128}, 0:1:1) === Int128(0):Int128(1):Int128(1)
+
+@test promote(0:1:1, 2:5) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int128,Int128}, 0:5) === Int128(0):Int128(1):Int128(5)
+@test convert(StepRange, 0:5) === 0:1:5
+@test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
+
+@test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
+@test convert(FloatRange{Float64}, 0:1/3:1) === 0:1/3:1
+@test convert(FloatRange{Float64}, 0f0:inv(3f0):1f0) === 0:1/3:1
+
+@test promote(0:1/3:1, 0:5) === (0:1/3:1, 0.:1.:5.)
+@test convert(FloatRange{Float64}, 0:5) === 0.:1.:5.
+@test convert(FloatRange{Float64}, 0:1:5) === 0.:1.:5.
+@test convert(FloatRange, 0:5) === 0.:1.:5.
+@test convert(FloatRange, 0:1:5) === 0.:1.:5.
+
+# Issue #11245
+let io = IOBuffer()
+    show(io, linspace(1, 2, 3))
+    str = takebuf_string(io)
+    @test str == "linspace(1.0,2.0,3)"
+end
+
+# issue 10950
+r = 1//2:3
+@test length(r) == 3
+i = 1
+for x in r
+    @test x == i//2
+    i += 2
+end
+@test i == 7
+
+# Issue 11049 and related
+@test promote(linspace(0f0, 1f0, 3), linspace(0., 5., 2)) ===
+    (linspace(0., 1., 3), linspace(0., 5., 2))
+@test convert(LinSpace{Float64}, linspace(0., 1., 3)) === linspace(0., 1., 3)
+@test convert(LinSpace{Float64}, linspace(0f0, 1f0, 3)) === linspace(0., 1., 3)
+
+@test promote(linspace(0., 1., 3), 0:5) === (linspace(0., 1., 3),
+                                             linspace(0., 5., 6))
+@test convert(LinSpace{Float64}, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace{Float64}, 0:1:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:1:5) === linspace(0., 5., 6)
+
+function test_range_index(r, s)
+    @test typeof(r[s]) == typeof(r)
+    @test [r;][s] == [r[s];]
+end
+test_range_index(linspace(0.1, 0.3, 3), 1:2)
+test_range_index(linspace(0.1, 0.3, 3), 1:0)
+test_range_index(linspace(1.0, 1.0, 1), 1:1)
+test_range_index(linspace(1.0, 1.0, 1), 1:0)
+test_range_index(linspace(1.0, 2.0, 0), 1:0)
+
+function test_linspace_identity(r, mr)
+    @test -r == mr
+    @test isa(-r, LinSpace)
+
+    @test 1 + r + (-1) == r
+    @test isa(1 + r + (-1), LinSpace)
+    @test 1 - r - 1 == mr
+    @test isa(1 - r - 1, LinSpace)
+
+    @test 1 * r * 1 == r
+    @test isa(1 * r * 1, LinSpace)
+    @test r / 1 == r
+    @test isa(r / 1, LinSpace)
+end
+
+test_linspace_identity(linspace(1.0, 27.0, 1275), linspace(-1.0, -27.0, 1275))
+
+@test reverse(linspace(1.0, 27.0, 1275)) == linspace(27.0, 1.0, 1275)
+@test [reverse(linspace(1.0, 27.0, 1275));] ==
+    reverse([linspace(1.0, 27.0, 1275);])

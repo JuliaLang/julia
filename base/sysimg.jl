@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Core.Intrinsics.ccall
 ccall(:jl_new_main_module, Any, ())
 
@@ -5,6 +7,7 @@ baremodule Base
 
 using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
             kwcall, _apply, typeassert, apply_type, svec
+ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include
 
@@ -25,7 +28,7 @@ end
 
 
 ## Load essential files and libraries
-
+include("essentials.jl")
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
@@ -47,36 +50,39 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
+include("functors.jl")
 
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
-
-include("float.jl")
-include("complex.jl")
-include("rational.jl")
-
-# core data structures (used by type inference)
+# array structures
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
-include("subarray2.jl")
-include("functors.jl")
-include("bitarray.jl")
-include("intset.jl")
-include("dict.jl")
-include("set.jl")
+
+include("docs/bootstrap.jl")
+using .DocBootstrap
+
+# numeric operations
 include("hashing.jl")
-include("iterator.jl")
+include("rounding.jl")
+importall .Rounding
+include("float.jl")
+include("complex.jl")
+include("rational.jl")
+include("abstractarraymath.jl")
+include("arraymath.jl")
 
 # SIMD loops
 include("simdloop.jl")
 importall .SimdLoop
 
+# map-reduce operators
 include("reduce.jl")
 
-# compiler
-include("inference.jl")
+## core structures
+include("bitarray.jl")
+include("intset.jl")
+include("dict.jl")
+include("set.jl")
+include("iterator.jl")
 
 # For OS specific stuff in I/O
 include("osutils.jl")
@@ -84,13 +90,11 @@ include("osutils.jl")
 # strings & printing
 include("char.jl")
 include("ascii.jl")
-include("utf8.jl")
-include("utf16.jl")
-include("utf32.jl")
 include("iobuffer.jl")
 include("string.jl")
-include("utf8proc.jl")
-importall .UTF8proc
+include("unicode.jl")
+include("parse.jl")
+include("shell.jl")
 include("regex.jl")
 include("base64.jl")
 importall .Base64
@@ -101,7 +105,7 @@ include("iostream.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, time, msync
+using .Libc: getpid, gethostname, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
@@ -123,7 +127,6 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-ccall(:jl_get_uv_hooks, Void, ()) # TODO: should put this in _init
 include("grisu.jl")
 import .Grisu.print_shortest
 include("file.jl")
@@ -144,9 +147,8 @@ include("multidimensional.jl")
 
 include("primes.jl")
 
-begin
-    SOURCE_PATH = ""
-    include = function(path)
+let SOURCE_PATH = ""
+    global include = function(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path
@@ -202,6 +204,7 @@ importall .Enums
 
 # concurrency and parallelism
 include("serialize.jl")
+importall .Serializer
 include("multi.jl")
 include("managers.jl")
 
@@ -213,6 +216,7 @@ include("poll.jl")
 
 # memory-mapped and shared arrays
 include("mmap.jl")
+import .Mmap
 include("sharedarray.jl")
 
 # utilities - timing, help, edit
@@ -238,7 +242,7 @@ include("client.jl")
 # Documentation
 
 include("markdown/Markdown.jl")
-include("docs.jl")
+include("docs/Docs.jl")
 using .Docs
 using .Markdown
 
@@ -271,8 +275,8 @@ end
 include("sysinfo.jl")
 import .Sys.CPU_CORES
 
-# mathematical constants
-include("constants.jl")
+# irrational mathematical constants
+include("irrationals.jl")
 
 # Numerical integration
 include("quadgk.jl")
@@ -298,7 +302,7 @@ import .Dates: Date, DateTime, now
 include("deprecated.jl")
 
 # Some basic documentation
-include("basedocs.jl")
+include("docs/basedocs.jl")
 
 function __init__()
     # Base library init

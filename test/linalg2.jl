@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
 
 import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, UnitUpperTriangular, UnitLowerTriangular
 
 # basic tridiagonal operations
 n = 5
@@ -60,6 +62,11 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     x = Tlu\v
     @test_approx_eq x invFv
     @test_approx_eq det(T) det(F)
+
+    @test_approx_eq T * UnitUpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UnitLowerTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * LowerTriangular(eye(n)) F*eye(n)
 
     # symmetric tridiagonal
     if elty <: Real
@@ -174,7 +181,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         end
 
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,Type{Val{false}}), copy(A), Val{false})
+        FJulia  = invoke(qrfact!, Tuple{AbstractMatrix, Type{Val{false}}},
+                         copy(A), Val{false})
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
@@ -264,10 +272,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         A = ones(elty,10,10)
         As = sub(A,1:5,1:5)
         @test_approx_eq norm(A, 1) 10
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(A, 2) 10
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(A, 2) 10
         @test_approx_eq norm(A, Inf) 10
         @test_approx_eq norm(As, 1) 5
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(As, 2) 5
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(As, 2) 5
         @test_approx_eq norm(As, Inf) 5
 
     for i = 1:10
@@ -285,20 +293,20 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
         # Absolute homogeneity
         @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
         @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
 
         @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
         @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
 
         # Triangle inequality
         @test norm(A + B,1) <= norm(A,1) + norm(B,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(A + B) <= norm(A) + norm(B) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
         @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
 
         @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
-        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
         @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
 
         # vecnorm:
@@ -330,8 +338,21 @@ end
 @test I[1,1] == 1 # getindex
 @test I[1,2] == 0 # getindex
 @test I === I' # transpose
+@test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
+@test zero(UniformScaling{Float32}) == UniformScaling(zero(Float32))
+@test zero(UniformScaling(rand(Complex128))) == zero(UniformScaling{Complex128})
+@test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
+@test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
+@test -one(UniformScaling(2)) == UniformScaling(-1)
+α = randn()
+@test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
+@test UniformScaling(α)./α == UniformScaling(1.0)
+@test α + UniformScaling(1.0) == UniformScaling(1.0) + α
+@test α - UniformScaling(1.0) == -(UniformScaling(1.0) - α)
 λ = complex(randn(),randn())
 J = UniformScaling(λ)
+@test ndims(J) == 2
+@test transpose(J) == J
 @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
 @test I + I === UniformScaling(2) # +
 @test inv(I) == I

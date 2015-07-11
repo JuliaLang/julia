@@ -16,13 +16,11 @@
 /libcxx-*
 /libcxxabi-*
 /libffi-*
-/libgit*
 /llvm-*
 /lldb-*
 /mpfr-*
 /patchelf-*
-/pcre-*
-!pcre-gcc49-compile.patch
+/pcre2-*
 /root
 /SuiteSparse-*
 /zlib-*
@@ -33,6 +31,8 @@
 /Rmath-julia*
 
 # git-externals:
+/libgit2
+/libgit2-*
 /libuv
 /libuv-*
 /openblas

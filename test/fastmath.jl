@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # fast math
 
 # basic arithmetic
@@ -170,6 +172,6 @@ let a = ones(2,2), b = ones(2,2)
     @test isapprox((@fastmath a[1,2] ^= 2.0), b[1,2] ^= 2.0)
 
     # test fallthrough for unsupported ops
-    c = 0
+    local c = 0
     @test Bool((@fastmath c |= 1))
 end

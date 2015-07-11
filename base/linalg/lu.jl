@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ####################
 # LU Factorization #
 ####################
@@ -10,12 +12,12 @@ end
 LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
-function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     pivot==Val{false} && return generic_lufact!(A, pivot)
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-lufact!(A::StridedMatrix, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = generic_lufact!(A, pivot)
+lufact!(A::StridedMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = generic_lufact!(A, pivot)
 function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true})
     m, n = size(A)
     minmn = min(m,n)
@@ -65,10 +67,10 @@ function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{
 end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
-lufact{T<:FloatingPoint}(A::Union(AbstractMatrix{T},AbstractMatrix{Complex{T}}), pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = lufact!(copy(A), pivot)
+lufact{T<:FloatingPoint}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
-function lufact{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}))
+function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})
     S = typeof(zero(T)/one(T))
     lufact!(copy_oftype(A, S), pivot)
 end
@@ -87,7 +89,7 @@ lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(B
 lufact(F::LU) = F
 
 lu(x::Number) = (one(x), x, 1)
-function lu(A::AbstractMatrix, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     F = lufact(A, pivot)
     F[:L], F[:U], F[:p]
 end
@@ -117,18 +119,20 @@ function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
         L = tril!(A.factors[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
-    end
-    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :p && return ipiv2perm(A.ipiv, m)
-    if d == :P
+    elseif d == :U
+        return triu!(A.factors[1:min(m,n), 1:n])
+    elseif d == :p
+        return ipiv2perm(A.ipiv, m)
+    elseif d == :P
         p = A[:p]
         P = zeros(T, m, m)
         for i in 1:m
             P[i,p[i]] = one(T)
         end
         return P
+    else
+        throw(KeyError(d))
     end
-    throw(KeyError(d))
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
@@ -156,7 +160,7 @@ function det{T,S}(A::LU{T,S})
     return prod(diag(A.factors)) * (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T))
 end
 
-function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     dg = diag(A.factors)
     s = (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T)) * prod(sign(dg))
@@ -164,11 +168,15 @@ function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
 end
 
 function logdet{T<:Real,S}(A::LU{T,S})
-    d,s = logdet2(A)
-    s>=0 || error("DomainError: determinant is negative")
+    d,s = logabsdet(A)
+    if s < 0
+        throw(DomainError())
+    end
     d
 end
 
+_mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
+_mod2pi(x) = mod2pi(x)
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
     s = sum(log(diag(A.factors)))
@@ -176,7 +184,7 @@ function logdet{T<:Complex,S}(A::LU{T,S})
         s = Complex(real(s), imag(s)+π)
     end
     r, a = reim(s)
-    a = π-mod2pi(π-a) #Take principal branch with argument (-pi,pi]
+    a = π - _mod2pi(π - a) #Take principal branch with argument (-pi,pi]
     complex(r,a)
 end
 
@@ -188,7 +196,7 @@ cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!{T}(A::Tridiagonal{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     n = size(A, 1)
     info = 0
     ipiv = Array(BlasInt, n)
@@ -258,7 +266,9 @@ factorize(A::Tridiagonal) = lufact(A)
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch())
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
@@ -287,7 +297,9 @@ end
 
 function At_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimentionsMismatch(""))
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
@@ -320,7 +332,9 @@ end
 # Ac_ldiv_B!{T<:Real}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) = At_ldiv_B!(A,B)
 function Ac_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimentionsMismatch(""))
+    if n != size(B,1)
+        throw(DimensionMismatch("Matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d

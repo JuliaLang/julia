@@ -1,13 +1,15 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## semantic version numbers (http://semver.org)
 
 immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::Tuple{Vararg{Union(Int,ASCIIString)}}
-    build::Tuple{Vararg{Union(Int,ASCIIString)}}
+    prerelease::Tuple{Vararg{Union{Int,ASCIIString}}}
+    build::Tuple{Vararg{Union{Int,ASCIIString}}}
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Tuple{Vararg{Union(Int,ASCIIString)}}, bld::Tuple{Vararg{Union(Int,ASCIIString)}})
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Tuple{Vararg{Union{Int,ASCIIString}}}, bld::Tuple{Vararg{Union{Int,ASCIIString}}})
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -106,8 +108,8 @@ ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
 ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-function ident_cmp(A::Tuple{Vararg{Union(Int,ASCIIString)}},
-                   B::Tuple{Vararg{Union(Int,ASCIIString)}})
+function ident_cmp(A::Tuple{Vararg{Union{Int,ASCIIString}}},
+                   B::Tuple{Vararg{Union{Int,ASCIIString}}})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -208,6 +210,7 @@ function banner(io::IO = STDOUT)
         commit_string = ""
     else
         days = Int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
         unit = days == 1 ? "day" : "days"
         distance = GIT_VERSION_INFO.fork_master_distance
         commit = GIT_VERSION_INFO.commit_short

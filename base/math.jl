@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
@@ -89,7 +91,9 @@ deg2rad(z::Integer) = deg2rad(float(z))
 @vectorize_1arg Real rad2deg
 @vectorize_1arg Real deg2rad
 
-log(b,x) = log(x)./log(b)
+log{T<:Number}(b::T, x::T) = log(x)/log(b)
+log(b::Number, x::Number) = log(promote(b,x)...)
+@vectorize_2arg Number log
 
 # type specific math functions
 
@@ -369,10 +373,13 @@ function mod2pi(x::Int64)
 end
 
 # More special functions
-
 include("special/trig.jl")
 include("special/bessel.jl")
 include("special/erf.jl")
 include("special/gamma.jl")
+
+module JuliaLibm
+include("special/log.jl")
+end
 
 end # module

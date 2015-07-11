@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 abstract AbstractCmd
 
 type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
-    env::Union(Array{ByteString},Void)
+    env::Union{Array{ByteString},Void}
     dir::UTF8String
     Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
 end
@@ -47,7 +49,7 @@ function show(io::IO, cmd::Cmd)
     (print_dir || print_env) && print(io, ")")
 end
 
-function show(io::IO, cmds::Union(OrCmds,ErrOrCmds))
+function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
     print(io, "pipe(")
     show(io, cmds.a)
     print(io, ", ")
@@ -89,7 +91,7 @@ uvtype(::DevNullStream) = UV_STREAM
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
+typealias Redirectable Union{AsyncStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -114,13 +116,22 @@ end
 
 
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
-ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
+ignorestatus(cmd::Union{OrCmds,AndCmds}) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
-setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[x for x in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
-setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") = (cmd.env = ByteString[k*"="*string(v) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
+# like bytestring(s), but throw an error if s contains NUL, since
+# libuv requires NUL-terminated strings
+function cstr(s)
+    if Base.containsnul(s)
+        throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
+    end
+    return bytestring(s)
+end
+
+setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[cstr(x) for x in env]; setenv(cmd, dir=dir); cmd)
+setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
+setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") = (cmd.env = ByteString[cstr(k*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
+setenv(cmd::Cmd; dir="") = (cmd.dir = cstr(dir); cmd)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
@@ -155,11 +166,11 @@ function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, a
 end
 
 pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
-pipe(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipe(cmd, stdin=src)
+pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdin=src)
 
 pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
+typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -197,19 +208,20 @@ type ProcessChain
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
-typealias ProcessChainOrNot Union(Bool,ProcessChain)
+typealias ProcessChainOrNot Union{Bool,ProcessChain}
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
     proc = Libc.malloc(_sizeof_uv_process)
+    disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}),
-         cmd, argv, loop, proc, pp, uvtype(in),
-         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
+        cmd, argv, loop, proc, pp, uvtype(in),
+        uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
+        pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
+        uv_jl_return_spawn::Ptr{Void})
     if error != 0
-        disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv, Void, (Ptr{Void},), proc)
         throw(UVError("could not spawn "*string(pp.cmd), error))
     end
@@ -223,12 +235,16 @@ function uvfinalize(proc::Process)
     proc.handle = C_NULL
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
+function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
+    data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
+    data == C_NULL && return
+    proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = Int32(exit_status)
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
+    nothing
 end
 
 function _uv_hook_close(proc::Process)
@@ -423,7 +439,6 @@ eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
-        start_reading(out)
         (out, processes)
     elseif mode == "w"
         processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdio,STDERR))
@@ -455,9 +470,9 @@ end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = open(cmd, "r", stdin)
+    bytes = readbytes(out)
     !success(pc) && pipeline_error(pc)
-    wait_close(out)
-    return takebuf_array(out.buffer)
+    return bytes
 end
 
 function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
@@ -549,28 +564,28 @@ process_signaled(s::Process) = (s.termsignal > 0)
 #process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
-    process_running (s) ? "ProcessRunning" :
+    process_running(s) ? "ProcessRunning" :
     process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
-    #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
+    #process_stopped(s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
+    process_exited(s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
 end
 
 ## implementation of `cmd` syntax ##
 
 arg_gen()          = ByteString[]
-arg_gen(x::AbstractString) = ByteString[x]
+arg_gen(x::AbstractString) = ByteString[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
     if applicable(start, head)
         vals = ByteString[]
         for x in head
-            push!(vals, string(x))
+            push!(vals, cstr(string(x)))
         end
         return vals
     else
-        return ByteString[string(head)]
+        return ByteString[cstr(string(head))]
     end
 end
 
@@ -579,7 +594,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push!(vals, bytestring(h, t))
+        push!(vals, cstr(bytestring(h, t)))
     end
     vals
 end

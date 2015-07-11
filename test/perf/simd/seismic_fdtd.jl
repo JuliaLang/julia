@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Finite-difference time-domain seismic simulation in 2D using a staggered grid.
 # The intent is to test performance of @simd on the inner loop of a 2D loop nest.
 #

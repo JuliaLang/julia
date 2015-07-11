@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("sparsedir/sparse.jl")
 if Base.USE_GPL_LIBS
     include("sparsedir/umfpack.jl")

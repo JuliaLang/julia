@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @unix_only begin
-    _getenv(var::AbstractString) = ccall(:getenv, Ptr{UInt8}, (Ptr{UInt8},), var)
+    _getenv(var::AbstractString) = ccall(:getenv, Ptr{UInt8}, (Cstring,), var)
     _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 end
 @windows_only begin
@@ -24,13 +26,12 @@ function FormatMessage(e=GetLastError())
     return utf8(UTF16String(buf))
 end
 
-_getenvlen(var::UTF16String) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt8},UInt32),utf16(var),C_NULL,0)
-_hasenv(s::UTF16String) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NOT_FOUND
-_hasenv(s::AbstractString) = _hasenv(utf16(s))
+_getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
+_hasenv(s::AbstractString) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NOT_FOUND
 function _jl_win_getenv(s::UTF16String,len::UInt32)
     val=zeros(UInt16,len)
-    ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),s,val,len)
-    if ret==0 || ret != len-1 || val[end] != 0
+    ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),s,val,len)
+    if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
         error(string("getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
     end
     val
@@ -62,13 +63,13 @@ end
 
 function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool)
     @unix_only begin
-        ret = ccall(:setenv, Int32, (Ptr{UInt8},Ptr{UInt8},Int32), var, val, overwrite)
+        ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
         systemerror(:setenv, ret != 0)
     end
     @windows_only begin
         var = utf16(var)
         if overwrite || !_hasenv(var)
-            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),utf16(var),utf16(val))
+            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Cwstring),var,val)
             systemerror(:setenv, ret == 0)
         end
     end
@@ -78,11 +79,11 @@ _setenv(var::AbstractString, val::AbstractString) = _setenv(var, val, true)
 
 function _unsetenv(var::AbstractString)
     @unix_only begin
-        ret = ccall(:unsetenv, Int32, (Ptr{UInt8},), var)
+        ret = ccall(:unsetenv, Int32, (Cstring,), var)
         systemerror(:unsetenv, ret != 0)
     end
     @windows_only begin
-        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),utf16(var),C_NULL)
+        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Ptr{UInt16}),var,C_NULL)
         systemerror(:setenv, ret == 0)
     end
 end

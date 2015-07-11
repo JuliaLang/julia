@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module dSFMT
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,

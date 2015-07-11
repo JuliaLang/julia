@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # middle
 
 @test middle(3) === 3.0
@@ -37,9 +39,22 @@ end
 @test isnan(median([NaN,0.0]))
 @test isequal(median([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
 
+# mean
+@test mean([0]) === 0.
+@test mean([1.]) === 1.
+@test mean([1.,3]) == 2.
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
 @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
+
+@test isnan(mean([NaN]))
+@test isnan(mean([0.0,NaN]))
+@test isnan(mean([NaN,0.0]))
+
+@test isnan(mean([0.,Inf,-Inf]))
+@test isnan(mean([1.,-1.,Inf,-Inf]))
+@test isnan(mean([-Inf,Inf]))
+@test isequal(mean([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
 
 # test var & std
 
@@ -248,7 +263,7 @@ end
 # test hist
 
 @test sum(hist([1,2,3])[2]) == 3
-@test hist(Union()[])[2] == []
+@test hist(Union{}[])[2] == []
 @test hist([1])[2] == [1]
 @test hist([1,2,3],[0,2,4]) == ([0,2,4],[2,1])
 @test hist([1,2,3],0:2:4) == (0:2:4,[2,1])

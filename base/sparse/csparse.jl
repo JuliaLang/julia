@@ -14,7 +14,7 @@
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Union(Function,Base.Func))
+                                nrow::Integer, ncol::Integer, combine::Union{Function,Base.Func})
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
     N = length(I)
@@ -71,7 +71,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
             j = Ri[p]
             pj = Wj[j]
             if pj >= p1
-                Rx[pj] = combine (Rx[pj], Rx[p])
+                Rx[pj] = combine(Rx[pj], Rx[p])
             else
                 Wj[j] = pdest
                 if pdest != p
@@ -358,9 +358,19 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     A
 end
 
-droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, nothing)
-triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), nothing)
+
+immutable DropTolFun <: Func{4} end
+call(::DropTolFun, i,j,x,other) = abs(x)>other
+immutable DropZerosFun <: Func{4} end
+call(::DropZerosFun, i,j,x,other) = x!=0
+immutable TriuFun <: Func{4} end
+call(::TriuFun, i,j,x,other) = j>=i
+immutable TrilFun <: Func{4} end
+call(::TrilFun, i,j,x,other) = i>=j
+
+droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
+triu!(A::SparseMatrixCSC) = fkeep!(A, TriuFun(), nothing)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), nothing)
+tril!(A::SparseMatrixCSC) = fkeep!(A, TrilFun(), nothing)
 tril(A::SparseMatrixCSC) = tril!(copy(A))

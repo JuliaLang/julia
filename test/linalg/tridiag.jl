@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
 
 using Base.Test
@@ -28,8 +30,16 @@ let n = 12 #Size of matrix problem to test
             b += im*convert(Vector{elty}, randn(n-1))
         end
 
+        @test_throws DimensionMismatch SymTridiagonal(a, ones(n+1))
+
         A = SymTridiagonal(a, b)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+
+        debug && println("Diagonal extraction")
+        @test diag(A,1) == b
+        @test diag(A,-1) == b
+        @test diag(A,0) == a
+        @test_throws BoundsError diag(A,n+1)
 
         debug && println("Idempotent tests")
         for func in (conj, transpose, ctranspose)
@@ -62,6 +72,18 @@ let n = 12 #Size of matrix problem to test
             w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
             evecs = LAPACK.stein!(a, b, w, iblock, isplit)
             test_approx_eq_vecs(v, evecs)
+
+            debug && println("stegr! call with index range")
+            F = eigfact(SymTridiagonal(a, b),1:2)
+            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
+            @test_approx_eq F[:vectors] fF[:vectors]
+            @test_approx_eq F[:values] fF[:values]
+
+            debug && println("stegr! call with value range")
+            F = eigfact(SymTridiagonal(a, b),0.0,1.0)
+            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
+            @test_approx_eq F[:vectors] fF[:vectors]
+            @test_approx_eq F[:values] fF[:values]
         end
 
         debug && println("Binary operations")
@@ -78,6 +100,14 @@ let n = 12 #Size of matrix problem to test
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)
         end
+        α = rand(elty)
+        @test_approx_eq full(α*A) α*full(A)
+        @test_approx_eq full(A*α) full(A)*α
+        @test_approx_eq full(A/α) full(A)/α
+
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
+        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
     end
 
     debug && println("Tridiagonal matrices")
@@ -92,8 +122,15 @@ let n = 12 #Size of matrix problem to test
             c += im*convert(Vector{elty}, randn(n - 1))
         end
 
+        @test_throws ArgumentError Tridiagonal(a,a,a)
         A = Tridiagonal(a, b, c)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+
+        debug && println("Diagonal extraction")
+        @test diag(A,-1) == a
+        @test diag(A,0) == b
+        @test diag(A,1) == c
+        @test_throws BoundsError diag(A,n+1)
 
         debug && println("Simple unary functions")
         for func in (det, inv)
@@ -123,5 +160,9 @@ let n = 12 #Size of matrix problem to test
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)
         end
+        α = rand(elty)
+        @test_approx_eq full(α*A) α*full(A)
+        @test_approx_eq full(A*α) full(A)*α
+        @test_approx_eq full(A/α) full(A)/α
     end
 end

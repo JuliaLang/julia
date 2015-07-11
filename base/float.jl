@@ -1,3 +1,16 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+## floating point traits ##
+
+const Inf16 = box(Float16,unbox(UInt16,0x7c00))
+const NaN16 = box(Float16,unbox(UInt16,0x7e00))
+const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
+const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
+const Inf64 = box(Float64,unbox(UInt64,0x7ff0000000000000))
+const NaN64 = box(Float64,unbox(UInt64,0x7ff8000000000000))
+const Inf = Inf64
+const NaN = NaN64
+
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -87,11 +100,11 @@ end
 
 #convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
 convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
-convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,x))
+convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,unbox(Float64,x)))
 
 #convert(::Type{Float32}, x::Float16) = box(Float32,fpext(Float32,x))
 convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
-convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,x))
+convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,unbox(Float32,x)))
 
 convert(::Type{FloatingPoint}, x::Bool)    = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int8)    = convert(Float64, x)
@@ -160,8 +173,8 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 
 # fallbacks
 floor{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,floor(x))
-ceil {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
-round {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
+ceil{ T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
+round{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
 
 trunc(x::Float64) = box(Float64,trunc_llvm(unbox(Float64,x)))
 trunc(x::Float32) = box(Float32,trunc_llvm(unbox(Float32,x)))
@@ -223,15 +236,15 @@ end
 ==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
 !=(x::Float32, y::Float32) = ne_float(unbox(Float32,x),unbox(Float32,y))
 !=(x::Float64, y::Float64) = ne_float(unbox(Float64,x),unbox(Float64,y))
-< (x::Float32, y::Float32) = lt_float(unbox(Float32,x),unbox(Float32,y))
-< (x::Float64, y::Float64) = lt_float(unbox(Float64,x),unbox(Float64,y))
+<( x::Float32, y::Float32) = lt_float(unbox(Float32,x),unbox(Float32,y))
+<( x::Float64, y::Float64) = lt_float(unbox(Float64,x),unbox(Float64,y))
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
 isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
 isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
-isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
-isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
+isless( x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
+isless( x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 function cmp(x::FloatingPoint, y::FloatingPoint)
     (isnan(x) || isnan(y)) && throw(DomainError())
@@ -278,14 +291,14 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
-==(x::Float32, y::Union(Int32,UInt32)) = Float64(x)==Float64(y)
-==(x::Union(Int32,UInt32), y::Float32) = Float64(x)==Float64(y)
+==(x::Float32, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
+==(x::Union{Int32,UInt32}, y::Float32) = Float64(x)==Float64(y)
 
-<(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<Float64(y)
-<(x::Union(Int32,UInt32), y::Float32) = Float64(x)<Float64(y)
+<(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<Float64(y)
+<(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<Float64(y)
 
-<=(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<=Float64(y)
-<=(x::Union(Int32,UInt32), y::Float32) = Float64(x)<=Float64(y)
+<=(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
+<=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
@@ -299,14 +312,17 @@ isfinite(x::Integer) = true
 
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
-## floating point traits ##
+## hashing small, built-in numeric types ##
 
-const Inf16 = box(Float16,unbox(UInt16,0x7c00))
-const NaN16 = box(Float16,unbox(UInt16,0x7e00))
-const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
-const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
-const Inf = box(Float64,unbox(UInt64,0x7ff0000000000000))
-const NaN = box(Float64,unbox(UInt64,0x7ff8000000000000))
+hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
+const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
+
+hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
+hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
+hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN $ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
+
+hash(x::Union{Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
 ## precision, as defined by the effective number of bits in the mantissa ##
 precision(::Type{Float16}) = 11
@@ -360,8 +376,8 @@ end
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
-    typemin(::Type{Float64}) = $(-Inf)
-    typemax(::Type{Float64}) = $(Inf)
+    typemin(::Type{Float64}) = $(-Inf64)
+    typemax(::Type{Float64}) = $(Inf64)
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
@@ -436,3 +452,25 @@ significand_mask(::Type{Float32}) = 0x007f_ffff
 significand_bits{T<:FloatingPoint}(::Type{T}) = trailing_ones(significand_mask(T))
 exponent_bits{T<:FloatingPoint}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
 exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+
+## Array operations on floating point numbers ##
+
+float{T<:FloatingPoint}(A::AbstractArray{T}) = A
+
+function float{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
+    convert(AbstractArray{typeof(float(zero(T)))}, A)
+end
+
+for fn in (:float,:big)
+    @eval begin
+        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
+        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
+        $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
+    end
+end
+
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)

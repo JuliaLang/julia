@@ -53,24 +53,12 @@ and can be passed around like any value:
     julia> g(2,3)
     5
 
-There are two other ways that functions can be applied: using special
-operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the :func:`apply`
-function:
+As with variables, Unicode can also be used for function names:
 
 .. doctest::
 
-    julia> apply(f,2,3)
-    5
-
-:func:`apply` applies its first argument — a function object —
-to its remaining arguments.
-
-As with variables, Unicode can also be used for function names::
-
     julia> ∑(x,y) = x + y
     ∑ (generic function with 1 method)
-
 
 Argument Passing Behavior
 -------------------------
@@ -195,6 +183,7 @@ Expression          Calls
 ``1:n``             :func:`colon`
 ``A[i]``            :func:`getindex`
 ``A[i]=x``          :func:`setindex!`
+``A(x)``            :func:`call`
 =================== ==================
 
 These functions are included in the ``Base.Operators`` module even
@@ -450,7 +439,7 @@ specified:
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see :ref:`man-methods`).
+(see :ref:`man-note-on-optional-and-keyword-arguments`).
 
 
 Keyword Arguments

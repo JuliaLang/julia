@@ -1,8 +1,10 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 
 if nworkers() < 3
-    remotecall_fetch(1, () -> addprocs(3))
+    remotecall_fetch(1, () -> addprocs(3 - nworkers()))
 end
 
 id_me = myid()
@@ -11,6 +13,16 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test fetch(@spawnat id_other myid()) == id_other
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
+
+rr=RemoteRef()
+a = rand(5,5)
+put!(rr, a)
+@test rr[2,3] == a[2,3]
+
+rr=RemoteRef(workers()[1])
+a = rand(5,5)
+put!(rr, a)
+@test rr[1,5] == a[1,5]
 
 dims = (20,20,20)
 
@@ -58,6 +70,8 @@ copy!(s, d)
 s = Base.shmem_rand(dims)
 copy!(s, sdata(d))
 @test s == d
+a = rand(dims)
+@test sdata(a) == a
 
 d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
@@ -67,6 +81,24 @@ for p in procs(d)
     @test d[idxf] == p
     @test d[idxl] == p
 end
+
+# reshape
+
+d = Base.shmem_fill(1.0, (10,10,10))
+@test ones(100, 10) == reshape(d,(100,10))
+d = Base.shmem_fill(1.0, (10,10,10))
+@test_throws DimensionMismatch reshape(d,(50,))
+
+# rand, randn
+d = Base.shmem_rand(dims)
+@test size(rand!(d)) == dims
+d = Base.shmem_fill(1.0, dims)
+@test size(randn!(d)) == dims
+
+# similar
+d = Base.shmem_rand(dims)
+@test size(similar(d, Complex128)) == dims
+@test size(similar(d, dims)) == dims
 
 # issue #6362
 d = Base.shmem_rand(dims)
@@ -102,6 +134,9 @@ map!(x->1, d)
 
 @test fill!(d, 1) == ones(10, 10)
 @test fill!(d, 2.) == fill(2, 10, 10)
+@test d[:] == fill(2, 100)
+@test d[:,1] == fill(2, 10)
+@test d[1,:] == fill(2, 1, 10)
 
 # Boundary cases where length(S) <= length(pids)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
@@ -199,25 +234,29 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
+    pmappids = remotecall_fetch(1, () -> addprocs(4))
+
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
-    @test length(res) < length(ups)
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true, pids=pmappids);
+    @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
     # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
-    @test length(res) < length(ups)
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true, pids=pmappids);
+    @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
     # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
+    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
+
+    remotecall_fetch(1, p->rmprocs(p), pmappids)
 
     print("\n\nPassed all pmap tests that print errors.\n")
 
@@ -230,6 +269,7 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
             catch e
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
+                print("w_in_remote : $w_in_remote\n")
                 print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
                 rethrow(e)
             end
@@ -267,8 +307,8 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", 9)], sshflags))
-    @test length(new_pids) == 9
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", num_workers)], sshflags))
+    @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
 
 end

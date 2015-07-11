@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include<stdio.h>
 #include<malloc.h>
 #include "parameter.h"

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Profile
 
 import Base: hash, ==
@@ -21,7 +23,7 @@ end
 ####
 #### User-level functions
 ####
-function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = nothing)
+function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n == nothing && delay == nothing

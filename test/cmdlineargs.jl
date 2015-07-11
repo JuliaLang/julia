@@ -1,4 +1,6 @@
-let exename = joinpath(JULIA_HOME, Base.julia_exename())
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --version
     let v = split(readall(`$exename -v`), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
@@ -73,6 +75,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
+        fname = realpath(fname)
         try
             @test readchomp(`$exename --machinefile $fname -e "println(bytestring(Base.JLOptions().machinefile))"`) == fname
         finally
@@ -138,6 +141,14 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     @test readchomp(`$exename --depwarn=no -E "Base.syntax_deprecation_warnings(true)"`) == "false"
     @test readchomp(`$exename --depwarn=yes -E "Base.syntax_deprecation_warnings(false)"`) == "true"
     @test !success(`$exename --depwarn=false`)
+    # test deprecated syntax
+    @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
+    # test deprecated method
+    @test !success(`$exename -e "
+        foo() = :foo; bar() = :bar
+        @deprecate foo() bar()
+        foo()
+    " --depwarn=error`)
 
     # --inline
     @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
@@ -148,13 +159,13 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
+        JL_OPTIONS_FAST_MATH_ON = 1,
         JL_OPTIONS_FAST_MATH_OFF = 2
         @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
         @test parse(Int,readchomp(`$exename --math-mode=user -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
+        @test parse(Int,readchomp(`$exename --math-mode=fast -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
     end
-    # --math-mode takes ieee/user as argument
-    @test !success(`$exename --math-mode=fast`)
 
     # --worker takes default / custom as arugment (default/custom arguments tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
@@ -179,4 +190,5 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
     # issue #10562
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "UTF8String[\"\"]"
+
 end

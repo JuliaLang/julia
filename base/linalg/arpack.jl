@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module ARPACK
 
-import ..LinAlg: BlasInt, blas_int, ARPACKException
+import ..LinAlg: BlasInt, ARPACKException
 
 ## aupd and eupd wrappers
 
@@ -30,9 +32,9 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
     ipntr  = zeros(BlasInt, (sym && !cmplx) ? 11 : 14)
     ido    = zeros(BlasInt, 1)
 
-    iparam[1] = blas_int(1)       # ishifts
-    iparam[3] = blas_int(maxiter) # maxiter
-    iparam[7] = blas_int(mode)    # mode
+    iparam[1] = BlasInt(1)       # ishifts
+    iparam[3] = BlasInt(maxiter) # maxiter
+    iparam[7] = BlasInt(mode)    # mode
 
     zernm1 = 0:(n-1)
 

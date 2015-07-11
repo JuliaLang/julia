@@ -2248,7 +2248,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     if (!iscons(args[1])) return NIL;
     value_t v;
     uint32_t first, last, argSP = args-Stack;
-    assert(argSP >= 0 && argSP < N_STACK);
+    assert(args >= Stack && argSP < N_STACK);
     if (nargs == 2) {
         if (SP+4 > N_STACK) grow_stack();
         PUSH(Stack[argSP]);

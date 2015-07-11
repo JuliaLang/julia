@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function laplace_iter_devec(u, dx2, dy2, Niter, N)
     uout = copy(u)
     for iter = 1:Niter

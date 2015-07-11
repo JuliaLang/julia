@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test string(Dates.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE

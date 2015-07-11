@@ -22,18 +22,20 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS = $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS = $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLTDIR = ../support
-LLT = $(BUILDDIR)/$(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
+LLT_release = $(BUILDDIR)/$(LLTDIR)/libsupport.a
+LLT_debug = $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
+LIBFILES_release = $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
+LIBFILES_debug = $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LIBS =
+ifneq ($(OS),WINNT)
+LIBS += -lpthread
+endif
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden
-endif
-LIBFILES = $(LLT)
-LIBS = $(LIBFILES)
-ifneq ($(OS),WINNT)
-LIBS += -lpthread
 endif
 
 DEBUGFLAGS += $(FLAGS)
@@ -49,7 +51,7 @@ $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
@@ -58,8 +60,10 @@ $(BUILDDIR)/flisp.dbg.obj:  flisp.c cvalues.c types.c flisp.h print.c read.c equ
 $(BUILDDIR)/flmain.o:  flmain.c flisp.h
 $(BUILDDIR)/flmain.dbg.obj: flmain.c flisp.h
 
-$(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
+$(LLT_release): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	$(MAKE) -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
+$(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c
+	$(MAKE) debug -C $(LLTDIR) BUILDDIR='$(abspath $(BUILDDIR)/$(LLTDIR))'
 
 $(BUILDDIR)/$(LIBTARGET)-debug.a: $(DOBJS) | $(BUILDDIR)
 	rm -rf $@
@@ -76,11 +80,11 @@ else
 CCLD = $(LD)
 endif
 
-$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBS) $(OSLIBS))
+$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
-$(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBS) $(OSLIBS))
+$(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 ifneq ($(BUILDDIR),.)
 $(BUILDDIR)/flisp.boot: flisp.boot

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Sort
 
 using Base.Order
@@ -50,7 +52,7 @@ function issorted(itr, order::Ordering)
     return true
 end
 issorted(itr;
-    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+    lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
@@ -113,12 +115,12 @@ function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Orderi
     end
 end
 
-select!(v::AbstractVector, k::Union(Int,OrdinalRange), o::Ordering) = select!(v,k,1,length(v),o)
-select!(v::AbstractVector, k::Union(Int,OrdinalRange);
-    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k::Union{Int,OrdinalRange};
+    lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union(Int,OrdinalRange); kws...) = select!(copy(v), k; kws...)
+select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -233,7 +235,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
         $s(v::AbstractVector, x;
-           lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+           lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
     end
 end
@@ -358,8 +360,8 @@ sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v,1,length(v),
 
 function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
-               lt::Function=isless,
-               by::Function=identity,
+               lt=isless,
+               by=identity,
                rev::Bool=false,
                order::Ordering=Forward)
     sort!(v, alg, ord(lt,by,rev,order))
@@ -371,8 +373,8 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
-                  lt::Function=isless,
-                  by::Function=identity,
+                  lt=isless,
+                  by=identity,
                   rev::Bool=false,
                   order::Ordering=Forward)
     sort!(collect(1:length(v)), alg, Perm(ord(lt,by,rev,order),v))
@@ -380,8 +382,8 @@ end
 
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
                                alg::Algorithm=DEFAULT_UNSTABLE,
-                               lt::Function=isless,
-                               by::Function=identity,
+                               lt=isless,
+                               by=identity,
                                rev::Bool=false,
                                order::Ordering=Forward,
                                initialized::Bool=false)
@@ -426,7 +428,7 @@ import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
-typealias Floats Union(Float32,Float64)
+typealias Floats Union{Float32,Float64}
 
 immutable Left <: Ordering end
 immutable Right <: Ordering end

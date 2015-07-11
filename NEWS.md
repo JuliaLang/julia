@@ -5,13 +5,13 @@ New language features
 ---------------------
 
   * Function call overloading: for arbitrary objects `x` (not of type
-    `Function`), `x(...)` is transformed into `call(x, ...)`, and `Base.call`
+    `Function`), `x(...)` is transformed into `call(x, ...)`, and `call`
     can be overloaded as desired.  Constructors are now a special case of
     this mechanism, which allows e.g. constructors for abstract types.
     `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
     define a constructor ([#8712], [#2403]).
 
-  * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
+  * Unicode version 8 is now supported for identifiers etcetera ([#7917], [#12031]).
 
   * Type parameters now permit any arbitrary `isbits` type, not just
     `Int` and `Bool` ([#6081]).
@@ -23,11 +23,13 @@ New language features
     it operates at two different stages of evaluation. At compile time, the generated
     function is called with its arguments bound to the types for which it should
     specialize. The quoted expression it returns forms the body of the specialized
-    method which is then called at run time. ([#7311]).
+    method which is then called at run time ([#7311]).
 
-  * (Also with syntax todo) Documentation system for functions, methods, types
-    and macros in packages and user code ([#8791]). Type `?@doc` at the repl
-    to see the current syntax and more information.
+  * [Documentation system](http://docs.julialang.org/en/latest/manual/documentation/)
+    for functions, methods, types and macros in packages and user code ([#8791]).
+
+  * The syntax `function foo end` can be used to introduce a generic function without
+    yet adding any methods ([#8283]).
 
 Language changes
 ----------------
@@ -72,6 +74,9 @@ Language changes
   * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
     ([#3737], [#2488], [#8599]).
 
+  * Unsigned `BigInt` literal syntax has been removed ([#11105]).
+    Unsigned literals larger than `UInt128` now throw a syntax error.
+
   * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
      in favor of using an explicit `throw` ([#9690]).
 
@@ -79,11 +84,11 @@ Language changes
 
   * `String` is renamed to `AbstractString` ([#8872]).
 
-  * `None` is deprecated; use `Union()` instead ([#8423]).
+  * `None` is deprecated; use `Union{}` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
 
-  * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075])
+  * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075]).
 
   * `Dict` literal syntax `[a=>b,c=>d]` is replaced by `Dict(a=>b,c=>d)`,
     `{a=>b}` is replaced by `Dict{Any,Any}(a=>b)`, and
@@ -107,6 +112,30 @@ Language changes
   * A custom triple-quoted string like `x"""..."""` no longer invokes an `x_mstr`
     macro. Instead, the string is first unindented and then `x_str` is invoked,
     as if the string had been single-quoted ([#10228]).
+
+  * Colons (`:`) within indexing expressions are no longer lowered to the range
+    `1:end`. Instead, the `:` identifier is passed directly. Custom array types
+    that implement `getindex` or `setindex!` methods must also extend those
+    methods to support arguments of type `Colon` ([#10331]).
+
+  * Unions of types should now be written with curly braces instead of parentheses, i.e.
+    `Union{Type1, Type2}` instead of `Union(Type1, Type2)` ([#11432]).
+
+  * The keyword `local` is no longer allowed in global scope. Use `let` instead of
+    `begin` to create a new scope from the top level ([#7234], [#10472]).
+
+  * Triple-quoted strings no longer treat tabs as 8 spaces. Instead, the
+    longest common prefix of spaces and tabs is removed.
+
+  * `global x` in a nested scope is now a syntax error if `x` is local
+    to the enclosing scope ([#7264]/[#11985]).
+
+Command line option changes
+---------------------------
+
+  * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
+
+  * New option --handle-signals={yes|no} to disable Julia's signal handlers.
 
 Compiler improvements
 ---------------------
@@ -148,15 +177,21 @@ Library improvements
 
     * `Givens` type doesn't have a size anymore and is no longer a subtype of `AbstractMatrix` ([#8660]).
 
-    * Large speedup in sparse ``\`` and splitting of Cholesky and LDLᵀ factorizations into ``cholfact`` and ``ldltfact`` ([#10117]).
+    * Large speedup in sparse `\` and splitting of Cholesky and LDLᵀ factorizations into `cholfact` and `ldltfact` ([#10117]).
 
-    * Add sparse least squares to ``\`` by adding ``qrfact`` for sparse matrices based on the SPQR library. ([#10180])
+    * Add sparse least squares to `\` by adding `qrfact` for sparse matrices based on the SPQR library. ([#10180])
 
     * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
     * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
+    * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
+
   * Strings
+
+    * NUL-terminated strings should now be passed to C via the new `Cstring` type, not `Ptr{UInt8}` or `Ptr{Cchar}`,
+      in order to check whether the string is free of NUL characters (which would cause silent truncation in C).
+      The analogous type `Cwstring` should be used for NUL-terminated `wchar_t*` strings ([#10994]).
 
     * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
 
@@ -171,11 +206,24 @@ Library improvements
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
-  * Data-structure processing
+    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints. ([#11171])
+
+  * Array and AbstractArray improvements
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end`.  ([#8432])
 
     * New implementation of SubArrays with substantial performance and functionality improvements ([#8501]).
+
+    * AbstractArray subtypes only need to implement `size` and `getindex`
+      for scalar indices to support indexing; all other indexing behaviors
+      (including logical idexing, ranges of indices, vectors, colons, etc.) are
+      implemented in default fallbacks. Similarly, they only need to implement
+      scalar `setindex!` to support all forms of indexed assingment ([#10525]).
+
+    * AbstractArrays that do not extend `similar` now return an `Array` by
+      default ([#10525]).
+
+  * Data-structure processing
 
     * New `sortperm!` function for pre-allocated index arrays ([#8792]).
 
@@ -228,6 +276,10 @@ Library improvements
 
     * Rational arithmetic throws errors on overflow ([#8672]).
 
+    * Optional `log` and `log1p` functions implemented in pure Julia (experimental) ([#10008]).
+
+    * The `MathConst` type has been renamed `Irrational` ([#11922]).
+
   * Random numbers
 
     * Streamlined random number generation APIs [#8246].
@@ -243,11 +295,19 @@ Library improvements
 
     * The `randexp` and `randexp!` functions are exported ([#9144])
 
+  * File
+
+    * Added function `readlink` which returns the value of a symbolic link "path" ([#10714]).
+
+    * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
+
+    * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
+
   * Other improvements
 
     * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
-    * The `gc_enable` and `gc_disable` functions now return the previous GC state.
+    * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 
     * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
 
@@ -277,8 +337,27 @@ Library improvements
     * New function `relpath` returns a relative filepath to path either from the current
       directory or from an optional start directory ([#10893]).
 
+    * `mktemp` and `mktempdir` now take an optional argument to set which
+      directory the temporary file or directory is created in.
+
 Deprecated or removed
 ---------------------
+
+  * several syntax whitespace insensitivities have been deprecated ([#11891]).
+    ```julia
+     # function call
+     f (x)
+
+     # getindex
+     x [17]
+     rand(2) [1]
+
+     # function definition
+     f (x) = x^2
+     function foo (x)
+	x^2
+     end
+    ```
 
   * indexing with Reals that are not subtypes of Integers (Rationals, FloatingPoint, etc.) has been deprecated ([#10458]).
 
@@ -335,13 +414,41 @@ Deprecated or removed
   * Low-level functions from the C library and dynamic linker have been moved to
     modules `Libc` and `Libdl`, respectively ([#10328]).
 
-  * The functions `parseint`, `parsefloat`, `float32_isvalid`, and `float64_isvalid`
-    have been replaced by `parse` and `tryparse` with a type argument
-    ([#3631], [#5704], [#9487], [#10543]).
+  * The functions `parseint`, `parsefloat`, `float32_isvalid`,
+  `float64_isvalid`, and the string-argument `BigInt` and `BigFloat` have
+  been replaced by `parse` and `tryparse` with a type argument. The string
+  macro `big"xx"` can be used to construct `BigInt` and `BigFloat` literals.
+  ([#3631], [#5704], [#9487], [#10543], [#10955]).
 
   * the `--int-literals` compiler option is no longer accepted ([#9597]).
 
   * Instead of `linrange`, use `linspace` ([#9666]).
+
+  * The functions `is_valid_char`, `is_valid_ascii`, `is_valid_utf8`, `is_valid_utf16`, and
+    `is_valid_utf32` have been replaced by generic `isvalid` methods.
+    The single argument form `isvalid(value)` can now be used for values of type `Char`, `ASCIIString`,
+    `UTF8String`, `UTF16String` and `UTF32String`.
+    The two argument form `isvalid(type, value)` can be used with the above types, with values
+    of type `Vector{UInt8}`, `Vector{UInt16}`, `Vector{UInt32}`, and `Vector{Char}` ([#11241]).
+
+  * Instead of `utf32(64,123,...)` use `utf32(UInt32[64,123,...])` ([#11379]).
+
+  * `start_timer` and `stop_timer` are replaced by `Timer` and `close`.
+
+  * The following internal julia C functions have been renamed, in order to prevent
+    potential naming conflicts with C libraries: ([#11741])
+
+    * `gc_wb*` -> `jl_gc_wb*`
+
+    * `gc_queue_root` -> `jl_gc_queue_root`
+
+    * `allocobj` -> `jl_gc_allocobj`
+
+    * `alloc_[0-3]w` -> `jl_gc_alloc_*w`
+
+    * `diff_gc_total_bytes` -> `jl_gc_diff_total_bytes`
+
+    * `sync_gc_total_bytes` -> `jl_gc_sync_total_bytes`
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -1271,8 +1378,10 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7234]: https://github.com/JuliaLang/julia/issues/7234
 [#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
+[#7264]: https://github.com/JuliaLang/julia/issues/7264
 [#7311]: https://github.com/JuliaLang/julia/issues/7311
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
@@ -1291,6 +1400,7 @@ Too numerous to mention.
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
+[#8283]: https://github.com/JuliaLang/julia/issues/8283
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
@@ -1355,6 +1465,7 @@ Too numerous to mention.
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
 [#9862]: https://github.com/JuliaLang/julia/issues/9862
 [#9957]: https://github.com/JuliaLang/julia/issues/9957
+[#10008]: https://github.com/JuliaLang/julia/issues/10008
 [#10024]: https://github.com/JuliaLang/julia/issues/10024
 [#10031]: https://github.com/JuliaLang/julia/issues/10031
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
@@ -1364,19 +1475,39 @@ Too numerous to mention.
 [#10180]: https://github.com/JuliaLang/julia/issues/10180
 [#10228]: https://github.com/JuliaLang/julia/issues/10228
 [#10328]: https://github.com/JuliaLang/julia/issues/10328
+[#10331]: https://github.com/JuliaLang/julia/issues/10331
 [#10332]: https://github.com/JuliaLang/julia/issues/10332
 [#10333]: https://github.com/JuliaLang/julia/issues/10333
 [#10380]: https://github.com/JuliaLang/julia/issues/10380
 [#10400]: https://github.com/JuliaLang/julia/issues/10400
 [#10446]: https://github.com/JuliaLang/julia/issues/10446
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
+[#10472]: https://github.com/JuliaLang/julia/issues/10472
+[#10525]: https://github.com/JuliaLang/julia/issues/10525
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10679]: https://github.com/JuliaLang/julia/issues/10679
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
+[#10714]: https://github.com/JuliaLang/julia/issues/10714
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
 [#10870]: https://github.com/JuliaLang/julia/issues/10870
 [#10885]: https://github.com/JuliaLang/julia/issues/10885
-[#10893]: https://github.com/JuliaLang/julia/pull/10893
+[#10888]: https://github.com/JuliaLang/julia/issues/10888
+[#10893]: https://github.com/JuliaLang/julia/issues/10893
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
+[#10955]: https://github.com/JuliaLang/julia/issues/10955
+[#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11067]: https://github.com/JuliaLang/julia/issues/11067
+[#11105]: https://github.com/JuliaLang/julia/issues/11105
+[#11145]: https://github.com/JuliaLang/julia/issues/11145
+[#11171]: https://github.com/JuliaLang/julia/issues/11171
+[#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11347]: https://github.com/JuliaLang/julia/issues/11347
+[#11379]: https://github.com/JuliaLang/julia/issues/11379
+[#11432]: https://github.com/JuliaLang/julia/issues/11432
+[#11741]: https://github.com/JuliaLang/julia/issues/11741
+[#11891]: https://github.com/JuliaLang/julia/issues/11891
+[#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11985]: https://github.com/JuliaLang/julia/issues/11985
+[#12031]: https://github.com/JuliaLang/julia/issues/12031

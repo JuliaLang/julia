@@ -1,6 +1,6 @@
 .. _man-dates:
 
-.. currentmodule:: Base.Dates
+.. currentmodule:: Dates
 
 *************************************
  Date and DateTime

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Linear algebra functions for dense matrices in column major format
 
 ## BLAS cutoff threshold constants
@@ -36,36 +38,41 @@ stride1(x::StridedVector) = stride(x, 1)::Int
 
 import Base: mapreduce_seq_impl, AbsFun, Abs2Fun, AddFun
 
-mapreduce_seq_impl{T<:BlasReal}(::AbsFun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
+mapreduce_seq_impl{T<:BlasReal}(::AbsFun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int) =
     BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
 
-function mapreduce_seq_impl{T<:BlasReal}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+function mapreduce_seq_impl{T<:BlasReal}(::Abs2Fun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
     n = ilast-ifirst+1
     px = pointer(a, ifirst)
     incx = stride1(a)
     BLAS.dot(n, px, incx, px, incx)
 end
 
-function mapreduce_seq_impl{T<:BlasComplex}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+function mapreduce_seq_impl{T<:BlasComplex}(::Abs2Fun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
     n = ilast-ifirst+1
     px = pointer(a, ifirst)
     incx = stride1(a)
     real(BLAS.dotc(n, px, incx, px, incx))
 end
 
-function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
-    (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
+function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}})
+    if minimum(rx) < 1 || maximum(rx) > length(x)
+        throw(BoundsError())
+    end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) =
+vecnorm1{T<:BlasReal}(x::Union{Array{T},StridedVector{T}}) =
     length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
 
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) =
+vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j+1-k), m)
@@ -81,6 +88,9 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j-k), m)
@@ -151,8 +161,8 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R
 end
 
-kron(a::Number, b::Union(Number, Vector, Matrix)) = a * b
-kron(a::Union(Vector, Matrix), b::Number) = a * b
+kron(a::Number, b::Union{Number, Vector, Matrix}) = a * b
+kron(a::Union{Vector, Matrix}, b::Number) = a * b
 kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
 kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
 kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
@@ -160,8 +170,9 @@ kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    isinteger(p) && return A^Integer(real(p))
-
+    if isinteger(p)
+        return A^Integer(real(p))
+    end
     chksquare(A)
     v, X = eig(A)
     any(v.<0) && (v = complex(v))
@@ -268,7 +279,9 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
 end
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
-    issym(A) && return sqrtm(Symmetric(A))
+    if issym(A)
+        return sqrtm(Symmetric(A))
+    end
     n = chksquare(A)
     SchurF = schurfact(complex(A))
     R = full(sqrtm(UpperTriangular(SchurF[:T])))
@@ -276,7 +289,9 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
-    ishermitian(A) && return sqrtm(Hermitian(A))
+    if ishermitian(A)
+        return sqrtm(Hermitian(A))
+    end
     n = chksquare(A)
     SchurF = schurfact(A)
     R = full(sqrtm(UpperTriangular(SchurF[:T])))
@@ -285,19 +300,17 @@ end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
-function inv!{S}(A::StridedMatrix{S})
-    if istriu(A)
-        Ai = inv!(UpperTriangular(A))
-    elseif istril(A)
-        Ai = inv!(LowerTriangular(A))
+function inv{T}(A::StridedMatrix{T})
+    S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
+    AA = convert(AbstractArray{S}, A)
+    if istriu(AA)
+        Ai = inv(UpperTriangular(AA))
+    elseif istril(AA)
+        Ai = inv(LowerTriangular(AA))
     else
-        Ai = inv(lufact!(A))
+        Ai = inv(lufact(AA))
     end
-    return convert(typeof(A), Ai)
-end
-function inv{S}(A::StridedMatrix{S})
-    T = typeof(one(S)/one(S))
-    inv!(copy_oftype(A, T))
+    return convert(typeof(AA), Ai)
 end
 
 function factorize{T}(A::Matrix{T})
@@ -376,18 +389,16 @@ end
 
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
 
-for (T1,PIVOT) in ((BlasFloat,Val{true}),(Any,Val{false}))
-    @eval function (\){T<:$T1}(A::StridedMatrix{T}, B::StridedVecOrMat)
-        m, n = size(A)
-        if m == n
-            if istril(A)
-                return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
-            end
-            istriu(A) && return \(UpperTriangular(A),B)
-            return \(lufact(A),B)
+function (\)(A::StridedMatrix, B::StridedVecOrMat)
+    m, n = size(A)
+    if m == n
+        if istril(A)
+            return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
         end
-        return qrfact(A,$PIVOT)\B
+        istriu(A) && return \(UpperTriangular(A),B)
+        return \(lufact(A),B)
     end
+    return qrfact(A,Val{true})\B
 end
 
 ## Moore-Penrose pseudoinverse

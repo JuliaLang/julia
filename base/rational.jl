@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable Rational{T<:Integer} <: Real
     num::T
     den::T
@@ -77,6 +79,9 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
 convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
+
+big{T<:Integer}(z::Complex{Rational{T}}) = Complex{Rational{BigInt}}(z)
+big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) = convert(AbstractArray{Complex{Rational{BigInt}},N}, x)
 
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
@@ -179,7 +184,7 @@ end
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
 ==(x::Rational, y::Rational) = (x.den == y.den) & (x.num == y.num)
-< (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :
+<( x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :
                                widemul(x.num,y.den) < widemul(x.den,y.num)
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num :
                                widemul(x.num,y.den) <= widemul(x.den,y.num)
@@ -187,8 +192,8 @@ fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
 ==(x::Rational, y::Integer ) = (x.den == 1) & (x.num == y)
 ==(x::Integer , y::Rational) = y == x
-< (x::Rational, y::Integer ) = x.num < widemul(x.den,y)
-< (x::Integer , y::Rational) = widemul(x,y.den) < y.num
+<( x::Rational, y::Integer ) = x.num < widemul(x.den,y)
+<( x::Integer , y::Rational) = widemul(x,y.den) < y.num
 <=(x::Rational, y::Integer ) = x.num <= widemul(x.den,y)
 <=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
 
@@ -272,7 +277,7 @@ end
 
 trunc{T}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
 floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
-ceil {T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
+ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
 function round{T}(::Type{T}, x::Rational, ::RoundingMode{:Nearest})
     q,r = divrem(x.num,x.den)
@@ -293,7 +298,7 @@ end
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
 floor{T}(x::Rational{T}) = Rational(floor(T,x))
-ceil {T}(x::Rational{T}) = Rational(ceil(T,x))
+ceil{ T}(x::Rational{T}) = Rational(ceil(T,x))
 round{T}(x::Rational{T}) = Rational(round(T,x))
 
 function ^(x::Rational, n::Integer)

@@ -1,4 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
+using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -46,57 +49,106 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         bc1 = factorize(asym)
         @test_approx_eq inv(bc1) * asym eye(n)
         @test_approx_eq_eps asym * (bc1\b) b 1000ε
-
+        @test_approx_eq inv(a.' + a) * (a.' + a) eye(n)
+        @test size(bc1) == size(bc1.LD)
+        @test size(bc1,1) == size(bc1.LD,1)
+        @test size(bc1,2) == size(bc1.LD,2)
+        if eltya <: BlasReal
+            @test_throws ArgumentError bkfact(a)
+        end
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
         @test_approx_eq inv(bc2) * apd eye(n)
         @test_approx_eq_eps apd * (bc2\b) b 150000ε
+        @test ishermitian(bc2) == !issym(bc2)
+
     end
 
 debug && println("QR decomposition (without pivoting)")
-    qra   = qrfact(a, Val{false})
-    q,r   = qra[:Q], qra[:R]
-    @test_approx_eq q'*full(q, thin=false) eye(n)
-    @test_approx_eq q*full(q, thin=false)' eye(n)
-    @test_approx_eq q*r a
-    @test_approx_eq_eps a*(qra\b) b 3000ε
-    @test_approx_eq full(qra) a
+    for i = 1:2
+        let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
+            qra   = @inferred qrfact(a)
+            @inferred qr(a)
+            q, r  = qra[:Q], qra[:R]
+            @test_throws KeyError qra[:Z]
+            @test_approx_eq q'*full(q, thin = false) eye(n)
+            @test_approx_eq q*full(q, thin = false)' eye(n)
+            @test_approx_eq q*r a
+            @test_approx_eq_eps a*(qra\b) b 3000ε
+            @test_approx_eq full(qra) a
 
 debug && println("Thin QR decomposition (without pivoting)")
-    qra   = qrfact(a[:,1:n1], Val{false})
-    q,r   = qra[:Q], qra[:R]
-    @test_approx_eq q'*full(q, thin=false) eye(n)
-    @test_approx_eq q'*full(q) eye(n, n1)
-    @test_approx_eq q*r a[:,1:n1]
-    @test_approx_eq_eps q*b[1:n1] full(q)*b[1:n1] 100ε
-    @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
-    @test_throws DimensionMismatch q*b[1:n1 + 1]
+            qra   = @inferred qrfact(a[:,1:n1], Val{false})
+            @inferred qr(a[:,1:n1], Val{false})
+            q,r   = qra[:Q], qra[:R]
+            @test_throws KeyError qra[:Z]
+            @test_approx_eq q'*full(q, thin=false) eye(n)
+            @test_approx_eq q'*full(q) eye(n, n1)
+            @test_approx_eq q*r a[:,1:n1]
+            @test_approx_eq_eps q*b[1:n1] full(q)*b[1:n1] 100ε
+            @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
+            @test_throws DimensionMismatch q*b[1:n1 + 1]
 
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
-    qrpa  = factorize(a[1:n1,:])
-    q,r = qrpa[:Q], qrpa[:R]
-    if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
-    @test_approx_eq q'*full(q, thin=false) eye(n1)
-    @test_approx_eq q*full(q, thin=false)' eye(n1)
-    @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:n1,:]
-    @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
-    @test_approx_eq full(qrpa) a[1:5,:]
+            if eltya <: BlasFloat
+                @inferred qrfact(a, Val{true})
+                @inferred qr(a, Val{true})
+            end
+            qrpa  = factorize(a[1:n1,:])
+            q,r = qrpa[:Q], qrpa[:R]
+            @test_throws KeyError qrpa[:Z]
+            if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
+            @test_approx_eq q'*full(q, thin=false) eye(n1)
+            @test_approx_eq q*full(q, thin=false)' eye(n1)
+            @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
+            @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:n1,:]
+            @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
+            @test_approx_eq full(qrpa) a[1:5,:]
 
 debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
-    qrpa  = factorize(a[:,1:n1])
-    q,r = qrpa[:Q], qrpa[:R]
-    if isa(qrpa, QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
-    @test_approx_eq q'*full(q, thin=false) eye(n)
-    @test_approx_eq q*full(q, thin=false)' eye(n)
-    @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:n1]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:n1]
-    @test_approx_eq full(qrpa) a[:,1:5]
+            qrpa  = factorize(a[:,1:n1])
+            q,r = qrpa[:Q], qrpa[:R]
+            @test_throws KeyError qrpa[:Z]
+            if isa(qrpa, QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
+            @test_approx_eq q'*full(q, thin=false) eye(n)
+            @test_approx_eq q*full(q, thin=false)' eye(n)
+            @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:n1]
+            @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:n1]
+            @test_approx_eq full(qrpa) a[:,1:5]
+        end
+    end
+
+debug && println("Matmul with QR factorizations")
+    if eltya != Int
+        qrpa  = factorize(a[:,1:n1])
+        q,r = qrpa[:Q], qrpa[:R]
+        @test_approx_eq A_mul_B!(full(q,thin=false)',q) eye(n)
+        @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
+        @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
+        @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+        @test_throws BoundsError size(q,-1)
+
+        qra   = qrfact(a[:,1:n1], Val{false})
+        q,r   = qra[:Q], qra[:R]
+        @test_approx_eq A_mul_B!(full(q,thin=false)',q) eye(n)
+        @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
+        @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
+        @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+        @test_throws BoundsError size(q,-1)
+
+        @test_throws DimensionMismatch q * eye(Int8,n+4)
+    end
 
 debug && println("non-symmetric eigen decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         d,v   = eig(a)
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
+        f = eigfact(a)
+        @test_approx_eq det(a) det(f)
+        @test_approx_eq inv(a) inv(f)
+
+        num_fact = eigfact(one(eltya))
+        @test num_fact.values[1] == one(eltya)
     end
 
 debug && println("symmetric generalized eigenproblem")
@@ -108,6 +160,8 @@ debug && println("symmetric generalized eigenproblem")
         @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
+        @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
+        @test_throws KeyError f[:Z]
     end
 
 debug && println("Non-symmetric generalized eigenproblem")
@@ -119,6 +173,8 @@ debug && println("Non-symmetric generalized eigenproblem")
         @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
+        @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
+        @test_throws KeyError f[:Z]
     end
 
 debug && println("Schur")
@@ -129,6 +185,7 @@ debug && println("Schur")
         @test_approx_eq sort(imag(f[:values])) sort(imag(d))
         @test istriu(f[:Schur]) || iseltype(a,Real)
         @test_approx_eq full(f) a
+        @test_throws KeyError f[:A]
     end
 
 debug && println("Reorder Schur")
@@ -141,6 +198,7 @@ debug && println("Reorder Schur")
         O = ordschur(S, select)
         sum(select) != 0 && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
         @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
+        @test_throws KeyError f[:A]
     end
 
 debug && println("Generalized Schur")
@@ -152,6 +210,7 @@ debug && println("Generalized Schur")
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a2_sf
         @test istriu(f[:S]) || iseltype(a,Real)
         @test istriu(f[:T]) || iseltype(a,Real)
+        @test_throws KeyError f[:A]
     end
 
 debug && println("Reorder Generalized Schur")
@@ -175,6 +234,10 @@ debug && println("singular value decomposition")
         usv = svdfact(a)
         @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
         @test_approx_eq full(usv) a
+        @test_approx_eq usv[:Vt]' usv[:V]
+        @test_throws KeyError usv[:Z]
+        b = rand(eltya,n)
+        @test_approx_eq usv\b a\b
     end
 
 debug && println("Generalized svd")
@@ -183,6 +246,12 @@ debug && println("Generalized svd")
         gsvd = svdfact(a,a_svd)
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
         @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a_svd
+        @test_approx_eq usv[:Vt]' usv[:V]
+        @test_throws KeyError usv[:Z]
+        α = eltya == Int ? -1 : rand(eltya)
+        β = svdfact(α)
+        @test β[:S] == [abs(α)]
+        @test svdvals(α) == [abs(α)]
     end
 
 debug && println("Solve square general system of equations")

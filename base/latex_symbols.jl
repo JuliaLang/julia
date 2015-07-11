@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Mapping from LaTeX math symbol to the corresponding Unicode codepoint.
 # This is used for tab substitution in the REPL.
 

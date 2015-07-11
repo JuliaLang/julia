@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## 1-dimensional ranges ##
 
 typealias Dims Tuple{Vararg{Int}}
@@ -64,13 +66,16 @@ StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
     stop::T
-
-    UnitRange(start, stop) =
-        new(start, ifelse(stop >= start, stop, convert(T,start-one(stop-start))))
-
-    UnitRange(start::Bool, stop::Bool) = new(start, stop)
+    UnitRange(start, stop) = new(start, unitrange_last(start,stop))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+
+unitrange_last(::Bool, stop::Bool) = stop
+unitrange_last{T<:Integer}(start::T, stop::T) =
+    ifelse(stop >= start, stop, convert(T,start-one(stop-start)))
+unitrange_last{T}(start::T, stop::T) =
+    ifelse(stop >= start, convert(T,start+floor(stop-start)),
+                          convert(T,start-one(stop-start)))
 
 colon(a::Real, b::Real) = colon(promote(a,b)...)
 
@@ -233,9 +238,9 @@ function show(io::IO, r::LinSpace)
     print(io, "linspace(")
     show(io, first(r))
     print(io, ',')
-    show(last(r))
+    show(io, last(r))
     print(io, ',')
-    show(length(r))
+    show(io, length(r))
     print(io, ')')
 end
 
@@ -267,7 +272,7 @@ length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
 length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
-function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
+function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
@@ -278,13 +283,13 @@ function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     end
 end
 
-length{T<:Union(Int,UInt,Int64,UInt64)}(r::UnitRange{T}) =
+length{T<:Union{Int,UInt,Int64,UInt64}}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
-                Union(Int8,UInt8,Int16,UInt16,Int32,UInt32) :
-                Union(Int8,UInt8,Int16,UInt16))
+                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
+                Union{Int8,UInt8,Int16,UInt16})
     global length
 
     function length{T <: smallint}(r::StepRange{T})
@@ -342,50 +347,49 @@ done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 ## indexing
 
-getindex(r::Range, i::Real) = getindex(r, to_index(i))
+getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
 
-function getindex{T}(r::Range{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, first(r) + (i-1)*step(r))
-end
-function getindex{T}(r::FloatRange{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, (r.start + (i-1)*r.step)/r.divisor)
-end
-function getindex{T}(r::LinSpace{T}, i::Integer)
-    1 <= i <= length(r) || throw(BoundsError())
-    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
-end
+getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
 
-function check_indexingrange(s, r)
-    sl = length(s)
-    rl = length(r)
-    sl == 0 || 1 <= first(s) <= rl &&
-               1 <=  last(s) <= rl || throw(BoundsError())
-    sl
-end
+getindex{T}(r::LinSpace{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
+unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 
-function getindex(r::UnitRange, s::UnitRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::Range, ::Colon) = copy(r)
+unsafe_getindex(r::Range, ::Colon) = copy(r)
+
+getindex(r::UnitRange, s::UnitRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::UnitRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, sl)
+    range(st, length(s))
 end
 
-function getindex(r::UnitRange, s::StepRange{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::UnitRange, s::StepRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::UnitRange, s::StepRange{Int})
     st = oftype(r.start, r.start + s.start-1)
-    range(st, step(s), sl)
+    range(st, step(s), length(s))
 end
 
-function getindex(r::StepRange, s::Range{Int})
-    sl = check_indexingrange(s, r)
+getindex(r::StepRange, s::Range{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::StepRange, s::Range{Int})
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    range(st, step(r)*step(s), sl)
+    range(st, step(r)*step(s), length(s))
 end
 
-function getindex(r::FloatRange, s::OrdinalRange)
-    sl = check_indexingrange(s, r)
-    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, sl, r.divisor)
+getindex(r::FloatRange, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex(r::FloatRange, s::OrdinalRange)
+    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+end
+
+getindex(r::LinSpace, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    sl::T = length(s)
+    ifirst = first(s)
+    ilast = last(s)
+    vfirst::T = ((r.len - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
+    vlast::T = ((r.len - ilast) * r.start + (ilast - 1) * r.stop) / r.divisor
+    return linspace(vfirst, vlast, sl)
 end
 
 function show(io::IO, r::Range)
@@ -536,37 +540,77 @@ end
 
 -(r::OrdinalRange) = range(-r.start, -step(r), length(r))
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
+-(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
 .+(x::Real, r::UnitRange)  = range(x + r.start, length(r))
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
+.+(x::Real, r::LinSpace)   = LinSpace(x + r.start, x + r.stop, r.len, r.divisor)
 .+(r::Range, x::Real)      = x + r
 #.+(r::FloatRange, x::Real) = x + r
 
 .-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
 .-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+.-(x::Real, r::LinSpace)   = LinSpace(x - r.start, x - r.stop, r.len, r.divisor)
 .-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
+.-(r::LinSpace, x::Real)   = LinSpace(r.start - x, r.stop - x, r.len, r.divisor)
 
 .*(x::Real, r::OrdinalRange) = range(x*r.start, x*step(r), length(r))
 .*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+.*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
 .*(r::Range, x::Real)        = x .* r
 .*(r::FloatRange, x::Real)   = x .* r
+.*(r::LinSpace, x::Real)     = x .* r
 
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
+./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
+
+promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
+    UnitRange{promote_type(T1,T2)}
+convert{T}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
+convert{T}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
+
+promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
+    StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) = r
+
+promote_rule{T1a,T1b,T2}(::Type{StepRange{T1a,T1b}},::Type{UnitRange{T2}}) =
+    StepRange{promote_type(T1a,T2),promote_type(T1b,T2)}
+convert{T1,T2}(::Type{StepRange{T1,T2}}, r::Range) =
+    StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
+convert{T}(::Type{StepRange}, r::UnitRange{T}) =
+    StepRange{T,T}(first(r), step(r), last(r))
 
 promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
     FloatRange{promote_type(T1,T2)}
+convert{T}(::Type{FloatRange{T}}, r::FloatRange{T}) = r
 convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
     FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
     FloatRange{promote_type(F,eltype(OR))}
 convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
-    FloatRange{T}(start(r), step(r), length(r), one(T))
+    FloatRange{T}(first(r), step(r), length(r), one(T))
+convert{T}(::Type{FloatRange}, r::OrdinalRange{T}) =
+    FloatRange{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
+promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
+    LinSpace{promote_type(T1,T2)}
+convert{T}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
+convert{T}(::Type{LinSpace{T}}, r::LinSpace) =
+    LinSpace{T}(r.start, r.stop, r.len, r.divisor)
+
+promote_rule{F,OR<:OrdinalRange}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T}(::Type{LinSpace{T}}, r::OrdinalRange) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
+    convert(LinSpace{typeof(float(first(r)))}, r)
+
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
@@ -608,6 +652,7 @@ collect(r::Range) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
+reverse(r::LinSpace)     = LinSpace(r.stop, r.start, r.len, r.divisor)
 
 ## sorting ##
 

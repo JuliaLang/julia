@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
 using Base.Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular
+using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpperTriangular, UnitLowerTriangular, A_rdiv_B!, A_rdiv_Bc!
 
 debug && println("Triangular matrices")
 
@@ -96,13 +98,15 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test full(-A1) == -full(A1)
 
         # Binary operations
-        @test A1*0.5 == full(A1*0.5)
-        @test 0.5*A1 == full(0.5*A1)
-        @test A1/0.5 == full(A1/0.5)
-        @test 0.5\A1 == full(0.5\A1)
+        @test A1*0.5 == full(A1)*0.5
+        @test 0.5*A1 == 0.5*full(A1)
+        @test A1/0.5 == full(A1)/0.5
+        @test 0.5\A1 == 0.5\full(A1)
 
         # inversion
         @test_approx_eq inv(A1) inv(lufact(full(A1)))
+        inv(full(A1)) # issue #11298
+        @test isa(inv(A1), t1)
 
         # Determinant
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
@@ -160,7 +164,15 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test_approx_eq full(A1*A2') full(A1)*full(A2)'
                 @test_approx_eq full(A1'A2') full(A1)'full(A2)'
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
-
+                if elty2 != BigFloat
+                    @test_throws DimensionMismatch eye(n+1)/A2
+                    @test_throws DimensionMismatch eye(n+1)/A2'
+                    @test_throws DimensionMismatch eye(n+1)*A2
+                    @test_throws DimensionMismatch eye(n+1)*A2'
+                    @test_throws DimensionMismatch A2'*eye(n+1)
+                    @test_throws DimensionMismatch A2*eye(n+1)
+                    @test_throws DimensionMismatch A2*ones(n+1)
+                end
             end
         end
 
@@ -275,6 +287,26 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     end
 end
 
-# Issue 10742
+# Issue 10742 and similar
 @test istril(UpperTriangular(diagm([1,2,3,4])))
 @test istriu(LowerTriangular(diagm([1,2,3,4])))
+@test isdiag(UpperTriangular(diagm([1,2,3,4])))
+@test isdiag(LowerTriangular(diagm([1,2,3,4])))
+@test !isdiag(UpperTriangular(rand(4, 4)))
+@test !isdiag(LowerTriangular(rand(4, 4)))
+
+# Test throwing in fallbacks for non BlasFloat/BlasComplex in A_rdiv_Bx!
+let
+    n = 5
+    A = rand(Float16, n, n)
+    B = rand(Float16, n-1, n-1)
+    @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_B!(A, UnitUpperTriangular(B))
+
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, LowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UpperTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitLowerTriangular(B))
+    @test_throws DimensionMismatch A_rdiv_Bc!(A, UnitUpperTriangular(B))
+end

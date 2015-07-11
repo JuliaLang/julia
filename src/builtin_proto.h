@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef BUILTIN_PROTO_H
 #define BUILTIN_PROTO_H
 
@@ -29,7 +31,6 @@ JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_arraysize);
 JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_typevar);
-JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_applicable);
 JL_CALLABLE(jl_f_invoke);

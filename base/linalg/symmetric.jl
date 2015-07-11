@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Symmetric and Hermitian matrices
 immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
@@ -17,13 +19,14 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
 
-typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
-typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
+typealias HermOrSym{T,S} Union{Hermitian{T,S}, Symmetric{T,S}}
+typealias RealHermSymComplexHerm{T<:Real,S} Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 
 size(A::HermOrSym, args...) = size(A.data, args...)
-getindex(A::HermOrSym, i::Integer) = ((q, r) = divrem(i - 1, size(A, 1)); A[r + 1, q + 1])
 getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : getindex(A.data, j, i)
 getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : conj(getindex(A.data, j, i))
+unsafe_getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? unsafe_getindex(A.data, i, j) : unsafe_getindex(A.data, j, i)
+unsafe_getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? unsafe_getindex(A.data, i, j) : conj(unsafe_getindex(A.data, j, i))
 full(A::Symmetric) = copytri!(copy(A.data), A.uplo)
 full(A::Hermitian) = copytri!(copy(A.data), A.uplo, true)
 convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric{T,S}) = A
@@ -44,11 +47,13 @@ transpose(A::Symmetric) = A
 ctranspose(A::Hermitian) = A
 
 ## Matvec
-A_mul_B!{T<:BlasFloat,S<:AbstractMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-A_mul_B!{T<:BlasComplex,S<:AbstractMatrix}(y::StridedVector{T}, A::Hermitian{T,S}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
+A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
+A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(y::StridedVector{T}, A::Hermitian{T,S}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
 ##Matmat
-A_mul_B!{T<:BlasFloat,S<:AbstractMatrix}(C::StridedMatrix{T}, A::Symmetric{T,S}, B::StridedMatrix{T}) = BLAS.symm!(A.uplo, one(T), A.data, B, zero(T), C)
-A_mul_B!{T<:BlasComplex,S<:AbstractMatrix}(y::StridedMatrix{T}, A::Hermitian{T,S}, x::StridedMatrix{T}) = BLAS.hemm!(A.uplo, one(T), A.data, B, zero(T), C)
+A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::Symmetric{T,S}, B::StridedMatrix{T}) = BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,S}) = BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::Hermitian{T,S}, B::StridedMatrix{T}) = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,S}) = BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
@@ -97,7 +102,7 @@ end
 eigvals!{T<:BlasReal,S<:StridedMatrix}(A::HermOrSym{T,S}, B::HermOrSym{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!{T<:BlasComplex,S<:StridedMatrix}(A::Hermitian{T,S}, B::Hermitian{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
-function svdvals!{T<:Real,S}(A::Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
+function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
     vals = eigvals!(A)
     for i = 1:length(vals)
         vals[i] = abs(vals[i])

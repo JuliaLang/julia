@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Git
 #
 # some utility functions for working with git repos
@@ -55,6 +57,10 @@ iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
 attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
 branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
 head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
+
+function iscommit(sha1s::Vector; dir="")
+    indexin(sha1s,split(readchomp(`log --all --format=%H`, dir=dir),"\n")).!=0
+end
 
 immutable State
     head::ASCIIString

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Sys
 
 export  CPU_CORES,
@@ -140,7 +142,7 @@ function get_process_title()
     return bytestring(pointer(buf))
 end
 function set_process_title(title::AbstractString)
-    err = ccall(:uv_set_process_title, Cint, (Ptr{UInt8},), bytestring(title))
+    err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
     uv_error("set_process_title", err)
 end
 

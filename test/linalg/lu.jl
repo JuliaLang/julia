@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 debug = false
 
 n = 10
@@ -14,13 +16,23 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
+creal = randn(n)/2
+cimg  = randn(n)/2
+dureal = randn(n-1)/2
+duimg  = randn(n-1)/2
+dlreal = randn(n-1)/2
+dlimg  = randn(n-1)/2
+dreal = randn(n)/2
+dimg  = randn(n)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+    d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) : convert(Tridiagonal{eltya}, eltya <: Complex ? Tridiagonal(complex(dlreal, dlimg), complex(dreal, dimg), complex(dureal, duimg)) : Tridiagonal(dlreal, dreal, dureal))
     ε = εa = eps(abs(float(one(eltya))))
 
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -34,7 +46,26 @@ debug && println("(Automatic) Square LU decomposition")
         @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
         @test norm(a'*(lua'\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
         @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
+        @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
+        @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
+        if eltya <: Real && eltyb <: Real
+            @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
+            @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
+        end
         @test_approx_eq full(lua) a
+
+debug && println("Tridiagonal LU")
+        κd    = cond(full(d),1)
+        lud   = lufact(d)
+        @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+        if eltya <: Real
+            @test norm((lud.'\b) - full(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+        end
+        if eltya <: Complex
+            @test norm((lud'\b) - full(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+        end
+        f = zeros(eltyb, n+1)
+        @test_throws DimensionMismatch lud\f
 
 debug && println("Thin LU")
         lua   = @inferred lufact(a[:,1:n1])
@@ -57,7 +88,7 @@ l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
 @test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(Array{Float64}(a))
+@test_approx_eq @inferred(det(a)) det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
@@ -81,4 +112,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
+
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
+@test_throws DomainError logdet([1 1; 1 -1])

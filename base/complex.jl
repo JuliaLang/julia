@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable Complex{T<:Real} <: Number
     re::T
     im::T
@@ -74,14 +76,28 @@ function write(s::IO, z::Complex)
     write(s,imag(z))
 end
 
-
-## generic functions of complex numbers ##
+## equality and hashing of complex numbers ##
 
 ==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
 ==(z::Complex, x::Real) = isreal(z) && real(z) == x
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+
+if UInt === UInt64
+    const h_imag = 0x32a7a07f3e7cd1f9
+else
+    const h_imag = 0x3e7cd1f9
+end
+const hash_0_imag = hash(0, h_imag)
+
+function hash(z::Complex, h::UInt)
+    # TODO: with default argument specialization, this would be better:
+    # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
+    hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
+end
+
+## generic functions of complex numbers ##
 
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
@@ -133,10 +149,10 @@ function /{T<:Real}(a::Complex{T}, b::Complex{T})
     end
 end
 
-inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
+inv{T<:Union{Float16,Float32}}(z::Complex{T}) =
     oftype(z, conj(widen(z))/abs2(widen(z)))
 
-/{T<:Union(Float16,Float32)}(z::Complex{T}, w::Complex{T}) =
+/{T<:Union{Float16,Float32}}(z::Complex{T}, w::Complex{T}) =
     oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
@@ -708,3 +724,49 @@ end
 float{T<:FloatingPoint}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 @vectorize_1arg Complex float
+
+big{T<:FloatingPoint}(z::Complex{T}) = Complex{BigFloat}(z)
+big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
+
+## Array operations on complex numbers ##
+
+complex{T<:Complex}(A::AbstractArray{T}) = A
+
+function complex{T}(A::AbstractArray{T})
+    if !isleaftype(T)
+        error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
+    end
+    convert(AbstractArray{typeof(complex(zero(T)))}, A)
+end
+
+big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigInt},N}, A)
+big{T<:FloatingPoint,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, A)
+
+## promotion to complex ##
+
+promote_array_type{S<:Union{Complex, Real}, AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+
+function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+    if size(A) != size(B); throw(DimensionMismatch()); end
+    F = similar(A, typeof(complex(zero(S),zero(T))))
+    for i in eachindex(A)
+        @inbounds F[i] = complex(A[i], B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Real, B::Array{T})
+    F = similar(B, typeof(complex(A,zero(T))))
+    for i in eachindex(B)
+        @inbounds F[i] = complex(A, B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Array{T}, B::Real)
+    F = similar(A, typeof(complex(zero(T),B)))
+    for i in eachindex(A)
+        @inbounds F[i] = complex(A[i], B)
+    end
+    return F
+end

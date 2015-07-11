@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function simd_loop_example_from_manual(x, y, z)
     s = zero(eltype(z))
     n = min(length(x),length(y),length(z))

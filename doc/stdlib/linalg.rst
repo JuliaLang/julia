@@ -30,6 +30,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
 
+.. function:: vecdot(x, y)
+
+   For any iterable containers ``x`` and ``y`` (including arrays of
+   any dimension) of numbers (or any element type for which ``dot`` is
+   defined), compute the Euclidean dot product (the sum of
+   ``dot(x[i],y[i])``) as if they were vectors.
+
 .. function:: cross(x, y)
               ×(x,y)
 
@@ -80,6 +87,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
            ``\``            ✓                       ✓             ✓
            ``cond``         ✓                                     ✓
            ``det``          ✓                       ✓             ✓
+           ``logdet``       ✓                       ✓
+           ``logabsdet``    ✓                       ✓
            ``size``         ✓                       ✓
       ================== ====== ======================== =============
 
@@ -89,7 +98,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: chol(A, [LU]) -> F
 
-   Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``:L`` (Lower), ``A = L*L'``. If ``LU`` is ``:U`` (Upper), ``A = R'*R``.
+   Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``Val{:U}`` (Upper), ``F`` is of type ``UpperTriangular`` and ``A = F'*F``. If ``LU`` is ``Val{:L}`` (Lower), ``F`` is of type ``LowerTriangular`` and ``A = F*F'``. ``LU`` defaults to ``Val{:U}``.
 
 .. function:: cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
@@ -97,12 +106,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the Cholesky factorization of a sparse positive definite
+   matrix ``A``. A fill-reducing permutation is used.  ``F =
+   cholfact(A)`` is most frequently used to solve systems of equations
+   with ``F\b``, but also the methods ``diag``, ``det``, ``logdet``
+   are defined for ``F``.  You can also extract individual factors
+   from ``F``, using ``F[:L]``.  However, since pivoting is on by
+   default, the factorization is internally represented as ``A ==
+   P'*L*L'*P`` with a permutation matrix ``P``; using just ``L``
+   without accounting for ``P`` will give incorrect answers.  To
+   include the effects of permutation, it's typically preferable to
+   extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of
+   ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).
 
    Setting optional ``shift`` keyword argument computes the factorization
    of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
    it should be a permutation of `1:size(A,1)` giving the ordering to use
    (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
@@ -114,12 +137,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
-   Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   Compute the LDLt factorization of a sparse symmetric or Hermitian
+   matrix ``A``. A fill-reducing permutation is used.  ``F =
+   ldltfact(A)`` is most frequently used to solve systems of equations
+   with ``F\b``, but also the methods ``diag``, ``det``, ``logdet``
+   are defined for ``F``. You can also extract individual factors from
+   ``F``, using ``F[:L]``.  However, since pivoting is on by default,
+   the factorization is internally represented as ``A == P'*L*D*L'*P``
+   with a permutation matrix ``P``; using just ``L`` without
+   accounting for ``P`` will give incorrect answers.  To include the
+   effects of permutation, it's typically preferable to extact
+   "combined" factors like ``PtL = F[:PtL]`` (the equivalent of
+   ``P'*L``) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``).  The
+   complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD,
+   :DU, :PtLD, :DUP``.
 
    Setting optional ``shift`` keyword argument computes the factorization
    of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
    it should be a permutation of `1:size(A,1)` giving the ordering to use
    (instead of CHOLMOD's default AMD ordering).
+
+   The function calls the C library CHOLMOD and many other functions
+   from the library are wrapped but not exported.
 
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
@@ -263,7 +302,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
    Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
-   (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
+   (The ``k``\ th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
    For :class:`SymTridiagonal` matrices, if the optional vector of eigenvalues
@@ -273,8 +312,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
    factorization object ``F`` which contains the eigenvalues in ``F[:values]``
-   and the eigenvectors in the columns of the matrix ``F[:vectors]``. (The
-   ``k``th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
+   and the eigenvectors in the columns of the matrix ``F[:vectors]``.
+   (The ``k``\ th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
 
    The following functions are available for ``Eigen`` objects: ``inv``,
    ``det``.
@@ -296,7 +335,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
    returning a ``GeneralizedEigen`` factorization object ``F`` which contains
    the generalized eigenvalues in ``F[:values]`` and the generalized
-   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k``th
+   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k``\ th
    generalized eigenvector can be obtained from the slice ``F[:vectors][:,
    k]``.)
 
@@ -493,9 +532,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: vecnorm(A, [p])
 
-   For any iterable container ``A`` (including arrays of any dimension)
-   of numbers, compute the ``p``-norm (defaulting to ``p=2``) as if ``A``
-   were a vector of the corresponding length.
+   For any iterable container ``A`` (including arrays of any
+   dimension) of numbers (or any element type for which ``norm`` is
+   defined), compute the ``p``-norm (defaulting to ``p=2``) as if
+   ``A`` were a vector of the corresponding length.
 
    For example, if ``A`` is a matrix and ``p=2``, then this is equivalent
    to the Frobenius norm.
@@ -525,6 +565,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logdet(M)
 
    Log of matrix determinant. Equivalent to ``log(det(M))``, but may provide increased accuracy and/or speed.
+
+.. function:: logabsdet(M)
+
+   Log of absolute value of determinant of real matrix. Equivalent to ``(log(abs(det(M))), sign(det(M)))``, but may provide increased accuracy and/or speed.
 
 .. function:: inv(M)
 
@@ -629,6 +673,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: istriu(A) -> Bool
 
    Test whether a matrix is upper triangular.
+
+.. function:: isdiag(A) -> Bool
+
+   Test whether a matrix is diagonal.
 
 .. function:: ishermitian(A) -> Bool
 
@@ -773,6 +821,18 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``a*X``.
 
+.. function:: ger!(alpha, x, y, A)
+
+   Rank-1 update of the matrix ``A`` with vectors ``x`` and
+   ``y`` as ``alpha*x*y' + A``.
+
+.. function:: syr!(uplo, alpha, x, A)
+
+   Rank-1 update of the symmetric matrix ``A`` with vector
+   ``x`` as ``alpha*x*x.' + A``.  When ``uplo`` is 'U' the
+   upper triangle of ``A`` is updated ('L' for lower triangle).
+   Returns ``A``.
+
 .. function:: syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix ``C`` as ``alpha*A*A.' +
@@ -785,6 +845,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Returns either the upper triangle or the lower triangle, according
    to ``uplo`` ('U' or 'L'), of ``alpha*A*A.'`` or ``alpha*A.'*A``,
    according to ``trans`` ('N' or 'T').
+
+.. function:: her!(uplo, alpha, x, A)
+
+   Methods for complex arrays only.  Rank-1 update of the Hermitian
+   matrix ``A`` with vector ``x`` as ``alpha*x*x' + A``.  When
+   ``uplo`` is 'U' the upper triangle of ``A`` is updated
+   ('L' for lower triangle). Returns ``A``.
 
 .. function:: herk!(uplo, trans, alpha, A, beta, C)
 

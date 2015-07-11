@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Create an extractor that extracts the modified original matrix, e.g.
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
@@ -12,7 +14,9 @@ end
 BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric)
 
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
-    symmetric || throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
+    if !symmetric
+        throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
+    end
     LD, ipiv = LAPACK.sytrf!(char_uplo(uplo) , A)
     BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
 end

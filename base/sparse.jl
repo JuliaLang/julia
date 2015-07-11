@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module SparseMatrix
 
-using Base: Func, AddFun, OrFun
+using Base: Func, AddFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular
 

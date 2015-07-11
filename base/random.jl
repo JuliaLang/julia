@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Random
 
 using Base.dSFMT
@@ -33,8 +35,8 @@ type Close1Open2 <: FloatInterval end
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
     end
 
-    rand {T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
-    rand!{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+    rand{ T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
 end
 
 @windows_only begin
@@ -45,12 +47,12 @@ end
         RandomDevice() = new(Array(UInt128, 1))
     end
 
-    function rand{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, ::Type{T})
+    function rand{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, ::Type{T})
         win32_SystemFunction036!(rd.buffer)
         @inbounds return rd.buffer[1] % T
     end
 
-    rand!{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
+    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
 end
 
 rand(rng::RandomDevice, ::Type{Close1Open2}) =
@@ -173,7 +175,7 @@ function srand()
     dsfmt_gv_srand()
 end
 
-function srand(seed::Union(Integer, Vector{UInt32}))
+function srand(seed::Union{Integer, Vector{UInt32}})
     srand(GLOBAL_RNG, seed)
     dsfmt_gv_srand()
 end
@@ -209,17 +211,17 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Var
 @inline rand(r::AbstractRNG) = rand(r, CloseOpen)
 
 # MersenneTwister & RandomDevice
-@inline rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float64}) = rand(r, CloseOpen)
+@inline rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float64}) = rand(r, CloseOpen)
 
 rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
 rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
 rand_ui10_raw(r::AbstractRNG)    = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG)    = rand(r, UInt32)
 
-rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float16}) =
+rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float16}) =
     Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
-rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
+rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
 
 
@@ -229,7 +231,7 @@ rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
 
 # MersenneTwister
 
-@inline rand{T<:Union(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
+@inline rand{T<:Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
@@ -246,9 +248,16 @@ end
 rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
 rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128))
 
-## random complex values
+## random Complex values
 
 rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
+
+# random Char values
+# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
+function rand(r::AbstractRNG, ::Type{Char})
+    c = rand(r, 0x00000000:0x0010f7ff)
+    (c < 0xd800) ? Char(c) : Char(c+0x800)
+end
 
 ## Arrays of random numbers
 
@@ -329,7 +338,7 @@ end
 @inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 @inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
-function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2})
+function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2})
     n = length(A)
     n128 = n * sizeof(T) ÷ 16
     rand!(r, pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
@@ -353,7 +362,7 @@ function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Ty
     A
 end
 
-function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen})
+function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen})
     rand!(r, A, Close1Open2)
     I32 = one(Float32)
     for i in eachindex(A)
@@ -362,7 +371,7 @@ function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Ty
     A
 end
 
-rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
+rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
 
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
@@ -393,7 +402,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     A
 end
 
-function rand!{T<:Union(Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128)}(r::MersenneTwister, A::Array{T})
+function rand!{T<:Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128}}(r::MersenneTwister, A::Array{T})
     n=length(A)
     n128 = n * sizeof(T) ÷ 16
     rand!(r, pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128))
@@ -425,7 +434,7 @@ immutable RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
     u::U   # rejection threshold
 end
 # generators with 32, 128 bits entropy
-RangeGeneratorInt{T, U<:Union(UInt32, UInt128)}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
+RangeGeneratorInt{T, U<:Union{UInt32, UInt128}}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
 RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
 # generator for ranges
@@ -483,7 +492,7 @@ end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
 # RangeGeneratorInt is responsible for providing the right value of k
-function rand{T<:Union(UInt64, Int64)}(rng::AbstractRNG, g::RangeGeneratorInt{T,UInt64})
+function rand{T<:Union{UInt64, Int64}}(rng::AbstractRNG, g::RangeGeneratorInt{T,UInt64})
     local x::UInt64
     if (g.k - 1) >> 32 == 0
         x = rand(rng, UInt32)
@@ -539,7 +548,7 @@ else
     end
 end
 
-rand{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+rand{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
 
 
 # Randomly draw a sample from an AbstractArray r
@@ -553,7 +562,7 @@ function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
     return A
 end
 
-rand!{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
+rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
 
 function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))

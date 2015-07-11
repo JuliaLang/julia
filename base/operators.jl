@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## types ##
 
 const (<:) = issubtype
@@ -17,7 +19,8 @@ isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x
 isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
-==(T::Type, S::Type) = typeseq(T, S)
+=={T}(::Type{T}, ::Type{T}) = true  # encourage more specialization on types (see #11425)
+==(T::Type, S::Type)        = typeseq(T, S)
 
 ## comparison fallbacks ##
 
@@ -73,13 +76,25 @@ scalarmin(x::AbstractArray, y               ) = error("ordering is not well-defi
 (|)(x::Integer) = x
 ($)(x::Integer) = x
 
-for op = (:+, :*, :&, :|, :$, :min, :max, :kron)
+# foldl for argument lists. expand recursively up to a point, then
+# switch to a loop. this allows small cases like `a+b+c+d` to be inlined
+# efficiently, without a major slowdown for `+(x...)` when `x` is big.
+afoldl(op,a) = a
+afoldl(op,a,b) = op(a,b)
+afoldl(op,a,b,c...) = afoldl(op, op(a,b), c...)
+function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
+    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,b),c),d),e),f),g),h),i),j),k),l),m),n),o),p)
+    for x in qs; y = op(y,x); end
+    y
+end
+
+for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
+               (:$,:$), (:min,:(MinFun())), (:max,:(MaxFun())), (:kron,:kron))
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c)        = ($op)(($op)(a,b),c)
-        ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = afoldl($F, ($op)(($op)(a,b),c), xs...)
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.
@@ -100,18 +115,18 @@ end
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
-.< (x::Real,y::Real) = x < y
+.<( x::Real,y::Real) = x < y
 .<=(x::Real,y::Real) = x <= y
 const .≤ = .<=
 const .≠ = .!=
 
-# core << >> and >>> takes Int32 as second arg
-<<(x,y::Int32)    = no_op_err("<<", typeof(x))
->>(x,y::Int32)    = no_op_err(">>", typeof(x))
->>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
-<<(x,y::Integer)  = x << convert(Int32,y)
->>(x,y::Integer)  = x >> convert(Int32,y)
->>>(x,y::Integer) = x >>> convert(Int32,y)
+# core << >> and >>> takes Int as second arg
+<<(x,y::Int)  = no_op_err("<<", typeof(x))
+>>(x,y::Int)  = no_op_err(">>", typeof(x))
+>>>(x,y::Int) = no_op_err(">>>", typeof(x))
+<<(x,y::Integer)  = typemax(Int) < y ? zero(x) : x <<  (y % Int)
+>>(x,y::Integer)  = typemax(Int) < y ? zero(x) : x >>  (y % Int)
+>>>(x,y::Integer) = typemax(Int) < y ? zero(x) : x >>> (y % Int)
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
@@ -139,28 +154,28 @@ ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
 # transposed multiply
-Ac_mul_B (a,b) = ctranspose(a)*b
-A_mul_Bc (a,b) = a*ctranspose(b)
+Ac_mul_B(a,b)  = ctranspose(a)*b
+A_mul_Bc(a,b)  = a*ctranspose(b)
 Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
-At_mul_B (a,b) = transpose(a)*b
-A_mul_Bt (a,b) = a*transpose(b)
+At_mul_B(a,b)  = transpose(a)*b
+A_mul_Bt(a,b)  = a*transpose(b)
 At_mul_Bt(a,b) = transpose(a)*transpose(b)
 
 # transposed divide
-Ac_rdiv_B (a,b) = ctranspose(a)/b
-A_rdiv_Bc (a,b) = a/ctranspose(b)
+Ac_rdiv_B(a,b)  = ctranspose(a)/b
+A_rdiv_Bc(a,b)  = a/ctranspose(b)
 Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
-At_rdiv_B (a,b) = transpose(a)/b
-A_rdiv_Bt (a,b) = a/transpose(b)
+At_rdiv_B(a,b)  = transpose(a)/b
+A_rdiv_Bt(a,b)  = a/transpose(b)
 At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
 
-Ac_ldiv_B (a,b) = ctranspose(a)\b
-A_ldiv_Bc (a,b) = a\ctranspose(b)
+Ac_ldiv_B(a,b)  = ctranspose(a)\b
+A_ldiv_Bc(a,b)  = a\ctranspose(b)
 Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
-At_ldiv_B (a,b) = transpose(a)\b
-A_ldiv_Bt (a,b) = a\transpose(b)
-At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
-
+At_ldiv_B(a,b)  = transpose(a)\b
+A_ldiv_Bt(a,b)  = a\transpose(b)
+At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
+Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
@@ -170,8 +185,8 @@ eltype(t::DataType) = eltype(super(t))
 eltype(x) = eltype(typeof(x))
 
 # copying immutable things
-copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
-              TopNode,QuoteNode,DataType,UnionType)) = x
+copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
+              TopNode,QuoteNode,DataType,Union}) = x
 
 # function pipelining
 |>(x, f::Callable) = f(x)
@@ -218,16 +233,11 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
-# shape of array to create for getindex() with indexes I
-# drop dimensions indexed with trailing scalars
-index_shape(I::Real...) = ()
-index_shape(i, I...) = tuple(length(i), index_shape(I...)...)
-
 function throw_setindex_mismatch(X, I)
     if length(I) == 1
-        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(length(I[1])) destinations"))
+        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))
     else
-        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(map(length,I))) destination"))
+        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(I)) destination"))
     end
 end
 
@@ -236,13 +246,13 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I...)
+function setindex_shape_check(X::AbstractArray, I::Int...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
     while true
         ii = size(X,i)
-        jj = length(I[j])::Int
+        jj = I[j]
         if i == li || j == lj
             while i < li
                 i += 1
@@ -250,7 +260,7 @@ function setindex_shape_check(X::AbstractArray, I...)
             end
             while j < lj
                 j += 1
-                jj *= length(I[j])::Int
+                jj *= I[j]
             end
             if ii != jj
                 throw_setindex_mismatch(X, I)
@@ -273,25 +283,25 @@ end
 setindex_shape_check(X::AbstractArray) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
 
-setindex_shape_check(X::AbstractArray, i) =
-    (length(X)==length(i) || throw_setindex_mismatch(X, (i,)))
+setindex_shape_check(X::AbstractArray, i::Int) =
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i) =
-    (length(X)==length(i) || throw_setindex_mismatch(X, (i,)))
+setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int) =
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i, j) =
-    (length(X)==length(i)*length(j) || throw_setindex_mismatch(X, (i,j)))
+setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int, j::Int) =
+    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
-    li, lj = length(i), length(j)
-    if length(X) != li*lj
+function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
+    if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
     sx1 = size(X,1)
-    if !(li == 1 || li == sx1 || sx1 == 1)
+    if !(i == 1 || i == sx1 || sx1 == 1)
         throw_setindex_mismatch(X, (i,j))
     end
 end
+setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to integer index
 to_index(i::Int) = i
@@ -302,19 +312,15 @@ to_index(I::UnitRange{Bool}) = find(I)
 to_index(I::Range{Bool}) = find(I)
 to_index{T<:Integer}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
 to_index{T<:Integer}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
+to_index(c::Colon) = c
 to_index(I::AbstractArray{Bool}) = find(I)
 to_index(A::AbstractArray{Int}) = A
 to_index{T<:Integer}(A::AbstractArray{T}) = [to_index(x) for x in A]
-to_index(i1, i2)         = to_index(i1), to_index(i2)
-to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
-to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)
-to_index(I...) = to_index(I)
-to_index(I::Tuple{Any,})            = (to_index(I[1]), )
-to_index(I::Tuple{Any,Any,})        = (to_index(I[1]), to_index(I[2]))
-to_index(I::Tuple{Any,Any,Any})     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
-to_index(I::Tuple{Any,Any,Any,Any}) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
-to_index(I::Tuple) = map(to_index, I)
 to_index(i) = error("invalid index: $i")
+
+to_indexes() = ()
+to_indexes(i1) = (to_index(i1),)
+to_indexes(i1, I...) = (to_index(i1), to_indexes(I...)...)
 
 # Addition/subtraction of ranges
 for f in (:+, :-)
@@ -427,12 +433,14 @@ reverse(p::Pair) = Pair(p.second, p.first)
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
-module Operators
+this_module = current_module()
+baremodule Operators
 
 export
     !,
     !=,
     !==,
+    ===,
     $,
     %,
     .%,
@@ -502,9 +510,9 @@ export
     ctranspose,
     call
 
-import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+import ..this_module: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
-    <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
+    <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose, call,
     ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
