@@ -87,6 +87,7 @@ function eigvals{T<:Number}(x::T; kwargs...)
     return imag(val) == 0 ? [real(val)] : [val]
 end
 
+# TO DO: Put message about not being able to sort complex numbers back in!
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
