@@ -61,9 +61,8 @@ function _require_from_serialized(node::Int, path_to_try::ByteString)
         if _include_from_serialized(content)
             others = filter(x -> x != myid(), procs())
             refs = Any[ @spawnat p _include_from_serialized(content) for p in others]
-            successes = Any[ fetch(ref) for ref in refs ]
             for (id, ref) in zip(others, refs)
-                if fetch(ref)
+                if !fetch(ref)
                     warn("node state is inconsistent: node $id failed to load serialized cache from :node $node:$path_to_try.")
                 end
             end
