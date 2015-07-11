@@ -318,6 +318,10 @@ include("precompile.jl")
 
 include = include_from_node1
 
+reinit_stdio()
+
+include("defaultpkg.jl")
+
 end # baremodule Base
 
 using Base
