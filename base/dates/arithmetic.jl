@@ -70,3 +70,11 @@ end
 (.-){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape(T[i - y for i in x], size(x))
 (.+){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .+ y
 (.-){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .- y
+
+(.-){T<:TimeType}(x::AbstractArray{T}, y::T) = reshape(Period[i - y for i in x], size(x))
+(.-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
+
+(-){T<:TimeType}(x::Range{T}, y::Range{T}) = collect(x) - collect(y)
+(-){T<:TimeType}(x::AbstractArray{T}, y::Range{T}) = y - collect(x)
+(-){T<:TimeType}(x::Range{T}, y::AbstractArray{T}) = collect(x) - y
+(-){T<:TimeType}(x::AbstractArray{T}, y::AbstractArray{T}) = reshape(Period[x[i] - y[i] for i in eachindex(x, y)], promote_shape(size(x),size(y)))
