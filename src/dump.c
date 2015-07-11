@@ -1008,6 +1008,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         assert(mode != MODE_MODULE_POSTWORK);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)(uptrint_t)pos);
+        dt->uid = jl_assign_type_uid(); // make sure this has a new uid early so it goes in the type cache correctly
     }
 
     if (nf > 0) {
@@ -1723,9 +1724,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
         jl_value_t *v = jl_cellref(datatype_list, i);
-        uint32_t uid = ((jl_datatype_t*)v)->uid;
         jl_cache_type_((jl_datatype_t*)v);
-        ((jl_datatype_t*)v)->uid = uid;
     }
     datatype_list = NULL;
 
