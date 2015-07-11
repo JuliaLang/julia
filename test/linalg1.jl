@@ -149,6 +149,11 @@ debug && println("non-symmetric eigen decomposition")
 
         num_fact = eigfact(one(eltya))
         @test num_fact.values[1] == one(eltya)
+        h = a + a'
+        @test_approx_eq minimum(eigvals(h)) eigmin(h)
+        @test_approx_eq maximum(eigvals(h)) eigmax(h)
+        @test_throws DomainError eigmin(a - a')
+        @test_throws DomainError eigmax(a - a')
     end
 
 debug && println("symmetric generalized eigenproblem")
