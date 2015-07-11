@@ -3115,6 +3115,7 @@ x11902[2] = 2
 @test x11902.x == (1,2)
 @test_throws BoundsError x11902[0] = 1
 @test_throws BoundsError x11902[3] = 1
+@test_throws BoundsError x11902[1,1] = 1
 try
     x11902[3] = 1
 catch e

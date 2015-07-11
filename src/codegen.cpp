@@ -2551,7 +2551,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         fieldty = tt;
                         bool ishomogeneous = true;
                         for (size_t i = 0; i < depth; ++i) {
-                            if (!is_tupletype_homogeneous(fieldty->types)) {
+                            // If we have more arguments than nesting,
+                            // or the tuple is not homgenous, fall back on generic code
+                            if (!jl_is_tuple_type(fieldty) ||
+                                !is_tupletype_homogeneous(fieldty->types)) {
                                 ishomogeneous = false;
                                 break;
                             }
