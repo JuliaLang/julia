@@ -332,7 +332,7 @@ function init_load_path()
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
-    push!(LOAD_CACHE_PATH,abspath(homedir(),".julia",".libs"))
+    push!(LOAD_CACHE_PATH,abspath(homedir(),".julia","libs",vers))
     push!(LOAD_CACHE_PATH,abspath(JULIA_HOME,"..","usr","lib","julia")) #TODO: fixme
 end
 

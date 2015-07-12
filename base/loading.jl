@@ -245,7 +245,7 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...
 function create_expr_cache(m::Expr, name)
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
-        mkdir(cachepath)
+        mkpath(cachepath)
     end
     cachefile = abspath(cachepath, name*".ji")
     code_object = """
