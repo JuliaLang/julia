@@ -919,7 +919,7 @@ than just the value of ``x*x``.
 
 From the caller's perspective, they are very similar to regular functions;
 in fact, you don't have to know if you're calling a regular or generated
-function or a - the syntax and result of the call is just the same.
+function - the syntax and result of the call is just the same.
 Let's see how ``foo`` behaves:
 
 .. doctest::
