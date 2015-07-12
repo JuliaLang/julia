@@ -503,15 +503,15 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
     }
 
 #ifdef USE_MCJIT
+    // Reset the target triple to make sure it matches the new target machine
+    #ifdef LLVM37
+    shadow_module->setTargetTriple(TM->getTargetTriple().str());
+    shadow_module->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+    #endif
     Module *objfile = CloneModule(shadow_module);
     if (sysimg_data)
         jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(objfile);
-    // Reset the target triple to make sure it matches the new target machine
-#ifdef LLVM37
-    objfile->setTargetTriple(TM->getTargetTriple().str());
-    objfile->setDataLayout(TM->getDataLayout()->getStringRepresentation());
-#endif
     PM.run(*objfile);
 #else
     Module *objfile = CloneModule(jl_Module);
