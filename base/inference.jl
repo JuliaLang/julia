@@ -1974,17 +1974,6 @@ function exprtype(x::ANY, sv::StaticVarInfo)
     end
 end
 
-function without_linenums(a::Array{Any,1})
-    l = []
-    for x in a
-        if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
-        else
-            push!(l, x)
-        end
-    end
-    l
-end
-
 # known affect-free calls (also effect-free)
 const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, is, isa, typeof, typeassert]
 
@@ -2031,6 +2020,10 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,Number) || isa(e,AbstractString) || isa(e,GenSym) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
+    end
+    if isa(e,GlobalRef)
+        allow_volatile && return true
+        return isconst(e.mod, e.name)
     end
     if isconstantfunc(e, sv) !== false
         return true
@@ -2248,7 +2241,8 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     end
 
     body = Expr(:block)
-    body.args = without_linenums(ast.args[3].args)::Array{Any,1}
+    body.args = filter(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)),
+                       ast.args[3].args::Array{Any,1})
     cost::Int = 1000
     if incompletematch
         cost *= 4
@@ -2284,6 +2278,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             return NF
         end
     end
+    # remove empty meta
+    body.args = filter(x->!(isa(x,Expr) && x.head === :meta && isempty(x.args)),
+                       body.args)
 
     spnames = Any[ sp[i].name for i=1:2:length(sp) ]
     enc_vinflist = enclosing_ast.args[2][1]::Array{Any,1}

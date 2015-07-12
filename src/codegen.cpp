@@ -1572,7 +1572,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::map<jl_sym_t*,jl_varinfo_
 
 static bool expr_is_symbol(jl_value_t *e)
 {
-    return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
+    return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e) || jl_is_globalref(e));
 }
 
 // a very simple, conservative escape analysis that is sufficient for
@@ -1746,7 +1746,8 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 static bool might_need_root(jl_value_t *ex)
 {
     return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
-            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex));
+            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
+            !jl_is_globalref(ex));
 }
 
 static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx)
@@ -4379,8 +4380,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 vi.hasGCRoot = false;
                 continue;
             }
-            if (vi.isSA && !vi.isVolatile &&
-                    !vi.isCaptured && !vi.usedUndef) {
+            if (vi.isSA && !vi.isVolatile && !vi.isCaptured && !vi.usedUndef) {
                 vi.hasGCRoot = false; // so far...
             }
             else {
