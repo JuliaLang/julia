@@ -635,7 +635,6 @@ end
 @deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset=position(s)) mmap(s, BitArray, dims, offset)
 @deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)
 
-
 # T[a:b] and T[a:s:b]
 @noinline function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
     depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
@@ -653,4 +652,33 @@ function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
         o += length(r)
     end
     return a
+end
+
+function require(mod::AbstractString)
+    depwarn("`require` is deprecated, use `using` or `import` instead", :require)
+    require(symbol(require_filename(mod)))
+end
+function require(f::AbstractString, fs::AbstractString...)
+    require(f)
+    for fn in fs
+        require(fn)
+    end
+end
+export require
+function require_filename(name::AbstractString)
+    # This function can be deleted when the deprecation for `require`
+    # is deleted.
+    # While we could also strip off the absolute path, the user may be
+    # deliberately directing to a different file than what got
+    # cached. So this takes a conservative approach.
+    if endswith(name, ".jl")
+        tmp = name[1:end-3]
+        for prefix in LOAD_CACHE_PATH
+            path = joinpath(prefix, tmp*".ji")
+            if isfile(path)
+                return tmp
+            end
+        end
+    end
+    name
 end
