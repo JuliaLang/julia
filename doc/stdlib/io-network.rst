@@ -97,15 +97,23 @@ General I/O
 
    Read binary data from a stream, filling in the argument ``array``.
 
-.. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b))
+.. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
 
    Read at most ``nb`` bytes from the stream into ``b``, returning the
    number of bytes read (increasing the size of ``b`` as needed).
 
-.. function:: readbytes(stream, nb=typemax(Int))
+   See ``readbytes`` for a description of the ``all`` option.
 
-   Read at most ``nb`` bytes from the stream, returning a
-   ``Vector{UInt8}`` of the bytes read.
+.. function:: readbytes(stream, nb=typemax(Int); all=true)
+
+   Read at most ``nb`` bytes from the stream, returning a ``Vector{UInt8}`` of the bytes read.
+
+   If ``all`` is true (the default), this function will block repeatedly
+   trying to read all requested bytes, until an error or end-of-file
+   occurs.
+   If ``all`` is false, at most one ``read`` call is performed, and the
+   amount of data returned is device-dependent.
+   Note that not all stream types support the ``all`` option.
 
 .. function:: position(s)
 
