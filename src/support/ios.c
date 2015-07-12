@@ -242,7 +242,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
 {
     size_t tot = 0;
     size_t got, avail;
-    //int result;
+    int didread = 0;
 
     if (s->state == bst_wr) {
         ios_seek(s, ios_pos(s));
@@ -256,9 +256,8 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             size_t ncopy = (avail >= n) ? n : avail;
             memcpy(dest, s->buf + s->bpos, ncopy);
             s->bpos += ncopy;
-            if (ncopy >= n) {
+            if (ncopy >= n)
                 return tot+ncopy;
-            }
         }
         if (s->bm == bm_mem || s->fd == -1) {
             // can't get any more data
@@ -271,9 +270,10 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
         n -= avail;
         tot += avail;
 
+        if (didread && !all) return tot;
+
         ios_flush(s);
         s->bpos = s->size = 0;
-
         s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
             // doesn't fit comfortably in buffer; go direct
@@ -302,6 +302,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             }
             s->size = got;
         }
+        didread = 1;
     }
 
     return tot;
@@ -579,8 +580,6 @@ int ios_eof_blocking(ios_t *s)
     if (s->bm == bm_mem)
         return (s->_eof ? 1 : 0);
     if (s->fd == -1)
-        return 1;
-    if (s->_eof)
         return 1;
 
     if (ios_readprep(s, 1) < 1)
