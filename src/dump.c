@@ -622,9 +622,16 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         ios_write(s, ((jl_sym_t*)v)->name, l);
     }
-    else if (jl_is_globalref(v) && mode == MODE_AST && jl_globalref_mod(v) == tree_enclosing_module) {
-        writetag(s, (jl_value_t*)NearbyGlobal_tag);
-        jl_serialize_value(s, jl_globalref_name(v));
+    else if (jl_is_globalref(v)) {
+        if (mode == MODE_AST && jl_globalref_mod(v) == tree_enclosing_module) {
+            writetag(s, (jl_value_t*)NearbyGlobal_tag);
+            jl_serialize_value(s, jl_globalref_name(v));
+        }
+        else {
+            writetag(s, (jl_value_t*)jl_globalref_type);
+            jl_serialize_value(s, jl_globalref_mod(v));
+            jl_serialize_value(s, jl_globalref_name(v));
+        }
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
@@ -1288,11 +1295,15 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_value_t *sym = jl_deserialize_value(s, NULL);
         return jl_module_globalref(tree_enclosing_module, (jl_sym_t*)sym);
     }
-    else if (vtag == (jl_value_t*)jl_datatype_type) {
+    else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)jl_globalref_type) {
         int pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, NULL);
-        jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
+        jl_datatype_t *dt;
+        if (vtag == (jl_value_t*)jl_globalref_type)
+            dt = jl_globalref_type;
+        else
+            dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
         if (dt == jl_datatype_type)
             return jl_deserialize_datatype(s, pos, loc);
         if ((mode == MODE_MODULE || mode == MODE_MODULE_LAMBDAS) && dt == jl_typename_type) {
@@ -1944,7 +1955,7 @@ void jl_init_serializer(void)
                      (void*)SmallInt64_tag, (void*)UNUSED_tag,
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
-                     (void*)CommonSym_tag, (void*)NearbyGlobal_tag,
+                     (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
@@ -2001,7 +2012,6 @@ void jl_init_serializer(void)
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_globalref_type,
 
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
