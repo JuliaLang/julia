@@ -136,7 +136,7 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
                  repo.ptr, Ref(options))
 end
 
-function reset!(repo::GitRepo, obj::Nullable{GitAnyObject}, pathspecs::AbstractString...)
+function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
     with(StrArrayStruct(pathspecs...)) do sa
         @check ccall((:git_reset_default, :libgit2), Cint,
                 (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
@@ -149,7 +149,7 @@ end
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
                checkout_opts::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_reset, :libgit2), Cint,
-                 (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}, Ptr{SignatureStruct}, Ptr{UInt8}),
+                 (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}),
                   repo.ptr, obj.ptr, mode, Ref(checkout_opts))
 end
 

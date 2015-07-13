@@ -211,4 +211,43 @@ module GitConst
     const CLONE_LOCAL          = Cint(1)
     const CLONE_NO_LOCAL       = Cint(2)
     const CLONE_LOCAL_NO_LINKS = Cint(3)
+
+    # status
+    const STATUS_CURRENT          = Cuint(0)
+    const STATUS_INDEX_NEW        = Cuint(1 << 0)
+    const STATUS_INDEX_MODIFIED   = Cuint(1 << 1)
+    const STATUS_INDEX_DELETED    = Cuint(1 << 2)
+    const STATUS_INDEX_RENAMED    = Cuint(1 << 3)
+    const STATUS_INDEX_TYPECHANGE = Cuint(1 << 4)
+    const STATUS_WT_NEW           = Cuint(1 << 7)
+    const STATUS_WT_MODIFIED      = Cuint(1 << 8)
+    const STATUS_WT_DELETED       = Cuint(1 << 9)
+    const STATUS_WT_TYPECHANGE    = Cuint(1 << 10)
+    const STATUS_WT_RENAMED       = Cuint(1 << 11)
+    const STATUS_WT_UNREADABLE    = Cuint(1 << 12)
+    const STATUS_IGNORED          = Cuint(1 << 14)
+    const STATUS_CONFLICTED       = Cuint(1 << 15)
+
+    # status show
+    const STATUS_SHOW_INDEX_AND_WORKDIR = Cint(0)
+    const STATUS_SHOW_INDEX_ONLY        = Cint(1)
+    const STATUS_SHOW_WORKDIR_ONLY      = Cint(2)
+
+    # status options
+    const STATUS_OPT_INCLUDE_UNTRACKED                = Cuint(1 << 0)
+    const STATUS_OPT_INCLUDE_IGNORED                  = Cuint(1 << 1)
+    const STATUS_OPT_INCLUDE_UNMODIFIED               = Cuint(1 << 2)
+    const STATUS_OPT_EXCLUDE_SUBMODULES               = Cuint(1 << 3)
+    const STATUS_OPT_RECURSE_UNTRACKED_DIRS           = Cuint(1 << 4)
+    const STATUS_OPT_DISABLE_PATHSPEC_MATCH           = Cuint(1 << 5)
+    const STATUS_OPT_RECURSE_IGNORED_DIRS             = Cuint(1 << 6)
+    const STATUS_OPT_RENAMES_HEAD_TO_INDEX            = Cuint(1 << 7)
+    const STATUS_OPT_RENAMES_INDEX_TO_WORKDIR         = Cuint(1 << 8)
+    const STATUS_OPT_SORT_CASE_SENSITIVELY            = Cuint(1 << 9)
+    const STATUS_OPT_SORT_CASE_INSENSITIVELY          = Cuint(1 << 10)
+    const STATUS_OPT_RENAMES_FROM_REWRITES            = Cuint(1 << 11)
+    const STATUS_OPT_NO_REFRESH                       = Cuint(1 << 12)
+    const STATUS_OPT_UPDATE_INDEX                     = Cuint(1 << 13)
+    const STATUS_OPT_INCLUDE_UNREADABLE               = Cuint(1 << 14)
+    const STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = Cuint(1 << 15)
 end
