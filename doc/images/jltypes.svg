@@ -2,7 +2,7 @@
 <!-- Generator: Adobe Illustrator 16.0.4, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 width="1080.034px" height="834.454px" viewBox="0 0 1080.034 834.454" enable-background="new 0 0 1080.034 834.454"
+	 width="1179.034px" height="834.454px" viewBox="0 0 1179.034 834.454" enable-background="new 0 0 1179.034 834.454"
 	 xml:space="preserve">
 <font horiz-adv-x="1000">
 <!-- Source is a trademark of Adobe Systems Incorporated in the United States and/or other countries. -->
@@ -205,43 +205,49 @@
 </font>
 
 	<g>
-	<rect x="521.534" y="157.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="99" height="47"/>
-	<text transform="matrix(1 0 0 1 548.1089 184.999)" font-family="'SourceSansPro-Regular'" font-size="18">Union</text>
+	<rect x="719.534" y="157.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="99" height="47"/>
+	<text transform="matrix(1 0 0 1 746.1089 184.999)" font-family="'SourceSansPro-Regular'" font-size="18">Union</text>
 </g>
 <g>
-	<rect x="683.534" y="175.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="116" height="72"/>
-	<text transform="matrix(1 0 0 1 706.7754 193.6655)" font-family="'SourceSansPro-Regular'" font-size="18">Union{}</text>
-	<rect x="692.708" y="199.6" fill="none" width="99.334" height="46.999"/>
-	<text transform="matrix(1 0 0 1 692.708 209.5679)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">aka Bottom,</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">representing the </tspan><tspan x="0" y="33.6" font-family="'SourceSansPro-Regular'" font-size="14">lack of any type</tspan></text>
+	<rect x="849.534" y="110.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="142" height="51"/>
+	<text transform="matrix(1 0 0 1 859.5537 130.6655)" font-family="'SourceSansPro-Regular'" font-size="18">Union{T,S}</text>
+	<rect x="866.486" y="138.953" fill="none" width="117.334" height="17.234"/>
+	<text transform="matrix(1 0 0 1 866.4863 148.9209)" font-family="'SourceSansPro-Regular'" font-size="14">either type T or S</text>
+</g>
+<g>
+	<rect x="849.534" y="200.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="140" height="59"/>
+	<text transform="matrix(1 0 0 1 858.4619 219.7769)" font-family="'SourceSansPro-Regular'" font-size="18">Union{}</text>
+	<rect x="861.845" y="225.711" fill="none" width="124.078" height="31.441"/>
+	<text transform="matrix(1 0 0 1 861.8447 235.6787)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">aka Bottom,</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">the empty set</tspan></text>
 </g>
 <g>
 	<rect x="385.534" y="157.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="117" height="46"/>
 	<text transform="matrix(1 0 0 1 411.4971 183.8535)" font-family="'SourceSansPro-Regular'" font-size="18">DataType</text>
 </g>
 <g>
-	<rect x="718.534" y="331.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="139" height="63"/>
-	<text transform="matrix(1 0 0 1 722.1094 351.687)" font-family="'SourceSansPro-Regular'" font-size="18">Type Constructor</text>
-	<text transform="matrix(1 0 0 1 731.7012 367.2847)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">aka typector</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">or typealias</tspan></text>
+	<rect x="536.534" y="157.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="139" height="63"/>
+	<text transform="matrix(1 0 0 1 540.1094 177.687)" font-family="'SourceSansPro-Regular'" font-size="18">Type Constructor</text>
+	<text transform="matrix(1 0 0 1 549.7012 193.2847)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">aka typector</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">or typealias</tspan></text>
 </g>
 <g>
-	<rect x="592.534" y="591.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="127" height="64"/>
-	<text transform="matrix(1 0 0 1 601.1089 612.499)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">sorted</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">cache</tspan></text>
-	<text transform="matrix(1 0 0 1 656.2837 603.3457)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">all type</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12">parameters</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">are egal*</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">comparable</tspan></text>
+	<rect x="844.534" y="695.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="127" height="64"/>
+	<text transform="matrix(1 0 0 1 853.1084 715.499)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">sorted</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">cache</tspan></text>
+	<text transform="matrix(1 0 0 1 908.2842 706.3457)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">all type</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12">parameters</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">are egal*</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">comparable</tspan></text>
 </g>
 <g>
-	<rect x="725.534" y="591.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="121" height="64"/>
-	<text transform="matrix(1 0 0 1 734.1089 612.499)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">linear</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">cache</tspan></text>
-	<text transform="matrix(1 0 0 1 791.6997 618.1787)" font-family="'SourceSansPro-Regular'" font-size="12">otherwise</text>
+	<rect x="977.534" y="695.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="121" height="64"/>
+	<text transform="matrix(1 0 0 1 986.1084 715.499)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">linear</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">cache</tspan></text>
+	<text transform="matrix(1 0 0 1 1043.7002 721.1787)" font-family="'SourceSansPro-Regular'" font-size="12">otherwise</text>
 </g>
 <g>
 	<g>
-		<rect x="416.534" y="562.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="69"/>
+		<rect x="416.534" y="598.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="69"/>
 	</g>
-	<text transform="matrix(1 0 0 1 422.29 578.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">C-style struct</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">- size &gt; 0</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- has fields</tspan></text>
+	<text transform="matrix(1 0 0 1 422.29 614.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">C-style struct</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">- size &gt; 0</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- has fields</tspan></text>
 </g>
 <g>
-	<rect x="416.534" y="643.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="70"/>
-	<text transform="matrix(1 0 0 1 422.29 660.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">bitstype</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">- size &gt; 0</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- no fields</tspan></text>
+	<rect x="416.534" y="679.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="70"/>
+	<text transform="matrix(1 0 0 1 422.29 696.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">bitstype</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">- size &gt; 0</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- no fields</tspan></text>
 </g>
 <g>
 	<rect x="70.534" y="722.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="136" height="76"/>
@@ -250,20 +256,20 @@
 	<text transform="matrix(1 0 0 1 83.0342 756.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">- undefined size</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">- no fields</tspan><tspan x="0" y="33.6" font-family="'SourceSansPro-Regular'" font-size="14">- inheritable</tspan></text>
 </g>
 <g>
-	<rect x="215.534" y="610.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="154" height="55"/>
-	<text transform="matrix(1 0 0 1 221.54 626.6865)" font-family="'SourceSansPro-Regular'" font-size="18">isbits</text>
-	<rect x="228.034" y="632.597" fill="none" width="158" height="33.334"/>
-	<text transform="matrix(1 0 0 1 228.0342 642.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">- pointer-free</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">- stored inline</tspan></text>
+	<rect x="215.534" y="639.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="154" height="55"/>
+	<text transform="matrix(1 0 0 1 221.54 655.6865)" font-family="'SourceSansPro-Regular'" font-size="18">isbits</text>
+	<rect x="228.034" y="661.597" fill="none" width="158" height="33.334"/>
+	<text transform="matrix(1 0 0 1 228.0342 671.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">- pointer-free</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">- stored inline</tspan></text>
 </g>
 <g>
-	<rect x="215.534" y="493.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="154" height="74"/>
-	<text transform="matrix(1 0 0 1 220.54 509.6865)" font-family="'SourceSansPro-Regular'" font-size="18">immutable</text>
-	<rect x="226.034" y="516.597" fill="none" width="160" height="50.333"/>
-	<text transform="matrix(1 0 0 1 226.0342 526.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">- size &gt; 0</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">- has fields</tspan><tspan x="0" y="33.6" font-family="'SourceSansPro-Regular'" font-size="14">- contains pointers</tspan></text>
+	<rect x="215.534" y="518.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="154" height="74"/>
+	<text transform="matrix(1 0 0 1 220.54 534.6865)" font-family="'SourceSansPro-Regular'" font-size="18">boxed immutable</text>
+	<rect x="226.034" y="541.597" fill="none" width="160" height="50.333"/>
+	<text transform="matrix(1 0 0 1 226.0342 551.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">- size &gt; 0</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">- has fields</tspan><tspan x="0" y="33.6" font-family="'SourceSansPro-Regular'" font-size="14">- contains pointers</tspan></text>
 </g>
 <g>
-	<rect x="416.534" y="725.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="94"/>
-	<text transform="matrix(1 0 0 1 422.7896 741.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">ghost</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">singleton</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- size is zero</tspan><tspan x="0" y="64.8" font-family="'SourceSansPro-Regular'" font-size="18">- unique instance</tspan></text>
+	<rect x="416.534" y="761.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="159" height="68"/>
+	<text transform="matrix(1 0 0 1 422.7896 777.9365)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">ghost singleton</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">- size is zero</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="18">- unique instance</tspan></text>
 </g>
 <g>
 	<rect x="70.534" y="318.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="114" height="115"/>
@@ -272,10 +278,15 @@
 	<text transform="matrix(1 0 0 1 77.3677 355.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">two instances are </tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">egal iff they are </tspan><tspan x="0" y="33.6" font-family="'SourceSansPro-Regular'" font-size="14">the same object </tspan><tspan x="0" y="50.4" font-family="'SourceSansPro-Regular'" font-size="14">(the same </tspan><tspan x="0" y="67.2" font-family="'SourceSansPro-Regular'" font-size="14">pointer)</tspan></text>
 </g>
 <g>
-	<rect x="385.534" y="407.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="219" height="142"/>
-	<text transform="matrix(1 0 0 1 388.8589 425.5825)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">isleaftype </tspan><tspan x="76.354" y="0" font-family="'SourceSansPro-Regular'" font-size="14">(gets a uid assigned)</tspan></text>
-	<rect x="392.034" y="432.597" fill="none" width="205.664" height="115.835"/>
-	<text transform="matrix(1 0 0 1 392.0342 441.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12"> - not an abstract type</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12"> - none of the direct type parameters</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">are a TypeVar</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12"> - no type parameter is a bound </tspan><tspan x="0" y="57.6" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar*, recursively tested</tspan><tspan x="0" y="72" font-family="'SourceSansPro-Regular'" font-size="12"> - if this is a Tuple type, then there is an </tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="12">additional restriction that all type </tspan><tspan x="0" y="100.8" font-family="'SourceSansPro-Regular'" font-size="12">parameters are leaf types</tspan></text>
+	<rect x="656.534" y="492.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="207" height="157"/>
+	<text transform="matrix(1 0 0 1 659.8589 510.583)" font-family="'SourceSansPro-Regular'" font-size="18">valid as type tags</text>
+	<rect x="663.034" y="517.597" fill="none" width="205.664" height="129.946"/>
+	<text transform="matrix(1 0 0 1 663.0342 526.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12"> - has uid assigned</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12"> - not an abstract type</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12"> - none of the direct type parameters</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">are a TypeVar</tspan><tspan x="0" y="57.6" font-family="'SourceSansPro-Regular'" font-size="12"> - no type parameter is a bound </tspan><tspan x="0" y="72" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar*, recursively tested</tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="12"> - if this is a Tuple type, then there is an </tspan><tspan x="0" y="100.8" font-family="'SourceSansPro-Regular'" font-size="12">additional restriction that all type </tspan><tspan x="0" y="115.2" font-family="'SourceSansPro-Regular'" font-size="12">parameters are leaf types</tspan></text>
+</g>
+<g>
+	<rect x="519.534" y="492.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="126" height="34"/>
+	<rect x="525.034" y="496.597" fill="none" width="116.444" height="24.889"/>
+	<text transform="matrix(1 0 0 1 525.0342 505.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">Type{T}, where T is not </tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12">a TypeVar</tspan></text>
 </g>
 <g>
 	<rect x="501.534" y="246.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="153" height="61"/>
@@ -288,40 +299,46 @@
 	<text transform="matrix(1 0 0 1 510.3589 354.9155)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">with type-parameters</tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">inserted (some or all) </tspan></text>
 </g>
 <g>
-	<rect x="887.534" y="769.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="185" height="55"/>
-	<text transform="matrix(1 0 0 1 891.8584 789.749)" font-family="'SourceSansPro-Regular'" font-size="18">*bound TypeVar</text>
-	<rect x="900.534" y="796.097" fill="none" width="168" height="26.5"/>
-	<text transform="matrix(1 0 0 1 900.5342 803.5723)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="10.5">a TypeVar is “bound” if it is a  static </tspan><tspan x="0" y="12.601" font-family="'SourceSansPro-Regular'" font-size="10.5">parameter in a function call definition</tspan></text>
+	<rect x="619.534" y="764.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="185" height="55"/>
+	<text transform="matrix(1 0 0 1 623.8584 784.749)" font-family="'SourceSansPro-Regular'" font-size="18">*bound TypeVar</text>
+	<rect x="632.534" y="791.097" fill="none" width="168" height="26.5"/>
+	<text transform="matrix(1 0 0 1 632.5342 798.5723)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="10.5">a TypeVar is “bound” if it is a  static </tspan><tspan x="0" y="12.601" font-family="'SourceSansPro-Regular'" font-size="10.5">parameter in a function call definition</tspan></text>
 </g>
 <g>
-	<rect x="887.534" y="687.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="185" height="70"/>
-	<text transform="matrix(1 0 0 1 891.8584 704.8916)" font-family="'SourceSansPro-Regular'" font-size="18">*egal</text>
-	<rect x="900.534" y="713.62" fill="none" width="168" height="37.215"/>
-	<text transform="matrix(1 0 0 1 900.5342 721.0957)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="10.5">“egal” corresponds to the “is” </tspan><tspan x="0" y="12.601" font-family="'SourceSansPro-Regular'" font-size="10.5">operator and can approximately be </tspan><tspan x="0" y="25.2" font-family="'SourceSansPro-Regular'" font-size="10.5">read as “the same”</tspan></text>
+	<rect x="619.534" y="677.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="185" height="70"/>
+	<text transform="matrix(1 0 0 1 623.8584 694.8916)" font-family="'SourceSansPro-Regular'" font-size="18">*egal</text>
+	<rect x="632.534" y="703.62" fill="none" width="168" height="37.215"/>
+	<text transform="matrix(1 0 0 1 632.5342 711.0957)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="10.5">“egal” corresponds to the “is” </tspan><tspan x="0" y="12.601" font-family="'SourceSansPro-Regular'" font-size="10.5">operator and means </tspan><tspan x="0" y="25.2" font-family="'SourceSansPro-Regular'" font-size="10.5">“indistinguishable”</tspan></text>
 </g>
 <g>
-	<rect x="615.534" y="408.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="138" height="64"/>
-	<text transform="matrix(1 0 0 1 619.0259 426.999)" font-family="'SourceSansPro-Regular'" font-size="18">not constructible</text>
-	<text transform="matrix(1 0 0 1 629.0342 443.9521)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">undefined size</tspan><tspan x="0" y="16.799" font-family="'SourceSansPro-Regular'" font-size="14">and layout</tspan></text>
+	<rect x="437.534" y="405.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="138" height="58"/>
+	<text transform="matrix(1 0 0 1 441.0259 423.999)" font-family="'SourceSansPro-Regular'" font-size="18">not constructible</text>
+	<text transform="matrix(1 0 0 1 450.0342 440.9521)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">undefined size</tspan><tspan x="0" y="16.799" font-family="'SourceSansPro-Regular'" font-size="14">and layout</tspan></text>
 </g>
 <g>
-	<rect x="765.534" y="445.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="116" height="52"/>
-	<rect x="770.034" y="452.597" fill="none" width="109.5" height="40"/>
-	<text transform="matrix(1 0 0 1 770.0342 461.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">abstract type with no </tspan><tspan x="0" y="14.399" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar parameters, </tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">recursively tested</tspan></text>
+	<rect x="954.534" y="550.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="116" height="52"/>
+	<rect x="959.034" y="556.597" fill="none" width="109.5" height="40"/>
+	<text transform="matrix(1 0 0 1 959.0342 565.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">abstract type with no </tspan><tspan x="0" y="14.399" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar parameters, </tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">recursively tested</tspan></text>
 </g>
 <g>
-	<rect x="933.534" y="464.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="143" height="65"/>
-	<rect x="937.701" y="469.739" fill="none" width="137" height="56.024"/>
-	<text transform="matrix(1 0 0 1 937.7012 478.2832)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">no type parameter is a </tspan><tspan x="0" y="14.399" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar or Union, </tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">recursively tested (affects </tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">Tuple types)</tspan></text>
+	<rect x="947.534" y="362.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="137" height="65"/>
+	<rect x="951.701" y="367.739" fill="none" width="137" height="56.024"/>
+	<text transform="matrix(1 0 0 1 951.7012 376.2832)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12">no type parameter is a </tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar or Union, </tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12">recursively tested (affects </tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">Tuple and abstract types)</tspan></text>
+</g>
+<rect x="813.534" y="363.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="126" height="48"/>
+<text transform="matrix(1 0 0 1 819.0342 380.2441)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">comparable by</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">pointer</tspan></text>
+<g>
+	<rect x="870.534" y="303.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="141" height="31"/>
+	<text transform="matrix(1 0 0 1 880.4951 322.5967)" font-family="'SourceSansPro-Regular'" font-size="18">egal comparable</text>
 </g>
 <g>
-	<rect x="871.534" y="557.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="164" height="48"/>
-	<text transform="matrix(1 0 0 1 880.7754 574.2441)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">DataType is pointer</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18"> (egal) comparable</tspan></text>
+	<rect x="598.534" y="405.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="102" height="60"/>
+	<text transform="matrix(1 0 0 1 608.4956 424.5967)" font-family="'SourceSansPro-Regular'" font-size="18">is leaf type</text>
 </g>
 <g>
-	<rect x="644.534" y="525.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="144" height="37"/>
-	<rect x="649.034" y="529.597" fill="none" width="138.5" height="30.5"/>
-	<text transform="matrix(1 0 0 1 649.0342 539.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">unique’d and gc-rooted </tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">via a type cache</tspan></text>
+	<rect x="900.534" y="630.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="144" height="37"/>
+	<rect x="905.034" y="633.597" fill="none" width="138.5" height="30.5"/>
+	<text transform="matrix(1 0 0 1 905.0342 643.5645)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="14">unique’d and gc-rooted </tspan><tspan x="0" y="16.8" font-family="'SourceSansPro-Regular'" font-size="14">via a type cache</tspan></text>
 </g>
 <g>
 	<rect x="70.534" y="495.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="114" height="197"/>
@@ -343,7 +360,7 @@
 </g>
 <g>
 	<rect x="563.534" y="83.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="99" height="46"/>
-	<text transform="matrix(1 0 0 1 573.2832 100.9155)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">all type</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">objects</tspan></text>
+	<text transform="matrix(1 0 0 1 573.2832 100.9155)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="18">all other</tspan><tspan x="0" y="21.6" font-family="'SourceSansPro-Regular'" font-size="18">objects</tspan></text>
 </g>
 <g>
 	<g>
@@ -354,6 +371,19 @@
 		</g>
 		<g>
 			<polygon points="459.02,145.148 458.647,149.154 461.273,152.203 451.784,151.347 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		
+			<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12,8" points="
+			840.593,136.408 825.159,184.722 840.593,233.035 		"/>
+		<g>
+			<polygon points="836.21,137.957 840.217,137.585 843.266,140.21 842.409,130.722 			"/>
+		</g>
+		<g>
+			<polygon points="836.21,231.486 840.217,231.858 843.266,229.233 842.409,238.722 			"/>
 		</g>
 	</g>
 </g>
@@ -371,13 +401,13 @@
 </g>
 <g>
 	<g>
-		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="404.546,683.145 
-			374.705,640.236 404.546,597.328 		"/>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="404.546,716.145 
+			374.705,673.236 404.546,630.328 		"/>
 		<g>
-			<polygon points="405.983,678.725 403.841,682.131 399.902,682.953 407.955,688.046 			"/>
+			<polygon points="405.983,711.725 403.841,715.131 399.902,715.953 407.955,721.046 			"/>
 		</g>
 		<g>
-			<polygon points="405.983,601.748 403.841,598.342 399.902,597.52 407.955,592.427 			"/>
+			<polygon points="405.983,634.748 403.841,631.342 399.902,630.52 407.955,625.427 			"/>
 		</g>
 	</g>
 </g>
@@ -387,27 +417,9 @@
 <g>
 	<g>
 		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="994.86" y1="533.542" x2="946.634" y2="549.248"/>
+			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="374.705" y1="673.599" x2="409.129" y2="791.131"/>
 		<g>
-			<polygon points="948.158,544.857 947.809,548.865 950.451,551.899 940.958,551.097 			"/>
-		</g>
-	</g>
-</g>
-<g>
-	<g>
-		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="789.659" y1="503.597" x2="741.346" y2="519.03"/>
-		<g>
-			<polygon points="742.895,514.647 742.522,518.654 745.148,521.703 735.659,520.847 			"/>
-		</g>
-	</g>
-</g>
-<g>
-	<g>
-		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="374.705" y1="640.599" x2="409.129" y2="758.131"/>
-		<g>
-			<polygon points="404.786,756.477 408.782,756.945 411.894,754.396 410.808,763.86 			"/>
+			<polygon points="404.786,789.477 408.782,789.945 411.894,787.396 410.808,796.86 			"/>
 		</g>
 	</g>
 </g>
@@ -427,49 +439,97 @@
 </g>
 <g>
 	<g>
-		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="204.593,406.035 
-			189.159,357.722 204.593,309.408 		"/>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="205.593,406.035 
+			190.159,357.722 205.593,309.408 		"/>
 		<g>
-			<polygon points="207.266,402.233 204.217,404.858 200.21,404.486 206.409,411.722 			"/>
+			<polygon points="208.266,402.233 205.217,404.858 201.21,404.486 207.409,411.722 			"/>
 		</g>
 		<g>
-			<polygon points="207.266,313.21 204.217,310.585 200.21,310.957 206.409,303.722 			"/>
-		</g>
-	</g>
-</g>
-<g>
-	<g>
-		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="204.593,625.035 
-			189.159,576.722 204.593,528.408 		"/>
-		<g>
-			<polygon points="207.266,621.232 204.217,623.858 200.21,623.486 206.409,630.722 			"/>
-		</g>
-		<g>
-			<polygon points="207.266,532.211 204.217,529.585 200.21,529.957 206.409,522.722 			"/>
+			<polygon points="208.266,313.21 205.217,310.585 201.21,310.957 207.409,303.722 			"/>
 		</g>
 	</g>
 </g>
 <g>
 	<g>
-		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="538.221,399.53 
-			586.534,384.097 634.848,399.53 		"/>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="205.593,663.035 
+			190.159,614.722 205.593,566.408 		"/>
 		<g>
-			<polygon points="542.023,402.203 539.397,399.154 539.77,395.148 532.534,401.347 			"/>
+			<polygon points="208.266,659.232 205.217,661.858 201.21,661.486 207.409,668.722 			"/>
 		</g>
 		<g>
-			<polygon points="631.045,402.203 633.671,399.154 633.299,395.148 640.534,401.347 			"/>
+			<polygon points="208.266,570.211 205.217,567.585 201.21,567.957 207.409,560.722 			"/>
 		</g>
 	</g>
 </g>
 <g>
 	<g>
-		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="669.471,583.03 
-			717.784,567.597 766.098,583.03 		"/>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="538.221,398.53 
+			586.534,383.097 634.848,398.53 		"/>
 		<g>
-			<polygon points="673.273,585.703 670.647,582.654 671.02,578.647 663.784,584.847 			"/>
+			<polygon points="542.023,401.203 539.397,398.154 539.77,394.148 532.534,400.347 			"/>
 		</g>
 		<g>
-			<polygon points="762.295,585.703 764.921,582.654 764.549,578.647 771.784,584.847 			"/>
+			<polygon points="631.045,401.203 633.671,398.154 633.299,394.148 640.534,400.347 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="603.221,484.53 
+			651.534,469.097 699.848,484.53 		"/>
+		<g>
+			<polygon points="607.023,487.203 604.397,484.154 604.77,480.147 597.534,486.347 			"/>
+		</g>
+		<g>
+			<polygon points="696.045,487.203 698.671,484.154 698.299,480.147 705.534,486.347 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="921.471,687.03 
+			969.784,671.597 1018.098,687.03 		"/>
+		<g>
+			<polygon points="925.273,689.703 922.647,686.654 923.02,682.647 915.784,688.847 			"/>
+		</g>
+		<g>
+			<polygon points="1014.295,689.703 1016.921,686.654 1016.549,682.647 1023.784,688.847 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="891.471,355.03 
+			939.784,339.597 988.098,355.03 		"/>
+		<g>
+			<polygon points="895.273,357.703 892.647,354.654 893.02,350.648 885.784,356.847 			"/>
+		</g>
+		<g>
+			<polygon points="984.295,357.703 986.921,354.654 986.549,350.648 993.784,356.847 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="670.837,293.142 
+			806.409,393.222 755.163,476.513 		"/>
+		<g>
+			<polygon points="670.897,297.79 671.831,293.876 675.296,291.831 666.034,289.597 			"/>
+		</g>
+		<g>
+			<polygon points="753.48,472.18 755.81,475.46 759.788,476.061 752.034,481.597 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<polyline fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" points="972.098,609.413 
+			923.784,624.847 875.471,609.413 		"/>
+		<g>
+			<polygon points="968.295,606.74 970.921,609.789 970.549,613.796 977.784,607.597 			"/>
+		</g>
+		<g>
+			<polygon points="879.273,606.74 876.647,609.789 877.02,613.796 869.784,607.597 			"/>
 		</g>
 	</g>
 </g>
@@ -477,28 +537,84 @@
 	<path fill="none" d="M498.409,168.753"/>
 </g>
 <g>
-	<path fill="none" d="M397.548,704.458"/>
+	<path fill="none" d="M397.548,737.458"/>
 </g>
 <rect x="611.867" y="62.311" fill="none" width="80.939" height="15.25"/>
 <text transform="matrix(1 0 0 1 611.8633 71.9023)" font-family="'SourceSansPro-Regular'" font-size="13.5">composed of</text>
 <g>
 	<g>
-		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" d="M502.696,39.6
-			c-1.781,0.49-3.707,1.047-5.76,1.667"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M497.91,43.064
+			c-1.852,0.484-3.786,1.004-5.793,1.557"/>
 		
-			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" stroke-dasharray="12.2195,8.1463" d="
-			M489.167,43.714C431.97,62.44,309.583,116.712,365.532,157.813"/>
-		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" d="M368.895,160.127
-			c1.599,1.034,3.316,2.058,5.157,3.073"/>
+			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="11.9285,7.9523" d="
+			M484.466,46.792c-74.237,21.63-222.298,80.559-111.932,119.068"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M376.307,167.134
+			c1.843,0.604,3.752,1.203,5.729,1.795"/>
 		<g>
-			<polygon points="369.869,165.131 372.984,162.584 373.313,158.575 379.363,165.935 			"/>
+			<polygon points="494.264,40.253 496.728,43.434 496.149,47.416 503.696,41.6 			"/>
 		</g>
 	</g>
 </g>
-<rect x="360.7" y="125.888" fill="none" width="37.5" height="15.25"/>
-<text transform="matrix(1 0 0 1 360.7002 135.4995)" font-family="'SourceSansPro-Regular'" font-size="13.5">typeof</text>
-<rect x="10.984" y="11.041" fill="none" width="157.492" height="131.994"/>
-<text transform="matrix(1 0 0 1 10.9844 36.6729)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="36">Julia v0.4 </tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="36">Types </tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="36">Properties</tspan></text>
+<g>
+	<g>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M442.927,99.765
+			c-1.892,0.467-3.842,0.928-5.839,1.384"/>
+		
+			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="11.6174,7.7449" d="
+			M429.52,102.812c-51.495,10.974-123.707,20.561-55.181,56.925"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M377.774,161.522
+			c1.713,0.873,3.505,1.76,5.377,2.663"/>
+		<g>
+			<polygon points="439.286,96.81 441.714,100.018 441.09,103.993 448.702,98.263 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M374.728,178.74
+			c-2.092,0.077-4.089,0.182-5.992,0.313"/>
+		
+			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12.3187,8.2125" d="
+			M360.558,179.834c-31.13,3.927-27.207,15.866,10.371,17.562"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M375.034,197.537
+			c1.922,0.046,3.922,0.066,6,0.06"/>
+		<g>
+			<polygon points="371.803,175.181 373.495,178.832 372.042,182.583 380.696,178.6 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M462.702,207.596
+			c1.73,0.98,3.489,1.933,5.273,2.857"/>
+		
+			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12.2948,8.1965" d="
+			M475.341,214.05c83.368,38.335,215.864,22.803,256.971,3.978"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M735.984,216.206
+			c1.997-1.08,3.683-2.166,5.033-3.247"/>
+		<g>
+			<polygon points="741.876,217.361 740.059,213.772 736.213,212.588 744.702,208.263 			"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M478.035,206.93
+			c1.795,0.886,3.603,1.747,5.419,2.581"/>
+		
+			<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12.1561,8.104" d="
+			M490.879,212.757c36.216,15.064,74.547,20.086,94.808,16.837"/>
+		<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M589.656,228.795
+			c2.193-0.546,4.085-1.218,5.637-2.013"/>
+		<g>
+			<polygon points="595.358,231.233 594.182,227.385 590.596,225.56 599.701,222.753 			"/>
+		</g>
+	</g>
+</g>
+<rect x="359.367" y="127.888" fill="none" width="37.5" height="15.25"/>
+<text transform="matrix(1 0 0 1 359.3667 137.4995)" font-family="'SourceSansPro-Regular'" font-size="13.5">typeof</text>
+<rect x="22.542" y="25.597" fill="none" width="157.492" height="131.994"/>
+<text transform="matrix(1 0 0 1 22.542 51.2285)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="36">Julia v0.4 </tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="36">Types </tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="36">Properties</tspan></text>
 <g>
 	<g>
 		<g>
@@ -528,17 +644,14 @@
 		</g>
 	</g>
 </g>
-<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" x1="661.034" y1="274.597" x2="910.034" y2="274.597"/>
-<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="795.034" y1="535.597" x2="910.034" y2="535.597"/>
-<g>
-	<g>
-		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" x1="910.034" y1="274.597" x2="910.034" y2="546.597"/>
-		<g>
-			<polygon points="906.331,543.318 910.034,544.892 913.737,543.318 910.034,552.097 			"/>
-		</g>
-	</g>
-</g>
+<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="
+	M868.034,493.597"/>
+<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="
+	M910.034,493.597"/>
+<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="
+	M973.37,335.928"/>
+<path fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="
+	M663.034,297.597"/>
 <g>
 	<g>
 		<g>
@@ -560,32 +673,15 @@
 	</g>
 </g>
 <g>
-	<g>
-		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="609.909" y1="502.597" x2="658.223" y2="518.03"/>
-		<g>
-			<polygon points="654.42,520.703 657.046,517.654 656.674,513.647 663.909,519.847 			"/>
-		</g>
-	</g>
+	<path fill="none" d="M719.91,376.847"/>
 </g>
 <g>
 	<g>
 		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="659.909" y1="336.597" x2="708.223" y2="352.03"/>
+			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="505.909" y1="134.097" x2="755.577" y2="150.457"/>
 		<g>
-			<polygon points="704.42,354.703 707.046,351.654 706.674,347.648 713.909,353.847 			"/>
+			<polygon points="752.533,153.968 754.345,150.375 753.017,146.578 761.534,150.847 			"/>
 		</g>
 	</g>
 </g>
-<g>
-	<g>
-		
-			<line fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10" x1="625.909" y1="181.597" x2="674.223" y2="197.03"/>
-		<g>
-			<polygon points="670.42,199.703 673.046,196.654 672.674,192.648 679.909,198.847 			"/>
-		</g>
-	</g>
-</g>
-<text transform="matrix(1 0 0 1 695.3721 520.2744)" font-family="'SourceSansPro-Regular'" font-size="14">+</text>
-<text transform="matrix(1 0 0 1 924.7051 550.2744)" font-family="'SourceSansPro-Regular'" font-size="14">+</text>
 </svg>
