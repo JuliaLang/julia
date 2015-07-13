@@ -1453,7 +1453,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);
 
-int jl_in_vinfo_array(jl_array_t *a, jl_value_t *v);
+int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v);
 
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
