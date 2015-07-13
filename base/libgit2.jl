@@ -3,9 +3,11 @@
 module LibGit2
 
 import Base: merge!, cat
-import ..Pkg
 
 export with, GitRepo, GitConfig
+
+const GITHUB_REGEX =
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 include("libgit2/const.jl")
 include("libgit2/types.jl")
@@ -117,7 +119,7 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
 
-        m = match(Pkg.GitHub.GITHUB_REGEX,url)
+        m = match(GITHUB_REGEX,url)
         if m != nothing
             push = "git@github.com:$(m.captures[1]).git"
             if push != url
@@ -357,9 +359,9 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     snd_id = revparseid(repo, snd)
     base_id = merge_base(string(fst_id), string(snd_id), repo)
     fc = count((i,r)->i!=base_id, repo, oid=fst_id,
-                by=Pkg.LibGit2.GitConst.SORT_TOPOLOGICAL)
+                by=GitConst.SORT_TOPOLOGICAL)
     sc = count((i,r)->i!=base_id, repo, oid=snd_id,
-                by=Pkg.LibGit2.GitConst.SORT_TOPOLOGICAL)
+                by=GitConst.SORT_TOPOLOGICAL)
     return (fc-1, sc-1)
 end
 

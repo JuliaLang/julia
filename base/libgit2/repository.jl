@@ -4,7 +4,7 @@ function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
-    if err != Error.GIT_OK[]
+    if err != Int(Error.GIT_OK)
         if repo_ptr_ptr[] != C_NULL
             finalize(GitRepo(repo_ptr_ptr[]))
         end
@@ -73,9 +73,9 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
               obj_ptr_ptr, r.ptr, id_ptr, git_otype)
     end
-    if err == Error.ENOTFOUND[]
+    if err == Int(Error.ENOTFOUND)
         return nothing
-    elseif err != Error.GIT_OK[]
+    elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(obj_ptr_ptr[]))
         end
@@ -103,9 +103,9 @@ function peel(obj::GitObject, obj_type::Cint)
     git_otype = getobjecttype(obj_type)
     err = ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), peeled_ptr_ptr, obj.ptr, obj_type)
-    if err == Error.ENOTFOUND[]
+    if err == Int(Error.ENOTFOUND)
         return Oid()
-    elseif err != Error.GIT_OK[]
+    elseif err != Int(Error.GIT_OK)
         if peeled_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(peeled_ptr_ptr[]))
         end

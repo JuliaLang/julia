@@ -4,9 +4,6 @@ module GitHub
 
 import Main, ...LibGit2, ..Dir, ...Pkg.PkgError
 
-const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
-
 const AUTH_NOTE = "Julia Package Manager"
 const AUTH_DATA = Dict{Any,Any}(
     "scopes" => ["repo"],
@@ -153,7 +150,7 @@ function fork(owner::AbstractString, repo::AbstractString)
 end
 
 function normalize_url(url::AbstractString)
-    m = match(GITHUB_REGEX,url)
+    m = match(LibGit2.GITHUB_REGEX,url)
     m == nothing ? url : "https://github.com/$(m.captures[1]).git"
 end
 
