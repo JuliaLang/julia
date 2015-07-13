@@ -177,27 +177,6 @@ function getindex(::Type{Any}, vals::ANY...)
     return a
 end
 
-if _oldstyle_array_vcat_
-# T[a:b] and T[a:s:b] also construct typed ranges
-function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
-    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
-    copy!(Array(T,length(r)), r)
-end
-
-function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
-    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
-    a = Array(T,length(r1)+sum(length,rs))
-    o = 1
-    copy!(a, o, r1)
-    o += length(r1)
-    for r in rs
-        copy!(a, o, r)
-        o += length(r)
-    end
-    return a
-end
-end #_oldstyle_array_vcat_
-
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
     return a
