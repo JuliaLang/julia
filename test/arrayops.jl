@@ -828,8 +828,9 @@ end
 @test reverse!([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse!([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
-@test_throws BoundsError reverse!([1:10;], 11)
+@test reverse!([1:10;], 11) == [1:10;]
 @test_throws BoundsError reverse!([1:10;], 1, 11)
+@test reverse!(Any[]) == Any[]
 
 # flipdim
 @test isequal(flipdim([2,3,1], 1), [1,3,2])
