@@ -51,6 +51,17 @@ ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
 
+# For now this is LLVM specific, but I expect it won't be in the future
+ifneq ($(LLVM_USE_CMAKE),)
+ifeq ($(CMAKE_GENERATOR),Ninja)
+CMAKE_GENERATOR_COMMAND = -G Ninja
+else ifeq ($(CMAKE_GENERATOR),make)
+CMAKE_GENERATOR_COMMAND = -G "Unix Makefiles"
+else
+$(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
+endif
+endif
+
 # If the top-level Makefile is called with environment variables,
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
@@ -204,14 +215,17 @@ $(build_prefix): | $(DIRS)
 #   	touch -c $@
 # this rule ensures that make install is more nearly atomic
 # so it's harder to get half-installed (or half-reinstalled) dependencies
-MAKE_DESTDIR = DESTDIR="$(build_staging)/$1"
-define make-install
+MAKE_DESTDIR = "$(build_staging)/$1"
+define staged-install
 	rm -rf $(build_staging)/$1
-	+$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
+	$2
 	mkdir -p $(build_prefix)
 	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
 endef
 
+define make-install
+	$(call staged-install,$1,+$(MAKE) -C $1 install $(MAKE_COMMON) $2 DESTDIR=$(call MAKE_DESTDIR,$1))
+endef
 
 ## A rule for making a git-external dependency ##
 # call syntax:
@@ -299,7 +313,11 @@ endif
 endif
 
 LLVM_LIB_FILE = libLLVMCodeGen.a
+ifeq ($(LLVM_USE_CMAKE),1)
+LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/lib/$(LLVM_LIB_FILE)
+else
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
+endif
 LLVM_OBJ_TARGET = $(build_libdir)/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
@@ -339,7 +357,9 @@ endif # LLVM_VER != svn
 LLVM_CXXFLAGS = $(CXXFLAGS)
 LLVM_CPPFLAGS = $(CPPFLAGS)
 LLVM_LDFLAGS = $(LDFLAGS)
-LLVM_TARGET_FLAGS= --enable-targets=host
+LLVM_TARGETS = host
+LLVM_TARGET_FLAGS = --enable-targets=$(LLVM_TARGETS)
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
@@ -385,6 +405,7 @@ LLVM_CXXFLAGS += -std=c++0x
 endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
 LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
+LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
@@ -546,35 +567,35 @@ else
 ifneq ($(LLVM_GIT_VER),)
 	(cd llvm-$(LLVM_VER) && \
 		git checkout $(LLVM_GIT_VER))
-endif
-endif
+endif # LLVM_GIT_VER
+endif # LLVM_VER
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
-endif
+endif # LLVM_CLANG_TAR
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
 	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
-endif
+endif # LLVM_COMPILER_RT_TAR
 ifneq ($(LLVM_LLDB_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/lldb && \
 	$(TAR) -C llvm-$(LLVM_VER)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
-endif
+endif # LLVM_LLDB_TAR
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only)
-endif
+endif # BUILD_LLVM_CLANG
 ifeq ($(BUILD_LLDB),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		git clone $(LLVM_GIT_URL_LLDB) llvm-$(LLVM_VER)/tools/lldb  ) || \
 		(cd llvm-$(LLVM_VER)/tools/lldb  && \
 		git pull --ff-only)
-endif
-endif
+endif # BUILD_LLDB
+endif # LLVM_VER
 ifeq ($(LLVM_VER),svn)
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
@@ -588,9 +609,9 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 ifneq ($(LLVM_CLANG_VER),)
 	(cd llvm-$(LLVM_VER) && \
 		git checkout $(LLVM_GIT_VER))
-endif
-endif
-endif
+endif # LLVM_CLANG_VER
+endif # BUILD_LLVM_CLANG
+endif # LLVM_VER
 
 # Apply version-specific LLVM patches
 ifeq ($(LLVM_VER),3.3)
@@ -602,44 +623,73 @@ ifeq ($(LLVM_VER),3.3)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
-endif
-endif
+endif # x86_64
+endif # WINNT
 
 else ifeq ($(LLVM_VER),3.6.0)
 	cd llvm-3.6.0 && patch -p1 < ../zerosign-llvm-3.6.0.patch
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	cd llvm-3.6.0 && patch -p1 < ../win64-allocas-llvm-3.6.0.patch
-endif
-endif
+endif # x86_64
+endif # WINNT
 
-endif
+endif # LLVM_VER
 	touch -c $@
 # end target llvm-$(LLVM_VER)/configure
 
-llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+LLVM_BUILDDIR = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)
+ifneq ($(LLVM_USE_CMAKE),)
+
+$(LLVM_BUILDDIR)/CMakeCache.txt: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+	cd llvm-$(LLVM_VER) && \
+	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	$(CMAKE) .. $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
+	touch -c $@
+
+$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR)/CMakeCache.txt | $(llvm_python_workaround)
+	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	$(CMAKE) --build .
+	touch -c $@
+
+else
+
+$(LLVM_BUILDDIR)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
-$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
+$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR)/config.status | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS) $(MAKE_COMMON)
 	touch -c $@
 
-llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
+endif # LLVM_USE_CMAKE
+
+ifeq ($(LLVM_USE_CMAKE),1)
+CHECK_COMMAND = $(CMAKE) --build . check
+else
+CHECK_COMMAND = $(MAKE) $(LLVM_MFLAGS) check
+endif
+$(LLVM_BUILDDIR)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) $(LLVM_MFLAGS) check
+	$(CHECK_COMMAND)
 endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH")
+ifeq ($(LLVM_USE_CMAKE),1)
+	$(call staged-install,$(LLVM_BUILDDIR),cd $(LLVM_BUILDDIR) && cmake -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR))$(build_prefix)" -P cmake_install.cmake)
+else
+	$(call make-install,$(LLVM_BUILDDIR),$(LLVM_MFLAGS) PATH="$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH")
+endif # LLVM_USE_CMAKE
 	touch -c $@
 
 reinstall-llvm:
