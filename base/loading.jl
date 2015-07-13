@@ -129,10 +129,10 @@ function require(mod::Symbol, cachecompile::Bool=false)
         if myid() == 1 && current_module() === Main && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             content = open(readall, path)
-            refs = Any[ @spawnat p eval(Main, :(Base.base_include($content, $path, (1, "")))) for p in procs() ]
+            refs = Any[ @spawnat p eval(Main, :(Base.include_string($content, $path))) for p in procs() ]
             for r in refs; wait(r); end
         else
-            eval(Main, :(Base.base_include($path, (1, ""))))
+            eval(Main, :(Base.base_include($path)))
         end
     finally
         loading = pop!(package_locks, mod)
@@ -159,61 +159,52 @@ function source_path(default::Union{AbstractString,Void}=nothing)
 end
 
 macro __FILE__()
-    sp = source_path()
-    if !isa(sp, Tuple{Int,Any})
-        return ":unknown:\0$sp"
-    elseif sp[1] === 0
-        return ":string:\0$(sp[2])"
-    elseif sp[1] !== myid()
-        return ":node $(sp[1]):\0$(sp[2])"
-    else
-        return sp[2]
-    end
+    return source_path()
 end
 
 # base_include is the implementation for Base.include
-# if relative_to::Void, it uses the working directory and node of the previous (recursive) include to find the file
-# relative_to is a tuple of (node, cwd), where node can be 0 iff the content is from a string (sans a real path)
+# if relative_to::Void, it uses the dirpath of the previous (recursive) include to find the file
+# relative_to is an alternate , where node can be 0 iff the content is from a string (sans a real path)
 function base_include(content::Nullable{ByteString}, path::AbstractString, relative_to=nothing)
     prev = source_path(nothing)
-    local bytepath::ByteString, node::Int
+    local bytepath::ByteString
     if !isnull(content)
         # already have content, so no need for file-system operations
         if relative_to === nothing
-            node = 0
             bytepath = bytestring(path)
         else
-            node = relative_to[1]
-            bytepath = bytestring(joinpath(relative_to[2],path))
+            bytepath = bytestring(joinpath(relative_to, path))
         end
     else
         if prev !== nothing && relative_to === nothing
             # if this is a recursive include without explicit relative_to location
             # pick up previous location for last include
-            relative_to = (prev[1], dirname(prev[2]))
+            relative_to = dirname(prev)
         end
-        if relative_to === nothing || relative_to[1] === 0
-            # no previous path, pick up location from host
-            node = myid()
-            bytepath = bytestring(abspath(path))
+        if relative_to === nothing
+            # no previous path, pick up absolute path location from node 1
+            if myid() == 1 || isabspath(path)
+                bytepath = bytestring(abspath(path))
+            else
+                bytepath = remotecall_fetch(1, path -> bytestring(abspath(path)), path)
+            end
         else
-            node = relative_to[1]
-            bytepath = bytestring(joinpath(relative_to[2],path))
+            bytepath = bytestring(joinpath(relative_to, path))
         end
     end
 
     tls = task_local_storage()
-    tls[:SOURCE_PATH] = (node, bytepath)
+    tls[:SOURCE_PATH] = bytepath
     try
         if isnull(content)
-            if myid() === node
+            if myid() === 1
                 # sleep a bit to process requests from other nodes
                 nprocs()>1 && yield()
                 result = Core.include(bytepath)
                 nprocs()>1 && yield()
                 return result
             else
-                content = Nullable{ByteString}(remotecall_fetch(node, readall, bytepath))
+                content = Nullable{ByteString}(remotecall_fetch(1, readall, bytepath))
                 # fall-through now that content is assigned
             end
         end
@@ -228,7 +219,6 @@ function base_include(content::Nullable{ByteString}, path::AbstractString, relat
         end
     end
 end
-base_include(content::AbstractString, path::AbstractString, relative_to=nothing) = base_include(Nullable{ByteString}(content), path, relative_to)
 base_include(path::AbstractString, relative_to=nothing) = base_include(Nullable{ByteString}(), path, relative_to)
 include_string(txt::AbstractString, fname::AbstractString="none") = base_include(Nullable{ByteString}(bytestring(txt)), bytestring(fname))
 

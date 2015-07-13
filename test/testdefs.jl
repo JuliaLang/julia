@@ -4,7 +4,7 @@ using Base.Test
 
 function runtests(name, cwd)
     @printf("     \033[1m*\033[0m \033[31m%-20s\033[0m", name)
-    tt = @elapsed include("$name.jl", (1, cwd))
+    tt = @elapsed include("$name.jl", cwd)
     @printf(" in %6.2f seconds\n", tt)
     nothing
 end
