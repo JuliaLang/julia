@@ -1453,6 +1453,8 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);
 
+int jl_in_vinfo_array(jl_array_t *a, jl_value_t *v);
+
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
     jl_array_t *closed = jl_lam_capt((jl_expr_t*)ast);
@@ -1466,6 +1468,8 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
         tvs = jl_svec_data(tvars);
         tvarslen = jl_svec_len(tvars);
     }
+    if (jl_in_vinfo_array(closed, ((jl_tvar_t*)tvs[0])->name))
+        return;
     size_t i;
     jl_array_t *vi=NULL;
     JL_GC_PUSH1(&vi);

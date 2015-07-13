@@ -634,3 +634,23 @@ end
 
 @deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset=position(s)) mmap(s, BitArray, dims, offset)
 @deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)
+
+
+# T[a:b] and T[a:s:b]
+@noinline function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
+    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
+    copy!(Array(T,length(r)), r)
+end
+
+function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
+    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
+    a = Array(T,length(r1)+sum(length,rs))
+    o = 1
+    copy!(a, o, r1)
+    o += length(r1)
+    for r in rs
+        copy!(a, o, r)
+        o += length(r)
+    end
+    return a
+end

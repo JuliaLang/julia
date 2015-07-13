@@ -32,8 +32,9 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios)!=0
 function flush(s::IOStream)
     sigatomic_begin()
-    systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
+    bad = ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0
     sigatomic_end()
+    systemerror("flush", bad)
     s
 end
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
@@ -214,22 +215,59 @@ function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
 
-function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b))
+function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    while !eof(s) && nr < nb
+    while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
         end
-        nr += Int(ccall(:ios_readall, UInt,
-                        (Ptr{Void}, Ptr{Void}, UInt),
+        nr += Int(ccall(:ios_readall, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                         s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
+        eof(s) && break
     end
-    if lb > olb
+    if lb > olb && lb > nr
         resize!(b, nr) # shrink to just contain input data if was resized
     end
     return nr
+end
+
+function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
+    olb = lb = length(b)
+    if nb > lb
+        resize!(b, nb)
+    end
+    nr = Int(ccall(:ios_read, UInt, (Ptr{Void}, Ptr{Void}, UInt),
+                   s.ios, pointer(b), nb))
+    if lb > olb && lb > nr
+        resize!(b, nr)
+    end
+    return nr
+end
+
+function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
+    return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
+end
+
+function readbytes(s::IOStream)
+    sz = 0
+    try # filesize is just a hint, so ignore if it fails
+        sz = filesize(s)
+        pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+        if pos > 0
+            sz -= pos
+        end
+    end
+    b = Array(UInt8, sz<=0 ? 1024 : sz)
+    nr = readbytes_all!(s, b, typemax(Int))
+    resize!(b, nr)
+end
+
+function readbytes(s::IOStream, nb::Integer; all::Bool=true)
+    b = Array(UInt8, nb)
+    nr = readbytes!(s, b, nb, all=all)
+    resize!(b, nr)
 end
 
 ## Character streams ##
