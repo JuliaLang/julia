@@ -4,7 +4,7 @@ using Base.Pkg.Types
 using Base.Pkg.Query
 using Base.Pkg.Resolve
 using Base.Pkg.Resolve.VersionWeights
-using Base.Pkg.PkgError
+import Base.Pkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 

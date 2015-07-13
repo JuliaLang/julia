@@ -23,7 +23,6 @@ module Error
             EPEEL           = Cint(-19), # the requested peel operation is not possible
             PASSTHROUGH     = Cint(-30), # internal only
             ITEROVER        = Cint(-31)) # signals end of iteration
-Base.getindex(c::Code) = c.val
 
 @enum(Class, None,
              NoMemory,
