@@ -27,7 +27,11 @@ endif
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --ldflags) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),1)
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
+else
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
+endif
 FLAGS += -DLLVM_SHLIB
 endif
 
@@ -161,4 +165,3 @@ clean-support:
 cleanall: clean clean-flisp clean-support
 
 .PHONY: debug release clean cleanall clean-*
-
