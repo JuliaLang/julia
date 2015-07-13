@@ -274,7 +274,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # load file immediately on all processors
             if opts.load != C_NULL
-                let file = bytestring(abspath(opts.load))
+                let file = abspath(bytestring(opts.load))
                     @everywhere include($file)
                 end
             end

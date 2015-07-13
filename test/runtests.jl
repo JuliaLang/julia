@@ -11,9 +11,7 @@ end
 
 @everywhere include("testdefs.jl")
 
-let cwd = pwd()
-    reduce(propagate_errors, nothing, pmap(test->runtests(test, cwd), tests; err_retry=false, err_stop=true))
-end
+reduce(propagate_errors, nothing, pmap(test->runtests(test), tests; err_retry=false, err_stop=true))
 
 @unix_only n > 1 && rmprocs(workers(), waitfor=5.0)
 println("    \033[32;1mSUCCESS\033[0m")

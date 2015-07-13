@@ -129,10 +129,10 @@ function require(mod::Symbol, cachecompile::Bool=false)
         if myid() == 1 && current_module() === Main && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             content = open(readall, path)
-            refs = Any[ @spawnat p eval(Main, :(Base.include_string($content, $path))) for p in procs() ]
+            refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in procs() ]
             for r in refs; wait(r); end
         else
-            eval(Main, :(Base.base_include($path)))
+            eval(Main, :(Base.include_from_node1($path)))
         end
     finally
         loading = pop!(package_locks, mod)
@@ -144,7 +144,15 @@ const reload = require
 
 # remote/parallel load
 
-function source_path(default::Union{AbstractString,Void}=nothing)
+include_string(txt::ByteString, fname::ByteString) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
+          txt, sizeof(txt), fname, sizeof(fname))
+
+include_string(txt::AbstractString, fname::AbstractString) = include_string(bytestring(txt), bytestring(fname))
+
+include_string(txt::AbstractString) = include_string(txt, "string")
+
+function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
@@ -158,69 +166,32 @@ function source_path(default::Union{AbstractString,Void}=nothing)
     end
 end
 
-macro __FILE__()
-    return source_path()
-end
+macro __FILE__() source_path() end
 
-# base_include is the implementation for Base.include
-# if relative_to::Void, it uses the dirpath of the previous (recursive) include to find the file
-# relative_to is an alternate , where node can be 0 iff the content is from a string (sans a real path)
-function base_include(content::Nullable{ByteString}, path::AbstractString, relative_to=nothing)
+function include_from_node1(path::AbstractString)
     prev = source_path(nothing)
-    local bytepath::ByteString
-    if !isnull(content)
-        # already have content, so no need for file-system operations
-        if relative_to === nothing
-            bytepath = bytestring(path)
-        else
-            bytepath = bytestring(joinpath(relative_to, path))
-        end
-    else
-        if prev !== nothing && relative_to === nothing
-            # if this is a recursive include without explicit relative_to location
-            # pick up previous location for last include
-            relative_to = dirname(prev)
-        end
-        if relative_to === nothing
-            # no previous path, pick up absolute path location from node 1
-            if myid() == 1 || isabspath(path)
-                bytepath = bytestring(abspath(path))
-            else
-                bytepath = remotecall_fetch(1, path -> bytestring(abspath(path)), path)
-            end
-        else
-            bytepath = bytestring(joinpath(relative_to, path))
-        end
-    end
-
+    path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
-    tls[:SOURCE_PATH] = bytepath
+    tls[:SOURCE_PATH] = path
+    local result
     try
-        if isnull(content)
-            if myid() === 1
-                # sleep a bit to process requests from other nodes
-                nprocs()>1 && yield()
-                result = Core.include(bytepath)
-                nprocs()>1 && yield()
-                return result
-            else
-                content = Nullable{ByteString}(remotecall_fetch(1, readall, bytepath))
-                # fall-through now that content is assigned
-            end
+        if myid()==1
+            # sleep a bit to process file requests from other nodes
+            nprocs()>1 && sleep(0.005)
+            result = Core.include(path)
+            nprocs()>1 && sleep(0.005)
+        else
+            result = include_string(remotecall_fetch(1, readall, path), path)
         end
-        txt = get(content)
-        return ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
-                     txt, sizeof(txt), bytepath, sizeof(bytepath))
     finally
-        if prev === nothing
+        if prev == nothing
             delete!(tls, :SOURCE_PATH)
         else
             tls[:SOURCE_PATH] = prev
         end
     end
+    result
 end
-base_include(path::AbstractString, relative_to=nothing) = base_include(Nullable{ByteString}(), path, relative_to)
-include_string(txt::AbstractString, fname::AbstractString="none") = base_include(Nullable{ByteString}(bytestring(txt)), bytestring(fname))
 
 function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
     return eval(Module(:__anon__),
