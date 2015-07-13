@@ -274,8 +274,8 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # load file immediately on all processors
             if opts.load != C_NULL
-                let file = bytestring(opts.load), cwd = pwd()
-                    @everywhere include($file, (1, $cwd))
+                let file = bytestring(abspath(opts.load))
+                    @everywhere include($file)
                 end
             end
             # eval expression
