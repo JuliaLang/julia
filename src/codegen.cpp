@@ -414,8 +414,8 @@ void jl_dump_bitcode(char *fname)
     raw_fd_ostream OS(fname, err);
 #endif
 #ifdef USE_MCJIT
+    jl_gen_llvm_gv_array(shadow_module);
     Module *bitcode = CloneModule(shadow_module);
-    jl_gen_llvm_gv_array(bitcode);
     WriteBitcodeToFile(bitcode, OS);
 #else
     Module *bitcode = CloneModule(jl_Module);
@@ -508,10 +508,10 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
     shadow_module->setTargetTriple(TM->getTargetTriple().str());
     shadow_module->setDataLayout(TM->getDataLayout()->getStringRepresentation());
     #endif
+    jl_gen_llvm_gv_array(shadow_module);
     Module *objfile = CloneModule(shadow_module);
     if (sysimg_data)
         jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
-    jl_gen_llvm_gv_array(objfile);
     PM.run(*objfile);
 #else
     Module *objfile = CloneModule(jl_Module);
