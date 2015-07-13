@@ -658,8 +658,13 @@ reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
 function reverse!(v::StridedVector, s=1, n=length(v))
+    if !(1 ≤ s ≤ endof(v))
+        throw(BoundsError(v, s))
+    elseif !(1 ≤ n ≤ endof(v))
+        throw(BoundsError(v, n))
+    end
     r = n
-    for i=s:div(s+n-1,2)
+    @inbounds for i in s:div(s+n-1, 2)
         v[i], v[r] = v[r], v[i]
         r -= 1
     end
