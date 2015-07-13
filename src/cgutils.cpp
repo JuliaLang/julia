@@ -357,14 +357,14 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_gv_array(llvm::Module *mod)
+static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap)
 {
-    ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
+    ArrayType *atype = ArrayType::get(T_psize, jl_sysimg_gvars.size());
     addComdat(new GlobalVariable(*mod,
                                  atype,
                                  true,
                                  GlobalVariable::ExternalLinkage,
-                                 ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
+                                 MapValue(ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)), VMap),
                                  "jl_sysimg_gvars"));
     addComdat(new GlobalVariable(*mod,
                                  T_size,
