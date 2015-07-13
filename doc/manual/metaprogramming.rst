@@ -991,7 +991,7 @@ multiple dispatch...)
 
 We can, of course, abuse this to produce some interesting behavior:
 
-..doctest ::
+.. doctest::
 
    julia> @generated function baz(x)
               if rand() < .9
