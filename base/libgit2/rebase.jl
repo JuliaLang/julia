@@ -2,19 +2,13 @@
 
 function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                    onto::Nullable{GitAnnotated}=Nullable{GitAnnotated}(),
-                   sig::Nullable{GitSignature}=Nullable{GitSignature}(),
                    opts::RebaseOptions = RebaseOptions())
     rebase_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    sig_obj = isnull(sig) ? default_signature(repo) : Base.get(sig)
-    try
-        @check ccall((:git_rebase_init, :libgit2), Cint,
-                      (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-                       Ptr{Void}, Ptr{SignatureStruct}, Ptr{RebaseOptions}),
-                       rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
-                       isnull(onto) ? C_NULL : Base.get(onto).ptr, sig_obj.ptr, Ref(opts))
-    finally
-        isnull(sig) && finalize(sig_obj)
-    end
+    @check ccall((:git_rebase_init, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+                   Ptr{Void}, Ptr{SignatureStruct}, Ptr{RebaseOptions}),
+                   rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
+                   isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
     return GitRebase(rebase_ptr_ptr[])
 end
 
@@ -34,12 +28,12 @@ function Base.getindex(rb::GitRebase, i::Csize_t)
 end
 Base.getindex(rb::GitRebase, i::Int) = getindex(rb, Csize_t(i))
 
-function Base.next(rb::GitRebase; opts::CheckoutOptions = CheckoutOptions())
+function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
     try
         @check ccall((:git_rebase_next, :libgit2), Cint,
-                      (Ptr{Ptr{RebaseOperation}}, Ptr{Void}, Ptr{CheckoutOptions}),
-                       rb_op_ptr_ptr, rb.ptr, Ref(opts))
+                      (Ptr{Ptr{RebaseOperation}}, Ptr{Void}),
+                       rb_op_ptr_ptr, rb.ptr)
     catch err
         err.code == Error.ITEROVER[] && return nothing
         rethrow(err)
@@ -55,13 +49,13 @@ function commit(rb::GitRebase, sig::GitSignature)
     return oid_ptr[]
 end
 
-function abort(rb::GitRebase, sig::GitSignature)
+function abort(rb::GitRebase)
     return ccall((:git_rebase_abort, :libgit2), Csize_t,
-                      (Ptr{Void}, Ptr{SignatureStruct}), rb.ptr, sig.ptr)
+                      (Ptr{Void},), rb.ptr)
 end
 
-function finish(rb::GitRebase, sig::GitSignature; opts::RebaseOptions = RebaseOptions())
+function finish(rb::GitRebase, sig::GitSignature)
     return ccall((:git_rebase_finish, :libgit2), Csize_t,
-                  (Ptr{Void}, Ptr{SignatureStruct}, Ptr{RebaseOptions}),
-                   rb.ptr, sig.ptr, Ref(opts))
+                  (Ptr{Void}, Ptr{SignatureStruct}),
+                   rb.ptr, sig.ptr)
 end

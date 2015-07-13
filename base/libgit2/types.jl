@@ -249,7 +249,7 @@ immutable DiffFile
     flags::Cuint
     mode::UInt16
 end
-DiffFile()=DiffFile(Oid(),convert(Cstring, Ptr{UInt8}(C_NULL)),Coff_t(0),Cuint(0),UInt16(0))
+DiffFile()=DiffFile(Oid(),Cstring_NULL,Coff_t(0),Cuint(0),UInt16(0))
 
 immutable DiffDelta
     status::Cint
@@ -330,8 +330,12 @@ immutable RebaseOptions
     version::Cuint
     quiet::Cint
     rewrite_notes_ref::Cstring
+    checkout_opts::CheckoutOptions
 end
-RebaseOptions()=RebaseOptions(one(Cuint), Cint(1), Cstring_NULL)
+RebaseOptions(; quiet::Cint = Cint(1),
+                rewrite_notes_ref::Cstring = Cstring_NULL,
+                checkout_opts::CheckoutOptions = CheckoutOptions()
+)=RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, checkout_opts)
 
 immutable RebaseOperation
     optype::Cint
@@ -340,6 +344,30 @@ immutable RebaseOperation
 end
 RebaseOperation()=RebaseOperation(Cint(0), Oid(), Cstring_NULL)
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
+
+immutable StatusOptions
+    version::Cuint
+    show::Cint
+    flags::Cuint
+    pathspec::StrArrayStruct
+end
+StatusOptions(; show::Cint = GitConst.STATUS_SHOW_INDEX_AND_WORKDIR,
+                flags::Cuint = GitConst.STATUS_OPT_INCLUDE_UNTRACKED |
+                               GitConst.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
+                               GitConst.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
+                               GitConst.STATUS_OPT_SORT_CASE_SENSITIVELY,
+                pathspec::StrArrayStruct = StrArrayStruct()
+)=StatusOptions(one(Cuint),
+                show,
+                flags,
+                pathspec)
+
+immutable StatusEntry
+    status::Cuint
+    head_to_index::Ptr{DiffDelta}
+    index_to_workdir::Ptr{DiffDelta}
+end
+StatusEntry()=StatusEntry(Cuint(0), C_NULL, C_NULL)
 
 # Abstract object types
 abstract AbstractGitObject
@@ -364,6 +392,7 @@ for (typ, ref, sup, fnc) in (
             (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
             (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
             (:GitRebase,     :Void, :AbstractGitObject, :(:git_rebase_free)),
+            (:GitStatus,     :Void, :AbstractGitObject, :(:git_status_list_free)),
             (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
             (:GitAnyObject,  :Void, :GitObject, nothing),
             (:GitCommit,     :Void, :GitObject, nothing),

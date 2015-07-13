@@ -11,7 +11,7 @@ end
 
 function tag_delete(repo::GitRepo, tag::AbstractString)
     @check ccall((:git_tag_delete, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{UInt8}, ), repo.ptr, tag)
+                  (Ptr{Void}, Cstring, ), repo.ptr, tag)
 end
 
 function tag_create(repo::GitRepo, tag::AbstractString, commit::AbstractString;
@@ -21,7 +21,7 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::AbstractString;
     with(get(GitCommit, repo, commit)) do commit_obj
         with(default_signature(repo)) do sig
             @check ccall((:git_tag_create, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{UInt8}, Cint),
+                 (Ptr{Oid}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
                   oid_ptr, repo.ptr, tag, commit_obj.ptr, sig.ptr, msg, Cint(force))
         end
     end

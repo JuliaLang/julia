@@ -2,7 +2,7 @@
 
 function StrArrayStruct{T<:AbstractString}(strs::T...)
     strcount = length(strs)
-    map(s->Base.unsafe_convert(Cstring, s), strs) # check for null-strings
+    map(s->Base.unsafe_convert(Cstring, bytestring(s)), strs) # check for null-strings
     sa_strings = convert(Ptr{Cstring}, Libc.malloc(sizeof(Cstring) * strcount))
     for i=1:strcount
         len = length(strs[i])

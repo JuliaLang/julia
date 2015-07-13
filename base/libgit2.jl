@@ -25,6 +25,7 @@ include("libgit2/tag.jl")
 include("libgit2/blob.jl")
 include("libgit2/diff.jl")
 include("libgit2/rebase.jl")
+include("libgit2/status.jl")
 include("libgit2/repl.jl")
 include("libgit2/utils.jl")
 
@@ -422,7 +423,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                     end
                     finish(rbs, sig)
                 catch err
-                    abort(rbs, sig)
+                    abort(rbs)
                 finally
                     finalize(rbs)
                 end
