@@ -177,27 +177,6 @@ function getindex(::Type{Any}, vals::ANY...)
     return a
 end
 
-if _oldstyle_array_vcat_
-# T[a:b] and T[a:s:b] also construct typed ranges
-function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
-    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
-    copy!(Array(T,length(r)), r)
-end
-
-function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
-    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
-    a = Array(T,length(r1)+sum(length,rs))
-    o = 1
-    copy!(a, o, r1)
-    o += length(r1)
-    for r in rs
-        copy!(a, o, r)
-        o += length(r)
-    end
-    return a
-end
-end #_oldstyle_array_vcat_
-
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
     return a
@@ -658,8 +637,14 @@ reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
 function reverse!(v::StridedVector, s=1, n=length(v))
+    if n <= s  # empty case; ok
+    elseif !(1 ≤ s ≤ endof(v))
+        throw(BoundsError(v, s))
+    elseif !(1 ≤ n ≤ endof(v))
+        throw(BoundsError(v, n))
+    end
     r = n
-    for i=s:div(s+n-1,2)
+    @inbounds for i in s:div(s+n-1, 2)
         v[i], v[r] = v[r], v[i]
         r -= 1
     end

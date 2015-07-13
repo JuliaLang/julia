@@ -399,7 +399,7 @@ map{T<:FloatingPoint}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.ste
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = unsafe_convert(Ptr{T},x) + (i-1)*elsize(x)
+pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-1)*elsize(x))
 
 
 ## Approach:

@@ -889,3 +889,16 @@ rm(dir)
 # The following fail on Windows with "stat: operation not permitted (EPERM)"
 @unix_only @test !ispath(file)
 @unix_only @test !ispath(dir)
+
+# issue #9687
+let n = tempname()
+    w = open(n, "a")
+    io = open(n)
+    write(w, "A"); flush(w)
+    @test readbytes(io) == UInt8[0x41]
+    @test readbytes(io) == UInt8[]
+    write(w, "A"); flush(w)
+    @test readbytes(io) == UInt8[0x41]
+    close(io); close(w)
+    rm(n)
+end
