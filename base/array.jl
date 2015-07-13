@@ -260,7 +260,12 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
-promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
+# don't change both arrays
+promote_rule{T,n,S}(a::Type{Array{T,n}}, b::Type{Array{S,n}}) = el_same(promote_type(T,S), a, b)
+el_same{T,n}(::Type{T}, ::Type{Array{T,n}}, ::Type{Array{T,n}}) = Array{T,n}
+el_same{T,S,n}(::Type{T}, ::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{T,n}
+el_same{T,S,n}(::Type{T}, ::Type{Array{S,n}}, ::Type{Array{T,n}}) = Array{T,n}
+el_same(::Type, a, b) = typejoin(a, b)
 
 function collect{T}(::Type{T}, itr)
     if applicable(length, itr)
