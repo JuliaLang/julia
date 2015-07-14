@@ -1168,6 +1168,7 @@ b1 = triu(bitrand(n2, n1))
 b1 = bitrand(n1,n1)
 b1 |= b1.'
 @check_bit_operation issym(b1) Bool
+@check_bit_operation ishermitian(b1) Bool
 
 b1 = bitrand(n1)
 b2 = bitrand(n2)
@@ -1235,6 +1236,12 @@ A = bitrand(10,10)
 uA = bitunpack(A)
 @test svd(A) == svd(uA)
 @test qr(A) == qr(uA)
+
+#gradient
+A = bitrand(10)
+fA = bitunpack(A)
+@test gradient(A) == gradient(fA)
+@test gradient(A,1.0) == gradient(fA,1.0)
 
 #diag and diagm
 
