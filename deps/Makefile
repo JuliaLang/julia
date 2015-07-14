@@ -686,7 +686,7 @@ endif
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,$(LLVM_BUILDDIR),cd $(LLVM_BUILDDIR) && cmake -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR))$(build_prefix)" -P cmake_install.cmake)
+	$(call staged-install,$(LLVM_BUILDDIR),cd $(LLVM_BUILDDIR) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR))$(build_prefix)" -P cmake_install.cmake)
 else
 	$(call make-install,$(LLVM_BUILDDIR),$(LLVM_MFLAGS) PATH="$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH")
 endif # LLVM_USE_CMAKE
