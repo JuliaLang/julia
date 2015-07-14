@@ -97,9 +97,8 @@ end
 # to synchronize multiple tasks trying to import/using something
 package_locks = Dict{Symbol,Condition}()
 
-# setting cachecompile=true will force a compile of a cache file
 # require always works in Main scope and loads files from node 1
-function require(mod::Symbol, cachecompile::Bool=false)
+function require(mod::Symbol)
     loading = get(package_locks, mod, false)
     if loading !== false
         # load already in progress for this module
@@ -109,22 +108,13 @@ function require(mod::Symbol, cachecompile::Bool=false)
     package_locks[mod] = Condition()
 
     try
-        if !cachecompile && _require_from_serialized(1, mod)
+        if _require_from_serialized(1, mod)
             return
         end
 
         name = string(mod)
         path = find_in_node_path(name, 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
-
-        if cachecompile || JLOptions().incremental != 0
-            # spawn off a new incremental compile task from node 1 for recursive `require` calls
-            cachefile = remotecall_fetch(1, create_expr_cache, path, name)
-            if !_require_from_serialized(1, cachefile)
-                error("Warning: require failed to create a precompiled cache file")
-            end
-            return
-        end
 
         if myid() == 1 && current_module() === Main && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
@@ -203,7 +193,7 @@ function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
-function create_expr_cache(m::Expr, name)
+function create_expr_cache(file::AbstractString, name)
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
         mkpath(cachepath)
@@ -233,7 +223,7 @@ function create_expr_cache(m::Expr, name)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
-    serialize(io, m)
+    serialize(io, :(Base.include($(abspath(file)))))
     if source !== nothing
         serialize(io, quote
             delete!(task_local_storage(), :SOURCE_PATH)
@@ -244,6 +234,11 @@ function create_expr_cache(m::Expr, name)
     return cachefile
 end
 
-function create_expr_cache(file::AbstractString, name)
-    return create_expr_cache(:(Base.include($(abspath(file)))), name)
+compile(mod::Symbol) = compile(string(mod))
+function compile(name::AbstractString)
+    path = find_in_node_path(name, 1)
+    path === nothing && throw(ArgumentError("$name not found in path"))
+    # spawn off a new incremental compile task from node 1
+    return remotecall_fetch(1, create_expr_cache, path, name)
+    # TODO: error/warning on failure?
 end
