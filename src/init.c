@@ -459,8 +459,10 @@ DLLEXPORT void uv_atexit_hook()
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     // close stdout and stderr last, since we like being
     // able to show stuff (incl. printf's)
-    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
-    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
+    if (((uv_handle_t*)jl_uv_stdout)->type < UV_HANDLE_TYPE_MAX)
+        jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
+    if (((uv_handle_t*)jl_uv_stderr)->type < UV_HANDLE_TYPE_MAX)
+        jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
     //uv_unref((uv_handle_t*)jl_uv_stdout);
     //uv_unref((uv_handle_t*)jl_uv_stderr);
     struct uv_shutdown_queue_item *item = queue.first;
