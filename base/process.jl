@@ -394,7 +394,10 @@ spawn_opts_swallow(in::Redirectable=DevNull, out::Redirectable=DevNull, err::Red
     (tuple(in,out,err,args...),false,false)
 spawn_opts_inherit(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
     (stdios,exitcb,closecb)
-spawn_opts_inherit(in::Redirectable=STDIN, out::Redirectable=STDOUT, err::Redirectable=STDERR, args...) =
+# pass original descriptors to child processes by default, because we might
+# have already exhausted and closed the libuv object for our standard streams.
+# this caused issue #8529.
+spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), args...) =
     (tuple(in,out,err,args...),false,false)
 
 spawn(pc::ProcessChainOrNot, cmds::AbstractCmd, args...) = spawn(pc, cmds, spawn_opts_swallow(args...)...)
