@@ -7,7 +7,7 @@ template<class T> // for GlobalObject's
 static T* addComdat(T *G)
 {
     if (imaging_mode && (!G->isDeclarationForLinker())) {
-        Comdat *jl_Comdat = shadow_module->getOrInsertComdat(G->getName());
+        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
         jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
         G->setComdat(jl_Comdat);
     }
@@ -357,7 +357,7 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap)
+static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, const char *sysimg_data, size_t sysimg_len)
 {
     ArrayType *atype = ArrayType::get(T_psize, jl_sysimg_gvars.size());
     addComdat(new GlobalVariable(*mod,
@@ -395,18 +395,115 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap)
                                      "jl_sysimg_cpu_cpuid"));
     }
 #endif
+
+    if (sysimg_data) {
+        Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+        addComdat(new GlobalVariable(*mod, data->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     data, "jl_system_image_data"));
+        Constant *len = ConstantInt::get(T_size, sysimg_len);
+        addComdat(new GlobalVariable(*mod, len->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     len, "jl_system_image_size"));
+    }
 }
 
-static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len)
+static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc)
 {
-    Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-    addComdat(new GlobalVariable(*mod, data->getType(), true,
-                                 GlobalVariable::ExternalLinkage,
-                                 data, "jl_system_image_data"));
-    Constant *len = ConstantInt::get(T_size, sysimg_len);
-    addComdat(new GlobalVariable(*mod, len->getType(), true,
-                                 GlobalVariable::ExternalLinkage,
-                                 len, "jl_system_image_size"));
+#ifdef LLVM36
+    std::error_code err;
+    StringRef fname_ref = StringRef(fname);
+    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
+#elif  LLVM35
+    std::string err;
+    raw_fd_ostream OS(fname, err, sys::fs::F_None);
+#else
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+#endif
+#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
+    raw_fd_ostream& FOS(OS);
+#else
+    formatted_raw_ostream FOS(OS);
+#endif
+
+    // We don't want to use MCJIT's target machine because
+    // it uses the large code model and we may potentially
+    // want less optimizations there.
+    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+#if defined(_OS_WINDOWS_) && defined(FORCE_ELF)
+#ifdef LLVM35
+    TheTriple.setObjectFormat(Triple::COFF);
+#else
+    TheTriple.setEnvironment(Triple::UnknownEnvironment);
+#endif
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+#ifdef LLVM35
+    TheTriple.setObjectFormat(Triple::MachO);
+#else
+    TheTriple.setEnvironment(Triple::MachO);
+#endif
+#endif
+#ifdef LLVM35
+    std::unique_ptr<TargetMachine>
+#else
+    OwningPtr<TargetMachine>
+#endif
+    TM(jl_TargetMachine->getTarget().createTargetMachine(
+        TheTriple.getTriple(),
+        jl_TargetMachine->getTargetCPU(),
+        jl_TargetMachine->getTargetFeatureString(),
+        jl_TargetMachine->Options,
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        Reloc::PIC_,
+#else
+        jit_model ? Reloc::PIC_ : Reloc::Default,
+#endif
+        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeGenOpt::Aggressive // -O3
+        ));
+
+    PassManager PM;
+    if (!dump_as_bc) {
+#ifndef LLVM37
+        PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+#else
+        PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+#endif
+#ifdef LLVM37
+    // No DataLayout pass needed anymore.
+#elif LLVM36
+        PM.add(new DataLayoutPass());
+#elif LLVM35
+        PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
+#else
+        PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#endif
+
+
+        if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
+            jl_error("Could not generate obj file for this target");
+        }
+    }
+
+    // now copy the module, since PM.run may modify it
+    ValueToValueMapTy VMap;
+    Module *clone = CloneModule(shadow_module, VMap);
+#ifdef USE_MCJIT
+    // Reset the target triple to make sure it matches the new target machine
+    clone->setTargetTriple(TM->getTargetTriple().str());
+    clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+#endif
+
+    // add metadata information
+    jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
+
+    // do the actual work
+    if (!dump_as_bc)
+        PM.run(*clone);
+    else
+        WriteBitcodeToFile(clone, FOS);
+    delete clone;
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)

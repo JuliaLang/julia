@@ -1040,9 +1040,3 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 #endif
 #endif
 #endif
-
-
-void show_execution_point(char *filename, int lno)
-{
-    jl_printf(JL_STDOUT, "executing file %s, line %d\n", filename, lno);
-}
