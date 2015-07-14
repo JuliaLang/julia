@@ -1237,11 +1237,12 @@ Statistics
    Compute the middle of an array, which consists in finding its extrema and
    then computing their mean.
 
-.. function:: median(v)
+.. function:: median(v[, region])
 
-   Compute the median of a vector ``v``. ``NaN`` is returned if the data
-   contains any ``NaN`` values. For applications requiring the handling of
-   missing data, the ``DataArrays`` package is recommended.
+   Compute the median of whole array ``v``, or optionally along the dimensions
+   in ``region``. ``NaN`` is returned if the data contains any ``NaN`` values.
+   For applications requiring the handling of missing data, the ``DataArrays``
+   package is recommended.
 
 .. function:: median!(v)
 
