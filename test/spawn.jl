@@ -202,6 +202,36 @@ close(f)
 @test is(OLD_STDOUT,STDOUT)
 rm(fname)
 
+# Test that redirecting an IOStream does not crash the process
+fname = tempname()
+cmd = """
+# Overwrite libuv memory before freeing it, to make sure that a use after free
+# triggers an assertion.
+function thrash(handle::Ptr{Void})
+    # Kill the memory, but write a nice low value in the libuv type field to
+    # trigger the right code path
+    ccall(:memset,Ptr{Void},(Ptr{Void},Cint,Csize_t),handle,0xee,3*sizeof(Ptr{Void}))
+    unsafe_store!(convert(Ptr{Cint},handle+2*sizeof(Ptr{Void})),15)
+    nothing
+end
+OLD_STDERR = STDERR
+redirect_stderr(open("$fname","w"))
+# Usually this would be done by GC. Do it manually, to make the failure
+# case more reliable.
+oldhandle = OLD_STDERR.handle
+OLD_STDERR.status = Base.StatusClosing
+OLD_STDERR.handle = C_NULL
+ccall(:uv_close,Void,(Ptr{Void},Ptr{Void}),oldhandle,cfunction(thrash,Void,(Ptr{Void},)))
+sleep(1)
+import Base.zzzInvalidIdentifier
+"""
+try
+    run(`$exename -f -e $cmd`)
+catch
+    error("IOStream redirect failed. Child stderr was \n$(readall(fname))")
+end
+rm(fname)
+
 # issue #10994: libuv can't handle strings containing NUL
 let bad = "bad\0name"
     @test_throws ArgumentError run(`$bad`)
