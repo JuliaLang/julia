@@ -1542,13 +1542,16 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     }
 
     // Get handle to sys.so
+    int windows = 0;
 #ifdef _OS_WINDOWS_
-    if (!jl_is_debugbuild()) {
+    windows = 1;
 #endif
-        jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
-#ifdef _OS_WINDOWS_
+    if (windows && (jl_is_debugbuild() || jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_NO)) {
+        jl_sysimg_handle = (uv_lib_t*)jl_load_library_as_datafile_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
     }
-#endif
+    else {
+        jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    }
 
     // set cpu target if unspecified by user and available from sysimg
     // otherwise default to native.

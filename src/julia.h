@@ -1178,6 +1178,7 @@ enum JL_RTLD_CONSTANT {
 typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
+jl_uv_libhandle jl_load_library_as_datafile_e(const char *filename, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
