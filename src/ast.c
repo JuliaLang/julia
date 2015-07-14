@@ -975,11 +975,11 @@ jl_value_t *skip_meta(jl_array_t *body)
     return body1;
 }
 
-static int in_vinfo_array(jl_array_t *a, jl_value_t *v)
+int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
 {
     size_t i, l=jl_array_len(a);
     for(i=0; i<l; i++) {
-        if (jl_cellref(jl_cellref(a,i),0) == v)
+        if (jl_cellref(jl_cellref(a,i),0) == (jl_value_t*)v)
             return 1;
     }
     return 0;
@@ -1000,8 +1000,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
     if (jl_is_symbol(expr)) {
         if (lam->module == NULL)
             return expr;
-        int is_local = in_vinfo_array(jl_lam_vinfo((jl_expr_t*)lam->ast), expr) ||
-            in_vinfo_array(jl_lam_capt((jl_expr_t*)lam->ast), expr) ||
+        int is_local = jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)lam->ast), (jl_sym_t*)expr) ||
+            jl_in_vinfo_array(jl_lam_capt((jl_expr_t*)lam->ast), (jl_sym_t*)expr) ||
             in_sym_array(jl_lam_staticparams((jl_expr_t*)lam->ast), expr);
         if (!is_local)
             return jl_module_globalref(lam->module, (jl_sym_t*)expr);
