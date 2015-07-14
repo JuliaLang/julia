@@ -153,7 +153,8 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
          * b) In case the stream is already closed, in which case uv_close would
          *    cause an assertion failure.
          */
-        uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
+        if (((uv_stream_t*)handle)->io_watcher.fd >= 0)
+            uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
     }
     else if (handle->type == UV_FILE) {
         uv_fs_t req;
