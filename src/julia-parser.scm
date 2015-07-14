@@ -2068,20 +2068,16 @@
 
 (define (simple-string-literal? e) (string? e))
 
-(define (any-string-literal? e)
+(define (doc-string-literal? e)
   (or (simple-string-literal? e)
       (and (length= e 3) (eq? (car e) 'macrocall)
 	   (simple-string-literal? (caddr e))
-	   (let* ((mname (string (cadr e)))
-		  (len (length mname)))
-	     (and (> len 4)
-		  (equal? (string.sub mname (string.dec mname len 4))
-			  "_str"))))))
+	   (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
   (let* ((isstr (eqv? (peek-token s) #\"))
 	 (ex    (production s)))
-    (if (and (or isstr (any-string-literal? ex))
+    (if (and (or isstr (doc-string-literal? ex))
 	     (not (closing-token? (peek-token s))))
 	`(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
 	ex)))

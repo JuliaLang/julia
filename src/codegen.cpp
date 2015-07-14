@@ -396,7 +396,7 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-static void jl_gen_llvm_gv_array(llvm::Module *mod);
+static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap);
 static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len);
 
 extern "C"
@@ -413,15 +413,18 @@ void jl_dump_bitcode(char *fname)
     std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
+    ValueToValueMapTy VMap;
 #ifdef USE_MCJIT
-    Module *bitcode = CloneModule(shadow_module);
-    jl_gen_llvm_gv_array(bitcode);
-    WriteBitcodeToFile(bitcode, OS);
-#else
-    Module *bitcode = CloneModule(jl_Module);
-    jl_gen_llvm_gv_array(bitcode);
-    WriteBitcodeToFile(bitcode, OS);
+    Module *bitcode = CloneModule(shadow_module, VMap);
+#ifdef LLVM37
+    bitcode->setTargetTriple(TM->getTargetTriple().str());
+    bitcode->setDataLayout(TM->getDataLayout()->getStringRepresentation());
 #endif
+#else
+    Module *bitcode = CloneModule(jl_Module, VMap);
+#endif
+    jl_gen_llvm_gv_array(bitcode, VMap);
+    WriteBitcodeToFile(bitcode, OS);
 }
 
 extern "C"
@@ -502,24 +505,21 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
         jl_error("Could not generate obj file for this target");
     }
 
+    ValueToValueMapTy VMap;
 #ifdef USE_MCJIT
+    Module *objfile = CloneModule(shadow_module, VMap);
     // Reset the target triple to make sure it matches the new target machine
-    #ifdef LLVM37
-    shadow_module->setTargetTriple(TM->getTargetTriple().str());
-    shadow_module->setDataLayout(TM->getDataLayout()->getStringRepresentation());
-    #endif
-    Module *objfile = CloneModule(shadow_module);
-    if (sysimg_data)
-        jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
-    jl_gen_llvm_gv_array(objfile);
-    PM.run(*objfile);
+#ifdef LLVM37
+    objfile->setTargetTriple(TM->getTargetTriple().str());
+    objfile->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+#endif
 #else
     Module *objfile = CloneModule(jl_Module);
+#endif
     if (sysimg_data)
         jl_sysimg_to_llvm(objfile, sysimg_data, sysimg_len);
-    jl_gen_llvm_gv_array(objfile);
+    jl_gen_llvm_gv_array(objfile, VMap);
     PM.run(*objfile);
-#endif
 }
 
 // aggregate of array metadata
