@@ -98,6 +98,8 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   ``ans`` is not set when Julia code is run in non-interactive mode.
 - Julia's ``type``\ s do not support dynamically adding fields at runtime,
   unlike MATLAB's ``class``\ es. Instead, use a :obj:`Dict`.
+- In Julia each module has its own global scope/namespace, whereas in
+  Matlab there is just one global scope.
 
 Noteworthy differences from R
 -----------------------------

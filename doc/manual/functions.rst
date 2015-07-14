@@ -501,6 +501,7 @@ tuple, explicitly after a semicolon.  For example, ``plot(x, y;
 ``plot(x, y, width=2)``.  This is useful in situations where the
 keyword name is computed at runtime.
 
+.. _man-evaluation-scope-default-values:
 
 Evaluation Scope of Default Values
 ----------------------------------
