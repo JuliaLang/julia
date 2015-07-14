@@ -193,20 +193,24 @@ unescape_string(s::AbstractString) = sprint(endof(s), print_unescaped, s)
 
 macro b_str(s); :($(unescape_string(s)).data); end
 
-## Count indentation, unindent ##
+## multiline strings ##
 
-function blank_width(c::Char)
-    c == ' '   ? 1 :
-    c == '\t'  ? 8 :
-    throw(ArgumentError("$(repr(c)) not a blank character"))
-end
+global tab_indentation_width = 8
 
-# width of leading blank space, also check if string is blank
-function indentation(s::AbstractString)
+"""
+Calculate the width of leading blank space, and also return if string is blank
+
+### Returns:
+* (width of leading whitespace, flag if string is totally blank)
+"""
+function indentation(str::AbstractString)
     count = 0
-    for c in s
-        if c == ' ' || c == '\t'
-            count += blank_width(c)
+    tabwid = tab_indentation_width
+    for ch in str
+        if ch == ' '
+            count += 1
+        elseif ch == '\t'
+            count = div(count + tabwid, tabwid) * tabwid
         else
             return count, false
         end
@@ -214,34 +218,69 @@ function indentation(s::AbstractString)
     count, true
 end
 
-function unindent(s::AbstractString, indent::Int)
-    indent == 0 && return s
-    buf = IOBuffer(Array(UInt8,endof(s)), true, true)
+"""
+Removes leading indentation from string
+
+### Returns:
+* `ASCIIString` or `UTF8String` of multiline string, with leading indentation of `indent` removed
+"""
+function unindent(str::AbstractString, indent::Int)
+    indent == 0 && return str
+    pos = start(str)
+    endpos = endof(str)
+    # Note: this loses the type of the original string
+    buf = IOBuffer(Array(UInt8,endpos), true, true)
     truncate(buf,0)
-    a = i = start(s)
-    cutting = false
-    cut = 0
-    while !done(s,i)
-        c,i_ = next(s,i)
-        if cutting && (c == ' ' || c == '\t')
-            a = i_
-            cut += blank_width(c)
-            if cut == indent
+    cutting = true
+    col = 0     # current column (0 based)
+    tabwid = tab_indentation_width
+    while pos <= endpos
+        ch, pos = next(str,pos)
+        if cutting
+            if ch == ' '
+                col += 1
+            elseif ch == '\t'
+                col = div(col + tabwid, tabwid) * tabwid
+            elseif ch == '\n'
+                # Now we need to output enough indentation
+                for i = 1:col-indent
+                    write(buf, ' ')
+                end
+                col = 0
+                write(buf, '\n')
+            else
                 cutting = false
-            elseif cut > indent
-                cutting = false
-                for _ = (indent+1):cut write(buf, ' ') end
+                # Now we need to output enough indentation to get to
+                # correct place
+                for i = 1:col-indent
+                    write(buf, ' ')
+                end
+                col += 1
+                write(buf, ch)
             end
-        elseif c == '\n'
-            print(buf, s[a:i])
-            a = i_
+        elseif ch == '\t'       # Handle internal tabs
+            upd = div(col + tabwid, tabwid) * tabwid
+            # output the number of spaces that would have been seen
+            # with original indentation
+            for i = 1:(upd-col)
+                write(buf, ' ')
+            end
+            col = upd
+        elseif ch == '\n'
             cutting = true
-            cut = 0
+            col = 0
+            write(buf, '\n')
         else
-            cutting = false
+            col += 1
+            write(buf, ch)
         end
-        i = i_
     end
-    print(buf, s[a:end])
+    # If we were still "cutting" when we hit the end of the string,
+    # we need to output the right number of spaces for the indentation
+    if cutting
+        for i = 1:col-indent
+            write(buf, ' ')
+        end
+    end
     takebuf_string(buf)
 end
