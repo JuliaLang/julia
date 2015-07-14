@@ -337,7 +337,8 @@ end
 # file downloading
 
 downloadcmd = nothing
-@unix_only function download(url::AbstractString, filename::AbstractString)
+@unix_only function download(url::AbstractString, filename::AbstractString; 
+                             silent::Bool=false)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
@@ -347,19 +348,26 @@ downloadcmd = nothing
             end
         end
     end
+    cmd = nothing
     if downloadcmd == :wget
-        run(`wget -O $filename $url`)
+        cmd = `wget -O $filename $url`
     elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
+        cmd = `curl -o $filename -L $url`
     elseif downloadcmd == :fetch
-        run(`fetch -f $filename $url`)
+        cmd = `fetch -f $filename $url`
     else
         error("no download agent available; install curl, wget, or fetch")
+    end
+    if silent
+        run(pipe(cmd, stdout=DevNull, stderr=DevNull))
+    else
+        run(cmd)
     end
     filename
 end
 
-@windows_only function download(url::AbstractString, filename::AbstractString)
+@windows_only function download(url::AbstractString, filename::AbstractString,
+                                silent::Bool=false)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                 (Ptr{Void},Cwstring,Cwstring,Cint,Ptr{Void}),C_NULL,url,filename,0,0)
     if res != 0
@@ -368,9 +376,9 @@ end
     filename
 end
 
-function download(url::AbstractString)
+function download(url::AbstractString; silent::Bool=false)
     filename = tempname()
-    download(url, filename)
+    download(url, filename, silent=silent)
 end
 
 # workspace management
