@@ -5655,6 +5655,8 @@ extern "C" void jl_init_codegen(void)
             "",
             TheCPU,
             MAttrs);
+    assert(targetMachine && "Failed to select target machine -"
+                            " Is the LLVM backend for this CPU enabled?");
     jl_TargetMachine = targetMachine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
             targetMachine->getTargetCPU(),
