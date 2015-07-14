@@ -546,7 +546,7 @@ DLLEXPORT int jl_gc_enable(int on);
 DLLEXPORT int jl_gc_is_enabled(void);
 DLLEXPORT int64_t jl_gc_total_bytes(void);
 DLLEXPORT uint64_t jl_gc_total_hrtime(void);
-int64_t jl_gc_diff_total_bytes(void);
+DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 void jl_gc_sync_total_bytes(void);
 
 DLLEXPORT void jl_gc_collect(int);

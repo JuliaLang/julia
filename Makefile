@@ -139,8 +139,7 @@ endif
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 ifneq ($(USEMSVC), 1)
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp))
+		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	$(DSYMUTIL) $@
 else
 	@true

@@ -7,7 +7,7 @@ template<class T> // for GlobalObject's
 static T* addComdat(T *G)
 {
     if (imaging_mode && (!G->isDeclarationForLinker())) {
-        Comdat *jl_Comdat = shadow_module->getOrInsertComdat(G->getName());
+        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
         jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
         G->setComdat(jl_Comdat);
     }
@@ -70,45 +70,9 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 #endif
 {
 #ifdef USE_MCJIT
-
-    StringRef name = gv->getName();
-#ifdef _OS_WINDOWS_
-    std::string imp_name;
-    // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_generating_output()) {
-        // add the __declspec(dllimport) attribute
-        gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-        // this will cause llvm to rename it, so we do the same
-        imp_name = Twine("__imp_", name).str();
-        name = StringRef(imp_name);
-        // __imp_ functions are jmp stubs (no additional work needed)
-        // __imp_ variables are indirection pointers, so use malloc to simulate that too
-        if (isa<GlobalVariable>(gv)) {
-            void** imp_addr = (void**)malloc(sizeof(void**));
-            *imp_addr = addr;
-            addr = (void*)imp_addr;
-        }
-    }
-#endif
     addComdat(gv);
     sys::DynamicLibrary::AddSymbol(name, addr);
-
-#else // USE_MCJIT
-
-#ifdef _OS_WINDOWS_
-    // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_generating_output()) {
-        if (gv->getLinkage() == GlobalValue::ExternalLinkage)
-            gv->setLinkage(GlobalValue::DLLImportLinkage);
-#ifdef _P64
-        // the following is correct by observation,
-        // as long as everything stays within a 32-bit offset :/
-        void** imp_addr = (void**)malloc(sizeof(void**));
-        *imp_addr = addr;
-        addr = (void*)imp_addr;
-#endif
-    }
-#endif // _OS_WINDOWS_
+#else
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
 #endif // USE_MCJIT
 }
@@ -357,7 +321,7 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap)
+static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, const char *sysimg_data, size_t sysimg_len)
 {
     ArrayType *atype = ArrayType::get(T_psize, jl_sysimg_gvars.size());
     addComdat(new GlobalVariable(*mod,
@@ -395,18 +359,189 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, ValueToValueMapTy &VMap)
                                      "jl_sysimg_cpu_cpuid"));
     }
 #endif
+
+    if (sysimg_data) {
+        Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+        addComdat(new GlobalVariable(*mod, data->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     data, "jl_system_image_data"));
+        Constant *len = ConstantInt::get(T_size, sysimg_len);
+        addComdat(new GlobalVariable(*mod, len->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     len, "jl_system_image_size"));
+    }
 }
 
-static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len)
+static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc)
 {
-    Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-    addComdat(new GlobalVariable(*mod, data->getType(), true,
+#ifdef LLVM36
+    std::error_code err;
+    StringRef fname_ref = StringRef(fname);
+    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
+#elif  LLVM35
+    std::string err;
+    raw_fd_ostream OS(fname, err, sys::fs::F_None);
+#else
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+#endif
+#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
+    raw_fd_ostream& FOS(OS);
+#else
+    formatted_raw_ostream FOS(OS);
+#endif
+
+    // We don't want to use MCJIT's target machine because
+    // it uses the large code model and we may potentially
+    // want less optimizations there.
+    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+#if defined(_OS_WINDOWS_) && defined(FORCE_ELF)
+#ifdef LLVM35
+    TheTriple.setObjectFormat(Triple::COFF);
+#else
+    TheTriple.setEnvironment(Triple::UnknownEnvironment);
+#endif
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+#ifdef LLVM35
+    TheTriple.setObjectFormat(Triple::MachO);
+#else
+    TheTriple.setEnvironment(Triple::MachO);
+#endif
+#endif
+#ifdef LLVM35
+    std::unique_ptr<TargetMachine>
+#else
+    OwningPtr<TargetMachine>
+#endif
+    TM(jl_TargetMachine->getTarget().createTargetMachine(
+        TheTriple.getTriple(),
+        jl_TargetMachine->getTargetCPU(),
+        jl_TargetMachine->getTargetFeatureString(),
+        jl_TargetMachine->Options,
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        Reloc::PIC_,
+#else
+        jit_model ? Reloc::PIC_ : Reloc::Default,
+#endif
+        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeGenOpt::Aggressive // -O3
+        ));
+
+    PassManager PM;
+    if (!dump_as_bc) {
+#ifndef LLVM37
+        PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+#else
+        PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+#endif
+#ifdef LLVM37
+    // No DataLayout pass needed anymore.
+#elif LLVM36
+        PM.add(new DataLayoutPass());
+#elif LLVM35
+        PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
+#else
+        PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#endif
+
+
+        if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
+            jl_error("Could not generate obj file for this target");
+        }
+    }
+
+    // now copy the module, since PM.run may modify it
+    ValueToValueMapTy VMap;
+    Module *clone = CloneModule(shadow_module, VMap);
+#ifdef USE_MCJIT
+    // Reset the target triple to make sure it matches the new target machine
+    clone->setTargetTriple(TM->getTargetTriple().str());
+    clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+#endif
+
+    // turn the ExternalLinkage functions with a `jl_` namespace prefix into a GOT-like array
+    // dump.c will recreate these globals based on the information in these arrays
+    // this transformation is necessary for the windows linker,
+    // which doesn't support undefined symbols during linkage
+    std::vector<Constant*> dllimport_names;
+    std::vector<GlobalValue*> dllimport_values;
+    for (Module::global_iterator G = clone->global_begin(), E = clone->global_end(); G != E; ++G) {
+        if (G->getLinkage() == GlobalValue::ExternalLinkage && G->isDeclaration()) {
+            if (G->getName().startswith("jl_"))
+                dllimport_values.push_back(G);
+        }
+    }
+    for (Module::iterator F = clone->begin(), E = clone->end(); F != E; ++F) {
+        if (F->getLinkage() == GlobalValue::ExternalLinkage && F->isDeclaration() && !F->getIntrinsicID()) {
+            if (F->getName().startswith("jl_"))
+                dllimport_values.push_back(F);
+        }
+    }
+    for (std::vector<GlobalValue*>::iterator B = dllimport_values.begin(),
+            G = B, E = dllimport_values.end();
+            G != E; ++G) {
+        // build string constant
+        Constant *StrConstant = ConstantDataArray::getString(jl_LLVMContext, (*G)->getName());
+        GlobalVariable *StrGV = new GlobalVariable(*clone, StrConstant->getType(),
+                                                   true, GlobalValue::PrivateLinkage,
+                                                   StrConstant);
+        StrGV->setUnnamedAddr(true);
+        Constant *zero = ConstantInt::get(T_int32, 0);
+        Constant *two_zeros[2] = {zero, zero};
+        dllimport_names.push_back(ConstantExpr::getInBoundsGetElementPtr(
+                    LLVM37_param(StrGV->getType()) StrGV, ArrayRef<Constant*>(two_zeros)));
+    }
+    dllimport_names.push_back(ConstantPointerNull::get(T_int8->getPointerTo()));
+    ArrayType *atype = ArrayType::get(T_pint8, dllimport_values.size() + 1);
+    addComdat(new GlobalVariable(*clone,
+                                 atype,
+                                 true,
                                  GlobalVariable::ExternalLinkage,
-                                 data, "jl_system_image_data"));
-    Constant *len = ConstantInt::get(T_size, sysimg_len);
-    addComdat(new GlobalVariable(*mod, len->getType(), true,
-                                 GlobalVariable::ExternalLinkage,
-                                 len, "jl_system_image_size"));
+                                 ConstantArray::get(atype, ArrayRef<Constant*>(dllimport_names)),
+                                 "jl_dllimport_names"));
+    dllimport_names.empty();
+    GlobalVariable *jl_dllimport_array = addComdat(
+            new GlobalVariable(*clone,
+                               atype,
+                               false,
+                               GlobalVariable::ExternalLinkage,
+                               ConstantAggregateZero::get(atype),
+                               "jl_dllimport_array"));
+    for (std::vector<GlobalValue*>::iterator B = dllimport_values.begin(),
+            G = B, E = dllimport_values.end();
+            G != E; ++G) {
+        Constant* gep[2] = {ConstantInt::get(T_int32, 0), ConstantInt::get(T_int32, G - B)};
+        GlobalValue *oldG = *G;
+        GlobalAlias *newG = new GlobalAlias( // use a GlobalAlias to give this a name in the bitcode
+                T_pint8->getPointerTo(),
+                GlobalValue::InternalLinkage,
+                "",
+                ConstantExpr::getInBoundsGetElementPtr(jl_dllimport_array, ArrayRef<Constant*>(gep)),
+                clone);
+        Constant *C = ConstantExpr::getBitCast(newG, oldG->getType()->getPointerTo());
+        while (!oldG->use_empty()) {
+            Value::use_iterator U = oldG->use_begin();
+#ifdef LLVM35
+            Value *New = new LoadInst(C, "", cast<Instruction>(U.getUser()));
+            U->set(New);
+#else
+            Value *New = new LoadInst(C, "", cast<Instruction>(*U));
+            U->replaceUsesOfWith(oldG, New);
+#endif
+        }
+        newG->takeName(oldG);
+        oldG->eraseFromParent();
+    }
+
+    // add metadata information
+    jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
+
+    // do the actual work
+    if (!dump_as_bc)
+        PM.run(*clone);
+    else
+        WriteBitcodeToFile(clone, FOS);
+    delete clone;
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)

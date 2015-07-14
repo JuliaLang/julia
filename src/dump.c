@@ -244,6 +244,15 @@ static int jl_load_sysimg_so()
         }
 #endif
 
+        // do the work of the system linker, because windows can't do undefined symbol resolution at runtime
+        void* *jl_dllimport_array = (void**)jl_dlsym(jl_sysimg_handle, "jl_dllimport_array");
+        const char *const *jl_dllimport_names = (const char *const *)jl_dlsym(jl_sysimg_handle, "jl_dllimport_names");
+        for (; *jl_dllimport_names; ++jl_dllimport_names, ++jl_dllimport_array) {
+            const char *sym = *jl_dllimport_names;
+            void *h = jl_dlsym(jl_dl_handle, sym);
+            *jl_dllimport_array = h;
+        }
+
 #ifdef _OS_WINDOWS_
         jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
 #else
