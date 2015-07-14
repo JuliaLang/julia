@@ -1097,6 +1097,7 @@ export
     include,
     include_string,
     reload,
+    compile,
 
 # RTS internals
     finalizer,
