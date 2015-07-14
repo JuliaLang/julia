@@ -209,3 +209,18 @@ let bad = "bad\0name"
     @test_throws ArgumentError run(setenv(`echo hello`, bad=>"good"))
     @test_throws ArgumentError run(setenv(`echo hello`, "good"=>bad))
 end
+
+# issue #8529
+@test_throws ErrorException run(pipe(Base.Pipe(C_NULL), `cat`))
+let fname = tempname()
+    open(fname, "w") do f
+        println(f, "test")
+    end
+    code = """
+    for line in eachline(STDIN)
+        run(pipe(`echo asdf`,`cat`))
+    end
+    """
+    @test success(pipe(`cat $fname`, `$exename -e $code`))
+    rm(fname)
+end
