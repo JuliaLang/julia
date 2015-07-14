@@ -106,27 +106,41 @@ end
 @test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
 @test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
 
-for x in logspace(-200, -0.01)
-    @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
-    @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
-    @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
-    if x > 1e-20
-        xf = Float32(x)
-        @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
-        @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
-        @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+for elty in [Float32,Float64]
+    for x in logspace(-200, -0.01)
+        @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
+        @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
+        @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
+        if x > 1e-20
+            xf = Float32(x)
+            @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
+            @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
+            @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+        end
     end
+    @test erfinv(one(elty)) == Inf
+    @test erfinv(-one(elty)) == -Inf
+    @test_throws DomainError erfinv(2.0*one(elty))
+
+    @test erfcinv(zero(elty)) == Inf
+    @test_throws DomainError erfcinv(-one(elty))
 end
+
+@test erfinv(one(Int)) == erfinv(1.0)
+@test erfcinv(one(Int)) == erfcinv(1.0)
 
 # airy
 @test_approx_eq airy(1.8) 0.0470362168668458052247
+@test_approx_eq airy(1.8) airyai(1.8)
 @test_approx_eq airyprime(1.8) -0.0685247801186109345638
+@test_approx_eq airyaiprime(1.8) airyprime(1.8)
 @test_approx_eq airybi(1.8) 2.595869356743906290060
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
 @test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
+@test_approx_eq airyx(z) airyx(0,z)
 @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
 @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
@@ -218,6 +232,7 @@ y33 = bessely(3,3.)
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
 @test_throws DomainError bessely(0.4,-1.0)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
+@test_throws DomainError bessely(1,Float32(-1.0))
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
@@ -473,6 +488,14 @@ with_bigfloat_precision(10_000) do
     @test log(2,big(2)^400) == 400
 end
 
+for T in (Float32,Float64)
+    @test log(zero(T)) == -Inf
+    @test isnan(log(NaN))
+    @test_throws DomainError log(-one(T))
+    @test log1p(-one(T)) == -Inf
+    @test isnan(log1p(NaN))
+    @test_throws DomainError log1p(-2*one(T))
+end
 # test vectorization of 2-arg vectorized functions
 binary_math_functions = [
     copysign, flipsign, log, atan2, hypot, max, min,
