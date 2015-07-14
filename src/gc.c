@@ -1885,7 +1885,7 @@ DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_b
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
 DLLEXPORT GC_Num jl_gc_num(void) { return gc_num; }
 
-int64_t jl_gc_diff_total_bytes(void)
+DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb = jl_gc_total_bytes();
