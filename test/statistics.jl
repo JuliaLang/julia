@@ -39,6 +39,9 @@ end
 @test isnan(median([NaN,0.0]))
 @test isequal(median([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
 
+@test median!([1 2 3 4]) == 2.5
+@test median!([1 2; 3 4]) == 2.5
+
 # mean
 @test mean([0]) === 0.
 @test mean([1.]) === 1.
