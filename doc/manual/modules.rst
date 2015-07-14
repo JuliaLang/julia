@@ -6,12 +6,14 @@
 
 .. index:: module, baremodule, using, import, export, importall
 
-Modules in Julia are separate global variable workspaces. They are
-delimited syntactically, inside ``module Name ... end``. Modules allow
-you to create top-level definitions without worrying about name conflicts
-when your code is used together with somebody else's. Within a module, you
-can control which names from other modules are visible (via importing),
-and specify which of your names are intended to be public (via exporting).
+Modules in Julia are separate variable workspaces, i.e. they introduce
+a new global scope. They are delimited syntactically, inside ``module
+Name ... end``. Modules allow you to create top-level definitions (aka
+global variables) without worrying about name conflicts when your code
+is used together with somebody else's. Within a module, you can
+control which names from other modules are visible (via importing),
+and specify which of your names are intended to be public (via
+exporting).
 
 The following example demonstrates the major features of modules. It is
 not meant to be run, but is shown for illustrative purposes::
