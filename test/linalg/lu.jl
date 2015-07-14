@@ -2,6 +2,8 @@
 
 debug = false
 
+using Base.Test
+
 n = 10
 
 # Split n into 2 parts for tests needing two matrices
@@ -57,6 +59,9 @@ debug && println("(Automatic) Square LU decomposition")
 debug && println("Tridiagonal LU")
         κd    = cond(full(d),1)
         lud   = lufact(d)
+        @test_approx_eq lud[:L]*lud[:U] lud[:P]*full(d)
+        @test_approx_eq lud[:L]*lud[:U] full(d)[lud[:p],:]
+        @test_approx_eq full(lud) d
         @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
         if eltya <: Real
             @test norm((lud.'\b) - full(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
@@ -111,7 +116,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     F = eigfact(A)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
-
 
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
 @test_throws DomainError logdet([1 1; 1 -1])
