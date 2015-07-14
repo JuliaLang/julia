@@ -207,7 +207,7 @@ jl_uv_libhandle jl_load_library_as_datafile_e(const char *filename, unsigned fla
 {
 #ifdef _OS_WINDOWS_
     WCHAR filename_w[32768];
-    if (!uv_utf8_to_utf16(filename, filename_w, ARRAY_SIZE(filename_w)))
+    if (!uv_utf8_to_utf16(filename, filename_w, 32768))
         return NULL;
     uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
     lib->errmsg = NULL;
