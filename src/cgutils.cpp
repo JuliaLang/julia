@@ -489,7 +489,7 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     // now copy the module, since PM.run may modify it
     ValueToValueMapTy VMap;
     Module *clone = CloneModule(shadow_module, VMap);
-#ifdef USE_MCJIT
+#ifdef LLVM37
     // Reset the target triple to make sure it matches the new target machine
     clone->setTargetTriple(TM->getTargetTriple().str());
     clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
