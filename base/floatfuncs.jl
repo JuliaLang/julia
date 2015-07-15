@@ -21,10 +21,10 @@ signbit(x::Float16) = signbit(reinterpret(Int16,x))
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
-maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
+maxintfloat{T<:AbstractFloat}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isinteger(x::AbstractFloat) = (trunc(x)==x)&isfinite(x)
 
 num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
 num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
@@ -50,16 +50,16 @@ round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
 round(x::Real, ::RoundingMode{:Up}) = ceil(x)
 round(x::Real, ::RoundingMode{:Down}) = floor(x)
 # C-style round
-function round(x::FloatingPoint, ::RoundingMode{:NearestTiesAway})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::FloatingPoint, ::RoundingMode{:NearestTiesUp})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end
-round{T<:Integer}(::Type{T}, x::FloatingPoint, r::RoundingMode) = trunc(T,round(x,r))
+round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
 
 @vectorize_1arg Real trunc
 @vectorize_1arg Real floor
@@ -166,13 +166,13 @@ for f in (:round, :ceil, :floor, :trunc)
 end
 
 # isapprox: Tolerant comparison of floating point numbers
-function isapprox(x::FloatingPoint, y::FloatingPoint; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
+function isapprox(x::AbstractFloat, y::AbstractFloat; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
     (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
 end
 
 # promotion of non-floats
-isapprox(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
-isapprox(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+isapprox(x::Real, y::AbstractFloat; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+isapprox(x::AbstractFloat, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
 
 # other real numbers
 isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = abs(x-y) <= atol
@@ -185,13 +185,13 @@ isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atol
 isapprox(z::Complex, x::Real; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
 
 # default tolerance arguments
-rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(eps(x), eps(y)))
-atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(eps(x), eps(y)))
+rtoldefault(x::AbstractFloat, y::AbstractFloat) = cbrt(max(eps(x), eps(y)))
+atoldefault(x::AbstractFloat, y::AbstractFloat) = sqrt(max(eps(x), eps(y)))
 
 # promotion of non-floats
 for fun in (:rtoldefault, :atoldefault)
     @eval begin
-        ($fun)(x::Real, y::FloatingPoint) = ($fun)(promote(x,y)...)
-        ($fun)(x::FloatingPoint, y::Real) = ($fun)(promote(x,y)...)
+        ($fun)(x::Real, y::AbstractFloat) = ($fun)(promote(x,y)...)
+        ($fun)(x::AbstractFloat, y::Real) = ($fun)(promote(x,y)...)
     end
 end

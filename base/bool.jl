@@ -39,11 +39,11 @@ abs2(x::Bool) = x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
-function +{T<:FloatingPoint}(x::Bool, y::T)
+function +{T<:AbstractFloat}(x::Bool, y::T)
     ifelse(x, one(promote_type(Bool,T)) + convert(promote_type(Bool,T),y),
            convert(promote_type(Bool,T),y))
 end
-+(y::FloatingPoint, x::Bool) = x + y
++(y::AbstractFloat, x::Bool) = x + y
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),

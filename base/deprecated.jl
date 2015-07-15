@@ -135,10 +135,10 @@ end
 
 @deprecate oftype{T}(::Type{T},c)  convert(T,c)
 
-@deprecate inf(x::FloatingPoint)  oftype(x,Inf)
-@deprecate nan(x::FloatingPoint)  oftype(x,NaN)
-@deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
-@deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
+@deprecate inf(x::AbstractFloat)  oftype(x,Inf)
+@deprecate nan(x::AbstractFloat)  oftype(x,NaN)
+@deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
+@deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
 export String
 const String = AbstractString
@@ -281,7 +281,7 @@ end
 @deprecate bool(x::Number)  x!=0
 
 @deprecate char(x)                 Char(x)
-@deprecate char(x::FloatingPoint)  Char(round(UInt32,x))
+@deprecate char(x::AbstractFloat)  Char(round(UInt32,x))
 @deprecate integer(x::Char)        Int(x)
 
 @deprecate complex128(r::Real, i::Real)  Complex128(r, i)
@@ -323,7 +323,7 @@ for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:U
               (:int128,:Int128), (:uint128,:UInt128), (:signed,:Int), (:unsigned,:UInt),
               (:integer,:Int), (:int,:Int), (:uint,:UInt))
     @eval begin
-        @deprecate ($f)(x::FloatingPoint)  round($t,x)
+        @deprecate ($f)(x::AbstractFloat)  round($t,x)
         @deprecate ($f)(x::Rational)       round($t,x)
     end
 end

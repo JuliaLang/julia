@@ -177,7 +177,7 @@ importall .GMP
 include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
-big(x::FloatingPoint) = convert(BigFloat,x)
+big(x::AbstractFloat) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 
 include("combinatorics.jl")

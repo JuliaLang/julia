@@ -597,9 +597,9 @@ comparing type parameters and otherwise is 0.
 
 The rules for these are somewhat different. ``subtype`` is sensitive
 to the number arguments, but ``type_morespecific`` may not be. In
-particular, ``Tuple{Int,FloatingPoint}`` is more specific than
+particular, ``Tuple{Int,AbstractFloat}`` is more specific than
 ``Tuple{Integer}``, even though it is not a subtype.  (Of
-``Tuple{Int,FloatingPoint}`` and ``Tuple{Integer,Float64}``, neither
+``Tuple{Int,AbstractFloat}`` and ``Tuple{Integer,Float64}``, neither
 is more specific than the other.)  Likewise, ``Tuple{Int,Vararg{Int}}``
 is not a subtype of ``Tuple{Integer}``, but it is considered
 more specific. However, ``morespecific`` does get a bonus for length:

@@ -182,7 +182,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     return a
 end
 
-function fill!{T<:Union{Integer,FloatingPoint}}(a::Array{T}, x)
+function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
     # note: checking bit pattern
     xT = convert(T,x)
     if isbits(T) && nfields(T)==0 &&
