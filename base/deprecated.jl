@@ -763,3 +763,6 @@ function nonboolean_all(itr)
 end
 
 @deprecate iseltype(x,T)  eltype(x) <: T
+
+const FloatingPoint = AbstractFloat
+export FloatingPoint
