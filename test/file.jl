@@ -869,6 +869,11 @@ else
 end
 @test_throws ArgumentError download("good", "ba\0d")
 @test_throws ArgumentError download("ba\0d", "good")
+# test silent download mode
+@unix_only begin
+    tmp = tempname()
+    download("http://google.com", tmp, silent=true)
+end
 
 ############
 # Clean up #
