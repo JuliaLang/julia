@@ -18,7 +18,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        besselj0, besselj1, besselj, besseljx,
        bessely0, bessely1, bessely, besselyx,
        hankelh1, hankelh2, hankelh1x, hankelh2x,
-       besseli, besselix, besselk, besselkx, besselh,
+       besseli, besselix, besselk, besselkx, besselh, besselhx,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv, @evalpoly
 

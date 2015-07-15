@@ -457,6 +457,7 @@ export
     airyprime,
     airyx,
     besselh,
+    besselhx,
     besseli,
     besselix,
     besselj,
