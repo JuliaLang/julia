@@ -409,7 +409,7 @@ Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for
 IDEs such as [Juno](http://junolab.org/),
 [Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface
 is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which
-adds Julia support to [IPython](http://ipython.org). The
+adds Julia support to [Jupyter](http://jupyter.org/)/[IPython](http://ipython.org). The
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin enables
 interaction between IJulia and Sublime Text.
 
