@@ -58,4 +58,3 @@ function release(s::Semaphore)
     s.curr_cnt = s.curr_cnt - 1
     notify(s.cond_wait; all=false)
 end
-
