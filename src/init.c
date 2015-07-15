@@ -1292,15 +1292,15 @@ static void julia_save()
     if (jl_options.incremental) {
         jl_array_t *worklist = jl_module_init_order;
         if (!worklist) {
-            jl_printf(JL_STDERR, "incremental output requested, but no modules defined during run");
+            jl_printf(JL_STDERR, "warning: incremental output requested, but no modules defined during run\n");
             return;
         }
         if (jl_options.outputji)
             jl_save_incremental(jl_options.outputji, worklist);
         if (jl_options.outputbc)
-            jl_printf(JL_STDERR, "incremental output to a .bc file is not implemented");
+            jl_printf(JL_STDERR, "warning: incremental output to a .bc file is not implemented\n");
         if (jl_options.outputo)
-            jl_printf(JL_STDERR, "incremental output to a .o file is not implemented");
+            jl_printf(JL_STDERR, "warning: incremental output to a .o file is not implemented\n");
     }
     else {
         ios_t *s = NULL;

@@ -63,7 +63,7 @@ function _require_from_serialized(node::Int, path_to_try::ByteString)
             refs = Any[ @spawnat p _include_from_serialized(content) for p in others]
             for (id, ref) in zip(others, refs)
                 if !fetch(ref)
-                    warn("node state is inconsistent: node $id failed to load serialized cache from :node $node:$path_to_try.")
+                    warn("node state is inconsistent: node $id failed to load cache from $path_to_try")
                 end
             end
             return true
@@ -90,15 +90,26 @@ function _require_from_serialized(node::Int, mod::Symbol)
         path_to_try === nothing && return false
         if _require_from_serialized(node, path_to_try)
             return true
+        else
+            warn("deserialization checks failed while attempting to load cache from $path_to_try")
         end
     end
 end
 
 # to synchronize multiple tasks trying to import/using something
 package_locks = Dict{Symbol,Condition}()
+package_loaded = Set{Symbol}()
 
 # require always works in Main scope and loads files from node 1
 function require(mod::Symbol)
+    if !(mod in package_loaded)
+        push!(package_loaded, mod)
+        reload(mod)
+    end
+    nothing
+end
+
+function reload(mod::Symbol)
     loading = get(package_locks, mod, false)
     if loading !== false
         # load already in progress for this module
@@ -109,13 +120,20 @@ function require(mod::Symbol)
 
     try
         if _require_from_serialized(1, mod)
+            return true
+        end
+        if JLOptions().incremental != 0
+            # spawn off a new incremental compile task from node 1 for recursive `require` calls
+            cachefile = compile(mod)
+            if !_require_from_serialized(1, cachefile)
+                warn("require failed to create a precompiled cache file")
+            end
             return
         end
 
         name = string(mod)
         path = find_in_node_path(name, 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
-
         if myid() == 1 && current_module() === Main && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             content = open(readall, path)
@@ -130,7 +148,6 @@ function require(mod::Symbol)
     end
     nothing
 end
-const reload = require
 
 # remote/parallel load
 
@@ -193,19 +210,14 @@ function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
-function create_expr_cache(file::AbstractString, name)
-    cachepath = LOAD_CACHE_PATH[1]
-    if !isdir(cachepath)
-        mkpath(cachepath)
-    end
-    cachefile = abspath(cachepath, name*".ji")
+function create_expr_cache(input::AbstractString, output::AbstractString)
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
         end
         """
     io, pobj = open(detach(setenv(`$(julia_cmd())
-            --output-ji $cachefile --output-incremental=yes
+            --output-ji $output --output-incremental=yes
             --startup-file=no --history-file=no
             --eval $code_object`,
         ["JULIA_HOME=$JULIA_HOME", "HOME=$(homedir())"])), "w")
@@ -223,7 +235,7 @@ function create_expr_cache(file::AbstractString, name)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
-    serialize(io, :(Base.include($(abspath(file)))))
+    serialize(io, :(Base.include($(abspath(input)))))
     if source !== nothing
         serialize(io, quote
             delete!(task_local_storage(), :SOURCE_PATH)
@@ -231,14 +243,19 @@ function create_expr_cache(file::AbstractString, name)
     end
     close(io)
     wait(pobj)
-    return cachefile
+    return pobj
 end
 
-compile(mod::Symbol) = compile(string(mod))
-function compile(name::AbstractString)
-    path = find_in_node_path(name, 1)
+function compile(mod::Symbol)
+    myid() == 1 || error("can only compile from node 1")
+    name = string(mod)
+    path = find_in_path(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
-    # spawn off a new incremental compile task from node 1
-    return remotecall_fetch(1, create_expr_cache, path, name)
-    # TODO: error/warning on failure?
+    cachepath = LOAD_CACHE_PATH[1]
+    if !isdir(cachepath)
+        mkpath(cachepath)
+    end
+    cachefile = abspath(cachepath, name*".ji")
+    create_expr_cache(path, cachefile)
+    return cachefile
 end
