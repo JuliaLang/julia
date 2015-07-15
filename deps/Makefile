@@ -1718,7 +1718,7 @@ install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
 GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
-ifneq ($(SANITIZE),)
+ifeq ($(SANITIZE),1)
 GMP_CONFIGURE_OPTS += --disable-assembly
 endif
 
@@ -1784,7 +1784,7 @@ ifeq ($(OS),Darwin)
 MPFR_CHECK_MFLAGS = LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
-ifneq ($(SANITIZE),)
+ifeq ($(SANITIZE),1)
 # Force generic C build
 MPFR_OPTS += --host=none-unknown-linux
 endif
