@@ -229,7 +229,7 @@ Julia language. Core operations typically have dozens of methods::
     # 139 methods for generic function "+":
     +(x::Bool) at bool.jl:33
     +(x::Bool,y::Bool) at bool.jl:36
-    +(y::FloatingPoint,x::Bool) at bool.jl:46
+    +(y::AbstractFloat,x::Bool) at bool.jl:46
     +(x::Int64,y::Int64) at int.jl:14
     +(x::Int8,y::Int8) at int.jl:14
     +(x::UInt8,y::UInt8) at int.jl:14
@@ -269,17 +269,17 @@ Julia language. Core operations typically have dozens of methods::
     +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat,d::Base.MPFR.BigFloat,e::Base.MPFR.BigFloat) at mpfr.jl:331
     +(x::Irrational{sym},y::Irrational{sym}) at constants.jl:71
     +{T<:Number}(x::T<:Number,y::T<:Number) at promotion.jl:205
-    +{T<:FloatingPoint}(x::Bool,y::T<:FloatingPoint) at bool.jl:43
+    +{T<:AbstractFloat}(x::Bool,y::T<:AbstractFloat) at bool.jl:43
     +(x::Number,y::Number) at promotion.jl:167
     +(x::Integer,y::Ptr{T}) at pointer.jl:70
     +(x::Bool,A::AbstractArray{Bool,N}) at array.jl:829
     +(x::Integer,y::Char) at char.jl:41
     +(x::Number) at operators.jl:72
     +(r1::OrdinalRange{T,S},r2::OrdinalRange{T,S}) at operators.jl:325
-    +{T<:FloatingPoint}(r1::FloatRange{T<:FloatingPoint},r2::FloatRange{T<:FloatingPoint}) at operators.jl:331
-    +(r1::FloatRange{T<:FloatingPoint},r2::FloatRange{T<:FloatingPoint}) at operators.jl:348
-    +(r1::FloatRange{T<:FloatingPoint},r2::OrdinalRange{T,S}) at operators.jl:349
-    +(r1::OrdinalRange{T,S},r2::FloatRange{T<:FloatingPoint}) at operators.jl:350
+    +{T<:AbstractFloat}(r1::FloatRange{T<:AbstractFloat},r2::FloatRange{T<:AbstractFloat}) at operators.jl:331
+    +(r1::FloatRange{T<:AbstractFloat},r2::FloatRange{T<:AbstractFloat}) at operators.jl:348
+    +(r1::FloatRange{T<:AbstractFloat},r2::OrdinalRange{T,S}) at operators.jl:349
+    +(r1::OrdinalRange{T,S},r2::FloatRange{T<:AbstractFloat}) at operators.jl:350
     +(x::Ptr{T},y::Integer) at pointer.jl:68
     +{S,T}(A::Range{S},B::Range{T}) at array.jl:773
     +{S,T}(A::Range{S},B::AbstractArray{T,N}) at array.jl:791

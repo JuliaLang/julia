@@ -806,7 +806,7 @@ end
 
 # issue #1153
 type SI{m, s, kg}
-    value::FloatingPoint
+    value::AbstractFloat
 end
 
 import Base.*
@@ -2073,10 +2073,10 @@ end
 
 # issue #8851
 abstract AbstractThing{T,N}
-type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+type ConcreteThing{T<:AbstractFloat,N} <: AbstractThing{T,N}
 end
 
-testintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing, ConcreteThing{TypeVar(:T,FloatingPoint),2}, isequal)
+testintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing, ConcreteThing{TypeVar(:T,AbstractFloat),2}, isequal)
 
 # issue #8978
 module I8978

@@ -421,9 +421,9 @@ Mathematical Functions
 
    Inexact equality comparison - behaves slightly different depending on types of input args:
 
-   * For ``FloatingPoint`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
+   * For ``AbstractFloat`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
 
-   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``FloatingPoint``, the other is promoted, and the method above is called instead.
+   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``AbstractFloat``, the other is promoted, and the method above is called instead.
 
    * For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
 

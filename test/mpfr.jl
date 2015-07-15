@@ -145,8 +145,8 @@ y = BigFloat(1)
 @test typeof(convert(BigFloat, Float32(0.5))) == BigFloat
 @test convert(BigFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
 @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
-@test convert(FloatingPoint, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
-@test typeof(convert(FloatingPoint, parse(BigInt,"9223372036854775808"))) == BigFloat
+@test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
+@test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5

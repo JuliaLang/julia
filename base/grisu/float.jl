@@ -36,7 +36,7 @@ end
 
 Float() = Float(0,0,0)
 Float(x,y) = Float(x,y,Int32(0))
-Float(d::FloatingPoint) = Float(_significand(d), _exponent(d))
+Float(d::AbstractFloat) = Float(_significand(d), _exponent(d))
 
 # Consts
 const Float10MSBits = 0xFFC0000000000000 # used normalize(Float)
@@ -104,18 +104,18 @@ SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
 uint_t(d::Float16) = reinterpret(UInt16,d)
 
-function _exponent{T<:FloatingPoint}(d::T)
+function _exponent{T<:AbstractFloat}(d::T)
   isdenormal(d) && return DenormalExponent(T)
   biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))
 end
-function _significand{T<:FloatingPoint}(d::T)
+function _significand{T<:AbstractFloat}(d::T)
   s = uint_t(d) & SignificandMask(T)
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
-isdenormal{T<:FloatingPoint}(d::T) = (uint_t(d) & ExponentMask(T)) == 0
+isdenormal{T<:AbstractFloat}(d::T) = (uint_t(d) & ExponentMask(T)) == 0
 
-function normalizedbound(f::FloatingPoint)
+function normalizedbound(f::AbstractFloat)
     v = Float(_significand(f),_exponent(f))
     m_plus = normalize(Float((v.s << 1) + 1, v.e - 1))
     if lowerboundaryiscloser(f)
@@ -125,7 +125,7 @@ function normalizedbound(f::FloatingPoint)
     end
     return Float(m_minus.s << (m_minus.e - m_plus.e), m_plus.e), m_plus
 end
-function lowerboundaryiscloser{T<:FloatingPoint}(f::T)
+function lowerboundaryiscloser{T<:AbstractFloat}(f::T)
     physical_significand_is_zero = (uint_t(f) & SignificandMask(T)) == 0
     return physical_significand_is_zero && (_exponent(f) != DenormalExponent(T))
 end

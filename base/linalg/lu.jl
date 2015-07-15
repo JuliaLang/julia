@@ -67,7 +67,7 @@ function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{
 end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
-lufact{T<:FloatingPoint}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
+lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
 function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})

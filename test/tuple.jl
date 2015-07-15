@@ -53,7 +53,7 @@
 
 ## eltype ##
 @test eltype((1,2,3)) === Int
-@test eltype((1.0,2.0,3.0)) <: FloatingPoint
+@test eltype((1.0,2.0,3.0)) <: AbstractFloat
 @test eltype((true, false)) === Bool
 @test eltype((1,2.0, false)) === Any
 @test eltype(()) === Union{}

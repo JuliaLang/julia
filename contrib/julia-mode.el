@@ -209,7 +209,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
    '("Number" "Real" "BigInt" "Integer"
      "UInt" "UInt8" "UInt16" "UInt32" "UInt64" "UInt128"
      "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
-     "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
+     "BigFloat" "AbstractFloat" "Float16" "Float32" "Float64"
      "Complex128" "Complex64"
      "Bool"
      "Cuchar" "Cshort" "Cushort" "Cint" "Cuint" "Clonglong" "Culonglong" "Cintmax_t" "Cuintmax_t"

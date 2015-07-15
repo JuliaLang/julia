@@ -20,12 +20,12 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
        plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
        rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-complexfloat{T<:FloatingPoint}(x::AbstractArray{Complex{T}}) = x
+complexfloat{T<:AbstractFloat}(x::AbstractArray{Complex{T}}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
 complexfloat{T<:Complex}(x::AbstractArray{T}) = copy!(Array(typeof(float(one(T))), size(x)), x)
-complexfloat{T<:FloatingPoint}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
+complexfloat{T<:AbstractFloat}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
 complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(one(T)))), size(x)), x)
 
 # implementations only need to provide plan_X(x, region)

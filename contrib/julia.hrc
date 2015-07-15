@@ -118,7 +118,7 @@
             <word name="Integer"/>
             <word name="Real"/>
             <word name="Complex"/>
-            <word name="FloatingPoint"/>
+            <word name="AbstractFloat"/>
             <word name="Float64"/>
             <word name="Float32"/>
             <word name="Int8"/>

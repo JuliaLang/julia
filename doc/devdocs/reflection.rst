@@ -52,12 +52,12 @@ one of these fields is the ``types`` field observed in the example above.
 .. rubric:: Subtypes
 
 The *direct* subtypes of any :obj:`DataType` may be listed using
-:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`FloatingPoint`
+:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`AbstractFloat`
 has four (concrete) subtypes:
 
 .. doctest::
 
-    julia> subtypes(FloatingPoint)
+    julia> subtypes(AbstractFloat)
     4-element Array{Any,1}:
      Base.MPFR.BigFloat
      Float16

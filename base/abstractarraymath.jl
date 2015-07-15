@@ -106,7 +106,7 @@ function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
+function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
     n = length(v)
     r = similar(v, n)
     if n == 0; return r; end
@@ -128,7 +128,7 @@ function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer=1)
+function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
