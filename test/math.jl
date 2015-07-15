@@ -130,7 +130,6 @@ end
 @test erfcinv(one(Int)) == erfcinv(1.0)
 
 # airy
-@test_approx_eq airy(1.8) 0.0470362168668458052247
 @test_approx_eq airy(1.8) airyai(1.8)
 @test_approx_eq airyprime(1.8) -0.0685247801186109345638
 @test_approx_eq airyaiprime(1.8) airyprime(1.8)
@@ -140,12 +139,16 @@ end
 @test_throws Base.Math.AmosException airybi(200)
 @test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
-@test_approx_eq airyx(z) airyx(0,z)
-@test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-@test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-@test_throws ArgumentError airyx(5,z)
+for elty in [Complex64,Complex128]
+    @test_approx_eq airy(convert(elty,1.8)) 0.0470362168668458052247
+    z = convert(elty,z)
+    @test_approx_eq airyx(z) airyx(0,z)
+    @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
+    @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
+    @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test_throws ArgumentError airyx(5,z)
+end
 
 # bessely0, bessely1, besselj0, besselj1
 @test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
@@ -206,6 +209,7 @@ j43 = besselj(4,3.)
 @test_approx_eq besselj(0.1, complex(-0.4)) 0.820421842809028916 + 0.266571215948350899im
 @test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
+@test_approx_eq besselj(1.0,3im) besselj(1,3im)
 @test_throws Base.Math.AmosException besselj(20,1000im)
 
 # besselk
@@ -233,6 +237,12 @@ y33 = bessely(3,3.)
 @test_throws DomainError bessely(0.4,-1.0)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
 @test_throws DomainError bessely(1,Float32(-1.0))
+
+#besselhx
+for elty in [Complex64,Complex128]
+    z = convert(elty, 1.0 + 1.9im)
+    @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
+end
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
