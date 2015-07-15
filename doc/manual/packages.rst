@@ -13,7 +13,7 @@ All package manager commands are found in the :mod:`Pkg <Base.Pkg>` module, incl
 
 First we'll go over the mechanics of the ``Pkg`` family of commands and then we'll provide some guidance on how
 to get your package registered. Be sure to read the section below on package naming conventions, tagging versions
-and the importance of a ``REQUIRE`` file for when you're ready to add you code to the curated METADATA repository.
+and the importance of a ``REQUIRE`` file for when you're ready to add your code to the curated METADATA repository.
 
 Package Status
 --------------
