@@ -245,15 +245,20 @@ appeared in the array to be sorted. ``QuickSort`` is the default
 algorithm for numeric values, including integers and floats.
 
 ``PartialQuickSort(k)`` is similar to ``QuickSort``, but the output array
-is only sorted up to index ``k``. For example::
+is only sorted up to index ``k`` if ``k`` is an integer, or in the range
+of ``k`` if ``k`` is an ``OrdinalRange``. For example::
 
     x = rand(1:500, 100)
     k = 50
+    k2 = 50:100
     s = sort(x; alg=QuickSort)
     ps = sort(x; alg=PartialQuickSort(k))
-    map(issorted, (s, ps))             # => (true, false)
-    map(x->issorted(x[1:k]), (s, ps))  # => (true, true)
-    s[1:k] == ps[1:k]                  # => true
+    qs = sort(x; alg=PartialQuickSort(k2))
+    map(issorted, (s, ps, qs))             # => (true, false, false)
+    map(x->issorted(x[1:k]), (s, ps, qs))  # => (true, true, false)
+    map(x->issorted(x[k2]), (s, ps, qs))   # => (true, false, true)
+    s[1:k] == ps[1:k]                      # => true
+    s[k2] == qs[k2]                        # => true
 
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
 in-place – it requires a temporary array of half the size of the
