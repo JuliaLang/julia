@@ -203,6 +203,25 @@ jl_uv_libhandle jl_load_dynamic_library(const char *modname, unsigned flags)
     return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 1);
 }
 
+jl_uv_libhandle jl_load_library_as_datafile_e(const char *filename, unsigned flags)
+{
+#ifdef _OS_WINDOWS_
+    WCHAR filename_w[32768];
+    if (!uv_utf8_to_utf16(filename, filename_w, 32768))
+        return NULL;
+    uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
+    lib->errmsg = NULL;
+    lib->handle = LoadLibraryExW(filename_w, NULL, LOAD_WITH_ALTERED_SEARCH_PATH | LOAD_LIBRARY_AS_DATAFILE);
+    if (lib->handle == NULL) {
+        free(lib);
+        return NULL;
+    }
+    return lib;
+#else
+    return jl_load_dynamic_library_e(filename, flags);
+#endif
+}
+
 void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
