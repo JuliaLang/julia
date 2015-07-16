@@ -354,8 +354,10 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # Ensure subnormal flags functions don't segfault
-@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
+@test any(set_zero_subnormals(true) .== [false,true])
+@test any(get_zero_subnormals() .== [false,true])
+@test set_zero_subnormals(false)
+@test !get_zero_subnormals()
 
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)

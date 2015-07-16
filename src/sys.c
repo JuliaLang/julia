@@ -430,41 +430,69 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 #ifdef __SSE__
 
-DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
+// Cache of information recovered from jl_cpuid.
+// In a multithreaded environment, there will be races on subnormal_flags,
+// but they are harmless idempotent races.  If we ever embrace C11, then
+// subnormal_flags should be declared atomic.
+static volatile int32_t subnormal_flags = 1;
+
+static int32_t get_subnormal_flags() {
+    uint32_t f = subnormal_flags;
+    if (f & 1) {
+        // CPU capabilities not yet inspected.
+        f = 0;
+        int32_t info[4];
+        jl_cpuid(info, 0);
+        if (info[0] >= 1) {
+            jl_cpuid(info, 0x00000001);
+            if (info[3] & (1 << 26)) {
+                // SSE2 supports both FZ and DAZ
+                f = 0x00008040;
+            } else if (info[3] & (1 << 25)) {
+                // SSE supports only the FZ flag
+                f = 0x00008000;
+            }
+        }
+        subnormal_flags = f;
+    }
+    return f;
+}
+
+// Returns non-zero if subnormals go to 0; zero otherwise.
+DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
 {
-    uint32_t flags = 0x00000000;
-    int32_t info[4];
+    uint32_t flags = get_subnormal_flags();
+    return _mm_getcsr() & flags;
+}
 
-    jl_cpuid(info, 0);
-    if (info[0] >= 1) {
-        jl_cpuid(info, 0x00000001);
-        if ((info[3] & ((int)1 << 26)) != 0) {
-            // SSE2 supports both FZ and DAZ
-            flags = 0x00008040;
-        }
-        else if ((info[3] & ((int)1 << 25)) != 0) {
-            // SSE supports only the FZ flag
-            flags = 0x00008000;
-        }
-    }
-
+// Return zero on success, non-zero on failure.
+DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    uint32_t flags = get_subnormal_flags();
     if (flags) {
-        if (isZero) {
-            _mm_setcsr(_mm_getcsr() | flags);
-        }
-        else {
-            _mm_setcsr(_mm_getcsr() & ~flags);
-        }
-        return 1;
+        uint32_t state = _mm_getcsr();
+        if (isZero)
+            state |= flags;
+        else
+            state &= ~flags;
+        _mm_setcsr(state);
+        return 0;
+    } else {
+        // Report a failure only if user is trying to enable FTZ/DAZ.
+        return isZero;
     }
-    return 0;
 }
 
 #else
 
-DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
+DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
 {
     return 0;
+}
+
+DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    return isZero;
 }
 
 #endif
