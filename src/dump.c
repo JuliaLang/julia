@@ -1356,13 +1356,19 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         return jl_module_globalref(tree_enclosing_module, (jl_sym_t*)sym);
     }
     else if (vtag == (jl_value_t*)jl_globalref_type) {
-        jl_value_t *v = jl_new_struct_uninit(jl_globalref_type);
-        if (usetable)
+        if (usetable) {
+            jl_value_t *v = jl_new_struct_uninit(jl_globalref_type);
             arraylist_push(&backref_list, v);
-        jl_value_t* *data = jl_data_ptr(v);
-        data[0] = jl_deserialize_value(s, &data[0]);
-        data[1] = jl_deserialize_value(s, &data[1]);
-        return v;
+            jl_value_t* *data = jl_data_ptr(v);
+            data[0] = jl_deserialize_value(s, &data[0]);
+            data[1] = jl_deserialize_value(s, &data[1]);
+            return v;
+        }
+        else {
+            jl_value_t *mod = jl_deserialize_value(s, NULL);
+            jl_value_t *var = jl_deserialize_value(s, NULL);
+            return jl_module_globalref((jl_module_t*)mod, (jl_sym_t*)var);
+        }
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)SmallDataType_tag) {
         int32_t sz = (vtag == (jl_value_t*)SmallDataType_tag ? read_uint8(s) : read_int32(s));
