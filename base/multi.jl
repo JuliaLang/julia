@@ -778,15 +778,6 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
-# activity on accept fd
-function accept_handler(server::TCPServer, status::Int32)
-    if status == -1
-        error("an error occured during the creation of the server")
-    end
-    client = accept_nonblock(server)
-    process_messages(client, client)
-end
-
 process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = process_messages(r_stream, w_stream, nothing)
 process_messages(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join) = @schedule process_tcp_streams(r_stream, w_stream, rr_ntfy_join)
 
@@ -977,7 +968,10 @@ function start_worker(out::IO)
     else
         sock = listen(LPROC.bind_port)
     end
-    sock.ccb = accept_handler
+    @schedule while isopen(sock)
+        client = accept(sock)
+        process_messages(client, client)
+    end
     print(out, "julia_worker:")  # print header
     print(out, "$(dec(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
