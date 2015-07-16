@@ -213,11 +213,6 @@ static int jl_load_sysimg_so()
         return -1;
 
     int imaging_mode = jl_generating_output();
-#ifdef _OS_WINDOWS_
-    //XXX: the windows linker forces our system image to be
-    //     linked against only one dll, I picked libjulia-release
-    if (jl_is_debugbuild()) imaging_mode = 1;
-#endif
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
@@ -1542,13 +1537,7 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     }
 
     // Get handle to sys.so
-#ifdef _OS_WINDOWS_
-    if (!jl_is_debugbuild()) {
-#endif
-        jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
-#ifdef _OS_WINDOWS_
-    }
-#endif
+    jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
 
     // set cpu target if unspecified by user and available from sysimg
     // otherwise default to native.

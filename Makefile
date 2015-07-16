@@ -60,10 +60,16 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C ui julia-$*
 
-julia-sysimg : julia-base julia-ui-$(JULIA_BUILD_MODE)
-	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/inference.ji
 
-julia-debug julia-release : julia-% : julia-ui-% julia-symlink julia-sysimg julia-libccalltest
+julia-sysimg-release : julia-inference julia-ui-release
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT)
+
+julia-sysimg-debug : julia-inference julia-ui-debug
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
 debug release : % : julia-%
 
@@ -132,19 +138,12 @@ ifeq ($(OS), WINNT)
 $(build_sysconfdir)/julia/juliarc.jl: contrib/windows/juliarc.jl
 endif
 
-.SECONDARY: $(build_private_libdir)/inference0.o
-.SECONDARY: $(build_private_libdir)/inference.o
-.SECONDARY: $(build_private_libdir)/sys.o
-
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
-ifneq ($(USEMSVC), 1)
-	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp))
-	$(DSYMUTIL) $@
-else
-	@true
-endif
+	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
+		$$([ $(OS) = WINNT ] && echo '' -lssp))
+	@$(INSTALL_NAME_CMD)$(notdir $@) $@
+	@$(DSYMUTIL) $@
 
 CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/abstractarray.jl \
@@ -170,28 +169,32 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/tuple.jl
-
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
-$(build_private_libdir)/inference0.o: $(CORE_SRCS) | $(build_private_libdir)
+$(build_private_libdir)/inference0.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-o $(call cygpath_w,$(build_private_libdir)/inference0.o) -f \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
 		coreimg.jl)
 
-$(build_private_libdir)/inference.o: $(build_private_libdir)/inference0.$(SHLIB_EXT)
+$(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-o $(call cygpath_w,$(build_private_libdir)/inference.o) -f \
-		-J $(call cygpath_w,$(build_private_libdir)/inference0.$(SHLIB_EXT)) coreimg.jl)
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+		-J $(call cygpath_w,$<) coreimg.jl)
 
 COMMA:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/inference.$(SHLIB_EXT)
-	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-o $(call cygpath_w,$(build_private_libdir)/sys.o) $(JULIA_SYSIMG_BUILD_FLAGS) -f \
-		-J $(call cygpath_w,$(build_private_libdir)/inference.$(SHLIB_EXT)) sysimg.jl \
-		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(COMMA) try `make cleanall`. ***' && false; } )
+define sysimg_builder
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji VERSION $$(BASE_SRCS) $$(build_docdir)/helpdb.jl
+	@$$(call PRINT_JULIA, cd base && \
+	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+		-J $$(call cygpath_w,$$<) sysimg.jl \
+		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
+.SECONDARY: $(build_private_libdir)/sys$1.o
+endef
+$(eval $(call sysimg_builder,,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug,$(JULIA_EXECUTABLE_debug)))
 
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
-	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
+	@$(call PRINT_CC, $(HOSTCC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
 # public libraries, that are installed in $(prefix)/lib
@@ -320,6 +323,7 @@ endif
 	# Copy system image
 	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in standalone executable build script
@@ -364,9 +368,11 @@ else ifeq ($(OS), Linux)
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
-		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.$(SHLIB_EXT)$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.$(SHLIB_EXT)" 256 $(call cygpath_w,$$julia)); \
-	done
+define stringreplace
+	$(build_bindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
+endef
+	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
+	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -404,11 +410,6 @@ endif
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
-endif
-
-	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
-ifeq ($(JULIA_CPU_TARGET), native)
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
 endif
 
 ifeq ($(OS), WINNT)
@@ -501,7 +502,7 @@ distcleanall: cleanall
 .PHONY: default debug release check-whitespace release-candidate \
 	julia-debug julia-release julia-deps \
 	julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
-	julia-symlink julia-base julia-sysimg \
+	julia-symlink julia-base julia-inference julia-sysimg-release julia-sysimg-debug \
 	test testall testall1 test clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
@@ -511,7 +512,7 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 testall: check-whitespace $(JULIA_BUILD_MODE)
-	cp $(build_prefix)/lib/julia/sys.$(SHLIB_EXT) local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J local.$(SHLIB_EXT) -e 'true' && rm local.$(SHLIB_EXT)
+	cp $(build_prefix)/lib/julia/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT) local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J local.$(SHLIB_EXT) -e 'true' && rm local.$(SHLIB_EXT)
 	@$(MAKE) $(QUIET_MAKE) -C test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 testall1: check-whitespace $(JULIA_BUILD_MODE)
