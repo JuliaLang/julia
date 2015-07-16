@@ -137,33 +137,43 @@ DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int juli
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (handle->type==UV_TTY)
-        uv_tty_set_mode((uv_tty_t*)handle,0);
-
-    if ((handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) &&
-        uv_is_writable((uv_stream_t*)handle)) {
-        uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
-        req->data = 0;
-        /*
-         * We are explicity ignoring the error here for the following reason:
-         * There is only two scenarios in which this returns an error:
-         * a) In case the stream is already shut down, in which case we're likely
-         *    in the process of closing this stream (since there's no other call to
-         *    uv_shutdown).
-         * b) In case the stream is already closed, in which case uv_close would
-         *    cause an assertion failure.
-         */
-        uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
-    }
-    else if (handle->type == UV_FILE) {
+    if (handle->type == UV_FILE) {
         uv_fs_t req;
         jl_uv_file_t *fd = (jl_uv_file_t*)handle;
         if (fd->file != -1) {
             uv_fs_close(handle->loop, &req, fd->file, NULL);
             fd->file = -1;
         }
+        return;
     }
-    else if (!uv_is_closing((uv_handle_t*)handle)) {
+
+    if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) {
+        if (((uv_stream_t*)handle)->shutdown_req) {
+            // don't close the stream while attempting a graceful shutdown
+            return;
+        }
+        if (uv_is_writable((uv_stream_t*)handle)) {
+            // attempt graceful shutdown of writable streams to give them a chance to flush first
+            uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
+            req->data = 0;
+            /*
+             * We are explicitly ignoring the error here for the following reason:
+             * There is only two scenarios in which this returns an error:
+             * a) In case the stream is already shut down, in which case we're likely
+             *    in the process of closing this stream (since there's no other call to
+             *    uv_shutdown).
+             * b) In case the stream is already closed, in which case uv_close would
+             *    cause an assertion failure.
+             */
+            uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
+            return;
+        }
+    }
+
+    if (!uv_is_closing((uv_handle_t*)handle)) {
+        // avoid double-closing the stream
+        if (handle->type == UV_TTY)
+            uv_tty_set_mode((uv_tty_t*)handle,0);
         uv_close(handle,&jl_uv_closeHandle);
     }
 }
