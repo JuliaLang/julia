@@ -1555,11 +1555,17 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 jl_gc_wb(v, *a);
                 break;
                     }
-            case 2: { // reinsert v (const) into parent as sym
+            case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
                 jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name);
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
+                    if (!jl_is_module(b->value)) {
+                        jl_errorf("invalid redefinition of constant %s", mod->name->name); // this also throws
+                    }
+                    if (jl_generating_output() && jl_options.incremental) {
+                        jl_errorf("error: cannot replace module %s during incremental compile", mod->name->name);
+                    }
                     jl_printf(JL_STDERR, "Warning: replacing module %s\n", mod->name->name);
                 }
                 b->value = v;
@@ -1939,6 +1945,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
     mode = MODE_MODULE;
+    jl_array_t *last_module_init_order = jl_module_init_order;
     jl_array_t *restored = NULL;
     restored = (jl_array_t*)jl_deserialize_value(f, (jl_value_t**)&restored);
 
@@ -2049,7 +2056,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     JL_SIGATOMIC_END();
 
     jl_init_restored_modules();
-    jl_module_init_order = NULL;
+    jl_module_init_order = last_module_init_order;
 
     return restored;
 }

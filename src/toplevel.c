@@ -48,6 +48,9 @@ void jl_add_standard_imports(jl_module_t *m)
 
 jl_module_t *jl_new_main_module(void)
 {
+    if (jl_generating_output() && jl_options.incremental)
+        jl_error("cannot call workspace() in incremental compile mode");
+
     // switch to a new top-level module
     if (jl_current_module != jl_main_module && jl_current_module != NULL)
         jl_error("Main can only be replaced from the top level");
@@ -109,9 +112,17 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *parent_module = jl_current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
-    if (b->value != NULL && !jl_generating_output()) {
-        // suppress warning "replacing module Core.Inference" during bootstrapping
-        jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
+    if (b->value != NULL) {
+        if (!jl_is_module(b->value)) {
+            jl_errorf("invalid redefinition of constant %s", name->name);
+        }
+        if (jl_generating_output() && jl_options.incremental) {
+            jl_errorf("error: cannot replace module %s during incremental compile", name->name);
+        }
+        if (!jl_generating_output()) {
+            // suppress warning "replacing module Core.Inference" during bootstrapping
+            jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
+        }
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
