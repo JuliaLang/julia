@@ -915,6 +915,8 @@ export
     get_rounding,
     set_rounding,
     with_rounding,
+    get_zero_subnormals,
+    set_zero_subnormals,
 
 # statistics
     cor,
