@@ -854,7 +854,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             }
             else {
                 for(size_t i=0; i < nf; i++) {
-                    jl_serialize_value(s, jl_get_nth_field(v, i));
+                    if (t->fields[i].size > 0) {
+                        jl_serialize_value(s, jl_get_nth_field(v, i));
+                    }
                 }
             }
         }
@@ -1392,19 +1394,16 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             ios_read(s, (char*)jl_data_ptr(v), nby);
         }
         else {
-            if (mode == MODE_AST && dt == jl_globalref_type) {
-                jl_value_t *mod = jl_deserialize_value(s, NULL);
-                jl_value_t *var = jl_deserialize_value(s, NULL);
-                return jl_module_globalref((jl_module_t*)mod, (jl_sym_t*)var);
-            }
             char *data = (char*)jl_data_ptr(v);
             for(i=0; i < nf; i++) {
-                if (dt->fields[i].isptr) {
-                    jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
-                    *fld = jl_deserialize_value(s, fld);
-                }
-                else {
-                    jl_set_nth_field(v, i, jl_deserialize_value(s, NULL));
+                if (dt->fields[i].size > 0) {
+                    if (dt->fields[i].isptr) {
+                        jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
+                        *fld = jl_deserialize_value(s, fld);
+                    }
+                    else {
+                        jl_set_nth_field(v, i, jl_deserialize_value(s, NULL));
+                    }
                 }
             }
             if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)) {
