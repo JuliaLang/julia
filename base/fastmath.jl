@@ -175,27 +175,49 @@ issubnormal_fast(x) = false
 ComplexTypes = Union{Complex64, Complex128}
 
 @fastmath begin
-    div_fast{T<:FloatTypes}(x::Complex{T}, y::T) =
-        Complex{T}(real(x)/y, imag(x)/y)
-
     abs_fast{T<:ComplexTypes}(x::T) = hypot(real(x), imag(x))
     abs2_fast{T<:ComplexTypes}(x::T) = real(x)*real(x) + imag(x)*imag(x)
-    add_fast{T<:ComplexTypes}(x::T, y::T) = T(real(x)+real(y), imag(x)+imag(y))
     conj_fast{T<:ComplexTypes}(x::T) = T(real(x), -imag(x))
-    function div_fast{T<:ComplexTypes}(x::T, y::T)
-        T(real(x)*real(y) + imag(x)*imag(y),
-           imag(x)*real(y) - real(x)*imag(y)) / abs2(y)
-    end
     inv_fast{T<:ComplexTypes}(x::T) = conj(x) / abs2(x)
     sign_fast{T<:ComplexTypes}(x::T) = x / abs(x)
-    sub_fast{T<:ComplexTypes}(x::T, y::T) = T(real(x)-real(y), imag(x)-imag(y))
-    function mul_fast{T<:ComplexTypes}(x::T, y::T)
+
+    add_fast{T<:ComplexTypes}(x::T, y::T) =
+        T(real(x)+real(y), imag(x)+imag(y))
+    add_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
+        Complex{T}(real(x)+b, imag(x))
+    add_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
+        Complex{T}(a+real(y), imag(y))
+
+    sub_fast{T<:ComplexTypes}(x::T, y::T) =
+        T(real(x)-real(y), imag(x)-imag(y))
+    sub_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
+        Complex{T}(real(x)-b, imag(x))
+    sub_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
+        Complex{T}(a-real(y), -imag(y))
+
+    mul_fast{T<:ComplexTypes}(x::T, y::T) =
         T(real(x)*real(y) - imag(x)*imag(y),
-           real(x)*imag(y) + imag(x)*real(y))
-    end
+          real(x)*imag(y) + imag(x)*real(y))
+    mul_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
+        Complex{T}(real(x)*b, imag(x)*b)
+    mul_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
+        Complex{T}(a*real(y), a*imag(y))
+
+    div_fast{T<:ComplexTypes}(x::T, y::T) =
+        T(real(x)*real(y) + imag(x)*imag(y),
+          imag(x)*real(y) - real(x)*imag(y)) / abs2(y)
+    div_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
+        Complex{T}(real(x)/b, imag(x)/b)
+    div_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
+        Complex{T}(a*real(y), -a*imag(y)) / abs2(y)
 
     eq_fast{T<:ComplexTypes}(x::T, y::T) =
         (real(x)==real(y)) & (imag(x)==imag(y))
+    eq_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
+        (real(x)==b) & (imag(x)==T(0))
+    eq_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
+        (a==real(y)) & (T(0)==imag(y))
+
     ne_fast{T<:ComplexTypes}(x::T, y::T) = !(x==y)
 end
 
