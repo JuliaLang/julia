@@ -24,6 +24,8 @@ blocks.  There are two main types of scopes in Julia, *global scope*
 and *local scope*, the latter can be nested.  The constructs
 introducing scope blocks are:
 
+.. _man-scope-table:
+
 +--------------------------------+----------------------------------------------------------------------------------+
 | Scope name                     | block/construct introducing this kind of scope                                   |
 +================================+==================================================================================+
@@ -32,7 +34,7 @@ introducing scope blocks are:
 | :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | | for, while, list-comprehensions,                |
 |                                |                              |   try-catch-finally, let                          |
 |                                +------------------------------+---------------------------------------------------+
-|                                |  :ref:`hard <man-hard-scope>`| | functions (either syntax, anonymous & do-blocks)|
+|                                | :ref:`hard <man-hard-scope>` | | functions (either syntax, anonymous & do-blocks)|
 |                                |                              | | type, immutable, macro                          |
 +--------------------------------+------------------------------+---------------------------------------------------+
 
@@ -103,12 +105,14 @@ the module ``Main``.
 Local Scope
 -----------
 
-A local scope *usually* inherits all the variables from its parent
-scope, both for reading and writing.  There are two subtypes of local
-scopes, hard and soft, with slightly different rules concerning what
-variables are inherited.  Unlike global scopes, local scopes are not
-namespaces, thus variables in an inner scope cannot be retrieved from
-the parent scope through some sort of qualified access.
+A new local scope is introduced by most code-blocks, see above
+:ref:`table <man-scope-table>` for a complete list.  A local scope
+*usually* inherits all the variables from its parent scope, both for
+reading and writing.  There are two subtypes of local scopes, hard and
+soft, with slightly different rules concerning what variables are
+inherited.  Unlike global scopes, local scopes are not namespaces,
+thus variables in an inner scope cannot be retrieved from the parent
+scope through some sort of qualified access.
 
 The following rules and examples pertain to both hard and soft local
 scopes.  A newly introduced variable in a local scope does not
@@ -204,7 +208,6 @@ Within soft scopes, the `global` keyword is never necessary, although
 allowed.  The only case when it would change the semantics is
 (currently) a syntax error::
 
-    x = 1
     let
         local x = 2
         let
@@ -212,7 +215,7 @@ allowed.  The only case when it would change the semantics is
         end
     end
 
-    # ERROR: syntax: `global #1#x`: #1#x is local variable in the enclosing scope
+    # ERROR: syntax: `global x`: x is local variable in the enclosing scope
 
 .. _man-hard-scope:
 
@@ -254,7 +257,9 @@ An explicit ``global`` is needed to assign to a global variable::
     julia> x
     2
 
-However, nested functions can modify the parent's *local* variables::
+Note that *nested functions* can behave differently to functions
+defined in the global scope as they can modify their parent scope's
+*local* variables::
 
     x,y = 1,2
     function foo()
@@ -267,7 +272,7 @@ However, nested functions can modify the parent's *local* variables::
     end
 
     julia> foo()
-    22  # x,y unchanged
+    22  # (x,y unchanged)
 
 The distinction between inheriting global and local variables for
 assignment can lead to some slight differences between functions
@@ -285,8 +290,8 @@ last example by moving ``bar`` to the global scope::
     end
 
     julia> foo()
-    14 # as x is not modified anymore
-       # x,y unchanged
+    14 # as x is not modified anymore.
+       # (x,y unchanged)
 
 Note that above subtlety does not pertain to type and macro
 definitions as they can only appear at the global scope.
@@ -335,6 +340,40 @@ Julia provides built-in, efficient functions to test for oddness and evenness
 called :func:`iseven` and :func:`isodd` so the above definitions should only be
 taken as examples.
 
+Hard vs. Soft Local Scope
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Blocks which introduce a soft local scope, such as loops, are
+generally used to manipulate the variables in their parent scope.
+Thus their default is to fully access all variables in their parent
+scope.
+
+Conversely, the code inside blocks which introduce a hard local scope
+(function, type and macro definitions) can be executed at any place in
+a program.  Remotely changing the state of global variables in other
+modules should be done with care and thus this is an opt-in feature
+requiring the ``global`` keyword.
+
+The reason to allow *modifying local* variables of parent scopes in
+nested functions is to allow constructing `closures
+<https://en.wikipedia.org/wiki/Closure_%28computer_programming%29>`_
+which have a private state, for instance the ``state`` variable in the
+following example::
+
+    let
+        state = 0
+        global counter
+        counter() = state += 1
+    end
+
+    julia> counter()
+    1
+
+    julia> counter()
+    2
+
+See also the closures in the examples in the next two sections.
+    
 .. _man-let-blocks:
 
 Let Blocks
