@@ -1041,13 +1041,12 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
                 dup(_fd(stream),  RawFD($unix_fd)) )
             $x = stream
         end
-        function ($f)(handle::AsyncStream)
+        function ($f)(handle::Union{AsyncStream,IOStream})
             $(_f)(handle)
             unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),
                 handle.handle)
             handle
         end
-        ($f)(handle::IOStream) = ($_f)(handle)
         function ($f)()
             read,write = (Pipe(C_NULL), Pipe(C_NULL))
             link_pipe(read,$(writable),write,$(!writable))
