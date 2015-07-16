@@ -30,10 +30,6 @@
 #define WHOLE_ARCHIVE
 #include "../src/julia.h"
 
-#ifndef JL_SYSTEM_IMAGE_PATH
-#error "JL_SYSTEM_IMAGE_PATH not defined!"
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
