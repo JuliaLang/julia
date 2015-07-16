@@ -184,8 +184,7 @@ noteworthy differences:
   :func:`vcat` and :func:`hvcat`, not ``c``, ``rbind`` and ``cbind`` like in R.
 - In Julia, a range like ``a:b`` is not shorthand for a vector like in R,
   but is a specialized :obj:`Range` that is used for iteration without high
-  memory overhead. To convert a range into a vector, you need to wrap the range
-  with brackets ``[a:b]``.
+  memory overhead. To convert a range into a vector, use :func:`collect(a:b) <collect>`.
 - Julia's :func:`max` and :func:`min` are the equivalent of ``pmax`` and
   ``pmin`` respectively in R, but both arguments need to have the same
   dimensions.  While :func:`maximum` and :func:`minimum` replace ``max`` and
