@@ -236,11 +236,11 @@ function gen_call_with_extracted_types(fcn, ex0)
         return Expr(:call, fcn, esc(args[1]),
                     Expr(:call, :typesof, map(esc, args[2:end])...))
     end
-    if isa(ex0, Expr) && ex0.head == :call
-        return Expr(:call, fcn, esc(ex0.args[1]),
-                    Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
-    end
     ex = expand(ex0)
+    if isa(ex, Expr) && ex.head == :call
+        return Expr(:call, fcn, esc(ex.args[1]),
+                    Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+    end
     exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
         # do nothing -> error
