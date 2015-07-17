@@ -50,8 +50,8 @@ function _include_from_serialized(content::Vector{UInt8})
     return m != 0
 end
 
-function _require_from_serialized(node::Int, path_to_try::ByteString)
-    if myid() == 1 && current_module() === Main && nprocs() > 1
+function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_load::Bool)
+    if toplevel_load && myid() == 1 && nprocs() > 1
         # broadcast top-level import/using from node 1 (only)
         if node == myid()
             content = open(readbytes, path_to_try)
@@ -82,13 +82,13 @@ function _require_from_serialized(node::Int, path_to_try::ByteString)
     return false
 end
 
-function _require_from_serialized(node::Int, mod::Symbol)
+function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
     name = string(mod)
     finder = @spawnat node @task find_in_cache_path(mod) # TODO: switch this to an explicit Channel
     while true
         path_to_try = remotecall_fetch(node, finder->consume(fetch(finder)), finder)
         path_to_try === nothing && return false
-        if _require_from_serialized(node, path_to_try)
+        if _require_from_serialized(node, path_to_try, toplevel_load)
             return true
         else
             warn("deserialization checks failed while attempting to load cache from $path_to_try")
@@ -101,15 +101,9 @@ package_locks = Dict{Symbol,Condition}()
 package_loaded = Set{Symbol}()
 
 # require always works in Main scope and loads files from node 1
+toplevel_load = true
 function require(mod::Symbol)
-    if !(mod in package_loaded)
-        push!(package_loaded, mod)
-        reload(mod)
-    end
-    nothing
-end
-
-function reload(mod::Symbol)
+    global toplevel_load
     loading = get(package_locks, mod, false)
     if loading !== false
         # load already in progress for this module
@@ -118,14 +112,16 @@ function reload(mod::Symbol)
     end
     package_locks[mod] = Condition()
 
+    last = toplevel_load
     try
-        if _require_from_serialized(1, mod)
+        toplevel_load = false
+        if _require_from_serialized(1, mod, last)
             return true
         end
         if JLOptions().incremental != 0
             # spawn off a new incremental compile task from node 1 for recursive `require` calls
             cachefile = compile(mod)
-            if !_require_from_serialized(1, cachefile)
+            if !_require_from_serialized(1, cachefile, last)
                 warn("require failed to create a precompiled cache file")
             end
             return
@@ -134,7 +130,7 @@ function reload(mod::Symbol)
         name = string(mod)
         path = find_in_node_path(name, 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
-        if myid() == 1 && current_module() === Main && nprocs() > 1
+        if last && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             content = open(readall, path)
             refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in procs() ]
@@ -143,6 +139,7 @@ function reload(mod::Symbol)
             eval(Main, :(Base.include_from_node1($path)))
         end
     finally
+        toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
     end

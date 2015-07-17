@@ -682,3 +682,5 @@ function require_filename(name::AbstractString)
     end
     name
 end
+const reload = require
+export reload
