@@ -3084,10 +3084,10 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
             else {
                 slot = emit_unboxed(r, ctx);
-                if (!slot.isboxed && slot.ispointer) { // emit a copy. TODO: elid this copy if unnecessary
+                if (slot.ispointer) { // emit a copy of boxed isbits values. TODO: elid this copy if unnecessary
                     slot = mark_julia_type(
-                            emit_unbox(julia_type_to_llvm(slot.typ), slot, slot.typ),
-                            slot.typ);
+                            emit_unbox(julia_type_to_llvm(declType), slot, declType),
+                            declType);
                 }
             }
         }
@@ -3179,10 +3179,10 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else {
             // SSA variable w/o gcroot, just track the value info
-            if (!rval_info.isboxed && rval_info.ispointer) { // emit a copy. TODO: elid this copy if unnecessary
+            if (store_unboxed_p(vi.value.typ) && rval_info.ispointer) { // emit a copy of boxed isbits values. TODO: elid this copy if unnecessary
                 rval_info = mark_julia_type(
-                        emit_unbox(julia_type_to_llvm(rval_info.typ), rval_info, rval_info.typ),
-                        rval_info.typ);
+                        emit_unbox(julia_type_to_llvm(vi.value.typ), rval_info, vi.value.typ),
+                        vi.value.typ);
             }
             vi.value = rval_info;
         }

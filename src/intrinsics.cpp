@@ -263,6 +263,7 @@ static jl_cgval_t ghostValue(jl_value_t *ty);
 // emit code to unpack a raw value from a box into registers
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
 {
+    assert(to != jl_pvalue_llvmt);
     // TODO: fully validate that x.typ == jt?
     if (x.isghost) {
         if (type_is_ghost(to)) {
