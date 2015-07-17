@@ -274,7 +274,9 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # load file immediately on all processors
             if opts.load != C_NULL
-                require(bytestring(opts.load))
+                @sync for p in procs()
+                    @async remotecall_fetch(p, include, bytestring(opts.load))
+                end
             end
             # eval expression
             if opts.eval != C_NULL
@@ -322,6 +324,7 @@ is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
 const LOAD_PATH = ByteString[]
+const LOAD_CACHE_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
@@ -329,6 +332,8 @@ function init_load_path()
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
+    push!(LOAD_CACHE_PATH,abspath(homedir(),".julia","lib",vers))
+    push!(LOAD_CACHE_PATH,abspath(JULIA_HOME,"..","usr","lib","julia")) #TODO: fixme
 end
 
 function load_juliarc()
