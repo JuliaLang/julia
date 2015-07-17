@@ -1795,7 +1795,7 @@ static jl_cgval_t emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx) // TODO: m
         make_gcroot(vbox, ctx);
         v = jl_cgval_t(vbox, v.typ); // bypass normal auto-unbox behavior for isghost
     }
-    else if (might_need_root(e)) { // TODO: v.needsroot
+    else if (might_need_root(e)) { // TODO: v.needsgcroot
         make_gcroot(v.V, ctx);
     }
     return v;
@@ -4507,11 +4507,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int n_roots = 0;
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_varinfo_t &varinfo = ctx.vars[s];
         if (store_unboxed_p(s, &ctx)) {
-            if (ctx.vars[s].isAssigned) // otherwise, just leave it in the input register
+            if (varinfo.isAssigned) // otherwise, just leave it in the input register
                 alloc_local(s, &ctx);
         }
-        else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
+        else if (varinfo.isAssigned || (va && i==largslen-1 && varinfo.escapes)) {
             n_roots++;
         }
         maybe_alloc_arrayvar(s, &ctx);
@@ -4573,7 +4574,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (store_unboxed_p(s, &ctx)) {
             varinfo.hasGCRoot = true;
         }
-        else if (varinfo.isAssigned || (va && i==largslen-1)) {
+        else if (varinfo.isAssigned || (va && i==largslen-1 && varinfo.escapes)) {
             Value *av = emit_local_slot(varnum, &ctx);
             varnum++;
             varinfo.memloc = av;
