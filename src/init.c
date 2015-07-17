@@ -641,6 +641,7 @@ DLLEXPORT void jl_atexit_hook(int exitcode)
             item = next_shutdown_queue_item(item);
         }
     }
+    loop->stop_flag = 0;
     uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
 }
 
