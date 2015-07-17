@@ -894,29 +894,32 @@ function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_n
         end # end of while
     catch e
         iderr = worker_id_from_socket(r_stream)
-        werr = worker_from_id(iderr)
-        oldstate = werr.state
-        set_worker_state(werr, W_TERMINATED)
+        if (iderr < 1)
+            print(STDERR, "Socket from unknown remote worker in worker ", myid())
+        else
+            werr = worker_from_id(iderr)
+            oldstate = werr.state
+            set_worker_state(werr, W_TERMINATED)
 
-
-        # If error occured talking to pid 1, commit harakiri
-        if iderr == 1
-            if isopen(w_stream)
-                print(STDERR, "fatal error on ", myid(), ": ")
-                display_error(e, catch_backtrace())
+            # If error occured talking to pid 1, commit harakiri
+            if iderr == 1
+                if isopen(w_stream)
+                    print(STDERR, "fatal error on ", myid(), ": ")
+                    display_error(e, catch_backtrace())
+                end
+                exit(1)
             end
-            exit(1)
-        end
 
-        # Will treat any exception as death of node and cleanup
-        # since currently we do not have a mechanism for workers to reconnect
-        # to each other on unhandled errors
-        deregister_worker(iderr)
+            # Will treat any exception as death of node and cleanup
+            # since currently we do not have a mechanism for workers to reconnect
+            # to each other on unhandled errors
+            deregister_worker(iderr)
+        end
 
         if isopen(r_stream) close(r_stream) end
         if isopen(w_stream) close(w_stream) end
 
-        if (myid() == 1)
+        if (myid() == 1) && (iderr > 1)
             if oldstate != W_TERMINATING
                 println(STDERR, "Worker $iderr terminated.")
                 rethrow(e)
