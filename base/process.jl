@@ -50,7 +50,7 @@ function show(io::IO, cmd::Cmd)
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
-    print(io, "pipe(")
+    print(io, "pipeline(")
     show(io, cmds.a)
     print(io, ", ")
     print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
@@ -100,7 +100,7 @@ type CmdRedirect <: AbstractCmd
 end
 
 function show(io::IO, cr::CmdRedirect)
-    print(io, "pipe(")
+    print(io, "pipeline(")
     show(io, cr.cmd)
     print(io, ", ")
     if cr.stream_no == STDOUT_NO
@@ -149,7 +149,7 @@ redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirec
 redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
 redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
-function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
         error("append set to true, but no output redirections specified")
     end
@@ -165,10 +165,10 @@ function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, a
     return cmd
 end
 
-pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
-pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdin=src)
+pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
+pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
 
-pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
+pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
 typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
