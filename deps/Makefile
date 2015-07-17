@@ -1791,7 +1791,7 @@ MPFR_OPTS += --host=none-unknown-linux
 endif
 
 mpfr-$(MPFR_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-current/$@
+	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$@
 mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
