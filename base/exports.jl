@@ -1096,8 +1096,6 @@ export
     evalfile,
     include,
     include_string,
-    reload,
-    require,
 
 # RTS internals
     finalizer,

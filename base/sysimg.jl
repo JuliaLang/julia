@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Core.Intrinsics.ccall
-ccall(:jl_new_main_module, Any, ())
 
 baremodule Base
 
@@ -314,9 +313,8 @@ function __init__()
     init_parallel()
 end
 
-include("precompile.jl")
-
 include = include_from_node1
+include("precompile.jl")
 
 end # baremodule Base
 

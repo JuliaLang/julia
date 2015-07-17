@@ -86,6 +86,7 @@ static const char opts[]  =
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
     " --output-bc name          Generate LLVM bitcode (.bc)\n\n"
+    " --output-incremental=no   Generate an incremental output file (rather than complete)\n\n"
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
@@ -113,7 +114,8 @@ void parse_opts(int *argcp, char ***argvp)
            opt_handle_signals,
            opt_output_o,
            opt_output_ji,
-           opt_use_precompiled
+           opt_use_precompiled,
+           opt_incremental
     };
     static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
     static struct option longopts[] = {
@@ -146,6 +148,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-ji",       required_argument, 0, opt_output_ji },
+        { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
         { "math-mode",       required_argument, 0, opt_math_mode },
@@ -330,6 +333,14 @@ void parse_opts(int *argcp, char ***argvp)
             jl_options.outputji = optarg;
             if (!imagepathspecified) jl_options.image_file = NULL;
             break;
+        case opt_incremental:
+            if (!strcmp(optarg,"yes"))
+                jl_options.incremental = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.incremental = 0;
+            else
+                jl_errorf("julia: invalid argument to --output-incremental={yes|no} (%s)\n", optarg);
+            break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_ON;
@@ -394,7 +405,7 @@ static int exec_program(char *program)
             jl_value_t *errs = jl_stderr_obj();
             jl_value_t *e = jl_exception_in_transit;
             if (errs != NULL) {
-                jl_show(jl_stderr_obj(), e);
+                jl_show(errs, e);
             }
             else {
                 jl_printf(JL_STDERR, "error during bootstrap:\n");
@@ -406,7 +417,7 @@ static int exec_program(char *program)
             JL_EH_POP();
             return 1;
         }
-        jl_load(program);
+        jl_load(program, strlen(program));
     }
     JL_CATCH {
         err = 1;
@@ -513,8 +524,6 @@ static int true_main(int argc, char *argv[])
     return 0;
 }
 
-DLLEXPORT extern void julia_save();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -571,8 +580,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
-    julia_save();
-    jl_atexit_hook();
+    jl_atexit_hook(ret);
     return ret;
 }
 

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# require
+# Base.require is the implementation for the `import` statement
 
 function find_in_path(name::AbstractString)
     isabspath(name) && return name
@@ -23,8 +23,8 @@ function find_in_path(name::AbstractString)
     return nothing
 end
 
-find_in_node1_path(name) = myid()==1 ?
-    find_in_path(name) : remotecall_fetch(1, find_in_path, name)
+find_in_node_path(name, node::Int=1) = myid() == node ?
+    find_in_path(name) : remotecall_fetch(node, find_in_path, name)
 
 function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
@@ -34,62 +34,114 @@ function find_source_file(file)
     isfile(file2) ? file2 : nothing
 end
 
-# Store list of files and their load time
-package_list = Dict{ByteString,Float64}()
-# to synchronize multiple tasks trying to require something
-package_locks = Dict{ByteString,Any}()
-require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
-
-# only broadcast top-level (not nested) requires and reloads
-toplevel_load = true
-
-function require(name::AbstractString)
-    path = find_in_node1_path(name)
-    path == nothing && throw(ArgumentError("$name not found in path"))
-
-    if myid() == 1 && toplevel_load
-        refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
-        _require(path)
-        for r in refs; wait(r); end
-    else
-        _require(path)
+function find_in_cache_path(mod::Symbol)
+    name = string(mod)
+    for prefix in LOAD_CACHE_PATH
+        path = joinpath(prefix, name*".ji")
+        if isfile(path)
+            produce(path)
+        end
     end
     nothing
 end
 
-function _require(path)
-    global toplevel_load
-    if haskey(package_list,path)
-        loaded, c = package_locks[path]
-        !loaded && wait(c)
+function _include_from_serialized(content::Vector{UInt8})
+    m = ccall(:jl_restore_incremental_from_buf, UInt, (Ptr{Uint8},Int), content, sizeof(content))
+    return m != 0
+end
+
+function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_load::Bool)
+    if toplevel_load && myid() == 1 && nprocs() > 1
+        # broadcast top-level import/using from node 1 (only)
+        if node == myid()
+            content = open(readbytes, path_to_try)
+        else
+            content = remotecall_fetch(node, open, readbytes, path_to_try)
+        end
+        if _include_from_serialized(content)
+            others = filter(x -> x != myid(), procs())
+            refs = Any[ @spawnat p _include_from_serialized(content) for p in others]
+            for (id, ref) in zip(others, refs)
+                if !fetch(ref)
+                    warn("node state is inconsistent: node $id failed to load cache from $path_to_try")
+                end
+            end
+            return true
+        end
+    elseif node == myid()
+        if ccall(:jl_restore_incremental, UInt, (Ptr{Uint8},), path_to_try) != 0
+            return true
+        end
     else
-        last = toplevel_load
-        toplevel_load = false
-        try
-            reload_path(path)
-        finally
-            toplevel_load = last
+        content = remotecall_fetch(node, open, readbytes, path_to_try)
+        if _include_from_serialized(content)
+            return true
+        end
+    end
+    # otherwise, continue search
+    return false
+end
+
+function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
+    name = string(mod)
+    finder = @spawnat node @task find_in_cache_path(mod) # TODO: switch this to an explicit Channel
+    while true
+        path_to_try = remotecall_fetch(node, finder->consume(fetch(finder)), finder)
+        path_to_try === nothing && return false
+        if _require_from_serialized(node, path_to_try, toplevel_load)
+            return true
+        else
+            warn("deserialization checks failed while attempting to load cache from $path_to_try")
         end
     end
 end
 
-function reload(name::AbstractString)
+# to synchronize multiple tasks trying to import/using something
+package_locks = Dict{Symbol,Condition}()
+package_loaded = Set{Symbol}()
+
+# require always works in Main scope and loads files from node 1
+toplevel_load = true
+function require(mod::Symbol)
     global toplevel_load
-    path = find_in_node1_path(name)
-    path == nothing && throw(ArgumentError("$name not found in path"))
-    refs = nothing
-    if myid() == 1 && toplevel_load
-        refs = Any[ @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) ]
+    loading = get(package_locks, mod, false)
+    if loading !== false
+        # load already in progress for this module
+        wait(loading)
+        return
     end
+    package_locks[mod] = Condition()
+
     last = toplevel_load
-    toplevel_load = false
     try
-        reload_path(path)
+        toplevel_load = false
+        if _require_from_serialized(1, mod, last)
+            return true
+        end
+        if JLOptions().incremental != 0
+            # spawn off a new incremental compile task from node 1 for recursive `require` calls
+            cachefile = compile(mod)
+            if !_require_from_serialized(1, cachefile, last)
+                warn("require failed to create a precompiled cache file")
+            end
+            return
+        end
+
+        name = string(mod)
+        path = find_in_node_path(name, 1)
+        path === nothing && throw(ArgumentError("$name not found in path"))
+        if last && myid() == 1 && nprocs() > 1
+            # broadcast top-level import/using from node 1 (only)
+            content = open(readall, path)
+            refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in procs() ]
+            for r in refs; wait(r); end
+        else
+            eval(Main, :(Base.include_from_node1($path)))
+        end
     finally
         toplevel_load = last
-    end
-    if refs !== nothing
-        for r in refs; wait(r); end
+        loading = pop!(package_locks, mod)
+        notify(loading, all=true)
     end
     nothing
 end
@@ -145,38 +197,62 @@ function include_from_node1(path::AbstractString)
     result
 end
 
-function reload_path(path::AbstractString)
-    had = haskey(package_list, path)
-    if !had
-        package_locks[path] = (false, Condition())
-    end
-    package_list[path] = time()
-    tls = task_local_storage()
-    prev = pop!(tls, :SOURCE_PATH, nothing)
-    try
-        eval(Main, :(Base.include_from_node1($path)))
-    catch e
-        had || delete!(package_list, path)
-        rethrow(e)
-    finally
-        if prev != nothing
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    reloaded, c = package_locks[path]
-    if !reloaded
-        package_locks[path] = (true, c)
-        notify(c, all=true)
-    end
-    nothing
-end
-
 function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
-                     :(eval(x) = Core.eval(__anon__,x)),
-                     :(eval(m,x) = Core.eval(m,x)),
-                     :(include($path))))
+                     :(eval(x) = Main.Core.eval(__anon__,x)),
+                     :(eval(m,x) = Main.Core.eval(m,x)),
+                     :(Main.Base.include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
+
+function create_expr_cache(input::AbstractString, output::AbstractString)
+    code_object = """
+        while !eof(STDIN)
+            eval(Main, deserialize(STDIN))
+        end
+        """
+    io, pobj = open(detach(setenv(`$(julia_cmd())
+            --output-ji $output --output-incremental=yes
+            --startup-file=no --history-file=no
+            --eval $code_object`,
+        ["JULIA_HOME=$JULIA_HOME", "HOME=$(homedir())"])), "w", STDOUT)
+    serialize(io, quote
+        empty!(Base.LOAD_PATH)
+        append!(Base.LOAD_PATH, $LOAD_PATH)
+        empty!(Base.LOAD_CACHE_PATH)
+        append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+        empty!(Base.DL_LOAD_PATH)
+        append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+    end)
+    source = source_path(nothing)
+    if source !== nothing
+        serialize(io, quote
+            task_local_storage()[:SOURCE_PATH] = $(source)
+        end)
+    end
+    serialize(io, :(Base.include($(abspath(input)))))
+    if source !== nothing
+        serialize(io, quote
+            delete!(task_local_storage(), :SOURCE_PATH)
+        end)
+    end
+    close(io)
+    wait(pobj)
+    return pobj
+end
+
+function compile(mod::Symbol)
+    myid() == 1 || error("can only compile from node 1")
+    name = string(mod)
+    path = find_in_path(name)
+    path === nothing && throw(ArgumentError("$name not found in path"))
+    cachepath = LOAD_CACHE_PATH[1]
+    if !isdir(cachepath)
+        mkpath(cachepath)
+    end
+    cachefile = abspath(cachepath, name*".ji")
+    create_expr_cache(path, cachefile)
+    return cachefile
+end

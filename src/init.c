@@ -169,7 +169,7 @@ static void jl_find_stack_bottom(void)
 // what to do on SIGINT
 DLLEXPORT void jl_sigint_action(void)
 {
-    if (exit_on_sigint) jl_exit(0);
+    if (exit_on_sigint) jl_exit(130); // 128+SIGINT
     jl_throw(jl_interrupt_exception);
 }
 
@@ -363,7 +363,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     else {
         jl_signal_pending = 0;
-        if (exit_on_sigint) jl_exit(0);
+        if (exit_on_sigint) jl_exit(130);
         if ((DWORD)-1 == SuspendThread(hMainThread)) {
             //error
             jl_safe_printf("error: SuspendThread failed\n");
@@ -541,6 +541,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 
 void jl_write_coverage_data(void);
 void jl_write_malloc_log(void);
+static void julia_save(void);
 
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
@@ -549,8 +550,9 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-DLLEXPORT void jl_atexit_hook()
+DLLEXPORT void jl_atexit_hook(int exitcode)
 {
+    if (exitcode == 0) julia_save();
 #if defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
@@ -768,7 +770,7 @@ void *mach_segv_listener(void *arg)
     while (1) {
         int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
         jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
-        jl_exit(1);
+        jl_exit(128+SIGSEGV);
     }
 }
 
@@ -1102,7 +1104,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_current_module = jl_core_module;
         jl_root_task->current_module = jl_current_module;
 
-        jl_load("boot.jl");
+        jl_load("boot.jl", sizeof("boot.jl"));
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -1282,33 +1284,48 @@ DLLEXPORT int jl_generating_output()
 
 void jl_compile_all(void);
 
-DLLEXPORT void julia_save()
+static void julia_save()
 {
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
         jl_compile_all();
 
-    ios_t *s = NULL;
-    if (jl_options.outputo)
-        s = jl_create_system_image();
-
-    if (jl_options.outputji) {
-        if (s == NULL) {
-            jl_save_system_image(jl_options.outputji);
+    if (jl_options.incremental) {
+        jl_array_t *worklist = jl_module_init_order;
+        if (!worklist) {
+            jl_printf(JL_STDERR, "warning: incremental output requested, but no modules defined during run\n");
+            return;
         }
-        else {
-            ios_t f;
-            if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-                jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
-            ios_write(&f, (const char*)s->buf, s->size);
-            ios_close(&f);
-        }
+        if (jl_options.outputji)
+            jl_save_incremental(jl_options.outputji, worklist);
+        if (jl_options.outputbc)
+            jl_printf(JL_STDERR, "warning: incremental output to a .bc file is not implemented\n");
+        if (jl_options.outputo)
+            jl_printf(JL_STDERR, "warning: incremental output to a .o file is not implemented\n");
     }
+    else {
+        ios_t *s = NULL;
+        if (jl_options.outputo)
+            s = jl_create_system_image();
 
-    if (jl_options.outputbc)
-        jl_dump_bitcode((char*)jl_options.outputbc);
+        if (jl_options.outputji) {
+            if (s == NULL) {
+                jl_save_system_image(jl_options.outputji);
+            }
+            else {
+                ios_t f;
+                if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
+                    jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
+                ios_write(&f, (const char*)s->buf, s->size);
+                ios_close(&f);
+            }
+        }
 
-    if (jl_options.outputo)
-        jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+        if (jl_options.outputbc)
+            jl_dump_bitcode((char*)jl_options.outputbc);
+
+        if (jl_options.outputo)
+            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+    }
 }
 
 jl_function_t *jl_typeinf_func=NULL;
