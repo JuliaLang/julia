@@ -406,7 +406,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         if (bt && jl_is_bitstype(bt)) {
             // always fixed size
             nb = jl_datatype_size(bt);
-            llvmt = julia_type_to_llvm(bt);
+            llvmt = staticeval_bitstype(bt);
             alignment = ((jl_datatype_t*)bt)->alignment;
         }
         else {
@@ -417,7 +417,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
                 return jl_cgval_t();
             }
             nb = jl_datatype_size(v.typ);
-            llvmt = julia_type_to_llvm(v.typ);
+            llvmt = staticeval_bitstype(v.typ);
             alignment = ((jl_datatype_t*)v.typ)->alignment;
         }
         Value *runtime_bt = boxed(emit_expr(targ, ctx), ctx);
