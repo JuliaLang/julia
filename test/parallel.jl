@@ -14,12 +14,12 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-rr=RemoteRef()
+rr=remote_channel()
 a = rand(5,5)
 put!(rr, a)
 @test rr[2,3] == a[2,3]
 
-rr=RemoteRef(workers()[1])
+rr=remote_channel(pid=workers()[1])
 a = rand(5,5)
 put!(rr, a)
 @test rr[1,5] == a[1,5]
@@ -150,11 +150,11 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple RemoteRefs
+# Testing timedwait on multiple zs
 @sync begin
-    rr1 = RemoteRef()
-    rr2 = RemoteRef()
-    rr3 = RemoteRef()
+    rr1 = Channel()
+    rr2 = Channel()
+    rr3 = Channel()
 
     @async begin sleep(0.5); put!(rr1, :ok) end
     @async begin sleep(1.0); put!(rr2, :ok) end
@@ -196,7 +196,7 @@ num_small_requests = 10000
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
-rr_list = [RemoteRef() for x in 1:ntasks]
+rr_list = [Channel() for x in 1:ntasks]
 a=ones(2*10^5);
 for rr in rr_list
     @async let rr=rr
@@ -232,7 +232,7 @@ end
 test_channel(Channel(10))
 
 # Test remote channel...
-c = open(ChannelRef(id_other), Any, 10)
+c = remote_channel(pid=id_other, sz=10)
 
 put!(c, 1)
 remotecall_fetch(id_other, ch -> put!(ch, "Hello"), c)
@@ -274,6 +274,23 @@ for x in 1:26
 end
 @test isready(c) == false
 
+# test channel iteration
+in_c=Channel(10)
+out_c=Channel(10)
+t=@schedule for v in in_c
+    put!(out_c, v)
+end
+
+@test isopen(in_c) == true
+put!(in_c, 1)
+@test take!(out_c) == 1
+put!(in_c, "Hello")
+@test take!(out_c) == "Hello"
+close(in_c)
+@test isopen(in_c) == false
+@test_throws ChannelClosedException put!(in_c, :foo)
+yield()
+@test istaskdone(t) == true
 
 # The below block of tests are usually run only on local development systems, since:
 # - addprocs tests are memory intensive

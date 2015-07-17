@@ -88,7 +88,7 @@ export
     Rational,
     Regex,
     RegexMatch,
-    RemoteRef,
+#    RemoteRef,
     RepString,
     RevString,
     RopeString,
@@ -156,6 +156,7 @@ export
 
 # Exceptions
     ArgumentError,
+    ChannelClosedException,
     DimensionMismatch,
     EOFError,
     ErrorException,
@@ -1194,8 +1195,10 @@ export
 
 # multiprocessing
     addprocs,
+    remote_channel,
     ClusterManager,
     fetch,
+    Future,
     init_worker,
     interrupt,
     isready,
