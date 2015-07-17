@@ -281,7 +281,7 @@ mfe22 = eye(Float64, 2)
 @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
 
 # issue #5190
-@test_throws DimensionMismatch sparsevec([3,5,7],[0.1,0.0,3.2],4)
+@test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
 @test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
@@ -589,17 +589,17 @@ let A = Array(Int,0,0), S = sparse(A)
 end
 
 # issue #8225
-@test_throws BoundsError sparse([0],[-1],[1.0],2,2)
+@test_throws ArgumentError sparse([0],[-1],[1.0],2,2)
 
 # issue #8363
-@test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
+@test_throws ArgumentError sparsevec(Dict(-1=>1,1=>2))
 
 # issue #8976
 @test conj(sparse([1im])) == sparse(conj([1im]))
 @test conj!(sparse([1im])) == sparse(conj!([1im]))
 
 # issue #9525
-@test_throws BoundsError sparse([3], [5], 1.0, 3, 3)
+@test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
 
 #findn
 b = findn( speye(4) )
@@ -1013,3 +1013,7 @@ A = sprandn(10,10,0.5)
 @test I + A == I + full(A)
 @test A - I == full(A) - I
 @test I - A == I - full(A)
+
+# Test error path if triplet vectors are not all the same length (#12177)
+@test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
+@test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
