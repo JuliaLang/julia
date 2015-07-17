@@ -207,16 +207,17 @@ const MemoryError = OutOfMemoryError
 #9295
 @deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
 
-@deprecate (|>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, stderr=dest)
-@deprecate (|>)(src::Redirectable,   dest::AbstractCmd)    pipe(src, dest)
-@deprecate (|>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, stderr=dest)
-@deprecate (|>)(src::AbstractCmd,    dest::AbstractString) pipe(src, dest)
-@deprecate (|>)(src::AbstractString, dest::AbstractCmd)    pipe(src, dest)
-@deprecate (.>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stderr=dest)
-@deprecate (>>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stdout=dest, append=true)
-@deprecate (.>>)(src::AbstractCmd,   dest::AbstractString) pipe(src, stderr=dest, append=true)
+@deprecate (|>)(src::AbstractCmd,    dest::AbstractCmd)    pipeline(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::AbstractCmd)    pipeline(src, stderr=dest)
+@deprecate (|>)(src::Redirectable,   dest::AbstractCmd)    pipeline(src, dest)
+@deprecate (|>)(src::AbstractCmd,    dest::Redirectable)   pipeline(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::Redirectable)   pipeline(src, stderr=dest)
+@deprecate (|>)(src::AbstractCmd,    dest::AbstractString) pipeline(src, dest)
+@deprecate (|>)(src::AbstractString, dest::AbstractCmd)    pipeline(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::AbstractString) pipeline(src, stderr=dest)
+@deprecate (>>)(src::AbstractCmd,    dest::AbstractString) pipeline(src, stdout=dest, append=true)
+@deprecate (.>>)(src::AbstractCmd,   dest::AbstractString) pipeline(src, stderr=dest, append=true)
+@deprecate pipe pipeline
 
 # 10314
 @deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)
