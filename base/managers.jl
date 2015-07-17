@@ -297,20 +297,32 @@ const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
     s = TCPSocket()
-    try
-        client_host = Ref{Cuint}(0)
-        ccall(:jl_tcp_bind, Int32,
-                (Ptr{Void}, UInt16, UInt32, Cuint),
-                s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+    client_host = Ref{Cuint}(0)
+    ccall(:jl_tcp_bind, Int32,
+            (Ptr{Void}, UInt16, UInt32, Cuint),
+            s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
 
-        ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle) < 0 && throw(SystemError("setsockopt() SO_REUSEPORT : "))
-        ccall(:jl_tcp_getsockname_v4, Int32,
-                    (Ptr{Void}, Ref{Cuint}, Ref{Cushort}),
-                    s.handle, client_host, client_port) < 0 && throw(SystemError("getsockname() : "))
-    catch e
-        warn_once("Unable to reuse port : ", e)
-        # provide a clean new socket
-        return TCPSocket()
+    # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
+    # early access to a socket fd, i.e., before a bind call.
+
+    @linux_only begin
+        try
+            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle)
+            if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
+                return s
+            elseif rc < 0
+                throw(SystemError("setsockopt() SO_REUSEPORT : "))
+            end
+
+            ccall(:jl_tcp_getsockname_v4, Int32,
+                        (Ptr{Void}, Ref{Cuint}, Ref{Cushort}),
+                        s.handle, client_host, client_port) < 0 && throw(SystemError("getsockname() : "))
+        catch e
+            # This is an issue only on systems with lots of client connections, hence delay the warning....
+            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
+            # provide a clean new socket
+            return TCPSocket()
+        end
     end
     return s
 end
