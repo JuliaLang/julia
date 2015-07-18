@@ -2021,8 +2021,8 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
             for(unsigned i=0; i < l; i++) {
                 jl_value_t *fldty = jl_svecref(types, i);
                 Value *subAns, *fld1, *fld2;
-                fld1 = builder.CreateConstGEP2_32(varg1, 0, i);
-                fld2 = builder.CreateConstGEP2_32(varg2, 0, i);
+                fld1 = builder.CreateConstGEP2_32(LLVM37_param(at) varg1, 0, i);
+                fld2 = builder.CreateConstGEP2_32(LLVM37_param(at) varg2, 0, i);
                 if (type_is_ghost(fld1->getType()))
                     continue;
                 subAns = emit_bits_compare(mark_julia_slot(fld1, fldty), mark_julia_slot(fld2, fldty), ctx);

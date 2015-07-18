@@ -281,7 +281,7 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
     }
 
     // simple integer and float widening & conversion cases
-    if (from_type->isPrimitiveType() && target_type->getPrimitiveSizeInBits() == from_type->getPrimitiveSizeInBits()) {
+    if (from_type->getPrimitiveSizeInBits() > 0 && target_type->getPrimitiveSizeInBits() == from_type->getPrimitiveSizeInBits()) {
         return builder.CreateBitCast(v, target_type);
     }
     if (target_type->isFloatingPointTy() && from_type->isFloatingPointTy()) {
