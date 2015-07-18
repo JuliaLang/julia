@@ -1258,6 +1258,8 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
                            jl_codectx_t *ctx)
 {
     Value *istype;
+    if (jl_subtype(x.typ, type, 0))
+        return;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         Value *vx = boxed(x, ctx);
         istype = builder.
@@ -2113,9 +2115,9 @@ static Value *emit_allocobj(size_t static_size)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-    Value *parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
-    Value *parent_type = builder.CreateLoad(parenttag);
-    Value *parent_mark_bits = builder.CreateAnd(parent_type, 1);
+    Value* parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
+    Value* parent_type = builder.CreateLoad(parenttag);
+    Value* parent_mark_bits = builder.CreateAnd(parent_type, 3);
 
     // the branch hint does not seem to make it to the generated code
     //builder.CreateCall(expect_func, {parent_marked, ConstantInt::get(T_int1, 0)});
@@ -2188,7 +2190,7 @@ static bool might_need_root(jl_value_t *ex)
             !jl_is_globalref(ex));
 }
 
-static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
+static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx, bool on_stack = false)
 {
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
@@ -2231,10 +2233,18 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(sty->size);
+        Value *strct;
+        Value *tag = literal_pointer_val((jl_value_t*)ty);
+        if (on_stack) {
+            strct = builder.CreateConstGEP1_32(builder.CreateBitCast(emit_static_alloca(T_int8, sty->size + sizeof(void*), ctx), T_pjlvalue), 1);
+            // set the gc bits as marked & young
+            tag = builder.CreateIntToPtr(builder.CreateOr(builder.CreatePtrToInt(tag, T_size), 3), T_pjlvalue);
+        }
+        else {
+            strct = emit_allocobj(sty->size);
+        }
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
-        builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
-                            emit_typeptr_addr(strct));
+        builder.CreateStore(tag, emit_typeptr_addr(strct));
         if (f1) {
             jl_cgval_t f1info = mark_julia_type(f1, true, jl_any_type, ctx);
             if (!jl_subtype(expr_type(args[1],ctx), jl_field_type(sty,0), 0))
@@ -2259,7 +2269,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 need_wb = true;
             }
             if (rhs.isboxed) {
-                if (!jl_subtype(expr_type(args[i],ctx), jl_svecref(sty->types,i-1), 0))
                     emit_typecheck(rhs, jl_svecref(sty->types,i-1), "new", ctx);
             }
             if (might_need_root(args[i])) // TODO: how to remove this?

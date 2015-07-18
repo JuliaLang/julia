@@ -90,7 +90,7 @@ void gc_setmark_buf(void *buf, int);
 
 static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
-    if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
+    if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 3) == 1 &&
                    (jl_astaggedvalue(val)->gc_bits & 1) == 0))
         gc_queue_binding(bnd);
 }
@@ -98,7 +98,7 @@ static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_
 static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
-    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
+    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 3) == 1))
         //            (jl_astaggedvalue(bufptr)->gc_bits) != 1))
         gc_setmark_buf(bufptr, jl_astaggedvalue(parent)->gc_bits);
 }

@@ -738,8 +738,9 @@ static inline void objprofile_count(void *ty, int old, int sz)
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
-static inline int gc_setmark_big(void *o, int mark_mode)
+static inline int gc_setmark_big(void *o, int bits)
 {
+    int mark_mode = GC_MARKED_NOESC;
 #ifdef GC_VERIFY
     if (verifying) {
         _gc_setmark(o, mark_mode);
@@ -747,57 +748,55 @@ static inline int gc_setmark_big(void *o, int mark_mode)
     }
 #endif
     assert(find_region(o,1) == NULL);
-    bigval_t *hdr = bigval_header(o);
-    int bits = gc_bits(o);
+    bigval_t* hdr = bigval_header(o);
     if (bits == GC_QUEUED || bits == GC_MARKED)
         mark_mode = GC_MARKED;
-    if ((mark_mode == GC_MARKED) & (bits != GC_MARKED)) {
-        // Move hdr from big_objects list to big_objects_marked list
-        *hdr->prev = hdr->next;
-        if (hdr->next)
-            hdr->next->prev = hdr->prev;
-        hdr->next = big_objects_marked;
-        hdr->prev = &big_objects_marked;
-        if (big_objects_marked)
-            big_objects_marked->prev = &hdr->next;
-        big_objects_marked = hdr;
-    }
     if (!(bits & GC_MARKED)) {
+        if ((mark_mode == GC_MARKED) & (bits != GC_MARKED)) {
+            // Move hdr from big_objects list to big_objects_marked list
+            *hdr->prev = hdr->next;
+            if (hdr->next)
+                hdr->next->prev = hdr->prev;
+            hdr->next = big_objects_marked;
+            hdr->prev = &big_objects_marked;
+            if (big_objects_marked)
+                big_objects_marked->prev = &hdr->next;
+            big_objects_marked = hdr;
+        }
         if (mark_mode == GC_MARKED)
             perm_scanned_bytes += hdr->sz&~3;
         else
             scanned_bytes += hdr->sz&~3;
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_MARKED, hdr->sz&~3);
+        _gc_setmark(o, mark_mode);
     }
-    _gc_setmark(o, mark_mode);
     verify_val(jl_valueof(o));
     return mark_mode;
 }
 
-static inline int gc_setmark_pool(void *o, int mark_mode)
+static inline int gc_setmark_pool(void *o, int bits)
 {
+    int mark_mode = GC_MARKED_NOESC;
 #ifdef GC_VERIFY
     if (verifying) {
         _gc_setmark(o, mark_mode);
         return mark_mode;
     }
 #endif
-    gcpage_t *page = page_metadata(o);
-    int bits = gc_bits(o);
-    if (bits == GC_QUEUED || bits == GC_MARKED) {
+    if (bits == GC_QUEUED || bits == GC_MARKED)
         mark_mode = GC_MARKED;
-    }
     if (!(bits & GC_MARKED)) {
+        gcpage_t* page = page_metadata(o);
         if (mark_mode == GC_MARKED)
             perm_scanned_bytes += page->osize;
         else
             scanned_bytes += page->osize;
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_MARKED, page->osize);
+        _gc_setmark(o, mark_mode);
+        page->gc_bits |= mark_mode;
     }
-    _gc_setmark(o, mark_mode);
-    page->gc_bits |= mark_mode;
     verify_val(jl_valueof(o));
     return mark_mode;
 }
@@ -822,14 +821,19 @@ static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 inline void gc_setmark_buf(void *o, int mark_mode)
 {
     buff_t *buf = gc_val_buf(o);
+    int bits = gc_bits(buf);
+    if (mark_mode == GC_MARKED && bits != GC_MARKED) {
+        _gc_setmark(buf, GC_QUEUED);
+        bits = GC_QUEUED;
+    }
 #ifdef MEMDEBUG
-    gc_setmark_big(buf, mark_mode);
+    gc_setmark_big(buf, bits);
     return;
 #endif
     if (buf->pooled)
-        gc_setmark_pool(buf, mark_mode);
+        gc_setmark_pool(buf, bits);
     else
-        gc_setmark_big(buf, mark_mode);
+        gc_setmark_big(buf, bits);
 }
 
 static NOINLINE void *malloc_page(void)
@@ -1671,12 +1675,50 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     if (!gc_marked(o)) {
 #ifdef MEMDEBUG
-        gc_setmark_big(o, GC_MARKED_NOESC);
+        gc_setmark_big(o, gc_bits(o));
 #else
-        gc_setmark_pool(o, GC_MARKED_NOESC);
+        gc_setmark_pool(o, gc_bits(o));
 #endif
     }
     //    perm_scanned_bytes = s;
+}
+
+static char* gc_stack_top;
+static char* gc_stack_bot;
+static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, intptr_t offset, int d)
+{
+    jl_task_t *task = (jl_task_t*)ta;
+    char *stkbuf = task == jl_current_task ? gc_stack_top : task->stkbuf;
+    char *stkend = task == jl_current_task ? gc_stack_bot : stkbuf + task->ssize;
+    while (s != NULL) {
+        s = (jl_gcframe_t*)((char*)s + offset);
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t nr = s->nroots>>1;
+        if (s->nroots & 1) {
+            for(size_t i=0; i < nr; i++) {
+                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                if (*ptr != NULL)
+                    gc_push_root(*ptr, d);
+            }
+        }
+        else {
+            for(size_t i=0; i < nr; i++) {
+                void *v = rts[i];
+                if (v != NULL) {
+                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
+                    if (stkbuf <= (char*)v && (char*)v <= stkend) {
+                        // if v is on the stack it is kept permanently marked
+                        // but we still need to scan it once
+                        push_root(v, d, gc_bits(jl_astaggedvalue(v)));
+                    }
+                    else {
+                        gc_push_root(v, d);
+                    }
+                }
+            }
+        }
+        s = s->prev;
+    }
 }
 
 NOINLINE static int gc_mark_module(jl_module_t *m, int d)
@@ -1714,31 +1756,6 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     }
 
     return refyoung;
-}
-
-static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d)
-{
-    while (s != NULL) {
-        s = (jl_gcframe_t*)((char*)s + offset);
-        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
-        size_t nr = s->nroots>>1;
-        if (s->nroots & 1) {
-            for(size_t i=0; i < nr; i++) {
-                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
-                if (*ptr != NULL)
-                    gc_push_root(*ptr, d);
-            }
-        }
-        else {
-            for(size_t i=0; i < nr; i++) {
-                if (rts[i] != NULL) {
-                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
-                    gc_push_root(rts[i], d);
-                }
-            }
-        }
-        s = s->prev;
-    }
 }
 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
@@ -1797,12 +1814,12 @@ static int push_root(jl_value_t *v, int d, int bits)
     int refyoung = 0, nptr = 0;
 
     if (vt == (jl_value_t*)jl_weakref_type) {
-        bits = gc_setmark(v, sizeof(jl_weakref_t), GC_MARKED_NOESC);
+        bits = gc_setmark(v, sizeof(jl_weakref_t), bits);
         goto ret;
     }
     if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
         int sz = jl_datatype_size(vt);
-        bits = gc_setmark(v, sz, GC_MARKED_NOESC);
+        bits = gc_setmark(v, sz, bits);
         goto ret;
     }
 #define MARK(v, s) do {                         \
@@ -1819,7 +1836,7 @@ static int push_root(jl_value_t *v, int d, int bits)
     if (vt == (jl_value_t*)jl_simplevector_type) {
         size_t l = jl_svec_len(v);
         MARK(v, bits = gc_setmark(v, l * sizeof(void*) +
-                                  sizeof(jl_svec_t), GC_MARKED_NOESC));
+                                  sizeof(jl_svec_t), bits));
         jl_value_t **data = jl_svec_data(v);
         nptr += l;
         for(size_t i=0; i < l; i++) {
@@ -1841,7 +1858,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 #define _gc_setmark_pool gc_setmark_pool
 #endif
             MARK(a,
-                 bits = _gc_setmark_pool(o, GC_MARKED_NOESC);
+                 bits = _gc_setmark_pool(o, bits);
                  if (a->flags.how == 2 && todo) {
                      objprofile_count(jl_malloc_tag, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
@@ -1851,7 +1868,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                  });
         else
             MARK(a,
-                 bits = gc_setmark_big(o, GC_MARKED_NOESC);
+                 bits = gc_setmark_big(o, bits);
                  if (a->flags.how == 2 && todo) {
                      objprofile_count(jl_malloc_tag, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
@@ -1895,12 +1912,12 @@ static int push_root(jl_value_t *v, int d, int bits)
     }
     else if (vt == (jl_value_t*)jl_module_type) {
         // should increase nptr here
-        MARK(v, bits = gc_setmark(v, sizeof(jl_module_t), GC_MARKED_NOESC));
+        MARK(v, bits = gc_setmark(v, sizeof(jl_module_t), bits));
         refyoung |= gc_mark_module((jl_module_t*)v, d);
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         // ditto nptr
-        MARK(v, bits = gc_setmark(v, sizeof(jl_task_t), GC_MARKED_NOESC));
+        MARK(v, bits = gc_setmark(v, sizeof(jl_task_t), bits));
         gc_mark_task((jl_task_t*)v, d);
         // tasks should always be remarked since we do not trigger the write barrier
         // for stores to stack slots
@@ -1922,8 +1939,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         else {
             dtsz = jl_datatype_size(dt);
         }
-        MARK(v, bits = gc_setmark(v, dtsz, GC_MARKED_NOESC));
-
+        MARK(v, bits = gc_setmark(v, dtsz, bits));
         int nf = (int)jl_datatype_nfields(dt);
         // TODO check if there is a perf improvement for objects with a lot of fields
         // int fdsz = sizeof(void*)*nf;
@@ -2186,6 +2202,7 @@ static int sweep_mask = GC_MARKED;
 static void _jl_gc_collect(int full, char *stack_hi)
 {
     uint64_t t0 = jl_hrtime();
+    gc_stack_top = (char*)&t0;
     int recollect = 0;
 #if defined(GC_TIME)
     int wb_activations = mark_sp - saved_mark_sp;
@@ -2670,6 +2687,8 @@ void jl_gc_init(void)
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
+    char _dummy;
+    gc_stack_bot = &_dummy;
 }
 
 // GC summary stats

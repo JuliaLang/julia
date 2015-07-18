@@ -99,7 +99,7 @@ jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
-jl_sym_t *unused_sym;
+jl_sym_t *unused_sym; jl_sym_t *stknew_sym;
 
 typedef struct {
     int64_t a;

@@ -215,7 +215,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         JL_GC_POP();
         return rhs;
     }
-    else if (ex->head == new_sym) {
+    else if (ex->head == new_sym || ex->head == stknew_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl, ngensym);
         jl_value_t *v=NULL;
         JL_GC_PUSH2(&thetype, &v);

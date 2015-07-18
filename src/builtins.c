@@ -1185,6 +1185,7 @@ void jl_init_primitives(void)
 #endif
 
     add_builtin("ANY", jl_ANY_flag);
+    add_builtin("Carnavalue", jl_carnavalue);
 }
 
 // toys for debugging ---------------------------------------------------------
