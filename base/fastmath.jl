@@ -201,8 +201,15 @@ end
 
 # fall-back implementations and type promotion
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=,
-           :abs, :abs2, :cmp, :conj, :inv, :mod, :rem, :sign)
+for op in (:abs, :abs2, :conj, :inv, :sign)
+    op_fast = fast_op[op]
+    @eval begin
+        # fall-back implementation for non-numeric types
+        $op_fast(xs...) = $op(xs...)
+    end
+end
+
+for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
