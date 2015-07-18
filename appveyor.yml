@@ -11,6 +11,7 @@ branches:
   only:
     - master
     - /release-.*/
+    - yyc/tests/appveyor
 
 skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue
@@ -26,6 +27,7 @@ clone_depth: 50
 
 init:
 # Carriage returns are bad
+  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
   - git config --global core.autocrlf input
 
 cache:
