@@ -327,13 +327,15 @@ for f in (:+, :-)
     @eval begin
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)
-            r1l == length(r2) || error("argument dimensions must match")
+            (r1l == length(r2) ||
+             throw(DimensionMismatch("argument dimensions must match")))
             range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
         end
 
         function $f{T<:FloatingPoint}(r1::FloatRange{T}, r2::FloatRange{T})
             len = r1.len
-            len == r2.len || error("argument dimensions must match")
+            (len == r2.len ||
+             throw(DimensionMismatch("argument dimensions must match")))
             divisor1, divisor2 = r1.divisor, r2.divisor
             if divisor1 == divisor2
                 FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
@@ -349,9 +351,23 @@ for f in (:+, :-)
             end
         end
 
-        $f(r1::FloatRange, r2::FloatRange) = $f(promote(r1,r2)...)
-        $f(r1::FloatRange, r2::OrdinalRange) = $f(promote(r1,r2)...)
-        $f(r1::OrdinalRange, r2::FloatRange) = $f(promote(r1,r2)...)
+        function $f{T<:FloatingPoint}(r1::LinSpace{T}, r2::LinSpace{T})
+            len = r1.len
+            (len == r2.len ||
+             throw(DimensionMismatch("argument dimensions must match")))
+            divisor1, divisor2 = r1.divisor, r2.divisor
+            if divisor1 == divisor2
+                LinSpace{T}($f(r1.start, r2.start), $f(r1.stop, r2.stop),
+                            len, divisor1)
+            else
+                linspace(convert(T, $f(first(r1), first(r2))),
+                         convert(T, $f(last(r1), last(r2))), len)
+            end
+        end
+
+        $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
+           r2::Union{FloatRange, OrdinalRange, LinSpace}) =
+               $f(promote(r1, r2)...)
     end
 end
 
