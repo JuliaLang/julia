@@ -78,21 +78,23 @@ Getting Around
 
    Return a string with the contents of the operating system clipboard ("paste").
 
-.. function:: require(file::AbstractString...)
+.. function:: require(module::Symbol)
 
-   Load source files once, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   This function is part of the implementation of ``using`` / ``import``, if a module is not already defined in ``Main``. It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for exmple, when interactively developing libraries).
+
+   Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
    When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
-.. function:: reload(file::AbstractString)
+.. function:: compile(module::String)
 
-   Like ``require``, except forces loading of files regardless of whether they have been loaded before. Typically used when interactively developing libraries.
+   Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in LOAD_CACHE_PATH[1], which defaults to `~/.julia/lib/VERSION`. See the manual section `Module initialization and precompilation` (under `Modules`) for important notes.
 
 .. function:: include(path::AbstractString)
 
    Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
 
-.. function:: include_string(code::AbstractString)
+.. function:: include_string(code::AbstractString, [filename])
 
    Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
 

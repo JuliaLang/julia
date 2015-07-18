@@ -1048,8 +1048,6 @@ let
     @test Sum < -0.69
 end
 
-include("test_sourcepath.jl")
-
 # issue #2509
 immutable Foo2509; foo::Int; end
 @test Foo2509(1) != Foo2509(2)
@@ -3122,3 +3120,10 @@ end
 let N = TypeVar(:N,true)
     @test typeintersect(NTuple{N,Int}, NTuple{N,Float64}) === Tuple{}
 end
+
+# issue #12063
+# NOTE: should have > MAX_TUPLETYPE_LEN arguments
+f12063{T}(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) = 1
+f12063(args...) = 2
+g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
+@test g12063() == 1

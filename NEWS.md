@@ -31,6 +31,12 @@ New language features
   * The syntax `function foo end` can be used to introduce a generic function without
     yet adding any methods ([#8283]).
 
+  * Incremental compilation of modules: ``Base.compile(module::Symbol)`` (stored in `~/.julia/lib/v0.4`)
+
+      * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.
+
+      * New option `--compile-incremental={yes|no}` added to invoke the equivalent of ``Base.compile`` from the command line.
+
 Language changes
 ----------------
 
@@ -449,6 +455,8 @@ Deprecated or removed
     * `diff_gc_total_bytes` -> `jl_gc_diff_total_bytes`
 
     * `sync_gc_total_bytes` -> `jl_gc_sync_total_bytes`
+
+  * `require(::AbstractString)` and `reload` (see news about addition of `compile`)
 
 Julia v0.3.0 Release Notes
 ==========================

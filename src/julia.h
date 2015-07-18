@@ -351,6 +351,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
     jl_function_t *kwsorter;  // keyword argument sorter function
+    jl_module_t *module; // used for incremental serialization to locate original binding
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -687,6 +688,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
+#define jl_string_len(s)  (jl_array_len(((jl_array_t*)(s)->fieldptr[0])))
 #define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
@@ -923,7 +925,7 @@ DLLEXPORT jl_sym_t *jl_gensym(void);
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
-jl_function_t *jl_new_generic_function(jl_sym_t *name);
+jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_function_t *meth,
                    jl_svec_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
@@ -1133,17 +1135,18 @@ DLLEXPORT void jl_init(const char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
 DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac,char *av[]));
-DLLEXPORT void jl_atexit_hook(void);
+DLLEXPORT void jl_atexit_hook(int status);
 DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT void jl_preload_sysimg_so(const char *fname);
-DLLEXPORT ios_t *jl_create_system_image();
+DLLEXPORT ios_t *jl_create_system_image(void);
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
-DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
-DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
-void jl_init_restored_modules();
+DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t* worklist);
+DLLEXPORT jl_array_t *jl_restore_incremental(const char *fname);
+DLLEXPORT jl_array_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
+void jl_init_restored_modules(void);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
@@ -1193,7 +1196,7 @@ void jl_compile(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-DLLEXPORT jl_value_t *jl_load(const char *fname);
+DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
@@ -1275,7 +1278,7 @@ DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, jl_value_t *c);
 
 // interfacing with Task runtime
-DLLEXPORT void jl_yield();
+DLLEXPORT void jl_yield(void);
 
 // async signal handling ------------------------------------------------------
 
@@ -1525,11 +1528,12 @@ typedef struct {
     const char *outputbc;
     const char *outputo;
     const char *outputji;
+    int8_t incremental;
 } jl_options_t;
 
 extern DLLEXPORT jl_options_t jl_options;
 
-DLLEXPORT int jl_generating_output();
+DLLEXPORT int jl_generating_output(void);
 
 // Settings for code_coverage and malloc_log
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated

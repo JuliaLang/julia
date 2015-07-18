@@ -778,15 +778,6 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
-# activity on accept fd
-function accept_handler(server::TCPServer, status::Int32)
-    if status == -1
-        error("an error occured during the creation of the server")
-    end
-    client = accept_nonblock(server)
-    process_messages(client, client)
-end
-
 process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = process_messages(r_stream, w_stream, nothing)
 process_messages(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join) = @schedule process_tcp_streams(r_stream, w_stream, rr_ntfy_join)
 
@@ -903,29 +894,32 @@ function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_n
         end # end of while
     catch e
         iderr = worker_id_from_socket(r_stream)
-        werr = worker_from_id(iderr)
-        oldstate = werr.state
-        set_worker_state(werr, W_TERMINATED)
+        if (iderr < 1)
+            print(STDERR, "Socket from unknown remote worker in worker ", myid())
+        else
+            werr = worker_from_id(iderr)
+            oldstate = werr.state
+            set_worker_state(werr, W_TERMINATED)
 
-
-        # If error occured talking to pid 1, commit harakiri
-        if iderr == 1
-            if isopen(w_stream)
-                print(STDERR, "fatal error on ", myid(), ": ")
-                display_error(e, catch_backtrace())
+            # If error occured talking to pid 1, commit harakiri
+            if iderr == 1
+                if isopen(w_stream)
+                    print(STDERR, "fatal error on ", myid(), ": ")
+                    display_error(e, catch_backtrace())
+                end
+                exit(1)
             end
-            exit(1)
-        end
 
-        # Will treat any exception as death of node and cleanup
-        # since currently we do not have a mechanism for workers to reconnect
-        # to each other on unhandled errors
-        deregister_worker(iderr)
+            # Will treat any exception as death of node and cleanup
+            # since currently we do not have a mechanism for workers to reconnect
+            # to each other on unhandled errors
+            deregister_worker(iderr)
+        end
 
         if isopen(r_stream) close(r_stream) end
         if isopen(w_stream) close(w_stream) end
 
-        if (myid() == 1)
+        if (myid() == 1) && (iderr > 1)
             if oldstate != W_TERMINATING
                 println(STDERR, "Worker $iderr terminated.")
                 rethrow(e)
@@ -977,7 +971,10 @@ function start_worker(out::IO)
     else
         sock = listen(LPROC.bind_port)
     end
-    sock.ccb = accept_handler
+    @schedule while isopen(sock)
+        client = accept(sock)
+        process_messages(client, client)
+    end
     print(out, "julia_worker:")  # print header
     print(out, "$(dec(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)

@@ -457,6 +457,7 @@ export
     airyprime,
     airyx,
     besselh,
+    besselhx,
     besseli,
     besselix,
     besselj,
@@ -1095,8 +1096,6 @@ export
     evalfile,
     include,
     include_string,
-    reload,
-    require,
 
 # RTS internals
     finalizer,

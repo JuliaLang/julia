@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-###### Functors ######
+###### Function Objects ("Functors") ######
 
-# Note that functors are merely used as internal machinery to enhance code
-# reuse and improve performance of map/reduce.
+# Note that function objects are merely used as internal machinery to
+# enhance code reuse and improve performance of map/reduce.
 # They are not exported.
-# When function arguments can be inlined, the use of functors can be removed.
+# When function arguments can be inlined, the use of function objects
+# can be removed.
 
 abstract Func{N}
 
@@ -51,8 +52,9 @@ call(::LessFun, x, y) = x < y
 immutable MoreFun <: Func{2} end
 call(::MoreFun, x, y) = x > y
 
-# a fallback unspecialized functor that allows code using functors to not care
-# whether they were able to specialize on the function value or not
+# a fallback unspecialized function object that allows code using
+# function objects to not care whether they were able to specialize on
+# the function value or not
 immutable UnspecializedFun{N} <: Func{N}
     f::Function
 end

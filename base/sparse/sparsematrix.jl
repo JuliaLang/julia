@@ -219,13 +219,24 @@ sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, AddFun())
 
 sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), AddFun())
 
-function sparsevec(I::AbstractVector, V, m::Integer, combine::Union{Function,Func})
+function sparsevec(I::AbstractVector, V, m::Integer, combine::Union{Function,Base.Func})
     nI = length(I)
-    if isa(V, Number); V = fill(V, nI); end
+    if isa(V, Number)
+        V = fill(V, nI)
+    end
+    if nI != length(V)
+        throw(ArgumentError("index and value vectors must be the same length"))
+    end
     p = sortperm(I)
     @inbounds I = I[p]
-    (nI==0 || m >= I[end]) || throw(DimensionMismatch("indices cannot be larger than length of vector"))
-    (nI==0 || I[1] > 0) || throw(BoundsError())
+    if nI > 0
+        if I[1] <= 0
+            throw(ArgumentError("I index values must be ≥ 0"))
+        end
+        if I[end] > m
+            throw(ArgumentError("all I index values must be ≤ length(sparsevec)"))
+        end
+    end
     V = V[p]
     sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end

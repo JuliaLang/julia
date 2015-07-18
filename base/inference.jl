@@ -591,7 +591,7 @@ const limit_tuple_type_n = function (t, lim::Int)
     p = t.parameters
     n = length(p)
     if n > lim
-        tail = reduce(tmerge, Bottom, svec(p[lim:(n-1)]..., unwrapva(p[n])))
+        tail = reduce(typejoin, Bottom, svec(p[lim:(n-1)]..., unwrapva(p[n])))
         return Tuple{p[1:(lim-1)]..., Vararg{tail}}
     end
     return t

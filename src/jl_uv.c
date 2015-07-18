@@ -351,6 +351,9 @@ DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
 static void jl_write(uv_stream_t *stream, const char *str, size_t n)
 {
     assert(stream);
+    _Static_assert(offsetof(uv_stream_t,type) == offsetof(ios_t,bm) &&
+        sizeof(((uv_stream_t*)0)->type) == sizeof(((ios_t*)0)->bm),
+	   "UV and ios layout mismatch");
 
     uv_file fd = 0;
 
@@ -446,7 +449,7 @@ DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 DLLEXPORT void jl_exit(int exitcode)
 {
     uv_tty_reset_mode();
-    jl_atexit_hook();
+    jl_atexit_hook(exitcode);
     exit(exitcode);
 }
 
@@ -655,7 +658,36 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
     }
     return 0;
 }
+
 #endif
+
+
+DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
+{
+#if defined(SO_REUSEPORT)
+    int fd = (handle)->io_watcher.fd;
+    int yes = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(yes))) {
+        return -1;
+    }
+    return 0;
+#else
+    return 1;
+#endif
+}
+
+DLLEXPORT int jl_tcp_getsockname_v4(uv_tcp_t *handle, uint32_t * ip, uint16_t * port)
+{
+    struct sockaddr_in name;
+    int len = sizeof(name);
+    if (uv_tcp_getsockname(handle, (struct sockaddr *)&name, &len)) {
+        return -1;
+    }
+
+    *ip = ntohl(name.sin_addr.s_addr);
+    *port = ntohs(name.sin_port);
+    return 0;
+}
 
 #ifndef _OS_WINDOWS_
 
