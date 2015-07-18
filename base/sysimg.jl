@@ -263,19 +263,18 @@ include("statistics.jl")
 include("sparse.jl")
 importall .SparseMatrix
 
+# irrational mathematical constants
+include("irrationals.jl")
+
 # signal processing
-if USE_GPL_LIBS
-    include("fftw.jl")
-    include("dsp.jl")
-    importall .DSP
-end
+include("dft.jl")
+importall .DFT
+include("dsp.jl")
+importall .DSP
 
 # system information
 include("sysinfo.jl")
 import .Sys.CPU_CORES
-
-# irrational mathematical constants
-include("irrationals.jl")
 
 # Numerical integration
 include("quadgk.jl")
