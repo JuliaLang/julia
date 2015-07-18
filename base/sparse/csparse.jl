@@ -12,13 +12,19 @@
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
+                                J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Union{Function,Base.Func})
+                                nrow::Integer, ncol::Integer,
+                                combine::Union{Function,Base.Func})
 
-    if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
+    if length(I) == 0;
+        return spzeros(eltype(V),nrow,ncol)
+    end
     N = length(I)
-    ((N == length(J)) && (N == length(V))) || throw(BoundsError())
+    if N != length(J) || N != length(V)
+        throw(ArgumentError("triplet I,J,V vectors must be the same length"))
+    end
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -46,8 +52,10 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     @inbounds for k=1:N
         iind = I[k]
         jind = J[k]
-        ((iind > 0) && (jind > 0)) || throw(BoundsError())
-        ((iind <= nrow) && (jind <= ncol)) || throw(BoundsError())
+        iind > 0 || throw(ArgumentError("all I index values must be > 0"))
+        jind > 0 || throw(ArgumentError("all J index values must be > 0"))
+        iind <= nrow || throw(ArgumentError("all I index values must be ≤ the number of rows"))
+        jind <= ncol || throw(ArgumentError("all J index values must be ≤ the number of columns"))
         p = Wj[iind]
         Vk = V[k]
         if Vk != 0

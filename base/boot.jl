@@ -71,8 +71,8 @@
 #    module::Module
 #end
 
-#type Box{T}
-#    contents::T
+#type Box
+#    contents::Any
 #end
 
 #abstract Ref{T}

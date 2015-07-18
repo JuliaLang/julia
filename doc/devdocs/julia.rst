@@ -11,6 +11,7 @@
 
    init
    eval
+   ast
    types
    object
    cartesian

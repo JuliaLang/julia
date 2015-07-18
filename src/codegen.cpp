@@ -350,7 +350,6 @@ static Function *jlgetnthfieldchecked_func;
 static Function *resetstkoflw_func;
 #endif
 static Function *diff_gc_total_bytes_func;
-static Function *show_execution_point_func;
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
@@ -691,7 +690,7 @@ static void jl_setup_module(Module *m, bool add)
 #endif
 #ifdef LLVM37
     if (jl_ExecutionEngine) {
-        m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+        m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
         m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     }
 #elif LLVM36
@@ -5576,8 +5575,8 @@ extern "C" void jl_init_codegen(void)
     mbuilder = new MDBuilder(getGlobalContext());
 
 #ifdef LLVM37
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
-    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
+    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
 #elif LLVM36
