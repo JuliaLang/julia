@@ -5,25 +5,169 @@ next(s::UTF32String, i::Int) = (s.data[i], i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
 
+reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
+
+sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
+
+const empty_utf32 = UTF32String(UInt32[0])
+
 utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
-function convert(::Type{UTF32String}, s::AbstractString)
-    a = Array(Char, length(s) + 1)
-    i = 0
-    for c in s
-        a[i += 1] = c
-    end
-    a[end] = Char(0) # NULL terminate
-    UTF32String(a)
+"
+Converts an `AbstractString` to a `UTF32String`
+
+### Returns:
+*   `UTF32String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF32String}, str::AbstractString)
+    len, flags = unsafe_checkstring(str)
+    buf = Vector{Char}(len+1)
+    out = 0
+    @inbounds for ch in str ; buf[out += 1] = ch ; end
+    @inbounds buf[out + 1] = 0 # NULL termination
+    UTF32String(buf)
 end
 
-function convert(::Type{UTF32String}, data::AbstractVector{Char})
-    len = length(data)
-    d = Array(Char, len + 1)
-    d[end] = Char(0) # NULL terminate
-    UTF32String(copy!(d,1, data,1, len))
+"
+Converts a `UTF32String` to a `UTF8String`
+
+### Returns:
+*   `UTF8String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF8String},  str::UTF32String)
+    dat = reinterpret(UInt32, str.data)
+    len = sizeof(dat) >>> 2
+    # handle zero length string quickly
+    len <= 1 && return empty_utf8
+    # get number of bytes to allocate
+    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len-1)
+    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
+    return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
+end
+
+"
+Converts a `UTF8String` to a `UTF32String`
+
+### Returns:
+*   `::UTF32String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF32String}, str::UTF8String)
+    dat = str.data
+    # handle zero length string quickly
+    sizeof(dat) == 0 && return empty_utf32
+    # Validate UTF-8 encoding, and get number of words to create
+    len, flags = unsafe_checkstring(dat)
+    # Optimize case where no characters > 0x7f
+    flags == 0 && @inbounds return fast_utf_copy(UTF32String, Char, len, dat, true)
+    # has multi-byte UTF-8 sequences
+    buf = Vector{Char}(len+1)
+    @inbounds buf[len+1] = 0 # NULL termination
+    local ch::UInt32, surr::UInt32
+    out = 0
+    pos = 0
+    @inbounds while out < len
+        ch = dat[pos += 1]
+        # Handle ASCII characters
+        if ch <= 0x7f
+            buf[out += 1] = ch
+        # Handle range 0x80-0x7ff
+        elseif ch < 0xe0
+            buf[out += 1] = ((ch & 0x1f) << 6) | (dat[pos += 1] & 0x3f)
+        # Handle range 0x800-0xffff
+        elseif ch < 0xf0
+            pos += 2
+            ch = get_utf8_3byte(dat, pos, ch)
+            # Handle surrogate pairs (should have been encoded in 4 bytes)
+            if is_surrogate_lead(ch)
+                # Build up 32-bit character from ch and trailing surrogate in next 3 bytes
+                pos += 3
+                surr = ((UInt32(dat[pos-2] & 0xf) << 12)
+                        | (UInt32(dat[pos-1] & 0x3f) << 6)
+                        | (dat[pos] & 0x3f))
+                ch = get_supplementary(ch, surr)
+            end
+            buf[out += 1] = ch
+        # Handle range 0x10000-0x10ffff
+        else
+            pos += 3
+            buf[out += 1] = get_utf8_4byte(dat, pos, ch)
+        end
+    end
+    UTF32String(buf)
+end
+
+"
+Converts a `UTF16String` to `UTF32String`
+
+### Returns:
+*   `::UTF32String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF32String}, str::UTF16String)
+    dat = str.data
+    len = sizeof(dat)
+    # handle zero length string quickly (account for trailing \0)
+    len <= 2 && return empty_utf32
+    # get number of words to create
+    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>1)
+    # No surrogate pairs, do optimized copy
+    (flags & UTF_UNICODE4) == 0 && @inbounds return UTF32String(copy!(Vector{Char}(len), dat))
+    local ch::UInt32
+    buf = Vector{Char}(len)
+    out = 0
+    pos = 0
+    @inbounds while out < len
+        ch = dat[pos += 1]
+        # check for surrogate pair
+        if is_surrogate_lead(ch) ; ch = get_supplementary(ch, dat[pos += 1]) ; end
+        buf[out += 1] = ch
+    end
+    UTF32String(buf)
+end
+
+"
+Converts a `UTF32String` to `UTF16String`
+
+### Returns:
+*   `::UTF16String`
+
+### Throws:
+*   `UnicodeError`
+"
+function convert(::Type{UTF16String}, str::UTF32String)
+    dat = reinterpret(UInt32, str.data)
+    len = sizeof(dat)
+    # handle zero length string quickly
+    len <= 4 && return empty_utf16
+    # get number of words to allocate
+    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
+    # optimized path, no surrogates
+    num4byte == 0 && @inbounds return UTF16String(copy!(Vector{UInt16}(len), dat))
+    return encode_to_utf16(dat, len + num4byte)
+end
+
+convert(::Type{UTF32String}, c::Char)             = UTF32String(Char[c, Char(0)])
+
+function convert(::Type{UTF32String}, str::ASCIIString)
+    dat = str.data
+    @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
+end
+
+function convert(::Type{UTF32String}, dat::AbstractVector{Char})
+    @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
 end
 
 convert{T<:Union{Int32,UInt32}}(::Type{UTF32String}, data::AbstractVector{T}) =
@@ -46,12 +190,11 @@ convert(::Type{Array{Char}},  str::UTF32String) = str.data
 
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
-sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
 unsafe_convert{T<:Union{Int32,UInt32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
-    isempty(bytes) && return UTF32String(Char[0])
+    isempty(bytes) && return empty_utf32
     length(bytes) & 3 != 0 && throw(UnicodeError(UTF_ERR_ODD_BYTES_32,0,0))
     data = reinterpret(Char, bytes)
     # check for byte-order mark (BOM):
@@ -78,6 +221,8 @@ function isvalid(::Type{UTF32String}, str::Union{Vector{Char}, Vector{UInt32}})
     return true
 end
 isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
+
+utf32(x) = convert(UTF32String, x)
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union{Ptr{UInt32}, Ptr{Int32}}, len::Integer) = utf32(convert(Ptr{Char}, p), len)
