@@ -6,7 +6,8 @@ include("fenv_constants.jl")
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
     RoundNearestTiesAway, RoundNearestTiesUp,
-    get_rounding, set_rounding, with_rounding
+    get_rounding, set_rounding, with_rounding,
+    get_zero_subnormals, set_zero_subnormals
 
 ## rounding modes ##
 immutable RoundingMode{T} end
@@ -84,5 +85,8 @@ function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:
         y < x ? nextfloat(y) : y
     end
 end
+
+set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
+get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 end #module
