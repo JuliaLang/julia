@@ -239,26 +239,6 @@ end
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
 "
-Converts a vector of `Char` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"
-function convert(::Type{UTF8String}, chrs::Vector{Char})
-    len = sizeof(chrs)
-    # handle zero length string quickly
-    len == 0 && return empty_utf8
-    dat = reinterpret(UInt32, chrs)
-    # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len>>>2)
-    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
-    return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
-end
-
-"
 Converts an already validated vector of `UInt16` or `UInt32` to a `UTF8String`
 
 ### Input Arguments:

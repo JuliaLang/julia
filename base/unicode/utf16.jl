@@ -195,28 +195,6 @@ function convert(::Type{UTF8String}, str::UTF16String)
 end
 
 "
-Converts a vector of `Char` to a `UTF16String`
-
-### Returns:
-*   `::UTF16String`
-
-### Throws:
-*   `UnicodeError`
-"
-function convert(::Type{UTF16String}, chrs::Vector{Char})
-    len = sizeof(chrs)
-    # handle zero length string quickly
-    len == 0 && return empty_utf16
-    dat = reinterpret(UInt32, chrs)
-    # get number of words to allocate
-    len, flags, num4byte = unsafe_checkstring(dat, 1, len>>>2)
-    len += num4byte + 1
-    # optimized path, no surrogates
-    num4byte == 0 && @inbounds return fast_utf_copy(UTF16String, UInt16, len, dat)
-    return encode_to_utf16(dat, len)
-end
-
-"
 Converts an already validated UTF-32 encoded vector of `UInt32` to a `UTF16String`
 
 ### Input Arguments:
