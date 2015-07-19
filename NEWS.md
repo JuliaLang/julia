@@ -227,7 +227,7 @@ Library improvements
 
     * AbstractArray subtypes only need to implement `size` and `getindex`
       for scalar indices to support indexing; all other indexing behaviors
-      (including logical idexing, ranges of indices, vectors, colons, etc.) are
+      (including logical indexing, ranges of indices, vectors, colons, etc.) are
       implemented in default fallbacks. Similarly, they only need to implement
       scalar `setindex!` to support all forms of indexed assingment ([#10525]).
 
