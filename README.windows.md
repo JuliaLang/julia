@@ -236,6 +236,15 @@ Finally, the build and install process for Julia:
 
 If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
 
+## Using a Windows VM
+
+[Vagrant](http://www.vagrantup.com/downloads) can also be used with a Windows
+guest VM via the `Vagrantfile` in [contrib/windows](contrib/windows/Vagrantfile),
+just run `vagrant up` from that folder. To build with Cygwin instead of MSYS2,
+replace `config.vm.provision :shell, :inline => $script_msys2` (near the end
+of the file) with `config.vm.provision :shell, :inline => $script_cygwin`.
+
+
 ## Windows Build Debugging
 
 ### GDB hangs with cygwin mintty
