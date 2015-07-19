@@ -2,7 +2,7 @@
 
 # editing files
 
-function edit(file::AbstractString, line::Integer)
+function editcmd(file::AbstractString, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -28,24 +28,28 @@ function edit(file::AbstractString, line::Integer)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(edname, "emacs") || edname == "gedit"
-        spawn(`$edpath +$line $file`)
+        return spawn,`$edpath +$line $file`
     elseif edname == "vi" || edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
-        run(`$edpath +$line $file`)
+        return run, `$edpath +$line $file`
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
-        spawn(`$edpath $file -l $line`)
+        return spawn, `$edpath $file -l $line`
     elseif startswith(edname, "subl") || edname == "atom"
-        spawn(`$(shell_split(edpath)) $file:$line`)
+        return spawn, `$(shell_split(edpath)) $file:$line`
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`cmd /c start /b $file`)
         println(no_line_msg)
+        return spawn, `cmd /c start /b $file`
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
-        spawn(`open -t $file`)
         println(no_line_msg)
+        return spawn, `open -t $file`
     else
-        run(`$(shell_split(edpath)) $file`)
         println(no_line_msg)
+        return run, `$(shell_split(edpath)) $file`
     end
-    nothing
+end
+
+function edit(file::AbstractString, line::Integer)
+    func, str = editcmd(file, line)
+    func(str)
 end
 
 function edit( m::Method )
