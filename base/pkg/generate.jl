@@ -55,6 +55,7 @@ function package(
             Generate.readme(pkg,user,force=force)
             Generate.entrypoint(pkg,force=force)
             Generate.tests(pkg,force=force)
+            Generate.require(pkg,force=force)
             Generate.travis(pkg,force=force)
             Generate.gitignore(pkg,force=force)
 
@@ -132,6 +133,27 @@ function tests(pkg::AbstractString; force::Bool=false)
 
         # write your own tests here
         @test 1 == 1
+        """)
+    end
+end
+
+function versionfloor(ver::VersionNumber)
+    # return "major.minor" for the most recent release version relative to ver
+    # for prereleases with ver.minor == ver.patch == 0, return "major-" since we
+    # don't know what the most recent minor version is for the previous major
+    if isempty(ver.prerelease) || ver.patch > 0
+        return string(ver.major, '.', ver.minor)
+    elseif ver.minor > 0
+        return string(ver.major, '.', ver.minor - 1)
+    else
+        return string(ver.major, '-')
+    end
+end
+
+function require(pkg::AbstractString; force::Bool=false)
+    genfile(pkg,"REQUIRE",force) do io
+        print(io, """
+        julia $(versionfloor(VERSION))
         """)
     end
 end
