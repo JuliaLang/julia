@@ -55,7 +55,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 ### MSYS2 provides a robust MSYS experience.
 
-1. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
+1. Install [Python 2.x](http://www.python.org/downloads/). Do **not** install Python 3.
 
 2. Install [CMake](http://www.cmake.org/download/).
 
