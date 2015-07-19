@@ -20,6 +20,8 @@ end
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
 
+cd(dirname(@__FILE__)) do
+
 # @test !isempty(Libdl.find_library(["libccalltest"], [dirname(@__FILE__)]))
 
 # dlopen should be able to handle absolute and relative paths, with and without dlext
@@ -161,4 +163,6 @@ let dl = C_NULL
     finally
         Libdl.dlclose(dl)
     end
+end
+
 end
