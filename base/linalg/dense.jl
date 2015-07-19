@@ -278,17 +278,17 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
-function logm{T}(A::StridedMatrix{T})
+function logm(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
-        return funm(log, Hermitian(A))
+        return logm(Hermitian(A))
     end
 
     # Use Schur decomposition
     n = chksquare(A)
     S,Q,d = schur(complex(A))
-    R = full(logm(UpperTriangular(S)))
-    retmat = Q*R*Q'
+    R = logm(UpperTriangular(S))
+    retmat = Q * R * Q'
 
     # Check whether the matrix has nonpositive real eigs
     np_real_eigs = false
@@ -313,7 +313,7 @@ logm(a::Complex) = log(a)
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issym(A)
-        return funm(sqrt, Symmetric(A))
+        return sqrtm(Symmetric(A))
     end
     n = chksquare(A)
     SchurF = schurfact(complex(A))
@@ -323,7 +323,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
     if ishermitian(A)
-        return funm(sqrt, Hermitian(A))
+        return sqrtm(Hermitian(A))
     end
     n = chksquare(A)
     SchurF = schurfact(A)
