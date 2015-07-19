@@ -3558,7 +3558,6 @@ for (gecon, elty, relty) in
      (:cgecon_,:Complex64, :Float32))
     @eval begin
         function gecon!(normtype::Char, A::StridedMatrix{$elty}, anorm::$relty)
-            chkstride1(A)
 #       SUBROUTINE ZGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, RWORK,
 #      $                   INFO )
 # *     .. Scalar Arguments ..
@@ -3570,8 +3569,8 @@ for (gecon, elty, relty) in
 #       DOUBLE PRECISION   RWORK( * )
 #       COMPLEX*16         A( LDA, * ), WORK( * )
             chkstride1(A)
-            n = size(A, 2)
-            lda = max(1, size(A, 1))
+            n = chksquare(A)
+            lda = max(1, stride(A, 2))
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
             rwork = Array($relty, 2n)
