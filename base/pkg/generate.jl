@@ -26,7 +26,7 @@ function git_contributors(dir::AbstractString, n::Int=typemax(Int))
         names[name] = get(names,name,0) + commits
     end
     names = sort!(collect(keys(names)),by=name->names[name],rev=true)
-    length(names) <= n ? names : [names[1:n], "et al."]
+    length(names) <= n ? names : [names[1:n]; "et al."]
 end
 
 function package(
@@ -57,6 +57,7 @@ function package(
             Generate.tests(pkg,force=force)
             Generate.require(pkg,force=force)
             Generate.travis(pkg,force=force)
+            Generate.appveyor(pkg,force=force)
             Generate.gitignore(pkg,force=force)
 
             msg = """
@@ -174,6 +175,56 @@ function travis(pkg::AbstractString; force::Bool=false)
         #script:
         #  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         #  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("$pkg"); Pkg.test("$pkg"; coverage=true)'
+        """)
+    end
+end
+
+function appveyor(pkg::AbstractString; force::Bool=false)
+    vf = versionfloor(VERSION)
+    if vf[end] == '-' # don't know what previous release was
+        vf = string(VERSION.major, '.', VERSION.minor)
+        rel32 = "#  - JULIAVERSION: \"julialang/bin/winnt/x86/$vf/julia-$vf-latest-win32.exe\""
+        rel64 = "#  - JULIAVERSION: \"julialang/bin/winnt/x64/$vf/julia-$vf-latest-win64.exe\""
+    else
+        rel32 = "  - JULIAVERSION: \"julialang/bin/winnt/x86/$vf/julia-$vf-latest-win32.exe\""
+        rel64 = "  - JULIAVERSION: \"julialang/bin/winnt/x64/$vf/julia-$vf-latest-win64.exe\""
+    end
+    genfile(pkg,"appveyor.yml",force) do io
+        print(io, """
+        environment:
+          matrix:
+        $rel32
+        $rel64
+          - JULIAVERSION: "julianightlies/bin/winnt/x86/julia-latest-win32.exe"
+          - JULIAVERSION: "julianightlies/bin/winnt/x64/julia-latest-win64.exe"
+
+        branches:
+          only:
+            - master
+            - /release-.*/
+
+        notifications:
+          - provider: Email
+            on_build_success: false
+            on_build_failure: false
+            on_build_status_changed: false
+
+        install:
+        # Download most recent Julia Windows binary
+          - ps: (new-object net.webclient).DownloadFile(
+                \$("http://s3.amazonaws.com/"+\$env:JULIAVERSION),
+                "C:\\projects\\julia-binary.exe")
+        # Run installer silently, output to C:\\projects\\julia
+          - C:\\projects\\julia-binary.exe /S /D=C:\\projects\\julia
+
+        build_script:
+        # Need to convert from shallow to complete for Pkg.clone to work
+          - IF EXIST .git\\shallow (git fetch --unshallow)
+          - C:\\projects\\julia\\bin\\julia -e "versioninfo();
+              Pkg.clone(pwd(), \\"$pkg\\"); Pkg.build(\\"$pkg\\")"
+
+        test_script:
+          - C:\\projects\\julia\\bin\\julia --check-bounds=yes -e "Pkg.test(\\"$pkg\\")"
         """)
     end
 end
