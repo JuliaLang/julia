@@ -895,7 +895,8 @@ end
 #   Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
 # logarithm and estimating the condition number", SIAM J. Sci. Comput., 35(4),
 # (2013), C394-C410.
-function logm{T}(A0::UpperTriangular{T})
+#   http://eprints.ma.man.ac.uk/1687/02/logm.zip
+function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -931,9 +932,9 @@ function logm{T}(A0::UpperTriangular{T})
         A = sqrtm(A)
     end
 
-    AmI = A - UpperTriangular(eye(n))
-    d2 = norm(AmI^2, 1)^(1/2)
-    d3 = norm(AmI^3, 1)^(1/3)
+    AmI = A - I
+    d2 = sqrt(norm(AmI^2, 1))
+    d3 = cbrt(norm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -944,7 +945,7 @@ function logm{T}(A0::UpperTriangular{T})
     while ~foundm
         more = false
         if s > s0
-            d3 = norm(AmI^3, 1)^(1/3)
+            d3 = cbrt(norm(AmI^3, 1))
         end
         d4 = norm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
@@ -957,7 +958,7 @@ function logm{T}(A0::UpperTriangular{T})
             if j <= 6
                 m = j
                 break
-            elseif alpha3/2 <= theta[5] && p < 2
+            elseif alpha3 / 2 <= theta[5] && p < 2
                 more = true
                 p = p + 1
            end
@@ -984,12 +985,12 @@ function logm{T}(A0::UpperTriangular{T})
             break
         end
         A = sqrtm(A)
-        AmI = A - UpperTriangular(eye(n))
+        AmI = A - I
         s = s + 1
     end
 
     # Compute accurate superdiagonal of T
-    p = (1/2^s)
+    p = 1 / 2^s
     for k = 1:n-1
         Ak = A0[k,k]
         Akp1 = A0[k+1,k+1]
@@ -999,7 +1000,7 @@ function logm{T}(A0::UpperTriangular{T})
         A[k+1,k+1] = Akp1p
         if Ak == Akp1
             A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
-        elseif abs(Ak) < abs(Akp1)/2 || abs(Akp1) < abs(Ak)/2
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
             A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
         else
             logAk = log(Ak)
@@ -1017,7 +1018,7 @@ function logm{T}(A0::UpperTriangular{T})
             r = a - 1
         end
         s0 = s
-        if angle(a) >= pi/2
+        if angle(a) >= pi / 2
             a = sqrt(a)
             s0 = s - 1
         end
@@ -1034,29 +1035,20 @@ function logm{T}(A0::UpperTriangular{T})
     # Compute the Gauss-Legendre quadrature formula
     R = zeros(Float64, m, m)
     for i = 1:m - 1
-        R[i,i+1] = i / sqrt((2 * i).^2-1)
+        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
     x,V = eig(R)
     w = Array(Float64, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
-        w[i] = (V[1,i])^2
+        w[i] = V[1,i]^2
     end
 
     # Compute the Padé approximation
-    B = zeros(T, n, n)
     Y = zeros(T, n, n)
     for k = 1:m
-        for j = 1:n
-            B[j,j] = 1. + A[j,j] * x[k]
-            for i = 1:j-1
-                B[i,j] = A[i,j] * x[k]
-            end
-        end
-        B = A * inv(B)
-        scale!(w[k], B)
-        Y = Y + B
+        Y = Y + w[k] * (A / (x[k] * A + I))
     end
 
     # Scale back
@@ -1072,7 +1064,7 @@ function logm{T}(A0::UpperTriangular{T})
         Y[k+1,k+1] = logAkp1
         if Ak == Akp1
             Y[k,k+1] = A0[k,k+1] / Ak
-        elseif abs(Ak) < abs(Akp1)/2 || abs(Akp1) < abs(Ak)/2
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
             Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
         else
             w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(ceil((imag(logAkp1-logAk) - pi)/(2*pi))))
