@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Auto-creation in lookup_ref is a problem
+
 # todo:
 # * fetch/wait latency seems to be excessive
 # * message aggregation
@@ -402,10 +404,12 @@ type Future{T} <: AbstractRemoteRef{T}
     where::Int
     whence::Int
     id::Int
+
+    is_open::Bool
     cached_val::Nullable{T}
 
     function Future(w, wh, id, ref_type)
-        r = new(w,wh,id, Nullable{ref_type}())
+        r = new(w,wh,id, true, Nullable{ref_type}())
         found = getkey(client_refs, r, false)
         if !is(found,false)
             return found
@@ -424,21 +428,10 @@ let REF_ID::Int = 1
     next_rrid_tuple() = (myid(),next_ref_id())
 end
 
-function Future(pid::Integer, T::DataType, sz::Int)
-    ref_id = next_ref_id()
-    if (T != Any) || (sz > 1)
-        # Create backing channel right away
-        remotecall_fetch(pid, (T, sz, from_pid, ref_id)->create_and_register_channel(T, sz, from_pid, ref_id), T, sz, myid(), ref_id)
-    end
-    Future{T}(pid, myid(), ref_id, T)
-end
-
+Future() = Future(myid())
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-Future(pid::Int) = Future(pid, Any)
-Future() = Future(Any)
-Future(T::Type) = Future(myid(), T)
-Future(pid::Int, T::Type) = Future(pid, T, 1)
+Future(pid::Integer) = Future{Any}(pid, myid(), next_ref_id(), Any)
 
 type ChannelRef{T} <: AbstractRemoteRef{T}
     where::Int
@@ -448,7 +441,7 @@ type ChannelRef{T} <: AbstractRemoteRef{T}
     ChannelRef(w, wh, id) = new(w, wh, id)
 end
 
-function remote_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)
+function open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)
     ref_id = next_ref_id()
     remotecall_fetch(pid, (T, sz, whence, ref_id)->create_and_register_channel(T, sz, whence, ref_id), T, sz, myid(), ref_id)
     ChannelRef{T}(pid, myid(), ref_id)
@@ -457,8 +450,8 @@ end
 
 function create_and_register_channel(T::Type, sz::Int, whence::Int, ref_id::Int)
     rv = RemoteValue(T, sz)
-    push!(rv.clientset, whence)
     PGRP.refs[(whence, ref_id)] = rv
+    push!(rv.clientset, whence)
     nothing
 end
 
@@ -506,7 +499,7 @@ function start_gc_msgs_task()
 end
 
 function send_del_client(rr::Future)
-    if !isnull(rr.cached_val)   # has not been fetched
+    if rr.is_open   # has not been fetched or closed
         if rr.where == myid()
             del_client(rr2id(rr), myid())
         else
@@ -519,6 +512,7 @@ function send_del_client(rr::Future)
             w.gcflag = true
             notify(any_gc_flag)
         end
+        rr.is_open = false
     end
 end
 
@@ -551,6 +545,9 @@ function send_add_client(rr::Future, i)
 end
 
 function serialize(s::SerializationState, rr::Future)
+    if rr.is_open == false
+        throw(InvalidStateException("Cannot serialize a fetched/closed future."))
+    end
     i = worker_id_from_socket(s.io)
     #println("$(myid()) serializing $rr to $i")
     if i != -1
@@ -583,10 +580,11 @@ type RemoteValue{T}
     channel::Channel{T}
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0
+    RemoteValue(c) = new(c, IntSet(), 0)
 end
 
-RemoteValue(T, sz) = RemoteValue{T}(Channel(T, sz), IntSet(), 0)
-RemoteValue() = RemoteValue(Any, 1)
+RemoteValue(T, sz) = RemoteValue{T}(Channel(T, sz))
+RemoteValue() = RemoteValue{Any}(Channel(Any))
 
 wait(rv::RemoteValue) = wait(rv.channel)
 take!(rv::RemoteValue) = take!(rv.channel)
@@ -728,42 +726,72 @@ function call_on_owner(f, rr::AbstractRemoteRef, args...)
     if rr.where == myid()
         f(rid, args...)
     else
-        remotecall_fetch(rr.where, f, rid, args...)
+        ret = remotecall_fetch(rr.where, f, rid, args...)
+        isa(ret, Exception) && throw(ret)
+        ret
     end
 end
 
-isready_ref(rid) = isready(lookup_ref(rid))
-isready(rr::AbstractRemoteRef) = call_on_owner(isready_ref, rr)
+function get_ref(rid)
+    rv = get(PGRP.refs, rid, false)
+    if rv == false
+        throw(InvalidStateException("Channel does not exist. Closed?"))
+    end
+    rv
+end
 
-wait_ref(rid) = (wait(lookup_ref(rid)); nothing)
-wait(rr::AbstractRemoteRef) = (call_on_owner(wait_ref, rr); rr)
+isready_future(rid) = isready(lookup_ref(rid))
+isready(rr::Future) = call_on_owner(isready_future, rr)
 
-function fetch_ref(rid, caller_id, del_client_ref)
+isready_ref(rid) = isready(get_ref(rid))
+isready(rr::ChannelRef) = call_on_owner(isready_ref, rr)
+
+wait_future(rid) = (wait(lookup_ref(rid)); nothing)
+wait(rr::Future) = (call_on_owner(wait_future, rr); rr)
+
+wait_ref(rid) = (wait(get_ref(rid)); nothing)
+wait(rr::ChannelRef) = (call_on_owner(wait_ref, rr); rr)
+
+function fetch_future(rid, caller_id)
     rv = lookup_ref(rid)
     v=fetch(rv)
-    del_client_ref && del_client(PGRP, rid, rv, caller_id)
+    del_client(PGRP, rid, rv, caller_id)
     v
 end
 function fetch(rr::Future)
-    if !isnull(rr.cached_val)
-        v = get(rr.cached_val)
+    if rr.is_open == false
+        # implies either that we have fetched data or ref is closed
+        v = get(rr.cached_val, nothing)
     else
-        v = call_on_owner(fetch_ref, rr, myid(), true)
+        v = call_on_owner(fetch_future, rr, myid())
         rr.cached_val = v
+        rr.is_open = false
     end
     v
 end
-fetch(rr::ChannelRef) = call_on_owner(fetch_ref, rr, myid(), false)
+
+fetch_ref(rid) = fetch(get_ref(rid))
+fetch(rr::ChannelRef) = call_on_owner(fetch_ref, rr)
 fetch(x::ANY) = x
 
-take_ref(rid) = take!(lookup_ref(rid))
+take_ref(rid) = take!(get_ref(rid))
 take!{T}(rr::ChannelRef{T}) = call_on_owner(take_ref, rr)
 
-put_ref(rid, v) = (put!(lookup_ref(rid), v); nothing)
+put_ref(rid, v) = (put!(get_ref(rid), v); nothing)
 put!{T}(rr::ChannelRef{T}, val::T) = (call_on_owner(put_ref, rr, val); rr)
 
-close_ref(rid) = delete!(PGRP.refs, rid)
+function put_future(rid, v)
+    rv = lookup_ref(rid)
+    isready(rv) && throw(InvalidStateException("Future can be set only once."))
+    put!(rv, v)
+    nothing
+end
+put!{T}(rr::Future{T}, val::T) = (call_on_owner(put_future, rr, val); rr)
+
+close_ref(rid) = (delete!(PGRP.refs, rid); nothing)
 close(rr::ChannelRef) = call_on_owner(close_ref, rr)
+
+close(rr::Future) = (send_del_client(rr); nothing)
 
 
 function deliver_result(sock::IO, msg, oid, value)

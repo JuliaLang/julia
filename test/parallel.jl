@@ -14,12 +14,12 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-rr=remote_channel()
+rr=open_channel()
 a = rand(5,5)
 put!(rr, a)
 @test rr[2,3] == a[2,3]
 
-rr=remote_channel(pid=workers()[1])
+rr=open_channel(pid=workers()[1])
 a = rand(5,5)
 put!(rr, a)
 @test rr[1,5] == a[1,5]
@@ -227,13 +227,14 @@ function test_channel(c)
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
+    close(c)
 end
 
 test_channel(Channel(10))
+test_channel(open_channel(pid=id_other, sz=10))
 
-# Test remote channel...
-c = remote_channel(pid=id_other, sz=10)
-
+# mix local and remote calls
+c = open_channel(pid=id_other, sz=10)
 put!(c, 1)
 remotecall_fetch(id_other, ch -> put!(ch, "Hello"), c)
 put!(c, 5.0)
@@ -288,9 +289,24 @@ put!(in_c, "Hello")
 @test take!(out_c) == "Hello"
 close(in_c)
 @test isopen(in_c) == false
-@test_throws ChannelClosedException put!(in_c, :foo)
+@test_throws InvalidStateException put!(in_c, :foo)
 yield()
 @test istaskdone(t) == true
+
+function test_future(f, rem_throw=false)
+    put!(f, 1)
+    if rem_throw
+        @test_throws InvalidStateException put!(f, 1)
+    end
+    @test fetch(f) == 1
+    @test get(f.cached_val) == 1
+    @test_throws MethodError take!(f)
+    close(f)
+end
+
+test_future(Future())
+test_future(Future(id_other))
+
 
 # The below block of tests are usually run only on local development systems, since:
 # - addprocs tests are memory intensive
@@ -299,6 +315,9 @@ yield()
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
 if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    print("Please ignore InvalidStateException in Future test.\n")
+    test_future(Future(id_other), true)
+
     print("\n\nTesting correct error handling in pmap call. Please ignore printed errors when specified.\n")
 
     # make sure exceptions propagate when waiting on Tasks

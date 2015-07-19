@@ -79,7 +79,7 @@ rm(file)
 
 # Stream Redirection
 @unix_only begin
-    r = RemoteRef()
+    r = Channel()
     @async begin
         port, server = listenany(2326)
         put!(r,port)
@@ -125,7 +125,7 @@ rm(file)
 
 # issue #3373
 # fixing up Conditions after interruptions
-r = RemoteRef()
+r = Channel()
 t = @async begin
     try
         wait(r)
@@ -141,7 +141,7 @@ yield()
 
 # Test marking of AsyncStream
 
-r = RemoteRef()
+r = Channel()
 @async begin
     port, server = listenany(2327)
     put!(r, port)

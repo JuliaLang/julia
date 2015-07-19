@@ -55,7 +55,12 @@ function close(c::Channel)
 end
 isopen(c::Channel) = (c.state == C_OPEN)
 
-type ChannelClosedException <: Exception end
+type InvalidStateException <: Exception
+    msg::AbstractString
+    state
+end
+InvalidStateException() = InvalidStateException("")
+InvalidStateException(msg) = InvalidStateException(msg, 0)
 
 start(c::Channel) = nothing
 function done(c::Channel, state)
@@ -65,7 +70,7 @@ function done(c::Channel, state)
             wait(c)
             isready(c) && return false
         catch e
-            if isa(e, ChannelClosedException)
+            if isa(e, InvalidStateException) && e.state==C_CLOSED
                 return true
             else
                 rethrow(e)
@@ -77,7 +82,7 @@ end
 next(c::Channel, state) = (take!(c), nothing)
 
 function put!{T}(c::Channel{T, ChannelDataMultiple{T}}, v::T)
-    !isopen(c) && throw(ChannelClosedException())
+    !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
     store::ChannelDataMultiple{T} = c.store
     d = store.take_pos - store.put_pos
     if (d == 1) || (d == -(store.szp1-1))
@@ -112,7 +117,7 @@ function put!{T}(c::Channel{T, ChannelDataMultiple{T}}, v::T)
 end
 
 function put!{T}(c::Channel{T, ChannelDataSingle{T}}, v::T)
-    !isopen(c) && throw(ChannelClosedException())
+    !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
     store::ChannelDataSingle{T} = c.store
     if store.full
         wait(c.cond_put)
@@ -132,7 +137,7 @@ fetch(store::ChannelDataSingle) = get(store.data)
 fetch(store::ChannelDataMultiple) = store.data[store.take_pos]
 
 function take!{T, S}(c::Channel{T, S})
-    !isopen(c) && throw(ChannelClosedException())
+    !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
     while !isready(c)
         wait(c.cond_take)
     end
@@ -142,7 +147,13 @@ function take!{T, S}(c::Channel{T, S})
     v
 end
 
-take!{T}(store::ChannelDataSingle{T}) = (v=get(store.data); store.data=Nullable{T}(); store.full=false; v)
+function take!{T}(store::ChannelDataSingle{T})
+    assert(store.full == true)
+    v=get(store.data, nothing)   # Nothing is a valid value to store!
+    store.data=Nullable{T}()
+    store.full=false
+    v
+end
 function take!(store::ChannelDataMultiple)
     v = store.data[store.take_pos]
     store.take_pos = (store.take_pos == store.szp1 ? 1 : store.take_pos + 1)
@@ -154,7 +165,7 @@ isready{T}(c::Channel{T, ChannelDataMultiple{T}}) = (store = c.store; store.take
 
 function wait(c::Channel)
     while !isready(c)
-        !isopen(c) && throw(ChannelClosedException())
+        !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
         wait(c.cond_take)
     end
     nothing

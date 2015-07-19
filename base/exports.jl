@@ -156,10 +156,10 @@ export
 
 # Exceptions
     ArgumentError,
-    ChannelClosedException,
     DimensionMismatch,
     EOFError,
     ErrorException,
+    InvalidStateException,
     KeyError,
     LoadError,
     MethodError,
@@ -1195,7 +1195,6 @@ export
 
 # multiprocessing
     addprocs,
-    remote_channel,
     ClusterManager,
     fetch,
     Future,
@@ -1207,6 +1206,7 @@ export
     myid,
     nprocs,
     nworkers,
+    open_channel,
     pmap,
     procs,
     put!,
