@@ -87,7 +87,7 @@ end
 # print elapsed time, return expression value
 const _mem_units = ["bytes", "KB", "MB", "GB", "TB", "PB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
-function prettyprint_getunits(value, numunits, factor)  # this really should be a private function
+function prettyprint_getunits(value, numunits, factor)
     c1 = factor
     c2 = c1 * c1
     if value <= c1*100 ; return (value, 1) ; end
@@ -101,7 +101,7 @@ function prettyprint_getunits(value, numunits, factor)  # this really should be 
 end
 
 const _sec_units = ["nanoseconds ", "microseconds", "milliseconds", "seconds     "]
-function prettyprint_nanoseconds(value::UInt64)                   # this really should be a private function
+function prettyprint_nanoseconds(value::UInt64)
     if value < 1000
         return (1, value, 0)    # nanoseconds
     elseif value < 1000000
@@ -122,7 +122,7 @@ function prettyprint_nanoseconds(value::UInt64)                   # this really 
     return (mt, frac, value-(frac*1000))
 end
 
-function padded_nonzero_print(value,str)        # this really should be a private function
+function padded_nonzero_print(value,str)
     if value != 0
         blanks = "                "[1:16-length(str)]
         println("$str:$blanks$value")
@@ -133,8 +133,8 @@ function time_print(elapsedtime, bytes, gctime, allocs)
     mt, pptime, fraction = prettyprint_nanoseconds(elapsedtime)
     (fraction != 0) ? @printf("%4d.%03d %s", pptime, fraction, _sec_units[mt]) : @printf("%8d %s",  pptime, _sec_units[mt])
     if bytes != 0 || allocs != 0
-        bytes, mb = prettyprint_getunits(bytes, length(_mem_units), 1024)
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), 1000)
+        bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         @printf(" (%d%s allocation%s: %d %s", allocs, _cnt_units[ma], allocs==1 ? "" : "s", bytes, _mem_units[mb])
         if gctime > 0
             @printf(", %.2f%% gc time", 100*gctime/elapsedtime)
