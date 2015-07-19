@@ -452,7 +452,7 @@ We can view the quoted return expression using the function :func:`macroexpand`
 (**important note:** this is an extremely useful tool for debugging macros)::
 
     julia> ex = macroexpand( :(@sayhello("human")) )
-    :(println("Hello, ","human","!"))
+    :(println("Hello, ","human"))
                         ^^^^^^^
                         interpolated: now a literal string
 
