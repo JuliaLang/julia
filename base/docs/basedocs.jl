@@ -315,7 +315,7 @@ For example, this regex has all three flags enabled:
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
 """
-r""
+:(r"")
 
 """
     push!(collection, items...) → collection
