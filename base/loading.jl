@@ -86,7 +86,7 @@ function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
     name = string(mod)
     finder = @spawnat node @task find_in_cache_path(mod) # TODO: switch this to an explicit Channel
     while true
-        path_to_try = remotecall_fetch(node, finder->consume(fetch(finder)), finder)
+        path_to_try = remotecall_fetch(node, consume_fetch, finder)
         path_to_try === nothing && return false
         if _require_from_serialized(node, path_to_try, toplevel_load)
             return true
@@ -96,9 +96,11 @@ function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
     end
 end
 
+consume_fetch(finder) = consume(fetch(finder))
+
 # to synchronize multiple tasks trying to import/using something
-package_locks = Dict{Symbol,Condition}()
-package_loaded = Set{Symbol}()
+const package_locks = Dict{Symbol,Condition}()
+const package_loaded = Set{Symbol}()
 
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
@@ -112,7 +114,7 @@ function require(mod::Symbol)
     end
     package_locks[mod] = Condition()
 
-    last = toplevel_load
+    last = toplevel_load::Bool
     try
         toplevel_load = false
         if _require_from_serialized(1, mod, last)

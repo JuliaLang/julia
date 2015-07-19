@@ -761,6 +761,63 @@ resulting speedup depend very much on the hardware. You can examine
 the change in generated code by using Julia's :func:`code_native`
 function.
 
+Treat Subnormal Numbers as Zeros
+--------------------------------
+
+Subnormal numbers, formerly called `denormal numbers <https://en.wikipedia.org/wiki/Denormal_number>`_,
+are useful in many contexts, but incur a performance penalty on some hardware.
+A call :func:`set_zero_subnormals(true) <set_zero_subnormals>`
+grants permission for floating-point operations to treat subnormal
+inputs or outputs as zeros, which may improve performance on some hardware.
+A call :func:`set_zero_subnormals(false) <set_zero_subnormals>`
+enforces strict IEEE behavior for subnormal numbers.
+
+Below is an example where subnormals noticeably impact performance on some hardware::
+
+    function timestep{T}( b::Vector{T}, a::Vector{T}, Δt::T )
+        @assert length(a)==length(b)
+        n = length(b)
+        b[1] = 1                            # Boundary condition
+        for i=2:n-1
+            b[i] = a[i] + (a[i-1] - T(2)*a[i] + a[i+1]) * Δt
+        end
+        b[n] = 0                            # Boundary condition
+    end
+
+    function heatflow{T}( a::Vector{T}, nstep::Integer )
+        b = similar(a)
+        for t=1:div(nstep,2)                # Assume nstep is even
+            timestep(b,a,T(0.1))
+            timestep(a,b,T(0.1))
+        end
+    end
+
+    heatflow(zeros(Float32,10),2)           # Force compilation
+    for trial=1:6
+        a = zeros(Float32,1000)
+        set_zero_subnormals(iseven(trial))  # Odd trials use strict IEEE arithmetic
+        @time heatflow(a,1000)
+    end
+
+This example generates many subnormal numbers because the values in ``a`` become
+an exponentially decreasing curve, which slowly flattens out over time.
+
+Treating subnormals as zeros should be used with caution, because doing so
+breaks some identities, such as ``x-y==0`` implies ``x==y``::
+
+    julia> x=3f-38; y=2f-38;
+
+    julia> set_zero_subnormals(false); (x-y,x==y)
+    (1.0000001f-38,false)
+
+    julia> set_zero_subnormals(true); (x-y,x==y)
+    (0.0f0,false)
+
+In some applications, an alternative to zeroing subnormal numbers is
+to inject a tiny bit of noise.  For example, instead of
+initializing ``a`` with zeros, initialize it with::
+
+     a = rand(Float32,1000) * 1.f-9
 
 .. _man-code-warntype:
 
