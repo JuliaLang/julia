@@ -2,15 +2,18 @@
 
 # Base.require is the implementation for the `import` statement
 
-function find_in_path(name::AbstractString)
+# `wd` is a working directory to search. from the top level (e.g the prompt)
+# it's just the cwd, otherwise it will be set to source_dir().
+function find_in_path(name::AbstractString, wd = pwd())
     isabspath(name) && return name
-    isfile(name) && return abspath(name)
+    if wd === nothing; wd = pwd(); end
+    isfile(joinpath(wd,name)) && return joinpath(wd,name)
     base = name
     if endswith(name,".jl")
         base = name[1:end-3]
     else
         name = string(base,".jl")
-        isfile(name) && return abspath(name)
+        isfile(joinpath(wd,name)) && return joinpath(wd,name)
     end
     for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
@@ -23,8 +26,13 @@ function find_in_path(name::AbstractString)
     return nothing
 end
 
-find_in_node_path(name, node::Int=1) = myid() == node ?
-    find_in_path(name) : remotecall_fetch(node, find_in_path, name)
+function find_in_node_path(name, srcpath, node::Int=1)
+    if myid() == node
+        find_in_path(name, srcpath)
+    else
+        remotecall_fetch(node, find_in_path, name, srcpath)
+    end
+end
 
 function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
@@ -127,7 +135,7 @@ function require(mod::Symbol)
         end
 
         name = string(mod)
-        path = find_in_node_path(name, 1)
+        path = find_in_node_path(name, source_dir(), 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
         if last && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
@@ -167,6 +175,11 @@ function source_path(default::Union{AbstractString,Void}="")
         end
         t = t.parent
     end
+end
+
+function source_dir()
+    p = source_path(nothing)
+    p === nothing ? p : dirname(p)
 end
 
 macro __FILE__() source_path() end
