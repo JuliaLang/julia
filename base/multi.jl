@@ -443,7 +443,7 @@ type ChannelRef{T} <: AbstractRemoteRef{T}
     ChannelRef(w, wh, id) = new(w, wh, id)
 end
 
-function open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)
+function open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=typemax(Int))
     ref_id = next_ref_id()
     remotecall_fetch(pid, (T, sz, whence, ref_id)->create_and_register_channel(T, sz, whence, ref_id), T, sz, myid(), ref_id)
     ChannelRef{T}(pid, myid(), ref_id)
@@ -586,7 +586,7 @@ type RemoteValue{T}
 end
 
 RemoteValue(T, sz) = RemoteValue{T}(Channel(T, sz))
-RemoteValue() = RemoteValue{Any}(Channel(Any))
+RemoteValue() = RemoteValue{Any}(Channel(Any,1))
 
 wait(rv::RemoteValue) = wait(rv.channel)
 take!(rv::RemoteValue) = take!(rv.channel)
@@ -596,19 +596,21 @@ put!(rv::RemoteValue, val::ANY) = put!(rv.channel, val)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 
-function run_work_thunk(thunk)
+function run_work_thunk(thunk, print_error)
     local result
     try
         result = thunk()
     catch err
-        print(STDERR, "exception on ", myid(), ": ")
-        display_error(err,catch_backtrace())
+        if print_error
+            print(STDERR, "exception on ", myid(), ": ")
+            display_error(err,catch_backtrace())
+        end
         result = err
     end
     result
 end
 function run_work_thunk(c::Channel, thunk)
-    put!(c, run_work_thunk(thunk))
+    put!(c, run_work_thunk(thunk, false))
     nothing
 end
 
@@ -671,7 +673,7 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    run_work_thunk(local_remotecall_thunk(f,args))
+    run_work_thunk(local_remotecall_thunk(f,args), true)
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -737,7 +739,7 @@ end
 function get_ref(rid)
     rv = get(PGRP.refs, rid, false)
     if rv == false
-        throw(InvalidStateException("Channel does not exist. Closed?"))
+        throw(InvalidStateException("Channel does not exist. Closed?", :closed))
     end
     rv
 end
@@ -898,7 +900,7 @@ function handle_msg(::Type{Val{:call_fetch}}, r_stream, w_stream)
     f = deserialize(r_stream)
     args = deserialize(r_stream)
     @schedule begin
-        v = run_work_thunk(()->f(args...))
+        v = run_work_thunk(()->f(args...), false)
         deliver_result(w_stream, :call_fetch, id, v)
         v
     end
@@ -919,7 +921,7 @@ function handle_msg(::Type{Val{:do}}, r_stream, w_stream)
     f = deserialize(r_stream)
     args = deserialize(r_stream)
     @schedule begin
-        run_work_thunk(()->f(args...))
+        run_work_thunk(()->f(args...), true)
     end
 end
 
@@ -1591,7 +1593,7 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
-    done = Channel()
+    done = Channel(1)
     timercb(aw) = begin
         try
             if testcb()
@@ -1686,4 +1688,27 @@ function getindex(r::AbstractRemoteRef, args...)
         return getindex(fetch(r), args...)
     end
     return remotecall_fetch(r.where, getindex, r, args...)
+end
+
+for objtype in [:Channel, :ChannelRef]
+    # Since other tasks can pop values while the iterator is
+    # running, we pre-fetch data in the `done` call itself
+
+    eval(quote
+        start{T}(c::($objtype){T}) = Ref{Nullable{T}}(Nullable{T}())
+        function done(c::($objtype), state::Ref)
+            try
+                # we are waiting either for more data or channel to be closed
+                state.x = take!(c)
+                return false
+            catch e
+                if isa(e, InvalidStateException) && e.state==:closed
+                    return true
+                else
+                    rethrow(e)
+                end
+            end
+        end
+        next{T}(c::($objtype){T}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
+    end)
 end

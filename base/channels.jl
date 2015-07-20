@@ -2,13 +2,11 @@
 
 abstract AbstractChannel{T}
 
-@enum ChannelState C_OPEN C_CLOSED
-
 type Channel{T} <: AbstractChannel{T}
     cid::Int
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
-    state::ChannelState
+    state::Symbol
 
     data::Array{T,1}
     szp1::Int               # current channel size plus one
@@ -16,7 +14,7 @@ type Channel{T} <: AbstractChannel{T}
     take_pos::Int           # read position
     put_pos::Int            # write position
 
-    Channel(elt, szp1, sz_max) = new(get_next_channel_id(), Condition(), Condition(), C_OPEN,
+    Channel(elt, szp1, sz_max) = new(get_next_channel_id(), Condition(), Condition(), :open,
                                      Array(T, szp1), szp1, sz_max, 1, 1)
 end
 
@@ -30,7 +28,7 @@ let next_channel_id=1
 end
 
 Channel() = Channel(Any)
-Channel(T::Type) = Channel(T::Type, 1)
+Channel(T::Type) = Channel(T::Type, typemax(Int))
 Channel(sz::Int) = Channel(Any, sz)
 function Channel(T::Type, sz::Int)
     sz_max = sz == typemax(Int) ? typemax(Int) - 1 : sz
@@ -38,12 +36,13 @@ function Channel(T::Type, sz::Int)
     Channel{T}(T, csz+1, sz_max)
 end
 
+closed_exception() = InvalidStateException("Channel is closed.", :closed)
 function close(c::Channel)
-    c.state = C_CLOSED
-    notify(c.cond_take, nothing, true, false)
+    c.state = :closed
+    notify_error(c::Channel, closed_exception())
     c
 end
-isopen(c::Channel) = (c.state == C_OPEN)
+isopen(c::Channel) = (c.state == :open)
 
 type InvalidStateException <: Exception
     msg::AbstractString
@@ -52,27 +51,8 @@ end
 InvalidStateException() = InvalidStateException("")
 InvalidStateException(msg) = InvalidStateException(msg, 0)
 
-start(c::Channel) = nothing
-function done(c::Channel, state)
-    while isopen(c)
-        try
-            # we are waiting either for more data or channel to be closed
-            wait(c)
-            isready(c) && return false
-        catch e
-            if isa(e, InvalidStateException) && e.state==C_CLOSED
-                return true
-            else
-                rethrow(e)
-            end
-        end
-    end
-    return true
-end
-next(c::Channel, state) = (take!(c), nothing)
-
 function put!(c::Channel, v)
-    !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
+    !isopen(c) && throw(closed_exception())
     d = c.take_pos - c.put_pos
     if (d == 1) || (d == -(c.szp1-1))
         # grow the channel if possible
@@ -96,6 +76,7 @@ function put!(c::Channel, v)
             c.data = newdata
         else
             wait(c.cond_put)
+            check_open(c)
         end
     end
 
@@ -111,7 +92,7 @@ function fetch(c::Channel)
 end
 
 function take!(c::Channel)
-    !isopen(c) && !isready(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
+    !isopen(c) && !isready(c) && throw(closed_exception())
     while !isready(c)
         wait(c.cond_take)
     end
@@ -125,7 +106,6 @@ isready(c::Channel) = (c.take_pos == c.put_pos ? false : true)
 
 function wait(c::Channel)
     while !isready(c)
-        !isopen(c) && throw(InvalidStateException("Channel is closed.", C_CLOSED))
         wait(c.cond_take)
     end
     nothing

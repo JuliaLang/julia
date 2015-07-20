@@ -64,7 +64,7 @@ end
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
 @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 
-port = Channel()
+port = Channel(1)
 c = Base.Condition()
 defaultport = rand(2000:4000)
 tsk = @async begin
@@ -107,7 +107,7 @@ end
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(UInt16)+1)
 
 p, server = listenany(defaultport)
-r = Channel()
+r = Channel(1)
 tsk = @async begin
     put!(r, :start)
     @test_throws Base.UVError accept(server)

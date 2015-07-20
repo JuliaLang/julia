@@ -64,7 +64,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         func_mapshmem = () -> begin
-            c = open_channel()
+            c = open_channel(sz=1)
             put!(c, shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR))
             c
         end
@@ -140,7 +140,7 @@ function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     refs = Array(ChannelRef, length(a.pids))
     @sync begin
         for (i, p) in enumerate(a.pids)
-            refs[i] = remotecall_fetch(p, (r,d)->(c=open_channel(); put!(c, reshape(fetch(r),d)); c), a.refs[i], dims)
+            refs[i] = remotecall_fetch(p, (r,d)->(c=open_channel(sz=1); put!(c, reshape(fetch(r),d)); c), a.refs[i], dims)
         end
     end
 

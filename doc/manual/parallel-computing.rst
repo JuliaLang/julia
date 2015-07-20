@@ -466,7 +466,7 @@ case the loop runs till the channel is open. The loop variable takes on
 all values added to the channel:
 
 Channels can also be used as a means of inter-process communication. To do this
-they need to be created via ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)``
+they need to be created via ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=typemax(Int))``
 which returns a ``ChannelRef``.
 
 Open remote channels need to be released explicitly via a ``close`` on

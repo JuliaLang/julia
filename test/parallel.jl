@@ -275,23 +275,26 @@ for x in 1:26
 end
 @test isready(c) == false
 
-# test channel iteration
-in_c=Channel(10)
-out_c=Channel(10)
-t=@schedule for v in in_c
-    put!(out_c, v)
+# test channel / channel_ref iterations
+function test_iteration(in_c, out_c)
+    t=@schedule for v in in_c
+        put!(out_c, v)
+    end
+
+    isa(in_c, Channel) && @test isopen(in_c) == true
+    put!(in_c, 1)
+    @test take!(out_c) == 1
+    put!(in_c, "Hello")
+    close(in_c)
+    @test take!(out_c) == "Hello"
+    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test_throws InvalidStateException put!(in_c, :foo)
+    yield()
+    @test istaskdone(t) == true
 end
 
-@test isopen(in_c) == true
-put!(in_c, 1)
-@test take!(out_c) == 1
-put!(in_c, "Hello")
-close(in_c)
-@test take!(out_c) == "Hello"
-@test isopen(in_c) == false
-@test_throws InvalidStateException put!(in_c, :foo)
-yield()
-@test istaskdone(t) == true
+test_iteration(Channel(10), Channel(10))
+test_iteration(open_channel(pid=id_other, sz=10), Channel(10))
 
 function test_future(f, rem_throw=false)
     put!(f, 1)
@@ -315,7 +318,50 @@ test_future(Future(id_other))
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
 if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
-    print("Please ignore InvalidStateException in Future test.\n")
+    println()
+    println("Testing a distributed put!/take! on a remote channel.")
+    n = 10^4
+    c=open_channel(T=Any, sz=10^10)
+    futures=cell(nworkers())
+    for (idx,p) in enumerate(workers())
+        futures[idx] = @spawnat p begin
+            cnts=Dict()
+            @sync for i in 1:n
+                if iseven(i)
+                    put!(c,myid())
+                else
+                    @async begin
+                        v=take!(c)
+                        cnts[v]=get(cnts, v, 0) + 1
+                    end
+                end
+                sleep(rand() * 0.001)
+            end
+            cnts
+        end
+    end
+
+    [fetch(f) for f in futures]
+    totals=Dict()
+    for f in futures
+        for (k,v) in fetch(f)
+            totals[k] = get(totals, k, 0) + v
+        end
+    end
+
+    for p in workers()
+        @test totals[p] == n/2
+        print("$(totals[p]) `put!`s from $p were `take!`n in (pid->cnt) ")
+        for f in futures
+            print("$(f.where)->$(fetch(f)[p]) ")
+        end
+        println()
+    end
+
+    close(c)
+
+    println()
+    print("Testing second put! on a Future. Please ignore printed error.\n")
     test_future(Future(id_other), true)
 
     print("\n\nTesting correct error handling in pmap call. Please ignore printed errors when specified.\n")
@@ -332,22 +378,22 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
     pmappids = remotecall_fetch(1, () -> addprocs(4))
 
-    # retry, on error exit
+    println("Testing retry, on error exit")
     res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true, pids=pmappids);
     @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
-    # no retry, on error exit
+    println("Testing no retry, on error exit")
     res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true, pids=pmappids);
     @test (length(res) < length(ups))
     @test isa(res[1], Exception)
 
-    # retry, on error continue
+    println("Testing retry, on error continue")
     res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
-    # no retry, on error continue
+    println("Testing no retry, on error continue")
     res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false, pids=pmappids);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)

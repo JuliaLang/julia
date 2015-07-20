@@ -120,11 +120,11 @@ Tasks
 
    Variants:
 
-        Channel() returns a ``Channel{Any}`` of size 1.
-        Channel(T::Type) returns a ``Channel{T}`` of size 1.
+        Channel() returns a ``Channel{Any}`` of size typemax(Int).
+        Channel(T::Type) returns a ``Channel{T}`` of size typemax(Int).
         Channel(sz::Int) returns a ``Channel{Any}`` of size ``sz``.
 
-.. function:: ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)``
+.. function:: ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=typemax(Int))``
 
    Returns a ``ChannelRef`` which is a reference to a channel on process ``pid``,
    capable of holding a maximum number ``sz`` objects of type ``T``.
