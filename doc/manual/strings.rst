@@ -707,6 +707,20 @@ with the number or name of the capture group::
     julia> m[2]
     "45"
 
+Captures can be referenced in a substitution string when using :func:`replace`
+by using ``\n`` to refer to the `n`th capture group and prefixing the
+subsitution string with ``s``. Capture group 0 refers to the entire match object.
+Named capture groups can be referenced in the substitution with ``g<groupname>``.
+For example::
+
+    julia> replace("first second", r"(\w+) (?P<agroup>\w+), s"\g<agroup> \1")
+    julia> "second first"
+
+Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
+as in::
+    julia> replace("a", r".", "\g<0>1")
+    julia> a1
+
 You can modify the behavior of regular expressions by some combination
 of the flags ``i``, ``m``, ``s``, and ``x`` after the closing double
 quote mark. These flags have the same meaning as they do in Perl, as

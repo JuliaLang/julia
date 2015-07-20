@@ -173,8 +173,9 @@ function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, k
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
 
-_replacement(repl, str, j, k) = repl
-_replacement(repl::Function, str, j, k) = repl(SubString(str, j, k))
+_replace(io, repl, str, r, pattern) = write(io, repl)
+_replace(io, repl::Function, str, r, pattern) =
+    write(io, repl(SubString(str, first(r), last(r))))
 
 function replace(str::ByteString, pattern, repl, limit::Integer)
     n = 1
@@ -183,10 +184,11 @@ function replace(str::ByteString, pattern, repl, limit::Integer)
     r = search(str,pattern,i)
     j, k = first(r), last(r)
     out = IOBuffer()
+    ensureroom(out, floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
             write_sub(out, str.data, i, j-i)
-            write(out, _replacement(repl, str, j, k))
+            _replace(out, repl, str, r, pattern)
         end
         if k<j
             i = j
