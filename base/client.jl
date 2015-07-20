@@ -75,11 +75,11 @@ function repl_cmd(cmd, out)
         @windows_only begin
             cmdbuf = IOBuffer()
             if lowercase(shell[1]) == "cmd"
-                print_cmdshell_escaped(cmdbuf, cmd.exec...)
+                print_shell_escaped(cmdbuf, cmd.exec..., mode=:cmd)
                 cmd.exec = ["cmd"; "/s /c \"$(bytestring(cmdbuf))\""]
                 cmd.verbatimargument = true
             elseif lowercase(shell[1]) == "powershell"
-                print_powershell_escaped(cmdbuf, cmd.exec...)
+                print_shell_escaped(cmdbuf, cmd.exec..., mode=:powershell)
                 cmd.exec = ["powershell"; "-command"; "$(bytestring(cmdbuf))"]
             end
         end
