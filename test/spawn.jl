@@ -215,7 +215,7 @@ function thrash(handle::Ptr{Void})
     nothing
 end
 OLD_STDERR = STDERR
-redirect_stderr(open("$fname","w"))
+redirect_stderr(open("$(escape_string(fname))","w"))
 # Usually this would be done by GC. Do it manually, to make the failure
 # case more reliable.
 oldhandle = OLD_STDERR.handle
@@ -226,12 +226,12 @@ sleep(1)
 import Base.zzzInvalidIdentifier
 """
 try
-    (out,in,p) = readandwrite(`$exename -f`)
+    (in,p) = open(`$exename -f`, "w")
     write(in,cmd)
     close(in)
     wait(p)
 catch
-    error("IOStream redirect failed. Child stderr was \n$(readall(fname))")
+    error("IOStream redirect failed. Child stderr was \n$(readall(fname))\n")
 end
 rm(fname)
 
