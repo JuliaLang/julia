@@ -340,7 +340,7 @@ not a standalone interpreter that also generates compiled code.
 
 Other known potential failure scenarios include:
 
-1. Global counters (for example, for uniquely identify objects)
+1. Global counters (for example, for attempting to unique identifying objects)
    Consider the following code snippet::
 
     type UniquedById
@@ -354,6 +354,9 @@ Other known potential failure scenarios include:
    the counter value is recorded at the end of compilation.
    All subsequent usages of this incrementally compiled module
    will start from that same counter value.
+
+   Note that ``object_id`` (which works by hashing the memory pointer)
+   has similar issues (see notes on Dict usage below).
 
    One alternative is to store both ``current_module()`` and the current ``counter`` value,
    however, it may be better to redesign the code to not depend on this global state.
@@ -384,7 +387,7 @@ to help the user avoid other wrong-behavior situations:
 
 2. ``global const`` statements from local scope after ``__init__()`` has been started (see issue #12010 for plans to add an error for this)
 
-3. Replacing a module (or calling ``workspace()`` is a runtime error while doing an incremental compile.
+3. Replacing a module (or calling ``workspace()``) is a runtime error while doing an incremental compile.
 
 A few other points to be aware of:
 
@@ -399,5 +402,5 @@ A few other points to be aware of:
    However, when possible, it can be good practice to copy resources
    into the module at compile-time so they won't need to be found at runtime.
 
-4. WeakRef objects and finalizers are not captured by currently handled by the serializer
+4. WeakRef objects and finalizers are not currently handled properly by the serializer
    (this will be fixed in an upcoming release).
