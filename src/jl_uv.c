@@ -27,6 +27,9 @@
 #include <io.h>
 #define write _write
 #endif
+#if defined(_COMPILER_MICROSOFT_) && !defined(_Static_assert)
+#define _Static_assert static_assert
+#endif
 
 #ifdef __cplusplus
 #include <cstring>

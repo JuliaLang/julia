@@ -28,6 +28,10 @@
 #endif
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // manipulating mark bits
 
 #define GC_CLEAN 0 // freshly allocated
@@ -251,10 +255,6 @@ static void pre_mark(void);
 static void post_mark(arraylist_t *list, int dryrun);
 
 #include "gc-debug.c"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 int jl_in_gc; // referenced from switchto task.c
 static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #11956
