@@ -113,6 +113,11 @@ end
 
 #Matrix-valued functions
 expm{T<:Real}(A::RealHermSymComplexHerm{T}) = (F = eigfact(A); F.vectors*Diagonal(exp(F.values))*F.vectors')
+function logm{T<:Real}(A::RealHermSymComplexHerm{T})
+    F = eigfact(A)
+    isposdef(F) && return F.vectors*Diagonal(log(F.values))*F.vectors'
+    return F.vectors*Diagonal(log(complex(F.values)))*F.vectors'
+end
 function sqrtm{T<:Real}(A::RealHermSymComplexHerm{T})
     F = eigfact(A)
     isposdef(F) && return F.vectors*Diagonal(sqrt(F.values))*F.vectors'

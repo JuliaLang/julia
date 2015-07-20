@@ -85,6 +85,7 @@ export
     linreg,
     logabsdet,
     logdet,
+    logm,
     lu,
     lufact,
     lufact!,
