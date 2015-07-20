@@ -61,13 +61,13 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C ui julia-$*
 
 julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE)
-	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/inference.ji
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 julia-sysimg-release : julia-inference julia-ui-release
-	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT)
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
 julia-sysimg-debug : julia-inference julia-ui-debug
-	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
