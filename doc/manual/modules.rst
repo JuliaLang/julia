@@ -373,6 +373,7 @@ Other known potential failure scenarios include:
 4. Creating accidental "copies" of global state from another module,
    by referencing it directly instead of via its lookup path.
    For example, (in global scope)::
+
        #mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#
        # instead use accessor functions:
        getstdout() = Base.STDOUT #= best option =#
