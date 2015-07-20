@@ -3812,7 +3812,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     return w;
 }
 
-// cstyle = compile with c-callable signature, not jlcall
+// Compile to LLVM IR, using a specialized signature if applicable.
 static Function *emit_function(jl_lambda_info_t *lam)
 {
     // step 1. unpack AST and allocate codegen context for this function
