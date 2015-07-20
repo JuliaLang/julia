@@ -186,7 +186,7 @@ sum_pairwise_blocksize(::Abs2Fun) = 4096
 mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, AddFun(), a)
+sum(f, a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
@@ -217,7 +217,7 @@ end
 
 ## prod
 
-prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
+prod(f, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 prod(A::AbstractArray{Bool}) =
@@ -261,8 +261,8 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MinFun(), a)
+maximum(f, a) = mapreduce(f, MaxFun(), a)
+minimum(f, a) = mapreduce(f, MinFun(), a)
 
 maximum(a) = mapreduce(IdFun(), MaxFun(), a)
 minimum(a) = mapreduce(IdFun(), MinFun(), a)
@@ -333,8 +333,8 @@ end
 all(a) = mapreduce(IdFun(), AndFun(), a)
 any(a) = mapreduce(IdFun(), OrFun(), a)
 
-all(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, AndFun(), a)
-any(pred::Union{Callable,Func{1}}, a) = mapreduce(pred, OrFun(), a)
+all(pred, a) = mapreduce(pred, AndFun(), a)
+any(pred, a) = mapreduce(pred, OrFun(), a)
 
 
 ## in & contains
