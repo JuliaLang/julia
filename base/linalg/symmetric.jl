@@ -45,7 +45,7 @@ issym{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
 issym(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose(A::Hermitian) = A
-trace(A::Hermitian) = real(sum(diag(A)))
+trace(A::Hermitian) = real(trace(A.data))
 
 ## Matvec
 A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
