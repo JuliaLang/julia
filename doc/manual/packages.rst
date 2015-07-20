@@ -842,6 +842,8 @@ if they haven't already been, and then opens a pull request to ``METADATA``::
 
       https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/3ef4f5c4
 
+.. _man-manual-publish:
+
 Publishing METADATA manually
 ============================
 
