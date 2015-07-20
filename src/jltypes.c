@@ -312,6 +312,8 @@ typedef struct {
 
 STATIC_INLINE int is_bnd(jl_tvar_t *tv, cenv_t *env)
 {
+    if (env->tvars == jl_emptysvec)
+        return tv->bound;
     if (jl_is_typevar(env->tvars))
         return (jl_tvar_t*)env->tvars == tv;
     for(size_t i=0; i < jl_svec_len(env->tvars); i++) {
@@ -667,7 +669,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         b = type_to_static_parameter_value(b);
     }
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
-        if (!a->bound) {
+        if (!is_bnd(a,penv)) {
             JL_GC_POP();
             return b;
         }
@@ -686,13 +688,13 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
           should give Type{_<:Vector}
         */
         if (jl_is_typevar(b)) {
-            if (!((jl_tvar_t*)b)->bound){
+            if (!is_bnd((jl_tvar_t*)b,penv)) {
                 JL_GC_POP();
                 return (jl_value_t*)a;
             }
         }
         else {
-            if (!a->bound) {
+            if (!is_bnd(a,penv)) {
                 JL_GC_POP();
                 return (jl_value_t*)a;
             }

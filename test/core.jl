@@ -3127,3 +3127,14 @@ f12063{T}(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) = 1
 f12063(args...) = 2
 g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
 @test g12063() == 1
+
+# issue #11587
+type Sampler11587{N}
+    clampedpos::Array{Int,2}
+    buf::Array{Float64,N}
+end
+function Sampler11587()
+    a = tuple(Any[32,32]...,)
+    Sampler11587(zeros(Int,a), zeros(Float64,a))
+end
+@test isa(Sampler11587(), Sampler11587{2})
