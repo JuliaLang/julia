@@ -1,5 +1,7 @@
 .. currentmodule:: Base
 
+.. _stdlib-arrays:
+
 ********
  Arrays
 ********

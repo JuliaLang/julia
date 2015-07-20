@@ -12,7 +12,10 @@ attention to their array implementation at the expense of other
 containers. Julia does not treat arrays in any special way. The array
 library is implemented almost completely in Julia itself, and derives
 its performance from the compiler, just like any other code written in
-Julia.
+Julia. As such, it's also possible to define custom array types by
+inheriting from ``AbstractArray.`` See the :ref:`manual section on the
+AbstractArray interface <man-interfaces-abstractarray>` for more details
+on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional
 grid.  In the most general case, an array may contain objects of type
