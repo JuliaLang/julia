@@ -24,14 +24,63 @@ one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
-+(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
-+{T}(B::BitArray{2},J::UniformScaling{T}) = bitunpack(B) + J
-+(J::UniformScaling, B::BitArray{2})      = J + bitunpack(B)
-+(J::UniformScaling, A::AbstractMatrix)   = A + J
-+(J::UniformScaling, x::Number)           = J.λ + x
-+(x::Number, J::UniformScaling)           = x + J.λ
+(+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
+(+){T}(B::BitArray{2},J::UniformScaling{T}) = bitunpack(B) + J
+(+)(J::UniformScaling, B::BitArray{2})      = J + bitunpack(B)
+(+)(J::UniformScaling, A::AbstractMatrix)   = A + J
+(+)(J::UniformScaling, x::Number)           = J.λ + x
+(+)(x::Number, J::UniformScaling)           = x + J.λ
 
-function +{TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+(-)(J::UniformScaling)                      = UniformScaling(-J.λ)
+(-)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
+(-)(B::BitArray{2}, J::UniformScaling)      = bitunpack(B) - J
+(-)(J::UniformScaling, B::BitArray{2})      = J - bitunpack(B)
+(-)(J::UniformScaling, x::Number)           = J.λ - x
+(-)(x::Number, J::UniformScaling)           = x - J.λ
+
+for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
+                 (:UnitLowerTriangular, :LowerTriangular))
+    for op in (:+,:-)
+        @eval begin
+            ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
+
+            function ($op)(UL::$t1, J::UniformScaling)
+                ULnew = copy_oftype(UL.data, promote_type(eltype(UL), eltype(J)))
+                for i = 1:size(ULnew, 1)
+                    ULnew[i,i] = ($op)(1, J.λ)
+                end
+                return ($t2)(ULnew)
+            end
+        end
+    end
+
+    function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
+        ULnew = similar(UL, promote_type(eltype(J), eltype(UL)))
+        n = size(ULnew, 1)
+        ULold = UL.data
+        for j = 1:n
+            for i = 1:j - 1
+                ULnew[i,j] = -ULold[i,j]
+            end
+            ULnew[j,j] = J.λ - ifelse(isa(UL, UnitUpperTriangular), 1, ULold[j,j])
+        end
+        return UpperTriangular(ULnew)
+    end
+    function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
+        ULnew = similar(UL, promote_type(eltype(J), eltype(UL)))
+        n = size(ULnew, 1)
+        ULold = UL.data
+        for j = 1:n
+            ULnew[j,j] = J.λ - ifelse(isa(UL, UnitLowerTriangular), 1, ULold[j,j])
+            for i = j + 1:n
+                ULnew[i,j] = -ULold[i,j]
+            end
+        end
+        return LowerTriangular(ULNew)
+    end
+end
+
+function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     n = chksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B,A)
@@ -41,14 +90,7 @@ function +{TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     B
 end
 
--(J::UniformScaling)                      = UniformScaling(-J.λ)
--(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
--(B::BitArray{2}, J::UniformScaling)      = bitunpack(B) - J
--(J::UniformScaling, B::BitArray{2})      = J - bitunpack(B)
--(J::UniformScaling, x::Number)           = J.λ - x
--(x::Number, J::UniformScaling)           = x - J.λ
-
-function -{TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     n = chksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B, A)
@@ -57,11 +99,11 @@ function -{TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     end
     B
 end
-function -{TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
+function (-){TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
     n = chksquare(A)
-    B = -A
-    @inbounds for i = 1:n
-        B[i,i] += J.λ
+    B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
+    @inbounds for j = 1:n
+        B[j,j] += J.λ
     end
     B
 end
