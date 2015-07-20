@@ -29,17 +29,22 @@ operations typically do not look like "message send" and "message
 receive" but rather resemble higher-level operations like calls to user
 functions.
 
-Parallel programming in Julia is built on two primitives: *remote
-references* and *remote calls*. A remote reference is an object that can
-be used from any process to refer to an object stored on a particular
-process. A remote call is a request by one process to call a certain
-function on certain arguments on another (possibly the same) process.
-A remote call returns a remote reference to its result. Remote calls
-return immediately; the process that made the call proceeds to its
-next operation while the remote call happens somewhere else. You can
-wait for a remote call to finish by calling :func:`wait` on its remote
-reference, and you can obtain the full value of the result using
-:func:`fetch`. You can store a value to a remote reference using :func:`put!`.
+Parallel programming in Julia is built on two primitives: *remote calls*
+and *remote channels*. A remote call is a request by one process to call a
+certain function on certain arguments on another (possibly the same)
+process. Remote calls return a ``Future`` object immediately; the process
+that made the call proceeds to its next operation while the remote call
+happens somewhere else. You can wait for a remote call to finish by
+calling :func:`wait` on its Future, and you can obtain the full value
+of the result using :func:`fetch`.
+
+Remote channels are opened using :func:`open_channel` which returns a
+``ChannelRef``. A ``ChannelRef`` is an object that can be used from any
+process to refer to a channel that exists on a particular process.
+
+You can append a value to a remote channel using :func:`put!`.
+
+Remote channels must be explicitly freed using :func:`close`
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
@@ -50,7 +55,7 @@ equal the number of CPU cores on the machine.
     $ ./julia -p 2
 
     julia> r = remotecall(2, rand, 2, 2)
-    RemoteRef(2,1,5)
+    Future(2,1,5)
 
     julia> fetch(r)
     2x2 Float64 Array:
@@ -58,14 +63,14 @@ equal the number of CPU cores on the machine.
      0.174572  0.157411
 
     julia> s = @spawnat 2 1 .+ fetch(r)
-    RemoteRef(2,1,7)
+    Future(2,1,7)
 
     julia> fetch(s)
     2x2 Float64 Array:
      1.60401  1.50111
      1.17457  1.15741
 
-The first argument to :func:`remotecall` is the index of the process
+The first argument to :func:`remotecall` is the Julia pid of the process
 that will do the work. Most parallel programming in Julia does not
 reference specific processes or the number of processes available,
 but :func:`remotecall` is considered a low-level interface providing
@@ -74,7 +79,7 @@ to call, and the remaining arguments will be passed to this
 function. As you can see, in the first line we asked process 2 to
 construct a 2-by-2 random matrix, and in the second line we asked it
 to add 1 to it. The result of both calculations is available in the
-two remote references, ``r`` and ``s``. The :obj:`@spawnat` macro
+two futures, ``r`` and ``s``. The :obj:`@spawnat` macro
 evaluates the expression in the second argument on the process
 specified by the first argument.
 
@@ -90,18 +95,19 @@ but is more efficient.
     0.10824216411304866
 
 Remember that :func:`getindex(r,1,1) <getindex>` is :ref:`equivalent <man-array-indexing>` to
-``r[1,1]``, so this call fetches the first element of the remote
-reference ``r``.
+``r[1,1]``, so this call fetches the first element of the future ``r``. This is
+useful if the result of the remote call is a very large array and we are interested
+in a smaller view into the result.
 
 The syntax of :func:`remotecall` is not especially convenient. The macro
 :obj:`@spawn` makes things easier. It operates on an expression rather than
 a function, and picks where to do the operation for you::
 
     julia> r = @spawn rand(2,2)
-    RemoteRef(1,1,0)
+    Future(1,1,0)
 
     julia> s = @spawn 1 .+ fetch(r)
-    RemoteRef(1,1,1)
+    Future(1,1,1)
 
     julia> fetch(s)
     1.10824216411304866 1.13798233877923116
@@ -134,10 +140,10 @@ type the following into the Julia prompt::
      1.15119   0.918912
 
     julia> @spawn rand2(2,2)
-    RemoteRef(1,1,1)
+    Future(1,1,1)
 
     julia> @spawn rand2(2,2)
-    RemoteRef(2,1,2)
+    Future(2,1,2)
 
     julia> exception on 2: in anonymous: rand2 not defined
 
@@ -168,7 +174,7 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
 - ``using DummyModule`` causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.
 - As long as ``DummyModule`` is loaded on process 2, commands like ::
 
-    rr = RemoteRef(2)
+    c = open_channel(pid=2)
     put!(rr, MyType(7))
 
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
@@ -180,9 +186,9 @@ Consequently, an easy way to load *and* use a package on all processes is::
 
 :obj:`@everywhere` can also be used to directly define a function on all processes::
 
-    julia> @everywhere id = myid()
+    julia> @everywhere foo() = myid()
 
-    julia> remotecall_fetch(2, ()->id)
+    julia> remotecall_fetch(2, ()->foo())
     2
 
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
@@ -256,6 +262,11 @@ current process has very little to do between the :obj:`@spawn` and
 altogether. Or imagine ``rand(1000,1000)`` is replaced with a more
 expensive operation. Then it might make sense to add another :obj:`@spawn`
 statement just for this step.
+
+On Futures, only the first call to :func:`fetch` results in data movement
+since the Future object caches the result locally. Further ``fetch`` calls
+on the same ``Future`` object return the cached result.
+
 
 Parallel Map and Loops
 ----------------------
@@ -346,9 +357,9 @@ vector ``a`` shared by all processes.
 
 As you could see, the reduction operator can be omitted if it is not needed.
 In that case, the loop executes asynchronously, i.e. it spawns independent
-tasks on all available workers and returns an array of :class:`RemoteRef`
+tasks on all available workers and returns an array of :class:`Future`
 immediately without waiting for completion.
-The caller can wait for the :class:`RemoteRef` completions at a later
+The caller can wait for the :class:`Future` completions at a later
 point by calling :func:`fetch` on them, or wait for completion at the end of the
 loop by prefixing it with :obj:`@sync`, like ``@sync @parallel for``.
 
@@ -369,10 +380,6 @@ numbers. Only worker processes are used by both :func:`pmap` and ``@parallel for
 for the parallel computation. In case of ``@parallel for``, the final reduction
 is done on the calling process.
 
-
-
-Synchronization With Remote References
---------------------------------------
 
 Scheduling
 ----------
@@ -401,7 +408,7 @@ different sizes::
 If one process handles both 800x800 matrices and another handles both
 600x600 matrices, we will not get as much scalability as we could. The
 solution is to make a local task to "feed" work to each process when
-it completes its current task. This can be seen in the implementation of
+it completes its current task. This can be seen in a implementation of
 :func:`pmap`::
 
     function pmap(f, lst)
@@ -444,8 +451,30 @@ preemptively. This means context switches only occur at well-defined
 points: in this case, when :func:`remotecall_fetch` is called.
 
 
+
+Channel and Remote Channels
+---------------------------
+Channels provide for a fast means of inter-task communication. A
+``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
+holding objects of type ``T``. Multiple readers can read off the channel
+via ``fetch`` and ``take!``. Multiple writers can add to the channel via
+``put!``. ``isready`` tests for the prescence of any object in
+the channel, while ``wait`` waits for an object to become available.
+
+A Channel can be used as an iterable object in a ``for`` loop, in which
+case the loop runs till the channel is open. The loop variable takes on
+all values added to the channel:
+
+Channels can also be used as a means of inter-process communication. To do this
+they need to be created via ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)``
+which returns a ``ChannelRef``.
+
+Open remote channels need to be released explicitly via a ``close`` on
+the ``ChannelRef`` returned by ``open_channel``
+
+
 Shared Arrays (Experimental)
------------------------------------------------
+----------------------------
 
 Shared Arrays use system shared memory to map the same array across
 many processes.  While there are some similarities to a :class:`DArray`,

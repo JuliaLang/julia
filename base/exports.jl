@@ -88,7 +88,6 @@ export
     Rational,
     Regex,
     RegexMatch,
-#    RemoteRef,
     RepString,
     RevString,
     RopeString,

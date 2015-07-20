@@ -433,6 +433,8 @@ Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
 Future(pid::Integer) = Future{Any}(pid, myid(), next_ref_id(), Any)
 
+show(io::IO, f::Future) = print(io, "Future($(f.where),$(f.whence),$(f.id))")
+
 type ChannelRef{T} <: AbstractRemoteRef{T}
     where::Int
     whence::Int

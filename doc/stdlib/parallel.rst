@@ -64,7 +64,7 @@ Tasks
    Edge triggering means that only tasks waiting at the time ``notify`` is
    called can be woken up. For level-triggered notifications, you must
    keep extra state to keep track of whether a notification has happened.
-   The ``RemoteRef`` type does this, and so can be used for level-triggered
+   The ``Channel`` type does this, and so can be used for level-triggered
    events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
@@ -113,6 +113,21 @@ Tasks
 
    Releases ownership of the lock by the current task. If the lock had been acquired before,
    it just decrements an internal counter and returns immediately.
+
+.. function:: Channel(T::Type, sz::Int)
+
+   Returns a ``Channel{T}`` of size ``sz``.
+
+   Variants:
+
+        Channel() returns a ``Channel{Any}`` of size 1.
+        Channel(T::Type) returns a ``Channel{T}`` of size 1.
+        Channel(sz::Int) returns a ``Channel{Any}`` of size ``sz``.
+
+.. function:: ``open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=1)``
+
+   Returns a ``ChannelRef`` which is a reference to a channel on process ``pid``,
+   capable of holding a maximum number ``sz`` objects of type ``T``.
 
 
 General Parallel Computing Support
@@ -217,17 +232,27 @@ General Parallel Computing Support
    If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
    If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
 
+.. function:: Future()
 
-.. function:: remotecall(id, func, args...)
+   Make an uninitialized Future on the local machine. It can be set via ``put!`` only once.
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteRef``.
+.. function:: Future(n)
+
+   Make an uninitialized Future on process ``n``.
 
 .. function:: wait([x])
 
    Block the current task until some event occurs, depending on the type
    of the argument:
 
-   * ``RemoteRef``: Wait for a value to become available for the specified remote reference.
+   * ``Future``: Wait for a result to become available.
+
+   * ``Channel``: Wait for a value to be appended to the channel.
+
+   * ``ChannelRef``: Wait for a value to be appended to the remote channel. Note that for remote channels, it is
+                    possible that a ``take!`` after a successful ``wait`` may still block,
+                    since it is possible that another processes has taken a value between the ``wait``
+                    and ``take!`` calls.
 
    * ``Condition``: Wait for ``notify`` on a condition.
 
@@ -245,9 +270,70 @@ General Parallel Computing Support
    Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
    is met before proceeding.
 
-.. function:: fetch(RemoteRef)
+.. function:: fetch(x)
 
-   Wait for and get the value of a remote reference.
+    Fetches a value from ``x`` depending on the type of ``x``. Blocks if no data is available.
+
+    * ``Future`` : Wait for and get the value of a future result. The first fetch, caches the returned result locally.
+                   Un-fetched, open Futures may be serialized to other processes.
+                   Serializing an already fetched, or closed ``Future`` results in an error.
+
+    * ``Channel`` : Fetches, but does not remove, the first available item from the channel.
+
+    * ``ChannelRef`` : Fetches, but does not remove, the first available item from the remote channel.
+
+.. function:: put!(x, val)
+    Stores / appends a value depending on the type of ``x``.
+
+    * ``Future`` : Store a value to a Future. Futures can be set only once.
+                  A subsequent ``put!`` on the same Future object results in an error.
+
+    * ``Channel`` : Append an item to the channel.
+
+    * ``ChannelRef`` : Append an item to the remote channel.
+
+.. function:: isready(x)
+
+    Tests for the prescence of a value in ``x``, effectively determines if a ``fetch`` or a ``take!``
+    would block:
+
+   * ``Future`` : Determines if ``x`` has a value stored to it. If ``x`` is owned
+                  by a different node, this call will block to wait for the answer. It is recommended to wait
+                  for ``r`` in a separate task instead, or to use a local ``Future`` as a proxy::
+
+                        rr = Future()
+                        @async put!(rr, remotecall_fetch(p, long_computation))
+                        isready(rr)  # will not block
+
+   * ``Channel`` : Determines if the channel has at least one item.
+
+   * ``ChannelRef`` : Determines if the remote channel has at least one item.
+
+.. function:: take!(x)
+
+    Removes and returns a value from a ``Channel`` or a ``ChannelRef``. Blocks till data is available.
+    ``Future`` does not implement a ``take!``
+
+.. function:: close(x)
+
+    Depending on the type of ``x``, the state of the object is changed and optionally resources released.
+
+    * ``Future`` : Optional call. Under normal circumstances the value referred to by a reference is freed
+                   when either `fetch` is called or when it is garbage collected. Non-fetched Future's can
+                   force the immediate release of the remote reference by calling ``close``.
+
+    * ``Channel`` : Optional call on ``Channels``. Closing a channel will throw a ``InvalidStateException``
+                    on subsequent ``put!`` calls. ``take!`` will succeed as long as there is data to be read.
+                    A ``for`` loop iterating on a ``Channel`` will terminate once a ``Channel`` is closed
+                    and all items processed.
+
+    * ``ChannelRef`` : Releases and frees the remote channel. Must necessarily be called on remote channels
+                        to free memory associated with it. Once a channel is freed, subsequent accesses throw a
+                        ``InvalidStateException``.
+
+.. function:: remotecall(id, func, args...)
+
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``.
 
 .. function:: remotecall_wait(id, func, args...)
 
@@ -257,37 +343,6 @@ General Parallel Computing Support
 
    Perform ``fetch(remotecall(...))`` in one message.
 
-.. function:: put!(RemoteRef, value)
-
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``. Returns its first argument.
-
-.. function:: take!(RemoteRef)
-
-   Fetch the value of a remote reference, removing it so that the reference is empty again.
-
-.. function:: isready(r::RemoteRef)
-
-   Determine whether a ``RemoteRef`` has a value stored to it. Note that this function
-   can cause race conditions, since by the time you receive its result it may
-   no longer be true. It is recommended that this function only be used on a
-   ``RemoteRef`` that is assigned once.
-
-   If the argument ``RemoteRef`` is owned by a different node, this call will block to
-   wait for the answer. It is recommended to wait for ``r`` in a separate task instead,
-   or to use a local ``RemoteRef`` as a proxy::
-
-       rr = RemoteRef()
-       @async put!(rr, remotecall_fetch(p, long_computation))
-       isready(rr)  # will not block
-
-.. function:: RemoteRef()
-
-   Make an uninitialized remote reference on the local machine.
-
-.. function:: RemoteRef(n)
-
-   Make an uninitialized remote reference on process ``n``.
-
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
    Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
@@ -296,12 +351,12 @@ General Parallel Computing Support
 .. function:: @spawn
 
    Execute an expression on an automatically-chosen process, returning a
-   ``RemoteRef`` to the result.
+   ``Future`` to the result.
 
 .. function:: @spawnat
 
    Accepts two arguments, ``p`` and an expression, and runs the expression
-   asynchronously on process ``p``, returning a ``RemoteRef`` to the result.
+   asynchronously on process ``p``, returning a ``Future`` to the result.
 
 .. function:: @fetch
 
@@ -358,6 +413,8 @@ Shared Arrays (Experimental, UNIX-only feature)
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified,
     it is called on all the participating workers.
 
+    SharedArray's need to be explictly freed via ``close``.
+
 .. function:: procs(S::SharedArray)
 
    Get the vector of processes that have mapped the shared array
@@ -370,6 +427,12 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
    the SharedArray
+
+.. function:: close(S::SharedArray)
+
+   SharedArray's need to be explictly closed. ``close`` frees all resources associated with the SharedArray and
+   needs to be called once. It will typically be called from the driver process which created the array.
+
 
 Cluster Manager Interface
 -------------------------

@@ -254,18 +254,18 @@ c=Channel(Int)
 
 c=Channel(256)
 # Test growth of channel
-@test c.store.szp1 <= 33
+@test c.szp1 <= 33
 for x in 1:40
   put!(c, x)
 end
-@test c.store.szp1 <= 65
+@test c.szp1 <= 65
 for x in 1:39
   take!(c)
 end
 for x in 1:64
   put!(c, x)
 end
-@test (c.store.szp1 > 65) && (c.store.szp1 <= 129)
+@test (c.szp1 > 65) && (c.szp1 <= 129)
 for x in 1:39
   take!(c)
 end
@@ -286,8 +286,8 @@ end
 put!(in_c, 1)
 @test take!(out_c) == 1
 put!(in_c, "Hello")
-@test take!(out_c) == "Hello"
 close(in_c)
+@test take!(out_c) == "Hello"
 @test isopen(in_c) == false
 @test_throws InvalidStateException put!(in_c, :foo)
 yield()
