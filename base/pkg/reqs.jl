@@ -2,6 +2,8 @@
 
 module Reqs
 
+import Base: ==
+
 using ..Types
 
 # representing lines of REQUIRE files
