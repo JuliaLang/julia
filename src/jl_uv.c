@@ -63,7 +63,7 @@ DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
     if (handle == (uv_handle_t*)JL_STDERR)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
-    if (handle->data)
+    if (handle->type != UV_FILE && handle->data)
         jl_uv_call_close_callback(handle->data);
     free(handle);
 }
@@ -144,6 +144,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_fs_close(handle->loop, &req, fd->file, NULL);
             fd->file = -1;
         }
+        jl_uv_closeHandle(handle); // synchronous (ok since the callback is known to not interact with any global state)
         return;
     }
 
