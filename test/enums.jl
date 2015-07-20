@@ -158,4 +158,11 @@ end
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
 
+# serialization
+let b = IOBuffer()
+    serialize(b, apple)
+    seekstart(b)
+    @test deserialize(b) === apple
+end
+
 end # module
