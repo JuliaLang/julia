@@ -34,15 +34,16 @@ function find_source_file(file)
     isfile(file2) ? file2 : nothing
 end
 
-function find_in_cache_path(mod::Symbol)
+function find_all_in_cache_path(mod::Symbol)
     name = string(mod)
+    paths = String[]
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
         if isfile(path)
-            produce(path)
+            push!(paths, path)
         end
     end
-    nothing
+    paths
 end
 
 function _include_from_serialized(content::Vector{UInt8})
@@ -83,20 +84,16 @@ function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_l
 end
 
 function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
-    name = string(mod)
-    finder = @spawnat node @task find_in_cache_path(mod) # TODO: switch this to an explicit Channel
-    while true
-        path_to_try = remotecall_fetch(node, consume_fetch, finder)
-        path_to_try === nothing && return false
+    paths = @fetchfrom node find_all_in_cache_path(mod)
+    for path_to_try in paths
         if _require_from_serialized(node, path_to_try, toplevel_load)
             return true
         else
             warn("deserialization checks failed while attempting to load cache from $path_to_try")
         end
     end
+    return false
 end
-
-consume_fetch(finder) = consume(fetch(finder))
 
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
