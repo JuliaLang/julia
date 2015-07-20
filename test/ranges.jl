@@ -244,10 +244,6 @@ end
 @test all(([1:5;] - (1:5)) .== 0)
 @test all(((1:5) - [1:5;]) .== 0)
 
-# exercise fallback addition of ranges
-@test ((linspace(1.,5.,5) - linspace(1.,5.,5)) == zeros(5))
-@test_throws DimensionMismatch (linspace(1.,5.,5) - linspace(1.,5.,6))
-
 # tricky floating-point ranges
 
 @test [0.1:0.1:0.3;]   == [linspace(0.1,0.3,3);]     == [1:3;]./10
@@ -266,6 +262,8 @@ end
 @test [0.1:1.3:4.0;]   == [linspace(0.1,4.0,4);]     == [1:13:40;]./10
 @test [1.1:1.1:3.3;]   == [linspace(1.1,3.3,3);]     == [11:11:33;]./10
 @test [0.3:0.1:1.1;]   == [linspace(0.3,1.1,9);]     == [3:1:11;]./10
+@test [0.0:1.0:0.0;]   == [linspace(0.0,0.0,1);]     == [0.0]
+@test [0.0:-1.0:0.0;]  == [linspace(0.0,0.0,1);]     == [0.0]
 
 @test [0.0:1.0:5.5;]   == [0:10:55;]./10
 @test [0.0:-1.0:0.5;]  == []
@@ -375,7 +373,8 @@ end
 # comparing and hashing ranges
 let
     Rs = Range[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0)]
+               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         ar = collect(r)
         @test r != ar
@@ -565,23 +564,95 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity(r, mr)
+function test_linspace_identity{T}(r::LinSpace{T}, mr::LinSpace{T})
     @test -r == mr
+    @test -collect(r) == collect(mr)
     @test isa(-r, LinSpace)
 
     @test 1 + r + (-1) == r
+    @test 1 + collect(r) == collect(1 + r) == collect(r + 1)
     @test isa(1 + r + (-1), LinSpace)
     @test 1 - r - 1 == mr
+    @test 1 - collect(r) == collect(1 - r) == collect(1 + mr)
+    @test collect(r) - 1 == collect(r - 1) == -collect(mr + 1)
     @test isa(1 - r - 1, LinSpace)
 
     @test 1 * r * 1 == r
+    @test 2 * r * T(0.5) == r
     @test isa(1 * r * 1, LinSpace)
     @test r / 1 == r
+    @test r / 2 * 2 == r
+    @test r / T(0.5) * T(0.5) == r
     @test isa(r / 1, LinSpace)
+
+    @test (2 * collect(r) == collect(r * 2) == collect(2 * r) ==
+           collect(r * T(2.0)) == collect(T(2.0) * r) ==
+           collect(r / T(0.5)) == -collect(mr * T(2.0)))
 end
 
-test_linspace_identity(linspace(1.0, 27.0, 1275), linspace(-1.0, -27.0, 1275))
+test_linspace_identity(linspace(1.0, 27.0, 10), linspace(-1.0, -27.0, 10))
+test_linspace_identity(linspace(1f0, 27f0, 10), linspace(-1f0, -27f0, 10))
+
+test_linspace_identity(linspace(1.0, 27.0, 0), linspace(-1.0, -27.0, 0))
+test_linspace_identity(linspace(1f0, 27f0, 0), linspace(-1f0, -27f0, 0))
+
+test_linspace_identity(linspace(1.0, 1.0, 1), linspace(-1.0, -1.0, 1))
+test_linspace_identity(linspace(1f0, 1f0, 1), linspace(-1f0, -1f0, 1))
 
 @test reverse(linspace(1.0, 27.0, 1275)) == linspace(27.0, 1.0, 1275)
 @test [reverse(linspace(1.0, 27.0, 1275));] ==
     reverse([linspace(1.0, 27.0, 1275);])
+
+# PR 12200 and related
+for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
+           linspace(1, 100, 10), linspace(1f0, 100f0, 10))
+    float_r = float(_r)
+    big_r = big(_r)
+    @test typeof(big_r).name === typeof(_r).name
+    if eltype(_r) <: FloatingPoint
+        @test isa(float_r, typeof(_r))
+        @test eltype(big_r) === BigFloat
+    else
+        @test isa(float_r, Range)
+        @test eltype(float_r) <: FloatingPoint
+        @test eltype(big_r) === BigInt
+    end
+end
+
+@test_throws DimensionMismatch linspace(1.,5.,5) + linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) - linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) .* linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) ./ linspace(1.,5.,6)
+
+@test_throws DimensionMismatch (1:5) + (1:6)
+@test_throws DimensionMismatch (1:5) - (1:6)
+@test_throws DimensionMismatch (1:5) .* (1:6)
+@test_throws DimensionMismatch (1:5) ./ (1:6)
+
+@test_throws DimensionMismatch (1.:5.) + (1.:6.)
+@test_throws DimensionMismatch (1.:5.) - (1.:6.)
+@test_throws DimensionMismatch (1.:5.) .* (1.:6.)
+@test_throws DimensionMismatch (1.:5.) ./ (1.:6.)
+
+function test_range_sum_diff(r1, r2, r_sum, r_diff)
+    @test r1 + r2 == r_sum
+    @test r2 + r1 == r_sum
+    @test r1 - r2 == r_diff
+    @test r2 - r1 == -r_diff
+
+    @test collect(r1) + collect(r2) == collect(r_sum)
+    @test collect(r2) + collect(r1) == collect(r_sum)
+    @test collect(r1) - collect(r2) == collect(r_diff)
+    @test collect(r2) - collect(r1) == collect(-r_diff)
+end
+
+test_range_sum_diff(1:5, 0:2:8, 1:3:13, 1:-1:-3)
+test_range_sum_diff(1.:5., 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
+test_range_sum_diff(linspace(1.,5.,5), linspace(0.,-4.,5),
+                    linspace(1.,1.,5), linspace(1.,9.,5))
+
+test_range_sum_diff(1:5, 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
+test_range_sum_diff(1:5, linspace(0, 8, 5),
+                    linspace(1, 13, 5), linspace(1, -3, 5))
+test_range_sum_diff(1.:5., linspace(0, 8, 5),
+                    linspace(1, 13, 5), linspace(1, -3, 5))

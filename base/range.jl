@@ -207,8 +207,8 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
             s = convert(T,n*e)
             if isinf(a*n) || isinf(c*n)
                 s, p = frexp(s)
-                p = oftype(s,2)^p
-                a /= p; c /= p
+                p2 = oftype(s,2)^p
+                a /= p2; c /= p2
             end
             if a*n/s == start && c*n/s == stop
                 return LinSpace(a, c, len, s)
@@ -218,8 +218,8 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
     a, c, s = start, stop, n
     if isinf(a*n) || isinf(c*n)
         s, p = frexp(s)
-        p = oftype(s,2)^p
-        a /= p; c /= p
+        p2 = oftype(s,2)^p
+        a /= p2; c /= p2
     end
     if a*n/s == start && c*n/s == stop
         return LinSpace(a, c, len, s)
@@ -399,6 +399,7 @@ show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 ==(r::OrdinalRange, s::OrdinalRange) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+=={T<:LinSpace}(r::T, s::T) = (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -546,17 +547,26 @@ end
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
-.+(x::Real, r::LinSpace)   = LinSpace(x + r.start, x + r.stop, r.len, r.divisor)
+function .+{T}(x::Real, r::LinSpace{T})
+    x2 = x * r.divisor / (r.len - 1)
+    LinSpace(x2 + r.start, x2 + r.stop, r.len, r.divisor)
+end
 .+(r::Range, x::Real)      = x + r
 #.+(r::FloatRange, x::Real) = x + r
 
 .-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
 .-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
-.-(x::Real, r::LinSpace)   = LinSpace(x - r.start, x - r.stop, r.len, r.divisor)
+function .-(x::Real, r::LinSpace)
+    x2 = x * r.divisor / (r.len - 1)
+    LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
+end
 .-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
-.-(r::LinSpace, x::Real)   = LinSpace(r.start - x, r.stop - x, r.len, r.divisor)
+function .-(r::LinSpace, x::Real)
+    x2 = x * r.divisor / (r.len - 1)
+    LinSpace(r.start - x2, r.stop - x2, r.len, r.divisor)
+end
 
 .*(x::Real, r::OrdinalRange) = range(x*r.start, x*step(r), length(r))
 .*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
@@ -610,6 +620,14 @@ convert{T}(::Type{LinSpace{T}}, r::OrdinalRange) =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
 convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
     convert(LinSpace{typeof(float(first(r)))}, r)
+
+# Promote FloatRange to LinSpace
+promote_rule{F,OR<:FloatRange}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T}(::Type{LinSpace{T}}, r::FloatRange) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T}(::Type{LinSpace}, r::FloatRange{T}) =
+    convert(LinSpace{T}, r)
 
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
