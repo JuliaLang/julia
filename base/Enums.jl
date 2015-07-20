@@ -8,6 +8,9 @@ abstract Enum
 
 Base.convert{T<:Integer}(::Type{T}, x::Enum) = convert(T, Intrinsics.box(Int32, x))
 
+Base.write(io::IO, x::Enum) = write(io, Int32(x))
+Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Int32))
+
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
     lo, hi = extrema(values)
