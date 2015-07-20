@@ -40,10 +40,8 @@ void jl_add_standard_imports(jl_module_t *m)
     assert(jl_base_module != NULL);
     // using Base
     jl_module_using(m, jl_base_module);
-    // importall Base.Operators
-    jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
-    if (opmod != NULL)
-        jl_module_importall(m, opmod);
+    // import Base.call
+    jl_module_import(m, jl_base_module, jl_symbol("call"));
 }
 
 jl_module_t *jl_new_main_module(void)

@@ -2,7 +2,7 @@
 
 module Markdown
 
-import Base: writemime
+import Base: writemime, ==
 
 typealias String AbstractString
 

@@ -3,6 +3,7 @@
 module FieldValues
 
 using ...VersionWeights
+importall .....Base.Operators
 
 export FieldValue, Field, validmax, secondmax
 

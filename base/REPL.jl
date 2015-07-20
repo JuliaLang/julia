@@ -17,7 +17,8 @@ import Base:
     Display,
     display,
     writemime,
-    AnyDict
+    AnyDict,
+    ==
 
 import ..LineEdit:
     CompletionProvider,

@@ -2,6 +2,8 @@
 
 module SPQR
 
+import Base: \
+
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
 const ORDERING_NATURAL = Int32(1)
