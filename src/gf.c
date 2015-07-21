@@ -1130,7 +1130,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
         }
         n = fname->name;
         s = JL_STDERR;
-        jl_printf(s, "Warning: New definition \n    %s", n);
+        jl_printf(s, "WARNING: New definition \n    %s", n);
         jl_static_show_func_sig(s, (jl_value_t*)type);
         print_func_loc(s, linfo);
         jl_printf(s, "\nis ambiguous with: \n    %s", n);
@@ -1173,7 +1173,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
                 (l->func->linfo->module != method->linfo->module)) {
                 jl_module_t *newmod = method->linfo->module;
                 JL_STREAM *s = JL_STDERR;
-                jl_printf(s, "Warning: Method definition %s", method->linfo->name->name);
+                jl_printf(s, "WARNING: Method definition %s", method->linfo->name->name);
                 jl_static_show_func_sig(s, (jl_value_t*)type);
                 jl_printf(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);

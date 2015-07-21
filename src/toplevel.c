@@ -117,11 +117,11 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
             jl_errorf("invalid redefinition of constant %s", name->name);
         }
         if (jl_generating_output() && jl_options.incremental) {
-            jl_errorf("error: cannot replace module %s during incremental compile", name->name);
+            jl_errorf("cannot replace module %s during incremental compile", name->name);
         }
         if (!jl_generating_output()) {
             // suppress warning "replacing module Core.Inference" during bootstrapping
-            jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
+            jl_printf(JL_STDERR, "WARNING: replacing module %s\n", name->name);
         }
     }
     jl_module_t *newm = jl_new_module(name);
@@ -363,7 +363,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             }
         }
         if (retrying && require_func) {
-            jl_printf(JL_STDERR, "Warning: requiring \"%s\" did not define a corresponding module.\n", var->name);
+            jl_printf(JL_STDERR, "WARNING: requiring \"%s\" did not define a corresponding module.\n", var->name);
             return NULL;
         }
         else {
@@ -819,7 +819,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         if (!jl_is_typevar(tv))
             jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
         if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
-            jl_printf(JL_STDERR, "Warning: static parameter %s does not occur in signature for %s",
+            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       ((jl_tvar_t*)tv)->name->name, name->name);
             print_func_loc(JL_STDERR, f->linfo);
             jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
@@ -864,7 +864,7 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_
                     if ((jl_sym_t*)jl_cellref((jl_array_t*)jl_cellref(vinfo,j),0) ==
                         ((jl_tvar_t*)tv)->name) {
                         jl_printf(JL_STDERR,
-                                  "Warning: local variable %s conflicts with a static parameter in %s",
+                                  "WARNING: local variable %s conflicts with a static parameter in %s",
                                   ((jl_tvar_t*)tv)->name->name, fname->name);
                         print_func_loc(JL_STDERR, li);
                         jl_printf(JL_STDERR, ".\n");

@@ -186,7 +186,7 @@ notfound:
     uv_dlclose(handle);
     free(handle);
     if (throw_err)
-        jl_errorf("could not load library '%s'\n%s", modname, path);
+        jl_errorf("could not load library \"%s\"\n%s", modname, path);
     return NULL;
 
 done:
@@ -216,7 +216,7 @@ void *jl_dlsym(jl_uv_libhandle handle, const char *symbol)
     void *ptr;
     int error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error) {
-        jl_errorf("could not load symbol '%s'\n%s", symbol, uv_dlerror((uv_lib_t *) handle));
+        jl_errorf("could not load symbol \"%s\"\n%s", symbol, uv_dlerror((uv_lib_t *) handle));
     }
     return ptr;
 }

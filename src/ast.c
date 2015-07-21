@@ -124,7 +124,7 @@ void jl_init_frontend(void)
 
     if (fl_load_system_image_str((char*)flisp_system_image,
                                  sizeof(flisp_system_image))) {
-        jl_error("fatal error loading system image\n");
+        jl_error("fatal error loading system image");
     }
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));
