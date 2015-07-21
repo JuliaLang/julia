@@ -61,7 +61,7 @@ static const char opts[]  =
 
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
-    "                           'auto' launches as many workers as the number of local cores\n"
+    "                           \"auto\" launches as many workers as the number of local cores\n"
     " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
 
     // interactive options
@@ -80,7 +80,7 @@ static const char opts[]  =
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // error and warning options
-    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)\n\n"
+    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -90,7 +90,7 @@ static const char opts[]  =
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
-    "                           Count executions of source lines (omitting setting is equivalent to 'user')\n"
+    "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
     " --track-allocation={none|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line\n";
 
@@ -216,7 +216,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.use_precompiled = JL_OPTIONS_USE_PRECOMPILED_NO;
             else
-                jl_errorf("julia: invalid argument to --precompiled={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --precompiled={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -229,7 +229,7 @@ void parse_opts(int *argcp, char ***argvp)
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
                 if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT_MAX)
-                    jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+                    jl_errorf("julia: -p,--procs=<n> must be an integer >= 1");
                 jl_options.nprocs = (int)nprocs;
             }
             break;
@@ -242,7 +242,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.color = JL_OPTIONS_COLOR_OFF;
             else
-                jl_errorf("julia: invalid argument to --color={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --color={yes|no} (%s)", optarg);
             break;
         case opt_history_file:
             if (!strcmp(optarg,"yes"))
@@ -250,7 +250,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
             else
-                jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)", optarg);
             break;
         case opt_no_history_file:
             jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
@@ -261,7 +261,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
             else
-                jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)", optarg);
             break;
         case 'f':
             jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
@@ -277,7 +277,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"all"))
                 jl_options.compile_enabled = JL_OPTIONS_COMPILE_ALL;
             else
-                jl_errorf("julia: invalid argument to --compile (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --compile (%s)", optarg);
             break;
         case opt_code_coverage:
             if (optarg != NULL) {
@@ -319,7 +319,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
             else
-                jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)", optarg);
             break;
         case opt_output_bc:
             jl_options.outputbc = optarg;
@@ -339,7 +339,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.incremental = 0;
             else
-                jl_errorf("julia: invalid argument to --output-incremental={yes|no} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --output-incremental={yes|no} (%s)", optarg);
             break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))
@@ -349,7 +349,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"error"))
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_ERROR;
             else
-                jl_errorf("julia: invalid argument to --depwarn={yes|no|error} (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --depwarn={yes|no|error} (%s)", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))
@@ -357,7 +357,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.can_inline = 0;
             else {
-                jl_errorf("julia: invalid argument to --inline (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --inline (%s)", optarg);
             }
             break;
         case opt_math_mode:
@@ -368,7 +368,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --math-mode (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
             break;
         case opt_worker:
             jl_options.worker = 1;
@@ -382,11 +382,11 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else
-                jl_errorf("julia: invalid argument to --handle-signals (%s)\n", optarg);
+                jl_errorf("julia: invalid argument to --handle-signals (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
-                      "This is a bug, please report it.\n", c);
+                      "This is a bug, please report it.", c);
         }
     }
     jl_options.code_coverage = codecov;
@@ -487,9 +487,9 @@ static int true_main(int argc, char *argv[])
         }
     }
 
-    ios_puts("warning: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
+    ios_puts("WARNING: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
     if (!jl_errorexception_type)
-        ios_puts("warning: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
+        ios_puts("WARNING: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
 
     while (!ios_eof(ios_stdin)) {
         char *volatile line = NULL;
@@ -502,7 +502,8 @@ static int true_main(int argc, char *argv[])
                 jl_printf(JL_STDERR, "error during run:\n");
                 jl_static_show(JL_STDERR, jl_exception_in_transit);
                 jl_exception_clear();
-            } else if (val) {
+            }
+            else if (val) {
                 jl_static_show(JL_STDOUT, val);
             }
             jl_printf(JL_STDOUT, "\n");
