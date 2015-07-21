@@ -83,6 +83,7 @@ function _iisconst(s::Symbol)
 end
 _iisconst(s::SymbolNode) = _iisconst(s.name)
 _iisconst(s::TopNode) = isconst(_topmod(), s.name)
+_iisconst(s::GlobalRef) = isconst(s.mod, s.name)
 _iisconst(x::Expr) = false
 _iisconst(x::ANY) = true
 

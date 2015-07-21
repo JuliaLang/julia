@@ -1256,16 +1256,6 @@ extern "C" void jl_write_malloc_log(void)
 
 // --- constant determination ---
 
-static bool in_vinfo(jl_sym_t *s, jl_array_t *vi)
-{
-    size_t i, l = jl_array_len(vi);
-    for(i=0; i < l; i++) {
-        if (s == (jl_sym_t*)jl_cellref(jl_cellref(vi, i), 0))
-            return true;
-    }
-    return false;
-}
-
 // try to statically evaluate, NULL if not possible
 extern "C"
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
@@ -1281,7 +1271,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             isglob = is_global(sym, ctx);
         }
         else if (ast) {
-            isglob = !in_vinfo(sym, jl_lam_vinfo(ast)) && !in_vinfo(sym, jl_lam_capt(ast));
+            isglob = !jl_local_in_ast(ast, sym);
         }
         if (isglob) {
             size_t i;
