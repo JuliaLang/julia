@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@unix_only begin
-
 # This script does the following
 # Sets up n unix pipes
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
@@ -11,7 +9,7 @@
 # Writable ends are always tested for writability before a write
 
 n = 20
-intvls = [0.1, 0.1, 1.0, 2.0]  # NOTE: The first interval is just used to let the readers/writers sort of synchnronize.
+intvls = [2, .2, .1, .002]
 
 pipe_fds = cell(n)
 for i in 1:n
@@ -20,68 +18,73 @@ for i in 1:n
 end
 
 
-function pfd_tst_reads(idx)
-    for (i, intvl) in enumerate(intvls)
-        tic()
-        evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl * 10.0; readable=true, writable=true)
-        t_elapsed = toq()
-        @test evt.readable && !(evt.writable) && !(evt.timedout)
+function pfd_tst_reads(idx, intvl)
+    global ready += 1
+    wait(ready_c)
+    tic()
+    evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=true)
+    t_elapsed = toq()
+    @test !evt.timedout
+    @test evt.readable
+    @test !evt.writable
 
-        # ignore the first one, everyone is just getting setup and synchronized
-        if i > 1
-#            println("i ", i, ", Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
-            # Assuming that a 200 millisecond buffer is good enough on a modern system
-            @test t_elapsed <= (intvl + 0.2)
-        end
+    # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
+    # Assuming that a 2 second buffer is good enough on a modern system
+    @test t_elapsed <= (intvl + 1)
 
-
-        dout = Array(Uint8, 1)
-        @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[idx][1], dout, 1)
-        @test dout[1] == int8('A')
-    end
+    dout = Array(UInt8, 1)
+    @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
+    @test dout[1] == Int8('A')
 end
 
 
-function pfd_tst_timeout(idx)
-    for intvl in intvls
-        tic()
-        evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=true)
-        @test !(evt.readable) && !(evt.writable) && evt.timedout
-        t_elapsed = toq()
+function pfd_tst_timeout(idx, intvl)
+    global ready += 1
+    wait(ready_c)
+    tic()
+    evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=false)
+    @test evt.timedout
+    @test !evt.readable
+    @test !evt.writable
+    t_elapsed = toq()
 
-        @test (intvl <= t_elapsed) && (t_elapsed <= (intvl + 0.2))
-    end
+    @test (intvl <= t_elapsed) && (t_elapsed <= (intvl + 1))
 end
 
 
 # Odd numbers trigger reads, even numbers timeout
-@sync begin
-    for i in 1:n
-        if isodd(i)
-            @async pfd_tst_reads(i)
-        else
-            @async pfd_tst_timeout(i)
-        end
-    end
-
-    for (i, intvl) in enumerate(intvls)
-        sleep(intvl)
-        # tickle only the odd ones, but test for writablity for everyone
+for (i, intvl) in enumerate(intvls)
+    @sync begin
+        global ready = 0
+        global ready_c = Condition()
         for idx in 1:n
-            evt = poll_fd(RawFD(pipe_fds[idx][2]), 0.0; readable=true, writable=true)
-            @test !(evt.readable) && evt.writable && !(evt.timedout)
-
             if isodd(idx)
-                @test 1 == ccall(:write, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[idx][2], bytestring("A"), 1)
+                @async pfd_tst_reads(idx, intvl)
+            else
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
+
+        while ready < n
+            sleep(0.1)
+        end
+        ready = 0
+        # tickle only the odd ones, but test for writablity for everyone
+        for idx in 1:n
+            event = poll_fd(RawFD(pipe_fds[idx][2]), 0.001; readable=true, writable=true)
+            @test !event.timedout
+            @test !event.readable
+            @test event.writable
+
+            if isodd(idx)
+                @test 1 == ccall(:write, Csize_t, (Cint, Ptr{UInt8},Csize_t), pipe_fds[idx][2], bytestring("A"), 1)
+            end
+        end
+        notify(ready_c, all=true)
     end
 end
 
 for i in 1:n
     ccall(:close, Cint, (Cint,), pipe_fds[i][1])
     ccall(:close, Cint, (Cint,), pipe_fds[i][2])
-end
-
-
 end
