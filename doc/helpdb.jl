@@ -1330,7 +1330,7 @@ Any[
 
 "),
 
-("Base","compile","compile(module::String)
+("Base","compile","compile(module::Symbol)
 
    Creates a precompiled cache file for module (see help for
    \"require\") and all of its dependencies. This can be used to
@@ -5815,12 +5815,14 @@ Millisecond(v)
 
 "),
 
-("Base","isopen","isopen(stream) -> Bool
+("Base","isopen","isopen(object) -> Bool
 
-   Determine whether a stream is open (i.e. has not been closed yet).
-   If the connection has been closed remotely (in case of e.g. a
-   socket), \"isopen\" will return \"false\" even though buffered data
-   may still be available. Use \"eof\" to check if necessary.
+   Determine whether an object - such as a stream, timer, or mmap --
+   is not yet closed. Once an object is closed, it will never produce
+   a new event. However, a closed stream may still have data to read
+   in its buffer, use \"eof\" to check for the ability to read data.
+   Use \"poll_fd\" to be notified when a stream might be writable or
+   readable.
 
 "),
 
@@ -8004,6 +8006,12 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 ("Base","expm","expm(A)
 
    Matrix exponential.
+
+"),
+
+("Base","logm","logm(A)
+
+   Matrix logarithm.
 
 "),
 
@@ -10545,12 +10553,25 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 "),
 
-("Base","plan_fft","plan_fft(A[, dims[, flags[, timelimit]]])
+("Base","plan_fft","plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
-   arguments have the same meaning as for \"fft()\".)  Returns a
-   function \"plan(A)\" that computes \"fft(A, dims)\" quickly.
+   arguments have the same meaning as for \"fft()\".)  Returns an
+   object \"P\" which represents the linear operator computed by the
+   FFT, and which contains all of the information needed to compute
+   \"fft(A, dims)\" quickly.
+
+   To apply \"P\" to an array \"A\", use \"P * A\"; in general, the
+   syntax for applying plans is much like that of matrices.  (A plan
+   can only be applied to arrays of the same size as the \"A\" for
+   which the plan was created.)  You can also apply a plan with a
+   preallocated output array \"Â\" by calling \"A_mul_B!(Â, plan,
+   A)\".  You can compute the inverse-transform plan by \"inv(P)\" and
+   apply the inverse plan with \"P \\ Â\" (the inverse plan is cached
+   and reused for subsequent calls to \"inv\" or \"\\\"), and apply
+   the inverse plan to a pre-allocated output array \"A\" with
+   \"A_ldiv_B!(A, P, Â)\".
 
    The \"flags\" argument is a bitwise-or of FFTW planner flags,
    defaulting to \"FFTW.ESTIMATE\".  e.g. passing \"FFTW.MEASURE\" or
@@ -10570,33 +10591,33 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 "),
 
-("Base","plan_ifft","plan_ifft(A[, dims[, flags[, timelimit]]])
+("Base","plan_ifft","plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as \"plan_fft()\", but produces a plan that performs inverse
    transforms \"ifft()\".
 
 "),
 
-("Base","plan_bfft","plan_bfft(A[, dims[, flags[, timelimit]]])
+("Base","plan_bfft","plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as \"plan_fft()\", but produces a plan that performs an
    unnormalized backwards transform \"bfft()\".
 
 "),
 
-("Base","plan_fft!","plan_fft!(A[, dims[, flags[, timelimit]]])
+("Base","plan_fft!","plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as \"plan_fft()\", but operates in-place on \"A\".
 
 "),
 
-("Base","plan_ifft!","plan_ifft!(A[, dims[, flags[, timelimit]]])
+("Base","plan_ifft!","plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as \"plan_ifft()\", but operates in-place on \"A\".
 
 "),
 
-("Base","plan_bfft!","plan_bfft!(A[, dims[, flags[, timelimit]]])
+("Base","plan_bfft!","plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as \"plan_bfft()\", but operates in-place on \"A\".
 
@@ -10643,7 +10664,7 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 "),
 
-("Base","plan_rfft","plan_rfft(A[, dims[, flags[, timelimit]]])
+("Base","plan_rfft","plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input FFT, similar to \"plan_fft()\"
    except for \"rfft()\" instead of \"fft()\".  The first two
@@ -10652,7 +10673,7 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 "),
 
-("Base","plan_brfft","plan_brfft(A, d[, dims[, flags[, timelimit]]])
+("Base","plan_brfft","plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input unnormalized transform, similar to
    \"plan_rfft()\" except for \"brfft()\" instead of \"rfft()\". The
@@ -10661,7 +10682,7 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 "),
 
-("Base","plan_irfft","plan_irfft(A, d[, dims[, flags[, timelimit]]])
+("Base","plan_irfft","plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized inverse real-input FFT, similar to
    \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
@@ -11335,6 +11356,29 @@ golden
       set_rounding(T, old)
 
    See \"get_rounding\" for available rounding modes.
+
+"),
+
+("Base","get_zero_subnormals","get_zero_subnormals() -> Bool
+
+   Returns \"false\" if operations on subnormal floating-point values
+   (\"denormals\") obey rules for IEEE arithmetic, and \"true\" if
+   they might be converted to zeros.
+
+"),
+
+("Base","set_zero_subnormals","set_zero_subnormals(yes::Bool) -> Bool
+
+   If \"yes\" is \"false\", subsequent floating-point operations
+   follow rules for IEEE arithmetic on subnormal values
+   (\"denormals\"). Otherwise, floating-point operations are permitted
+   (but not required) to convert subnormal inputs or outputs to zero.
+   Returns \"true\" unless \"yes==true\" but the hardware does not
+   support zeroing of subnormal numbers.
+
+   \"set_zero_subnormals(true)\" can speed up some computations on
+   some hardware. However, it can break identities such as \"(x-y==0)
+   == (x==y)\".
 
 "),
 

@@ -175,12 +175,13 @@ General I/O
 
    Determine whether a stream is read-only.
 
-.. function:: isopen(stream) -> Bool
+.. function:: isopen(object) -> Bool
 
-   Determine whether a stream is open (i.e. has not been closed yet).
-   If the connection has been closed remotely (in case of e.g. a socket),
-   ``isopen`` will return ``false`` even though buffered data may still be
-   available. Use ``eof`` to check if necessary.
+   Determine whether an object - such as a stream, timer, or mmap -- is not yet closed.
+   Once an object is closed, it will never produce a new event.
+   However, a closed stream may still have data to read in its buffer,
+   use ``eof`` to check for the ability to read data.
+   Use ``poll_fd`` to be notified when a stream might be writable or readable.
 
 .. function:: serialize(stream, value)
 
