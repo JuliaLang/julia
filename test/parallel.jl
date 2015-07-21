@@ -14,12 +14,12 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-rr=open_channel()
+rr=Future()
 a = rand(5,5)
 put!(rr, a)
 @test rr[2,3] == a[2,3]
 
-rr=open_channel(pid=workers()[1])
+rr=RegisteredRef(pid=workers()[1], reftype=Channel{Any}, sz=1)
 a = rand(5,5)
 put!(rr, a)
 @test rr[1,5] == a[1,5]
@@ -231,10 +231,10 @@ function test_channel(c)
 end
 
 test_channel(Channel(10))
-test_channel(open_channel(pid=id_other, sz=10))
+test_channel(RegisteredRef(pid=id_other, sz=10))
 
 # mix local and remote calls
-c = open_channel(pid=id_other, sz=10)
+c = RegisteredRef(pid=id_other, sz=10)
 put!(c, 1)
 remotecall_fetch(id_other, ch -> put!(ch, "Hello"), c)
 put!(c, 5.0)
@@ -249,7 +249,7 @@ put!(c, 5.0)
 @test remotecall_fetch(id_other, ch -> isready(ch), c) == false
 @test isready(c) == false
 
-c=Channel(Int)
+c=Channel{Int}(1)
 @test_throws MethodError put!(c, "Hello")
 
 c=Channel(256)
@@ -294,7 +294,7 @@ function test_iteration(in_c, out_c)
 end
 
 test_iteration(Channel(10), Channel(10))
-test_iteration(open_channel(pid=id_other, sz=10), Channel(10))
+test_iteration(RegisteredRef(pid=id_other, sz=10), Channel(10))
 
 function test_future(f, rem_throw=false)
     put!(f, 1)
@@ -321,7 +321,7 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     println()
     println("Testing a distributed put!/take! on a remote channel.")
     n = 10^4
-    c=open_channel(T=Any, sz=10^10)
+    c=RegisteredRef(;sz=10^10)
     futures=cell(nworkers())
     for (idx,p) in enumerate(workers())
         futures[idx] = @spawnat p begin

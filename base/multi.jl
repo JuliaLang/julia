@@ -399,8 +399,10 @@ end
 const client_refs = WeakKeyDict()
 
 abstract AbstractRemoteRef{T}
+abstract SysManagedRef{T} <: AbstractRemoteRef{T}
+abstract UserManagedRef{T} <: AbstractRemoteRef{T}
 
-type Future{T} <: AbstractRemoteRef{T}
+type Future{T} <: SysManagedRef{T}
     where::Int
     whence::Int
     id::Int
@@ -435,26 +437,27 @@ Future(pid::Integer) = Future{Any}(pid, myid(), next_ref_id(), Any)
 
 show(io::IO, f::Future) = print(io, "Future($(f.where),$(f.whence),$(f.id))")
 
-type ChannelRef{T} <: AbstractRemoteRef{T}
+type RegisteredRef{T} <: UserManagedRef{T}
     where::Int
     whence::Int
     id::Int
 
-    ChannelRef(w, wh, id) = new(w, wh, id)
+    RegisteredRef(w, wh, id) = new(w, wh, id)
 end
 
-function open_channel(; pid::Int=myid(), T::Type=Any, sz::Int=typemax(Int))
+RegisteredRef(;pid::Int=myid(), reftype::Type=Channel{Any}, sz::Int=DEF_CHANNEL_SZ) = RegisteredRef(()->reftype(sz), pid)
+function RegisteredRef(f::Function, pid::Int=myid())
     ref_id = next_ref_id()
-    remotecall_fetch(pid, (T, sz, whence, ref_id)->create_and_register_channel(T, sz, whence, ref_id), T, sz, myid(), ref_id)
-    ChannelRef{T}(pid, myid(), ref_id)
+    reftype = remotecall_fetch(pid, (f, whence, ref_id)->create_and_register_channel(f, whence, ref_id), f, myid(), ref_id)
+    RegisteredRef{reftype}(pid, myid(), ref_id)
 end
 
-
-function create_and_register_channel(T::Type, sz::Int, whence::Int, ref_id::Int)
-    rv = RemoteValue(T, sz)
+function create_and_register_channel(f, whence::Int, ref_id::Int)
+    c = f()
+    rv = RemoteValue(c)
     PGRP.refs[(whence, ref_id)] = rv
     push!(rv.clientset, whence)
-    nothing
+    typeof(c)
 end
 
 eltype{T}(rr::AbstractRemoteRef{T}) = T
@@ -578,21 +581,19 @@ function deserialize{T}(s::SerializationState, t::Type{Future{T}})
 end
 
 # data stored by the owner of a AbstractRemoteRef
-type RemoteValue{T}
-    channel::Channel{T}
+type RemoteValue
+    channel::AbstractChannel
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0
     RemoteValue(c) = new(c, IntSet(), 0)
 end
+RemoteValue() = RemoteValue(Channel(1))
 
-RemoteValue(T, sz) = RemoteValue{T}(Channel(T, sz))
-RemoteValue() = RemoteValue{Any}(Channel(Any,1))
-
-wait(rv::RemoteValue) = wait(rv.channel)
-take!(rv::RemoteValue) = take!(rv.channel)
-fetch(rv::RemoteValue) = fetch(rv.channel)
-isready(rv::RemoteValue) = isready(rv.channel)
-put!(rv::RemoteValue, val::ANY) = put!(rv.channel, val)
+wait(rv::RemoteValue, args...) = wait(rv.channel, args...)
+take!(rv::RemoteValue, args...) = take!(rv.channel, args...)
+fetch(rv::RemoteValue, args...) = fetch(rv.channel, args...)
+isready(rv::RemoteValue, args...) = isready(rv.channel, args...)
+put!(rv::RemoteValue, args...) = put!(rv.channel, args...)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 
@@ -747,14 +748,14 @@ end
 isready_future(rid) = isready(lookup_ref(rid))
 isready(rr::Future) = call_on_owner(isready_future, rr)
 
-isready_ref(rid) = isready(get_ref(rid))
-isready(rr::ChannelRef) = call_on_owner(isready_ref, rr)
+isready_ref(rid, args...) = isready(get_ref(rid), args...)
+isready(rr::RegisteredRef, args...) = call_on_owner(isready_ref, rr, args...)
 
 wait_future(rid) = (wait(lookup_ref(rid)); nothing)
 wait(rr::Future) = (call_on_owner(wait_future, rr); rr)
 
-wait_ref(rid) = (wait(get_ref(rid)); nothing)
-wait(rr::ChannelRef) = (call_on_owner(wait_ref, rr); rr)
+wait_ref(rid, args...) = (wait(get_ref(rid), args...); nothing)
+wait(rr::RegisteredRef, args...) = (call_on_owner(wait_ref, rr, args...); rr)
 
 function fetch_future(rid, caller_id)
     rv = lookup_ref(rid)
@@ -774,15 +775,15 @@ function fetch(rr::Future)
     v
 end
 
-fetch_ref(rid) = fetch(get_ref(rid))
-fetch(rr::ChannelRef) = call_on_owner(fetch_ref, rr)
+fetch_ref(rid, args...) = fetch(get_ref(rid), args...)
+fetch(rr::RegisteredRef, args...) = call_on_owner(fetch_ref, rr, args...)
 fetch(x::ANY) = x
 
-take_ref(rid) = take!(get_ref(rid))
-take!{T}(rr::ChannelRef{T}) = call_on_owner(take_ref, rr)
+take_ref(rid, args...) = take!(get_ref(rid), args...)
+take!{T}(rr::RegisteredRef{T}, args...) = call_on_owner(take_ref, rr, args...)
 
-put_ref(rid, v) = (put!(get_ref(rid), v); nothing)
-put!{T}(rr::ChannelRef{T}, val::T) = (call_on_owner(put_ref, rr, val); rr)
+put_ref(rid, args...) = (put!(get_ref(rid), args...); nothing)
+put!{T}(rr::RegisteredRef{T}, args...) = (call_on_owner(put_ref, rr, args...); rr)
 
 function put_future(rid, v)
     rv = lookup_ref(rid)
@@ -793,7 +794,7 @@ end
 put!{T}(rr::Future{T}, val::T) = (call_on_owner(put_future, rr, val); rr)
 
 close_ref(rid) = (delete!(PGRP.refs, rid); nothing)
-close(rr::ChannelRef) = call_on_owner(close_ref, rr)
+close(rr::RegisteredRef) = call_on_owner(close_ref, rr)
 
 close(rr::Future) = (send_del_client(rr); nothing)
 
@@ -1690,25 +1691,21 @@ function getindex(r::AbstractRemoteRef, args...)
     return remotecall_fetch(r.where, getindex, r, args...)
 end
 
-for objtype in [:Channel, :ChannelRef]
-    # Since other tasks can pop values while the iterator is
-    # running, we pre-fetch data in the `done` call itself
-
-    eval(quote
-        start{T}(c::($objtype){T}) = Ref{Nullable{T}}(Nullable{T}())
-        function done(c::($objtype), state::Ref)
-            try
-                # we are waiting either for more data or channel to be closed
-                state.x = take!(c)
-                return false
-            catch e
-                if isa(e, InvalidStateException) && e.state==:closed
-                    return true
-                else
-                    rethrow(e)
-                end
-            end
+start{T}(c::RegisteredRef{Channel{T}}) = Ref{Nullable{T}}(Nullable{T}())
+function done(c::RegisteredRef, state::Ref)
+    try
+        # we are waiting either for more data or channel to be closed
+        state.x = take!(c)
+        return false
+    catch e
+        if isa(e, InvalidStateException) && e.state==:closed
+            return true
+        else
+            rethrow(e)
         end
-        next{T}(c::($objtype){T}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
-    end)
+    end
 end
+next{T}(c::RegisteredRef{Channel{T}}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
+
+
+

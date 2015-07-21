@@ -3,7 +3,6 @@
 abstract AbstractChannel{T}
 
 type Channel{T} <: AbstractChannel{T}
-    cid::Int
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
     state::Symbol
@@ -14,27 +13,18 @@ type Channel{T} <: AbstractChannel{T}
     take_pos::Int           # read position
     put_pos::Int            # write position
 
-    Channel(elt, szp1, sz_max) = new(get_next_channel_id(), Condition(), Condition(), :open,
-                                     Array(T, szp1), szp1, sz_max, 1, 1)
-end
-
-let next_channel_id=1
-    global get_next_channel_id
-    function get_next_channel_id()
-        cid = next_channel_id
-        next_channel_id = next_channel_id+1
-        return cid
+    function Channel(sz)
+        sz_max = sz == typemax(Int) ? typemax(Int) - 1 : sz
+        szp1 = sz > 32 ? 33 : sz+1
+        new(Condition(), Condition(), :open,
+            Array(T, szp1), szp1, sz_max, 1, 1)
     end
 end
 
-Channel() = Channel(Any)
-Channel(T::Type) = Channel(T::Type, typemax(Int))
-Channel(sz::Int) = Channel(Any, sz)
-function Channel(T::Type, sz::Int)
-    sz_max = sz == typemax(Int) ? typemax(Int) - 1 : sz
-    csz = sz > 32 ? 32 : sz
-    Channel{T}(T, csz+1, sz_max)
-end
+const DEF_CHANNEL_SZ=32
+
+Channel() = Channel(DEF_CHANNEL_SZ)
+Channel(sz::Int) = Channel{Any}(sz)
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 function close(c::Channel)
@@ -128,4 +118,21 @@ end
 
 size(c::Channel) = c.sz_max
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(id:$(c.cid),sz_max:$(size(c)),sz_curr:$(length(c)))")
+show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(size(c)),sz_curr:$(length(c)))")
+
+start{T}(c::Channel{T}) = Ref{Nullable{T}}(Nullable{T}())
+function done(c::Channel, state::Ref)
+    try
+        # we are waiting either for more data or channel to be closed
+        state.x = take!(c)
+        return false
+    catch e
+        if isa(e, InvalidStateException) && e.state==:closed
+            return true
+        else
+            rethrow(e)
+        end
+    end
+end
+next{T}(c::Channel{T}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
+

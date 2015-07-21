@@ -3,7 +3,7 @@
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Array{ChannelRef}
+    refs::Array{RegisteredRef}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
@@ -64,12 +64,12 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         func_mapshmem = () -> begin
-            c = open_channel(sz=1)
+            c = RegisteredRef()
             put!(c, shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR))
             c
         end
 
-        refs = Array(ChannelRef, length(pids))
+        refs = Array(RegisteredRef, length(pids))
         @sync begin
             for (i, p) in enumerate(pids)
                 @async refs[i] = remotecall_fetch(p, func_mapshmem)
@@ -137,10 +137,10 @@ size(S::SharedArray) = S.dims
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
-    refs = Array(ChannelRef, length(a.pids))
+    refs = Array(RegisteredRef, length(a.pids))
     @sync begin
         for (i, p) in enumerate(a.pids)
-            refs[i] = remotecall_fetch(p, (r,d)->(c=open_channel(sz=1); put!(c, reshape(fetch(r),d)); c), a.refs[i], dims)
+            refs[i] = remotecall_fetch(p, (r,d)->(c=RegisteredRef(); put!(c, reshape(fetch(r),d)); c), a.refs[i], dims)
         end
     end
 
