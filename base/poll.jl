@@ -43,7 +43,7 @@ type FileMonitor
         this = new(handle, file, Condition(), false)
         associate_julia_struct(handle, this)
         err = ccall(:uv_fs_event_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
-        if err < 0
+        if err != 0
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
         end
@@ -68,7 +68,7 @@ type PollingFileWatcher <: UVPollingWatcher
         this = new(handle, file, round(UInt32, interval*1000), Condition(), false)
         associate_julia_struct(handle, this)
         err = ccall(:uv_fs_poll_init, Int32, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
-        if err < 0
+        if err != 0
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
         end
@@ -104,7 +104,7 @@ type _FDWatcher
             this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
             associate_julia_struct(handle, this)
             err = ccall(:uv_poll_init, Int32, (Ptr{Void}, Ptr{Void}, Int32), eventloop(), handle, fd.fd)
-            if err < 0
+            if err != 0
                 Libc.free(handle)
                 throw(UVError("FDWatcher",err))
             end
@@ -120,7 +120,7 @@ type _FDWatcher
             associate_julia_struct(handle, this)
             err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
                                                     eventloop(), handle,    fd.handle)
-            if err < 0
+            if err != 0
                 Libc.free(handle)
                 throw(UVError("FDWatcher",err))
             end
@@ -204,7 +204,7 @@ end
 function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
     fname = filename == C_NULL ? "" : bytestring(convert(Ptr{UInt8}, filename))
-    if status < 0
+    if status != 0
         notify_error(t.notify, UVError("FileMonitor", status))
     else
         notify(t.notify, (fname, FileEvent(events)))
@@ -214,7 +214,7 @@ end
 
 function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
     t = @handle_as handle _FDWatcher
-    if status < 0
+    if status != 0
         notify_error(t.notify, UVError("FDWatcher", status))
     else
         notify(t.notify, FDEvent(events))
@@ -224,7 +224,7 @@ end
 
 function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
     t = @handle_as handle PollingFileWatcher
-    if status < 0
+    if status != 0
         notify_error(t.notify, UVError("PollingFileWatcher", status))
     else
         prev_stat = StatStruct(convert(Ptr{UInt8}, prev))

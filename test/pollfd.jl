@@ -13,27 +13,36 @@ intvls = [2, .2, .1, .002]
 
 pipe_fds = cell(n)
 for i in 1:n
-    pipe_fds[i] = Array(Cint, 2)
-    @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds[i])
+    @test 0 ==
+        @windows ? begin
+            pipe_fds[i] = Array(Libc.WindowsRawSocket, 2)
+            ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i])
+        end : begin
+            pipe_fds[i] = Array(RawFD, 2)
+            ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
+        end
 end
-
 
 function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
     tic()
-    evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=true)
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=true)
     t_elapsed = toq()
     @test !evt.timedout
     @test evt.readable
-    @test !evt.writable
+    @test @windows ? evt.writable : !evt.writable
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Assuming that a 2 second buffer is good enough on a modern system
     @test t_elapsed <= (intvl + 1)
 
     dout = Array(UInt8, 1)
-    @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
+    @test 1 == @windows ? (
+        ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0)
+    ) : (
+        ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
+    )
     @test dout[1] == Int8('A')
 end
 
@@ -42,13 +51,14 @@ function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
     tic()
-    evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=false)
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     @test evt.timedout
     @test !evt.readable
     @test !evt.writable
     t_elapsed = toq()
 
-    @test (intvl <= t_elapsed) && (t_elapsed <= (intvl + 1))
+    @unix_only @test (intvl <= t_elapsed) # TODO: enable this test on windows when the libuv version is bumped
+    @test (t_elapsed <= (intvl + 1))
 end
 
 
@@ -71,13 +81,17 @@ for (i, intvl) in enumerate(intvls)
         ready = 0
         # tickle only the odd ones, but test for writablity for everyone
         for idx in 1:n
-            event = poll_fd(RawFD(pipe_fds[idx][2]), 0.001; readable=true, writable=true)
+            event = poll_fd(pipe_fds[idx][2], 0.001; readable=true, writable=true)
             @test !event.timedout
             @test !event.readable
             @test event.writable
 
             if isodd(idx)
-                @test 1 == ccall(:write, Csize_t, (Cint, Ptr{UInt8},Csize_t), pipe_fds[idx][2], bytestring("A"), 1)
+                @test 1 == @windows ? (
+                   ccall(:send, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][2], "A", 1, 0)
+                ) : (
+                   ccall(:write, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][2], "A", 1)
+                )
             end
         end
         notify(ready_c, all=true)
@@ -85,6 +99,11 @@ for (i, intvl) in enumerate(intvls)
 end
 
 for i in 1:n
-    ccall(:close, Cint, (Cint,), pipe_fds[i][1])
-    ccall(:close, Cint, (Cint,), pipe_fds[i][2])
+    for j = 1:2
+        @test 0 == @windows ? (
+            ccall(:closesocket, stdcall, Cint, (Ptr{Void},), pipe_fds[i][j])
+        ) : (
+            ccall(:close, Cint, (Cint,), pipe_fds[i][j])
+        )
+    end
 end
