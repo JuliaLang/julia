@@ -602,3 +602,47 @@ to leave it as a constructor rather than a ``convert`` method.  For
 example, the ``Array(Int)`` constructor creates a zero-dimensional
 ``Array`` of the type ``Int``, but is not really a "conversion" from
 ``Int`` to an ``Array``.
+
+Outer-only constructors
+-----------------------
+
+As we have seen, a typical parametric type has inner constructors
+that are called when type parameters are known; e.g. they apply
+to ``Point{Int}`` but not to ``Point``.
+Optionally, outer constructors that determine type parameters
+automatically can be added, for example constructing a
+``Point{Int}`` from the call ``Point(1,2)``.
+Outer constructors call inner constructors to do the core
+work of making an instance.
+However, in some cases one would rather not provide inner constructors,
+so that specific type parameters cannot be requested manually.
+
+For example, say we define a type that stores a vector along with
+an accurate representation of its sum::
+
+    type SummedArray{T<:Number,S<:Number}
+        data::Vector{T}
+        sum::S
+    end
+
+The problem is that we want ``S`` to be a larger type than ``T``, so
+that we can sum many elements with less information loss.
+For example, when ``T`` is ``Int32``, we would like ``S`` to be ``Int64``.
+Therefore we want to avoid an interface that allows the user to construct
+instances of the type ``SummedArray{Int32,Int32}``.
+One way to do this is to provide only an outer constructor for ``SummedArray``.
+This can be done using explicit ``call`` overloading::
+
+    type SummedArray{T<:Number,S<:Number}
+        data::Vector{T}
+        sum::S
+
+        function call{T}(::Type{SummedArray}, a::Vector{T})
+            S = widen(T)
+            new{T,S}(a, sum(S, a))
+        end
+    end
+
+This constructor will be invoked by the syntax ``SummedArray(a)``.
+The syntax ``new{T,S}`` allows specifying parameters for the type to be
+constructed, i.e. this call will return a ``SummedArray{T,S}``.
