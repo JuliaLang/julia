@@ -107,6 +107,8 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | ``^C``                 | Interrupt or cancel                                |
 +------------------------+----------------------------------------------------+
+| ``^L``                 | Clear console screen                               |
++------------------------+----------------------------------------------------+
 | Return/Enter, ``^J``   | New line, executing if it is complete              |
 +------------------------+----------------------------------------------------+
 | meta-Return/Enter      | Insert new line without executing it               |
