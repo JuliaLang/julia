@@ -1040,7 +1040,7 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
             global $x
             @windows? (
                 ccall(:SetStdHandle,stdcall,Int32,(Int32,Ptr{Void}),
-                    $(-10-unix_fd),_get_osfhandle(_fd(stream)).handle) :
+                    $(-10-unix_fd), Libc._get_osfhandle(_fd(stream)).handle) :
                 dup(_fd(stream),  RawFD($unix_fd)) )
             $x = stream
         end
