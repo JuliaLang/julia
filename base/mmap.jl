@@ -80,7 +80,7 @@ const FILE_MAP_READ          = UInt32(0x04)
 const FILE_MAP_EXECUTE       = UInt32(0x20)
 
 function gethandle(io::IO)
-    handle = Base._get_osfhandle(RawFD(fd(io))).handle
+    handle = Libc._get_osfhandle(RawFD(fd(io))).handle
     systemerror("could not get handle for file to map: $(Base.FormatMessage())", handle == -1)
     return Int(handle)
 end
