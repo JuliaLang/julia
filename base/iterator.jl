@@ -1,5 +1,38 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# For unbounded length iterators
+immutable AlephNull <: Number
+end
+
+show(io::IO, ::AlephNull) = print(io, "ℵ₀")
+const ℵ₀ = AlephNull()
+
+==(::Integer,::AlephNull) = false
+==(::AlephNull,::Integer) = false
+==(::AlephNull,::AlephNull) = true
+
+<(::Integer,::AlephNull) = true
+<(::AlephNull,::Integer) = false
+<(::AlephNull,::AlephNull) = false
+
+<=(::Integer,::AlephNull) = true
+<=(::AlephNull,::Integer) = false
+<=(::AlephNull,::AlephNull) = true
+
+min(x::Integer, ::AlephNull) = x
+min(::AlephNull, x::Integer) = x
+min(::AlephNull, ::AlephNull) = AlephNull()
+
+max(::Integer, ::AlephNull) = AlephNull()
+max(::AlephNull, ::Integer) = AlephNull()
+max(::AlephNull, ::AlephNull) = AlephNull()
+
++(::Integer, ::AlephNull) = AlephNull()
++(::AlephNull, ::Integer) = AlephNull()
++(::AlephNull, ::AlephNull) = AlephNull()
+
+-(::AlephNull, ::Integer) = AlephNull()
+
 isempty(itr) = done(itr, start(itr))
 
 # enumerate
@@ -120,6 +153,7 @@ countfrom(start::Number)               = Count(start, one(start))
 countfrom()                            = Count(1, 1)
 
 eltype{S}(it::Count{S}) = S
+length(it::Count) = AlephNull()
 
 start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
@@ -134,6 +168,7 @@ end
 take(xs, n::Int) = Take(xs, n)
 
 eltype(it::Take) = eltype(it.xs)
+length(it::Take) = min(length(it.xs), it.n)
 
 start(it::Take) = (it.n, start(it.xs))
 
@@ -157,6 +192,7 @@ end
 drop(xs, n::Int) = Drop(xs, n)
 
 eltype(it::Drop) = eltype(it.xs)
+length(it::Drop) = max(length(it.xs)-it.n, 0)
 
 function start(it::Drop)
     xs_state = start(it.xs)
@@ -181,6 +217,7 @@ end
 cycle(xs) = Cycle(xs)
 
 eltype(it::Cycle) = eltype(it.xs)
+length(it::Cycle) = AlephNull()
 
 function start(it::Cycle)
     s = start(it.xs)
@@ -205,6 +242,8 @@ immutable Repeated{O}
 end
 repeated(x) = Repeated(x)
 eltype{O}(r::Repeated{O}) = O
+length(x::Repeated) = AlephNull()
+
 start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false

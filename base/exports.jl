@@ -29,6 +29,7 @@ export
     AbstractSparseVector,
     AbstractVector,
     AbstractVecOrMat,
+    AlephNull,
     Array,
     Associative,
     Bidiagonal,
@@ -199,6 +200,7 @@ export
     catalan,
     φ, golden,
     I,
+    ℵ₀,
 
 # Operators
     !,
