@@ -195,10 +195,14 @@ Library improvements
 
     * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
 
-  * `p = plan_fft(x)` and similar functions now return a `Base.DFT.Plan` object, rather
+    * `p = plan_fft(x)` and similar functions now return a `Base.DFT.Plan` object, rather
     than an anonymous function.  Calling it via `p(x)` is deprecated in favor of
     `p * x` or `p \ x` (for the inverse), and it can also be used with `A_mul_B!`
     to employ pre-allocated output arrays ([#12087]).
+
+    * `LU{T,Tridiagonal{T}}` now supports extraction of `L`, `U`, `p`, and `P` factors ([#12137]).
+
+    * Allocations in sparse matrix factorizations are now tracked by Julia's garbage collector ([#12034]).
 
   * Strings
 
@@ -352,6 +356,9 @@ Library improvements
 
     * `mktemp` and `mktempdir` now take an optional argument to set which
       directory the temporary file or directory is created in.
+
+    * New garbage collector tracked memory allocator functions: `jl_malloc`, `jl_calloc`,
+    `jl_realloc`, and `jl_free` with libc API ([[#12034]]).
 
 Deprecated or removed
 ---------------------
