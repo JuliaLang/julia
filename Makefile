@@ -59,11 +59,13 @@ $(BUILDROOT)/doc/_build/html:
 CLEAN_TARGETS += clean-docdir
 clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
-$(subst $(abspath $(BUILDROOT))/,,$(abspath $(build_docdir))): $(build_docdir)
-$(build_docdir):
-	@mkdir -p $@/examples
-	@cp -R $(JULIAHOME)/examples/*.jl $@/examples/
-	@cp -R $(JULIAHOME)/examples/clustermanager $@/examples/
+$(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) $(shell find $(JULIAHOME)/examples/clustermanager)
+	@echo Copying in usr/share/doc/julia/examples
+	@-rm -fr $(build_docdir)/examples
+	@mkdir -p $(build_docdir)/examples
+	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
+	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
+	@echo 1 > $@
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifneq ($(OS),WINNT)
@@ -72,10 +74,10 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps
+julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest:
@@ -87,7 +89,7 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/ui julia-$*
 
-julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE)
+julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 julia-sysimg-release : julia-inference julia-ui-release
@@ -153,10 +155,12 @@ release-candidate: release testall
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
+	@echo Copying in usr/share/man/man1/julia.1
 	@mkdir -p $(build_man1dir)
 	@cp $< $@
 
 $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia
+	@echo Creating usr/etc/julia/juliarc.jl
 	@cp $< $@
 ifeq ($(OS), WINNT)
 	@cat $(JULIAHOME)/contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
