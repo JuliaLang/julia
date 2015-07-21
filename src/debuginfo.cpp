@@ -673,6 +673,8 @@ public:
   virtual uint8_t *getGOTBase() const { return JMM->getGOTBase(); }
   virtual uint8_t *startFunctionBody(const Function *F,
                                      uintptr_t &ActualSize) {
+      if (ActualSize == 0)
+          ActualSize += 64;
       ActualSize += 48;
       uint8_t *mem = JMM->startFunctionBody(F,ActualSize);
       ActualSize -= 48;
