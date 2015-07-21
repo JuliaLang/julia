@@ -16,25 +16,64 @@
 # * dynamically adding nodes (then always start with 1 and grow)
 
 ## workers and message i/o ##
+# Messages
+abstract AbstractMsg
 
-function send_msg_unknown(s::IO, kind, args)
+type CallMsg{Mode} <: AbstractMsg
+    f::Function
+    args::Tuple
+    response_oid::Tuple
+end
+type CallWaitMsg <: AbstractMsg
+    f::Function
+    args::Tuple
+    response_oid::Tuple
+    notify_oid::Tuple
+end
+type RemoteDoMsg <: AbstractMsg
+    f::Function
+    args::Tuple
+end
+type ResultMsg <: AbstractMsg
+    response_oid::Tuple
+    value::Any
+end
+
+# Worker initialization messages
+type IdentifySocketMsg <: AbstractMsg
+    from_pid::Int
+end
+type JoinPGRPMsg <: AbstractMsg
+    self_pid::Int
+    other_workers::Array
+    self_is_local::Bool
+    notify_oid::Tuple
+end
+type JoinCompleteMsg <: AbstractMsg
+    notify_oid::Tuple
+    cpu_cores::Int
+    ospid::Int
+end
+
+
+function send_msg_unknown(s::IO, msg)
     error("attempt to send to unknown socket")
 end
 
-function send_msg(s::IO, kind, args...)
+function send_msg(s::IO, msg)
     id = worker_id_from_socket(s)
     if id > -1
-        return send_msg(worker_from_id(id), kind, args...)
+        return send_msg(worker_from_id(id), msg)
     end
-    send_msg_unknown(s, kind, args)
+    send_msg_unknown(s, msg)
 end
 
-function send_msg_now(s::IO, kind, args...)
+function send_msg_now(s::IO, msg::AbstractMsg)
     id = worker_id_from_socket(s)
     if id > -1
-        return send_msg_now(worker_from_id(id), kind, args...)
+        return send_msg_now(worker_from_id(id), msg)
     end
-    send_msg_unknown(s, kind, args)
+    send_msg_unknown(s, msg)
 end
 
 abstract ClusterManager
@@ -124,12 +163,12 @@ function set_worker_state(w, state)
     notify(w.c_state; all=true)
 end
 
-function send_msg_now(w::Worker, kind, args...)
-    send_msg_(w, kind, args, true)
+function send_msg_now(w::Worker, msg)
+    send_msg_(w, msg, true)
 end
 
-function send_msg(w::Worker, kind, args...)
-    send_msg_(w, kind, args, false)
+function send_msg(w::Worker, msg)
+    send_msg_(w, msg, false)
 end
 
 function flush_gc_msgs(w::Worker)
@@ -152,7 +191,6 @@ function flush_gc_msgs(w::Worker)
 end
 
 function check_worker_state(w::Worker)
-    #println("Sending msg $kind")
     if w.state == W_CREATED
         # Since higher pids connect with lower pids, the remote worker
         # may not have connected to us yet. Wait for some time.
@@ -166,15 +204,12 @@ function check_worker_state(w::Worker)
 end
 
 
-function send_msg_(w::Worker, kind, args, now::Bool)
+function send_msg_(w::Worker, msg, now::Bool)
     check_worker_state(w)
     io = w.w_stream
     lock(io.lock)
     try
-        serialize(io, kind)
-        for arg in args
-            serialize(io, arg)
-        end
+        serialize(io, msg)
 
         if !now && w.gcflag
             flush_gc_msgs(w)
@@ -646,7 +681,7 @@ end
 function remotecall(w::Worker, f, args...)
     rr = RemoteRef(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, :call, rr2id(rr), f, args)
+    send_msg(w, CallMsg{:call}(f, args, rr2id(rr)))
     rr
 end
 
@@ -663,7 +698,7 @@ function remotecall_fetch(w::Worker, f, args...)
     oid = next_id()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
-    send_msg(w, :call_fetch, oid, f, args)
+    send_msg(w, CallMsg{:call_fetch}(f, args, oid))
     v = wait_full(rv)
     delete!(PGRP.refs, oid)
     v
@@ -680,7 +715,7 @@ function remotecall_wait(w::Worker, f, args...)
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = RemoteRef(w)
-    send_msg(w, :call_wait, rr2id(rr), prid, f, args)
+    send_msg(w, CallWaitMsg(f, args, rr2id(rr), prid))
     wait_full(rv)
     delete!(PGRP.refs, prid)
     rr
@@ -699,7 +734,7 @@ function remote_do(w::LocalProcess, f, args...)
 end
 
 function remote_do(w::Worker, f, args...)
-    send_msg(w, :do, f, args)
+    send_msg(w, RemoteDoMsg(f, args))
     nothing
 end
 
@@ -754,7 +789,7 @@ function deliver_result(sock::IO, msg, oid, value)
         val = oid
     end
     try
-        send_msg_now(sock, :result, oid, val)
+        send_msg_now(sock, ResultMsg(oid, val))
     catch e
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
@@ -777,120 +812,29 @@ notify_full( rv::RemoteValue) = notify(rv.full, work_result(rv))
 notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
+process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = @schedule process_tcp_streams(r_stream, w_stream)
 
-process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = process_messages(r_stream, w_stream, nothing)
-process_messages(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join) = @schedule process_tcp_streams(r_stream, w_stream, rr_ntfy_join)
-
-function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join)
+function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket)
         disable_nagle(r_stream)
         wait_connected(r_stream)
         if r_stream != w_stream
             disable_nagle(w_stream)
             wait_connected(w_stream)
         end
-        message_handler_loop(r_stream, w_stream, rr_ntfy_join)
+        message_handler_loop(r_stream, w_stream)
 end
 
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = process_messages(r_stream, w_stream, nothing)
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream, rr_ntfy_join) = @schedule message_handler_loop(r_stream, w_stream, rr_ntfy_join)
+process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = @schedule message_handler_loop(r_stream, w_stream)
 
-function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_ntfy_join)
+function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream)
     global PGRP
     global cluster_manager
 
     try
         while true
             msg = deserialize(r_stream)
-            #println("got msg: ",msg)
-            # handle message
-            if is(msg, :call)
-                id = deserialize(r_stream)
-                #print("$(myid()) got id $id\n")
-                f0 = deserialize(r_stream)
-                #print("$(myid()) got call $f0\n")
-                args0 = deserialize(r_stream)
-                #print("$(myid()) got args $args0\n")
-                let f=f0, args=args0
-                    schedule_call(id, ()->f(args...))
-                end
-            elseif is(msg, :call_fetch)
-                id = deserialize(r_stream)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                let f=f, args=args, id=id, msg=msg
-                    @schedule begin
-                        v = run_work_thunk(()->f(args...))
-                        deliver_result(w_stream, msg, id, v)
-                        v
-                    end
-                end
-            elseif is(msg, :call_wait)
-                id = deserialize(r_stream)
-                notify_id = deserialize(r_stream)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                let f=f, args=args, id=id, msg=msg, notify_id=notify_id
-                    @schedule begin
-                        rv = schedule_call(id, ()->f(args...))
-                        deliver_result(w_stream, msg, notify_id, wait_full(rv))
-                    end
-                end
-            elseif is(msg, :do)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                #print("got args: $args\n")
-                let f=f, args=args
-                    @schedule begin
-                        run_work_thunk(RemoteValue(), ()->f(args...))
-                    end
-                end
-            elseif is(msg, :result)
-                # used to deliver result of wait or fetch
-                oid = deserialize(r_stream)
-                #print("$(myid()) got $msg $oid\n")
-                val = deserialize(r_stream)
-                put!(lookup_ref(oid), val)
-            elseif is(msg, :identify_socket)
-                otherid = deserialize(r_stream)
-                Worker(otherid, r_stream, w_stream, cluster_manager) # The constructor registers the worker
-
-            elseif is(msg, :join_pgrp)
-                self_pid = LPROC.id = deserialize(r_stream)
-                locs = deserialize(r_stream)
-                self_is_local = deserialize(r_stream)
-                controller = Worker(1, r_stream, w_stream, cluster_manager)
-                register_worker(LPROC)
-
-                wait_tasks = Task[]
-
-                for (connect_at, rpid, r_is_local) in locs
-                    wconfig = WorkerConfig()
-                    wconfig.connect_at = connect_at
-                    wconfig.environ = AnyDict(:self_is_local=>self_is_local, :r_is_local=>r_is_local)
-
-                    let rpid=rpid, wconfig=wconfig
-                        t = @async connect_to_peer(cluster_manager, rpid, wconfig)
-                        push!(wait_tasks, t)
-                    end
-                end
-
-                for wt in wait_tasks; wait(wt); end
-
-                send_msg_now(controller, :join_complete, Sys.CPU_CORES, getpid())
-
-            elseif is(msg, :join_complete)
-                w = map_sock_wrkr[r_stream]
-
-                environ = get(w.config.environ, Dict())
-                environ[:cpu_cores] = deserialize(r_stream)
-                w.config.environ = environ
-
-                w.config.ospid = deserialize(r_stream)
-
-                put!(rr_ntfy_join, w.id)
-                rr_ntfy_join = nothing    # so that it gets gc'ed
-            end
-
+            # println("got msg: ", msg)
+            handle_msg(msg, r_stream, w_stream)
         end # end of while
     catch e
         iderr = worker_id_from_socket(r_stream)
@@ -930,16 +874,71 @@ function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_n
     end
 end
 
+handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+function handle_msg(msg::CallMsg{:call_fetch}, r_stream, w_stream)
+    @schedule begin
+        v = run_work_thunk(()->msg.f(msg.args...))
+        deliver_result(w_stream, :call_fetch, msg.response_oid, v)
+    end
+end
+
+function handle_msg(msg::CallWaitMsg, r_stream, w_stream)
+    @schedule begin
+        rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+        deliver_result(w_stream, :call_wait, msg.notify_oid, wait_full(rv))
+    end
+end
+
+handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...))
+
+handle_msg(msg::ResultMsg, r_stream, w_stream) = put!(lookup_ref(msg.response_oid), msg.value)
+
+handle_msg(msg::IdentifySocketMsg, r_stream, w_stream) = Worker(msg.from_pid, r_stream, w_stream, cluster_manager)
+
+function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
+    LPROC.id = msg.self_pid
+    controller = Worker(1, r_stream, w_stream, cluster_manager)
+    register_worker(LPROC)
+
+    wait_tasks = Task[]
+    for (connect_at, rpid, r_is_local) in msg.other_workers
+        wconfig = WorkerConfig()
+        wconfig.connect_at = connect_at
+        wconfig.environ = AnyDict(:self_is_local=>msg.self_is_local, :r_is_local=>r_is_local)
+
+        let rpid=rpid, wconfig=wconfig
+            t = @async connect_to_peer(cluster_manager, rpid, wconfig)
+            push!(wait_tasks, t)
+        end
+    end
+
+    for wt in wait_tasks; wait(wt); end
+
+    send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid()))
+end
+
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
     try
         (r_s, w_s) = connect(manager, rpid, wconfig)
         w = Worker(rpid, r_s, w_s, manager, wconfig)
         process_messages(w.r_stream, w.w_stream)
-        send_msg_now(w, :identify_socket, myid())
+        send_msg_now(w, IdentifySocketMsg(myid()))
     catch e
         println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
         exit(1)
     end
+end
+
+function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream)
+    w = map_sock_wrkr[r_stream]
+
+    environ = get(w.config.environ, Dict())
+    environ[:cpu_cores] = msg.cpu_cores
+    w.config.environ = environ
+    w.config.ospid = msg.ospid
+
+    ntfy_channel = lookup_ref(msg.notify_oid)
+    put!(ntfy_channel, w.id)
 end
 
 function disable_threaded_libs()
@@ -1192,11 +1191,13 @@ function create_worker(manager, wconfig)
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     # set when the new worker has finshed connections with all other workers
-    rr_ntfy_join = RemoteRef()
+    ntfy_oid = next_id()
+    rr_ntfy_join = lookup_ref(ntfy_oid)
+    rr_ntfy_join.waitingfor = myid()
 
     # Start a new task to handle inbound messages from connected worker in master.
     # Also calls `wait_connected` on TCP streams.
-    process_messages(w.r_stream, w.w_stream, rr_ntfy_join)
+    process_messages(w.r_stream, w.w_stream)
 
     # send address information of all workers to the new worker.
     # Cluster managers set the address of each worker in `WorkerConfig.connect_at`.
@@ -1225,10 +1226,12 @@ function create_worker(manager, wconfig)
     join_list = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state==W_CONNECTED), PGRP.workers)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
-    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager))
+    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid))
 
     @schedule manage(w.manager, w.id, w.config, :register)
-    wait(rr_ntfy_join)
+    wait_full(rr_ntfy_join)
+    delete!(PGRP.refs, ntfy_oid)
+
     w.id
 end
 
