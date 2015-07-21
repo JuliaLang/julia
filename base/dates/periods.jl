@@ -185,7 +185,7 @@ type CompoundPeriod <: AbstractTime
                     v += value(p[i])
                     i -= 1
                 end
-                v0 = f == 1 ? v : mod(v, f)
+                v0 = f == 1 ? v : rem(v, f)
                 v0 != 0 && push!(pc, P(v0))
                 if v != v0
                     P = Pc
