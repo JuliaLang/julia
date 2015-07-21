@@ -21,16 +21,16 @@ data_out = collect(s)
 @test sprint(show, IntSet([1,2,3])) == "IntSet([1, 2, 3])"
 
 
-s = IntSet([0,1,10,20,200,300,1000,10000,10002])
+s = IntSet([1,2,10,20,200,300,1000,10000,10002])
 @test last(s) == 10002
-@test first(s) == 0
+@test first(s) == 1
 @test length(s) == 9
 @test pop!(s) == 10002
 @test_throws KeyError pop!(s, -1)
 @test length(s) == 8
-@test shift!(s) == 0
+@test shift!(s) == 1
 @test length(s) == 7
-@test !in(0,s)
+@test !in(1,s)
 @test !in(10002,s)
 @test in(10000,s)
 @test_throws ArgumentError first(IntSet())
@@ -53,7 +53,7 @@ s = IntSet(255)
 
 # issue #7851
 @test_throws ArgumentError IntSet(-1)
-@test !(-1 in IntSet(0:10))
+@test !(-1 in IntSet(1:10))
 
 # # issue #8570
 # This requires 2^29 bytes of storage, which is too much for a simple test

@@ -55,8 +55,12 @@ function push!(s::IntSet, n::Integer)
             lim = Int(n + div(n,2))
             sizehint!(s, lim)
         end
-    elseif n < 0
-        throw(ArgumentError("IntSet elements cannot be negative"))
+    elseif n <= 0
+        if n < 0
+            throw(ArgumentError("IntSet elements cannot be negative"))
+        else
+            depwarn("storing zero in IntSets is deprecated", :push!)
+        end
     end
     s.bits[n>>5 + 1] |= (UInt32(1)<<(n&31))
     return s
@@ -78,8 +82,12 @@ function pop!(s::IntSet, n::Integer, deflt)
             return deflt
         end
     end
-    if n < 0
-        return deflt
+    if n <= 0
+        if n < 0
+            return deflt
+        else
+            depwarn("stored zeros in IntSet is deprecated", :pop!)
+        end
     end
     mask = UInt32(1)<<(n&31)
     idx = n>>5 + 1
@@ -147,12 +155,15 @@ function in(n::Integer, s::IntSet)
     if n >= s.limit
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1
-        s.fill1s && n >= 0 && n < typemax(Int)
-    elseif n < 0
-        return false
-    else
-        (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
+        return s.fill1s && n >= 0 && n < typemax(Int)
+    elseif n <= 0
+        if n < 0
+            return false
+        else
+            depwarn("stored zeros in IntSet is deprecated", :in)
+        end
     end
+    (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
 end
 
 start(s::IntSet) = Int64(0)
