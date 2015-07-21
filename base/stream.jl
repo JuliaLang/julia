@@ -559,7 +559,7 @@ type Timer
 
     function Timer(timeout::Real, repeat::Real=0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
-        repeat ≥ 0 || throw(ArgumentError("timer cannot repeat $repeat times"))
+        repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
 
         this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)

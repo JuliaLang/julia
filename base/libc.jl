@@ -16,7 +16,7 @@ immutable RawFD
     RawFD(fd::RawFD) = fd
 end
 
-Base.convert(::Type{Int32}, fd::RawFD) = fd.fd
+Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
 dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
@@ -27,12 +27,13 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
 @windows_only immutable WindowsRawSocket
     handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
 end
+@windows_only Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
 
 @unix_only _get_osfhandle(fd::RawFD) = fd
 @windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
 @windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
 
-## FILE ##
+## FILE (not auto-finalized) ##
 
 immutable FILE
     ptr::Ptr{Void}
@@ -41,9 +42,9 @@ end
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
-function FILE(fd, mode)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
+function FILE(fd::RawFD, mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
