@@ -6,15 +6,20 @@ if nworkers() < 3
 end
 
 modname = gensym(:anon)
+function init_modname_on(p)
+    modexpr = (modname) -> (Core.eval(Main, :(module $modname end)); nothing)
+    modexpr.code.module = Main
+    remotecall_fetch(p, modexpr, modname)
+end
 @sync for p in procs()
     if p != myid()
-        modexpr = (modname) -> (Core.eval(Main, :(module $modname end)); nothing)
-        modexpr.code.module = Main
-        @async remotecall_fetch(p, modexpr, modname)
+        @async init_modname_on(p)
     end
 end
 
 Core.eval(Main, :(module $modname # needs a real path for serialize/deserialize (not __anon__)
+init_modname_on = $init_modname_on
+
 using Base.Test
 
 id_me = myid()
@@ -406,6 +411,9 @@ if DoFullTest
     # pmap tests
     # needs at least 4 processors dedicated to the below tests
     ppids = remotecall_fetch(1, ()->addprocs(4))
+    @sync for p in ppids
+        @async init_modname_on(p)
+    end
     s = "abcdefghijklmnopqrstuvwxyz";
     ups = uppercase(s);
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
