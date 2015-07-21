@@ -190,4 +190,4 @@ $|x| < 1$"""
                           LaTeX("|x| < 1")])
 
 
-@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$"
+@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\\[|x| < 1\\]"
