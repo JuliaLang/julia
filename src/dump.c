@@ -228,7 +228,7 @@ static int jl_load_sysimg_so()
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.\n");
+                     "Please delete or regenerate sys.{so,dll,dylib}.");
 #ifdef HAVE_CPUID
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
@@ -236,14 +236,14 @@ static int jl_load_sysimg_so()
             if (!RUNNING_ON_VALGRIND) {
                 uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
                 if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.\n");
+                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
             }
         }
         else if (strcmp(cpu_target,"core2") == 0) {
             int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.\n");
+                         "Please delete or regenerate sys.{so,dll,dylib}.");
         }
 #endif
 
@@ -1481,7 +1481,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 int jl_deserialize_verify_mod_list(ios_t *s)
 {
     if (!jl_main_module->uuid) {
-        jl_printf(JL_STDERR, "error: Main module uuid state is invalid for module deserialization.\n");
+        jl_printf(JL_STDERR, "ERROR: Main module uuid state is invalid for module deserialization.\n");
         return 0;
     }
     while (1) {
@@ -1508,7 +1508,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
             m = (jl_module_t*)jl_get_global(jl_main_module, sym);
         }
         if (!m) {
-            jl_printf(JL_STDERR, "error: requiring \"%s\" did not define a corresponding module\n", name);
+            jl_printf(JL_STDERR, "ERROR: requiring \"%s\" did not define a corresponding module\n", name);
             return 0;
         }
         if (!jl_is_module(m)) {
@@ -1516,7 +1516,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
             jl_errorf("invalid module path (%s does not name a module)", name);
         }
         if (m->uuid != uuid) {
-            jl_printf(JL_STDERR, "warning: Module %s uuid did not match cache file\n", name);
+            jl_printf(JL_STDERR, "WARNING: Module %s uuid did not match cache file\n", name);
             return 0;
         }
     }
@@ -1564,9 +1564,9 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                         jl_errorf("invalid redefinition of constant %s", mod->name->name); // this also throws
                     }
                     if (jl_generating_output() && jl_options.incremental) {
-                        jl_errorf("error: cannot replace module %s during incremental compile", mod->name->name);
+                        jl_errorf("cannot replace module %s during incremental compile", mod->name->name);
                     }
-                    jl_printf(JL_STDERR, "Warning: replacing module %s\n", mod->name->name);
+                    jl_printf(JL_STDERR, "WARNING: replacing module %s\n", mod->name->name);
                 }
                 b->value = v;
                 jl_gc_wb_binding(b, v);
@@ -1577,7 +1577,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
         }
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "Warning: error reinitializing value ");
+        jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
         jl_static_show(JL_STDERR, jl_exception_in_transit);
@@ -1657,7 +1657,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
+        jl_errorf("cannot open system image file \"%s\" for writing", fname);
     }
     JL_SIGATOMIC_BEGIN();
     jl_save_system_image_to_stream(&f);
@@ -1771,14 +1771,14 @@ DLLEXPORT void jl_restore_system_image(const char *fname)
         int err = jl_load_sysimg_so();
         if (err != 0) {
             if (jl_sysimg_handle == 0)
-                jl_errorf("System image file \"%s\" not found\n", fname);
-            jl_errorf("Library \"%s\" does not contain a valid system image\n", fname);
+                jl_errorf("system image file \"%s\" not found", fname);
+            jl_errorf("library \"%s\" does not contain a valid system image", fname);
         }
     }
     else {
         ios_t f;
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
-            jl_errorf("System image file \"%s\" not found\n", fname);
+            jl_errorf("system image file \"%s\" not found", fname);
         JL_SIGATOMIC_BEGIN();
         jl_restore_system_image_from_stream(&f);
         ios_close(&f);

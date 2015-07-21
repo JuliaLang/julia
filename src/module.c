@@ -92,7 +92,7 @@ DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
         else if ((*bp)->owner != m) {
             // TODO: change this to an error soon
             jl_printf(JL_STDERR,
-                       "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
+                       "WARNING: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
         else {
             return *bp;
@@ -183,7 +183,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                 if (owner != NULL && tempb->owner != b->owner &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
-                              "Warning: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
+                              "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
                               owner->name->name, imp->name->name, var->name, m->name->name);
                     // mark this binding resolved, to avoid repeating the warning
                     (void)jl_get_binding_wr(m, var);
@@ -258,7 +258,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
         jl_printf(JL_STDERR,
-                  "Warning: could not import %s.%s into %s\n",
+                  "WARNING: could not import %s.%s into %s\n",
                   from->name->name, s->name, to->name->name);
     }
     else {
@@ -281,7 +281,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     return;
                 }
                 jl_printf(JL_STDERR,
-                          "Warning: ignoring conflicting import of %s.%s into %s\n",
+                          "WARNING: ignoring conflicting import of %s.%s into %s\n",
                           from->name->name, s->name, to->name->name);
             }
             else if (bto->constp || bto->value) {
@@ -292,7 +292,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     return;
                 }
                 jl_printf(JL_STDERR,
-                          "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
+                          "WARNING: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
                           from->name->name, s->name, to->name->name);
             }
             else {
@@ -356,7 +356,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
                     var != to->name &&
                     !eq_bindings(jl_get_binding(to,var), b)) {
                     jl_printf(JL_STDERR,
-                              "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
+                              "WARNING: using %s.%s in module %s conflicts with an existing identifier.\n",
                               from->name->name, var->name, to->name->name);
                 }
             }
@@ -441,7 +441,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
                 jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs)) {
                 jl_errorf("invalid redefinition of constant %s", b->name->name);
             }
-            jl_printf(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
+            jl_printf(JL_STDERR,"WARNING: redefining constant %s\n",b->name->name);
         }
     }
     b->value = rhs;
@@ -522,7 +522,7 @@ void jl_module_run_initializer(jl_module_t *m)
         jl_apply(f, NULL, 0);
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "Warning: error initializing module %s:\n", m->name->name);
+        jl_printf(JL_STDERR, "WARNING: error initializing module %s:\n", m->name->name);
         jl_static_show(JL_STDERR, jl_exception_in_transit);
         jl_printf(JL_STDERR, "\n");
     }

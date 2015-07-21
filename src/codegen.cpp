@@ -956,7 +956,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
             return NULL;
         }
         jl_printf(JL_STDERR,
-                  "Warning: Returned code may not match what actually runs.\n");
+                  "WARNING: Returned code may not match what actually runs.\n");
     }
     if (sf->linfo->specFunctionObject != NULL) {
         // found in the system image: force a recompile
@@ -1094,7 +1094,7 @@ const jl_value_t *jl_dump_function_asm(void *f)
         jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
     }
     else {
-        jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
+        jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
     }
     fstream.flush();
 
@@ -3391,7 +3391,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
     }
     else if (head == simdloop_sym) {
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
-            jl_printf(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
+            jl_printf(JL_STDERR, "WARNING: could not attach metadata for @simd loop.\n");
         return NULL;
     }
     else if (head == meta_sym) {
@@ -5514,7 +5514,7 @@ extern "C" void jl_init_codegen(void)
 #endif
     std::string TheCPU = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
     if (TheCPU.empty() || TheCPU == "generic") {
-        jl_printf(JL_STDERR, "warning: unable to determine host cpu name.\n");
+        jl_printf(JL_STDERR, "WARNING: unable to determine host cpu name.\n");
 #ifdef _CPU_ARM_
         MAttrs.append(1, "+vfp2"); // the processors that don't have VFP are old and (hopefully) rare. this affects the platform calling convention.
 #endif

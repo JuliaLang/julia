@@ -142,14 +142,11 @@ static void jl_find_stack_bottom(void)
     int result;
 
     result = getrlimit(RLIMIT_STACK, &rl);
-    if (result == 0)
-    {
-        if (rl.rlim_cur < kStackSize)
-        {
+    if (result == 0) {
+        if (rl.rlim_cur < kStackSize) {
             rl.rlim_cur = kStackSize;
             result = setrlimit(RLIMIT_STACK, &rl);
-            if (result != 0)
-            {
+            if (result != 0) {
                 fprintf(stderr, "setrlimit returned result = %d\n", result);
             }
         }
@@ -684,7 +681,7 @@ void *init_stdio_handle(uv_file fd,int readable)
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
             if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
-                jl_errorf("Error initializing stdio in uv_tty_init (%d, %d)\n", fd, type);
+                jl_errorf("error initializing stdio in uv_tty_init (%d, %d)", fd, type);
             }
             ((uv_tty_t*)handle)->data=0;
             uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
@@ -708,26 +705,26 @@ void *init_stdio_handle(uv_file fd,int readable)
         case UV_NAMED_PIPE:
             handle = malloc(sizeof(uv_pipe_t));
             if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITABLE))) {
-                jl_errorf("Error initializing stdio in uv_pipe_init (%d, %d)\n", fd, type);
+                jl_errorf("error initializing stdio in uv_pipe_init (%d, %d)", fd, type);
             }
             if (uv_pipe_open((uv_pipe_t*)handle,fd)) {
-                jl_errorf("Error initializing stdio in uv_pipe_open (%d, %d)\n", fd, type);
+                jl_errorf("error initializing stdio in uv_pipe_open (%d, %d)", fd, type);
             }
             ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_TCP:
             handle = malloc(sizeof(uv_tcp_t));
             if (uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle)) {
-                jl_errorf("Error initializing stdio in uv_tcp_init (%d, %d)\n", fd, type);
+                jl_errorf("error initializing stdio in uv_tcp_init (%d, %d)", fd, type);
             }
             if (uv_tcp_open((uv_tcp_t*)handle,fd)) {
-                jl_errorf("Error initializing stdio in uv_tcp_open (%d, %d)\n", fd, type);
+                jl_errorf("error initializing stdio in uv_tcp_open (%d, %d)", fd, type);
             }
             ((uv_tcp_t*)handle)->data=0;
             break;
         case UV_UDP:
         default:
-            jl_errorf("This type of handle for stdio is not yet supported (%d, %d)!\n", fd, type);
+            jl_errorf("this type of handle for stdio is not yet supported (%d, %d)", fd, type);
             break;
     }
     return handle;
@@ -922,10 +919,10 @@ static char *abspath(const char *in)
             size_t len = strlen(in);
             char *path = (char*)malloc(PATH_MAX);
             if (uv_cwd(path, &path_size)) {
-                jl_error("fatal error: unexpected error while retrieving current working directory\n");
+                jl_error("fatal error: unexpected error while retrieving current working directory");
             }
             if (path_size + len + 1 >= PATH_MAX) {
-                jl_error("fatal error: current working directory path too long\n");
+                jl_error("fatal error: current working directory path too long");
             }
             path[path_size-1] = PATHSEPSTRING[0];
             memcpy(path+path_size, in, len+1);
@@ -936,12 +933,12 @@ static char *abspath(const char *in)
 #else
     DWORD n = GetFullPathName(in, 0, NULL, NULL);
     if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed\n");
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     char *out = (char*)malloc(n);
     DWORD m = GetFullPathName(in, n, out, NULL);
     if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed\n");
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
 #endif
     return out;
@@ -958,10 +955,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
     if (uv_exepath(free_path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving exepath\n");
+        jl_error("fatal error: unexpected error while retrieving exepath");
     }
     if (path_size >= PATH_MAX) {
-        jl_error("fatal error: jl_options.julia_bin path too long\n");
+        jl_error("fatal error: jl_options.julia_bin path too long");
     }
     jl_options.julia_bin = strdup(free_path);
     if (!jl_options.julia_home) {
@@ -981,7 +978,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_home, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
-                jl_error("fatal error: jl_options.image_file path too long\n");
+                jl_error("fatal error: jl_options.image_file path too long");
             }
             jl_options.image_file = free_path;
         }
@@ -1170,10 +1167,10 @@ void jl_install_default_signal_handlers(void)
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGPIPE\n");
+        jl_error("fatal error: Couldn't set SIGPIPE");
     }
 #if defined (_OS_DARWIN_)
     kern_return_t ret;
@@ -1202,7 +1199,7 @@ void jl_install_default_signal_handlers(void)
     ss.ss_size = sig_stack_size;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
-        jl_errorf("fatal error: sigaltstack: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
     }
 
     struct sigaction act;
@@ -1211,7 +1208,7 @@ void jl_install_default_signal_handlers(void)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #endif // defined(_OS_DARWIN_)
     struct sigaction act_die;
@@ -1220,41 +1217,41 @@ void jl_install_default_signal_handlers(void)
     act_die.sa_sigaction = sigdie_handler;
     act_die.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINFO, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGBUS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGILL, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGTERM, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGABRT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGQUIT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGFPE\n");
+        jl_error("fatal error: Couldn't set SIGFPE");
     }
     if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGILL\n");
+        jl_error("fatal error: Couldn't set SIGILL");
     }
     if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGINT\n");
+        jl_error("fatal error: Couldn't set SIGINT");
     }
     if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGSEGV\n");
+        jl_error("fatal error: Couldn't set SIGSEGV");
     }
     if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTERM\n");
+        jl_error("fatal error: Couldn't set SIGTERM");
     }
     SetUnhandledExceptionFilter(exception_handler);
 #endif
@@ -1271,7 +1268,7 @@ DLLEXPORT void jl_install_sigint_handler(void)
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #endif
 }
@@ -1294,15 +1291,15 @@ static void julia_save()
     if (jl_options.incremental) {
         jl_array_t *worklist = jl_module_init_order;
         if (!worklist) {
-            jl_printf(JL_STDERR, "warning: incremental output requested, but no modules defined during run\n");
+            jl_printf(JL_STDERR, "WARNING: incremental output requested, but no modules defined during run\n");
             return;
         }
         if (jl_options.outputji)
             jl_save_incremental(jl_options.outputji, worklist);
         if (jl_options.outputbc)
-            jl_printf(JL_STDERR, "warning: incremental output to a .bc file is not implemented\n");
+            jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
         if (jl_options.outputo)
-            jl_printf(JL_STDERR, "warning: incremental output to a .o file is not implemented\n");
+            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
     }
     else {
         ios_t *s = NULL;
@@ -1316,7 +1313,7 @@ static void julia_save()
             else {
                 ios_t f;
                 if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-                    jl_errorf("Cannot open system image file \"%s\" for writing.\n", jl_options.outputji);
+                    jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
                 ios_write(&f, (const char*)s->buf, s->size);
                 ios_close(&f);
             }

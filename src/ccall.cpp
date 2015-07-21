@@ -118,7 +118,7 @@ void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
         *hnd = handle = get_library(f_lib);
     void *ptr = jl_dlsym_e(handle, f_name);
     if (!ptr)
-        jl_errorf("symbol could not be found %s: %s\n", f_name, uv_dlerror(handle));
+        jl_errorf("symbol \"%s\" could not be found: %s", f_name, uv_dlerror(handle));
     return ptr;
 }
 
@@ -588,7 +588,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else if (sym.fptr != NULL) {
         res = literal_static_pointer_val(sym.fptr, lrt);
         if (imaging_mode)
-            jl_printf(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
+            jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
         if (imaging_mode) {
@@ -1327,7 +1327,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_static_pointer_val(fptr, funcptype);
         if (imaging_mode)
-            jl_printf(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
+            jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
     }
     else {
         assert(f_name != NULL);
