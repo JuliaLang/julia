@@ -30,7 +30,7 @@ New language features
 
   * Incremental compilation of modules: `Base.compile(module::Symbol)` imports the named module,
     but instead of loading it into the current session saves the result of compiling it in
-    `~/.julia/lib/v0.4`.
+    `~/.julia/lib/v0.4` ([#8745]).
 
       * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.
 
@@ -1432,6 +1432,7 @@ Too numerous to mention.
 [#8672]: https://github.com/JuliaLang/julia/issues/8672
 [#8712]: https://github.com/JuliaLang/julia/issues/8712
 [#8734]: https://github.com/JuliaLang/julia/issues/8734
+[#8745]: https://github.com/JuliaLang/julia/issues/8745
 [#8750]: https://github.com/JuliaLang/julia/issues/8750
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
 [#8791]: https://github.com/JuliaLang/julia/issues/8791
