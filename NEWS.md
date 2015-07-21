@@ -34,7 +34,7 @@ New language features
 
       * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.
 
-      * New option `--compile-incremental={yes|no}` added to invoke the equivalent of ``Base.compile`` from the command line.
+      * New option `--output-incremental={yes|no}` added to invoke the equivalent of ``Base.compile`` from the command line.
 
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
