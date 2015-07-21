@@ -236,16 +236,6 @@ intersect(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
 
-function complement!(s::IntSet)
-    for n = 1:length(s.bits)
-        s.bits[n] = ~s.bits[n]
-    end
-    s.fill1s = !s.fill1s
-    s
-end
-
-complement(s::IntSet) = complement!(copy(s))
-
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         sizehint!(s, s2.limit)
