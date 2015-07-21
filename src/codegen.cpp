@@ -4571,6 +4571,10 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         "-avx",
 #endif
+#if defined(USE_MCJIT) && !defined(V128_BUG)
+        // Prevent zero-sized array error
+        ""
+#endif
     };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+sizeof(mattr)/sizeof(mattr[0]));
     EngineBuilder eb = EngineBuilder(engine_module)
