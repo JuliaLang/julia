@@ -340,15 +340,18 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
-    show_backtrace(io, try
-                         symbol(string(eval_user_input))
-                       catch
-                         :(:) #for when client.jl is not yet defined
-                       end, t, set)
+    process_entry(lastname, lastfile, lastline, n) = show_trace_entry(io, lastname, lastfile, lastline, n)
+
+    process_backtrace(process_entry,
+                        try
+                            symbol(string(eval_user_input))
+                        catch
+                            :(:) #for when client.jl is not yet defined
+                        end, t, set)
 end
 
-# show the backtrace, up to (but not including) top_function
-function show_backtrace(io::IO, top_function::Symbol, t, set)
+# process the backtrace, up to (but not including) top_function
+function process_backtrace(process_func::Function, top_function::Symbol, t, set)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#")
     local fname, file, line
@@ -366,7 +369,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
         if !in(count, set); continue; end
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
-                show_trace_entry(io, lastname, lastfile, lastline, n)
+                process_func(lastname, lastfile, lastline, n)
             end
             n = 1
             lastfile = file; lastline = line; lastname = fname
@@ -375,6 +378,6 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
         end
     end
     if n > 1 || lastline != -11
-        show_trace_entry(io, lastname, lastfile, lastline, n)
+        process_func(lastname, lastfile, lastline, n)
     end
 end

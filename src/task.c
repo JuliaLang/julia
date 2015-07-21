@@ -837,6 +837,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
+    t->backtrace = jl_nothing;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->gcstack = NULL;
@@ -890,7 +891,7 @@ void jl_init_tasks(void)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_emptysvec,
-                                   jl_svec(9,
+                                   jl_svec(10,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
@@ -899,12 +900,14 @@ void jl_init_tasks(void)
                                             jl_symbol("donenotify"),
                                             jl_symbol("result"),
                                             jl_symbol("exception"),
+                                            jl_symbol("backtrace"),
                                             jl_symbol("code")),
-                                   jl_svec(9,
+                                   jl_svec(10,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_sym_type,
                                             jl_any_type, jl_any_type,
-                                            jl_any_type, jl_any_type, jl_function_type),
+                                            jl_any_type, jl_any_type,
+                                            jl_any_type, jl_function_type),
                                    0, 1, 0);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
@@ -938,6 +941,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->result = NULL;
     jl_current_task->donenotify = NULL;
     jl_current_task->exception = NULL;
+    jl_current_task->backtrace = NULL;
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
 

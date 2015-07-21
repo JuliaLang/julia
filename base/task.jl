@@ -5,7 +5,57 @@
 # allow tasks to be constructed with arbitrary function objects
 Task(f) = Task(()->f())
 
-show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
+function show(io::IO, t::Task)
+    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
+    if t.state == :failed
+        show(io, CapturedException(t.result, t.backtrace))
+    end
+end
+
+# Container for a captured exception and its backtrace. Can be serialized.
+type CapturedException
+    ex::Any
+    processed_bt::Array
+
+    function CapturedException(ex, bt_raw)
+        # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
+        # Typically the result of a catch_backtrace()
+
+        # Process bt_raw so that it can be safely serialized
+        bt_lines = Any[]
+        process_func(name, file, line, n) = push!(bt_lines, (name, file, line, n))
+        process_backtrace(process_func, :(:), bt_raw, 1:100) # Limiting this to 100 lines.
+
+        new(ex, bt_lines)
+    end
+end
+
+function show(io::IO, ce::CapturedException)
+    show(io, ce.ex)
+    for entry in ce.processed_bt
+        show_trace_entry(io, entry...)
+    end
+end
+
+type CompositeException <: Exception
+    exceptions::Array
+    CompositeException() = new(Any[])
+end
+length(c::CompositeException) = length(c.exceptions)
+push!(c::CompositeException, ex) = push!(c.exceptions, ex)
+
+function show(io::IO, ex::CompositeException)
+    if length(ex) > 0
+        show(io, ex.exceptions[1])
+        remaining = length(ex) - 1
+        if remaining > 0
+            print(io, "\n\n...and $remaining other exceptions.\n")
+        end
+    else
+        print(io, "CompositeException()\n")
+    end
+end
+
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
@@ -29,8 +79,8 @@ function throwto(t::Task, exc)
     yieldto(t)
 end
 
-function task_local_storage()
-    t = current_task()
+task_local_storage() = get_task_tls(current_task())
+function get_task_tls(t::Task)
     if is(t.storage, nothing)
         t.storage = ObjectIdDict()
     end
@@ -66,12 +116,17 @@ function wait(t::Task)
     return t.result
 end
 
+suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     err = (t.state == :failed)
     result = t.result
     nexttask = t.last
     handled = true
+    if err
+        t.backtrace = catch_backtrace()
+    end
 
     q = t.consumers
 
@@ -105,12 +160,14 @@ function task_done_hook(t::Task)
                 active_repl_backend.in_eval
                 throwto(active_repl_backend.backend_task, result)
             end
-            let bt = catch_backtrace()
-                # run a new task to print the error for us
-                @schedule with_output_color(:red, STDERR) do io
-                    print(io, "ERROR (unhandled task failure): ")
-                    showerror(io, result, bt)
-                    println(io)
+            if !suppress_excp_printing(t)
+                let bt = t.backtrace
+                    # run a new task to print the error for us
+                    @schedule with_output_color(:red, STDERR) do io
+                        print(io, "ERROR (unhandled task failure): ")
+                        showerror(io, result, bt)
+                        println(io)
+                    end
                 end
             end
         end
@@ -326,7 +383,6 @@ end
 
 
 ## dynamically-scoped waiting for multiple items
-
 sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
 
 function sync_end()
@@ -336,9 +392,26 @@ function sync_end()
     end
     refs = spawns[1]
     task_local_storage(:SPAWNS, spawns[2])
+
+    c_ex = CompositeException()
     for r in refs
-        wait(r)
+        try
+            wait(r)
+        catch ex
+            if !isa(r, Task) || (isa(r, Task) && !(r.state == :failed))
+                rethrow(ex)
+            end
+        finally
+            if isa(r, Task) && (r.state == :failed)
+                push!(c_ex, CapturedException(r.result, r.backtrace))
+            end
+        end
     end
+
+    if length(c_ex) > 0
+        throw(c_ex)
+    end
+    nothing
 end
 
 macro sync(block)
@@ -354,6 +427,10 @@ function sync_add(r)
     spawns = get(task_local_storage(), :SPAWNS, ())
     if !is(spawns,())
         push!(spawns[1], r)
+        if isa(r, Task)
+            tls_r = get_task_tls(r)
+            tls_r[:SUPPRESS_EXCEPTION_PRINTING] = true
+        end
     end
     r
 end
