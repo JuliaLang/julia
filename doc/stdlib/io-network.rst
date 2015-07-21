@@ -723,22 +723,33 @@ Network I/O
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
    was created on and the server itself.
 
-.. function:: watch_file(cb=false, s; poll=false)
+.. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 
-   Watch file or directory ``s`` and run callback ``cb`` when ``s`` is modified. The ``poll`` parameter specifies whether to use file system event monitoring or polling. The callback function ``cb`` should accept 3 arguments: ``(filename, events, status)`` where ``filename`` is the name of file that was modified, ``events`` is an object with boolean fields ``changed`` and ``renamed`` when using file system event monitoring, or ``readable`` and ``writable`` when using polling, and ``status`` is always 0. Pass ``false`` for ``cb`` to not use a callback function.
+   Monitor a file descriptor ``fd`` for changes in the read or write availability, and with a timeout given by ``timeout_s`` seconds.
 
-.. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
+   The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to true.
 
-   Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
-   If the timeout is not needed, use ``wait(fd)`` instead. The keyword arguments determine which of read and/or write status
-   should be monitored and at least one of them needs to be set to true.
    The returned value is an object with boolean fields ``readable``, ``writable``, and
    ``timedout``, giving the result of the polling.
 
-.. function:: poll_file(s, interval_seconds::Real, seconds::Real)
+   Internally, this uses a ``FDWatcher``.
 
-   Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
-   the file changed, a return value of false indicates a timeout.
+.. function:: poll_file(path, interval_seconds::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
+
+   Monitor a file for changes by polling every ``interval_seconds`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
+
+   Returns a pair of ``StatStruct`` objects when a change is detected. (using ``watch_file`` is preferred, if supported)
+
+   Internally, this uses a ``PollingFileWatcher``.
+
+.. function:: watch_file(path, timeout_s::Real)
+
+   Watch file or directory ``s`` for changes until a change occurs or ``timeout_s`` seconds have elapsed.
+
+   The returned value is an object with boolean fields ``changed``, ``renamed``, and
+   ``timedout``, giving the result of watching the file.
+
+   Internally, this uses a ``FileMonitor``.
 
 .. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 

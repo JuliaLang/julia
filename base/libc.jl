@@ -23,6 +23,15 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     ccall((@windows? :_dup2 : :dup2),Int32,
     (Int32,Int32),src.fd,target.fd))
 
+#Wrapper for an OS file descriptor (for Windows)
+@windows_only immutable WindowsRawSocket
+    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
+end
+
+@unix_only _get_osfhandle(fd::RawFD) = fd
+@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+@windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
+
 ## FILE ##
 
 immutable FILE

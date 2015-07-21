@@ -15,6 +15,8 @@ immutable StatStruct
     ctime   :: Float64
 end
 
+StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
 StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),

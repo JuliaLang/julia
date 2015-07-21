@@ -4,6 +4,7 @@
 include("uv_constants.jl")
 
 import .Libc: RawFD, dup
+@windows_only import .Libc: WindowsRawSocket
 
 ## types ##
 typealias Callback Union{Function,Bool}
@@ -515,6 +516,7 @@ function _uv_hook_close(uv::Union{AsyncStream,UVServer})
     notify(uv.closenotify)
     try notify(uv.readnotify) end
     try notify(uv.connectnotify) end
+    nothing
 end
 
 ##########################################
@@ -595,6 +597,7 @@ function _uv_hook_close(t::Timer)
     unpreserve_handle(t)
     disassociate_julia_struct(t)
     t.handle = C_NULL
+    notify(t.cond)
     nothing
 end
 
