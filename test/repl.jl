@@ -97,7 +97,7 @@ cd(origpwd)
 write(stdin_write, "1+1\n") # populate history with a trivial input
 readline(stdout_read)
 write(stdin_write, "\e[A\n")
-t = Timer(10) do
+t = Timer(10) do t
     isopen(t) || return
     error("Stuck waiting for the repl to write `1+1`")
 end
