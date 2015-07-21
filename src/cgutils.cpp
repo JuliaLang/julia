@@ -2044,17 +2044,14 @@ static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, j
         if (jl_isbits(sty)) {
             Type *lt = julia_type_to_llvm(ty);
             size_t na = nargs-1 < nf ? nargs-1 : nf;
-            if (lt == T_void) {
-                for (size_t i=0; i < na; i++)
-                    emit_unboxed(args[i+1], ctx);  // do side effects
-                return mark_julia_type(UndefValue::get(NoopType),ty);
-            }
-            Value *strct = UndefValue::get(lt);
+            Value *strct = UndefValue::get(lt == T_void ? NoopType : lt);
             unsigned idx = 0;
             for (size_t i=0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types,i);
                 Type *fty = julia_type_to_llvm(jtype);
                 Value *fval = emit_unboxed(args[i+1], ctx);
+                if (!jl_subtype(expr_type(args[i+1],ctx), jtype, 0))
+                    emit_typecheck(fval, jtype, "new", ctx);
                 if (!type_is_ghost(fty)) {
                     fval = emit_unbox(fty, fval, jtype);
                     if (fty == T_int1)

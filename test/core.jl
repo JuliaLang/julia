@@ -3138,3 +3138,20 @@ function Sampler11587()
     Sampler11587(zeros(Int,a), zeros(Float64,a))
 end
 @test isa(Sampler11587(), Sampler11587{2})
+
+# issue #8010 - error when convert returns wrong type during new()
+immutable Vec8010{T}
+    x::T
+    y::T
+end
+Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
+Base.convert{T}(::Type{Vec8010{T}},x::AbstractVector) = Vec8010(x)
+Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
+immutable MyType8010
+     m::Vec8010{Float32}
+end
+immutable MyType8010_ghost
+     m::Void
+end
+@test_throws TypeError MyType8010([3.0;4.0])
+@test_throws TypeError MyType8010_ghost([3.0;4.0])
