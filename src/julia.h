@@ -1316,6 +1316,7 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *exception;
+    jl_value_t *backtrace;
     jl_function_t *start;
     jl_jmp_buf ctx;
 #ifndef COPY_STACKS

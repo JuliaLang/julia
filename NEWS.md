@@ -141,6 +141,15 @@ Language changes
   * The default `importall Base.Operators` is deprecated, and relying on it
     will give a warning ([#8113]).
 
+  * `remotecall_fetch` and `fetch` now rethrow any uncaught remote exception locally as a
+    `RemoteException`. Previously they would return the remote exception object.
+    The worker pid, remote exception and remote backtrace are available in the
+    thrown `RemoteException`.
+
+  * If any of the enclosed async operations in a `@sync` block throw exceptions, they
+    are now collected in a `CompositeException` and the `CompositeException` thrown.
+
+
 Command line option changes
 ---------------------------
 
