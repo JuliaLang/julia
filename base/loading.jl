@@ -229,7 +229,8 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             --output-ji $output --output-incremental=yes
             --startup-file=no --history-file=no
             --eval $code_object`,
-        ["JULIA_HOME=$JULIA_HOME", "HOME=$(homedir())"])), "w", STDOUT)
+        ["JULIA_HOME=$JULIA_HOME", "HOME=$(homedir())",
+         "JULIA_PKGDIR=$(Pkg.dir())"])), "w", STDOUT)
     serialize(io, quote
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $LOAD_PATH)
