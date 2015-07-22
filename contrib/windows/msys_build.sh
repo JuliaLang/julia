@@ -110,6 +110,7 @@ if [ -z "$USEMSVC" ]; then
       echo "Downloading $f"
       $curlflags -O https://bintray.com/artifact/download/tkelman/generic/$f
     fi
+    deps/jlchecksum $f
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
     export PATH=$PATH:$PWD/mingw$bits/bin
@@ -142,6 +143,7 @@ fi
   echo "Downloading $f"
   $curlflags -O https://bintray.com/artifact/download/tkelman/generic/$f
 #fi
+deps/jlchecksum $f
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
 echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
