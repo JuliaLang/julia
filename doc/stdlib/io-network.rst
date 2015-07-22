@@ -732,24 +732,26 @@ Network I/O
    The returned value is an object with boolean fields ``readable``, ``writable``, and
    ``timedout``, giving the result of the polling.
 
-   Internally, this uses a ``FDWatcher``.
-
 .. function:: poll_file(path, interval_seconds::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
    Monitor a file for changes by polling every ``interval_seconds`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
+   The `timeout_s` should be a long interval; the default is 5.007 seconds.
 
-   Returns a pair of ``StatStruct`` objects when a change is detected. (using ``watch_file`` is preferred, if supported)
+   Returns a pair of ``StatStruct`` objects ``(previous, current)`` when a change is detected.
 
-   Internally, this uses a ``PollingFileWatcher``.
+   To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect notification of changes.
+   However, using ``watch_file`` for this operation is preferred, since it is more reliable and efficient,
+   although in some situations it may not be available.
 
 .. function:: watch_file(path, timeout_s::Real)
 
    Watch file or directory ``s`` for changes until a change occurs or ``timeout_s`` seconds have elapsed.
 
-   The returned value is an object with boolean fields ``changed``, ``renamed``, and
-   ``timedout``, giving the result of watching the file.
+   The returned value is an object with boolean fields ``changed``, ``renamed``,
+   and ``timedout``, giving the result of watching the file.
 
-   Internally, this uses a ``FileMonitor``.
+   This behavior of this function varies slightly across platforms.
+   See https://nodejs.org/api/fs.html#fs_caveat for more detailed information.
 
 .. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 

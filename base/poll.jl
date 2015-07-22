@@ -61,9 +61,6 @@ type PollingFileWatcher <: UVPollingWatcher
     notify::Condition
     active::Bool
     function PollingFileWatcher(file::AbstractString, interval::Float64=5.007) # same default as nodejs
-        if interval < 2
-            warn("For maximum portability, use multi-second intervals with PollingFileWatcher")
-        end
         handle = Libc.malloc(_sizeof_uv_fs_poll)
         this = new(handle, file, round(UInt32, interval*1000), Condition(), false)
         associate_julia_struct(handle, this)
