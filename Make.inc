@@ -397,6 +397,10 @@ ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 
+# Special case fortran LDFLAGS, because they generally might be quite different
+# if C/C++ are built with Clang
+FORTRAN_LDFLAGS := $(LDFLAGS)
+
 ifeq ($(SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS = -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
@@ -837,10 +841,11 @@ endif
 
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LDFLAGS += -L$(build_libdir) -lc++abi
 CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
 CPPFLAGS += -I$(build_includedir)/c++/v1
+ifeq ($(OS), Linux)
 CUSTOM_LD_LIBRARY_PATH = LD_LIBRARY_PATH="$(build_libdir)"
+endif # Linux
 ifeq ($(USEICC),1)
 CXXFLAGS += -cxxlib-nostd -static-intel
 CLDFLAGS += -static-intel

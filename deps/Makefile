@@ -24,7 +24,7 @@ include $(JULIAHOME)/Make.inc
 
 ## Some shared configuration options ##
 
-CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) $(CUSTOM_LD_LIBRARY_PATH)
+CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
@@ -33,7 +33,7 @@ ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 endif
 endif
-CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS)"
+CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS) $(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
 
 CMAKE_CC_ARG = $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG = $(CXX_ARG) $(DEPS_CXXFLAGS)
@@ -99,7 +99,8 @@ endif
 ifeq ($(OS), Linux)
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 STAGE1_DEPS += patchelf
-PATCHELF=$(build_bindir)/patchelf
+PATCHELF_TARGET=$(build_bindir)/patchelf
+PATCHELF=$(CUSTOM_LD_LIBRARY_PATH) $(PATCHELF_TARGET)
 else
 PATCHELF=patchelf
 endif
@@ -439,7 +440,7 @@ endif # LLVM_CXXFLAGS
 LLVM_MFLAGS += $(LLVM_CC)
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LDFLAGS += -Wl,-R$(build_libdir) -lc++ -lc++abi
+LLVM_LDFLAGS += -Wl,-R$(build_libdir) $(CXXLDFLAGS)
 ifeq ($(USEICC),1)
 LLVM_LDFLAGS += -no_cpprt
 endif # USEICC
@@ -1281,7 +1282,7 @@ ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
-ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
+ARPACK_FLAGS += LDFLAGS="$(FORTRAN_LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
@@ -1329,7 +1330,7 @@ ifeq ($(OS), Linux)
 endif
 	touch -c $@
 ifneq ($(PATCHELF),patchelf)
-$(ARPACK_OBJ_TARGET): $(PATCHELF)
+$(ARPACK_OBJ_TARGET): $(PATCHELF_TARGET)
 endif
 
 clean-arpack:
@@ -1442,8 +1443,8 @@ endif
 	touch -c $@
 
 ifneq ($(PATCHELF),patchelf)
-$(FFTW_DOUBLE_OBJ_TARGET): $(PATCHELF)
-$(FFTW_SINGLE_OBJ_TARGET): $(PATCHELF)
+$(FFTW_DOUBLE_OBJ_TARGET): $(PATCHELF_TARGET)
+$(FFTW_SINGLE_OBJ_TARGET): $(PATCHELF_TARGET)
 endif
 
 clean-fftw: clean-fftw-single clean-fftw-double
