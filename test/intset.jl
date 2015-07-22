@@ -26,6 +26,7 @@ s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 @test first(s) == 0
 @test length(s) == 9
 @test pop!(s) == 10002
+@test_throws KeyError pop!(s, -1)
 @test length(s) == 8
 @test shift!(s) == 0
 @test length(s) == 7
