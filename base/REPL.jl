@@ -36,8 +36,8 @@ abstract AbstractREPL
 answer_color(::AbstractREPL) = ""
 
 type REPLBackend
-    repl_channel::RemoteRef
-    response_channel::RemoteRef
+    repl_channel::Channel
+    response_channel::Channel
     in_eval::Bool
     ans
     backend_task::Task
@@ -75,7 +75,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
     end
 end
 
-function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
+function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend = REPLBackend(repl_channel, response_channel, false, nothing)
     backend.backend_task = @schedule begin
         # include looks at this to determine the relative include path
@@ -154,13 +154,13 @@ end
 
 # A reference to a backend
 immutable REPLBackendRef
-    repl_channel::RemoteRef
-    response_channel::RemoteRef
+    repl_channel::Channel
+    response_channel::Channel
 end
 
 function run_repl(repl::AbstractREPL)
-    repl_channel = RemoteRef()
-    response_channel = RemoteRef()
+    repl_channel = Channel(1)
+    response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
     backend
@@ -665,7 +665,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     #
     # Usage:
     #
-    # repl_channel,response_channel = RemoteRef(),RemoteRef()
+    # repl_channel,response_channel = Channel(),Channel()
     # start_repl_backend(repl_channel, response_channel)
     # setup_interface(REPLDisplay(t),repl_channel,response_channel)
     #
@@ -894,8 +894,8 @@ input_color(r::StreamREPL) = r.input_color
 function run_repl(stream::AsyncStream)
     repl =
     @async begin
-        repl_channel = RemoteRef()
-        response_channel = RemoteRef()
+        repl_channel = Channel(1)
+        response_channel = Channel(1)
         start_repl_backend(repl_channel, response_channel)
         StreamREPL_frontend(repl, repl_channel, response_channel)
     end
