@@ -11,6 +11,10 @@ It can also install external libraries using your operating system's standard sy
 The list of registered Julia packages can be found at `<http://pkg.julialang.org>`_.
 All package manager commands are found in the :mod:`Pkg <Base.Pkg>` module, included in Julia's :mod:`Base` install.
 
+First we'll go over the mechanics of the ``Pkg`` family of commands and then we'll provide some guidance on how
+to get your package registered. Be sure to read the section below on package naming conventions, tagging versions
+and the importance of a ``REQUIRE`` file for when you're ready to add your code to the curated METADATA repository.
+
 Package Status
 --------------
 
@@ -610,7 +614,14 @@ Guidelines for naming a package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Package names should be sensible to most Julia users, *even to those who are
-not domain experts*.
+not domain experts*. When you submit your package to METADATA, you can expect
+a little back and forth about the package name with collaborators, especially if it's
+ambiguous or can be confused with something other than what it is. During this
+bike-shedding, it's not uncommon to get a range of *different* name suggestions.
+These are only suggestions though, with the intent being to keep a tidy namespace in
+the curated METADATA repository. Since this repository belongs to the entire
+community, there will likely be a few collaborators who care your package name.
+Here are some guidelines to follow in naming your package:
 
 1. Avoid jargon. In particular, avoid acronyms unless there is minimal
    possibility of confusion.
@@ -674,7 +685,10 @@ name of a license that the package generator knows about::
     INFO: Generating README.md
     INFO: Generating src/FooBar.jl
     INFO: Generating test/runtests.jl
+    INFO: Generating REQUIRE
     INFO: Generating .travis.yml
+    INFO: Generating appveyor.yml
+    INFO: Generating .gitignore
     INFO: Committing FooBar generated files
 
 This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git repository, generates a bunch of files
@@ -695,12 +709,15 @@ that all packages should have, and commits them to the repository::
 
         Julia Version 0.3.0-prerelease+3217 [5fcfb13*]
 
-     .travis.yml      | 16 +++++++++++++
+     .gitignore       |  2 ++
+     .travis.yml      | 13 +++++++++++++
      LICENSE.md       | 22 +++++++++++++++++++++++
      README.md        |  3 +++
+     REQUIRE          |  1 +
+     appveyor.yml     | 34 ++++++++++++++++++++++++++++++++++
      src/FooBar.jl    |  5 +++++
      test/runtests.jl |  5 +++++
-     5 files changed, 51 insertions(+)
+     8 files changed, 85 insertions(+)
 
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License,
 indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.  If you want to use a
@@ -709,8 +726,9 @@ different license, you can ask us to add it to the package generator, or just pi
 
 If you created a GitHub account and configured git to know about it, :func:`Pkg.generate` will set an appropriate origin URL
 for you.  It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated
-testing service.  You will have to enable testing on the Travis website for your package repository, but once you've done that,
-it will already have working tests.  Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
+testing service, and an ``appveyor.yml`` file for using `AppVeyor <http://appveyor.com>`_.  You will have to enable testing on
+the Travis and AppVeyor websites for your package repository, but once you've done that, it will already have working tests.
+Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
 Making Your Package Available
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
