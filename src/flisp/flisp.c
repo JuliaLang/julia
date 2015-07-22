@@ -162,8 +162,8 @@ void fl_raise(fl_context_t *fl_ctx, value_t e)
 static value_t make_error_msg(fl_context_t *fl_ctx, char *format, va_list args)
 {
     char msgbuf[512];
-    vsnprintf(msgbuf, sizeof(msgbuf), format, args);
-    return string_from_cstr(fl_ctx, msgbuf);
+    size_t len = vsnprintf(msgbuf, sizeof(msgbuf), format, args);
+    return string_from_cstrn(fl_ctx, msgbuf, len);
 }
 
 void lerrorf(fl_context_t *fl_ctx, value_t e, char *format, ...)
