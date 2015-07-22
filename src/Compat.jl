@@ -141,6 +141,21 @@ function rewrite_dict(ex)
     newex
 end
 
+function rewrite_ordereddict(ex)
+    length(ex.args) == 1 && return ex
+
+    f = ex.args[1]
+    newex = Expr(:call, f, :[])
+
+    for i = 2:length(ex.args)
+        pair = ex.args[i]
+        !isexpr(pair, :(=>)) && return ex
+        push!(newex.args[2].args, Expr(:tuple, pair.args...))
+    end
+
+    newex
+end
+
 # rewrite Julia 0.4-style split or rsplit (str, splitter; kws...)
 # into 0.2/0.3-style positional arguments
 function rewrite_split(ex, f)
@@ -261,6 +276,8 @@ function _compat(ex::Expr)
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
             ex = rewrite_dict(ex)
+        elseif VERSION < v"0.4.0-dev+980" && (f == :OrderedDict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :OrderedDict))
+            ex = rewrite_ordereddict(ex)
         elseif VERSION < v"0.4.0-dev+129" && (f == :split || f == :rsplit) && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
             ex = rewrite_split(ex, f)
         elseif VERSION < v"0.4.0-dev+3732" && haskey(calltypes, f) && length(ex.args) > 1

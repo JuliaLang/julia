@@ -34,9 +34,9 @@ wherever you want to use syntax that differs in the latest Julia
 
 Currently, the `@compat` macro supports the following syntaxes:
 
-* `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction.
+* `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction. (Also works for DataStructures.OrderedDict)
 
-* `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction.
+* `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction. (Also works for DataStructures.OrderedDict)
 
 * `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
 
