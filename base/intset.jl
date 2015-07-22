@@ -78,6 +78,9 @@ function pop!(s::IntSet, n::Integer, deflt)
             return deflt
         end
     end
+    if n < 0
+        return deflt
+    end
     mask = UInt32(1)<<(n&31)
     idx = n>>5 + 1
     b = s.bits[idx]
