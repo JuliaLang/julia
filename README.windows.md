@@ -249,7 +249,15 @@ of the file) with `config.vm.provision :shell, :inline => $script_cygwin`.
 
 ### GDB hangs with cygwin mintty
 
-- run gdb under the windows console (cmd) instead. gdb [does not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications.
+- Run gdb under the windows console (cmd) instead. gdb [does not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications. You can use `cmd /c start` to start the windows console from mintty if necessary.
+
+### GDB not attaching to the right process
+
+- Use the PID from the windows task manager or `WINPID` from the `ps` command instead of the PID from unix style command line tools (e.g. `pgrep`). You may need to add the PID column if it is not shown by default in the windows task manager.
+
+### GDB not showing the right backtrace
+
+- When attaching to the julia process, GDB may not be attaching to the right thread. Use `info threads` command to show all the threads and `thread <threadno>` to switch threads.
 
 ### Build process is slow/eats memory/hangs my computer
 
