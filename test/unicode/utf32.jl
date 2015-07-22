@@ -171,3 +171,37 @@ u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
 w = wstring(u8)
 @test length(w) == 5 && utf8(w) == u8 && collect(u8) == collect(w)
 @test u8 == WString(w.data)
+
+# 12268
+for (fun, S, T) in ((utf16, UInt16, UTF16String), (utf32, Char, UTF32String))
+    # AbstractString
+    str = "abcd\0\uff\u7ff\u7fff\U7ffff"
+    tst = SubString(convert(T,str),4)
+    cmp = Char['d','\0','\uff','\u7ff','\u7fff','\U7ffff']
+    cmpch = Char['d','\0','\uff','\u7ff','\u7fff','\U7ffff','\0']
+    cmp16 = UInt16[0x0064,0x0000,0x00ff,0x07ff,0x7fff,0xd9bf,0xdfff,0x0000]
+    x = fun(tst)
+    cmpx = (S == UInt16 ? cmp16 : cmpch)
+    @test typeof(tst) == SubString{T}
+    @test convert(T, tst) == str[4:end]
+    S != Char && @test convert(Vector{Char}, x) == cmp
+    # Vector{T} / Array{T}
+    @test convert(Vector{S}, x) == cmpx
+    @test convert(Array{S}, x) == cmpx
+    # Embedded nul checking
+    @test Base.containsnul(x)
+    @test Base.containsnul(tst)
+    # map
+    @test_throws UnicodeError map(islower, x)
+    @test_throws ArgumentError map(islower, tst)
+    # SubArray conversion
+    subarr = sub(cmp, 1:6)
+    @test convert(T, subarr) == str[4:end]
+end
+
+# Char to UTF32String
+@test utf32('\U7ffff') == utf32("\U7ffff")
+@test convert(UTF32String, '\U7ffff') == utf32("\U7ffff")
+
+@test isvalid(UTF32String, Char['d','\uff','\u7ff','\u7fff','\U7ffff'])
+@test reverse(utf32("abcd \uff\u7ff\u7fff\U7ffff")) == utf32("\U7ffff\u7fff\u7ff\uff dcba")
