@@ -214,6 +214,8 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
+convert(::Type{SubString{UTF8String}}, s::SubString{ASCIIString}) =
+    SubString(utf8(s.string), s.offset+1, s.endof+s.offset)
 convert(::Type{UTF8String}, a::Array{UInt8,1}) = isvalid(UTF8String, a) ? UTF8String(a) : throw(UnicodeError(UTF_ERR_INVALID_8))
 function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractString)
     l = length(a)
