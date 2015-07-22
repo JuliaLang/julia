@@ -119,7 +119,7 @@ end
 
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = Int(n + dim(n,2))
+        lim = Int(n + div(n,2))
         sizehint!(s, lim)
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
@@ -274,7 +274,7 @@ function ==(s1::IntSet, s2::IntSet)
             return false
         end
     end
-    filln = s1.fill1s ? UInt32(-1) : UInt32(0)
+    filln = s1.fill1s ? reinterpret(UInt32, Int32(-1)) : UInt32(0)
     if lim1 > lim2
         for i = lim2:lim1
             if s1.bits[i] != filln
