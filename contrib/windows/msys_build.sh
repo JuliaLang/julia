@@ -11,8 +11,21 @@ cd `dirname "$0"`/../..
 # Stop on error
 set -e
 
-# Fail fast on AppVeyor if there are newer pending commits in this PR
 curlflags="curl --retry 10 -k -L -y 5"
+checksum_download() {
+  # checksum_download filename url
+  f=$1
+  url=$2
+  if [ -e "$f" ]; then
+    deps/jlchecksum "$f" 2> /dev/null && return
+    echo "Checksum for '$f' changed, download again." >&2
+  fi
+  echo "Downloading '$f'"
+  $curlflags -O "$url"
+  deps/jlchecksum "$f"
+}
+
+# Fail fast on AppVeyor if there are newer pending commits in this PR
 if [ -n "$APPVEYOR_PULL_REQUEST_NUMBER" ]; then
   # download a handy cli json parser
   if ! [ -e jq.exe ]; then
@@ -103,14 +116,11 @@ mkdir -p usr/Git/tmp
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
 
-mingw=http://sourceforge.net/projects/mingw
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
-    if ! [ -e $f ]; then
-      echo "Downloading $f"
-      $curlflags -O $mingw-w64/files/Toolchains%20targetting%20Win$bits/Personal%20Builds/mingw-builds/4.9.2/threads-win32/$exc/$f
-    fi
+    checksum_download \
+        "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
     export PATH=$PATH:$PWD/mingw$bits/bin
@@ -139,10 +149,8 @@ else
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
 fi
 
-if ! [ -e $f ]; then
-  echo "Downloading $f"
-  $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
-fi
+checksum_download \
+    "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
 echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
@@ -163,7 +171,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   f="/make/make-3.81-2/make-3.81-2-msys-1.0.11-bin.tar"
   if ! [ -e `basename $f.lzma` ]; then
     echo "Downloading `basename $f`"
-    $curlflags -O $mingw/files/MSYS/Base$f.lzma
+    $curlflags -O http://sourceforge.net/projects/mingw/files/MSYS/Base$f.lzma
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
