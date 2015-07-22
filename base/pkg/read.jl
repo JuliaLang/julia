@@ -168,9 +168,9 @@ end
 
 function issue_url(pkg::AbstractString)
     ispath(pkg,".git") || return ""
-    m = match(Git.GITHUB_REGEX, url(pkg))
-    m == nothing && return ""
-    return "https://github.com/" * m.captures[1] * "/issues"
+    maybe_m = match(Git.GITHUB_REGEX, url(pkg))
+    isnull(maybe_m) && return
+    return "https://github.com/" * get(maybe_m).captures[1] * "/issues"
 end
 
 end # module

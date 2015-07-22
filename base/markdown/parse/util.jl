@@ -100,8 +100,9 @@ function startswith(stream::IO, r::Regex; eat = true, padding = false)
     padding && skipwhitespace(stream)
     line = chomp(readline(stream))
     seek(stream, start)
-    m = match(r, line)
-    m == nothing && return ""
+    maybe_m = match(r, line)
+    isnull(maybe_m) && return ""
+    m = get(maybe_m)
     eat && @dotimes length(m.match) read(stream, Char)
     return m.match
 end

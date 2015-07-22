@@ -936,19 +936,19 @@ alignment(x::Any) = (0, length(sprint(showcompact_lim, x)))
 alignment(x::Number) = (length(sprint(showcompact_lim, x)), 0)
 alignment(x::Integer) = (length(sprint(showcompact_lim, x)), 0)
 function alignment(x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact_lim, x))
-    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    maybe_m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact_lim, x))
+    isnull(maybe_m) ? (length(sprint(showcompact_lim, x)), 0) :
+                   (length(get(maybe_m).captures[1]), length(get(maybe_m).captures[2]))
 end
 function alignment(x::Complex)
-    m = match(r"^(.*[\+\-])(.*)$", sprint(showcompact_lim, x))
-    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    maybe_m = match(r"^(.*[\+\-])(.*)$", sprint(showcompact_lim, x))
+    isnull(maybe_m) ? (length(sprint(showcompact_lim, x)), 0) :
+                   (length(get(maybe_m).captures[1]), length(get(maybe_m).captures[2]))
 end
 function alignment(x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(showcompact_lim, x))
-    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    maybe_m = match(r"^(.*?/)(/.*)$", sprint(showcompact_lim, x))
+    isnull(maybe_m) ? (length(sprint(showcompact_lim, x)), 0) :
+                   (length(get(maybe_m).captures[1]), length(get(maybe_m).captures[2]))
 end
 
 const undef_ref_str = "#undef"

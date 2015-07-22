@@ -141,7 +141,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32
     compile(re)
     opts = re.match_options | add_opts
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
-        return nothing
+        return Nullable{RegexMatch}()
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
@@ -149,7 +149,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32
     cap = Union{Void,SubString{UTF8String}}[
             ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
-    RegexMatch(mat, cap, ovec[1]+1, off, re)
+    Nullable(RegexMatch(mat, cap, ovec[1]+1, off, re))
 end
 
 match(re::Regex, str::Union{ByteString,SubString}, idx::Integer, add_opts::UInt32=UInt32(0)) =
@@ -221,10 +221,11 @@ end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
-done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
+done(itr::RegexMatchIterator, prev_match) = isnull(prev_match)
 
 # Assumes prev_match is not nothing
-function next(itr::RegexMatchIterator, prev_match)
+function next(itr::RegexMatchIterator, maybe_prev_match)
+    prev_match = get(maybe_prev_match)
     prevempty = isempty(prev_match.match)
 
     if itr.overlap
@@ -242,7 +243,7 @@ function next(itr::RegexMatchIterator, prev_match)
         mat = match(itr.regex, itr.string, offset,
                     prevempty ? opts_nonempty : UInt32(0))
 
-        if mat === nothing
+        if isnull(mat)
             if prevempty && offset <= length(itr.string.data)
                 offset = nextind(itr.string, offset)
                 prevempty = false
@@ -251,10 +252,10 @@ function next(itr::RegexMatchIterator, prev_match)
                 break
             end
         else
-            return (prev_match, mat)
+            return (get(maybe_prev_match), mat)
         end
     end
-    (prev_match, nothing)
+    (get(maybe_prev_match), Nullable{RegexMatch}())
 end
 
 function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)

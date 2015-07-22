@@ -172,9 +172,9 @@ function clone(url_or_pkg::AbstractString)
         # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || error("can't determine package name from URL: $url")
-        pkg = m.captures[1]
+        maybe_m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
+        isnull(maybe_m) && error("can't determine package name from URL: $url")
+        pkg = get(maybe_m).captures[1]
     end
     clone(url,pkg)
 end
@@ -312,9 +312,9 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
     commit = isempty(commit) ? Git.head(dir=dir) :
         Git.readchomp(`rev-parse --verify $commit`, dir=dir)
     isempty(url) && (url = Git.readchomp(`config remote.origin.url`, dir=dir))
-    m = match(Git.GITHUB_REGEX, url)
-    m == nothing && error("not a GitHub repo URL, can't make a pull request: $url")
-    owner, repo = m.captures[2:3]
+    maybe_m = match(Git.GITHUB_REGEX, url)
+    isnull(maybe_m) && error("not a GitHub repo URL, can't make a pull request: $url")
+    owner, repo = get(maybe_m).captures[2:3]
     user = GitHub.user()
     info("Forking $owner/$repo to $user")
     response = GitHub.fork(owner,repo)

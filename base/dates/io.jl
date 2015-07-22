@@ -65,12 +65,12 @@ duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
 function DateFormat(f::AbstractString,locale::AbstractString="english")
     slots = Slot[]
     trans = []
-    begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
+    begtran = get(match(r"^.*?(?=[ymuUdHMSsEe])",f)).match
     ss = split(f,r"^.*?(?=[ymuUdHMSsEe])")
     s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSsEe]+|(?<=([ymuUdHMSsEe])(?!\1))")
     for (i,k) in enumerate(s)
         k == "" && break
-        tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
+        tran = i >= endof(s) ? r"$" : get(match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f)).match
         slot = tran == "" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
         typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :

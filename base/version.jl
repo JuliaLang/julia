@@ -82,8 +82,9 @@ function split_idents(s::AbstractString)
 end
 
 VersionNumber(v::AbstractString) = begin
-    m = match(VERSION_REGEX, v)
-    m == nothing && throw(ArgumentError("invalid version string: $v"))
+    maybe_m = match(VERSION_REGEX, v)
+    isnull(maybe_m) && throw(ArgumentError("invalid version string: $v"))
+    m = get(maybe_m)
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(Int, major)
     minor = minor != nothing ? parse(Int, minor) : 0

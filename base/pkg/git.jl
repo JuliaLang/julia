@@ -110,9 +110,9 @@ const GITHUB_REGEX =
 
 function set_remote_url(url::AbstractString; remote::AbstractString="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)
-    m = match(GITHUB_REGEX,url)
-    m == nothing && return
-    push = "git@github.com:$(m.captures[1]).git"
+    maybe_m = match(GITHUB_REGEX,url)
+    isnull(maybe_m) && return
+    push = "git@github.com:$(get(maybe_m).captures[1]).git"
     push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
 end
 

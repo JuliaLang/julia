@@ -1034,8 +1034,9 @@ function read_worker_host_port(io::IO)
 end
 
 function parse_connection_info(str)
-    m = match(r"^julia_worker:(\d+)#(.*)", str)
-    if m != nothing
+    maybe_m = match(r"^julia_worker:(\d+)#(.*)", str)
+    if !isnull(maybe_m)
+        m = get(maybe_m)
         (m.captures[2], parse(Int16, m.captures[1]))
     else
         ("", Int16(-1))
