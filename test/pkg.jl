@@ -46,6 +46,7 @@ end
 temp_pkg_dir() do
   Pkg.generate("PackageWithTestDependencies", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
+  @test readall(Pkg.dir("PackageWithTestDependencies","REQUIRE")) == "julia $(Pkg.Generate.versionfloor(VERSION))\n"
 
   isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
   open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"w") do f
