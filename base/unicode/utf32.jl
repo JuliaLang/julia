@@ -159,8 +159,6 @@ function convert(::Type{UTF16String}, str::UTF32String)
     return encode_to_utf16(dat, len + num4byte)
 end
 
-convert(::Type{UTF32String}, c::Char)             = UTF32String(Char[c, Char(0)])
-
 function convert(::Type{UTF32String}, str::ASCIIString)
     dat = str.data
     @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
