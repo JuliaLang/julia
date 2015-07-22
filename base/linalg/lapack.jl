@@ -2852,14 +2852,13 @@ for (syev, syevr, sygvd, elty) in
             if range == 'V'
                 vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
             end
-            lda = max(1,stride(A,2))
+            lda = stride(A,2)
             m = Array(BlasInt, 1)
             w = similar(A, $elty, n)
+            ldz = n
             if jobz == 'N'
-                ldz = 1
                 Z = similar(A, $elty, ldz, 0)
             elseif jobz == 'V'
-                ldz = max(1,n)
                 Z = similar(A, $elty, ldz, n)
             end
             isuppz = similar(A, BlasInt, 2*n)
@@ -2877,9 +2876,9 @@ for (syev, syevr, sygvd, elty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{BlasInt}),
                     &jobz, &range, &uplo, &n,
-                    A, &lda, &vl, &vu,
+                    A, &max(1,lda), &vl, &vu,
                     &il, &iu, &abstol, m,
-                    w, Z, &ldz, isuppz,
+                    w, Z, &max(1,ldz), isuppz,
                     work, &lwork, iwork, &liwork,
                     info)
                 @lapackerror
