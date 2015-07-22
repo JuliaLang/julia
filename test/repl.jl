@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # REPL tests
+isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
 
