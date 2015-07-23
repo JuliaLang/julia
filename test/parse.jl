@@ -272,3 +272,5 @@ for T in (UInt8,UInt16,UInt32,UInt64)
     @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
     @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
+
+@test parse("1 == 2|>3") == Expr(:comparison, 1, :(==), Expr(:call, :(|>), 2, 3))
