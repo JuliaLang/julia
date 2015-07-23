@@ -20,6 +20,8 @@ function argtype_decl(n, t) # -> (argname, argtype)
         else
             return s, string(t.parameters[1], "...")
         end
+    elseif t == ByteString
+        return s, "ByteString"
     end
     return s, string(t)
 end
