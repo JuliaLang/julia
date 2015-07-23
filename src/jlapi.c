@@ -290,6 +290,49 @@ DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v) {
     return jl_typeof__MACRO(v);
 }
 
+static void NORETURN throw_eof_error(void)
+{
+    jl_datatype_t* eof_error = (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
+    assert(eof_error != NULL);
+    jl_exceptionf(eof_error, "");
+}
+
+DLLEXPORT uint16_t jl_ios_get_uint16(ios_t *s)
+{
+    uint8_t buf[2];
+    size_t ret = ios_readall(s, (char*)buf, 2);
+    if (ret < 2)
+        throw_eof_error();
+    uint16_t x = 0;
+    for (int i = 0; i < 2; i++)
+        x |= (uint16_t)buf[i] << (i << 3);
+    return x;
+}
+
+DLLEXPORT uint32_t jl_ios_get_uint32(ios_t *s)
+{
+    uint8_t buf[4];
+    size_t ret = ios_readall(s, (char*)buf, 4);
+    if (ret < 4)
+        throw_eof_error();
+    uint32_t x = 0;
+    for (int i = 0; i < 4; i++)
+        x |= (uint32_t)buf[i] << (i << 3);
+    return x;
+}
+
+DLLEXPORT uint64_t jl_ios_get_uint64(ios_t *s)
+{
+    uint8_t buf[8];
+    size_t ret = ios_readall(s, (char*)buf, 8);
+    if (ret < 8)
+        throw_eof_error();
+    uint64_t x = 0;
+    for (int i = 0; i < 8; i++)
+        x |= (uint64_t)buf[i] << (i << 3);
+    return x;
+}
+
 #ifdef __cplusplus
 }
 #endif
