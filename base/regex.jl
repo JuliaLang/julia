@@ -209,6 +209,89 @@ search(s::AbstractString, r::Regex, idx::Integer) =
     throw(ArgumentError("regex search is only available for bytestrings; use bytestring(s) to convert"))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
+immutable SubstitutionString{T<:AbstractString} <: AbstractString
+    string::T
+end
+
+endof(s::SubstitutionString) = endof(s.string)
+next(s::SubstitutionString, idx::Int) = next(s.string, idx)
+function show(io::IO, s::SubstitutionString)
+    print(io, "s")
+    show(io, s.string)
+end
+
+macro s_str(string) SubstitutionString(string) end
+
+replace_err(repl) = error("Bad replacement string: $repl")
+
+function _write_capture(io, re, group)
+    len = PCRE.substring_length_bynumber(re.match_data, group)
+    ensureroom(io, len+1)
+    PCRE.substring_copy_bynumber(re.match_data, group,
+        pointer(io.data, io.ptr), len+1)
+    io.ptr += len
+    io.size = max(io.size, io.ptr - 1)
+end
+
+function _replace(io, repl_s::SubstitutionString, str, r, re)
+    const SUB_CHAR = '\\'
+    const GROUP_CHAR = 'g'
+    const LBRACKET = '<'
+    const RBRACKET = '>'
+    repl = repl_s.string
+    i = start(repl)
+    e = endof(repl)
+    while i <= e
+        if repl[i] == SUB_CHAR
+            next_i = nextind(repl, i)
+            next_i > e && replace_err(repl)
+            if repl[next_i] == SUB_CHAR
+                write(io, SUB_CHAR, repl[next_i])
+                i = nextind(repl, next_i)
+            elseif isnumber(repl[next_i])
+                group = parse(Int, repl[next_i])
+                i = nextind(repl, next_i)
+                while i <= e
+                    if isnumber(repl[i])
+                        group = 10group + parse(Int, repl[i])
+                        i = nextind(repl, i)
+                    else
+                        break
+                    end
+                end
+                _write_capture(io, re, group)
+            elseif repl[next_i] == GROUP_CHAR
+                i = nextind(repl, next_i)
+                if i > e || repl[i] != LBRACKET
+                    replace_err(repl)
+                end
+                i = nextind(repl, i)
+                i > e && replace_err(repl)
+                groupstart = i
+                while repl[i] != RBRACKET
+                    i = nextind(repl, i)
+                    i > e && replace_err(repl)
+                end
+                #  TODO: avoid this allocation
+                groupname = SubString(repl, groupstart, prevind(repl, i))
+                if isnumber(groupname)
+                    _write_capture(io, re, parse(Int, groupname))
+                else
+                    group = PCRE.substring_number_from_name(re.regex, groupname)
+                    group < 0 && replace_err("Group $groupname not found in regex $re")
+                    _write_capture(io, re, group)
+                end
+                i = nextind(repl, i)
+            else
+                replace_err(repl)
+            end
+        else
+            write(io, repl[i])
+            i = nextind(repl, i)
+        end
+    end
+end
+
 immutable RegexMatchIterator
     regex::Regex
     string::UTF8String

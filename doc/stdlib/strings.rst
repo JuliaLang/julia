@@ -177,7 +177,7 @@
 
 .. function:: replace(string, pat, r[, n])
 
-   Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
+   Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring. If ``pat`` is a regular expression and ``r`` is a ``SubstitutionString``, then capture group references in ``r`` are replaced with the corresponding matched text.
 
 .. function:: split(string, [chars]; limit=0, keep=true)
 
