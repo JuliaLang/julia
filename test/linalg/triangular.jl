@@ -38,6 +38,8 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         # similar
         @test isa(similar(A1), t1)
+        @test_throws ArgumentError similar(A1,typeof(A1),(n,n+1))
+        @test_throws ArgumentError similar(A1,typeof(A1),(n,n,n))
 
         # getindex
         ## Linear indexing
@@ -83,10 +85,14 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test !istril(A1)
         end
 
+        # factorize
+        @test factorize(A1) == A1
+
         # (c)transpose
         @test full(A1') == full(A1)'
         @test full(A1.') == full(A1).'
         @test transpose!(copy(A1)) == A1.'
+        @test ctranspose!(copy(A1)) == A1'
 
         # diag
         @test diag(A1) == diag(full(A1))
@@ -107,12 +113,19 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test_approx_eq inv(A1) inv(lufact(full(A1)))
         inv(full(A1)) # issue #11298
         @test isa(inv(A1), t1)
+        # make sure the call to LAPACK works right
+        if elty1 <: BlasFloat
+            @test_approx_eq Base.LinAlg.inv!(copy(A1)) inv(lufact(full(A1)))
+        end
 
         # Determinant
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test_approx_eq sqrtm(A1) |> t->t*t A1
+
+        # naivesub errors
+        @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
 
         # eigenproblems
         if elty1 != BigFloat # Not handled yet
@@ -193,6 +206,11 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test_approx_eq B*A1' B*full(A1)'
             @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
             @test_approx_eq B'A1' B'full(A1)'
+
+            #error handling
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
 
             # ... and division
             @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
