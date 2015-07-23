@@ -319,6 +319,10 @@ Text I/O
 .. function:: @sprintf("%Fmt", args...)
 
    Return ``@printf`` formatted output as string.
+   julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
+
+   julia> println(s)
+   this is a test            34.6
 
 .. function:: sprint(f::Function, args...)
 
