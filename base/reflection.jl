@@ -31,14 +31,22 @@ names(m::Module, all::Bool, imported::Bool) = sort!(ccall(:jl_module_names, Arra
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
 
-binding_module(var::Symbol) = binding_module(current_module(), var)
-function binding_module(m::Module, var::Symbol)
-    if isdefined(m, var) # this returns true for 'used' bindings
-        mod = ccall(:jl_get_module_of_binding, Any, (Any, Any), m, var)
-    else
-        error("\"$var\" is not bound in module $m")
+function isbindingresolved(m::Module, var::Symbol)
+    ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
+end
+
+binding_module(s::Symbol) = binding_module(current_module(), s)
+function binding_module(m::Module, s::Symbol)
+    p = ccall(:jl_get_module_of_binding, Ptr{Void}, (Any, Any), m, s)
+    p == C_NULL && return m
+    return unsafe_pointer_to_objref(p)::Module
+end
+
+function resolve(g::GlobalRef; force::Bool=false)
+    if force || isbindingresolved(g.mod, g.name)
+        return GlobalRef(binding_module(g.mod, g.name), g.name)
     end
-    mod
+    return g
 end
 
 fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
@@ -288,7 +296,14 @@ function which(f::ANY, t::ANY)
     end
 end
 
-which(s::Symbol) = binding_module(current_module(), s)
+which(s::Symbol) = which_module(current_module(), s)
+# TODO: making this a method of which() causes a strange error
+function which_module(m::Module, s::Symbol)
+    if !isdefined(m, s)
+        error("\"$s\" is not defined in module $m")
+    end
+    binding_module(m, s)
+end
 
 function functionloc(m::Method)
     lsd = m.func.code::LambdaStaticData
