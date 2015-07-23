@@ -16,7 +16,7 @@ Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
 
-const INVALID_HANDLE_VALUE = -1
+const INVALID_HANDLE_VALUE = Libc.RawFD(-1)
 # const used for zeroed, anonymous memory; same value on Windows & Unix; say what?!
 gethandle(io::Anonymous) = INVALID_HANDLE_VALUE
 
@@ -30,10 +30,10 @@ const MAP_PRIVATE   = convert(Cint,2)
 const MAP_ANONYMOUS = convert(Cint, @osx? 0x1000 : 0x20)
 const F_GETFL       = convert(Cint,3)
 
-gethandle(io::IO) = fd(io)
+gethandle(io::IO) = Libc.RawFD(fd(io))
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::Int, shared::Bool)
+function settings(s::Libc.RawFD, shared::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_HANDLE_VALUE
         flags |= MAP_ANONYMOUS
@@ -82,14 +82,14 @@ const FILE_MAP_EXECUTE       = UInt32(0x20)
 function gethandle(io::IO)
     handle = Base._get_osfhandle(RawFD(fd(io))).handle
     systemerror("could not get handle for file to map: $(Base.FormatMessage())", handle == -1)
-    return Int(handle)
+    return Libc.RawFD(handle)
 end
 
 settings(sh::Anonymous) = utf16(sh.name), sh.readonly, sh.create
 settings(io::IO) = convert(Ptr{Cwchar_t},C_NULL), isreadonly(io), true
 end # @windows_only
 
-# core impelementation of mmap
+# core implementation of mmap
 function mmap{T,N}(io::IO,
                           ::Type{Array{T,N}}=Vector{UInt8},
                           dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
