@@ -143,7 +143,7 @@ _checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
 _checkbounds(sz, r::Range{Int}) = (@_inline_meta; isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz))
 _checkbounds{T<:Real}(sz, r::Range{T}) = (@_inline_meta; _checkbounds(sz, to_index(r)))
 _checkbounds(sz, ::Colon) = true
-function _checkbounds{T <: Real}(sz, I::AbstractArray{T})
+function _checkbounds(sz, I::AbstractArray)
     @_inline_meta
     b = true
     for i in I
