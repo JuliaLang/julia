@@ -14,6 +14,8 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
+* Respect our [community standards](http://julialang.org/community/standards/).
+
 * Relax and have fun.
 
 ## How to file a bug report
