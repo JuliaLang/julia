@@ -323,6 +323,10 @@ function poll_fd(s, seconds::Real; readable=false, writable=false)
 end
 
 function poll_file(s, interval_seconds::Real, seconds::Real)
+    if !isfile(s)
+        throw(ErrorException("No such file or directory $s"))
+    end
+
     wt = Condition()
     pfw = PollingFileWatcher(s)
 
