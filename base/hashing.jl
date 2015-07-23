@@ -62,6 +62,7 @@ else
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
 end
 
+hash(x::QuoteNode, h::UInt) = hash(x.value, hash(QuoteNode, h))
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
 const hashr_seed = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
