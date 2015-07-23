@@ -1030,14 +1030,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 lam->module != NULL) {
                 // replace getfield(module_expr, :sym) with GlobalRef
                 jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
-                if (jl_is_symbol(s)) {
-                    jl_value_t *f = jl_static_eval(jl_exprarg(e,0), NULL, lam->module,
+                jl_value_t *fe = jl_exprarg(e,0);
+                if (jl_is_symbol(s) && jl_is_topnode(fe)) {
+                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module,
                                                    NULL, (jl_expr_t*)lam->ast, 0, 0);
                     if (f && jl_is_func(f) && ((jl_function_t*)f)->fptr == &jl_f_get_field) {
-                        jl_value_t *m = jl_static_eval(jl_exprarg(e,1), NULL, lam->module,
-                                                       NULL, (jl_expr_t*)lam->ast, 0, 0);
-                        if (m && jl_is_module(m))
-                            return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
+                        jl_value_t *me = jl_exprarg(e,1);
+                        if (jl_is_topnode(me) ||
+                            (jl_is_symbol(me) && jl_binding_resolved_p(lam->module,(jl_sym_t*)me))) {
+                            jl_value_t *m = jl_static_eval(me, NULL, lam->module,
+                                                           NULL, (jl_expr_t*)lam->ast, 0, 0);
+                            if (m && jl_is_module(m))
+                                return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
+                        }
                     }
                 }
             }
