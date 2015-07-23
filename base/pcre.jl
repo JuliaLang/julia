@@ -140,6 +140,23 @@ function substring_number_from_name(re, name)
         (Ptr{Void}, Cstring), re, name)
 end
 
+function substring_length_bynumber(match_data, number)
+  s = Ref{Csize_t}()
+  rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
+        (Ptr{Void}, UInt32, Ref{Csize_t}), match_data, number, s)
+  rc < 0 && error("PCRE error: $(err_message(rc))")
+  convert(Int, s[])
+end
+
+function substring_copy_bynumber(match_data, number, buf, buf_size)
+  s = Ref{Csize_t}(buf_size)
+  rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
+             (Ptr{Void}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
+             match_data, number, buf, s)
+  rc < 0 && error("PCRE error: $(err_message(rc))")
+  convert(Int, s[])
+end
+
 function capture_names(re)
     name_count = info(re, INFO_NAMECOUNT, UInt32)
     name_entry_size = info(re, INFO_NAMEENTRYSIZE, UInt32)
