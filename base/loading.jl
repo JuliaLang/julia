@@ -225,12 +225,10 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(detach(setenv(`$(julia_cmd())
+    io, pobj = open(detach(`$(julia_cmd())
             --output-ji $output --output-incremental=yes
             --startup-file=no --history-file=no
-            --eval $code_object`,
-        ["JULIA_HOME=$JULIA_HOME", "HOME=$(homedir())",
-         "JULIA_PKGDIR=$(Pkg.dir())"])), "w", STDOUT)
+            --eval $code_object`), "w", STDOUT)
     serialize(io, quote
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $LOAD_PATH)
