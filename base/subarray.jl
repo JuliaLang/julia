@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias NonSliceIndex Union{Colon, Range{Int}, UnitRange{Int}, Array{Int,1}}
+typealias NonSliceIndex Union{Colon, AbstractVector}
 typealias ViewIndex Union{Int, NonSliceIndex}
 
 # LD is the last dimension up through which this object has efficient
@@ -39,8 +39,8 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-slice(A::AbstractArray, I::ViewIndex...) = _slice(A, I)
-slice(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _slice(A, I)
+slice(A::AbstractArray, I::ViewIndex...) = _slice(A, to_indexes(I...))
+slice(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _slice(A, to_indexes(I...))
 function _slice(A, I)
     checkbounds(A, I...)
     slice_unsafe(A, I)
@@ -86,8 +86,8 @@ end
 
 # Conventional style (drop trailing singleton dimensions, keep any
 # other singletons by converting them to ranges, e.g., 3:3)
-sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
-sub(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _sub(A, I)
+sub(A::AbstractArray, I::ViewIndex...) = _sub(A, to_indexes(I...))
+sub(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _sub(A, to_indexes(I...))
 function _sub(A, I)
     checkbounds(A, I...)
     sub_unsafe(A, I)
@@ -451,7 +451,7 @@ function nextLD(jprev, j, LD, die_next_vector)
         if jprev != Void && !(jprev <: Real)
             die_next_vector = true
         end
-    elseif die_next_vector || j <: Vector
+    elseif die_next_vector
         LD -= 1
         isdone = true
     elseif j == Colon
@@ -463,8 +463,11 @@ function nextLD(jprev, j, LD, die_next_vector)
             isdone = true
         end
         die_next_vector = true
+    elseif j <: AbstractVector
+        LD -= 1
+        isdone = true
     else
-        error("This shouldn't happen (linear indexing inference)")
+        error("unsupported SubArray index type $j")
     end
     jprev = j
     return jprev, LD, die_next_vector, isdone
@@ -603,9 +606,7 @@ end
 # Indexing with non-scalars. For now, this returns a copy, but changing that
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
-getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = getindex(V, to_indexes(I...)...)
 unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub_unsafe(V, I))
-unsafe_getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union{Real, AbstractVector, Colon}...) = unsafe_getindex(V, to_indexes(I...)...)
 
 # Nonscalar setindex! falls back to the AbstractArray versions
 
