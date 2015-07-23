@@ -198,7 +198,6 @@ type CompoundPeriod <: AbstractTime
                     break
                 end
             end
-            # return new(reverse!(pc))
             p = reverse(pc)
             n = length(p)
         else
