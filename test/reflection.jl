@@ -131,7 +131,6 @@ not_const = 1
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
-@test_throws UndefVarError ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sdi597sl3)
 
 module TestMod7648
 using Base.Test
