@@ -316,7 +316,7 @@ to_index(c::Colon) = c
 to_index(I::AbstractArray{Bool}) = find(I)
 to_index(A::AbstractArray{Int}) = A
 to_index{T<:Integer}(A::AbstractArray{T}) = [to_index(x) for x in A]
-to_index(i) = error("invalid index: $i")
+to_index(i) = i
 
 to_indexes() = ()
 to_indexes(i1) = (to_index(i1),)
