@@ -43,16 +43,21 @@ namespace JL_I {
         // pointer access
         pointerref, pointerset,
         // c interface
-        ccall, cglobal, llvmcall
+        ccall, cglobal, llvmcall,
+        // terminator
+        fptoui_auto, fptosi_auto,
+        num_intrinsics
     };
 }
 
 using namespace JL_I;
+Function *runtime_func[num_intrinsics];
+unsigned intrinsic_nargs[num_intrinsics];
 
 #include "ccall.cpp"
 
 /*
-  low-level intrinsics design:
+  low-level intrinsics design: TODO: fix description below
   functions like add_int expect unboxed values of matching bit-length.
   every operation that can return an unboxed value does so.
   this maximizes opportunities for composing functions without
@@ -107,12 +112,22 @@ static Type *JL_INTT(Type *t)
     assert(t == T_void);
     return T_void;
 }
-static jl_value_t *JL_JLINTT(Type *t)
+// convert float type to same-size int type (as a Julia type)
+static jl_value_t *JL_JLUINTT(Type *t)
 {
     assert(!t->isIntegerTy());
-    if (t == T_float32) return (jl_value_t*)jl_float32_type;
-    if (t == T_float64) return (jl_value_t*)jl_float64_type;
-    if (t == Type::getHalfTy(jl_LLVMContext)) return jl_get_global(jl_base_module, jl_symbol("Float16"));
+    if (t == T_float32) return (jl_value_t*)jl_uint32_type;
+    if (t == T_float64) return (jl_value_t*)jl_uint64_type;
+    if (t == Type::getHalfTy(jl_LLVMContext)) return (jl_value_t*)jl_uint16_type;
+    assert(t == T_void);
+    return jl_bottom_type;
+}
+static jl_value_t *JL_JLSINTT(Type *t)
+{
+    assert(!t->isIntegerTy());
+    if (t == T_float32) return (jl_value_t*)jl_int32_type;
+    if (t == T_float64) return (jl_value_t*)jl_int64_type;
+    if (t == Type::getHalfTy(jl_LLVMContext)) return (jl_value_t*)jl_int16_type;
     assert(t == T_void);
     return jl_bottom_type;
 }
@@ -413,10 +428,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         }
         else {
             if (!jl_is_leaf_type(v.typ) && !jl_is_bitstype(v.typ)) {
-                // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
-                // since codegen has no idea what size it might have
-                jl_error("codegen: failed during evaluation of a call to reinterpret");
-                return jl_cgval_t();
+                return jl_cgval_t(); // TODO: XXX
             }
             nb = jl_datatype_size(v.typ);
             llvmt = staticeval_bitstype(v.typ);
@@ -820,25 +832,59 @@ static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
 }
 
 #define HANDLE(intr,n)                                                  \
-    case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
+    case intr:
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
                                        jl_codectx_t *ctx, jl_datatype_t* *newtyp);
 static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                        jl_codectx_t *ctx)
 {
+    assert(f < num_intrinsics);
+    if (f == fptoui && nargs == 1)
+        f = fptoui_auto;
+    if (f == fptosi && nargs == 1)
+        f = fptosi_auto;
+    unsigned expected_nargs = intrinsic_nargs[f];
+    if (expected_nargs && expected_nargs != nargs) {
+        jl_errorf("intrinsic #%d: wrong number of arguments", f);
+    }
+
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal: return emit_cglobal(args, nargs, ctx);
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
-
-    HANDLE(pointerref,2)
+#if 0
+    default:
+        int ldepth = ctx->gc.argDepth;
+        Value *r;
+        if (nargs == 1) {
+            Value *x = emit_boxed_rooted(args[1], ctx).V;
+            r = builder.CreateCall(runtime_func[f], x);
+        }
+        else if (nargs == 2) {
+            Value *x = emit_boxed_rooted(args[1], ctx).V;
+            Value *y = emit_boxed_rooted(args[2], ctx).V;
+            r = builder.CreateCall2(runtime_func[f], x, y);
+        }
+        else if (nargs == 3) {
+            Value *x = emit_boxed_rooted(args[1], ctx).V;
+            Value *y = emit_boxed_rooted(args[2], ctx).V;
+            Value *z = emit_boxed_rooted(args[3], ctx).V;
+            r = builder.CreateCall3(runtime_func[f], x, y, z);
+        }
+        else {
+            assert(0);
+        }
+        ctx->gc.argDepth = ldepth;
+        return mark_julia_type(r, true, (jl_value_t*)jl_any_type);
+#else
+    case pointerref:
         return emit_pointerref(args[1], args[2], ctx);
-    HANDLE(pointerset,3)
+    case pointerset:
         return emit_pointerset(args[1], args[2], args[3], ctx);
-    HANDLE(box,2)
+    case box:
         return generic_box(args[1], args[2], ctx);
-    HANDLE(unbox,2) // TODO: deprecate this
+    case unbox:
         return generic_box(args[1], args[2], ctx);
     HANDLE(trunc_int,2)
         return generic_trunc(args[1], args[2], ctx, false, false);
@@ -873,46 +919,38 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return mark_julia_type(builder.CreateSIToFP(xi, FTnbits(nb)), false, bt);
     }
 
-    case fptoui:
-        if (nargs == 1) {
-            Value *x = FP(auto_unbox(args[1], ctx));
-            if (x->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-            return mark_julia_type(
-                    builder.CreateFPToUI(FP(x), JL_INTT(x->getType())),
-                    false,
-                    JL_JLINTT(x->getType()));
-        }
-        else if (nargs == 2) {
-            jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
-            if (!bt) return jl_cgval_t();
-            int nb = get_bitstype_nbits(bt);
-            Value *xf = FP(auto_unbox(args[2],ctx));
-            if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-            return mark_julia_type(builder.CreateFPToUI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
-        }
-        else {
-            jl_error("fptoui: wrong number of arguments");
-        }
+    case fptoui_auto: {
+        Value *x = FP(auto_unbox(args[1], ctx));
+        if (x->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
+        return mark_julia_type(
+                builder.CreateFPToUI(FP(x), JL_INTT(x->getType())),
+                false,
+                JL_JLUINTT(x->getType()));
+    }
+    case fptoui: {
+        jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
+        if (!bt) return jl_cgval_t();
+        int nb = get_bitstype_nbits(bt);
+        Value *xf = FP(auto_unbox(args[2],ctx));
+        if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
+        return mark_julia_type(builder.CreateFPToUI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
+    }
 
-    case fptosi:
-        if (nargs == 1) {
-            Value *x = FP(auto_unbox(args[1], ctx));
-            return mark_julia_type(
-                    builder.CreateFPToSI(FP(x), JL_INTT(x->getType())),
-                    false,
-                    JL_JLINTT(x->getType()));
-        }
-        else if (nargs == 2) {
-            jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
-            if (!bt) return jl_cgval_t();
-            int nb = get_bitstype_nbits(bt);
-            Value *xf = FP(auto_unbox(args[2],ctx));
-            if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-            return mark_julia_type(builder.CreateFPToSI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
-        }
-        else {
-            jl_error("fptosi: wrong number of arguments");
-        }
+    case fptosi_auto: {
+        Value *x = FP(auto_unbox(args[1], ctx));
+        return mark_julia_type(
+                builder.CreateFPToSI(FP(x), JL_INTT(x->getType())),
+                false,
+                JL_JLSINTT(x->getType()));
+    }
+    case fptosi: {
+        jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
+        if (!bt) return jl_cgval_t();
+        int nb = get_bitstype_nbits(bt);
+        Value *xf = FP(auto_unbox(args[2],ctx));
+        if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
+        return mark_julia_type(builder.CreateFPToSI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
+    }
 
     HANDLE(fptrunc,2) {
         jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
@@ -1016,7 +1054,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             r = builder.CreateBitCast(r, x->getType());
         return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ);
     }
-
+#endif
     }
     assert(0);
 }
@@ -1385,7 +1423,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     HANDLE(powi_llvm,2) {
         x = FP(x);
         y = JL_INT(y);
-        Type *tx = x->getType();
+        Type *tx = x->getType(); // TODO: LLVM expects this to be i32
 #ifdef LLVM36
         Type *ts[1] = { tx };
         Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
@@ -1409,6 +1447,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
+
     default:
         assert(false);
     }
@@ -1464,6 +1503,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
+
     ADD_I(box); ADD_I(unbox);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
@@ -1501,6 +1541,83 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_trunc_uint);
     ADD_I(check_top_bit);
     ADD_I(nan_dom_err);
+    //ADD_I(fptosi_auto); ADD_I(fptoui_auto); // these intrinsics are "hidden" in fpto*i
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(llvmcall);
 }
+#undef ADD_I
+
+static void add_intrinsic_to_codegen(Module *m, const std::string &name, intrinsic f,
+        unsigned nargs, std::vector<Type *> args, void *pfunc) {
+    Function *func = Function::Create(FunctionType::get(T_pjlvalue, args, false),
+                                      Function::ExternalLinkage, name, m);
+    runtime_func[f] = func;
+    add_named_global(func, pfunc);
+    intrinsic_nargs[f] = nargs;
+}
+
+static void add_intrinsic_to_codegen(intrinsic alias, intrinsic base)
+{
+    runtime_func[alias] = runtime_func[base];
+    intrinsic_nargs[alias] = intrinsic_nargs[base];
+}
+
+#define ADD_I(name, nargs) add_intrinsic_to_codegen(m, "jl_" #name, name, nargs, args##nargs, (void*)&jl_##name)
+#define ALIAS(alias, base) add_intrinsic_to_codegen(alias, base)
+
+static void jl_init_intrinsic_functions_codegen(Module *m)
+{
+    std::vector<Type *> args1(0);
+    args1.push_back(T_pjlvalue);
+    std::vector<Type *> args2(0);
+    args2.push_back(T_pjlvalue);
+    args2.push_back(T_pjlvalue);
+    std::vector<Type *> args3(0);
+    args3.push_back(T_pjlvalue);
+    args3.push_back(T_pjlvalue);
+    args3.push_back(T_pjlvalue);
+
+    add_intrinsic_to_codegen(m, "jl_reinterpret", box,
+        2, args2, (void*)&jl_reinterpret);
+    ALIAS(unbox, box);
+    ADD_I(neg_int, 1); ADD_I(add_int, 2); ADD_I(sub_int, 2); ADD_I(mul_int, 2);
+    ADD_I(sdiv_int, 2); ADD_I(udiv_int, 2); ADD_I(srem_int, 2); ADD_I(urem_int, 2);
+    ADD_I(smod_int, 2);
+    ADD_I(neg_float, 1); ADD_I(add_float, 2); ADD_I(sub_float, 2); ADD_I(mul_float, 2);
+    ADD_I(div_float, 2); ADD_I(rem_float, 2); ADD_I(fma_float, 3); ADD_I(muladd_float, 3);
+    ALIAS(neg_float_fast, neg_float); ALIAS(add_float_fast, add_float); ALIAS(sub_float_fast, sub_float);
+    ALIAS(mul_float_fast, mul_float); ALIAS(div_float_fast, div_float); ALIAS(rem_float_fast, rem_float);
+    ADD_I(eq_int, 2); ADD_I(ne_int, 2);
+    ADD_I(slt_int, 2); ADD_I(ult_int, 2);
+    ADD_I(sle_int, 2); ADD_I(ule_int, 2);
+    ADD_I(eq_float, 2); ADD_I(ne_float, 2);
+    ADD_I(lt_float, 2); ADD_I(le_float, 2);
+    ALIAS(eq_float_fast, eq_float); ALIAS(ne_float_fast, ne_float);
+    ALIAS(lt_float_fast, lt_float); ALIAS(le_float_fast, le_float);
+    ADD_I(fpiseq, 2); ADD_I(fpislt, 2);
+    ADD_I(and_int, 2); ADD_I(or_int, 2); ADD_I(xor_int, 2); ADD_I(not_int, 1);
+    ADD_I(shl_int, 2); ADD_I(lshr_int, 2); ADD_I(ashr_int, 2); ADD_I(bswap_int, 1);
+    ADD_I(ctpop_int, 1); ADD_I(ctlz_int, 1); ADD_I(cttz_int, 1);
+    ADD_I(sext_int, 2); ADD_I(zext_int, 2); ADD_I(trunc_int, 2);
+    ADD_I(fptoui, 2); ADD_I(fptosi, 2);
+    ADD_I(uitofp, 2); ADD_I(sitofp, 2);
+    ADD_I(fptrunc, 2); ADD_I(fpext, 2);
+    ADD_I(abs_float, 1); ADD_I(copysign_float, 2);
+    ADD_I(flipsign_int, 2); ADD_I(select_value, 3);
+    ADD_I(ceil_llvm, 1); ADD_I(floor_llvm, 1); ADD_I(trunc_llvm, 1); ADD_I(rint_llvm, 1);
+    ADD_I(sqrt_llvm, 1); ADD_I(powi_llvm, 2);
+    ALIAS(sqrt_llvm_fast, sqrt_llvm);
+    ADD_I(pointerref, 2); ADD_I(pointerset, 3);
+    ADD_I(checked_sadd, 2); ADD_I(checked_uadd, 2);
+    ADD_I(checked_ssub, 2); ADD_I(checked_usub, 2);
+    ADD_I(checked_smul, 2); ADD_I(checked_umul, 2);
+    ADD_I(checked_fptosi, 2); ADD_I(checked_fptoui, 2);
+    ADD_I(checked_trunc_sint, 2);
+    ADD_I(checked_trunc_uint, 2);
+    ADD_I(check_top_bit, 1);
+    ADD_I(nan_dom_err, 2);
+    ADD_I(fptosi_auto, 1); ADD_I(fptoui_auto, 1);
+}
+
+#undef ADD_I
+#undef ALIAS

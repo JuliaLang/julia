@@ -14,7 +14,7 @@ override CPPFLAGS += $(JCPPFLAGS)
 SRCS := \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
-	llvm-simdloop simplevector
+	llvm-simdloop simplevector APInt-C runtime_intrinsics
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
 endif

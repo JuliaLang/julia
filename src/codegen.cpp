@@ -6121,6 +6121,7 @@ extern "C" void jl_init_codegen(void)
                               "jl_box32", (void*)&jl_box32, m);
     box64_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int64),
                               "jl_box64", (void*)&jl_box64, m);
+    jl_init_intrinsic_functions_codegen(m);
 }
 
 // for debugging from gdb

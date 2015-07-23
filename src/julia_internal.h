@@ -224,6 +224,98 @@ DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 extern DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
+// Runtime intrinsics //
+
+DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
+DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i);
+DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i);
+
+DLLEXPORT jl_value_t *jl_neg_int(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_add_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_sub_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_mul_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_sdiv_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_udiv_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_srem_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_urem_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_smod_int(jl_value_t *a, jl_value_t *b);
+
+DLLEXPORT jl_value_t *jl_neg_float(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_sub_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_mul_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_div_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_rem_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_fma_float(jl_value_t *a, jl_value_t *b, jl_value_t *c);
+DLLEXPORT jl_value_t *jl_muladd_float(jl_value_t *a, jl_value_t *b, jl_value_t *c);
+
+DLLEXPORT jl_value_t *jl_eq_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ne_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_slt_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ult_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_sle_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ule_int(jl_value_t *a, jl_value_t *b);
+
+DLLEXPORT jl_value_t *jl_eq_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ne_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_lt_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_le_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_fpiseq(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_fpislt(jl_value_t *a, jl_value_t *b);
+
+DLLEXPORT jl_value_t *jl_not_int(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_and_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_or_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_xor_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_shl_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_lshr_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ashr_int(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_bswap_int(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_ctpop_int(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_ctlz_int(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_cttz_int(jl_value_t *a);
+
+DLLEXPORT jl_value_t *jl_sext_int(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_zext_int(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_trunc_int(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_sitofp(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_uitofp(jl_value_t *ty, jl_value_t *a);
+
+DLLEXPORT jl_value_t *jl_fptoui(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_fptosi(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_fptrunc(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_fpext(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a);
+
+DLLEXPORT jl_value_t *jl_checked_fptoui(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_checked_fptosi(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_checked_trunc_sint(jl_value_t *ty, jl_value_t *a);
+DLLEXPORT jl_value_t *jl_checked_trunc_uint(jl_value_t *ty, jl_value_t *a);
+
+DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_checked_sadd(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_checked_uadd(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_checked_ssub(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_checked_usub(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_checked_smul(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_checked_umul(jl_value_t *a, jl_value_t *b);
+
+DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_ceil_llvm(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_floor_llvm(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_trunc_llvm(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_rint_llvm(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_sqrt_llvm(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_abs_float(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
+
+DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
+
+
+
 #ifdef __cplusplus
 }
 #endif
