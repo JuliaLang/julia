@@ -23,7 +23,7 @@ const UTF_SURROGATE = 32        ##< surrogate pairs present
     (ch << 6) | (byt & 0x3f)
 end
 
-"
+"""
 Validates and calculates number of characters in a UTF-8,UTF-16 or UTF-32 encoded vector/string
 
 Warning: this function does not check the bounds of the start or end positions
@@ -46,7 +46,7 @@ Use `checkstring` to make sure the bounds are checked
 
 ### Throws:
 * `UnicodeError`
-"
+"""
 function unsafe_checkstring end
 
 function unsafe_checkstring(dat::Vector{UInt8},
@@ -191,7 +191,7 @@ function unsafe_checkstring{T <: Union{Vector{UInt16}, Vector{UInt32}, AbstractS
     return totalchar, flags, num4byte, num3byte, num2byte
 end
 
-"
+"""
 Validates and calculates number of characters in a UTF-8,UTF-16 or UTF-32 encoded vector/string
 
 This function checks the bounds of the start and end positions
@@ -214,7 +214,7 @@ Use `unsafe_checkstring` to avoid that overhead if the bounds have already been 
 
 ### Throws:
 * `UnicodeError`
-"
+"""
 function checkstring end
 
 # No need to check bounds if using defaults
