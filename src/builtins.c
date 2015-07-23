@@ -267,10 +267,13 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
-            if (!ft->haspadding)
+            if (!ft->haspadding) {
                 eq = bits_equal(ao, bo, dt->fields[f].size);
-            else
+            }
+            else {
+                assert(jl_datatype_nfields(ft) > 0);
                 eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
+            }
         }
         if (!eq) return 0;
     }

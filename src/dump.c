@@ -1026,6 +1026,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     }
     else {
         dt->alignment = dt->size;
+        dt->haspadding = 0;
         if (dt->alignment > MAX_ALIGN)
             dt->alignment = MAX_ALIGN;
         dt->types = jl_emptysvec;
