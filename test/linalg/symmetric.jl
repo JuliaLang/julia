@@ -49,7 +49,10 @@ let n=10
         #transpose, ctranspose
         if eltya <: Real
             @test transpose(Symmetric(asym)) == asym
+        else
+            @test transpose(Hermitian(asym)) == transpose(asym)
         end
+        @test ctranspose(Symmetric(asym)) == Symmetric(conj(asym))
         @test ctranspose(Hermitian(asym)) == asym
 
         eltya == BigFloat && continue # Revisit when implemented in julia
