@@ -312,11 +312,17 @@ for x in (randn(10),randn(10,12))
     for f in (plan_bfft!, plan_fft!, plan_ifft!,
               plan_bfft, plan_fft, plan_ifft,
               fft, bfft, fft_, ifft)
-        @inferred f(z)
+        p = @inferred f(z)
+        if isa(p, FFTW.Plan)
+            @inferred FFTW.plan_inv(p)
+        end
     end
     for f in (plan_bfft, plan_fft, plan_ifft,
               plan_rfft, fft, bfft, fft_, ifft)
-        @inferred f(x)
+        p = @inferred f(x)
+        if isa(p, FFTW.Plan)
+            @inferred FFTW.plan_inv(p)
+        end
     end
     # note: inference doesn't work for plan_fft_ since the
     #       algorithm steps are included in the CTPlan type
