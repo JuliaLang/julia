@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Auto-creation in lookup_ref is a problem
+
 # todo:
 # * fetch/wait latency seems to be excessive
 # * message aggregation
@@ -370,7 +372,7 @@ function deregister_worker(pg, pid)
     end
     push!(map_del_wrkr, pid)
 
-    # delete this worker from our RemoteRef client sets
+    # delete this worker from our AbstractRemoteRef client sets
     ids = []
     tonotify = []
     for (id,rv) in pg.refs
@@ -387,7 +389,7 @@ function deregister_worker(pg, pid)
 
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
-        notify_error(rv.full, ProcessExitedException())
+        notify_error(rv.channel, ProcessExitedException())
         delete!(pg.refs, id)
     end
 end
@@ -396,14 +398,20 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef
+abstract AbstractRemoteRef{T}
+abstract SysManagedRef{T} <: AbstractRemoteRef{T}
+abstract UserManagedRef{T} <: AbstractRemoteRef{T}
+
+type Future{T} <: SysManagedRef{T}
     where::Int
     whence::Int
     id::Int
-    # TODO: cache value if it's fetched, but don't serialize the cached value
 
-    function RemoteRef(w, wh, id)
-        r = new(w,wh,id)
+    is_open::Bool
+    cached_val::Nullable{T}
+
+    function Future(w, wh, id, ref_type)
+        r = new(w,wh,id, true, Nullable{ref_type}())
         found = getkey(client_refs, r, false)
         if !is(found,false)
             return found
@@ -412,26 +420,52 @@ type RemoteRef
         finalizer(r, send_del_client)
         r
     end
-
-    REQ_ID::Int = 0
-    function RemoteRef(pid::Integer)
-        rr = RemoteRef(pid, myid(), REQ_ID)
-        REQ_ID += 1
-        rr
-    end
-
-    RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-    RemoteRef(w::Worker) = RemoteRef(w.id)
-    RemoteRef() = RemoteRef(myid())
-
-    global next_id
-    next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+let REF_ID::Int = 1
+    global next_ref_id
+    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+    global next_rrid_tuple
+    next_rrid_tuple() = (myid(),next_ref_id())
+end
+
+Future() = Future(myid())
+Future(w::LocalProcess) = Future(w.id)
+Future(w::Worker) = Future(w.id)
+Future(pid::Integer) = Future{Any}(pid, myid(), next_ref_id(), Any)
+
+show(io::IO, f::Future) = print(io, "Future($(f.where),$(f.whence),$(f.id))")
+
+type RegisteredRef{T} <: UserManagedRef{T}
+    where::Int
+    whence::Int
+    id::Int
+
+    RegisteredRef(w, wh, id) = new(w, wh, id)
+end
+
+RegisteredRef(;pid::Int=myid(), reftype::Type=Channel{Any}, sz::Int=DEF_CHANNEL_SZ) = RegisteredRef(()->reftype(sz), pid)
+function RegisteredRef(f::Function, pid::Int=myid())
+    ref_id = next_ref_id()
+    reftype = remotecall_fetch(pid, (f, whence, ref_id)->create_and_register_channel(f, whence, ref_id), f, myid(), ref_id)
+    RegisteredRef{reftype}(pid, myid(), ref_id)
+end
+
+function create_and_register_channel(f, whence::Int, ref_id::Int)
+    c = f()
+    rv = RemoteValue(c)
+    PGRP.refs[(whence, ref_id)] = rv
+    push!(rv.clientset, whence)
+    typeof(c)
+end
+
+eltype{T}(rr::AbstractRemoteRef{T}) = T
+
+hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
+
+rr2id(r::AbstractRemoteRef) = (r.whence, r.id)
 
 lookup_ref(id) = lookup_ref(PGRP, id)
 function lookup_ref(pg, id)
@@ -445,24 +479,14 @@ function lookup_ref(pg, id)
     rv
 end
 
-function isready(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        lookup_ref(rid).done
-    else
-        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
-    end
-end
-
 del_client(id, client) = del_client(PGRP, id, client)
-function del_client(pg, id, client)
-    rv = lookup_ref(id)
+del_client(pg, id, client) = del_client(pg, id, lookup_ref(id), client)
+function del_client(pg, id, rv, client)
     delete!(rv.clientset, client)
     if isempty(rv.clientset)
         delete!(pg.refs, id)
         #print("$(myid()) collected $id\n")
     end
-    nothing
 end
 
 function del_clients(pairs::Vector)
@@ -479,18 +503,21 @@ function start_gc_msgs_task()
     end
 end
 
-function send_del_client(rr::RemoteRef)
-    if rr.where == myid()
-        del_client(rr2id(rr), myid())
-    else
-        if in(rr.where, map_del_wrkr)
-            # for a removed worker, don't bother
-            return
+function send_del_client(rr::Future)
+    if rr.is_open   # has not been fetched or closed
+        if rr.where == myid()
+            del_client(rr2id(rr), myid())
+        else
+            if in(rr.where, map_del_wrkr)
+                # for a removed worker, don't bother
+                return
+            end
+            w = worker_from_id(rr.where)
+            push!(w.del_msgs, (rr2id(rr), myid()))
+            w.gcflag = true
+            notify(any_gc_flag)
         end
-        w = worker_from_id(rr.where)
-        push!(w.del_msgs, (rr2id(rr), myid()))
-        w.gcflag = true
-        notify(any_gc_flag)
+        rr.is_open = false
     end
 end
 
@@ -507,7 +534,7 @@ function add_clients(pairs::Vector)
     end
 end
 
-function send_add_client(rr::RemoteRef, i)
+function send_add_client(rr::Future, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
     elseif i != rr.where
@@ -522,89 +549,82 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
-function serialize(s::SerializationState, rr::RemoteRef)
+function serialize(s::SerializationState, rr::Future)
+    if rr.is_open == false
+        throw(InvalidStateException("Cannot serialize a fetched/closed future."))
+    end
     i = worker_id_from_socket(s.io)
     #println("$(myid()) serializing $rr to $i")
     if i != -1
         #println("send add $rr to $i")
         send_add_client(rr, i)
     end
-    invoke(serialize, Tuple{SerializationState, Any}, s, rr)
+
+    # don't serialize the cached val, remote process will fetch it when required.
+    Base.Serializer.serialize_type(s, typeof(rr))
+    serialize(s, rr.where)
+    serialize(s, rr.whence)
+    serialize(s, rr.id)
 end
 
-function deserialize(s::SerializationState, t::Type{RemoteRef})
-    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
-    where = rr.where
-    if where == myid()
+function deserialize{T}(s::SerializationState, t::Type{Future{T}})
+    where = deserialize(s)
+    whence = deserialize(s)
+    id = deserialize(s)
+
+    rr = Future{T}(where, whence, id, T)
+
+    if (where == myid())
         add_client(rr2id(rr), myid())
     end
-    # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    rr
 end
 
-# data stored by the owner of a RemoteRef
+# data stored by the owner of a AbstractRemoteRef
 type RemoteValue
-    done::Bool
-    result
-    full::Condition   # waiting for a value
-    empty::Condition  # waiting for value to be removed
+    channel::AbstractChannel
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0
-
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
+    RemoteValue(c) = new(c, IntSet(), 0)
 end
+RemoteValue() = RemoteValue(Channel(1))
 
-function work_result(rv::RemoteValue)
-    v = rv.result
-    if isa(v,WeakRef)
-        v = v.value
-    end
-    v
-end
-
-function wait_full(rv::RemoteValue)
-    while !rv.done
-        wait(rv.full)
-    end
-    return work_result(rv)
-end
-
-function wait_empty(rv::RemoteValue)
-    while rv.done
-        wait(rv.empty)
-    end
-    return nothing
-end
+wait(rv::RemoteValue, args...) = wait(rv.channel, args...)
+take!(rv::RemoteValue, args...) = take!(rv.channel, args...)
+fetch(rv::RemoteValue, args...) = fetch(rv.channel, args...)
+isready(rv::RemoteValue, args...) = isready(rv.channel, args...)
+put!(rv::RemoteValue, args...) = put!(rv.channel, args...)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 
-function run_work_thunk(thunk)
+function run_work_thunk(thunk, print_error)
     local result
     try
         result = thunk()
     catch err
-        print(STDERR, "exception on ", myid(), ": ")
-        display_error(err,catch_backtrace())
+        if print_error
+            print(STDERR, "exception on ", myid(), ": ")
+            display_error(err,catch_backtrace())
+        end
         result = err
     end
     result
 end
-function run_work_thunk(rv::RemoteValue, thunk)
-    put!(rv, run_work_thunk(thunk))
+function run_work_thunk(c::Channel, thunk)
+    put!(c, run_work_thunk(thunk, false))
     nothing
 end
 
 function schedule_call(rid, thunk)
     rv = RemoteValue()
     (PGRP::ProcessGroup).refs[rid] = rv
-    push!(rv.clientset, rid[1])
-    schedule(@task(run_work_thunk(rv,thunk)))
+    schedule(@task(run_work_thunk(rv.channel,thunk)))
     rv
 end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-#function localize_ref(r::RemoteRef)
+#function localize_ref(r::AbstractRemoteRef)
 #    if r.where == myid()
 #        fetch(r)
 #    else
@@ -638,13 +658,13 @@ function local_remotecall_thunk(f, args)
 end
 
 function remotecall(w::LocalProcess, f, args...)
-    rr = RemoteRef(w)
+    rr = Future(w)
     schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
 function remotecall(w::Worker, f, args...)
-    rr = RemoteRef(w)
+    rr = Future(w)
     #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
@@ -654,17 +674,17 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    run_work_thunk(local_remotecall_thunk(f,args))
+    run_work_thunk(local_remotecall_thunk(f,args), true)
 end
 
 function remotecall_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
-    oid = next_id()
+    oid = next_rrid_tuple()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
     send_msg(w, :call_fetch, oid, f, args)
-    v = wait_full(rv)
+    v = take!(rv.channel)
     delete!(PGRP.refs, oid)
     v
 end
@@ -676,12 +696,12 @@ remotecall_fetch(id::Integer, f, args...) =
 remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
 
 function remotecall_wait(w::Worker, f, args...)
-    prid = next_id()
+    prid = next_rrid_tuple()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
-    rr = RemoteRef(w)
+    rr = Future(w)
     send_msg(w, :call_wait, rr2id(rr), prid, f, args)
-    wait_full(rv)
+    wait(rv.channel)
     delete!(PGRP.refs, prid)
     rr
 end
@@ -706,45 +726,78 @@ end
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
+function call_on_owner(f, rr::AbstractRemoteRef, args...)
     rid = rr2id(rr)
     if rr.where == myid()
         f(rid, args...)
     else
-        remotecall_fetch(rr.where, f, rid, args...)
+        ret = remotecall_fetch(rr.where, f, rid, args...)
+        isa(ret, Exception) && throw(ret)
+        ret
     end
 end
 
-wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
-wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
-
-fetch_ref(rid) = wait_full(lookup_ref(rid))
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
-fetch(x::ANY) = x
-
-# storing a value to a RemoteRef
-function put!(rv::RemoteValue, val::ANY)
-    wait_empty(rv)
-    rv.result = val
-    rv.done = true
-    notify_full(rv)
+function get_ref(rid)
+    rv = get(PGRP.refs, rid, false)
+    if rv == false
+        throw(InvalidStateException("Channel does not exist. Closed?", :closed))
+    end
     rv
 end
 
-put_ref(rid, v) = put!(lookup_ref(rid), v)
-put!(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); rr)
+isready_future(rid) = isready(lookup_ref(rid))
+isready(rr::Future) = call_on_owner(isready_future, rr)
 
-function take!(rv::RemoteValue)
-    wait_full(rv)
-    val = rv.result
-    rv.done = false
-    rv.result = nothing
-    notify_empty(rv)
-    val
+isready_ref(rid, args...) = isready(get_ref(rid), args...)
+isready(rr::RegisteredRef, args...) = call_on_owner(isready_ref, rr, args...)
+
+wait_future(rid) = (wait(lookup_ref(rid)); nothing)
+wait(rr::Future) = (call_on_owner(wait_future, rr); rr)
+
+wait_ref(rid, args...) = (wait(get_ref(rid), args...); nothing)
+wait(rr::RegisteredRef, args...) = (call_on_owner(wait_ref, rr, args...); rr)
+
+function fetch_future(rid, caller_id)
+    rv = lookup_ref(rid)
+    v=fetch(rv)
+    del_client(PGRP, rid, rv, caller_id)
+    v
+end
+function fetch(rr::Future)
+    if rr.is_open == false
+        # implies either that we have fetched data or ref is closed
+        v = get(rr.cached_val, nothing)
+    else
+        v = call_on_owner(fetch_future, rr, myid())
+        rr.cached_val = v
+        rr.is_open = false
+    end
+    v
 end
 
-take_ref(rid) = take!(lookup_ref(rid))
-take!(rr::RemoteRef) = call_on_owner(take_ref, rr)
+fetch_ref(rid, args...) = fetch(get_ref(rid), args...)
+fetch(rr::RegisteredRef, args...) = call_on_owner(fetch_ref, rr, args...)
+fetch(x::ANY) = x
+
+take_ref(rid, args...) = take!(get_ref(rid), args...)
+take!{T}(rr::RegisteredRef{T}, args...) = call_on_owner(take_ref, rr, args...)
+
+put_ref(rid, args...) = (put!(get_ref(rid), args...); nothing)
+put!{T}(rr::RegisteredRef{T}, args...) = (call_on_owner(put_ref, rr, args...); rr)
+
+function put_future(rid, v)
+    rv = lookup_ref(rid)
+    isready(rv) && throw(InvalidStateException("Future can be set only once."))
+    put!(rv, v)
+    nothing
+end
+put!{T}(rr::Future{T}, val::T) = (call_on_owner(put_future, rr, val); rr)
+
+close_ref(rid) = (delete!(PGRP.refs, rid); nothing)
+close(rr::RegisteredRef) = call_on_owner(close_ref, rr)
+
+close(rr::Future) = (send_del_client(rr); nothing)
+
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
@@ -772,126 +825,28 @@ function deliver_result(sock::IO, msg, oid, value)
     end
 end
 
-# notify waiters that a certain job has finished or RemoteRef has been emptied
-notify_full( rv::RemoteValue) = notify(rv.full, work_result(rv))
-notify_empty(rv::RemoteValue) = notify(rv.empty)
-
 ## message event handlers ##
+process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = @schedule process_tcp_streams(r_stream, w_stream)
 
-process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = process_messages(r_stream, w_stream, nothing)
-process_messages(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join) = @schedule process_tcp_streams(r_stream, w_stream, rr_ntfy_join)
-
-function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, rr_ntfy_join)
+function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket)
         disable_nagle(r_stream)
         wait_connected(r_stream)
         if r_stream != w_stream
             disable_nagle(w_stream)
             wait_connected(w_stream)
         end
-        message_handler_loop(r_stream, w_stream, rr_ntfy_join)
+        message_handler_loop(r_stream, w_stream)
 end
 
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = process_messages(r_stream, w_stream, nothing)
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream, rr_ntfy_join) = @schedule message_handler_loop(r_stream, w_stream, rr_ntfy_join)
+process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = @schedule message_handler_loop(r_stream, w_stream)
 
-function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_ntfy_join)
-    global PGRP
-    global cluster_manager
-
+function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream)
     try
         while true
             msg = deserialize(r_stream)
             #println("got msg: ",msg)
-            # handle message
-            if is(msg, :call)
-                id = deserialize(r_stream)
-                #print("$(myid()) got id $id\n")
-                f0 = deserialize(r_stream)
-                #print("$(myid()) got call $f0\n")
-                args0 = deserialize(r_stream)
-                #print("$(myid()) got args $args0\n")
-                let f=f0, args=args0
-                    schedule_call(id, ()->f(args...))
-                end
-            elseif is(msg, :call_fetch)
-                id = deserialize(r_stream)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                let f=f, args=args, id=id, msg=msg
-                    @schedule begin
-                        v = run_work_thunk(()->f(args...))
-                        deliver_result(w_stream, msg, id, v)
-                        v
-                    end
-                end
-            elseif is(msg, :call_wait)
-                id = deserialize(r_stream)
-                notify_id = deserialize(r_stream)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                let f=f, args=args, id=id, msg=msg, notify_id=notify_id
-                    @schedule begin
-                        rv = schedule_call(id, ()->f(args...))
-                        deliver_result(w_stream, msg, notify_id, wait_full(rv))
-                    end
-                end
-            elseif is(msg, :do)
-                f = deserialize(r_stream)
-                args = deserialize(r_stream)
-                #print("got args: $args\n")
-                let f=f, args=args
-                    @schedule begin
-                        run_work_thunk(RemoteValue(), ()->f(args...))
-                    end
-                end
-            elseif is(msg, :result)
-                # used to deliver result of wait or fetch
-                oid = deserialize(r_stream)
-                #print("$(myid()) got $msg $oid\n")
-                val = deserialize(r_stream)
-                put!(lookup_ref(oid), val)
-            elseif is(msg, :identify_socket)
-                otherid = deserialize(r_stream)
-                Worker(otherid, r_stream, w_stream, cluster_manager) # The constructor registers the worker
-
-            elseif is(msg, :join_pgrp)
-                self_pid = LPROC.id = deserialize(r_stream)
-                locs = deserialize(r_stream)
-                self_is_local = deserialize(r_stream)
-                controller = Worker(1, r_stream, w_stream, cluster_manager)
-                register_worker(LPROC)
-
-                wait_tasks = Task[]
-
-                for (connect_at, rpid, r_is_local) in locs
-                    wconfig = WorkerConfig()
-                    wconfig.connect_at = connect_at
-                    wconfig.environ = AnyDict(:self_is_local=>self_is_local, :r_is_local=>r_is_local)
-
-                    let rpid=rpid, wconfig=wconfig
-                        t = @async connect_to_peer(cluster_manager, rpid, wconfig)
-                        push!(wait_tasks, t)
-                    end
-                end
-
-                for wt in wait_tasks; wait(wt); end
-
-                send_msg_now(controller, :join_complete, Sys.CPU_CORES, getpid())
-
-            elseif is(msg, :join_complete)
-                w = map_sock_wrkr[r_stream]
-
-                environ = get(w.config.environ, Dict())
-                environ[:cpu_cores] = deserialize(r_stream)
-                w.config.environ = environ
-
-                w.config.ospid = deserialize(r_stream)
-
-                put!(rr_ntfy_join, w.id)
-                rr_ntfy_join = nothing    # so that it gets gc'ed
-            end
-
-        end # end of while
+            handle_msg(Val{msg}, r_stream, w_stream)
+        end
     catch e
         iderr = worker_id_from_socket(r_stream)
         if (iderr < 1)
@@ -930,6 +885,86 @@ function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream, rr_n
     end
 end
 
+# Function calling messages
+
+function handle_msg(::Type{Val{:call}}, r_stream, w_stream)
+    id = deserialize(r_stream)
+    f0 = deserialize(r_stream)
+    args0 = deserialize(r_stream)
+    let f=f0, args=args0
+        schedule_call(id, ()->f(args...))
+    end
+end
+
+function handle_msg(::Type{Val{:call_fetch}}, r_stream, w_stream)
+    id = deserialize(r_stream)
+    f = deserialize(r_stream)
+    args = deserialize(r_stream)
+    @schedule begin
+        v = run_work_thunk(()->f(args...), false)
+        deliver_result(w_stream, :call_fetch, id, v)
+        v
+    end
+end
+
+function handle_msg(::Type{Val{:call_wait}}, r_stream, w_stream)
+    id = deserialize(r_stream)
+    notify_id = deserialize(r_stream)
+    f = deserialize(r_stream)
+    args = deserialize(r_stream)
+    @schedule begin
+        rv = schedule_call(id, ()->f(args...))
+        deliver_result(w_stream, :call_wait, notify_id, wait(rv.channel))
+    end
+end
+
+function handle_msg(::Type{Val{:do}}, r_stream, w_stream)
+    f = deserialize(r_stream)
+    args = deserialize(r_stream)
+    @schedule begin
+        run_work_thunk(()->f(args...), true)
+    end
+end
+
+function handle_msg(::Type{Val{:result}}, r_stream, w_stream)
+    # used to deliver result of wait or fetch
+    oid = deserialize(r_stream)
+    val = deserialize(r_stream)
+    put!(lookup_ref(oid).channel, val)
+end
+
+# Worker initialization messages
+function handle_msg(::Type{Val{:identify_socket}}, r_stream, w_stream)
+    otherid = deserialize(r_stream)
+    Worker(otherid, r_stream, w_stream, cluster_manager) # The constructor registers the worker
+end
+
+function handle_msg(::Type{Val{:join_pgrp}}, r_stream, w_stream)
+    self_pid = LPROC.id = deserialize(r_stream)
+    locs = deserialize(r_stream)
+    self_is_local = deserialize(r_stream)
+    ntfy_oid = deserialize(r_stream)
+    controller = Worker(1, r_stream, w_stream, cluster_manager)
+    register_worker(LPROC)
+
+    wait_tasks = Task[]
+
+    for (connect_at, rpid, r_is_local) in locs
+        wconfig = WorkerConfig()
+        wconfig.connect_at = connect_at
+        wconfig.environ = AnyDict(:self_is_local=>self_is_local, :r_is_local=>r_is_local)
+
+        let rpid=rpid, wconfig=wconfig
+            t = @async connect_to_peer(cluster_manager, rpid, wconfig)
+            push!(wait_tasks, t)
+        end
+    end
+
+    for wt in wait_tasks; wait(wt); end
+
+    send_msg_now(controller, :join_complete, Sys.CPU_CORES, getpid(), ntfy_oid)
+end
+
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
     try
         (r_s, w_s) = connect(manager, rpid, wconfig)
@@ -941,6 +976,21 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         exit(1)
     end
 end
+
+function handle_msg(::Type{Val{:join_complete}}, r_stream, w_stream)
+    w = map_sock_wrkr[r_stream]
+
+    environ = get(w.config.environ, Dict())
+    environ[:cpu_cores] = deserialize(r_stream)
+    w.config.environ = environ
+
+    w.config.ospid = deserialize(r_stream)
+    ntfy_oid = deserialize(r_stream)
+
+    ntfy_channel = lookup_ref(ntfy_oid).channel
+    put!(ntfy_channel, w.id)
+end
+
 
 function disable_threaded_libs()
     blas_set_num_threads(1)
@@ -1049,7 +1099,7 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     cluster_manager = manager
     disable_threaded_libs()
 
-    # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
+    # Since our pid has yet to be set, ensure no AbstractRemoteRefs have been created or addprocs() called.
     assert(nprocs() <= 1)
     assert(isempty(PGRP.refs))
     assert(isempty(client_refs))
@@ -1192,11 +1242,14 @@ function create_worker(manager, wconfig)
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     # set when the new worker has finshed connections with all other workers
-    rr_ntfy_join = RemoteRef()
+    ntfy_oid = next_rrid_tuple()
+    rr_ntfy_join = lookup_ref(ntfy_oid)
+    rr_ntfy_join.waitingfor = myid()
+
 
     # Start a new task to handle inbound messages from connected worker in master.
     # Also calls `wait_connected` on TCP streams.
-    process_messages(w.r_stream, w.w_stream, rr_ntfy_join)
+    process_messages(w.r_stream, w.w_stream)
 
     # send address information of all workers to the new worker.
     # Cluster managers set the address of each worker in `WorkerConfig.connect_at`.
@@ -1225,10 +1278,12 @@ function create_worker(manager, wconfig)
     join_list = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state==W_CONNECTED), PGRP.workers)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
-    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager))
+    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid)
 
     @schedule manage(w.manager, w.id, w.config, :register)
-    wait(rr_ntfy_join)
+    take!(rr_ntfy_join.channel)
+    delete!(PGRP.refs, ntfy_oid)
+
     w.id
 end
 
@@ -1236,7 +1291,7 @@ end
 # Called on the first worker on a remote host. Used to optimize launching
 # of multiple workers on a remote host (to leverage multi-core)
 
-additional_io_objs=Dict()
+const additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
     io_objs = cell(np)
     addresses = cell(np)
@@ -1274,7 +1329,7 @@ let nextidx = 0
                 if isa(v,Box)
                     v = v.contents
                 end
-                if isa(v,RemoteRef)
+                if isa(v,AbstractRemoteRef)
                     p = v.where; break
                 end
             end
@@ -1539,7 +1594,7 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
-    done = RemoteRef()
+    done = Channel(1)
     timercb(aw) = begin
         try
             if testcb()
@@ -1629,9 +1684,28 @@ function terminate_all_workers()
     end
 end
 
-function getindex(r::RemoteRef, args...)
+function getindex(r::AbstractRemoteRef, args...)
     if r.where == myid()
         return getindex(fetch(r), args...)
     end
     return remotecall_fetch(r.where, getindex, r, args...)
 end
+
+start{T}(c::RegisteredRef{Channel{T}}) = Ref{Nullable{T}}(Nullable{T}())
+function done(c::RegisteredRef, state::Ref)
+    try
+        # we are waiting either for more data or channel to be closed
+        state.x = take!(c)
+        return false
+    catch e
+        if isa(e, InvalidStateException) && e.state==:closed
+            return true
+        else
+            rethrow(e)
+        end
+    end
+end
+next{T}(c::RegisteredRef{Channel{T}}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
+
+
+

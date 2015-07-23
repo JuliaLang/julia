@@ -692,3 +692,6 @@ function require_filename(name::AbstractString)
 end
 const reload = require
 export reload
+
+@deprecate RemoteRef() Future()
+@deprecate RemoteRef(pid) Future(pid)

@@ -115,7 +115,7 @@ end
 
 function test_timeout(tval)
     tic()
-    channel = RemoteRef()
+    channel = Channel(1)
     @async test_file_poll(channel,tval)
     tr = take!(channel)
     t_elapsed = toq()
@@ -125,7 +125,7 @@ end
 
 function test_touch(slval)
     tval = slval*1.1
-    channel = RemoteRef()
+    channel = Channel(1)
     @async test_file_poll(channel, tval)
     sleep(tval/10)  # ~ one poll period
     f = open(file,"a")

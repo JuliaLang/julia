@@ -232,7 +232,8 @@ function wait(c::Condition)
     end
 end
 
-function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
+notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
+function notify(c::Condition, arg, all, error)
     if all
         for t in c.waitq
             schedule(t, arg, error=error)

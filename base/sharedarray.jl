@@ -3,11 +3,13 @@
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Array{RemoteRef}
+    refs::Array{RegisteredRef}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
     segname::AbstractString
+
+    released::Bool  # true if backing references have been freed.
 
     # Fields below are not to be serialized
     # Local shmem map.
@@ -21,7 +23,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # a subset of workers.
     loc_subarr_1d
 
-    SharedArray(d,p,r,sn) = new(d,p,r,sn)
+    SharedArray(d,p,r,sn) = new(d,p,r,sn,false)
 end
 
 function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
@@ -61,16 +63,17 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end)
         end
 
-        func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
-
-        refs = Array(RemoteRef, length(pids))
-        for (i, p) in enumerate(pids)
-            refs[i] = remotecall(p, func_mapshmem)
+        func_mapshmem = () -> begin
+            c = RegisteredRef()
+            put!(c, shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR))
+            c
         end
 
-        # Wait till all the workers have mapped the segment
-        for i in 1:length(refs)
-            wait(refs[i])
+        refs = Array(RegisteredRef, length(pids))
+        @sync begin
+            for (i, p) in enumerate(pids)
+                @async refs[i] = remotecall_fetch(p, func_mapshmem)
+            end
         end
 
         # All good, immediately unlink the segment.
@@ -109,7 +112,19 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
         end
     end
+
+    finalizer(S, close)
     S
+end
+
+
+function close(S::SharedArray)
+    S.released && return
+    for ref in S.refs
+        @schedule close(ref)
+    end
+    S.released = true
+    nothing
 end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
@@ -122,9 +137,11 @@ size(S::SharedArray) = S.dims
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
-    refs = Array(RemoteRef, length(a.pids))
-    for (i, p) in enumerate(a.pids)
-        refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
+    refs = Array(RegisteredRef, length(a.pids))
+    @sync begin
+        for (i, p) in enumerate(a.pids)
+            refs[i] = remotecall_fetch(p, (r,d)->(c=RegisteredRef(); put!(c, reshape(fetch(r),d)); c), a.refs[i], dims)
+        end
     end
 
     A = SharedArray{T,N}(dims, a.pids, refs, a.segname)
@@ -184,6 +201,7 @@ function init_loc_flds{T}(S::SharedArray{T})
         S.pidx = 0
         S.loc_subarr_1d = Array(T, 0)
     end
+    S.released = true
 end
 
 
@@ -193,7 +211,7 @@ function serialize(s::SerializationState, S::SharedArray)
     Serializer.serialize_cycle(s, S) && return
     Serializer.serialize_type(s, typeof(S))
     for n in SharedArray.name.names
-        if n in [:s, :pidx, :loc_subarr_1d]
+        if n in [:s, :pidx, :loc_subarr_1d, :released]
             Serializer.writetag(s.io, Serializer.UNDEFREF_TAG)
         else
             serialize(s, getfield(S, n))
