@@ -312,6 +312,8 @@ emptyperiod = ((y + d) - d) - y
 @test 8d - s == 1w + 23h + 59mi + 59s
 @test h + 3mi == 63mi
 @test y - m == 11m
+@test -h + mi == -59mi
+@test string(-h + mi) == "-59 minutes"
 
 @test Date(2009,2,1) - (Month(1) + Day(1)) == Date(2008,12,31)
 @test (Month(1) + Day(1)) - Date(2009,2,1) == Date(2008,12,31)

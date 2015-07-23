@@ -198,10 +198,45 @@ type CompoundPeriod <: AbstractTime
                     break
                 end
             end
-            return new(reverse!(pc))
+            # return new(reverse!(pc))
+            p = reverse(pc)
+            n = length(p)
         else
             return new(resize!(p, n))
         end
+        # canonicalize Period values such that they are all either
+        # positive or negative.
+        if n > 0
+            # Since Periods have been reduced we know that the largest
+            # Period type will indicate the sign.
+            s = sign(value(p[1]))
+
+            pc = sizehint!(Period[], n)
+            P = typeof(p[n])
+            v = value(p[n])
+            i = n - 1
+            while true
+                Pc, f = coarserperiod(P)
+                if i > 0 && typeof(p[i]) == P
+                    v += value(p[i])
+                    i -= 1
+                end
+                v0 = f == 1 ? v : mod(v, f * s)
+                v0 != 0 && push!(pc, P(v0))
+                if v != v0
+                    P = Pc
+                    v = div(v - v0, f)
+                elseif i > 0
+                    P = typeof(p[i])
+                    v = value(p[i])
+                    i -= 1
+                else
+                    break
+                end
+            end
+            p = reverse(pc)
+        end
+        return new(p)
     end
 end
 Base.convert(::Type{CompoundPeriod}, x::Period) = CompoundPeriod(Period[x])
