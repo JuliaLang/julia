@@ -117,6 +117,7 @@ process that owns ``r``, so the :func:`fetch` will be a no-op.
 as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
+.. _man-parallel-computing-code-availability:
 
 Code Availability and Loading Packages
 --------------------------------------
