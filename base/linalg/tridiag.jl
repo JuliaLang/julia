@@ -46,7 +46,7 @@ for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 for func in (:round, :trunc, :floor, :ceil)
-    @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), (T,$func)(M.ev))
+    @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), ($func)(T,M.ev))
 end
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
@@ -273,7 +273,20 @@ end
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
-diag{T}(M::Tridiagonal{T}, n::Integer=0) = n==0 ? M.d : n==-1 ? M.dl : n==1 ? M.du : abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : throw(BoundsError())
+function diag{T}(M::Tridiagonal{T}, n::Integer=0)
+    if n == 0
+        return M.d
+    elseif n == -1
+        return M.dl
+    elseif n == 1
+        return M.du
+    elseif abs(n) < size(M,1)
+        return zeros(T,size(M,1)-abs(n))
+    else
+        throw(BoundsError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+    end
+end
+
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError("(i,j) = ($i,$j) not within matrix of size $(size(A))"))
@@ -316,8 +329,14 @@ convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
 convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du), convert(Vector{T}, M.du2))
 convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M)
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
-convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
-    throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
+function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
+    if M.dl == M.du
+        return SymTridiagonal(M.dl, M.d)
+    else
+        throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
+    end
+end
+
 convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
