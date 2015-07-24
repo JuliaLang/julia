@@ -971,17 +971,10 @@ static Value *emit_typeof(Value *p)
     if (p->getType() == jl_pvalue_llvmt) {
         Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
         tt = builder.CreateLoad(emit_typeptr_addr(tt), false);
-#ifdef OVERLAP_SVEC_LEN
-        tt = builder.CreateIntToPtr(builder.CreateAnd(
-                    builder.CreatePtrToInt(tt, T_int64),
-                    ConstantInt::get(T_int64,0x000ffffffffffffe)),
-                jl_pvalue_llvmt);
-#else
         tt = builder.CreateIntToPtr(builder.CreateAnd(
                     builder.CreatePtrToInt(tt, T_size),
                     ConstantInt::get(T_size,~(uptrint_t)3)),
                 jl_pvalue_llvmt);
-#endif
         return tt;
     }
     return literal_pointer_val(julia_type_of(p));
