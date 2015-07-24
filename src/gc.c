@@ -74,7 +74,7 @@ typedef struct _buff_t {
         uintptr_t header;
         struct _buff_t *next;
         uptrint_t flags;
-        jl_value_t *type;
+        jl_value_t *type; // 16-bytes aligned
         struct {
             uintptr_t gc_bits:2;
             uintptr_t pooled:1;

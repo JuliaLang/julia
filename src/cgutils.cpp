@@ -973,7 +973,7 @@ static Value *emit_typeof(Value *p)
         tt = builder.CreateLoad(emit_typeptr_addr(tt), false);
         tt = builder.CreateIntToPtr(builder.CreateAnd(
                     builder.CreatePtrToInt(tt, T_size),
-                    ConstantInt::get(T_size,~(uptrint_t)3)),
+                    ConstantInt::get(T_size,~(uptrint_t)15)),
                 jl_pvalue_llvmt);
         return tt;
     }
