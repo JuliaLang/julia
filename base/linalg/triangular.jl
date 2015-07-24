@@ -891,11 +891,14 @@ end
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
-# the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153-C169.
+#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153-C169.
 #   Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
-# logarithm and estimating the condition number", SIAM J. Sci. Comput., 35(4),
-# (2013), C394-C410.
-#   http://eprints.ma.man.ac.uk/1687/02/logm.zip
+#     logarithm and estimating the condition number", SIAM J. Sci. Comput., 35(4),
+#     (2013), C394-C410.
+#
+# Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
+# Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
+# Julia version relicensed with permission from original authors
 function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     maxsqrt = 100
     theta = [1.586970738772063e-005,
