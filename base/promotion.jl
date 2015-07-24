@@ -199,6 +199,13 @@ checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
 checked_sub(x::Integer, y::Integer) = checked_sub(promote(x,y)...)
 checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
 
+@generated function promote_op{R,S}(F, ::Type{R}, ::Type{S})
+    ret = Base.return_types(F(), Tuple{R,S})
+    length(ret) == 1 || error("Strange result from Base.return_types: ", ret)
+    T = ret[1]
+    :($T)
+end
+
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)

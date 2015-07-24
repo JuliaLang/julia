@@ -67,6 +67,11 @@ call(::LessFun, x, y) = x < y
 immutable MoreFun <: Func{2} end
 call(::MoreFun, x, y) = x > y
 
+immutable GenericNFunc{F,N} <: Func{N} end
+@generated function call{F}(::GenericNFunc{F,2}, x, y)
+    :($F(x, y))
+end
+
 # a fallback unspecialized function object that allows code using
 # function objects to not care whether they were able to specialize on
 # the function value or not
