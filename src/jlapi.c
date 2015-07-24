@@ -297,39 +297,30 @@ static void NORETURN throw_eof_error(void)
     jl_exceptionf(eof_error, "");
 }
 
-DLLEXPORT uint16_t jl_ios_get_uint16(ios_t *s)
+DLLEXPORT uint64_t jl_ios_get_nbytes(ios_t *s, const size_t n)
 {
-    uint8_t buf[2];
-    size_t ret = ios_readall(s, (char*)buf, 2);
-    if (ret < 2)
-        throw_eof_error();
-    uint16_t x = 0;
-    for (int i = 0; i < 2; i++)
-        x |= (uint16_t)buf[i] << (i << 3);
-    return x;
-}
-
-DLLEXPORT uint32_t jl_ios_get_uint32(ios_t *s)
-{
-    uint8_t buf[4];
-    size_t ret = ios_readall(s, (char*)buf, 4);
-    if (ret < 4)
-        throw_eof_error();
-    uint32_t x = 0;
-    for (int i = 0; i < 4; i++)
-        x |= (uint32_t)buf[i] << (i << 3);
-    return x;
-}
-
-DLLEXPORT uint64_t jl_ios_get_uint64(ios_t *s)
-{
+    assert(n <= 8);
     uint8_t buf[8];
-    size_t ret = ios_readall(s, (char*)buf, 8);
-    if (ret < 8)
+    size_t ret = ios_readall(s, (char*)buf, n);
+    if (ret < n)
         throw_eof_error();
     uint64_t x = 0;
-    for (int i = 0; i < 8; i++)
-        x |= (uint64_t)buf[i] << (i << 3);
+    if (n == 8) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 8; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else if (n >= 4) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 4; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+        for (size_t i = 4; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else {
+        for (size_t i = 0; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
     return x;
 }
 
