@@ -211,7 +211,7 @@ General Parallel Computing Support
 .. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    Transform collections ``lsts`` by applying ``f`` to each element in parallel.
-   The definition of ``f`` must be preceded by ``@everywhere`` so all workers have access to the function.
+   (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.)
    If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
    All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
 
@@ -422,4 +422,3 @@ Cluster Manager Interface
     Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the
     first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two
     AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
-
