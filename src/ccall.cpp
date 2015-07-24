@@ -1250,12 +1250,18 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         // Julia type of the current parameter
         jl_value_t *jargty;
+
+        // Index into the byRefList for the current argument
+        size_t byRefIndex;
+
         if (isVa && ai >= nargt-1) {
             largty = fargt[nargt-1];
+            byRefIndex = nargt-1;
             jargty = jl_tparam0(jl_svecref(tt,nargt-1));
         }
         else {
             largty = fargt[sret+ai];
+            byRefIndex = ai;
             jargty = jl_svecref(tt,ai);
         }
 
@@ -1303,11 +1309,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         bool nSR=false;
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
+        assert(byRefList.size() == inRegList.size() && byRefIndex < byRefList.size());
+        bool byRef = byRefList[byRefIndex];
+        bool inReg = inRegList[byRefIndex];
         argvals[ai + sret] = llvm_type_rewrite(
-                julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, byRefList[ai], inRegList[ai],
-                    need_private_copy(jargty, byRefList[ai]), false, ai + 1, ctx, &nSR),
+                julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, byRef, inReg,
+                    need_private_copy(jargty, byRef), false, ai + 1, ctx, &nSR),
                 largty, ai + sret < fargt_sig.size() ? fargt_sig[ai + sret] : fargt_vasig,
-                false, byRefList[ai], issigned, ctx);
+                false, byRef, issigned, ctx);
         needStackRestore |= nSR;
     }
 
