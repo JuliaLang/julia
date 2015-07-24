@@ -32,7 +32,7 @@ td[1] = 1.0
 @test @compat(Dict()) == Dict()
 @test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
 if VERSION >= v"0.3.0-"
-	@test @compat(Dict([(1, 1)])) == d
+    @test @compat(Dict([(1, 1)])) == d
 end
 
 d2 = Dict{Symbol,Dict{Symbol,Int}}()
@@ -44,9 +44,9 @@ d = Dict(zip([1, 2], [3, 4]))
 @test d == @compat Dict(1=>3, 2=>4)
 
 @compat function f()
-	a = :a
-	b = Dict(:b => 1)
-	Dict(a => b)
+    a = :a
+    b = Dict(:b => 1)
+    Dict(a => b)
 end
 @test f() == d2
 
@@ -111,10 +111,10 @@ end
 @test rand(Bool) in [false, true]
 
 module CartesianTest
-	using Base.Cartesian, Compat
-	@ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
-		@ncall N tuple X
-	end
+    using Base.Cartesian, Compat
+    @ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
+        @ncall N tuple X
+    end
 end
 
 @test CartesianTest.f(1) == (1,)
@@ -254,6 +254,21 @@ let A, B, s
         s += B[i]
     end
     @test s == 210
+end
+
+let
+    d = @compat Dict(1=>2, 3=>4)
+    d[5] = 6
+    val = 0
+    for I in eachindex(d)
+        val += d[I]
+    end
+    @test val == 12
+    empty!(d)
+    for I in eachindex(d)
+        val += d[I]
+    end
+    @test val == 12
 end
 
 # findlast, findprev
