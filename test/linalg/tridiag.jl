@@ -35,10 +35,17 @@ let n = 12 #Size of matrix problem to test
         A = SymTridiagonal(a, b)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
 
+        debug && println("getindex")
+        @test_throws BoundsError A[n+1,1]
+        @test_throws BoundsError A[1,n+1]
+        @test A[1,n] == convert(elty,0.0)
+        @test A[1,1] == a[1]
+
         debug && println("Diagonal extraction")
         @test diag(A,1) == b
         @test diag(A,-1) == b
         @test diag(A,0) == a
+        @test diag(A,n-1) == zeros(elty,1)
         @test_throws BoundsError diag(A,n+1)
 
         debug && println("Idempotent tests")
@@ -50,6 +57,20 @@ let n = 12 #Size of matrix problem to test
         for func in (det, inv)
             @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
         end
+
+        debug && println("Rounding to Ints")
+        if elty <: Real
+            @test round(Int,A) == round(Int,fA)
+            @test trunc(Int,A) == trunc(Int,fA)
+            @test ceil(Int,A) == ceil(Int,fA)
+            @test floor(Int,A) == floor(Int,fA)
+        end
+
+        debug && println("Tridiagonal/SymTridiagonal mixing ops")
+        B = convert(Tridiagonal{elty},A)
+        @test B == A
+        @test B + A == A + B
+        @test B - A == A - B
 
         debug && println("Multiplication with strided vector")
         @test_approx_eq A*ones(n) full(A)*ones(n)
@@ -105,9 +126,11 @@ let n = 12 #Size of matrix problem to test
         @test_approx_eq full(A*α) full(A)*α
         @test_approx_eq full(A/α) full(A)/α
 
+        debug && println("A_mul_B!")
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
+
     end
 
     debug && println("Tridiagonal matrices")
@@ -126,15 +149,35 @@ let n = 12 #Size of matrix problem to test
         A = Tridiagonal(a, b, c)
         fA = map(elty <: Complex ? Complex128 : Float64, full(A))
 
+        debug && println("Similar, size, and copy!")
+        B = similar(A)
+        @test size(B) == size(A)
+        copy!(B,A)
+        @test B == A
+        @test_throws DimensionMismatch similar(A,(n,n,2))
+        @test_throws DimensionMismatch similar(A,(n+1,n))
+        @test_throws DimensionMismatch similar(A,(n,n+1))
+        @test size(A,3) == 1
+        @test_throws ArgumentError size(A,0)
+
         debug && println("Diagonal extraction")
         @test diag(A,-1) == a
         @test diag(A,0) == b
         @test diag(A,1) == c
+        @test diag(A,n-1) == zeros(elty,1)
         @test_throws BoundsError diag(A,n+1)
 
         debug && println("Simple unary functions")
         for func in (det, inv)
             @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+        end
+
+        debug && println("Rounding to Ints")
+        if elty <: Real
+            @test round(Int,A) == round(Int,fA)
+            @test trunc(Int,A) == trunc(Int,fA)
+            @test ceil(Int,A) == ceil(Int,fA)
+            @test floor(Int,A) == floor(Int,fA)
         end
 
         debug && println("Binary operations")
@@ -164,5 +207,15 @@ let n = 12 #Size of matrix problem to test
         @test_approx_eq full(α*A) α*full(A)
         @test_approx_eq full(A*α) full(A)*α
         @test_approx_eq full(A/α) full(A)/α
+
+        @test_throws ArgumentError convert(SymTridiagonal{elty},A)
+
+        debug && println("A_mul_B!")
+        @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n,n+1))
+        @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n+1,n))
+
+        debug && println("getindex")
+        @test_throws BoundsError A[n+1,1]
+        @test_throws BoundsError A[1,n+1]
     end
 end
