@@ -211,6 +211,7 @@ General Parallel Computing Support
 .. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    Transform collections ``lsts`` by applying ``f`` to each element in parallel.
+   The definition of ``f`` must be preceded by ``@everywhere`` so all workers have access to the function.
    If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
    All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
 
