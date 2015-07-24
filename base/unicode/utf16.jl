@@ -120,8 +120,8 @@ function convert(::Type{UTF16String}, str::AbstractString)
             buf[out += 1] = UInt16(c)
         else
             # output surrogate pair
-            buf[out += 1] = UInt16(0xd7c0 + (ch >>> 10))
-            buf[out += 1] = UInt16(0xdc00 + (ch & 0x3ff))
+            buf[out += 1] = UInt16(0xd7c0 + (c >>> 10))
+            buf[out += 1] = UInt16(0xdc00 + (c & 0x3ff))
         end
     end
     @inbounds buf[out + 1] = 0 # NULL termination
