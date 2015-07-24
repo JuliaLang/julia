@@ -13,14 +13,13 @@ intvls = [2, .2, .1, .002]
 
 pipe_fds = cell(n)
 for i in 1:n
-    @test 0 ==
-        @windows ? begin
-            pipe_fds[i] = Array(Libc.WindowsRawSocket, 2)
-            ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i])
-        end : begin
-            pipe_fds[i] = Array(RawFD, 2)
-            ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
-        end
+    @windows ? begin
+        pipe_fds[i] = Array(Libc.WindowsRawSocket, 2)
+        0 == ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i]) || error(Libc.FormatMessage())
+    end : begin
+        pipe_fds[i] = Array(RawFD, 2)
+        @test 0 == ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
+    end
 end
 
 function pfd_tst_reads(idx, intvl)
@@ -38,10 +37,10 @@ function pfd_tst_reads(idx, intvl)
     @test t_elapsed <= (intvl + 1)
 
     dout = Array(UInt8, 1)
-    @test 1 == @windows ? (
-        ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0)
+    @windows ? (
+        1 == ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     ) : (
-        ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
+        @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][1], dout, 1)
     )
     @test dout[1] == Int8('A')
 end
@@ -87,10 +86,10 @@ for (i, intvl) in enumerate(intvls)
             @test event.writable
 
             if isodd(idx)
-                @test 1 == @windows ? (
-                   ccall(:send, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][2], "A", 1, 0)
+                @windows ? (
+                   1 == ccall(:send, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][2], "A", 1, 0) || error(Libc.FormatMessage())
                 ) : (
-                   ccall(:write, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][2], "A", 1)
+                   @test 1 == ccall(:write, Csize_t, (Cint, Ptr{UInt8}, Csize_t), pipe_fds[idx][2], "A", 1)
                 )
             end
         end
@@ -100,10 +99,10 @@ end
 
 for i in 1:n
     for j = 1:2
-        @test 0 == @windows ? (
-            ccall(:closesocket, stdcall, Cint, (Ptr{Void},), pipe_fds[i][j])
+        @windows ? (
+            0 == ccall(:closesocket, stdcall, Cint, (Ptr{Void},), pipe_fds[i][j]) || error(Libc.FormatMessage())
         ) : (
-            ccall(:close, Cint, (Cint,), pipe_fds[i][j])
+            @test 0 == ccall(:close, Cint, (Cint,), pipe_fds[i][j])
         )
     end
 end
