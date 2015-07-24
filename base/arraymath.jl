@@ -38,10 +38,10 @@ end
 
 ## Binary arithmetic operators ##
 
-promote_array_type{Scalar, Arry}(::Type{Scalar}, ::Type{Arry}) = promote_type(Scalar, Arry)
-promote_array_type{S<:Real, A<:FloatingPoint}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
+promote_array_type{Scalar, Arry}(F, ::Type{Scalar}, ::Type{Arry}) = promote_op(F, Scalar, Arry)
+promote_array_type{S<:Real, A<:FloatingPoint}(F, ::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}) = S
 
 # Handle operations that return different types
 ./(x::Number, Y::AbstractArray) =
@@ -58,9 +58,10 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
     reshape([ x ^ y for x in X ], size(X))
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
+    F = GenericNFunc{f,2}()
     @eval begin
         function ($f){S,T}(A::Range{S}, B::Range{T})
-            F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
             i = 1
             for (a,b) in zip(A,B)
                 @inbounds F[i] = ($f)(a, b)
@@ -69,7 +70,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
-            F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
                 @inbounds F[i] = ($f)(A[i], b)
@@ -78,7 +79,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
-            F = similar(B, promote_type(S,T), promote_shape(size(A),size(B)))
+            F = similar(B, promote_op($F,S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
                 @inbounds F[i] = ($f)(a, B[i])
@@ -87,7 +88,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
             for i in eachindex(A,B)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
@@ -96,16 +97,17 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
     end
 end
 for f in (:.+, :.-, :.*, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
+    F = GenericNFunc{f,2}()
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
-            F = similar(B, promote_array_type(typeof(A),T))
+            F = similar(B, promote_array_type($F,typeof(A),T))
             for i in eachindex(B)
                 @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
-            F = similar(A, promote_array_type(typeof(B),T))
+            F = similar(A, promote_array_type($F,typeof(B),T))
             for i in eachindex(A)
                 @inbounds F[i] = ($f)(A[i], B)
             end

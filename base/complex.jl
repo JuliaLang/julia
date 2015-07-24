@@ -747,7 +747,7 @@ big{T<:FloatingPoint,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{
 
 ## promotion to complex ##
 
-promote_array_type{S<:Union{Complex, Real}, AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+promote_array_type{S<:Union{Complex, Real}, AT<:FloatingPoint}(F, ::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     if size(A) != size(B); throw(DimensionMismatch()); end
