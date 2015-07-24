@@ -1501,7 +1501,8 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
 static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, jl_svec_t *tvars)
 {
     func->linfo->specTypes = sig;
-    jl_gc_wb(func->linfo, sig);
+    if (sig)
+        jl_gc_wb(func->linfo, sig);
     if (tvars != jl_emptysvec) {
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
