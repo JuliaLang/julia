@@ -53,31 +53,39 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             end
         end
     end
+end
 
-    function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-        ULnew = similar(UL, promote_type(eltype(J), eltype(UL)))
-        n = size(ULnew, 1)
-        ULold = UL.data
-        for j = 1:n
-            for i = 1:j - 1
-                ULnew[i,j] = -ULold[i,j]
-            end
-            ULnew[j,j] = J.λ - ifelse(isa(UL, UnitUpperTriangular), 1, ULold[j,j])
+function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
+    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    n = size(ULnew, 1)
+    ULold = UL.data
+    for j = 1:n
+        for i = 1:j - 1
+            ULnew[i,j] = -ULold[i,j]
         end
-        return UpperTriangular(ULnew)
-    end
-    function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-        ULnew = similar(UL, promote_type(eltype(J), eltype(UL)))
-        n = size(ULnew, 1)
-        ULold = UL.data
-        for j = 1:n
-            ULnew[j,j] = J.λ - ifelse(isa(UL, UnitLowerTriangular), 1, ULold[j,j])
-            for i = j + 1:n
-                ULnew[i,j] = -ULold[i,j]
-            end
+        if isa(UL, UnitUpperTriangular)
+            ULnew[j,j] = J.λ - 1
+        else
+            ULnew[j,j] = J.λ - ULold[j,j]
         end
-        return LowerTriangular(ULNew)
     end
+    return UpperTriangular(ULnew)
+end
+function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
+    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    n = size(ULnew, 1)
+    ULold = UL.data
+    for j = 1:n
+        if isa(UL, UnitLowerTriangular)
+            ULnew[j,j] = J.λ - 1
+        else
+            ULnew[j,j] = J.λ - ULold[j,j]
+        end
+        for i = j + 1:n
+            ULnew[i,j] = -ULold[i,j]
+        end
+    end
+    return LowerTriangular(ULnew)
 end
 
 function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
