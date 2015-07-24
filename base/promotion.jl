@@ -199,12 +199,11 @@ checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
 checked_sub(x::Integer, y::Integer) = checked_sub(promote(x,y)...)
 checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
 
-@generated function promote_op{R,S}(F, ::Type{R}, ::Type{S})
-    ret = Base.return_types(F(), Tuple{R,S})
-    length(ret) == 1 || error("Strange result from Base.return_types: ", ret)
-    T = ret[1]
-    :($T)
-end
+# "Promotion" that takes a Functor into account. You can override this
+# as needed. For example, if you need to provide a custom result type
+# for the multiplication of two types,
+#   promote_op{R<:MyType,S<:MyType}(::GenericNFunc{:*,2}, ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
+promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = promote_type(R, S)
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
