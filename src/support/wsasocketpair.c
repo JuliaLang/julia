@@ -29,41 +29,54 @@ __declspec(dllexport) int wsasocketpair(int domain, int type, int protocol, SOCK
         return -1;
     }
     name.sin_family = AF_INET;
-    name.sin_addr.s_addr = INADDR_LOOPBACK;
+    name.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     name.sin_port = 0;
     err = bind(server, (SOCKADDR*)&name, sizeof(name));
     if (err == SOCKET_ERROR) {
-       closesocket(server);
-       return -1;
+        int lasterr = WSAGetLastError();
+        closesocket(server);
+        WSASetLastError(lasterr);
+        return -1;
     }
     err = listen(server, 1);
     if (err == SOCKET_ERROR) {
-       closesocket(server);
-       return -1;
+        int lasterr = WSAGetLastError();
+        closesocket(server);
+        WSASetLastError(lasterr);
+        return -1;
     }
     namelen = sizeof(name);
     err = getsockname(server, (SOCKADDR*)&name, &namelen);
     if (err == SOCKET_ERROR) {
-       closesocket(server);
-       return -1;
+        int lasterr = WSAGetLastError();
+        closesocket(server);
+        WSASetLastError(lasterr);
+        return -1;
     }
     client0 = socket(AF_INET, type, protocol);
     if (client0 == INVALID_SOCKET) {
+        int lasterr = WSAGetLastError();
         closesocket(server);
+        WSASetLastError(lasterr);
         return -1;
     }
     err = connect(client0, (SOCKADDR*)&name, sizeof(name));
     if (err == SOCKET_ERROR) {
-       closesocket(client0);
-       closesocket(server);
-       return -1;
+        int lasterr = WSAGetLastError();
+        closesocket(client0);
+        closesocket(server);
+        WSASetLastError(lasterr);
+        return -1;
     }
     client1 = accept(server, NULL, NULL);
-    closesocket(server);
     if (err == INVALID_SOCKET) {
-       closesocket(client0);
-       return -1;
+        int lasterr = WSAGetLastError();
+        closesocket(server);
+        closesocket(client0);
+        WSASetLastError(lasterr);
+        return -1;
     }
+    closesocket(server);
     socket_vector[0] = client0;
     socket_vector[1] = client1;
     return 0;
