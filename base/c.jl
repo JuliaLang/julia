@@ -113,7 +113,7 @@ macro ccallable(def)
             end
             return quote
                 $(esc(def))
-                ccallable($(esc(name)), $(Expr(:tuple, map(esc, at)...)))
+                ccallable($(esc(name)), $(Expr(:curly, :Tuple, map(esc, at)...)))
             end
         end
     end
