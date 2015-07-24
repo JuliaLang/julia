@@ -10,6 +10,7 @@ end
 
 if VERSION < v"0.4.0-dev+1624"
     eachindex(A::AbstractArray) = 1:length(A)
+    eachindex(a::Associative) = Base.KeyIterator(a)
     export eachindex
 end
 
