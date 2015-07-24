@@ -22,11 +22,7 @@ DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 
 jl_svec_t *jl_svec1(void *a)
 {
-#ifdef OVERLAP_SVEC_LEN
-    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_1w();
-#else
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_2w();
-#endif
     jl_set_typeof(v, jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 1);
     jl_svecset(v, 0, a);
@@ -35,11 +31,7 @@ jl_svec_t *jl_svec1(void *a)
 
 jl_svec_t *jl_svec2(void *a, void *b)
 {
-#ifdef OVERLAP_SVEC_LEN
-    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_2w();
-#else
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_3w();
-#endif
     jl_set_typeof(v, jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 2);
     jl_svecset(v, 0, a);
@@ -50,11 +42,7 @@ jl_svec_t *jl_svec2(void *a, void *b)
 jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
     if (n == 0) return jl_emptysvec;
-#ifdef OVERLAP_TUPLE_LEN
-    jl_svec_t *jv = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, n);
-#else
     jl_svec_t *jv = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, n+1);
-#endif
     jl_svec_set_len_unsafe(jv, n);
     return jv;
 }
