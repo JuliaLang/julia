@@ -910,7 +910,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
          2.879093714241194e-001]
     tmax = size(theta, 1)
     n = size(A0, 1)
-    A = A0
+    A = copy(A0)
     p = 0
     m = 0
 
@@ -919,7 +919,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     dm1 = Array(T, n)
     s = 0
     for i = 1:n
-        dm1[i] = dm1[i] - 1.
+        dm1[i] = d[i] - 1.
     end
     while norm(dm1, Inf) > theta[tmax]
         for i = 1:n
@@ -1078,6 +1078,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     return UpperTriangular(Y)
 
 end
+logm(A::LowerTriangular) = logm(A.').'
 
 function sqrtm{T}(A::UpperTriangular{T})
     n = size(A, 1)
