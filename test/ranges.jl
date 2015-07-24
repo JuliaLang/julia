@@ -484,6 +484,9 @@ end
 # issue #8584
 @test (0:1//2:2)[1:2:3] == 0:1//1:1
 
+# issue #12278
+@test length(1:UInt(0)) == 0
+
 # zip
 let i = 0
 x = 1:2:8
