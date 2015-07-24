@@ -1705,11 +1705,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         jl_varinfo_t &vari = ctx->vars[s];
         if (vari.closureidx != -1) {
             int idx = vari.closureidx;
-#ifdef OVERLAP_SVEC_LEN
-            val = emit_nthptr((Value*)ctx->envArg, idx, tbaa_sveclen);
-#else
             val = emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_sveclen);
-#endif
         }
         else {
             Value *l = vari.memvalue;
@@ -2807,17 +2803,9 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         int idx = vi.closureidx;
         assert(((Value*)ctx->envArg)->getType() == jl_pvalue_llvmt);
         if (isBoxed(s, ctx)) {
-#ifdef OVERLAP_SVEC_LEN
-            return builder.CreatePointerCast(emit_nthptr((Value*)ctx->envArg, idx, tbaa_sveclen), jl_ppvalue_llvmt);
-#else
             return builder.CreatePointerCast(emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_sveclen), jl_ppvalue_llvmt);
-#endif
         }
-#ifdef OVERLAP_SVEC_LEN
-        return emit_nthptr_addr((Value*)ctx->envArg, idx);
-#else
         return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
-#endif
     }
     Value *l = vi.memvalue;
     if (l == NULL) return NULL;
