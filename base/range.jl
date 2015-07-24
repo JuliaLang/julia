@@ -283,8 +283,11 @@ function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     end
 end
 
-length{T<:Union{Int,UInt,Int64,UInt64}}(r::UnitRange{T}) =
+length{T<:Union{Int,Int64}}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
+
+length{T<:Union{UInt,UInt64}}(r::UnitRange{T}) =
+    r.stop < r.start ? zero(T) : checked_add(r.stop - r.start, one(T))
 
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
