@@ -21,6 +21,8 @@ export # also exported by Base
     # order & algorithm:
     sort,
     sort!,
+    selectperm,
+    selectperm!,
     sortperm,
     sortperm!,
     sortrows,
@@ -28,7 +30,8 @@ export # also exported by Base
     # algorithms:
     InsertionSort,
     QuickSort,
-    MergeSort
+    MergeSort,
+    PartialQuickSort
 
 export # not exported by Base
     Algorithm,
@@ -55,72 +58,16 @@ issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
-    lo <= k <= hi || throw(ArgumentError("select index $k is out of range $lo:$hi"))
-    @inbounds while lo < hi
-        if hi-lo == 1
-            if lt(o, v[hi], v[lo])
-                v[lo], v[hi] = v[hi], v[lo]
-            end
-            return v[k]
-        end
-        pivot = v[(lo+hi)>>>1]
-        i, j = lo, hi
-        while true
-            while lt(o, v[i], pivot); i += 1; end
-            while lt(o, pivot, v[j]); j -= 1; end
-            i <= j || break
-            v[i], v[j] = v[j], v[i]
-            i += 1; j -= 1
-        end
-        if k <= j
-            hi = j
-        elseif i <= k
-            lo = i
-        else
-            return pivot
-        end
-    end
-    return v[lo]
+function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
+    sort!(v, 1, length(v), PartialQuickSort(k), o)
+    v[k]
 end
-
-function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Ordering)
-    isempty(r) && (return v[r])
-    a, b = extrema(r)
-    lo <= a <= b <= hi || throw(ArgumentError("selection $r is out of range $lo:$hi"))
-    @inbounds while true
-        if lo == a && hi == b
-            sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
-            return v[r]
-        end
-        pivot = v[(lo+hi)>>>1]
-        i, j = lo, hi
-        while true
-            while lt(o, v[i], pivot); i += 1; end
-            while lt(o, pivot, v[j]); j -= 1; end
-            i <= j || break
-            v[i], v[j] = v[j], v[i]
-            i += 1; j -= 1
-        end
-        if b <= j
-            hi = j
-        elseif i <= a
-            lo = i
-        else
-            a <= j && select!(v, a, lo,  j, o)
-            b >= i && select!(v, b,  i, hi, o)
-            sort!(v, a, b, DEFAULT_UNSTABLE, o)
-            return v[r]
-        end
-    end
-end
-
-select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering) = select!(v,k,1,length(v),o)
 select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
 select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copy(v), k; kws...)
+
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -248,6 +195,10 @@ immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
 
+immutable PartialQuickSort{T <: Union(Int,OrdinalRange)} <: Algorithm
+    k::T
+end
+
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
 const MergeSort     = MergeSortAlg()
@@ -274,10 +225,20 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Order
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+# selectpivot!
+#
+# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi]) and
+# choose the middle value as a pivot
+#
+# Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
+# greater than the pivot
+
+@inline function selectpivot!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+    @inbounds begin
         mi = (lo+hi)>>>1
+
+        # sort the values in v[lo], v[mi], v[hi]
+
         if lt(o, v[mi], v[lo])
             v[mi], v[lo] = v[lo], v[mi]
         end
@@ -288,17 +249,43 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
                 v[hi], v[mi] = v[mi], v[hi]
             end
         end
-        v[mi], v[lo] = v[lo], v[mi]
-        i, j = lo, hi
+
+        # move v[mi] to v[lo] and use it as the pivot
+        v[lo], v[mi] = v[mi], v[lo]
         pivot = v[lo]
-        while true
-            i += 1; j -= 1;
-            while lt(o, v[i], pivot); i += 1; end;
-            while lt(o, pivot, v[j]); j -= 1; end;
-            i >= j && break
-            v[i], v[j] = v[j], v[i]
-        end
-        v[j], v[lo] = v[lo], v[j]
+    end
+
+    # return the pivot
+    return pivot
+end
+
+# partition!
+#
+# select a pivot, and partition v according to the pivot
+
+function partition!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+    pivot = selectpivot!(v, lo, hi, o)
+    # pivot == v[lo], v[hi] > pivot
+    i, j = lo, hi
+    @inbounds while true
+        i += 1; j -= 1
+        while lt(o, v[i], pivot); i += 1; end;
+        while lt(o, pivot, v[j]); j -= 1; end;
+        i >= j && break
+        v[i], v[j] = v[j], v[i]
+    end
+    v[j], v[lo] = pivot, v[j]
+
+    # v[j] == pivot
+    # v[k] >= pivot for k > j
+    # v[i] <= pivot for i < j
+    return j
+end
+
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
+    @inbounds while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        j = partition!(v, lo, hi, o)
         if j-lo < hi-j
             # recurse on the smaller chunk
             # this is necessary to preserve O(log(n))
@@ -351,6 +338,53 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
+               o::Ordering)
+    @inbounds while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        j = partition!(v, lo, hi, o)
+        if j >= a.k
+            # we don't need to sort anything bigger than j
+            hi = j-1
+        elseif j-lo < hi-j
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
+            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo = j+1
+        else
+            (j+1) < hi && sort!(v, j+1, hi, a, o)
+            hi = j-1
+        end
+    end
+    return v
+end
+
+
+function sort!{T<:OrdinalRange}(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
+               o::Ordering)
+    @inbounds while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        j = partition!(v, lo, hi, o)
+
+        if j <= first(a.k)
+            lo = j+1
+        elseif j >= last(a.k)
+            hi = j-1
+        else
+            if j-lo < hi-j
+                lo < (j-1) && sort!(v, lo, j-1, a, o)
+                lo = j+1
+            else
+                hi > (j+1) && sort!(v, j+1, hi, a, o)
+                hi = j-1
+            end
+        end
+    end
+    return v
+end
+
+
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
@@ -368,6 +402,30 @@ function sort!(v::AbstractVector;
 end
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
+
+
+## selectperm: the permutation to sort the first k elements of an array ##
+
+selectperm(v::AbstractVector, k::Union(Integer,OrdinalRange); kwargs...) =
+    selectperm!(Vector{eltype(k)}(length(v)), v, k; kwargs..., initialized=false)
+
+function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
+                                 k::Union(Int, OrdinalRange);
+                                 lt::Function=isless,
+                                 by::Function=identity,
+                                 rev::Bool=false,
+                                 order::Ordering=Forward,
+                                 initialized::Bool=false)
+    if !initialized
+        @inbounds for i = 1:length(ix)
+            ix[i] = i
+        end
+    end
+
+    # do partial quicksort
+    sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
+    return ix[k]
+end
 
 ## sortperm: the permutation to sort an array ##
 
@@ -498,6 +556,10 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, i,  hi, a, right(o))
     return v
 end
+
+
+fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
+    sort!(v, 1, length(v), a, o)
 
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
 sort!{O<:DirectOrdering,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
