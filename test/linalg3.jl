@@ -182,6 +182,9 @@ for elty in (Float64, Complex{Float64})
     @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprimary matrix logarithm will be returned.")
     redirect_stderr(OLD_STDERR)
 
+    A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
+    @test_approx_eq expm(logm(A7)) A7
+
 end
 
 A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1];
