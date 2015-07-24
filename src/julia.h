@@ -93,14 +93,6 @@ typedef struct {
         uintptr_t type_bits;
         struct {
             uintptr_t gc_bits:2;
-#ifdef OVERLAP_SVEC_LEN
-#ifdef _P64
-            uintptr_t unmarked:50;
-#else
-#error OVERLAP_SVEC_LEN requires 64-bit pointers
-#endif
-            uintptr_t length:12;
-#endif
         };
     };
     jl_value_t value;
@@ -133,9 +125,7 @@ typedef struct _jl_gensym_t {
 
 typedef struct {
     JL_DATA_TYPE
-#ifndef OVERLAP_SVEC_LEN
     size_t length;
-#endif
     jl_value_t *data[];
 } jl_svec_t;
 

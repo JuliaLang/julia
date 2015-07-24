@@ -8,12 +8,6 @@
 
 // object layout options ------------------------------------------------------
 
-#ifdef _P64
-// a risky way to save 8 bytes per tuple, by storing the length in the
-// top bits of the type tag. only possible on 64-bit.
-//#define OVERLAP_TUPLE_LEN
-#endif
-
 // if this is not defined, only individual dimension sizes are
 // stored and not total length, to save space.
 #define STORE_ARRAY_LEN
