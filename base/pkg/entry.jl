@@ -203,7 +203,7 @@ function free(pkg::AbstractString)
     Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be freed – not a registered package")
-    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
     info("Freeing $pkg")
     vers = sort!(collect(keys(avail)), rev=true)
     while true
@@ -224,7 +224,7 @@ function free(pkgs)
             Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
             avail = Read.available(pkg)
             isempty(avail) && error("$pkg cannot be freed – not a registered package")
-            Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+            Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
             info("Freeing $pkg")
             vers = sort!(collect(keys(avail)), rev=true)
             for ver in vers
@@ -256,7 +256,7 @@ function pin(pkg::AbstractString, ver::VersionNumber)
     Read.isinstalled(pkg) || error("$pkg cannot be pinned – not an installed package".tmp)
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be pinned – not a registered package".tmp)
-    haskey(avail,ver) || error("$pkg – $ver is not a registered version")
+    haskey(avail,ver) || error("$pkg – $ver is not a registered version")
     pin(pkg,avail[ver].sha1)
 end
 
@@ -551,9 +551,9 @@ nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=false, commit::AbstractString="HEAD")
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) &&
-        error("$pkg is dirty – commit or stash changes to tag")
+        error("$pkg is dirty – commit or stash changes to tag")
     Git.dirty(pkg, dir="METADATA") &&
-        error("METADATA/$pkg is dirty – commit or stash changes to tag")
+        error("METADATA/$pkg is dirty – commit or stash changes to tag")
     commit = Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
     if !force

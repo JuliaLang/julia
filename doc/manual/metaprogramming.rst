@@ -307,7 +307,7 @@ at global scope using :func:`eval`:
 Every :ref:`module <man-modules>` has its own :func:`eval` function that
 evaluates expressions in its global scope.
 Expressions passed to :func:`eval` are not limited to returning values
-— they can also have side-effects that alter the state of the enclosing
+— they can also have side-effects that alter the state of the enclosing
 module's environment:
 
 .. doctest::
@@ -868,7 +868,7 @@ is implemented with the following innocuous-looking macro::
 Of course, a large amount of complexity is hidden in the functions used
 in this macro definition, but they are just functions, written
 entirely in Julia. You can read their source and see precisely what they
-do — and all they do is construct expression objects to be inserted into
+do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.
 
 Generated functions

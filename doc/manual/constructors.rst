@@ -6,7 +6,7 @@
  Constructors
 **************
 
-Constructors [#]_ are functions that create new objects — specifically,
+Constructors [#]_ are functions that create new objects — specifically,
 instances of :ref:`man-composite-types`. In Julia,
 type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
@@ -53,7 +53,7 @@ these cases and more.
 Outer Constructor Methods
 -------------------------
 
-A constructor is just like any other function in Julia in that its
+A constructor is just like any other function in Julia in that its
 overall behavior is defined by the combined behavior of its methods.
 Accordingly, you can add functionality to a constructor by simply
 defining new methods. For example, let's say you want to add a
@@ -156,7 +156,7 @@ type, if the corresponding field has a type), and passes them to
 
 This declaration has the same effect as the earlier definition of the
 ``Foo`` type without an explicit inner constructor method. The following
-two types are equivalent — one with a default constructor, the other
+two types are equivalent — one with a default constructor, the other
 with an explicit constructor::
 
     type T1
@@ -445,7 +445,7 @@ the following outer method definition to make all calls to the general
     julia> Point(x::Real, y::Real) = Point(promote(x,y)...);
 
 The ``promote`` function converts all its arguments to a common type
-— in this case :class:`Float64`. With this method definition, the ``Point``
+— in this case :class:`Float64`. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
 like :obj:`+` do, and works for all kinds of real numbers:
 
@@ -505,7 +505,7 @@ which implements Julia's :ref:`man-rational-numbers`::
         complex(real(xy)//yy, imag(xy)//yy)
     end
 
-The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
+The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
 :class:`Rational` takes one type parameter of an integer type, and is itself
 a real type. The field declarations ``num::T`` and ``den::T`` indicate
 that the data held in a ``Rational{T}`` object are a pair of integers of
@@ -519,7 +519,7 @@ non-negative denominator. This is accomplished by dividing the given
 numerator and denominator values by their greatest common divisor,
 computed using the ``gcd`` function. Since ``gcd`` returns the greatest
 common divisor of its arguments with sign matching the first argument
-(``den`` here), after this division the new value of ``den`` is
+(``den`` here), after this division the new value of ``den`` is
 guaranteed to be non-negative. Because this is the only inner
 constructor for :class:`Rational`, we can be certain that :class:`Rational`
 objects are always constructed in this normalized form.
@@ -539,7 +539,7 @@ for the :obj:`//` operator, which provides a syntax for writing rationals.
 Before these definitions, :obj:`//` is a completely undefined operator with
 only syntax and no meaning. Afterwards, it behaves just as described in
 :ref:`man-rational-numbers`
-— its entire behavior is defined in these few lines. The first and most
+— its entire behavior is defined in these few lines. The first and most
 basic definition just makes ``a//b`` construct a :class:`Rational` by
 applying the :class:`Rational` constructor to ``a`` and ``b`` when they are
 integers. When one of the operands of :obj:`//` is already a rational

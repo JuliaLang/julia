@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # ––––––––
-# Emphasis
+# Emphasis
 # ––––––––
 
 type Italic
@@ -25,7 +25,7 @@ function asterisk_bold(stream::IO, md::MD)
 end
 
 # ––––
-# Code
+# Code
 # ––––
 
 @trigger '`' ->
@@ -34,9 +34,9 @@ function inline_code(stream::IO, md::MD)
     return result == nothing ? nothing : Code(result)
 end
 
-# ––––––––––––––
-# Images & Links
-# ––––––––––––––
+# ––––––––––––––
+# Images & Links
+# ––––––––––––––
 
 type Image
     url::UTF8String
@@ -76,9 +76,9 @@ function link(stream::IO, md::MD)
     end
 end
 
-# –––––––––––
+# –––––––––––
 # Punctuation
-# –––––––––––
+# –––––––––––
 
 type LineBreak end
 
