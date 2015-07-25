@@ -1186,6 +1186,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     transition(s, p) do
         pss = state(s, p)
         pss.parent = parent
+        pss.histprompt.parent_prompt = parent
         pss.prefix = bytestring(pointer(buf.data), position(buf))
         copybuf!(pss.response_buffer, buf)
         pss.indent = state(s, parent).indent
