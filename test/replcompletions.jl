@@ -446,6 +446,24 @@ c, r, res = test_scomplete(s)
         c,r = test_complete(s)
         rm(dir)
     end
+
+    # Tests detecting of files in the env path (in shell mode)
+    let
+        oldpath = ENV["PATH"]
+        path = tempdir()
+        ENV["PATH"] = path
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        s = "tmp-execu"
+        c,r = test_scomplete(s)
+        @test "tmp-executable" in c
+        @test r == 1:9
+        @test s[r] == "tmp-execu"
+        rm(file)
+        ENV["PATH"] = oldpath
+    end
+
 end
 
 let #test that it can auto complete with spaces in file/path
