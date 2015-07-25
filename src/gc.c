@@ -48,6 +48,7 @@ typedef struct {
     uint64_t    malloc;
     uint64_t    realloc;
     uint64_t    poolalloc;
+    uint64_t    bigalloc;
     uint64_t    freecall;
     uint64_t    total_time;
     uint64_t    total_allocd;
@@ -57,7 +58,7 @@ typedef struct {
     int         full_sweep;
 } GC_Num;
 
-static GC_Num gc_num = {0,0,0,0,0,0,0,0,0,0,0,0};
+static GC_Num gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 #define collect_interval gc_num.collect
 #define n_pause         gc_num.pause
@@ -821,9 +822,10 @@ static NOINLINE void *alloc_big(size_t sz)
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
-    allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
+    allocd_bytes += allocsz;
+    gc_num.bigalloc++;
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
 #endif
@@ -2186,6 +2188,7 @@ void jl_gc_collect(int full)
     }
 #endif
     if (recollect) {
+        n_pause--;
         jl_gc_collect(0);
     }
 }
