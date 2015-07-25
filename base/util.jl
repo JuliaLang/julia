@@ -9,16 +9,17 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.c
 immutable GC_Num
-    allocd      ::Int64
-    freed       ::Int64
+    allocd      ::Int64 # GC internal
+    freed       ::Int64 # GC internal
     malloc      ::UInt64
     realloc     ::UInt64
     poolalloc   ::UInt64
+    bigalloc    ::UInt64
     freecall    ::UInt64
     total_time  ::UInt64
-    total_allocd::UInt64
-    since_sweep ::UInt64
-    collect     ::Csize_t
+    total_allocd::UInt64 # GC internal
+    since_sweep ::UInt64 # GC internal
+    collect     ::Csize_t # GC internal
     pause       ::Cint
     full_sweep  ::Cint
 end
@@ -27,31 +28,34 @@ gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 immutable GC_Diff
-    allocd      ::Int64
-    freed       ::Int64
-    malloc      ::Int64
-    realloc     ::Int64
-    poolalloc   ::Int64
-    freecall    ::Int64
-    total_time  ::Int64
-    total_allocd::Int64
-    since_sweep ::Int64
-    pause       ::Int64
-    full_sweep  ::Int64
+    allocd      ::Int64 # Bytes allocated
+    malloc      ::Int64 # Number of GC aware malloc()
+    realloc     ::Int64 # Number of GC aware realloc()
+    poolalloc   ::Int64 # Number of pool allocation
+    bigalloc    ::Int64 # Number of big (non-pool) allocation
+    freecall    ::Int64 # Number of GC aware free()
+    total_time  ::Int64 # Time spent in garbage collection
+    pause       ::Int64 # Number of GC pauses
+    full_sweep  ::Int64 # Number of GC full collection
 end
 
 function GC_Diff(new::GC_Num, old::GC_Num)
-    return GC_Diff((new.allocd + Int64(new.collect)) - (old.allocd + Int64(old.collect)),
-                   new.freed              - old.freed,
+    # logic from gc.c:jl_gc_total_bytes
+    old_allocd = old.allocd + Int64(old.collect) + Int64(old.total_allocd)
+    new_allocd = new.allocd + Int64(new.collect) + Int64(new.total_allocd)
+    return GC_Diff(new_allocd - old_allocd,
                    Int64(new.malloc       - old.malloc),
                    Int64(new.realloc      - old.realloc),
                    Int64(new.poolalloc    - old.poolalloc),
+                   Int64(new.bigalloc     - old.bigalloc),
                    Int64(new.freecall     - old.freecall),
                    Int64(new.total_time   - old.total_time),
-                   Int64(new.total_allocd - old.total_allocd),
-                   Int64(new.since_sweep  - old.since_sweep),
                    new.pause              - old.pause,
                    new.full_sweep         - old.full_sweep)
+end
+
+function gc_alloc_count(diff::GC_Diff)
+    diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
 
@@ -124,7 +128,7 @@ end
 
 function padded_nonzero_print(value,str)
     if value != 0
-        blanks = "                "[1:16-length(str)]
+        blanks = "                "[1:18-length(str)]
         println("$str:$blanks$value")
     end
 end
@@ -147,22 +151,18 @@ function time_print(elapsedtime, bytes, gctime, allocs)
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
-    bytes = diff.total_allocd + diff.allocd
-    allocs = diff.malloc + diff.realloc + diff.poolalloc
-    time_print(elapsedtime, bytes, diff.total_time, allocs)
-    print("elapsed time:    $elapsedtime nanoseconds\n")
-    padded_nonzero_print(diff.total_time,   "gc time")
-    padded_nonzero_print(bytes,              "bytes allocated")
-    padded_nonzero_print(diff.allocd,       "allocated")
-    padded_nonzero_print(diff.freed,        "freed")
-    padded_nonzero_print(diff.malloc,       "mallocs")
-    padded_nonzero_print(diff.realloc,      "reallocs")
-    padded_nonzero_print(diff.poolalloc,    "poolallocs")
-    padded_nonzero_print(diff.freecall,     "free calls")
-    padded_nonzero_print(diff.total_allocd, "total allocated")
-    padded_nonzero_print(diff.since_sweep,  "since sweep")
-    padded_nonzero_print(diff.pause,        "pause")
-    padded_nonzero_print(diff.full_sweep,   "full sweep")
+    allocs = gc_alloc_count(diff)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
+    print("elapsed time (ns): $elapsedtime\n")
+    padded_nonzero_print(diff.total_time,   "gc time (ns)")
+    padded_nonzero_print(diff.allocd,       "bytes allocated")
+    padded_nonzero_print(diff.poolalloc,    "pool allocs")
+    padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
+    padded_nonzero_print(diff.malloc,       "malloc() calls")
+    padded_nonzero_print(diff.realloc,      "realloc() calls")
+    padded_nonzero_print(diff.freecall,     "free() calls")
+    padded_nonzero_print(diff.pause,        "GC pauses")
+    padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
 macro time(ex)
@@ -172,9 +172,8 @@ macro time(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        local bytes = diff.total_allocd + diff.allocd
-        local allocs = diff.malloc + diff.realloc + diff.poolalloc
-        time_print(elapsedtime, bytes, diff.total_time, allocs)
+        time_print(elapsedtime, diff.allocd, diff.total_time,
+                   gc_alloc_count(diff))
         val
     end
 end
@@ -228,7 +227,7 @@ macro timed(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.total_allocd + diff.allocd, diff.total_time/1e9, diff
+        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
     end
 end
 
