@@ -262,7 +262,7 @@ of ``k`` if ``k`` is an ``OrdinalRange``. For example::
 
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
 in-place – it requires a temporary array of half the size of the
-input array – and is typically not quite as fast as ``QuickSort``.
+input array – and is typically not quite as fast as ``QuickSort``.
 It is the default algorithm for non-numeric data.
 
 The default sorting algorithms are chosen on the basis that they are

@@ -238,7 +238,7 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
-# Documentation
+# Documentation
 
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")

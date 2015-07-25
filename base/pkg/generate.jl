@@ -44,7 +44,7 @@ function package(
             url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
             Generate.init(pkg,url,config=config)
         else
-            Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
+            Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
         end
 
         Git.transact(dir=pkg) do

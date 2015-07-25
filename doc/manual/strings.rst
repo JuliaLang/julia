@@ -277,9 +277,9 @@ special characters depends on your terminal's locale settings and its
 support for Unicode. Non-ASCII string literals are encoded using the
 UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all
 characters are encoded in the same number of bytes. In UTF-8, ASCII
-characters — i.e. those with code points less than 0x80 (128) — are
+characters — i.e. those with code points less than 0x80 (128) — are
 encoded as they are in ASCII, using a single byte, while code points
-0x80 and above are encoded using multiple bytes — up to four per
+0x80 and above are encoded using multiple bytes — up to four per
 character. This means that not every byte index into a UTF-8 string is
 necessarily a valid index for a character. If you index into a string at
 such an invalid byte index, an error is thrown:

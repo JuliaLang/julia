@@ -92,7 +92,7 @@ operator is read as "is an instance of". It can be used
 anywhere to assert that the value of the expression on the left is an
 instance of the type on the right. When the type on the right is
 concrete, the value on the left must have that type as its
-implementation — recall that all concrete types are final, so no
+implementation — recall that all concrete types are final, so no
 implementation is a subtype of any other. When the type is abstract, it
 suffices for the value to be implemented by a concrete type that is a
 subtype of the abstract type. If the type assertion is not true, an
@@ -177,7 +177,7 @@ to make sense, for example, only if its arguments are some kind of integer,
 but not really depend on what particular *kind* of integer.  For example,
 the greatest common denominator algorithm works for all kinds of integers,
 but will not work for floating-point numbers.  Abstract types allow the
-construction of a hierarchy of types, providing a context into which
+construction of a hierarchy of types, providing a context into which
 concrete types can fit.  This allows you, for example, to easily program to
 any type that is an integer, without restricting an algorithm to a specific
 type of integer.
@@ -580,7 +580,7 @@ parametric: types can take parameters, so that type declarations
 actually introduce a whole family of new types — one for each possible
 combination of parameter values. There are many languages that support
 some version of `generic
-programming <http://en.wikipedia.org/wiki/Generic_programming>`_, wherein
+programming <http://en.wikipedia.org/wiki/Generic_programming>`_, wherein
 data structures and algorithms to manipulate them may be specified
 without specifying the exact types involved. For example, some form of
 generic programming exists in ML, Haskell, Ada, Eiffel, C++, Java, C#,
@@ -705,7 +705,7 @@ The efficiency gained by being able to store ``Point{Float64}`` objects
 with immediate values is magnified enormously in the case of arrays: an
 ``Array{Float64}`` can be stored as a contiguous memory block of 64-bit
 floating-point values, whereas an ``Array{Real}`` must be an array of
-pointers to individually allocated :obj:`Real` objects — which may well be
+pointers to individually allocated :obj:`Real` objects — which may well be
 `boxed <http://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing>`_
 64-bit floating-point values, but also might be arbitrarily large,
 complex objects, which are declared to be implementations of the
@@ -933,7 +933,7 @@ of integers represents a value on the real number line, so any
 Tuple Types
 ~~~~~~~~~~~
 
-Tuples are an abstraction of the arguments of a function — without the
+Tuples are an abstraction of the arguments of a function — without the
 function itself. The salient aspects of a function's arguments are their
 order and their types. Therefore a tuple type is similar to a
 parameterized immutable type where each parameter is the type
@@ -1082,7 +1082,7 @@ like this::
 
 The slightly odd feature of these declarations as compared to typical
 parametric composite types, is that the type parameter ``T`` is not used
-in the definition of the type itself — it is just an abstract tag,
+in the definition of the type itself — it is just an abstract tag,
 essentially defining an entire family of types with identical structure,
 differentiated only by their type parameter. Thus, ``Ptr{Float64}`` and
 ``Ptr{Int64}`` are distinct types, even though they have identical
@@ -1121,8 +1121,8 @@ This is accomplished via the following code in ``base/boot.jl``::
         typealias UInt UInt32
     end
 
-Of course, this depends on what :class:`Int` is aliased to — but that is
-predefined to be the correct type — either :class:`Int32` or :class:`Int64`.
+Of course, this depends on what :class:`Int` is aliased to — but that is
+predefined to be the correct type — either :class:`Int32` or :class:`Int64`.
 
 For parametric types, ``typealias`` can be convenient for providing
 names for cases where some of the parameter choices are fixed.
@@ -1146,8 +1146,8 @@ For that reason, the following type aliases are provided::
 
 Writing ``Vector{Float64}`` is equivalent to writing
 ``Array{Float64,1}``, and the umbrella type ``Vector`` has as instances
-all ``Array`` objects where the second parameter — the number of array
-dimensions — is 1, regardless of what the element type is. In languages
+all ``Array`` objects where the second parameter — the number of array
+dimensions — is 1, regardless of what the element type is. In languages
 where parametric types must always be specified in full, this is not
 especially helpful, but in Julia, this allows one to write just
 ``Matrix`` for the abstract type including all two-dimensional dense

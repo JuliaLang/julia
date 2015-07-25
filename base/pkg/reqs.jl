@@ -110,7 +110,7 @@ function dependents(packagename::AbstractString)
     pkgs
 end
 
-# add & rm – edit the content a requires file
+# add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=VersionSet())
     v = VersionSet[]
