@@ -1,10 +1,19 @@
-# Not sure how to test edit without needing to mock the fs layer
 
-# Test the clipboard: doesn't work cause on linux the clipboard
-# requires and xserver display. Julia should probably default to reading and writing to a file
-# if this is the case though.
-#clipboard("Clipboard Test")
-#@test clipboard() == "Clipboard Test"
+file, line = functionloc(workspace)
+func, str = editcmd(file, line)
+@test func == run || func == spawn
+@test contains(string(str), file)
+
+
+@unix_only begin
+    try
+        clipboard("Clipboard Test")
+        @test clipboard() == "Clipboard Test"
+    catch exc
+        @test isa(exc, ErrorException)
+        @test contains(exc.msg, "no clipboard command found, please install xsel or xclip")
+    end
+end
 
 # Not sure how detailed the versioninfo check needs to be
 versioninfo(true)
