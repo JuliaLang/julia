@@ -120,6 +120,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // outputbc
                             NULL, // outputo
                             NULL, // outputji
+                            0, // incremental
 };
 
 int jl_boot_file_loaded = 0;
