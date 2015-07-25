@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # ––––––––––
-# Paragraphs
+# Paragraphs
 # ––––––––––
 
 type Paragraph
@@ -88,7 +88,7 @@ function setextheader(stream::IO, md::MD)
 end
 
 # ––––
-# Code
+# Code
 # ––––
 
 type Code
@@ -117,7 +117,7 @@ function indentcode(stream::IO, block::MD)
 end
 
 # ––––––
-# Quotes
+# Quotes
 # ––––––
 
 type BlockQuote
@@ -145,9 +145,9 @@ function blockquote(stream::IO, block::MD)
     end
 end
 
-# –––––
-# Lists
-# –––––
+# –––––
+# Lists
+# –––––
 
 type List
     items::Vector{Any}
@@ -210,9 +210,9 @@ function list(stream::IO, block::MD)
     end
 end
 
-# ––––––––––––––
+# ––––––––––––––
 # HorizontalRule
-# ––––––––––––––
+# ––––––––––––––
 
 type HorizontalRule
 end

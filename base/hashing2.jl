@@ -84,7 +84,7 @@ values `num, pow, den`, such that the value of `x` is mathematically equal to
 The decomposition need not be canonical in the sense that it just needs to be *some*
 way to express `x` in this form, not any particular way – with the restriction that
 `num` and `den` may not share any odd common factors. They may, however, have powers
-of two in common – the generic hashing code will normalize those as necessary.
+of two in common – the generic hashing code will normalize those as necessary.
 
 Special values:
 

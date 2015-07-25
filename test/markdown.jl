@@ -6,7 +6,7 @@ import Base: writemime
 
 # Basics
 # Equality is checked by making sure the HTML output is
-# the same – the structure itself may be different.
+# the same – the structure itself may be different.
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))

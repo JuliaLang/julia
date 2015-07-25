@@ -45,7 +45,7 @@ mathematical operators are just functions with special syntax, and the
 arguments of functions are never automatically converted. However, one
 may observe that applying mathematical operations to a wide variety of
 mixed argument types is just an extreme case of polymorphic multiple
-dispatch — something which Julia's dispatch and type systems are
+dispatch — something which Julia's dispatch and type systems are
 particularly well-suited to handle. "Automatic" promotion of
 mathematical operands simply emerges as a special application: Julia
 comes with pre-defined catch-all dispatch rules for mathematical
@@ -383,7 +383,7 @@ as promoting the numerator/denominator type with the float.
 This small handful of promotion rules, together with the `conversion
 methods discussed above <#case-study-rational-conversions>`_, are
 sufficient to make rational numbers interoperate completely naturally
-with all of Julia's other numeric types — integers, floating-point
+with all of Julia's other numeric types — integers, floating-point
 numbers, and complex numbers. By providing appropriate conversion
 methods and promotion rules in the same manner, any user-defined numeric
 type can interoperate just as naturally with Julia's predefined
