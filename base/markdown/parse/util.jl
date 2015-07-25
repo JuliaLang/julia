@@ -159,7 +159,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
 end
 
 # TODO: refactor this. If we're going to assume
-# the delimiter is a single character + a minimum
+# the delimiter is a single character + a minimum
 # repeat we may as well just pass that into the
 # function.
 

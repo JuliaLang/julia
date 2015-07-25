@@ -128,7 +128,7 @@ When you decide that you don't want to have a package around any more, you can u
 
 Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running :func:`Pkg.resolve` to update the set of installed packages to match.
 While :func:`Pkg.add` and :func:`Pkg.rm` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call :func:`Pkg.edit` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
-:func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
+:func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
 
 Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
 
@@ -200,8 +200,8 @@ If the branch cannot be fast-forwarded, it is assumed that you're working on it 
 Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
 A package is considered fixed if it is one of the following:
 
-1. **Unregistered:** the package is not in ``METADATA`` – you installed it with :func:`Pkg.clone`.
-2. **Checked out:** the package repo is on a development branch.
+1. **Unregistered:** the package is not in ``METADATA`` – you installed it with :func:`Pkg.clone`.
+2. **Checked out:** the package repo is on a development branch.
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
@@ -238,7 +238,7 @@ In such cases, you can do :func:`Pkg.checkout(pkg) <Pkg.checkout>` to checkout t
      - NumericExtensions             0.2.17
      - Stats                         0.2.7
 
-Immediately after installing ``Distributions`` with :func:`Pkg.add` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
+Immediately after installing ``Distributions`` with :func:`Pkg.add` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
 Then after running :func:`Pkg.checkout("Distributions") <Pkg.checkout>`, you can see from the output of :func:`Pkg.status` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
 
 When you checkout an unregistered version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
@@ -272,7 +272,7 @@ If you want to pin a package at a specific version so that calling :func:`Pkg.up
      - NumericExtensions             0.2.17
      - Stats                         0.2.7              pinned.47c198b1.tmp
 
-After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
+After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
 :func:`Pkg.pin` works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
 By default, it pins a package at the current commit, but you can choose a different version by passing a second argument::
 
@@ -736,7 +736,7 @@ Making Your Package Available
 Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try
 it out.  First you'll need to create the remote repository and push your code to it; we don't yet automatically do this for you,
 but we will in the future and it's not too hard to figure out [3]_.  Once you've done this, letting people try out your code is
-as simple as sending them the URL of the published repo – in this case::
+as simple as sending them the URL of the published repo – in this case::
 
     git://github.com/StefanKarpinski/FooBar.jl.git
 

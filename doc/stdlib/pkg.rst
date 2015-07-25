@@ -81,7 +81,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: update()
 
-   Update package the metadata repo – kept in ``Pkg.dir("METADATA")`` – then update any fixed packages that can safely be pulled from their origin;
+   Update package the metadata repo – kept in ``Pkg.dir("METADATA")`` – then update any fixed packages that can safely be pulled from their origin;
    then call ``Pkg.resolve()`` to determine a new optimal set of packages versions.
 
 .. function:: checkout(pkg, [branch="master"])

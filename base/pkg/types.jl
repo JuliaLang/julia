@@ -84,7 +84,7 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :
     print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
 
-# TODO: Available & Fixed are almost the same – merge them?
+# TODO: Available & Fixed are almost the same – merge them?
 # Free could include the same information too, it just isn't
 # required by anything that processes these things.
 

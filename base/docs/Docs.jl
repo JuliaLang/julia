@@ -6,7 +6,7 @@ import Base.Markdown: @doc_str, MD
 
 export doc
 
-# Basic API / Storage
+# Basic API / Storage
 
 const modules = Module[]
 
@@ -354,7 +354,7 @@ Functions, methods and types can be documented by placing a string before the
 definition:
 
     \"""
-    # The Foo Function
+    # The Foo Function
     `foo(x)`: Foo the living hell out of `x`.
     \"""
     foo(x) = ...
@@ -490,7 +490,7 @@ function catdoc(xs::Text...)
     end
 end
 
-# MD support
+# MD support
 
 catdoc(md::MD...) = MD(md...)
 
@@ -517,7 +517,7 @@ repl_corrections(s) = repl_corrections(STDOUT, s)
 
 macro repl(ex)
     quote
-        # Fuzzy Searching
+        # Fuzzy Searching
         $(isexpr(ex, Symbol)) && repl_search($(string(ex)))
         if $(isa(ex, Symbol)) &&
                 !(isdefined($(current_module()), $(Expr(:quote, ex))) ||
@@ -583,7 +583,7 @@ function fuzzysort(search, candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
-# Levenshtein Distance
+# Levenshtein Distance
 
 function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)

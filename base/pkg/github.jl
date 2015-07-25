@@ -132,7 +132,7 @@ function pushable(owner::AbstractString, repo::AbstractString, user::AbstractStr
     status, response = GET("repos/$owner/$repo/collaborators/$user")
     status == 204 && return true
     status == 404 && return false
-    error("unexpected API status code: $status – $(response["message"])")
+    error("unexpected API status code: $status – $(response["message"])")
 end
 
 function fork(owner::AbstractString, repo::AbstractString)

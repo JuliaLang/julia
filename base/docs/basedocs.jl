@@ -67,7 +67,7 @@ keywords[:export] = doc"""
       end
 
       using Test
-      foo(1) # 1
+      foo(1) # 1
       bar(1) # Error: bar not defined
       Test.bar(1) # 1
   """
