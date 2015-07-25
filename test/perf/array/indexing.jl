@@ -169,6 +169,6 @@ function makearrays{T}(::Type{T}, sz)
     B = reshape(convert(Vector{T}, [1:prod(outersz);]), outersz)
     Asub = sub(B, 1:sz[1], 2:sz[2]+1)
     Bit = trues(sz)
-    (A, AS, AF, AS, ASS, AF, Asub, Bit,)
+    (A, AF, AS, ASS, Asub, Bit,)
 end
 
