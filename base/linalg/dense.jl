@@ -286,9 +286,14 @@ function logm(A::StridedMatrix)
 
     # Use Schur decomposition
     n = chksquare(A)
-    S,Q,d = schur(complex(A))
-    R = logm(UpperTriangular(S))
-    retmat = Q * R * Q'
+    if istriu(A)
+        retmat = full(logm(UpperTriangular(complex(A))))
+        d = diag(A)
+    else
+        S,Q,d = schur(complex(A))
+        R = logm(UpperTriangular(S))
+        retmat = Q * R * Q'
+    end
 
     # Check whether the matrix has nonpositive real eigs
     np_real_eigs = false
