@@ -386,9 +386,11 @@ dist:
 
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
+ifeq ($(ISX86),1)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use binary-dist target
 	@false
+endif
 endif
 endif
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
