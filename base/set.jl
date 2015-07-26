@@ -29,7 +29,15 @@ in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
-pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
+function pop!(s::Set)
+    if s.dict.ndel == 0
+        val = s.dict.keys[end]
+    else
+        val = s.dict.keys[maximum(s.dict.slots)]
+    end
+    delete!(s.dict, val)
+    val
+end
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)
@@ -41,7 +49,7 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next(s::Set, i)     = (s.dict.keys[i], i+1)
 
 union() = Set()
 union(s::Set) = copy(s)
@@ -103,17 +111,7 @@ const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
-function unique(C)
-    out = Array(eltype(C),0)
-    seen = Set{eltype(C)}()
-    for x in C
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
-    end
-    out
-end
+unique(C) = collect(Set(C))
 
 function filter(f, s::Set)
     u = similar(s)

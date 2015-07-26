@@ -338,7 +338,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         for i = 1:length(bt)
             ip = bt[i][level+1]
             key = lidict[ip]
-            indx = Base.ht_keyindex(d, key)
+            indx = Base.ht_keyindex(d, key, true)
             if indx == -1
                 d[key] = [i]
             else
@@ -362,7 +362,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         d = Dict{T,Vector{Int}}()
         for i = 1:length(bt)
             key = bt[i][level+1]
-            indx = Base.ht_keyindex(d, key)
+            indx = Base.ht_keyindex(d, key, true)
             if indx == -1
                 d[key] = [i]
             else
