@@ -386,6 +386,7 @@ function workspace()
               :(const Base = $(Expr(:quote, b))),
               :(const LastMain = $(Expr(:quote, last)))))
     empty!(package_locks)
+    load_juliarc()
     nothing
 end
 
