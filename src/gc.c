@@ -168,6 +168,11 @@ typedef struct _gcpage_t {
 #define REGION_COUNT 8
 
 typedef struct {
+    // Page layout:
+    //  Padding: GC_PAGE_OFFSET
+    //  Blocks: osize * n
+    //    Tag: sizeof_jl_taggedvalue_t
+    //    Data: <= osize - sizeof_jl_taggedvalue_t
     char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
@@ -449,29 +454,31 @@ static uint64_t total_fin_time=0;
 int sweeping = 0;
 
 /*
-  The state transition looks like :
-
- <-[quicksweep]--
- <-[sweep]---   |
-            |   |
-    ---> GC_QUEUED <---[sweep && age>promotion]--------
-    |     |     ^                                     |
-    |   [mark]  |                                     |
- [sweep]  |  [write barrier]                          |
-    |     v     |                                     |
-    ----- GC_MARKED <--------                         |
-             |              |                         |
-             --[quicksweep]--                         |
-                                                      |          === above this line objects are old
- ----[new]------> GC_CLEAN ------[mark]--------> GC_MARKED_NOESC
-                   | ^ ^                                | |
-                   | | |                                | |
- <---[sweep]-------- | ------[sweep && age<=promotion]--- |
-                     |                                    |
-                     --[quicksweep && age<=promotion]------
+ * The state transition looks like :
+ *
+ * ([(quick)sweep] means either a sweep or a quicksweep)
+ *
+ * <-[(quick)sweep]-
+ *                 |
+ *     ---> GC_QUEUED <--[(quick)sweep && age>promotion]--
+ *     |     |     ^                                     |
+ *     |   [mark]  |                                     |
+ *  [sweep]  |  [write barrier]                          |
+ *     |     v     |                                     |
+ *     ----- GC_MARKED <--------                         |
+ *              |              |                         |
+ *              --[quicksweep]--                         |
+ *                                                       |
+ *  ========= above this line objects are old =========  |
+ *                                                       |
+ *  ----[new]------> GC_CLEAN ------[mark]--------> GC_MARKED_NOESC
+ *                    |    ^                                   |
+ *  <-[(quick)sweep]---    |                                   |
+ *                         --[(quick)sweep && age<=promotion]---
  */
 
-// A quick sweep is a sweep where sweep_mask == GC_MARKED_NOESC. It means we won't touch GC_MARKED objects.
+// A quick sweep is a sweep where sweep_mask == GC_MARKED_NOESC.
+// It means we won't touch GC_MARKED objects (old gen).
 
 // When a reachable object has survived more than PROMOTE_AGE+1 collections
 // it is tagged with GC_QUEUED during sweep and will be promoted on next mark
