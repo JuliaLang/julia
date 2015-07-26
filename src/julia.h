@@ -89,7 +89,7 @@ typedef struct _jl_value_t {
 
 typedef struct {
     union {
-        jl_value_t *type;
+        jl_value_t *type; // 16-bytes aligned
         uintptr_t type_bits;
         struct {
             uintptr_t gc_bits:2;
@@ -99,10 +99,9 @@ typedef struct {
 } jl_taggedvalue_t;
 
 #define jl_astaggedvalue__MACRO(v) container_of((v),jl_taggedvalue_t,value)
-#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_astaggedvalue__MACRO(v)->type_bits&~(size_t)3))
+#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_astaggedvalue__MACRO(v)->type_bits&~(uintptr_t)15))
 #define jl_astaggedvalue jl_astaggedvalue__MACRO
 #define jl_typeof jl_typeof__MACRO
-//#define jl_set_typeof(v,t) (jl_astaggedvalue(v)->type = (jl_value_t*)(t))
 static inline void jl_set_typeof(void *v, void *t)
 {
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
@@ -571,29 +570,30 @@ void gc_setmark_buf(void *buf, int);
 
 static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
-    if (__unlikely((*((uintptr_t*)bnd-1) & 1) == 1 && (*(uintptr_t*)jl_astaggedvalue(val) & 1) == 0))
+    if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
+                   (jl_astaggedvalue(val)->gc_bits & 1) == 0))
         gc_queue_binding(bnd);
 }
 
 static inline void jl_gc_wb(void *parent, void *ptr) // parent and ptr isa jl_value_t*
 {
-    if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1 &&
-                   (*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 0))
+    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1 &&
+                   (jl_astaggedvalue(ptr)->gc_bits & 1) == 0))
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
 static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
-    if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1))
-        //                   (*((uintptr_t*)bufptr) & 3) != 1))
-        gc_setmark_buf(bufptr, *(uintptr_t*)jl_astaggedvalue(parent) & 3);
+    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
+        //            (jl_astaggedvalue(bufptr)->gc_bits) != 1))
+        gc_setmark_buf(bufptr, jl_astaggedvalue(parent)->gc_bits);
 }
 
 static inline void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is marked
-    if(__unlikely((*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 1)) {
+    if (__unlikely((jl_astaggedvalue(ptr)->gc_bits & 1) == 1)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
