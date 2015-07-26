@@ -84,8 +84,8 @@ $(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDD
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) ./bin2hex.scm < $< > $@)
 
-export julia_flisp.boot=$(BUILDDIR)/julia_flisp.boot
-$(julia_flisp.boot): julia-parser.scm julia-syntax.scm \
+export julia_flisp_boot=$(BUILDDIR)/julia_flisp.boot
+$(julia_flisp_boot): julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm $(FLISP_EXECUTABLE)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) ./mk_julia_flisp_boot.scm)
 
