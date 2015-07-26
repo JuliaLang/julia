@@ -891,6 +891,17 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     assert(llvmf);
     JL_GC_POP();
 #ifdef USE_MCJIT
+    if (imaging_mode) {
+        // Copy the function out of the shadow module, unless this was done before
+        void *addr = (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+        if (addr != nullptr) {
+            return addr;
+        }
+        Module *m = new Module("julia", jl_LLVMContext);
+        jl_setup_module(m, true);
+        FunctionMover mover(m, shadow_module);
+        llvmf = mover.CloneFunction(llvmf);
+    }
     return (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
     return jl_ExecutionEngine->getPointerToFunction(llvmf);
