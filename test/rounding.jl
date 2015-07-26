@@ -126,3 +126,10 @@ for T in [Float32,Float64]
         @test isinf(pu) || pu - pd == eps(pz)
     end
 end
+
+#fenv
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundNearest)) == RoundNearest
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundToZero)) == RoundToZero
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundUp)) == RoundUp
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundDown)) == RoundDown
+@test_throws ArgumentError Base.Rounding.from_fenv(-99)
