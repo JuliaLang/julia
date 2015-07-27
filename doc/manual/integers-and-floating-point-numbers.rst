@@ -550,7 +550,7 @@ computation, and also in the following references:
   numerical accuracy encountered when computing with them, see David Goldberg's
   paper `What Every Computer Scientist Should Know About Floating-Point
   Arithmetic
-  <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.102.244&rep=rep1&type=pdf>`_.
+  <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf>`_.
 - For even more extensive documentation of the history of, rationale for,
   and issues with floating-point numbers, as well as discussion of many other
   topics in numerical computing, see the `collected writings
