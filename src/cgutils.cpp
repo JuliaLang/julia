@@ -492,7 +492,11 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #ifdef LLVM37
     // Reset the target triple to make sure it matches the new target machine
     clone->setTargetTriple(TM->getTargetTriple().str());
+#ifdef LLVM38
+    clone->setDataLayout(TM->createDataLayout());
+#else
     clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
+#endif
 #endif
 
     // add metadata information
