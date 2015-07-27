@@ -190,7 +190,3 @@ let
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
 end
-
-## Rope strings ##
-
-@test sizeof(RopeString("abc","def")) == 6
