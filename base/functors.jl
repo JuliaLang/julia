@@ -37,8 +37,17 @@ call(::OrFun, x, y) = x | y
 immutable AddFun <: Func{2} end
 call(::AddFun, x, y) = x + y
 
+immutable SubFun <: Func{2} end
+call(::SubFun, x, y) = x - y
+
 immutable MulFun <: Func{2} end
 call(::MulFun, x, y) = x * y
+
+immutable DivFun <: Func{2} end
+call(::DivFun, x, y) = x / y
+
+immutable PowFun <: Func{2} end
+call(::PowFun, x, y) = x ^ y
 
 immutable MaxFun <: Func{2} end
 call(::MaxFun, x, y) = scalarmax(x,y)
@@ -121,7 +130,10 @@ function specialized_unary(f::Function)
 end
 function specialized_binary(f::Function)
     is(f, +) ? AddFun() :
+    is(f, -) ? SubFun() :
     is(f, *) ? MulFun() :
+    is(f, /) ? DivFun() :
+    is(f, ^) ? PowFun() :
     is(f, &) ? AndFun() :
     is(f, |) ? OrFun()  :
     UnspecializedFun{2}(f)
