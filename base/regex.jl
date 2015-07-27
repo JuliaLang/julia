@@ -246,7 +246,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             next_i = nextind(repl, i)
             next_i > e && replace_err(repl)
             if repl[next_i] == SUB_CHAR
-                write(io, SUB_CHAR, repl[next_i])
+                write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
             elseif isnumber(repl[next_i])
                 group = parse(Int, repl[next_i])
