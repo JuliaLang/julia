@@ -161,8 +161,8 @@ index_lengths_dim(A, dim) = ()
 index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_lengths_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Real, I...) = (1, index_lengths_dim(A, dim+1, I...)...)
-@inline index_lengths_dim(A, dim, i::AbstractVector{Bool}, I...) = (sum(i), index_lengths_dim(A, dim+1, I...)...)
-@inline index_lengths_dim(A, dim, i::AbstractVector, I...) = (length(i), index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim(A, dim, i::AbstractArray, I...) = (length(i), index_lengths_dim(A, dim+1, I...)...)
 
 # shape of array to create for getindex() with indexes I, dropping trailing scalars
 index_shape(A::AbstractArray, I::AbstractArray) = size(I) # Linear index reshape
@@ -290,15 +290,12 @@ _iterable(v) = repeated(v)
     checkbounds(A, J...)
     _unsafe_setindex!(l, A, x, J...)
 end
-@inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractVector,Colon}...)
+@inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
     _unsafe_batchsetindex!(l, A, _iterable(x), to_indexes(J...)...)
 end
 
-# While setindex! with one array argument doesn't mean anything special, it is
-# still supported for symmetry with getindex.
-_unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, I::AbstractArray) = _unsafe_setindex!(l, A, x, vec(I))
 # 1-d logical indexing: override the above to avoid calling find (in to_index)
-function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractVector{Bool})
+function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractArray{Bool})
     X = _iterable(x)
     Xs = start(X)
     i = 0
@@ -317,7 +314,7 @@ function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractVec
 end
 
 # Use iteration over X so we don't need to worry about its storage
-@generated function _unsafe_batchsetindex!(::LinearFast, A::AbstractArray, X, I::Union{Real,AbstractVector,Colon}...)
+@generated function _unsafe_batchsetindex!(::LinearFast, A::AbstractArray, X, I::Union{Real,AbstractArray,Colon}...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
@@ -334,7 +331,7 @@ end
         A
     end
 end
-@generated function _unsafe_batchsetindex!(::LinearSlow, A::AbstractArray, X, I::Union{Real,AbstractVector,Colon}...)
+@generated function _unsafe_batchsetindex!(::LinearSlow, A::AbstractArray, X, I::Union{Real,AbstractArray,Colon}...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
