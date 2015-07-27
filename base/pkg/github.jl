@@ -25,7 +25,7 @@ function user()
 end
 
 function json()
-    isdefined(:JSON) || try require("JSON")
+    isdefined(:JSON) || try eval(Main, :(import JSON))
     catch err
         warn(err)
         error("using the GitHub API requires having the JSON package installed ")
