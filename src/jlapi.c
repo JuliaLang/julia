@@ -290,6 +290,40 @@ DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v) {
     return jl_typeof__MACRO(v);
 }
 
+static void NORETURN throw_eof_error(void)
+{
+    jl_datatype_t* eof_error = (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
+    assert(eof_error != NULL);
+    jl_exceptionf(eof_error, "");
+}
+
+DLLEXPORT uint64_t jl_ios_get_nbytes(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
+    uint8_t buf[8];
+    size_t ret = ios_readall(s, (char*)buf, n);
+    if (ret < n)
+        throw_eof_error();
+    uint64_t x = 0;
+    if (n == 8) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 8; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else if (n >= 4) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 4; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+        for (size_t i = 4; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else {
+        for (size_t i = 0; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    return x;
+}
+
 #ifdef __cplusplus
 }
 #endif

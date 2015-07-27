@@ -165,6 +165,14 @@ function read(s::IOStream, ::Type{UInt8})
     b % UInt8
 end
 
+for (U, S) in ((:UInt16, :Int16),
+               (:UInt32, :Int32),
+               (:UInt64, :Int64))
+    @eval function read{T<:Union{$U,$S}}(s::IOStream, ::Type{T})
+        ccall(:jl_ios_get_nbytes, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
+    end
+end
+
 function read!{T}(s::IOStream, a::Array{T})
     if isbits(T)
         nb = length(a)*sizeof(T)
