@@ -90,7 +90,6 @@ export
     RemoteRef,
     RepString,
     RevString,
-    RopeString,
     RoundFromZero,
     RoundDown,
     RoundingMode,
