@@ -64,7 +64,7 @@ typedef struct {
 #define tag(x) ((x)&0x7)
 #define ptr(x) ((void*)((x)&(~(value_t)0x7)))
 #define tagptr(p,t) (((value_t)(p)) | (t))
-#define fixnum(x) ((value_t)(((fixnum_t)(x))<<2))
+#define fixnum(x) ((value_t)(((uptrint_t)(x))<<2))
 #define numval(x)  (((fixnum_t)(x))>>2)
 #if NBITS==64
 #define fits_fixnum(x) (((x)>>61) == 0 || (~((x)>>61)) == 0)
