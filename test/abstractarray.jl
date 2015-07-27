@@ -193,6 +193,9 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test B[1:end] == A[1:end] == collect(1:N)
     @test B[:,:] == A[:,:] == reshape(1:N, shape[1], prod(shape[2:end]))
     @test B[1:end,1:end] == A[1:end,1:end] == reshape(1:N, shape[1], prod(shape[2:end]))
+    # Test with containers that aren't Int[]
+    @test B[[]] == A[[]] == []
+    @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
 end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
