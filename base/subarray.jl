@@ -63,7 +63,8 @@ end
 # For S4, J[1] corresponds to I[2], because of the slice along
 # dimension 1 in S2
 
-@generated function slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+slice_unsafe(A::AbstractArray, J) = _slice_unsafe(A, to_indexes(J...))
+@generated function _slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     Jp = J.parameters
@@ -86,14 +87,15 @@ end
 
 # Conventional style (drop trailing singleton dimensions, keep any
 # other singletons by converting them to ranges, e.g., 3:3)
-sub(A::AbstractArray, I::ViewIndex...) = _sub(A, to_indexes(I...))
-sub(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _sub(A, to_indexes(I...))
+sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
+sub(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _sub(A, I)
 function _sub(A, I)
     checkbounds(A, I...)
     sub_unsafe(A, I)
 end
 
-@generated function sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
+sub_unsafe(A::AbstractArray, J) = _sub_unsafe(A, to_indexes(J...))
+@generated function _sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
@@ -129,7 +131,7 @@ end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-@generated function slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+@generated function _slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
@@ -220,7 +222,7 @@ end
     end
 end
 
-@generated function sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+@generated function _sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
     Jp = J.parameters
     IVp = IV.parameters
     N = length(Jp)
