@@ -158,9 +158,8 @@ noteworthy differences:
   an assignment operation: you cannot write ``diag(M) = ones(n)``.
 - Julia discourages populating the main namespace with functions. Most
   statistical functionality for Julia is found in
-  `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_
-  under the `JuliaStats organization <https://github.com/JuliaStats>`_. For
-  example:
+  `packages <http://pkg.julialang.org/>`_ under the `JuliaStats organization
+  <https://github.com/JuliaStats>`_. For example:
 
   - Functions pertaining to probability distributions are provided by the
     `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_.
