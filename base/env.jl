@@ -126,7 +126,7 @@ function next(::EnvHash, i)
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
+    (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), i+1)
 end
 end
 
@@ -150,7 +150,7 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (ByteString[convert(typeof(env),x) for x in m.captures], (pos+len*2, blk))
+    (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), (pos+len*2, blk))
 end
 end
 
