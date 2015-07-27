@@ -168,7 +168,7 @@ PriorityQueue{K,V}(a::AbstractArray{Tuple{K,V}}, o::Ordering=Forward) = Priority
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
 haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
-peek(pq::PriorityQueue) = (kv = pq.xs[1]; (kv.first, kv.second))
+peek(pq::PriorityQueue) = pq.xs[1]
 
 
 function percolate_down!(pq::PriorityQueue, i::Integer)
@@ -277,17 +277,14 @@ function dequeue!(pq::PriorityQueue, key)
     key
 end
 
-
 # Unordered iteration through key value pairs in a PriorityQueue
 start(pq::PriorityQueue) = start(pq.index)
 
 done(pq::PriorityQueue, i) = done(pq.index, i)
 
-function next(pq::PriorityQueue, i)
+function next{K,V}(pq::PriorityQueue{K,V}, i)
     (k, idx), i = next(pq.index, i)
-    return ((k, pq.xs[idx].second), i)
+    return (pq.xs[idx], i)
 end
 
-
 end # module Collections
-
