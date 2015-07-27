@@ -4,6 +4,7 @@ module Libc
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
     errno, strerror, flush_cstdio, systemsleep, time
+@windows_only export GetLastError, FormatMessage
 
 include("errno.jl")
 
@@ -16,14 +17,24 @@ immutable RawFD
     RawFD(fd::RawFD) = fd
 end
 
-Base.convert(::Type{Int32}, fd::RawFD) = fd.fd
+Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
 dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     ccall((@windows? :_dup2 : :dup2),Int32,
     (Int32,Int32),src.fd,target.fd))
 
-## FILE ##
+#Wrapper for an OS file descriptor (for Windows)
+@windows_only immutable WindowsRawSocket
+    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
+end
+@windows_only Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
+
+@unix_only _get_osfhandle(fd::RawFD) = fd
+@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+@windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
+
+## FILE (not auto-finalized) ##
 
 immutable FILE
     ptr::Ptr{Void}
@@ -32,9 +43,9 @@ end
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
-function FILE(fd, mode)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), convert(Cint, fd), mode)
+function FILE(fd::RawFD, mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
@@ -154,6 +165,28 @@ errno() = ccall(:jl_errno, Cint, ())
 errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
 strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
 strerror() = strerror(errno())
+
+@windows_only begin
+GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
+function FormatMessage(e=GetLastError())
+    const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
+    const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
+    const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
+    const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
+    lpMsgBuf = Array(Ptr{UInt16})
+    lpMsgBuf[1] = 0
+    len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+        C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
+    p = lpMsgBuf[1]
+    len == 0 && return utf8("")
+    len = len + 1
+    buf = Array(UInt16, len)
+    unsafe_copy!(pointer(buf), p, len)
+    ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
+    return utf8(UTF16String(buf))
+end
+end
 
 ## Memory related ##
 

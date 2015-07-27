@@ -80,8 +80,8 @@ const FILE_MAP_READ          = UInt32(0x04)
 const FILE_MAP_EXECUTE       = UInt32(0x20)
 
 function gethandle(io::IO)
-    handle = Base._get_osfhandle(RawFD(fd(io))).handle
-    systemerror("could not get handle for file to map: $(Base.FormatMessage())", handle == -1)
+    handle = Libc._get_osfhandle(RawFD(fd(io))).handle
+    systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == -1)
     return Int(handle)
 end
 
@@ -127,10 +127,10 @@ function mmap{T,N}(io::IO,
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (Cint, Cint, Cwstring),
                             readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
-        handle == C_NULL && error("could not create file mapping: $(Base.FormatMessage())")
+        handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
-        ptr == C_NULL && error("could not create mapping view: $(Base.FormatMessage())")
+        ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # @windows_only
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = pointer_to_array(convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
@@ -138,7 +138,7 @@ function mmap{T,N}(io::IO,
     @windows_only finalizer(A, x -> begin
         status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
         status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
-        status || error("could not unmap view: $(Base.FormatMessage())")
+        status || error("could not unmap view: $(Libc.FormatMessage())")
     end)
     return A
 end
@@ -202,7 +202,7 @@ const MS_SYNC = 4
 
 function sync!{T}(m::Array{T}, flags::Integer=MS_SYNC)
     @unix_only systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), pointer(m), length(m)*sizeof(T), flags) != 0)
-    @windows_only systemerror("could not FlushViewOfFile: $(Base.FormatMessage())",
+    @windows_only systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
                     ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), pointer(m), length(m)) == 0)
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
