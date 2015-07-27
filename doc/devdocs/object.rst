@@ -79,8 +79,8 @@ However, the :ref:`man-embedding` section of the manual is also required reading
 for covering other details of boxing and unboxing various types,
 and understanding the gc interactions.
 
-Mirror structs for some of the built-in types are `defined in julia.h <http://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
-The corresponding global :c:type:`jl_datatype_t` objects are created by `jl_init_types in jltypes.c <http://github.com/JuliaLang/julia/blob/master/src/jltypes.c>`_.
+Mirror structs for some of the built-in types are `defined in julia.h <https://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
+The corresponding global :c:type:`jl_datatype_t` objects are created by `jl_init_types in jltypes.c <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c>`_.
 
 Garbage collector mark bits
 ---------------------------
@@ -88,7 +88,7 @@ Garbage collector mark bits
 The garbage collector uses several bits from the metadata portion of the :c:type:`jl_typetag_t`
 to track each object in the system.
 Further details about this algorithm can be found in the comments of the `garbage collector implementation in gc.c
-<http://github.com/JuliaLang/julia/blob/master/src/gc.c>`_.
+<https://github.com/JuliaLang/julia/blob/master/src/gc.c>`_.
 
 Object allocation
 -----------------
@@ -111,7 +111,7 @@ Types::
     jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 
 While these are the most commonly used options, there are more low-level constructors too,
-which you can find declared in `julia.h <http://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
+which you can find declared in `julia.h <https://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
 These are used in :c:func:`jl_init_types` to create the initial types needed to bootstrap the creation of the Julia system image.
 
 Tuples::
@@ -153,7 +153,7 @@ Arrays::
 
 Note that many of these have alternative allocation functions for various special-purposes.
 The list here reflects the more common usages, but a more complete list can be found by reading the `julia.h header file
-<http://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
+<https://github.com/JuliaLang/julia/blob/master/src/julia.h>`_.
 
 Internal to Julia, storage is typically allocated by :c:func:`newstruct` (or :func:`newobj` for the special types)::
 

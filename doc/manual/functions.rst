@@ -195,7 +195,7 @@ Anonymous Functions
 -------------------
 
 Functions in Julia are `first-class objects
-<http://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
+<https://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,

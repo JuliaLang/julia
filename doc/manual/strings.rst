@@ -11,13 +11,13 @@ comes when one asks what a character is. The characters that English
 speakers are familiar with are the letters ``A``, ``B``, ``C``, etc.,
 together with numerals and common punctuation symbols. These characters
 are standardized together with a mapping to integer values between 0 and
-127 by the `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ standard. There
+127 by the `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ standard. There
 are, of course, many other characters used in non-English languages,
 including variants of the ASCII characters with accents and other
 modifications, related scripts such as Cyrillic and Greek, and scripts
 completely unrelated to ASCII and English, including Arabic, Chinese,
 Hebrew, Hindi, Japanese, and Korean. The
-`Unicode <http://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
+`Unicode <https://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
 complexities of what exactly a character is, and is generally accepted
 as the definitive standard addressing this problem. Depending on your
 needs, you can either ignore these complexities entirely and just
@@ -53,9 +53,9 @@ There are a few noteworthy high-level features about Julia's strings:
    efficiently and simply for variable-width encodings of Unicode
    strings.
 -  Julia supports the full range of
-   `Unicode <http://en.wikipedia.org/wiki/Unicode>`_ characters: literal
-   strings are always `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ or
-   `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
+   `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters: literal
+   strings are always `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ or
+   `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
    strings from external sources can be supported.
 
 .. _man-characters:
@@ -66,7 +66,7 @@ Characters
 A :obj:`Char` value represents a single character: it is just a 32-bit
 bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
+point <https://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
 values are input and shown:
 
 .. doctest::
@@ -137,7 +137,7 @@ Julia uses your system's locale and language settings to determine which
 characters can be printed as-is and which must be output using the
 generic, escaped ``\u`` or ``\U`` input forms. In addition to these
 Unicode escape forms, all of `C's traditional escaped input
-forms <http://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
+forms <https://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
 also be used:
 
 .. doctest::

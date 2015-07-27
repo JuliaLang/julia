@@ -32,7 +32,7 @@ together is all that is ever needed to create instances. There are,
 however, cases where more functionality is required when creating
 composite objects. Sometimes invariants must be enforced, either by
 checking arguments or by transforming them. `Recursive data
-structures <http://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29>`_,
+structures <https://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29>`_,
 especially those that may be self-referential, often cannot be
 constructed cleanly without first being created in an incomplete state
 and then altered programmatically to be made whole, as a separate step
