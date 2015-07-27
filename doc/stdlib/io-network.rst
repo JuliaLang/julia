@@ -314,7 +314,7 @@ Text I/O
 
 .. function:: @printf([io::IOStream], "%Fmt", args...)
 
-   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
+   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output. Positional arguments are not currently supported.
 
 .. function:: @sprintf("%Fmt", args...)
 
