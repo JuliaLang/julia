@@ -418,7 +418,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
         try
             sig = default_signature(repo)
             try
-                rbs = GitRebase(repo, head_ann, upst_ann, sig=Nullable(sig))
+                rbs = GitRebase(repo, head_ann, upst_ann)
                 try
                     while (rbs_op = next(rbs)) != nothing
                         commit(rbs, sig)

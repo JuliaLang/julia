@@ -6,7 +6,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
     rebase_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_rebase_init, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-                   Ptr{Void}, Ptr{SignatureStruct}, Ptr{RebaseOptions}),
+                   Ptr{Void}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
                    isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
     return GitRebase(rebase_ptr_ptr[])

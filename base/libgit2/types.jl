@@ -214,20 +214,20 @@ immutable DiffOptionsStruct
     interhunk_lines::UInt32
     id_abbrev::UInt16
     max_size::Coff_t
-    old_prefix::Ptr{UInt8}
-    new_prefix::Ptr{UInt8}
+    old_prefix::Cstring
+    new_prefix::Cstring
 end
 DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
-                    ignore_submodules::Cint = GitConst.SUBMODULE_IGNORE_DEFAULT,
+                    ignore_submodules::Cint = Cint(GitConst.SUBMODULE_IGNORE_UNSPECIFIED),
                     pathspec::StrArrayStruct = StrArrayStruct(),
-                    notify_cb::Ptr{Void} = Ptr{Void}(0),
-                    notify_payload::Ptr{Void} = Ptr{Void}(0),
+                    notify_cb::Ptr{Void} = C_NULL,
+                    notify_payload::Ptr{Void} = C_NULL,
                     context_lines::UInt32 = UInt32(3),
                     interhunk_lines::UInt32 = zero(UInt32),
                     id_abbrev::UInt16 = UInt16(7),
                     max_size::Coff_t = Coff_t(512*1024*1024), #zero(Coff_t), #512Mb
-                    old_prefix::Ptr{UInt8} = Ptr{UInt8}(0),
-                    new_prefix::Ptr{UInt8} = Ptr{UInt8}(0)
+                    old_prefix::Cstring = Cstring_NULL,
+                    new_prefix::Cstring = Cstring_NULL
 )=DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
                     flags,
                     ignore_submodules,

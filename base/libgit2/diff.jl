@@ -4,7 +4,7 @@ function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; c
     emptypathspec = isempty(pathspecs)
     diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     if !emptypathspec
-        sa = StrArrayStruct(paths)
+        sa = StrArrayStruct(pathspecs)
         diff_opts = DiffOptionsStruct(pathspec = sa)
     end
     try

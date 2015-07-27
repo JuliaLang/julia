@@ -250,4 +250,10 @@ module GitConst
     const STATUS_OPT_UPDATE_INDEX                     = Cuint(1 << 13)
     const STATUS_OPT_INCLUDE_UNREADABLE               = Cuint(1 << 14)
     const STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = Cuint(1 << 15)
+
+    @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
+                                SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
+                                SUBMODULE_IGNORE_UNTRACKED    = 2,  # dirty if tracked files change
+                                SUBMODULE_IGNORE_DIRTY        = 3,  # only dirty if HEAD moved
+                                SUBMODULE_IGNORE_ALL          = 4)  # never dirty
 end
