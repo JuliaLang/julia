@@ -37,7 +37,7 @@ increase both the performance and robustness of these systems, and
 perhaps somewhat counterintuitively, often significantly simplify them.
 
 Describing Julia in the lingo of `type
-systems <http://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
+systems <https://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
 nominative and parametric. Generic types can be parameterized,
 and the hierarchical relationships
 between types are explicitly declared, rather than implied by compatible
@@ -332,7 +332,7 @@ differently than :class:`Int8` or :class:`UInt8`.
 Composite Types
 ---------------
 
-`Composite types <http://en.wikipedia.org/wiki/Composite_data_type>`_
+`Composite types <https://en.wikipedia.org/wiki/Composite_data_type>`_
 are called records, structures (``struct``\ s in C), or objects in various
 languages. A composite type is a collection of named fields, an instance
 of which can be treated as a single value. In many languages, composite
@@ -580,7 +580,7 @@ parametric: types can take parameters, so that type declarations
 actually introduce a whole family of new types — one for each possible
 combination of parameter values. There are many languages that support
 some version of `generic
-programming <http://en.wikipedia.org/wiki/Generic_programming>`_, wherein
+programming <https://en.wikipedia.org/wiki/Generic_programming>`_, wherein
 data structures and algorithms to manipulate them may be specified
 without specifying the exact types involved. For example, some form of
 generic programming exists in ML, Haskell, Ada, Eiffel, C++, Java, C#,
@@ -706,7 +706,7 @@ with immediate values is magnified enormously in the case of arrays: an
 ``Array{Float64}`` can be stored as a contiguous memory block of 64-bit
 floating-point values, whereas an ``Array{Real}`` must be an array of
 pointers to individually allocated :obj:`Real` objects — which may well be
-`boxed <http://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing>`_
+`boxed <https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing>`_
 64-bit floating-point values, but also might be arbitrarily large,
 complex objects, which are declared to be implementations of the
 :obj:`Real` abstract type.

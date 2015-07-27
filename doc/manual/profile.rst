@@ -13,7 +13,7 @@ spent on individual line(s).  The most common usage is to identify
 
 :mod:`Profile` implements what is known as a "sampling" or `statistical
 profiler
-<http://en.wikipedia.org/wiki/Profiling_(computer_programming)>`_.  It
+<https://en.wikipedia.org/wiki/Profiling_(computer_programming)>`_.  It
 works by periodically taking a backtrace during the execution of any
 task. Each backtrace captures the currently-running function and
 line number, plus the complete chain of function calls that led to

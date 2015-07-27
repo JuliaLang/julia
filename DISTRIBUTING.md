@@ -69,7 +69,7 @@ Linux
 On Linux, `make binary-dist` creates a tarball that contains a fully
 functional Julia installation. If you wish to create a distribution
 package such as a `.deb`, or `.rpm`, some extra effort is needed. See the
-[julia-debian](http://github.com/staticfloat/julia-debian) repository
+[julia-debian](https://github.com/staticfloat/julia-debian) repository
 for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. See the
 [Fedora package](https://admin.fedoraproject.org/pkgdb/package/julia/)

@@ -44,7 +44,7 @@ if it really could be any integer, expressed with the abstract type
 altogether, unless it is needed to disambiguate from other method
 definitions, since a :exc:`MethodError` will be thrown anyway if a type
 is passed that does not support any of the requisite operations.
-(This is known as `duck typing <http://en.wikipedia.org/wiki/Duck_typing>`_.)
+(This is known as `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_.)
 
 For example, consider the following definitions of a function
 ``addone`` that returns one plus its argument::
