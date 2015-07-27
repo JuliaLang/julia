@@ -95,6 +95,13 @@ function cmp{T<:ByteString,S<:ByteString}(a::SubString{T}, b::SubString{S})
     c < 0 ? -1 : c > 0 ? +1 : cmp(na,nb)
 end
 
+# don't make unnecessary copies when passing substrings to C functions
+cconvert{T<:ByteString}(::Type{Ptr{UInt8}}, s::SubString{T}) = s
+cconvert{T<:ByteString}(::Type{Ptr{Int8}}, s::SubString{T}) = s
+function unsafe_convert{T<:ByteString, R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{T})
+    unsafe_convert(Ptr{R}, s.string.data) + s.offset
+end
+
 ## reversed strings without data movement ##
 
 immutable RevString{T<:AbstractString} <: AbstractString

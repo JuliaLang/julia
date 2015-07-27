@@ -137,7 +137,7 @@ end
 
 call(r::Regex, s) = ismatch(r, s)
 
-function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32(0))
+function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
@@ -152,8 +152,10 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=UInt32
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
-match(re::Regex, str::Union{ByteString,SubString}, idx::Integer, add_opts::UInt32=UInt32(0)) =
-    match(re, utf8(str), idx, add_opts)
+_utf8(str) = utf8(str)
+_utf8(str::SubString{ASCIIString}) = convert(SubString{UTF8String}, str)
+match{T<:ByteString}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
+    match(re, _utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
 match(r::Regex, s::AbstractString, i::Integer) =
