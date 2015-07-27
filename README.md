@@ -56,7 +56,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
-* `typealias AssertionError ErrorException` - `AssertionError` was introduced in [##9734](https://github.com/JuliaLang/julia/pull/#9734); before `@assert` threw an `ErrorException`
+* `typealias AssertionError ErrorException` - `AssertionError` was introduced in [#9734](https://github.com/JuliaLang/julia/pull/#9734); before `@assert` threw an `ErrorException`
 
 * For all unsigned integer types to their equivalents with uppercase `I`. [#8907](https://github.com/JuliaLang/julia/pull/8907)
 
