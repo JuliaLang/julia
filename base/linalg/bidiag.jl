@@ -76,7 +76,7 @@ function show(io::IO, M::Bidiagonal)
     println(io, summary(M), ":")
     print(io, " diag:")
     print_matrix(io, (M.dv)')
-    print(io, M.isupper?"\nsuper:":"\n  sub:")
+    print(io, M.isupper?"\n super:":"\n  sub:")
     print_matrix(io, (M.ev)')
 end
 
@@ -127,7 +127,7 @@ function -(A::Bidiagonal, B::Bidiagonal)
     end
 end
 
--(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev)
+-(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.isupper)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.isupper)
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
