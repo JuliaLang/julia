@@ -732,10 +732,10 @@ Network I/O
    The returned value is an object with boolean fields ``readable``, ``writable``, and
    ``timedout``, giving the result of the polling.
 
-.. function:: poll_file(path, interval_seconds::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
+.. function:: poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
-   Monitor a file for changes by polling every ``interval_seconds`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
-   The `timeout_s` should be a long interval; the default is 5.007 seconds.
+   Monitor a file for changes by polling every ``interval_s`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
+   The `interval_s` should be a long period; the default is 5.007 seconds.
 
    Returns a pair of ``StatStruct`` objects ``(previous, current)`` when a change is detected.
 
