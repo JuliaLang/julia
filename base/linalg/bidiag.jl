@@ -14,7 +14,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     end
 end
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
-Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = error("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument.")
+Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = throw(ArgumentError("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
 #Convert from BLAS uplo flag to boolean internal
 Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
