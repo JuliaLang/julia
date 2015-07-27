@@ -149,7 +149,21 @@
 .. function:: reenable_sigint(f::Function)
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily
-   reverses the effect of ``disable_sigint``.
+   reverses the effect of ``disable_sigint`` or ``@sigatomic``.
+
+.. function:: @sigatomic
+
+   Disable Ctrl-C handler during execution of a code block, such as an
+   interrupt-unsafe ``ccall``.  Use as::
+
+    @sigatomic ccall(...)
+
+   or::
+
+    @sigatomic begin
+        # interrupt-unsafe code
+        ...
+    end
 
 .. function:: systemerror(sysfunc, iftrue)
 
