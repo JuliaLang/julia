@@ -10,7 +10,9 @@ haskey(d::Associative, k) = in(k,keys(d))
 
 function in(p, a::Associative)
     if !isa(p,Pair)
-        error("Associative collections only contain Pairs; look for e.g. A=>B instead")
+        error("""Associative collections only contain Pairs;
+                 Either look for e.g. A=>B instead, or use the `keys` or `values`
+                 function if you are looking for a key or value respectively.""")
     end
     v = get(a,p[1],secret_table_token)
     !is(v, secret_table_token) && (v == p[2])
