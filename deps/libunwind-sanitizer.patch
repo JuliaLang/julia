@@ -1,0 +1,63 @@
+diff -r '--exclude=*.o' '--exclude=Makefile' '--exclude=*.m4' '--exclude=configure' '--exclude=tests' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.pc' '--exclude=.deps' '--exclude=.libs' '--exclude=.dirstamp' '--exclude=config.log' '--exclude=config.status' '--exclude=common.tex' '--exclude=test-driver' '--exclude=*~' '--exclude=libunwind.h' '--exclude=libunwind-common.h' '--exclude=stamp-h1' '--exclude=libtool' '--exclude=config.h' '--exclude=*.cache' '--exclude=Makefile.in' libunwind/include/config.h.in libunwind-1.1/include/config.h.in
+176,178d175
+< /* Define to 1 if your C compiler doesn't accept -c and -o together. */
+< #undef NO_MINUS_C_MINUS_O
+< 
+diff -r '--exclude=*.o' '--exclude=Makefile' '--exclude=*.m4' '--exclude=configure' '--exclude=tests' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.pc' '--exclude=.deps' '--exclude=.libs' '--exclude=.dirstamp' '--exclude=config.log' '--exclude=config.status' '--exclude=common.tex' '--exclude=test-driver' '--exclude=*~' '--exclude=libunwind.h' '--exclude=libunwind-common.h' '--exclude=stamp-h1' '--exclude=libtool' '--exclude=config.h' '--exclude=*.cache' '--exclude=Makefile.in' libunwind/include/dwarf_i.h libunwind-1.1/include/dwarf_i.h
+11a12,18
+> #if defined(__has_feature)
+> #  if __has_feature(memory_sanitizer)
+> extern void __msan_unpoison(const volatile void *a, size_t size);
+> #    define UNPOISON(val) __msan_unpoison(val,sizeof(*val))
+> #  endif
+> #endif
+> 
+51a59
+>   UNPOISON(val);
+62a71
+>   UNPOISON(val);
+73a83
+>   UNPOISON(val);
+84a95
+>   UNPOISON(val);
+95a107
+>   UNPOISON(val);
+106a119
+>   UNPOISON(val);
+117a131
+>   UNPOISON(val);
+128a143
+>   UNPOISON(val);
+diff -r '--exclude=*.o' '--exclude=Makefile' '--exclude=*.m4' '--exclude=configure' '--exclude=tests' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.pc' '--exclude=.deps' '--exclude=.libs' '--exclude=.dirstamp' '--exclude=config.log' '--exclude=config.status' '--exclude=common.tex' '--exclude=test-driver' '--exclude=*~' '--exclude=libunwind.h' '--exclude=libunwind-common.h' '--exclude=stamp-h1' '--exclude=libtool' '--exclude=config.h' '--exclude=*.cache' '--exclude=Makefile.in' libunwind/include/libunwind-x86_64.h libunwind-1.1/include/libunwind-x86_64.h
+129c129,135
+< #define unw_tdep_getcontext		UNW_ARCH_OBJ(getcontext)
+---
+> #define unw_tdep_getcontext UNW_ARCH_OBJ(getcontext)
+> #if defined(__has_feature)
+> #  if __has_feature(memory_sanitizer)
+> #    undef unw_tdep_getcontext
+> #    define unw_tdep_getcontext UNW_ARCH_OBJ(getcontext_interceptor)
+> #  endif
+> #endif
+Only in libunwind-1.1/include/tdep: libunwind_i.h
+diff -r '--exclude=*.o' '--exclude=Makefile' '--exclude=*.m4' '--exclude=configure' '--exclude=tests' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.pc' '--exclude=.deps' '--exclude=.libs' '--exclude=.dirstamp' '--exclude=config.log' '--exclude=config.status' '--exclude=common.tex' '--exclude=test-driver' '--exclude=*~' '--exclude=libunwind.h' '--exclude=libunwind-common.h' '--exclude=stamp-h1' '--exclude=libtool' '--exclude=config.h' '--exclude=*.cache' '--exclude=Makefile.in' libunwind/src/Makefile.am libunwind-1.1/src/Makefile.am
+299c299,300
+< 	x86_64/Lstash_frame.c x86_64/Lstep.c x86_64/Ltrace.c x86_64/getcontext.S
+---
+> 	x86_64/Lstash_frame.c x86_64/Lstep.c x86_64/Ltrace.c x86_64/getcontext.S \
+>   x86_64/getcontext_interceptor.S
+Only in libunwind-1.1/src/x86_64: getcontext_interceptor.S
+diff -r '--exclude=*.o' '--exclude=Makefile' '--exclude=*.m4' '--exclude=configure' '--exclude=tests' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.pc' '--exclude=.deps' '--exclude=.libs' '--exclude=.dirstamp' '--exclude=config.log' '--exclude=config.status' '--exclude=common.tex' '--exclude=test-driver' '--exclude=*~' '--exclude=libunwind.h' '--exclude=libunwind-common.h' '--exclude=stamp-h1' '--exclude=libtool' '--exclude=config.h' '--exclude=*.cache' '--exclude=Makefile.in' libunwind/src/x86_64/Ginit.c libunwind-1.1/src/x86_64/Ginit.c
+36a37,42
+> #if defined(__has_feature)
+> #  if __has_feature(memory_sanitizer)
+> void __msan_unpoison(void *, size_t);
+> #  endif
+> #endif
+> 
+173a180,184
+> 	#if defined(__has_feature)
+> 	#  if __has_feature(memory_sanitizer)
+> 				__msan_unpoison(val, sizeof(unw_word_t));
+> 	#  endif
+> 	#endif
