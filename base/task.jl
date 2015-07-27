@@ -2,6 +2,9 @@
 
 ## basic task functions and TLS
 
+# allow tasks to be constructed with arbitrary function objects
+Task(f) = Task(()->f())
+
 show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
