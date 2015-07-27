@@ -108,50 +108,36 @@ rm(c_tmpdir, recursive=true)
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-function test_file_poll(channel,timeout_s)
-    rc = poll_file(file, round(Int,timeout_s/10), timeout_s)
+function test_file_poll(channel,interval,timeout_s)
+    rc = poll_file(file, interval, timeout_s)
     put!(channel,rc)
 end
 
 function test_timeout(tval)
     tic()
     channel = RemoteRef()
-    @async test_file_poll(channel,tval)
+    @async test_file_poll(channel, 10, tval)
     tr = take!(channel)
     t_elapsed = toq()
-    @test !tr
+    @test !ispath(tr[1]) && !ispath(tr[2])
     @test tval <= t_elapsed
 end
 
 function test_touch(slval)
     tval = slval*1.1
     channel = RemoteRef()
-    @async test_file_poll(channel, tval)
-    sleep(tval/10)  # ~ one poll period
+    @async test_file_poll(channel, tval/3, tval)
+    sleep(tval/3)  # one poll period
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
     tr = take!(channel)
-    @test tr
+    @test ispath(tr[1]) && ispath(tr[2])
 end
 
-
-function test_monitor(slval)
-    FsMonitorPassed = false
-    fm = FileMonitor(file) do args...
-        FsMonitorPassed = true
-    end
-    sleep(slval/2)
-    f = open(file,"a")
-    write(f,"Hello World\n")
-    close(f)
-    sleep(slval)
-    @test FsMonitorPassed
-    close(fm)
-end
 
 function test_monitor_wait(tval)
-    fm = watch_file(file)
+    fm = FileMonitor(file)
     @async begin
         sleep(tval)
         f = open(file,"a")
@@ -163,29 +149,28 @@ function test_monitor_wait(tval)
     @test events.changed
 end
 
-function test_monitor_wait_poll(tval)
-    fm = watch_file(file, poll=true)
+function test_monitor_wait_poll()
+    pfw = PollingFileWatcher(file, 5.007)
     @async begin
-        sleep(tval)
+        sleep(2.5)
         f = open(file,"a")
         write(f,"Hello World\n")
         close(f)
     end
-    fname, events = wait(fm)
-    @test fname == basename(file)
-    @test events.writable
+    (old, new) = wait(pfw)
+    @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
 end
 
-# Commented out the tests below due to issues 3015, 3016 and 3020
 test_timeout(0.1)
 test_timeout(1)
-# the 0.1 second tests are too optimistic
-#test_touch(0.1)
-test_touch(2)
-#test_monitor(0.1)
-test_monitor(2)
+test_touch(6)
 test_monitor_wait(0.1)
-test_monitor_wait_poll(0.5)
+test_monitor_wait(0.1)
+test_monitor_wait_poll()
+test_monitor_wait_poll()
+
+@test_throws Base.UVError watch_file("nonexistantfile", 10)
+@test_throws Base.UVError poll_file("nonexistantfile", 2, 10)
 
 ##############
 # mark/reset #
@@ -855,7 +840,7 @@ close(f)
 test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
 # issue #10994: pathnames cannot contain embedded NUL chars
-for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isexecutable, isfifo, isfile, islink, ispath, isreadable, issetgid, issetuid, issocket, issticky, iswritable, realpath, watch_file)
+for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isexecutable, isfifo, isfile, islink, ispath, isreadable, issetgid, issetuid, issocket, issticky, iswritable, realpath, watch_file, poll_file)
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)

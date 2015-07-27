@@ -175,7 +175,7 @@ function tempdir()
     temppath = Array(UInt16,32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
-        error("GetTempPath failed: $(FormatMessage())")
+        error("GetTempPath failed: $(Libc.FormatMessage())")
     end
     resize!(temppath,lentemppath+1)
     return utf8(UTF16String(temppath))
@@ -186,7 +186,7 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32,Ptr{UInt16}), temppath,utf16("jul"),uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
-        error("GetTempFileName failed: $(FormatMessage())")
+        error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
     resize!(tname,lentname+1)
     return utf8(UTF16String(tname))

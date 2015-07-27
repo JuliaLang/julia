@@ -711,7 +711,7 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
         return 0;
     if (loop->watchers[fd] == NULL)
         return 0;
-    if (loop->watchers[fd] == &handle->io_watcher)
+    if (handle && loop->watchers[fd] == &handle->io_watcher)
         return 0;
     return 1;
 }

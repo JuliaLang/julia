@@ -11,7 +11,7 @@ SRCS = hashing timefuncs ptrhash operators \
 	utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-SRCS += asprintf
+SRCS += asprintf wsasocketpair
 ifeq ($(ARCH),i686)
 SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),i386)

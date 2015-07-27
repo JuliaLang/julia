@@ -606,7 +606,7 @@ function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
     status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle)!=0
     if !status
-        error("could not unmap view: $(FormatMessage())")
+        error("could not unmap view: $(Libc.FormatMessage())")
     end
 end
 
@@ -614,7 +614,7 @@ function msync(p::Ptr, len::Integer)
     depwarn("`msync` is deprecated, use `Mmap.sync!(array)` instead", :msync)
     status = ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len)!=0
     if !status
-        error("could not msync: $(FormatMessage())")
+        error("could not msync: $(Libc.FormatMessage())")
     end
 end
 

@@ -325,12 +325,6 @@ function TCPServer()
     this
 end
 
-function uvfinalize(uv)
-    close(uv)
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
-end
-
 isreadable(io::TCPSocket) = true
 iswritable(io::TCPSocket) = true
 
