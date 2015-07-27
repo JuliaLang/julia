@@ -291,6 +291,41 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     return (jl_value_t*)a;
 }
 
+static void NORETURN throw_eof_error(void)
+{
+    jl_datatype_t *eof_error = (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
+    assert(eof_error != NULL);
+    jl_exceptionf(eof_error, "");
+}
+
+DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
+    size_t ret = ios_readprep(s, n);
+    if (ret < n)
+        throw_eof_error();
+    uint64_t x = 0;
+    uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
+    if (n == 8) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 8; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else if (n >= 4) {
+        // expecting loop unrolling optimization
+        for (size_t i = 0; i < 4; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+        for (size_t i = 4; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    else {
+        for (size_t i = 0; i < n; i++)
+            x |= (uint64_t)buf[i] << (i << 3);
+    }
+    s->bpos += n;
+    return x;
+}
+
 // -- syscall utilities --
 
 int jl_errno(void) { return errno; }

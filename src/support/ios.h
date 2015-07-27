@@ -96,9 +96,6 @@ DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
 DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
-//void ios_lock(ios_t *s);
-//int ios_trylock(ios_t *s);
-//int ios_unlock(ios_t *s);
 
 /* stream creation */
 DLLEXPORT
@@ -114,29 +111,17 @@ extern DLLEXPORT ios_t *ios_stderr;
 void ios_init_stdstreams(void);
 
 /* high-level functions - output */
-int ios_putnum(ios_t *s, char *data, uint32_t type);
-int ios_putint(ios_t *s, int n);
 DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
-int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
 DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
 DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 
 /* high-level stream functions - input */
-int ios_getnum(ios_t *s, char *data, uint32_t type);
 DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
 DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
-int ios_ungetutf8(ios_t *s, uint32_t wc);
-//int ios_getstringz(ios_t *dest, ios_t *src);
-//int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);
-//int ios_getline(ios_t *s, char **pbuf, size_t *psz);
 DLLEXPORT char *ios_readline(ios_t *s);
 
 // discard data buffered for reading
 DLLEXPORT void ios_purge(ios_t *s);
-
-// seek by utf8 sequence increments
-int ios_nextutf8(ios_t *s);
-int ios_prevutf8(ios_t *s);
 
 /* stdio-style functions */
 #define IOS_EOF (-1)

@@ -165,12 +165,8 @@ function read(s::IOStream, ::Type{UInt8})
     b % UInt8
 end
 
-for (U, S) in ((:UInt16, :Int16),
-               (:UInt32, :Int32),
-               (:UInt64, :Int64))
-    @eval function read{T<:Union{$U,$S}}(s::IOStream, ::Type{T})
-        ccall(:jl_ios_get_nbytes, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
-    end
+function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream, ::Type{T})
+    ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
 end
 
 function read!{T}(s::IOStream, a::Array{T})
