@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Sieve of Atkin for generating primes:
-#     http://en.wikipedia.org/wiki/Sieve_of_Atkin
+#     https://en.wikipedia.org/wiki/Sieve_of_Atkin
 # Code very loosely based on this:
 #     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
 #     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
@@ -35,7 +35,7 @@ primes(n::Union{Integer,AbstractVector{Bool}}) = find(primesmask(n))
 const PRIMES = primes(2^16)
 
 # Small precomputed primes + Miller-Rabin for primality testing:
-#     http://en.wikipedia.org/wiki/Miller–Rabin_primality_test
+#     https://en.wikipedia.org/wiki/Miller–Rabin_primality_test
 #
 function isprime(n::Integer)
     (n < 3 || iseven(n)) && return n == 2
@@ -77,8 +77,8 @@ isprime(n::Int128) = n < 2 ? false :
 
 # Trial division of small (< 2^16) precomputed primes +
 # Pollard rho's algorithm with Richard P. Brent optimizations
-#     http://en.wikipedia.org/wiki/Trial_division
-#     http://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
+#     https://en.wikipedia.org/wiki/Trial_division
+#     https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
 #     http://maths-people.anu.edu.au/~brent/pub/pub051.html
 #
 function factor{T<:Integer}(n::T)

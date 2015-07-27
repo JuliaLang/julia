@@ -39,7 +39,7 @@ scope. When a variable is introduced into a scope, it is also inherited
 by all inner scopes unless one of those inner scopes explicitly
 overrides it.
 
-Julia uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
+Julia uses `lexical scoping <https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
 meaning that a function's scope does not inherit from its caller's
 scope, but from the scope in which the function was defined.
 For example, in the following code the ``x`` inside ``foo`` is found
