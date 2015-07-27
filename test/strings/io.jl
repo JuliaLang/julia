@@ -223,3 +223,14 @@ Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
 @test "$("string")" == "string"
 arr = ["a","b","c"]
 @test "[$(join(arr, " - "))]" == "[a - b - c]"
+
+# print_joined with empty input
+myio = IOBuffer()
+print_joined(myio, "", "", 1)
+@test isempty(takebuf_array(myio))
+
+# unescape_chars
+@test Base.unescape_chars("\\t","t") == "t"
+@test_throws ArgumentError print_unescaped(IOBuffer(), string('\\',"xZ"))
+@test_throws ArgumentError print_unescaped(IOBuffer(), string('\\',"777"))
+
