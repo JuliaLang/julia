@@ -303,20 +303,15 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
 end
 setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
 
-# convert to integer index
+# convert to a supported index type (Array, Colon, or Int)
 to_index(i::Int) = i
 to_index(i::Integer) = convert(Int,i)::Int
-to_index(r::UnitRange{Int}) = r
-to_index(r::Range{Int}) = r
-to_index(I::UnitRange{Bool}) = find(I)
-to_index(I::Range{Bool}) = find(I)
-to_index{T<:Integer}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
-to_index{T<:Integer}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
 to_index(c::Colon) = c
 to_index(I::AbstractArray{Bool}) = find(I)
-to_index(A::AbstractArray{Int}) = A
-to_index{T<:Integer}(A::AbstractArray{T}) = [to_index(x) for x in A]
-to_index(i) = error("invalid index: $i")
+to_index(A::AbstractArray) = A
+to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
+to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
+to_index(i) = throw(ArgumentError("invalid index: $i"))
 
 to_indexes() = ()
 to_indexes(i1) = (to_index(i1),)

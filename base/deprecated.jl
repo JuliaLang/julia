@@ -417,16 +417,7 @@ function to_index(i::Real)
     to_index_nodep(i)
 end
 
-function to_index{T<:Real}(r::UnitRange{T})
-    depwarn("indexing with non Integer UnitRanges is deprecated", :to_index)
-    to_index_nodep(first(r)):to_index_nodep(last(r))
-end
-
-function to_index{T<:Real}(r::StepRange{T})
-    depwarn("indexing with non Integer StepRanges is deprecated", :to_index)
-    to_index_nodep(first(r)):to_index_nodep(step(r)):to_index_nodep(last(r))
-end
-
+to_index{T<:Integer}(A::AbstractArray{T}) = A
 function to_index{T<:Real}(A::AbstractArray{T})
     depwarn("indexing with non Integer AbstractArrays is deprecated", :to_index)
     Int[to_index_nodep(x) for x in A]

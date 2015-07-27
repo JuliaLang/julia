@@ -137,13 +137,12 @@ end
     Expr(:block, Expr(:meta, :inline), ex)
 end
 
-_checkbounds(sz, i::Integer) = 1 <= i <= sz
-_checkbounds(sz, i::Real) = 1 <= to_index(i) <= sz
-_checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
-_checkbounds(sz, r::Range{Int}) = (@_inline_meta; isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz))
-_checkbounds{T<:Real}(sz, r::Range{T}) = (@_inline_meta; _checkbounds(sz, to_index(r)))
+_checkbounds(sz, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
+_checkbounds(sz, i::Real) = 1 <= i <= sz
 _checkbounds(sz, ::Colon) = true
-function _checkbounds{T <: Real}(sz, I::AbstractArray{T})
+_checkbounds(sz, r::Range) = (@_inline_meta; isempty(r) || (_checkbounds(sz, minimum(r)) && _checkbounds(sz,maximum(r))))
+_checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
+function _checkbounds(sz, I::AbstractArray)
     @_inline_meta
     b = true
     for i in I
@@ -487,8 +486,9 @@ _getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined 
 function _getindex(::LinearFast, A::AbstractArray, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_getindex
-    checkbounds(A, I...)
-    unsafe_getindex(A, sub2ind(size(A), to_indexes(I...)...))
+    J = to_indexes(I...)
+    checkbounds(A, J...)
+    unsafe_getindex(A, sub2ind(size(A), J...))
 end
 _unsafe_getindex(::LinearFast, A::AbstractArray, I::Int) = (@_inline_meta; getindex(A, I))
 function _unsafe_getindex(::LinearFast, A::AbstractArray, I::Real...)
@@ -512,19 +512,20 @@ end
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
+        Jsplat = Expr[:(J[$d]) for d = 1:N-1]
         i = 0
         for d=N:AN
-            push!(Isplat, :(s[$(i+=1)]))
+            push!(Jsplat, :(s[$(i+=1)]))
         end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
             # ind2sub requires all dimensions to be nonzero, so checkbounds first
-            checkbounds(A, I...)
-            s = ind2sub($sz, to_index(I[$N]))
-            unsafe_getindex(A, $(Isplat...))
+            J = to_indexes(I...)
+            checkbounds(A, J...)
+            s = ind2sub($sz, J[$N])
+            unsafe_getindex(A, $(Jsplat...))
         end
     end
 end
@@ -583,8 +584,9 @@ _setindex!(::LinearFast, A::AbstractArray, v, I::Int) = error("indexed assignmen
 function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_setindex!
-    checkbounds(A, I...)
-    unsafe_setindex!(A, v, sub2ind(size(A), to_indexes(I...)...))
+    J = to_indexes(I...)
+    checkbounds(A, J...)
+    unsafe_setindex!(A, v, sub2ind(size(A), J...))
 end
 _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Int) = (@_inline_meta; setindex!(A, v, I))
 function _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
@@ -608,18 +610,19 @@ end
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
+        Jsplat = Expr[:(J[$d]) for d = 1:N-1]
         i = 0
         for d=N:AN
-            push!(Isplat, :(s[$(i+=1)]))
+            push!(Jsplat, :(s[$(i+=1)]))
         end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
-            checkbounds(A, I...)
+            J = to_indexes(I...)
+            checkbounds(A, J...)
             s = ind2sub($sz, to_index(I[$N]))
-            unsafe_setindex!(A, v, $(Isplat...))
+            unsafe_setindex!(A, v, $(Jsplat...))
         end
     end
 end
