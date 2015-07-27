@@ -39,7 +39,7 @@ functions in the Julia runtime, or functions in an application linked to
 Julia.
 
 By default, Fortran compilers `generate mangled names
-<http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+<https://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
 (for example, converting function names to lowercase or uppercase,
 often appending an underscore), and so to call a Fortran function via
 ``ccall`` you must pass the mangled identifier corresponding to the rule

@@ -96,7 +96,7 @@ is reachable before initialisation is complete.
 Legacy ios.c library
 --------------------
 
-The :code:`julia/src/support/ios.c` library is inherited from `femtolisp <http://github.com/JeffBezanson/femtolisp>`_.
+The :code:`julia/src/support/ios.c` library is inherited from `femtolisp <https://github.com/JeffBezanson/femtolisp>`_.
 It provides cross-platform buffered file IO and in-memory temporary buffers.
 
 :code:`ios.c` is still used by:
@@ -107,7 +107,7 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
 
 Use of :code:`ios.c` in these modules is mostly self-contained and
 separated from the ``libuv`` I/O system. However, there is `one place
-<http://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654>`_
+<https://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654>`_
 where femtolisp calls through to :c:func:`jl_printf` with a legacy :c:type:`ios_t` stream.
 
 There is a hack in :code:`ios.h` that makes the :c:member:`ios_t.bm`

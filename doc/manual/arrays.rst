@@ -588,7 +588,7 @@ stride parameters.
 Sparse Matrices
 ===============
 
-`Sparse matrices <http://en.wikipedia.org/wiki/Sparse_matrix>`_ are
+`Sparse matrices <https://en.wikipedia.org/wiki/Sparse_matrix>`_ are
 matrices that contain enough zeros that storing them in a special data
 structure leads to savings in space and execution time. Sparse
 matrices may be used when operations on the sparse representation of a
@@ -600,7 +600,7 @@ Compressed Sparse Column (CSC) Storage
 
 In Julia, sparse matrices are stored in the `Compressed Sparse Column
 (CSC) format
-<http://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29>`_.
+<https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29>`_.
 Julia sparse matrices have the type ``SparseMatrixCSC{Tv,Ti}``, where ``Tv``
 is the type of the nonzero values, and ``Ti`` is the integer type for
 storing column pointers and row indices.::

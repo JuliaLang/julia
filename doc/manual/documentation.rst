@@ -6,7 +6,7 @@
 
 Julia enables package developers and users to document functions, types and
 other objects easily, either via the built-in documentation system in Julia 0.4
-or the `Docile.jl <http://github.com/MichaelHatherly/Docile.jl>`_ package in
+or the `Docile.jl <https://github.com/MichaelHatherly/Docile.jl>`_ package in
 Julia 0.3.
 
 In 0.4:
@@ -16,7 +16,7 @@ In 0.4:
     "Tells you if there are too foo items in the array."
     foo(xs::Array) = ...
 
-Documentation is interpreted as `Markdown <http://en.wikipedia.org/wiki/Markdown>`_,
+Documentation is interpreted as `Markdown <https://en.wikipedia.org/wiki/Markdown>`_,
 so you can use indentation and code fences to delimit code examples from text.
 
 .. doctest::

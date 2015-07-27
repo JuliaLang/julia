@@ -42,7 +42,7 @@ sometimes implied rather than explicitly written as an
 argument. [#]_ Using all of a function's arguments to
 choose which method should be invoked, rather than just the first, is
 known as `multiple dispatch
-<http://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
+<https://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
 dispatch is particularly useful for mathematical code, where it makes
 little sense to artificially deem the operations to "belong" to one
 argument more than any of the others: does the addition operation in

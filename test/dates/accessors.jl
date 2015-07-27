@@ -120,7 +120,7 @@ end
 test_dates(0,2100)
 
 # week function
-# Tests from http://en.wikipedia.org/wiki/ISO_week_date
+# Tests from https://en.wikipedia.org/wiki/ISO_week_date
 @test Dates.week(Dates.Date(2005,1,1)) == 53
 @test Dates.week(Dates.Date(2005,1,2)) == 53
 @test Dates.week(Dates.Date(2005,12,31)) == 52
