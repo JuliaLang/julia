@@ -402,9 +402,11 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 # sub logical indexing #4763
 A = sub([1:10;], 5:8)
 @test A[A.<7] == [5, 6]
+@test Base.unsafe_getindex(A, A.<7) == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = sub(B, 2:3, 2:3)
 @test sB[sB.>8] == [10, 11]
+@test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # slice
 A = reshape(1:120, 3, 5, 8)
