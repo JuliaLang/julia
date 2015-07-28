@@ -387,14 +387,14 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
 
         m = match(LibGit2.GITHUB_REGEX, url)
         m == nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
-        owner, repo = m.captures[2:3]
+        owner, owner_repo = m.captures[2:3]
         user = GitHub.user()
-        info("Forking $owner/$repo to $user")
-        response = GitHub.fork(owner,repo)
+        info("Forking $owner/$owner_repo to $user")
+        response = GitHub.fork(owner,owner_repo)
         fork = response["ssh_url"]
         branch = "pull-request/$(commit[1:8])"
         info("Pushing changes as branch $branch")
-        LibGit2.push(repo, url=fork, refspecs=["$commit:refs/heads/$branch"])
+        LibGit2.push(repo, remoteurl=fork, refspecs=["$commit:refs/heads/$branch"])
         pr_url = "$(response["html_url"])/compare/$branch"
         info("To create a pull-request, open:\n\n  $pr_url\n")
     end
@@ -407,6 +407,8 @@ function submit(pkg::AbstractString, commit::AbstractString="")
 end
 
 function publish(branch::AbstractString)
+    tags = Dict{ByteString,Vector{ASCIIString}}()
+
     with(GitRepo, "METADATA") do repo
         LibGit2.branch(repo) == branch ||
             throw(PkgError("METADATA must be on $branch to publish changes"))
@@ -416,11 +418,8 @@ function publish(branch::AbstractString)
         ahead_remote > 0 && throw(PkgError("METADATA is behind origin/$branch – run `Pkg.update()` before publishing"))
         ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
 
-        tags = Dict{ByteString,Vector{ASCIIString}}()
-
         # get changed files
         for path in LibGit2.diff_files(repo, "origin/metadata-v2", LibGit2.GitConst.HEAD_FILE)
-            println(path)
             m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
             m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
             pkg, ver = m.captures; ver = convert(VersionNumber,ver)
