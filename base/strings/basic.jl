@@ -194,7 +194,7 @@ length(e::EachStringIndex) = length(e.s)
 start(e::EachStringIndex) = start(e.s)
 next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
-eltype(e::EachStringIndex) = Int
+eltype(::Type{EachStringIndex}) = Int
 
 typealias Chars Union{Char,AbstractVector{Char},Set{Char}}
 

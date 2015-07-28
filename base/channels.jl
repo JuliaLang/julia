@@ -105,7 +105,7 @@ function notify_error(c::Channel, err)
     notify_error(c.cond_put, err)
 end
 
-eltype{T}(c::Channel{T}) = T
+eltype{T}(::Type{Channel{T}}) = T
 
 function length(c::Channel)
     if c.put_pos >= c.take_pos
