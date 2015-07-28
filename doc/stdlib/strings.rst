@@ -135,6 +135,11 @@
 
    Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
+.. function:: match!(m::RegexMatch, s::AbstractString[, idx::Integer[, addopts]])
+
+    Like ``match``, but accepts a pre-allocated match object instead of a regular expression. ``m`` will be modified in-place to hold the results of the match. Returns ```true`` if a match was found; ``false`` otherwise. A pre-allocated match object compatible with a 
+    regular expression ``re`` can be obtained via ``RegexMatch(re)``.
+
 .. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
    Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
@@ -409,5 +414,3 @@
    depending on whether ``Cwchar_t`` is 32 or 16 bits, respectively.
    The synonym ``WString`` for ``UTF32String`` or ``UTF16String``
    is also provided.
-
-

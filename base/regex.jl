@@ -86,12 +86,26 @@ end
 # TODO: map offsets into non-ByteStrings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
-immutable RegexMatch
+type RegexMatch
     match::SubString{UTF8String}
     captures::Vector{Union{Void,SubString{UTF8String}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
+
+    # Construct a match object that has the capacity to store a match produced by the given regex
+    function RegexMatch(re::Regex)
+        compile(re)
+        n_captures = div(length(re.ovec), 2) - 1
+        m = new()
+        m.regex = re
+        m.captures = Vector{Union{Void, SubString{UTF8String}}}(n_captures)
+        m.offsets = Vector{Int}(n_captures)
+        m
+    end
+
+    RegexMatch(match, captures, offset, offsets, regex) =
+        new(match, captures, offset, offsets, regex)
 end
 
 function show(io::IO, m::RegexMatch)
@@ -137,27 +151,42 @@ end
 
 call(r::Regex, s) = ismatch(r, s)
 
-function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
+function match!(m::RegexMatch, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
+    re = m.regex
     compile(re)
     opts = re.match_options | add_opts
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
-        return nothing
+        return false
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{UTF8String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
-    off = Int[ ovec[2i+1]+1 for i=1:n ]
-    RegexMatch(mat, cap, ovec[1]+1, off, re)
+    n == length(m.offsets) || throw(ArgumentError("$re has $n capture groups, but the match object is expecting $(length(m.offsets)) groups."))
+    m.match = SubString(str, ovec[1]+1, ovec[2])
+    for i=1:n
+        m.captures[i] =
+            ovec[2i + 1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i + 1]+1, ovec[2i + 2])
+        m.offsets[i] = ovec[2i + 1] + 1
+    end
+    m.offset = ovec[1] + 1
+    return true
+end
+
+function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
+    m = RegexMatch(re)
+    match!(m, str, idx, add_opts) && return m
+    return nothing
 end
 
 _utf8(str) = utf8(str)
 _utf8(str::SubString{ASCIIString}) = convert(SubString{UTF8String}, str)
 match{T<:ByteString}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
     match(re, _utf8(str), idx, add_opts)
+match!{T<:ByteString}(m::RegexMatch, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
+    match!(m, _utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
+match!(m::RegexMatch, s::AbstractString) = match!(m, s, start(s))
+
 match(r::Regex, s::AbstractString, i::Integer) =
     throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))
 

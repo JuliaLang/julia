@@ -44,6 +44,19 @@ let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
     @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
 end
 
+# In-place matching
+let
+    r = r"a(.)(.)"
+    m = RegexMatch(r)
+    s = "babca"
+    match!(m, s)
+    @test (m[1], m[2]) == ("b", "c")
+    r2 = r"a(.)"
+    m = RegexMatch(r2)
+    m.regex = r
+    @test_throws ArgumentError match!(m, s)
+end
+
 # Backcapture reference in substitution string
 @test replace("abcde", r"(..)(?P<byname>d)", s"\g<byname>xy\\\1") == "adxy\\bce"
 @test_throws ErrorException replace("a", r"(?P<x>)", s"\g<y>")
