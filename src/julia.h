@@ -1480,10 +1480,6 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type);
 DLLEXPORT void jlbacktrace(void);
 
-#if defined(GC_FINAL_STATS)
-void jl_print_gc_stats(JL_STREAM *s);
-#endif
-
 // debugging
 void show_execution_point(char *filename, int lno);
 

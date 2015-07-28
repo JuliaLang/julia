@@ -50,6 +50,11 @@ void gc_debug_print_status();
 #else
 #define gc_debug_print_status()
 #endif
+#if defined(GC_FINAL_STATS)
+void jl_print_gc_stats(JL_STREAM *s);
+#else
+#define jl_print_gc_stats(s) ((void)s)
+#endif
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
 int  jl_get_t_uid_ctr(void);
