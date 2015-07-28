@@ -150,11 +150,11 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple RemoteRefs
+# Testing timedwait on multiple channels
 @sync begin
-    rr1 = RemoteRef()
-    rr2 = RemoteRef()
-    rr3 = RemoteRef()
+    rr1 = Channel()
+    rr2 = Channel()
+    rr3 = Channel()
 
     @async begin sleep(0.5); put!(rr1, :ok) end
     @async begin sleep(1.0); put!(rr2, :ok) end
@@ -196,7 +196,7 @@ num_small_requests = 10000
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
-rr_list = [RemoteRef() for x in 1:ntasks]
+rr_list = [Channel() for x in 1:ntasks]
 a=ones(2*10^5);
 for rr in rr_list
     @async let rr=rr
@@ -214,6 +214,69 @@ end
 
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
+function test_channel(c)
+    put!(c, 1)
+    put!(c, "Hello")
+    put!(c, 5.0)
+
+    @test isready(c) == true
+    @test fetch(c) == 1
+    @test fetch(c) == 1   # Should not have been popped previously
+    @test take!(c) == 1
+    @test take!(c) == "Hello"
+    @test fetch(c) == 5.0
+    @test take!(c) == 5.0
+    @test isready(c) == false
+    close(c)
+end
+
+test_channel(Channel(10))
+
+c=Channel{Int}(1)
+@test_throws MethodError put!(c, "Hello")
+
+c=Channel(256)
+# Test growth of channel
+@test c.szp1 <= 33
+for x in 1:40
+  put!(c, x)
+end
+@test c.szp1 <= 65
+for x in 1:39
+  take!(c)
+end
+for x in 1:64
+  put!(c, x)
+end
+@test (c.szp1 > 65) && (c.szp1 <= 129)
+for x in 1:39
+  take!(c)
+end
+@test fetch(c) == 39
+for x in 1:26
+  take!(c)
+end
+@test isready(c) == false
+
+# test channel iterations
+function test_iteration(in_c, out_c)
+    t=@schedule for v in in_c
+        put!(out_c, v)
+    end
+
+    isa(in_c, Channel) && @test isopen(in_c) == true
+    put!(in_c, 1)
+    @test take!(out_c) == 1
+    put!(in_c, "Hello")
+    close(in_c)
+    @test take!(out_c) == "Hello"
+    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test_throws InvalidStateException put!(in_c, :foo)
+    yield()
+    @test istaskdone(t) == true
+end
+
+test_iteration(Channel(10), Channel(10))
 
 # The below block of tests are usually run only on local development systems, since:
 # - addprocs tests are memory intensive

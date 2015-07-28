@@ -600,47 +600,49 @@ Built-in :exc:`Exception`\ s
 :exc:`Exception`\ s are thrown when an unexpected condition has occurred. The
 built-in :exc:`Exception`\ s listed below all interrupt the normal flow of control.
 
-+---------------------------+
-| :exc:`Exception`          |
-+===========================+
-| :exc:`ArgumentError`      |
-+---------------------------+
-| :exc:`BoundsError`        |
-+---------------------------+
-| :exc:`DivideError`        |
-+---------------------------+
-| :exc:`DomainError`        |
-+---------------------------+
-| :exc:`EOFError`           |
-+---------------------------+
-| :exc:`ErrorException`     |
-+---------------------------+
-| :exc:`InexactError`       |
-+---------------------------+
-| :exc:`InterruptException` |
-+---------------------------+
-| :exc:`KeyError`           |
-+---------------------------+
-| :exc:`LoadError`          |
-+---------------------------+
-| :exc:`OutOfMemoryError`   |
-+---------------------------+
-| :exc:`ReadOnlyMemoryError`|
-+---------------------------+
-| :exc:`MethodError`        |
-+---------------------------+
-| :exc:`OverflowError`      |
-+---------------------------+
-| :exc:`ParseError`         |
-+---------------------------+
-| :exc:`SystemError`        |
-+---------------------------+
-| :exc:`TypeError`          |
-+---------------------------+
-| :exc:`UndefRefError`      |
-+---------------------------+
-| :exc:`UndefVarError`      |
-+---------------------------+
++------------------------------+
+| :exc:`Exception`             |
++==============================+
+| :exc:`ArgumentError`         |
++------------------------------+
+| :exc:`BoundsError`           |
++------------------------------+
+| :exc:`DivideError`           |
++------------------------------+
+| :exc:`DomainError`           |
++------------------------------+
+| :exc:`EOFError`              |
++------------------------------+
+| :exc:`ErrorException`        |
++------------------------------+
+| :exc:`InexactError`          |
++------------------------------+
+| :exc:`InterruptException`    |
++------------------------------+
+| :exc:`InvalidStateException` |
++------------------------------+
+| :exc:`KeyError`              |
++------------------------------+
+| :exc:`LoadError`             |
++------------------------------+
+| :exc:`OutOfMemoryError`      |
++------------------------------+
+| :exc:`ReadOnlyMemoryError`   |
++------------------------------+
+| :exc:`MethodError`           |
++------------------------------+
+| :exc:`OverflowError`         |
++------------------------------+
+| :exc:`ParseError`            |
++------------------------------+
+| :exc:`SystemError`           |
++------------------------------+
+| :exc:`TypeError`             |
++------------------------------+
+| :exc:`UndefRefError`         |
++------------------------------+
+| :exc:`UndefVarError`         |
++------------------------------+
 
 
 For example, the :func:`sqrt` function throws a :exc:`DomainError` if applied to a
