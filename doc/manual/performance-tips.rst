@@ -132,13 +132,6 @@ This can be written more concisely and efficiently as::
     norm(A::Matrix) = max(svd(A)[2])
 
 
-    function f(x)
-        y = similar(x)
-        for i in 1:10^7
-            y[i] = x[i]^2
-        end
-    end
-
 
 Separate kernel functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -966,18 +959,19 @@ performance measurements and some judgment may be required.
 
 Inline functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Functions called within a loop are not always inlined.
+It may be slow to call a function within a loop.
+The first reason is that function arguments are not inlined
 
     julia> f(x::Float64) = (x+1.2)^2
-    julia> function testn(f)
+    julia> function testn(g)
                s = 0.0
                for i = 1:10^7
-                   s += f(i/10^7)
+                   s += g(i/10^7)
                end
                s
            end
 
-    julia> function test_inlined()
+    julia> function testn()
                s = 0.0
                for i = 1:10^7
                    s += (i/10^7+1.2)^2
@@ -987,14 +981,14 @@ Functions called within a loop are not always inlined.
 
     julia> @time testn(f)
     elapsed time: 1.168110985 seconds (480138732 bytes allocated, 26.17% gc time)
-    julia> @time test_inlined()
+    julia> @time testn()
     elapsed time: 0.429674432 seconds (96 bytes allocated)
 
-To check whether a function is inlined, use :ref`:man-code-warntype:`
+The second reason is that functions (even when they are not passed as arguments)
+may not be inlined. To check whether a function is inlined, use :ref`:man-code-warntype:`
+In these cases, you can use the `FastAnonymous <https://github.com/timholy/FastAnonymous.jl>`_package.
 
-In some cases (like in the example above)  you may be able to inline the function manually.
-
-For instance, use a list comprehension rather than the function map:
+For the same reason, list comprehensions are faster than the function map:
 
     julia> @time map(x -> x^2, 1:10^7);
     elapsed time: 0.776970203 seconds (399992848 bytes allocated, 39.38% gc time)
@@ -1002,7 +996,6 @@ For instance, use a list comprehension rather than the function map:
     elapsed time: 0.035863782 seconds (80000048 bytes allocated)
 
 
-In more complicated cases, you can use the `FastAnonymous <https://github.com/timholy/FastAnonymous.jl>`_package.
 
 Performance Annotations
 -----------------------
