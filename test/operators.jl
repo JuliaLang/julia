@@ -20,3 +20,11 @@ B = [true true false]
 
 @test reverse(Pair(1,2)) == Pair(2,1)
 @test reverse(Pair("13","24")) == Pair("24","13")
+
+p = 1=>:foo
+@test first(p) == 1
+@test last(p)  == :foo
+@test first(reverse(p)) == :foo
+@test last(reverse(p))  == 1
+@test endof(p) == 2
+@test p[endof(p)] == p[end] == p[2] == :foo
