@@ -8,6 +8,14 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     return GitRemote(rmt_ptr_ptr[])
 end
 
+function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
+    rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
+                rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url, fetch_spec)
+    return GitRemote(rmt_ptr_ptr[])
+end
+
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
@@ -46,15 +54,14 @@ function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
 end
 
 function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
-              force::Bool=false)
-    msg = "libgit2.push: $msg"
-    push_opts = PushOptionsStruct()
+                                 force::Bool = false,
+                                 push_opts::PushOptions = PushOptions())
     no_refs = (length(refspecs) == 0)
     !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_push, :libgit2), Cint,
-            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptionsStruct}),
-             rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(push_opts))
+                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
+                       rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(push_opts))
     finally
         !no_refs && finalize(sa)
     end

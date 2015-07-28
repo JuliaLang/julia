@@ -28,6 +28,7 @@ include("libgit2/blob.jl")
 include("libgit2/diff.jl")
 include("libgit2/rebase.jl")
 include("libgit2/status.jl")
+include("libgit2/callbacks.jl")
 include("libgit2/repl.jl")
 include("libgit2/utils.jl")
 
@@ -112,7 +113,7 @@ end
 
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
-    merge_base(a, b, repo) == A
+    merge_base(repo, a, b) == A
 end
 
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
@@ -134,26 +135,6 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
         set_remote_url(repo, url, remote=remote)
     end
 end
-
-function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void}, name::Cstring, url::Cstring, payload::Ptr{Void})
-    # Create the remote with a mirroring url
-    fetch_spec = "+refs/*:refs/*"
-    err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
-                remote, repo_ptr, name, url, fetch_spec)
-    err != 0 && return Cint(err)
-
-    # And set the configuration option to true for the push command
-    config = GitConfig(GitRepo(repo_ptr))
-    name_str = bytestring(name)
-    err= try set!(config, "remote.$name_str.mirror", true)
-         catch -1
-         finally finalize(config)
-         end
-    err != 0 && return Cint(err)
-    return Cint(0)
-end
-const mirror_cb = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Void}))
 
 """ git fetch [<url>|<repository>] [<refspecs>]"""
 function fetch{T<:AbstractString}(repo::GitRepo;
@@ -186,7 +167,8 @@ function push{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        push(rmt, refspecs, force=force, msg="to $(url(rmt))")
+        po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
+        push(rmt, refspecs, force=force, push_opts=po)
     catch err
         warn("push: $err")
     finally
@@ -357,7 +339,7 @@ end
 function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     fst_id = revparseid(repo, fst)
     snd_id = revparseid(repo, snd)
-    base_id = merge_base(string(fst_id), string(snd_id), repo)
+    base_id = merge_base(repo, string(fst_id), string(snd_id))
     fc = count((i,r)->i!=base_id, repo, oid=fst_id,
                 by=GitConst.SORT_TOPOLOGICAL)
     sc = count((i,r)->i!=base_id, repo, oid=snd_id,

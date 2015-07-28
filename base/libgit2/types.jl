@@ -135,19 +135,31 @@ immutable RemoteCallbacks
     transport::Ptr{Void}
     payload::Ptr{Void}
 end
-RemoteCallbacks() = RemoteCallbacks(one(Cuint),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0),
-                                    Ptr{Void}(0))
+RemoteCallbacks(; sideband_progress::Ptr{Void} = C_NULL,
+                  completion::Ptr{Void} = C_NULL,
+                  credentials::Ptr{Void} = C_NULL,
+                  certificate_check::Ptr{Void} = C_NULL,
+                  transfer_progress::Ptr{Void} = C_NULL,
+                  update_tips::Ptr{Void} = C_NULL,
+                  pack_progress::Ptr{Void} = C_NULL,
+                  push_transfer_progress::Ptr{Void} = C_NULL,
+                  push_update_reference::Ptr{Void} = C_NULL,
+                  push_negotiation::Ptr{Void} = C_NULL,
+                  transport::Ptr{Void} = C_NULL,
+                  payload::Ptr{Void} = C_NULL
+)=RemoteCallbacks(one(Cuint),
+                  sideband_progress,
+                  completion,
+                  credentials,
+                  certificate_check,
+                  transfer_progress,
+                  update_tips,
+                  pack_progress,
+                  push_transfer_progress,
+                  push_update_reference,
+                  push_negotiation,
+                  transport,
+                  payload)
 
 immutable FetchOptions
     version::Cuint
@@ -282,11 +294,16 @@ MergeOptionsStruct(; flags::Cint = Cint(0),
                      file_favor
                     )
 
-immutable PushOptionsStruct
+immutable PushOptions
     version::Cuint
     parallelism::Cint
+    callbacks::RemoteCallbacks
 end
-PushOptionsStruct() = PushOptionsStruct(one(Cuint),one(Cuint))
+PushOptions(; parallelism::Cint=one(Cint),
+              callbacks::RemoteCallbacks=RemoteCallbacks()
+)=PushOptions(one(Cuint),
+              parallelism,
+              callbacks)
 
 immutable IndexTime
     seconds::Int64
