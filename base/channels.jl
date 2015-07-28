@@ -23,8 +23,7 @@ end
 
 const DEF_CHANNEL_SZ=32
 
-Channel() = Channel(DEF_CHANNEL_SZ)
-Channel(sz::Int) = Channel{Any}(sz)
+Channel(sz::Int = DEF_CHANNEL_SZ) = Channel{Any}(sz)
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 function close(c::Channel)
@@ -36,10 +35,8 @@ isopen(c::Channel) = (c.state == :open)
 
 type InvalidStateException <: Exception
     msg::AbstractString
-    state
+    state::Symbol
 end
-InvalidStateException() = InvalidStateException("")
-InvalidStateException(msg) = InvalidStateException(msg, 0)
 
 function put!(c::Channel, v)
     !isopen(c) && throw(closed_exception())
@@ -82,9 +79,7 @@ end
 
 function take!(c::Channel)
     !isopen(c) && !isready(c) && throw(closed_exception())
-    while !isready(c)
-        wait(c.cond_take)
-    end
+    wait(c)
     v = c.data[c.take_pos]
     c.take_pos = (c.take_pos == c.szp1 ? 1 : c.take_pos + 1)
     notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
@@ -107,7 +102,7 @@ end
 
 eltype{T}(::Type{Channel{T}}) = T
 
-function length(c::Channel)
+function n_avail(c::Channel)
     if c.put_pos >= c.take_pos
         return c.put_pos - c.take_pos
     else
@@ -115,15 +110,13 @@ function length(c::Channel)
     end
 end
 
-size(c::Channel) = c.sz_max
+show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(size(c)),sz_curr:$(length(c)))")
-
-start{T}(c::Channel{T}) = Ref{Nullable{T}}(Nullable{T}())
+start{T}(c::Channel{T}) = Ref{Nullable{T}}()
 function done(c::Channel, state::Ref)
     try
         # we are waiting either for more data or channel to be closed
-        state.x = take!(c)
+        state[] = take!(c)
         return false
     catch e
         if isa(e, InvalidStateException) && e.state==:closed
@@ -133,5 +126,4 @@ function done(c::Channel, state::Ref)
         end
     end
 end
-next{T}(c::Channel{T}, state) = (get(state.x), Ref{Nullable{T}}(Nullable{T}()))
-
+next{T}(c::Channel{T}, state) = (v=get(state[]); state[]=nothing; (v, state))
