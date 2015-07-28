@@ -261,7 +261,7 @@ include("statistics.jl")
 
 # sparse matrices and sparse linear algebra
 include("sparse.jl")
-importall .SparseMatrix
+importall .Sparse
 
 # irrational mathematical constants
 include("irrationals.jl")

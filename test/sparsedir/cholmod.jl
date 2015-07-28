@@ -3,7 +3,7 @@
 srand(123)
 using Base.Test
 
-using Base.SparseMatrix.CHOLMOD
+using Base.Sparse.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
@@ -185,10 +185,10 @@ end
 
 # test Sparse constructor Symmetric and Hermitian input (and issym and ishermitian)
 ACSC = sprandn(10, 10, 0.3) + I
-@test issym(Sparse(Symmetric(ACSC, :L)))
-@test issym(Sparse(Symmetric(ACSC, :U)))
-@test ishermitian(Sparse(Hermitian(complex(ACSC), :L)))
-@test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
+@test issym(CHOLMOD.Sparse(Symmetric(ACSC, :L)))
+@test issym(CHOLMOD.Sparse(Symmetric(ACSC, :U)))
+@test ishermitian(CHOLMOD.Sparse(Hermitian(complex(ACSC), :L)))
+@test ishermitian(CHOLMOD.Sparse(Hermitian(complex(ACSC), :U)))
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
 let testfile = joinpath(tempdir(), "tmp.mtx")
@@ -318,8 +318,8 @@ for elty in (Float64, Complex{Float64})
     A1pdSparse = CHOLMOD.Sparse(
         A1pd.m,
         A1pd.n,
-        Base.SparseMatrix.decrement(A1pd.colptr),
-        Base.SparseMatrix.decrement(A1pd.rowval),
+        Base.Sparse.decrement(A1pd.colptr),
+        Base.Sparse.decrement(A1pd.rowval),
         A1pd.nzval)
 
     ## High level interface
@@ -388,7 +388,7 @@ for elty in (Float64, Complex{Float64})
     @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
 
     if elty <: Real
-        @test CHOLMOD.issym(Sparse(A1pd, 0))
+        @test CHOLMOD.issym(CHOLMOD.Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
@@ -398,8 +398,8 @@ for elty in (Float64, Complex{Float64})
         F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
         @test F1 == F2
     else
-        @test !CHOLMOD.issym(Sparse(A1pd, 0))
-        @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
+        @test !CHOLMOD.issym(CHOLMOD.Sparse(A1pd, 0))
+        @test CHOLMOD.ishermitian(CHOLMOD.Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
