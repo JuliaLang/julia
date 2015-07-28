@@ -325,6 +325,12 @@ only as a storage format. In calculations they'll be converted to ``Float32``:
     julia> 2*Float16(4.)
     8.0f0
 
+The underscore ``_`` can be used as digit separator:
+
+.. doctest::
+
+    julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
+    (10000,5.0e-9,0xdeadbeef,0xb2)
 
 Floating-point zero
 ~~~~~~~~~~~~~~~~~~~
