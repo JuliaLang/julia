@@ -64,7 +64,7 @@ Tasks
    Edge triggering means that only tasks waiting at the time ``notify`` is
    called can be woken up. For level-triggered notifications, you must
    keep extra state to keep track of whether a notification has happened.
-   The ``RemoteRef`` type does this, and so can be used for level-triggered
+   The ``Channel`` type does this, and so can be used for level-triggered
    events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
@@ -113,6 +113,15 @@ Tasks
 
    Releases ownership of the lock by the current task. If the lock had been acquired before,
    it just decrements an internal counter and returns immediately.
+
+.. function:: Channel{T}(sz::Int)
+
+   Constructs a Channel that can hold a maximum of ``sz`` objects of type ``T``. ``put!`` calls
+   on a full channel block till an object is removed with ``take!``.
+
+   Other constructors:
+        ``Channel()`` - equivalent to ``Channel{Any}(32)``
+        ``Channel(sz::Int)`` equivalent to ``Channel{Any}(sz)``
 
 
 General Parallel Computing Support
@@ -230,6 +239,8 @@ General Parallel Computing Support
 
    * ``RemoteRef``: Wait for a value to become available for the specified remote reference.
 
+   * ``Channel``: Wait for a value to be appended to the channel.
+
    * ``Condition``: Wait for ``notify`` on a condition.
 
    * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
@@ -246,9 +257,13 @@ General Parallel Computing Support
    Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
    is met before proceeding.
 
-.. function:: fetch(RemoteRef)
+.. function:: fetch(x)
 
-   Wait for and get the value of a remote reference.
+   Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
+
+   * ``RemoteRef``: Wait for and get the value of a remote reference.
+
+   * ``Channel`` : Wait for and get the first available item from the channel.
 
 .. function:: remotecall_wait(id, func, args...)
 
@@ -262,9 +277,17 @@ General Parallel Computing Support
 
    Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``. Returns its first argument.
 
+.. function:: put!(Channel, value)
+
+    Appends an item to the channel. Blocks if the channel is full.
+
 .. function:: take!(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
+
+.. function:: take!(Channel)
+
+   Removes and returns a value from a ``Channel``. Blocks till data is available.
 
 .. function:: isready(r::RemoteRef)
 
@@ -280,6 +303,14 @@ General Parallel Computing Support
        rr = RemoteRef()
        @async put!(rr, remotecall_fetch(p, long_computation))
        isready(rr)  # will not block
+
+.. function:: close(Channel)
+
+    Closes a channel. An exception is thrown by:
+
+    * ``put!`` on a on a closed channel.
+
+    * ``take!`` and ``fetch`` on an empty, closed channel.
 
 .. function:: RemoteRef()
 
