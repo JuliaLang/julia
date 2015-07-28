@@ -137,8 +137,7 @@
 
 .. function:: match!(m::RegexMatch, s::AbstractString[, idx::Integer[, addopts]])
 
-    Like ``match``, but accepts a pre-allocated match object instead of a regular expression. ``m`` will be modified in-place to hold the results of the match. Returns ```true`` if a match was found; ``false`` otherwise. A pre-allocated match object compatible with a 
-    regular expression ``re`` can be obtained via ``RegexMatch(re)``.
+    Like ``match``, but accepts a pre-allocated match object instead of a regular expression. ``m`` will be modified in-place to hold the results of the match. Returns ```true`` if a match was found; ``false`` otherwise. A pre-allocated match object compatible with a regular expression ``re`` can be obtained via ``RegexMatch(re)``.
 
 .. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
