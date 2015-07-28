@@ -132,12 +132,12 @@ This can be written more concisely and efficiently as::
     norm(A::Matrix) = max(svd(A)[2])
 
 
-function f(x)
-    y = similar(x)
-    for i in 1:10^7
-        y[i] = x[i]^2
+    function f(x)
+        y = similar(x)
+        for i in 1:10^7
+            y[i] = x[i]^2
+        end
     end
-end
 
 
 Separate kernel functions
@@ -567,10 +567,10 @@ However, there's one remaining hole: we haven't enforced that ``A``
 has element type ``T``, so it's perfectly possible to construct an
 object like this::
 
-  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
+    julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
 
-  julia> typeof(b)
-  MyContainer{Int64,UnitRange{Float64}}
+    julia> typeof(b)
+    MyContainer{Int64,UnitRange{Float64}}
 
 To prevent this, we can add an inner constructor::
 
