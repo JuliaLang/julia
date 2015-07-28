@@ -7,14 +7,13 @@
 function find_in_path(name::AbstractString, wd = pwd())
     isabspath(name) && return name
     if wd === nothing; wd = pwd(); end
-    isfile(joinpath(wd,name)) && return joinpath(wd,name)
     base = name
     if endswith(name,".jl")
         base = name[1:end-3]
     else
         name = string(base,".jl")
-        isfile(joinpath(wd,name)) && return joinpath(wd,name)
     end
+    isfile(joinpath(wd,name)) && return joinpath(wd,name)
     for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
