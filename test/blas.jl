@@ -146,7 +146,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
     @test_throws DimensionMismatch BLAS.gemm!('N','N', one(elty), I4, I4, elm1, eye(elty,5))
 
     # gemm compared to (sy)(he)rk
-    if iseltype(elm1,Complex)
+    if eltype(elm1)<:Complex
         @test all(triu(BLAS.herk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
         @test all(tril(BLAS.herk('L', 'N', U4)) .== tril(BLAS.gemm('N', 'T', U4, U4)))
         @test all(triu(BLAS.herk('U', 'N', L4)) .== triu(BLAS.gemm('N', 'T', L4, L4)))

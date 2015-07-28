@@ -761,3 +761,5 @@ function nonboolean_all(itr)
     #throw(ArgumentError(nonboolean_warning(:all, :&, "not supported")))
     reduce(&, itr)
 end
+
+@deprecate iseltype(x,T)  eltype(x) <: T

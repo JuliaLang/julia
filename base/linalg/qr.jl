@@ -344,7 +344,7 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
     A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
     B[rnk+1:end,:] = zero(T)
-    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
+    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
     B[1:nA,:] = sub(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
