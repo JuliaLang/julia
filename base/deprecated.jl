@@ -727,3 +727,5 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
 export RopeString
+
+@deprecate iseltype(x,T)  eltype(x) <: T
