@@ -144,7 +144,7 @@ DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *
                     jl_errorf("error in method definition: %s.%s cannot be extended", b->owner->name->name, var->name);
                 }
                 else {
-                    if (jl_base_module && b->owner == jl_base_module) {
+                    if (jl_base_module && m->std_imports && b->owner == jl_base_module) {
                         jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
                         if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
                             jl_printf(JL_STDERR,
