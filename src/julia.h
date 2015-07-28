@@ -312,6 +312,7 @@ typedef struct _jl_module_t {
     jl_array_t *constant_table;
     jl_function_t *call_func;  // cached lookup of `call` within this module
     uint8_t istopmod;
+    uint8_t std_imports;  // only for temporarily deprecating `importall Base.Operators`
     uint64_t uuid;
 } jl_module_t;
 
