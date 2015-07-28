@@ -445,11 +445,11 @@ static htable_t obj_sizes[3];
 #endif
 
 #ifdef GC_FINAL_STATS
-static size_t total_freed_bytes=0;
+static size_t total_freed_bytes = 0;
 static uint64_t max_pause = 0;
-static uint64_t total_sweep_time=0;
-static uint64_t total_mark_time=0;
-static uint64_t total_fin_time=0;
+static uint64_t total_sweep_time = 0;
+static uint64_t total_mark_time = 0;
+static uint64_t total_fin_time = 0;
 #endif
 int sweeping = 0;
 
@@ -1703,14 +1703,8 @@ static int push_root(jl_value_t *v, int d, int bits)
     else if (vt == (jl_value_t*)jl_symbol_type) {
         //gc_setmark_other(v, GC_MARKED); // symbols have their own allocator and are never freed
     }
-    else if (
-#ifdef GC_VERIFY
-             // this check should not be needed but it helps catching corruptions early
-             gc_typeof(vt) == (jl_value_t*)jl_datatype_type
-#else
-             1
-#endif
-             ) {
+    // this check should not be needed but it helps catching corruptions early
+    else if (gc_typeof(vt) == (jl_value_t*)jl_datatype_type) {
         jl_datatype_t *dt = (jl_datatype_t*)vt;
         size_t dtsz;
         if (dt == jl_datatype_type)
@@ -1738,13 +1732,11 @@ static int push_root(jl_value_t *v, int d, int bits)
         //while(ci)
         //  refyoung |= gc_push_root(children[--ci], d);
     }
-#ifdef GC_VERIFY
     else {
         jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
         jl_(vt);
         abort();
     }
-#endif
 
  ret:
 #ifdef GC_VERIFY
@@ -2075,9 +2067,7 @@ void jl_gc_collect(int full)
 #endif
             estimate_freed = live_bytes - scanned_bytes - perm_scanned_bytes + actual_allocd;
 
-#ifdef GC_VERIFY
             gc_verify();
-#endif
 
 #if defined(MEMPROFILE)
             all_pool_stats();
@@ -2315,8 +2305,9 @@ void jl_print_gc_stats(JL_STREAM *s)
         jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
                   NS2MS(total_gc_time)/n_pause, NS2MS(max_pause));
         jl_printf(s, "\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
-                  (total_mark_time*100)/total_gc_time, (total_sweep_time*100)/total_gc_time,
-                  (total_fin_time*100)/total_gc_time);
+                  (int)(total_mark_time * 100 / total_gc_time),
+                  (int)(total_sweep_time * 100 / total_gc_time),
+                  (int)(total_fin_time * 100 / total_gc_time));
     }
     int i = 0;
     while (i < REGION_COUNT && regions[i]) i++;
@@ -2324,7 +2315,7 @@ void jl_print_gc_stats(JL_STREAM *s)
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count*GC_PAGE_SZ/1024/1024);
-    jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
+    jl_printf(s, "total freed\t%" PRIuPTR " b\n", total_freed_bytes);
     jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes/gct)/1024/1024);
 }
 #endif

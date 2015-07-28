@@ -214,6 +214,7 @@ static void gc_verify(void)
 }
 
 #else
+#define gc_verify()
 #define verify_val(v)
 #define verify_parent1(ty,obj,slot,arg1)
 #define verify_parent2(ty,obj,slot,arg1,arg2)

@@ -56,7 +56,7 @@
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
-//#define GC_FINAL_STATS
+// #define GC_FINAL_STATS
 
 // MEMPROFILE prints pool summary statistics after every GC
 //#define MEMPROFILE
