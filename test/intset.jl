@@ -19,18 +19,18 @@ data_out = collect(s)
 # show
 @test sprint(show, IntSet()) == "IntSet([])"
 @test sprint(show, IntSet([1,2,3])) == "IntSet([1, 2, 3])"
-@test contains(sprint(show, complement(IntSet())), "...,")
 
 
-s = IntSet([0,1,10,20,200,300,1000,10000,10002])
+s = IntSet([1,2,10,20,200,300,1000,10000,10002])
 @test last(s) == 10002
-@test first(s) == 0
+@test first(s) == 1
 @test length(s) == 9
 @test pop!(s) == 10002
+@test_throws KeyError pop!(s, -1)
 @test length(s) == 8
-@test shift!(s) == 0
+@test shift!(s) == 1
 @test length(s) == 7
-@test !in(0,s)
+@test !in(1,s)
 @test !in(10002,s)
 @test in(10000,s)
 @test_throws ArgumentError first(IntSet())
@@ -38,7 +38,6 @@ s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 t = copy(s)
 sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
 @test hash(s) == hash(t)
-@test hash(complement(s)) == hash(complement(t))
 
 @test setdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3])
 @test symdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3, 5, 6])
@@ -54,7 +53,7 @@ s = IntSet(255)
 
 # issue #7851
 @test_throws ArgumentError IntSet(-1)
-@test !(-1 in IntSet(0:10))
+@test !(-1 in IntSet(1:10))
 
 # # issue #8570
 # This requires 2^29 bytes of storage, which is too much for a simple test
@@ -63,21 +62,6 @@ s = IntSet(255)
 # for b in s; b; end
 
 i = IntSet([1, 2, 3])
-j = complement(i)
-
-for n in (0, 4, 171)
-    @test n in j
-end
-
-@test j.limit == 256
-@test length(j) == typemax(Int) - 3
-push!(j, 257)
-@test length(j) == typemax(Int) - 3
-
-pop!(j, 171)
-@test !(171 in j)
-@test length(j) == typemax(Int) - 4
-@test complement(j) == IntSet([1, 2, 3, 171])
 
 union!(i, [1, 2])
 @test length(i) == 3
@@ -96,7 +80,6 @@ empty!(i)
 
 i = IntSet(1:6)
 @test symdiff!(i, IntSet([6, 513])) == IntSet([1:5; 513])
-@test length(symdiff!(i, complement(i))) == typemax(Int)
 
 i = IntSet([1, 2, 3])
 k = IntSet([4, 5])
@@ -104,15 +87,7 @@ copy!(k, i)
 @test k == i
 @test !(k === i)
 
-union!(i, complement(i))
-copy!(k, i)
-@test k == i
-@test !(k === i)
-
 # unions
-l = union!(i, complement(i))
-@test length(l) == typemax(Int)
-
 i = IntSet([1, 2, 3])
 j = union(i)
 @test j == i
@@ -138,16 +113,8 @@ push!(j, 257)
 push!(j, 2, 3, 17)
 @test intersect(i, j) == IntSet([2, 3])
 
-k = complement(j)
-@test intersect(i, k) == IntSet([1])
-
-l = IntSet([1, 3])
-@test intersect(i, k, l) == IntSet([1])
-
-
 ## equality
 i = IntSet([1, 2, 3])
-@test !(i == complement(i))
 j = IntSet([1, 2, 4])
 @test i != j
 

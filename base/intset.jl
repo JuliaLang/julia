@@ -55,8 +55,12 @@ function push!(s::IntSet, n::Integer)
             lim = Int(n + div(n,2))
             sizehint!(s, lim)
         end
-    elseif n < 0
-        throw(ArgumentError("IntSet elements cannot be negative"))
+    elseif n <= 0
+        if n < 0
+            throw(ArgumentError("IntSet elements cannot be negative"))
+        else
+            depwarn("storing zero in IntSets is deprecated", :push!)
+        end
     end
     s.bits[n>>5 + 1] |= (UInt32(1)<<(n&31))
     return s
@@ -76,6 +80,13 @@ function pop!(s::IntSet, n::Integer, deflt)
             sizehint!(s, lim)
         else
             return deflt
+        end
+    end
+    if n <= 0
+        if n < 0
+            return deflt
+        else
+            depwarn("stored zeros in IntSet is deprecated", :pop!)
         end
     end
     mask = UInt32(1)<<(n&31)
@@ -144,12 +155,15 @@ function in(n::Integer, s::IntSet)
     if n >= s.limit
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1
-        s.fill1s && n >= 0 && n < typemax(Int)
-    elseif n < 0
-        return false
-    else
-        (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
+        return s.fill1s && n >= 0 && n < typemax(Int)
+    elseif n <= 0
+        if n < 0
+            return false
+        else
+            depwarn("stored zeros in IntSet is deprecated", :in)
+        end
     end
+    (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
 end
 
 start(s::IntSet) = Int64(0)
@@ -235,16 +249,6 @@ intersect(s1::IntSet) = copy(s1)
 intersect(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
-
-function complement!(s::IntSet)
-    for n = 1:length(s.bits)
-        s.bits[n] = ~s.bits[n]
-    end
-    s.fill1s = !s.fill1s
-    s
-end
-
-complement(s::IntSet) = complement!(copy(s))
 
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
