@@ -64,16 +64,12 @@ With only those definitions, the ``Squares`` type is already pretty powerful. We
     36
     49
 
-We can compute the sum of all squares up to a certain number:
+We can use many of the builtin methods that work with iterables, like :func:`in`, :func:`mean` and :func:`std`:
 
 .. doctest::
 
-    julia> sum(Squares(1803))
-    1955361914
-
-Or even the mean and standard deviation:
-
-.. doctest::
+    julia> 25 in Squares(10)
+    true
 
     julia> mean(Squares(100)), std(Squares(100))
     (3383.5,3024.355854282583)
@@ -233,7 +229,7 @@ As a more complicated example, let's define our own toy N-dimensional sparse-lik
 
     julia> Base.size(A::SparseArray) = A.dims
            Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
-           # Define scalar indexing and indexed assignment up to 3-dimensions
+           # Define scalar indexing and indexed assignment for up to 3 dimensions
            Base.getindex{T}(A::SparseArray{T,1}, i1::Int)                   = get(A.data, (i1,), zero(T))
            Base.getindex{T}(A::SparseArray{T,2}, i1::Int, i2::Int)          = get(A.data, (i1,i2), zero(T))
            Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) = get(A.data, (i1,i2,i3), zero(T))
@@ -272,7 +268,7 @@ Since the ``SparseArray`` is mutable, we were able to override :func:`similar`. 
      1.0  4.0  7.0
      2.0  5.0  8.0
 
-And now, in addition to all the iterable and indexable methods from above, these types can interact with each other and use all the methods defined in the standard library for ``AbstractArrays``:
+In addition to all the iterable and indexable methods from above, these types can also interact with each other and use all of the methods defined in the standard library for ``AbstractArrays``:
 
 .. doctest::
 
