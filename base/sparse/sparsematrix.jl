@@ -877,7 +877,7 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2
 
 ## Binary arithmetic and boolean operators
 
-for op in (+, -)
+for op in (+, -, min, max)
     body = gen_broadcast_body_sparse(op, true)
     OP = Symbol(string(op))
     @eval begin
