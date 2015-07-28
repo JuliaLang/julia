@@ -892,16 +892,31 @@ public:
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
 
+static void (*libc_register_frame)(void*)   = NULL;
+static void (*libc_deregister_frame)(void*) = NULL;
+
 static const char *processFDE(const char *Entry, bool isDeregister) {
   const char *P = Entry;
   uint32_t Length = *((const uint32_t *)P);
   P += 4;
   uint32_t Offset = *((const uint32_t *)P);
   if (Offset != 0) {
-    if (isDeregister)
+    if (isDeregister) {
+      if (!libc_deregister_frame) {
+        libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
+      }
+      assert(libc_deregister_frame);
+      libc_deregister_frame(const_cast<char *>(Entry));
       __deregister_frame(const_cast<char *>(Entry));
-    else
+    }
+    else {
+      if (!libc_register_frame) {
+        libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
+      }
+      assert(libc_register_frame);
+      libc_register_frame(const_cast<char *>(Entry));
       __register_frame(const_cast<char *>(Entry));
+    }
   }
   return P + Length;
 }
