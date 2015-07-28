@@ -371,7 +371,6 @@ export
     invdigamma,
     invmod,
     isapprox,
-    iseltype,
     iseven,
     isfinite,
     isinf,

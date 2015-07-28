@@ -91,14 +91,14 @@ end
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    if iseltype(v,Complex)
+    if eltype(v)<:Complex
         throw(DomainError())
     end
     maximum(v)
 end
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    if iseltype(v,Complex)
+    if eltype(v)<:Complex
         throw(DomainError())
     end
     minimum(v)

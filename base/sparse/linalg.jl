@@ -179,7 +179,7 @@ end
 
 ## solvers
 function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
-    if iseltype(b, Complex); A = complex(A); end
+    if eltype(b)<:Complex; A = complex(A); end
 
     if istril(A)
         # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
