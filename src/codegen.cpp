@@ -5545,7 +5545,9 @@ extern "C" void jl_init_codegen(void)
             );
     delete targetMachine;
     assert(jl_TargetMachine);
-#if defined(LLVM36) && !defined(LLVM37)
+#if defined(LLVM38)
+    engine_module->setDataLayout(jl_TargetMachine->createDataLayout());
+#elif defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
 #elif defined(LLVM35) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout());
