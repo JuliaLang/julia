@@ -749,8 +749,6 @@ export
     any!,
     any,
     collect,
-    complement!,
-    complement,
     contains,
     count,
     delete!,
