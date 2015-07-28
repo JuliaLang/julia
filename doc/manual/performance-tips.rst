@@ -974,7 +974,7 @@ The first reason is that function arguments are not inlined
     julia> function testn()
                s = 0.0
                for i = 1:10^7
-                   s += (i/10^7+1.2)^2
+                   s += f(i/10^7)
                end
                s
            end
