@@ -293,7 +293,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            cmplx = iseltype(A,Complex)
+            cmplx = eltype(A)<:Complex
             if cmplx; rwork = Array($relty, 2n); end
             for i in 1:2
                 if cmplx
@@ -1036,7 +1036,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             rvecs = jobvr == 'V'
             VL    = similar(A, $elty, (n, lvecs ? n : 0))
             VR    = similar(A, $elty, (n, rvecs ? n : 0))
-            cmplx = iseltype(A,Complex)
+            cmplx = eltype(A)<:Complex
             if cmplx
                 W     = similar(A, $elty, n)
                 rwork = similar(A, $relty, 2n)
@@ -1103,7 +1103,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             work   = Array($elty, 1)
             lwork  = BlasInt(-1)
             S      = similar(A, $relty, minmn)
-            cmplx  = iseltype(A,Complex)
+            cmplx  = eltype(A)<:Complex
             if cmplx
                 rwork = Array($relty, job == 'N' ? 7*minmn :
                               minmn*max(5*minmn+7, 2*max(m,n)+2*minmn+1))
@@ -1151,7 +1151,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             U      = similar(A, $elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = similar(A, $elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
-            cmplx  = iseltype(A,Complex)
+            cmplx  = eltype(A)<:Complex
             if cmplx; rwork = Array($relty, 5minmn); end
             lwork  = BlasInt(-1)
             info   = Array(BlasInt, 1)
@@ -1213,7 +1213,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             ldq = max(1, n)
             Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
             work = Array($elty, max(3n, m, p) + n)
-            cmplx = iseltype(A,Complex)
+            cmplx = eltype(A)<:Complex
             if cmplx; rwork = Array($relty, 2n); end
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)

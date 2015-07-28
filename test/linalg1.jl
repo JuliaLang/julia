@@ -188,7 +188,7 @@ debug && println("Schur")
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
         @test_approx_eq sort(real(f[:values])) sort(real(d))
         @test_approx_eq sort(imag(f[:values])) sort(imag(d))
-        @test istriu(f[:Schur]) || iseltype(a,Real)
+        @test istriu(f[:Schur]) || eltype(a)<:Real
         @test_approx_eq full(f) a
         @test_throws KeyError f[:A]
     end
@@ -213,8 +213,8 @@ debug && println("Generalized Schur")
         f = schurfact(a1_sf, a2_sf)
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a1_sf
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a2_sf
-        @test istriu(f[:S]) || iseltype(a,Real)
-        @test istriu(f[:T]) || iseltype(a,Real)
+        @test istriu(f[:S]) || eltype(a)<:Real
+        @test istriu(f[:T]) || eltype(a)<:Real
         @test_throws KeyError f[:A]
     end
 
