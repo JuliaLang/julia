@@ -8,8 +8,7 @@ abstract Plan{T}
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
 
-eltype{T}(::Plan{T}) = T
-eltype{P<:Plan}(T::Type{P}) = T.parameters[1]
+eltype{T}(::Type{Plan{T}}) = T
 
 # size(p) should return the size of the input array for p
 size(p::Plan, d) = size(p)[d]

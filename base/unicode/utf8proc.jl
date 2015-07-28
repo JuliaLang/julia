@@ -193,7 +193,7 @@ immutable GraphemeIterator{S<:AbstractString}
 end
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
-eltype{S}(::GraphemeIterator{S}) = SubString{S}
+eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)

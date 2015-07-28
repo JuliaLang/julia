@@ -87,7 +87,6 @@ end
 end
 
 eltype{I}(::Type{CartesianRange{I}}) = I
-eltype{I}(::CartesianRange{I}) = I
 
 @generated function start{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)

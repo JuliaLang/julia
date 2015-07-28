@@ -20,10 +20,7 @@ typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union{Den
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # Simple utilities
-eltype{T,N,P,I}(V::SubArray{T,N,P,I}) = T
 eltype{T,N,P,I}(::Type{SubArray{T,N,P,I}}) = T
-ndims{T,N,P,I}(V::SubArray{T,N,P,I}) = N
-ndims{T,N,P,I}(::Type{SubArray{T,N,P,I}}) = N
 size(V::SubArray) = V.dims
 # size(V::SubArray, d::Integer) = d <= ndims(V) ? (@inbounds ret = V.dims[d]; ret) : 1
 length(V::SubArray) = prod(V.dims)

@@ -19,7 +19,7 @@ getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
 getindex(c::Char, I::Real...) = getindex(c, to_indexes(I...)...)
 first(c::Char) = c
 last(c::Char) = c
-eltype(c::Char) = Char
+eltype(::Type{Char}) = Char
 
 start(c::Char) = false
 next(c::Char, state) = (c, true)

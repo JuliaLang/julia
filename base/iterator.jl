@@ -119,7 +119,7 @@ countfrom(start::Number, step::Number) = Count(promote(start, step)...)
 countfrom(start::Number)               = Count(start, one(start))
 countfrom()                            = Count(1, 1)
 
-eltype{S}(it::Count{S}) = S
+eltype{S}(::Type{Count{S}}) = S
 
 start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
@@ -133,7 +133,7 @@ immutable Take{I}
 end
 take(xs, n::Int) = Take(xs, n)
 
-eltype(it::Take) = eltype(it.xs)
+eltype{I}(::Type{Take{I}}) = eltype(I)
 
 start(it::Take) = (it.n, start(it.xs))
 
@@ -156,7 +156,7 @@ immutable Drop{I}
 end
 drop(xs, n::Int) = Drop(xs, n)
 
-eltype(it::Drop) = eltype(it.xs)
+eltype{I}(::Type{Drop{I}}) = eltype(I)
 
 function start(it::Drop)
     xs_state = start(it.xs)
@@ -180,7 +180,7 @@ immutable Cycle{I}
 end
 cycle(xs) = Cycle(xs)
 
-eltype(it::Cycle) = eltype(it.xs)
+eltype{I}(::Type{Cycle{I}}) = eltype(I)
 
 function start(it::Cycle)
     s = start(it.xs)
@@ -204,7 +204,7 @@ immutable Repeated{O}
     x::O
 end
 repeated(x) = Repeated(x)
-eltype{O}(r::Repeated{O}) = O
+eltype{O}(::Type{Repeated{O}}) = O
 start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
