@@ -1032,3 +1032,22 @@ A = sprandn(10,10,0.5)
 # Test error path if triplet vectors are not all the same length (#12177)
 @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
+
+#Issue 12118: sparse matrices are closed under +, -, min, max
+let
+    A12118 = sparse([1,2,3,4,5], [1,2,3,4,5], [1,2,3,4,5])
+    B12118 = sparse([1,2,4,5],   [1,2,3,5],   [2,1,-1,-2])
+
+    @test A12118 + B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [3,3,3,-1,4,3])
+    @test typeof(A12118 + B12118) == SparseMatrixCSC{Int,Int}
+
+    @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
+    @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
+
+    @test max(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
+    @test typeof(max(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+
+    @test min(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
+    @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+end
+
