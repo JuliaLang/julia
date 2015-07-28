@@ -43,8 +43,14 @@ call(::SubFun, x, y) = x - y
 immutable MulFun <: Func{2} end
 call(::MulFun, x, y) = x * y
 
-immutable DivFun <: Func{2} end
-call(::DivFun, x, y) = x / y
+immutable RDivFun <: Func{2} end
+call(::RDivFun, x, y) = x / y
+
+immutable LDivFun <: Func{2} end
+call(::LDivFun, x, y) = x \ y
+
+immutable IDivFun <: Func{2} end
+call(::IDivFun, x, y) = div(x, y)
 
 immutable PowFun <: Func{2} end
 call(::PowFun, x, y) = x ^ y
@@ -132,10 +138,12 @@ function specialized_binary(f::Function)
     is(f, +) ? AddFun() :
     is(f, -) ? SubFun() :
     is(f, *) ? MulFun() :
-    is(f, /) ? DivFun() :
+    is(f, /) ? RDivFun() :
+    is(f, \) ? LDivFun() :
     is(f, ^) ? PowFun() :
     is(f, &) ? AndFun() :
     is(f, |) ? OrFun()  :
+    is(f, div) ? IDivFun() :
     UnspecializedFun{2}(f)
 end
 
