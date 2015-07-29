@@ -89,7 +89,7 @@ end
 
 function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}}, fix::Dict)
     for (p,vs) in reqs
-        if !any([(vn in vs) for vn in keys(deps[p])])
+        if !any(vn->(vn in vs), keys(deps[p]))
             remaining_vs = VersionSet()
             err_msg = "fixed packages introduce conflicting requirements for $p: \n"
             available_list = sort(collect(keys(deps[p])))
