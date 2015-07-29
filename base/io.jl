@@ -32,7 +32,13 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-write(io::IO, xs...) = for x in xs write(io, x) end
+function write(io::IO, xs...)
+    local written::Int = 0
+    for x in xs
+        written += write(io, x)
+    end
+    written
+end
 
 if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
