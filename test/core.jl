@@ -3155,3 +3155,13 @@ immutable MyType8010_ghost
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
+
+# don't allow redefining types if ninitialized changes
+immutable NInitializedTestType
+    a
+end
+
+@test_throws ErrorException @eval immutable NInitializedTestType
+    a
+    NInitializedTestType() = new()
+end
