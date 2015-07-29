@@ -58,6 +58,9 @@ call(::DotMulFun, x, y) = x .* y
 immutable RDivFun <: Func{2} end
 call(::RDivFun, x, y) = x / y
 
+immutable DotRDivFun <: Func{2} end
+call(::DotRDivFun, x, y) = x ./ y
+
 immutable LDivFun <: Func{2} end
 call(::LDivFun, x, y) = x \ y
 
