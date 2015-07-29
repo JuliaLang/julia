@@ -216,6 +216,15 @@ let c = [0, 0], A = 1:1000
     @test c == [10,10]
 end
 
+# any and all with functors
+
+immutable SomeFunctor end
+Base.call(::SomeFunctor, x) = true
+
+@test any(SomeFunctor(), 1:10)
+@test all(SomeFunctor(), 1:10)
+
+
 # in
 
 @test in(1, Int[]) == false
