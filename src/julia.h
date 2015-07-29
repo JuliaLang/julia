@@ -443,13 +443,12 @@ extern DLLEXPORT jl_datatype_t *jl_topnode_type;
 extern DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern DLLEXPORT jl_datatype_t *jl_methtable_type;
 extern DLLEXPORT jl_datatype_t *jl_method_type;
-extern DLLEXPORT jl_datatype_t *jl_task_type;
 
 extern DLLEXPORT jl_svec_t *jl_emptysvec;
 extern DLLEXPORT jl_value_t *jl_emptytuple;
-DLLEXPORT extern jl_value_t *jl_true;
-DLLEXPORT extern jl_value_t *jl_false;
-DLLEXPORT extern jl_value_t *jl_nothing;
+extern DLLEXPORT jl_value_t *jl_true;
+extern DLLEXPORT jl_value_t *jl_false;
+extern DLLEXPORT jl_value_t *jl_nothing;
 
 // some important symbols
 extern jl_sym_t *call_sym;
