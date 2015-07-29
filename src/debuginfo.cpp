@@ -247,8 +247,12 @@ public:
                 sym_iter.getSection(Section);
 #  ifdef LLVM36
                 assert(Section->isText());
+#    ifdef LLVM38
+                SectionAddr = L.getSectionLoadAddress(*Section);
+#    else
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
+#    endif
                 Addr += SectionAddr;
 #  else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
