@@ -643,6 +643,8 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 +------------------------------+
 | :exc:`UndefVarError`         |
 +------------------------------+
+| :exc:`UnicodeError`          |
++------------------------------+
 
 
 For example, the :func:`sqrt` function throws a :exc:`DomainError` if applied to a
