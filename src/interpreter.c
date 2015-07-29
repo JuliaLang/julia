@@ -93,6 +93,7 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
             dta->abstract == dtb->abstract &&
             dta->mutabl == dtb->mutabl &&
             dta->size == dtb->size &&
+            dta->ninitialized == dtb->ninitialized &&
             jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super) &&
             jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names) &&
             jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters));
