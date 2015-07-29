@@ -62,8 +62,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
             # Bootstrap off off that to create sys.{ji,o}
             info("Building sys.o...")
-            println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o  -J $inference_path.ji -f sysimg.jl")
-            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji -f sysimg.jl`)
+            println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
+            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
             if ld != nothing
                 link_sysimg(sysimg_path, ld)
