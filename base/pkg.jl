@@ -19,7 +19,7 @@ dir(path...) = Dir.path(path...)
 init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
 
 edit() = cd(Entry.edit)
-rm(pkg::AbstractString) = cd(Entry.rm,pkg)
+rm(pkg::AbstractString; cleandeps=true) = cd(Entry.rm, pkg; cleandeps=cleandeps)
 add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
 available() = cd(Entry.available)
