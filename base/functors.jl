@@ -78,8 +78,8 @@ call(f::UnspecializedFun{2}, x, y) = f.f(x,y)
 
 # Special purpose functors
 
-type Predicate <: Func{1}
-    f::Function
+type Predicate{F} <: Func{1}
+    f::F
 end
 call(pred::Predicate, x) = pred.f(x)::Bool
 
