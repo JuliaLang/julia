@@ -61,6 +61,15 @@ foo
 
 ---
 World""" |> plain == "Hello\n\n–––\n\nWorld\n"
+@test md"[*a*](b)" |> plain == "[*a*](b)\n"
+@test md"""
+> foo
+>
+>   * bar
+>
+> ```
+> baz
+> ```""" |> plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
 
 # HTML output
 
