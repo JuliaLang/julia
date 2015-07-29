@@ -80,12 +80,12 @@ function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     return a
 end
 
-function read(from::AbstractIOBuffer, ::Type{UInt8})
+@inline function read(from::AbstractIOBuffer, ::Type{UInt8})
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if from.ptr > from.size
         throw(EOFError())
     end
-    byte = from.data[from.ptr]
+    @inbounds byte = from.data[from.ptr]
     from.ptr += 1
     return byte
 end
