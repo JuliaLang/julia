@@ -104,28 +104,6 @@ function prettyprint_getunits(value, numunits, factor)
     return div(value+(c1>>>1),c1), unit
 end
 
-const _sec_units = ["nanoseconds ", "microseconds", "milliseconds", "seconds     "]
-function prettyprint_nanoseconds(value::UInt64)
-    if value < 1000
-        return (1, value, 0)    # nanoseconds
-    elseif value < 1000000
-        mt = 2
-    elseif value < 1000000000
-        mt = 3
-        # round to nearest # of microseconds
-        value = div(value+500,1000)
-    elseif value < 1000000000000
-        mt = 4
-        # round to nearest # of milliseconds
-        value = div(value+500000,1000000)
-    else
-        # round to nearest # of seconds
-        return (4, div(value+500000000,1000000000), 0)
-    end
-    frac::UInt64 = div(value,1000)
-    return (mt, frac, value-(frac*1000))
-end
-
 function padded_nonzero_print(value,str)
     if value != 0
         blanks = "                "[1:18-length(str)]
@@ -134,8 +112,13 @@ function padded_nonzero_print(value,str)
 end
 
 function time_print(elapsedtime, bytes, gctime, allocs)
-    mt, pptime, fraction = prettyprint_nanoseconds(elapsedtime)
-    (fraction != 0) ? @printf("%4d.%03d %s", pptime, fraction, _sec_units[mt]) : @printf("%8d %s",  pptime, _sec_units[mt])
+    seconds = elapsedtime/1e9
+    if 1 <= round(seconds,3)
+        @printf("%.3f seconds", seconds)
+    else
+        power = -floor(log10(seconds))
+        @printf("%.3f/10^%d seconds", seconds*10^power, power)
+    end
     if bytes != 0 || allocs != 0
         bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
