@@ -10,10 +10,11 @@ for σ in map(Hermitian, Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
-# Hermitian matrix exponential
+# Hermitian matrix exponential/log
 let A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test_approx_eq expm(A2) expm(Hermitian(A2))
+    @test_approx_eq logm(A2) logm(Hermitian(A2))
 end
 
 let n=10
@@ -36,6 +37,9 @@ let n=10
 
         # full
         @test asym == full(Hermitian(asym))
+
+        #trace
+        @test trace(asym) == trace(Hermitian(asym))
 
         # issym, ishermitian
         if eltya <: Real
