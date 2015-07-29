@@ -2,6 +2,8 @@
 
 module Grisu
 
+importall ..Base.Operators
+
 export print_shortest
 export DIGITS, grisu
 

@@ -6,8 +6,7 @@ using ..Cartesian
 import Base.promote_eltype
 import Base.@get!
 import Base.num_bit_chunks, Base._msk_end, Base.unsafe_bitgetindex
-import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\), Base.(.//)
-import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
+import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .%, .<<, .>>, .^
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
 
