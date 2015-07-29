@@ -276,6 +276,9 @@ the the catch-all method definitions given in
     *(x::Number, y::Number) = *(promote(x,y)...)
     /(x::Number, y::Number) = /(promote(x,y)...)
 
+In certain cases, the result type also depends on the operator; how to
+handle such scenarios is described :ref:`elsewhere <devdocs-promote-op>`.
+
 These method definitions say that in the absence of more specific rules
 for adding, subtracting, multiplying and dividing pairs of numeric
 values, promote the values to a common type and then try again. That's
@@ -308,6 +311,8 @@ For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions
 explicitly, but sometimes, especially for numeric problems, it can be
 convenient to do promotion automatically.
+
+.. _man-promotion-rules:
 
 Defining Promotion Rules
 ~~~~~~~~~~~~~~~~~~~~~~~~

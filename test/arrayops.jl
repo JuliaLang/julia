@@ -1212,3 +1212,29 @@ b = rand(6,7)
 @test_throws BoundsError copy!(a,b)
 @test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
 @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+# return type declarations (promote_op)
+module RetTypeDecl
+    using Base.Test
+
+    immutable MeterUnits{T,P} <: Number
+        val::T
+    end
+    MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
+
+    m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
+    m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
+
+    (+){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,1}(x.val+y.val)
+    (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+    (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+
+    Base.promote_op{R,S}(::Base.AddFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
+    Base.promote_op{R,S}(::Base.MulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+    Base.promote_op{R,S}(::Base.DotMulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+
+    @test @inferred(m+[m,m]) == [m+m,m+m]
+    @test @inferred([m,m]+m) == [m+m,m+m]
+    @test @inferred(m.*[m,m]) == [m2,m2]
+    @test @inferred([m,m].*m) == [m2,m2]
+end
