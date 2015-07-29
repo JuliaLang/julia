@@ -275,7 +275,7 @@ function position(f::File)
     ret
 end
 
-fd(f::File) = RawFD(f.handle)
+fd(f::File) = f.handle
 stat(f::File) = stat(fd(f))
 
 end
