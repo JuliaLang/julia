@@ -330,7 +330,7 @@ types of the arguments given to the constructor. Here are some examples:
       Point{T<:Real}(::T<:Real, !Matched::T<:Real)
       call{T}(::Type{T}, ::Any)
       convert{T}(::Type{T}, !Matched::T)
-     in call at base.jl:41
+     in call at essentials.jl:57
 
     ## explicit T ##
 
@@ -339,7 +339,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
-     in call at no file
+     in call at none:2
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -432,7 +432,7 @@ However, other similar calls still don't work:
       call{T}(::Type{T}, ::Any)
       convert{T}(::Type{T}, !Matched::T)
       ...
-     in call at base.jl:41
+     in call at essentials.jl:57
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk

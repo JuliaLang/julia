@@ -32,7 +32,7 @@ union with ``typejoin``:
     Union{}
 
     julia> Union{Int, Float64}
-    Union{Int64,Float64}
+    Union{Float64,Int64}
 
     julia> typejoin(Int, Float64)
     Real
@@ -41,7 +41,7 @@ union with ``typejoin``:
     Int8
 
     julia> Union{Signed, Union{UInt8, Int8}}
-    Union{Signed,UInt8}
+    Union{UInt8,Signed}
 
     julia> typejoin(Signed, Union{UInt8, Int8})
     Integer
@@ -215,11 +215,11 @@ a lot about how Julia does dispatch:
 
    julia> methods(candid)
    # 1 method for generic function "candid":
-   candid{T}(A::Array{T,N},x::T) at none:1
+   candid{T}(A::Array{T,N}, x::T) at none:1
 
    julia> methods(sneaky)
    # 1 method for generic function "sneaky":
-   sneaky{T}(A::Array{T,N},x::T) at none:1
+   sneaky{T}(A::Array{T,N}, x::T) at none:1
 
 These therefore print identically, but they have very different behavior:
 
@@ -245,10 +245,10 @@ bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
 .. doctest::
 
    julia> jl_(start(methods(candid)))
-   Method(sig=Tuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
+   Method(sig=Tuple{Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
 
    julia> jl_(start(methods(sneaky)))
-   Method(sig=Tuple{Array{＃T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=＃T<:Any, func=＃<function>, invokes=nothing, next=nothing)
+   Method(sig=Tuple{Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
@@ -320,8 +320,8 @@ the type, which is an object of type :obj:`TypeName`:
      cache: SimpleVector
        length: Int64 135
      linearcache: SimpleVector
-       length: Int64 12
-     uid: Int64 35
+       length: Int64 18
+     uid: Int64 37
 
 In this case, the relevant field is ``primary``, which holds a
 reference to the "primary" instance of the type::
@@ -359,12 +359,12 @@ type:
    julia> MyType.name.cache
    svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
    ERROR: UndefRefError: access to undefined reference
-    in getindex at /Users/jiahao/local/src/julia/usr/lib/julia/sys.dylib
-    in show_delim_array at show.jl:195
-    in show at show.jl:223
-    in anonymous at show.jl:1243
-    in with_output_limit at ./show.jl:1220
-    in showlimited at show.jl:1242
+    in getindex at ./essentials.jl:211
+    in show_delim_array at show.jl:213
+    in show at show.jl:241
+    in anonymous at show.jl:1280
+    in with_output_limit at ./show.jl:1257
+    in showlimited at show.jl:1279
     in display at multimedia.jl:120
     in display at multimedia.jl:151
 

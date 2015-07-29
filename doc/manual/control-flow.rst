@@ -656,7 +656,7 @@ negative real value:
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument.
     try sqrt (complex(x))
-     in sqrt at math.jl:137
+     in sqrt at math.jl:139
 
 You may define your own exceptions in the following way:
 
@@ -681,7 +681,6 @@ if the argument is negative:
 
     julia> f(-1)
     ERROR: DomainError:
-    <BLANKLINE>
      in f at none:1
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
@@ -779,7 +778,7 @@ execution.:
 
     julia> error("Hi"); 1+1
     ERROR: Hi
-     in error at error.jl:21
+     in error at ./error.jl:21
 
 
 The ``try/catch`` statement
@@ -838,7 +837,6 @@ assumes ``x`` is a real number and returns its square root:
 
     julia> sqrt_second(-9)
     ERROR: DomainError:
-    <BLANKLINE>
      in sqrt_second at none:7
 
 Note that the symbol following ``catch`` will always be interpreted as a

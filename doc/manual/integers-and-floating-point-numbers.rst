@@ -592,10 +592,10 @@ Julia's
     123456789012345678901234567891
 
     julia> parse(BigFloat, "1.23456789012345678901")
-    1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00 with 256 bits of precision
+    1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
     julia> BigFloat(2.0^66) / 3
-    2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19 with 256 bits of precision
+    2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19
 
     julia> factorial(BigInt(40))
     815915283247897734345611269596115894272000000000
@@ -637,17 +637,17 @@ block of code by :func:`with_bigfloat_precision` or
     julia> with_rounding(BigFloat,RoundUp) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
+    1.100000000000000000000000000000000000000000000000000000000000000000000000000003
 
     julia> with_rounding(BigFloat,RoundDown) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
+    1.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
     julia> with_bigfloat_precision(40) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.1000000000004e+00 with 40 bits of precision
+    1.1000000000004
 
 
 .. _man-numeric-literal-coefficients:
@@ -706,17 +706,17 @@ imply multiplication:
     julia> (x-1)(x+1)
     ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
     Closest candidates are:
+      Union(!Matched::Any...)
       BoundsError()
       BoundsError(!Matched::Any...)
-      DivideError()
       ...
 
     julia> x(x+1)
     ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
     Closest candidates are:
+      Union(!Matched::Any...)
       BoundsError()
       BoundsError(!Matched::Any...)
-      DivideError()
       ...
 
 Both expressions are interpreted as function application: any
@@ -783,5 +783,5 @@ Examples:
     1
 
     julia> one(BigFloat)
-    1e+00 with 256 bits of precision
+    1.000000000000000000000000000000000000000000000000000000000000000000000000000000
 

@@ -401,7 +401,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
-     in call at no file
+     in call at none:2
 
 You may find a list of field names using the ``fieldnames`` function.
 
@@ -744,7 +744,7 @@ each field:
       Point{T}(::Any, !Matched::Any)
       call{T}(::Type{T}, ::Any)
       convert{T}(::Type{T}, !Matched::T)
-     in call at base.jl:40
+     in call at essentials.jl:56
 
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{Float64}}, ::Float64, ::Float64, ::Float64)
@@ -754,7 +754,7 @@ each field:
       Point{T}(::Any, ::Any)
       call{T}(::Type{T}, ::Any)
       convert{T}(::Type{T}, !Matched::T)
-     in call at base.jl:41
+     in call at essentials.jl:57
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -794,7 +794,7 @@ isn't the case, the constructor will fail with a :exc:`MethodError`:
       Point{T}(::T, !Matched::T)
       call{T}(::Type{T}, ::Any)
       convert{T}(::Type{T}, !Matched::T)
-     in call at base.jl:41
+     in call at essentials.jl:57
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -1197,7 +1197,7 @@ objects, they also have types, and we can ask what their types are:
     DataType
 
     julia> typeof(Union{Real,ASCIIString})
-    UnionType
+    Union
 
 What if we repeat the process? What is the type of a type of a type?
 As it happens, types are all composite values and thus all have a type of

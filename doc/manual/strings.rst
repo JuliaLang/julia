@@ -290,14 +290,14 @@ such an invalid byte index, an error is thrown:
     '∀'
 
     julia> s[2]
-    ERROR: ArgumentError: invalid UTF-8 character index
-     in next at ./utf8.jl:80
-     in getindex at string.jl:62
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:69
+     in getindex at strings/basic.jl:37
 
     julia> s[3]
-    ERROR: ArgumentError: invalid UTF-8 character index
-     in next at ./utf8.jl:80
-     in getindex at string.jl:62
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:69
+     in getindex at strings/basic.jl:37
 
     julia> s[4]
     ' '
