@@ -237,16 +237,28 @@ print_joined(myio, "", "", 1)
 # 11659
 # The indentation code was not correctly counting tab stops
 @test Base.indentation("      \t") == (8, true)
-@test Base.indentation("  \tfoob") == (8, false)
-@test Base.indentation(" \t \t")   == (16, true)
+@test Base.indentation("  \tfoob") == (4, false)
+@test Base.indentation(" \t \t")   == (8, true)
 
 @test Base.unindent("\tfoo",0) == "\tfoo"
-@test Base.unindent("\tfoo",4) == "    foo"
+@test Base.unindent("\tfoo",2) == "  foo"
+@test Base.unindent("\tfoo",4) == "foo"
 @test Base.unindent("    \tfoo",4) == "    foo"
-@test Base.unindent("\t\n    \tfoo",4) == "    \n    foo"
-@test Base.unindent("\tfoo\tbar",4) == "    foo     bar"
-@test Base.unindent("\n\tfoo",4) == "\n    foo"
+@test Base.unindent("\t\n    \tfoo",2) == "  \n      foo"
+@test Base.unindent("\t\n    \tfoo",4) == "\n    foo"
+@test Base.unindent("\t\n    \tfoo",6) == "\n  foo"
+@test Base.unindent("\t\n    \tfoo",8) == "\nfoo"
+@test Base.unindent("\tfoo\tbar",2) == "  foo bar"
+@test Base.unindent("\tfoo\tbar",4) == "foo bar"
+@test Base.unindent("\n\tfoo",2) == "\n  foo"
+@test Base.unindent("\n\tfoo",4) == "\nfoo"
+@test Base.unindent("\n    \tfoo",2) == "\n      foo"
 @test Base.unindent("\n    \tfoo",4) == "\n    foo"
-@test Base.unindent("\n\t\n    \tfoo",4) == "\n    \n    foo"
-@test Base.unindent("\n\tfoo\tbar",4) == "\n    foo     bar"
-
+@test Base.unindent("\n    \tfoo",6) == "\n  foo"
+@test Base.unindent("\n    \tfoo",8) == "\nfoo"
+@test Base.unindent("\n\t\n    \tfoo",2) == "\n  \n      foo"
+@test Base.unindent("\n\t\n    \tfoo",4) == "\n\n    foo"
+@test Base.unindent("\n\t\n    \tfoo",6) == "\n\n  foo"
+@test Base.unindent("\n\t\n    \tfoo",8) == "\n\nfoo"
+@test Base.unindent("\n\tfoo\tbar",2) == "\n  foo bar"
+@test Base.unindent("\n\tfoo\tbar",4) == "\nfoo bar"

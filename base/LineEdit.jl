@@ -1433,8 +1433,8 @@ AnyDict(
         input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
         input = replace(input, '\r', '\n')
         if position(buffer(s)) == 0
-            indent = Base.indentation(input; tabwidth=4)[1]
-            input = Base.unindent(input[(indent+1):end], indent; tabwidth=4)
+            indent = Base.indentation(input)[1]
+            input = Base.unindent(input[(indent+1):end], indent)
         end
         edit_insert(s, input)
     end,
