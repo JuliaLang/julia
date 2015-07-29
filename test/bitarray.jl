@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(x->tc(x...), [zip(r1,r2)...])
 tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc{T}(r1::T, r2::T) = true
@@ -77,6 +79,8 @@ for (sz,T) in allsizes
     b2 = similar(b1)
     @check_bit_operation copy!(b2, b1) T
 end
+
+@test_throws ArgumentError size(trues(5),0)
 
 timesofar("utils")
 
@@ -394,6 +398,9 @@ for m = v1 : -1 : 1
     @test isequal(bitunpack(b1), i1)
 end
 @test length(b1) == 0
+b1 = bitrand(v1)
+@test_throws ArgumentError deleteat!(b1,[1 1 2])
+@test_throws BoundsError deleteat!(b1,[1 length(b1)+1])
 
 b1 = bitrand(v1)
 i1 = bitunpack(b1)
@@ -552,10 +559,13 @@ b2 = bitrand(n1, n2)
 @check_bit_operation (.*)(b1, b2) BitMatrix
 @check_bit_operation (./)(b1, b2) Matrix{Float64}
 @check_bit_operation (.^)(b1, b2) BitMatrix
+@check_bit_operation (/)(b1,1) Matrix{Float64}
 
 b2 = trues(n1, n2)
 @check_bit_operation div(b1, b2) BitMatrix
 @check_bit_operation mod(b1, b2) BitMatrix
+@check_bit_operation div(b1,bitunpack(b2)) BitMatrix
+@check_bit_operation mod(b1,bitunpack(b2)) BitMatrix
 
 while true
     global b1
@@ -681,24 +691,39 @@ f2 = Float64(i2)
 ci2 = complex(i2)
 cu2 = complex(u2)
 cf2 = complex(f2)
+b2 = bitunpack(bitrand(n1,n2))
 
 @check_bit_operation (&)(b1, true)   BitMatrix
 @check_bit_operation (&)(b1, false)  BitMatrix
+@check_bit_operation (&)(true, b1)   BitMatrix
+@check_bit_operation (&)(false, b1)  BitMatrix
 @check_bit_operation (|)(b1, true)   BitMatrix
 @check_bit_operation (|)(b1, false)  BitMatrix
+@check_bit_operation (|)(true, b1)   BitMatrix
+@check_bit_operation (|)(false, b1)  BitMatrix
 @check_bit_operation ($)(b1, true)   BitMatrix
 @check_bit_operation ($)(b1, false)  BitMatrix
+@check_bit_operation ($)(true, b1)   BitMatrix
+@check_bit_operation ($)(false, b1)  BitMatrix
 @check_bit_operation (.+)(b1, true)   Matrix{Int}
 @check_bit_operation (.+)(b1, false)  Matrix{Int}
 @check_bit_operation (.-)(b1, true)   Matrix{Int}
 @check_bit_operation (.-)(b1, false)  Matrix{Int}
 @check_bit_operation (.*)(b1, true)  BitMatrix
 @check_bit_operation (.*)(b1, false) BitMatrix
+@check_bit_operation (.*)(true, b1)  BitMatrix
+@check_bit_operation (.*)(false, b1) BitMatrix
 @check_bit_operation (./)(b1, true)  Matrix{Float64}
 @check_bit_operation (./)(b1, false) Matrix{Float64}
 @check_bit_operation div(b1, true)   BitMatrix
 @check_bit_operation mod(b1, true)   BitMatrix
 
+@check_bit_operation (&)(b1, b2)  BitMatrix
+@check_bit_operation (|)(b1, b2)  BitMatrix
+@check_bit_operation ($)(b1, b2)  BitMatrix
+@check_bit_operation (&)(b2, b1)  BitMatrix
+@check_bit_operation (|)(b2, b1)  BitMatrix
+@check_bit_operation ($)(b2, b1)  BitMatrix
 @check_bit_operation (&)(b1, i2)  Matrix{Int}
 @check_bit_operation (|)(b1, i2)  Matrix{Int}
 @check_bit_operation ($)(b1, i2)  Matrix{Int}
@@ -753,6 +778,7 @@ cf2 = complex(f2)
 @check_bit_operation (.^)(b1, 0.0im) Matrix{Complex128}
 @check_bit_operation (.^)(b1, 0x0im) Matrix{Complex128}
 @check_bit_operation (.^)(b1, 0im)   Matrix{Complex128}
+@test_throws DomainError (.^)(b1, -1)
 
 b1 = trues(n1, n2)
 @check_bit_operation (.^)(b1, -1.0im) Matrix{Complex128}
@@ -784,6 +810,7 @@ for d = 1 : 4
     #end
     @check_bit_operation flipdim(b1, d) BitArray{4}
 end
+@check_bit_operation flipdim(b1, 5) BitArray{4}
 
 b1 = bitrand(n1, n2)
 for k = 1 : 4
@@ -1096,6 +1123,7 @@ b2 = bitrand(v1)
 for m = 1 : v1 - 1
     @check_bit_operation vcat(b1[1:m], b1[m+1:end]) BitVector
 end
+@test_throws DimensionMismatch hcat(b1,trues(n1+1))
 
 b1 = bitrand(n1, n2)
 b2 = bitrand(n1)
