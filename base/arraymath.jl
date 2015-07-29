@@ -57,8 +57,13 @@ promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}) = S
 .^(X::AbstractArray, y::Number      ) =
     reshape([ x ^ y for x in X ], size(X))
 
-for f in (:+, :-, :div, :mod, :&, :|, :$)
-    F = GenericNFunc{f,2}()
+for (f,F) in ((:+,   AddFun()),
+              (:-,   SubFun()),
+              (:div, IDivFun()),
+              (:mod, ModFun()),
+              (:&,   AndFun()),
+              (:|,   OrFun()),
+              (:$,   XorFun()))
     @eval begin
         function ($f){S,T}(A::Range{S}, B::Range{T})
             F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
@@ -96,8 +101,18 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:.+, :.-, :.*, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
-    F = GenericNFunc{f,2}()
+for (f,F) in ((:.+,  DotAddFun()),
+          (:.-,  DotSubFun()),
+          (:.*,  DotMulFun()),
+          (:.%,  DotRemFun()),
+          (:.<<, DotLSFun()),
+          (:.>>, DotRSFun()),
+          (:div, IDivFun()),
+          (:mod, ModFun()),
+          (:rem, RemFun()),
+          (:&,   AndFun()),
+          (:|,   OrFun()),
+          (:$,   XorFun()))
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_array_type($F,typeof(A),T))

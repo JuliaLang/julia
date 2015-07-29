@@ -25,10 +25,14 @@ just the input types, ``promote_rule`` will be inadequate.
 
 Fortunately, it's possible to provide such definitions via ``promote_op``::
 
-    Base.promote_op{R,S}(::Base.GenericNFunc{:+,2}, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
-    Base.promote_op{R,S}(::Base.GenericNFunc{:*,2}, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
-    Base.promote_op{R,S}(::Base.GenericNFunc{:.*,2}, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+    Base.promote_op{R,S}(::Base.AddFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
+    Base.promote_op{R,S}(::Base.MulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+    Base.promote_op{R,S}(::Base.DotMulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
 
 The first one defines the promotion rule for ``+``, and the second one
-for ``*``.  A ``GenericNFunc`` is a `functor <https://github.com/JuliaLang/julia/blob/master/base/functors.jl>`_;
-the second parameter ``2`` means that it takes two arguments.
+for ``*``.  ``AddFun``, ``MulFun``, and ``DotMulFun`` are "functor
+types" defined in `functor.jl
+<https://github.com/JuliaLang/julia/blob/master/base/functors.jl>`_.
+
+It's worth noting that as julia's internal representation of functions
+evolves, this interface may change in a future version of Julia.
