@@ -787,8 +787,8 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
             input = replace(input, '\r', '\n')
             if position(LineEdit.buffer(s)) == 0
-                indent = Base.indentation(input)[1]
-                input = Base.unindent(lstrip(input), indent)
+                indent = Base.indentation(input; tabwidth=4)[1]
+                input = Base.unindent(lstrip(input), indent; tabwidth=4)
             end
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
