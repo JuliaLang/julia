@@ -27,4 +27,5 @@ type UnicodeError <: Exception
     errchr::UInt32              ##< Invalid character
 end
 
-show(io::IO, exc::UnicodeError) = print(io, replace(replace(exc.errmsg,"<<1>>",string(exc.errpos)),"<<2>>",hex(exc.errchr)))
+show(io::IO, exc::UnicodeError) = print(io, replace(replace(string("UnicodeError: ",exc.errmsg),
+    "<<1>>",string(exc.errpos)),"<<2>>",hex(exc.errchr)))
