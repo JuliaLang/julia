@@ -730,7 +730,7 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
     else
         push!(notests,pkg)
     end
-    resolve()
+    isfile(reqs_path) && resolve()
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
