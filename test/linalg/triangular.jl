@@ -140,6 +140,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             for p in (1.0, Inf)
                 @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
             end
+            @test cond(A1,2) == cond(full(A1),2)
         end
 
         if elty1 != BigFloat # Not implemented yet
@@ -194,6 +195,9 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
+            Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+            @test_approx_eq Base.LinAlg.A_mul_B!(Tri,copy(A1)) Tri*full(A1)
+
             # Triangular-dense Matrix/vector multiplication
             @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
             @test_approx_eq A1*B full(A1)*B
@@ -209,6 +213,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
             @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
             @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
 
@@ -219,6 +224,9 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test_approx_eq A1'\B full(A1)'\B
             @test_approx_eq A1\B' full(A1)\B'
             @test_approx_eq A1'\B' full(A1)'\B'
+            if t1 == UpperTriangular || t1 == LowerTriangular
+                @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
+            end
             @test_approx_eq B/A1 B/full(A1)
             @test_approx_eq B/A1' B/full(A1)'
             @test_approx_eq B'/A1 B'/full(A1)
