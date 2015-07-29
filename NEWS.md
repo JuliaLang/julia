@@ -138,6 +138,9 @@ Language changes
   * `global x` in a nested scope is now a syntax error if `x` is local
     to the enclosing scope ([#7264]/[#11985]).
 
+  * The default `importall Base.Operators` is deprecated, and relying on it
+    will give a warning ([#8113]).
+
 Command line option changes
 ---------------------------
 
@@ -1420,6 +1423,7 @@ Too numerous to mention.
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
+[#8113]: https://github.com/JuliaLang/julia/issues/8113
 [#8135]: https://github.com/JuliaLang/julia/issues/8135
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
@@ -1535,4 +1539,6 @@ Too numerous to mention.
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
+[#12034]: https://github.com/JuliaLang/julia/issues/12034
 [#12087]: https://github.com/JuliaLang/julia/issues/12087
+[#12137]: https://github.com/JuliaLang/julia/issues/12137
