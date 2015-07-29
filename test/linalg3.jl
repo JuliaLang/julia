@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -159,6 +161,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                              [4.000000000000000  -1.414213562373094  -1.414213562373095
                                               -1.414213562373095   4.999999999999996  -0.000000000000000
                                               0  -0.000000000000002   3.000000000000000])
+    @test_throws KeyError hessfact(A1)[:Z]
+    @test_approx_eq full(hessfact(A1)) A1
+    @test_approx_eq full(Base.LinAlg.HessenbergQ(hessfact(A1))) full(hessfact(A1)[:Q])
 end
 
 for elty in (Float64, Complex{Float64})
