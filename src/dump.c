@@ -540,6 +540,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     }
     jl_serialize_value(s, m->constant_table);
     write_uint8(s, m->istopmod);
+    write_uint8(s, m->std_imports);
     write_uint64(s, m->uuid);
 }
 
@@ -1336,6 +1337,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
         if (m->constant_table != NULL) jl_gc_wb(m, m->constant_table);
         m->istopmod = read_uint8(s);
+        m->std_imports = read_uint8(s);
         m->uuid = read_uint64(s);
         return (jl_value_t*)m;
     }

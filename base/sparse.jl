@@ -7,6 +7,7 @@ using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular
 
 importall Base
+importall ..Base.Operators
 importall Base.LinAlg
 import Base.promote_eltype
 import Base.@get!

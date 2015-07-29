@@ -104,6 +104,7 @@ end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
 issym(Phi::CPM)=false
 ishermitian(Phi::CPM)=false
+import Base: *
 function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
     rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho2=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))

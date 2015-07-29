@@ -30,6 +30,8 @@
 
 module Bignums
 
+import Base: ==, <
+
 export Bignum
 
 const kMaxSignificantBits = 3584

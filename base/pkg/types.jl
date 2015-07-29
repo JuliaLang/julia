@@ -3,7 +3,7 @@
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
-import Base: show, isempty, in, intersect, hash, deepcopy_internal
+import Base: show, isempty, in, intersect, hash, deepcopy_internal, ==
 
 immutable VersionInterval
     lower::VersionNumber

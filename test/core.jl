@@ -1726,6 +1726,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 @test_throws LoadError include_string("#= #= #= =# =# =")
 
 # issue #6142
+import Base: +
 type A6142 <: AbstractMatrix{Float64}; end
 +{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"

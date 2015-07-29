@@ -2,6 +2,8 @@
 
 module VersionWeights
 
+importall ....Base.Operators
+
 export VersionWeight
 
 immutable HierarchicalValue{T}

@@ -160,13 +160,12 @@ contain ``using Base``, since this is needed in the vast majority of cases.
 Default top-level definitions and bare modules
 ----------------------------------------------
 
-In addition to ``using Base``, all operators are explicitly imported,
-since one typically wants to extend operators rather than creating entirely
-new definitions of them. A module also automatically contains a definition
-of the ``eval`` function, which evaluates expressions within the context of
-that module.
+In addition to ``using Base``, modules also perform ``import Base.call`` by
+default, to facilitate adding constructors to new types.
+A new module also automatically contains a definition of the ``eval`` function,
+which evaluates expressions within the context of that module.
 
-If these ``Base`` definitions are not wanted, modules can be defined using the
+If these default definitions are not wanted, modules can be defined using the
 keyword ``baremodule`` instead (note: ``Core`` is still imported, as per above).
 In terms of ``baremodule``, a standard ``module`` looks like this::
 
@@ -174,7 +173,7 @@ In terms of ``baremodule``, a standard ``module`` looks like this::
 
     using Base
 
-    importall Base.Operators
+    import Base.call
 
     eval(x) = Core.eval(Mod, x)
     eval(m,x) = Core.eval(m, x)

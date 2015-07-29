@@ -3,6 +3,8 @@
 module ModInts
 export ModInt
 
+import Base: +, -, *
+
 immutable ModInt{n} <: Integer
     k::Int
     ModInt(k) = new(mod(k,n))

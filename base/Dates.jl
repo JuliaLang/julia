@@ -2,6 +2,8 @@
 
 module Dates
 
+importall ..Base.Operators
+
 include("dates/types.jl")
 include("dates/periods.jl")
 include("dates/accessors.jl")

@@ -28,6 +28,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->constant_table = NULL;
     m->call_func = NULL;
     m->istopmod = 0;
+    m->std_imports = 0;
     m->uuid = uv_now(uv_default_loop());
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -120,6 +121,16 @@ DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
 // and overwriting.
 DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
+    if (jl_base_module && m->std_imports && !jl_binding_resolved_p(m,var)) {
+        jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
+        if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
+            jl_printf(JL_STDERR,
+                      "WARNING: module %s should explicitly import %s from %s\n",
+                      m->name->name, var->name, jl_base_module->name->name);
+            jl_module_import(m, opmod, var);
+        }
+    }
+
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b = *bp;
 
@@ -133,6 +144,15 @@ DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *
                     jl_errorf("error in method definition: %s.%s cannot be extended", b->owner->name->name, var->name);
                 }
                 else {
+                    if (jl_base_module && m->std_imports && b->owner == jl_base_module) {
+                        jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
+                        if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
+                            jl_printf(JL_STDERR,
+                                      "WARNING: module %s should explicitly import %s from %s\n",
+                                      m->name->name, var->name, b->owner->name->name);
+                            return b2;
+                        }
+                    }
                     jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
                 }
             }
