@@ -1144,34 +1144,9 @@ static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(int region_i, int sweep_mask)
+static void sweep_pool_region(gcval_t **pfl[N_POOLS], int region_i, int sweep_mask)
 {
     region_t* region = regions[region_i];
-    gcval_t **pfl[N_POOLS];
-
-    // update metadata of pages that were pointed to by freelist or newpages from a pool
-    // i.e. pages being the current allocation target
-    FOR_EACH_HEAP
-        for (int i = 0; i < N_POOLS; i++) {
-            pool_t* p = &HEAP(norm_pools)[i];
-            gcval_t* last = p->freelist;
-            if (last) {
-                gcpage_t* pg = page_metadata(last);
-                pg->allocd = 1;
-                pg->nfree = p->nfree;
-            }
-            p->freelist =  NULL;
-            pfl[i] = &p->freelist;
-
-            last = p->newpages;
-            if (last) {
-                gcpage_t* pg = page_metadata(last);
-                pg->nfree = (GC_PAGE_SZ - ((char*)last - GC_PAGE_DATA(last))) / p->osize;
-                pg->allocd = 1;
-            }
-            p->newpages = NULL;
-        }
-    END
 
     // the actual sweeping
     int ub = 0;
@@ -1196,17 +1171,6 @@ static void sweep_pool_region(int region_i, int sweep_mask)
     }
     regions_ub[region_i] = ub;
     regions_lb[region_i] = lb;
-
-    // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
-    FOR_EACH_HEAP
-        for (int i = 0; i < N_POOLS; i++) {
-            pool_t* p = &HEAP(norm_pools)[i];
-            *pfl[i] = NULL;
-            if (p->freelist) {
-                p->nfree = page_metadata(p->freelist)->nfree;
-            }
-        }
-    END
 }
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
@@ -1376,10 +1340,48 @@ static int gc_sweep_inc(int sweep_mask)
     page_done = 0;
     int finished = 1;
 
+    gcval_t **pfl[N_POOLS];
+
+    // update metadata of pages that were pointed to by freelist or newpages from a pool
+    // i.e. pages being the current allocation target
+    FOR_EACH_HEAP
+        for (int i = 0; i < N_POOLS; i++) {
+            pool_t* p = &HEAP(norm_pools)[i];
+            gcval_t* last = p->freelist;
+            if (last) {
+                gcpage_t* pg = page_metadata(last);
+                pg->allocd = 1;
+                pg->nfree = p->nfree;
+            }
+            p->freelist =  NULL;
+            pfl[i] = &p->freelist;
+
+            last = p->newpages;
+            if (last) {
+                gcpage_t* pg = page_metadata(last);
+                pg->nfree = (GC_PAGE_SZ - ((char*)last - GC_PAGE_DATA(last))) / p->osize;
+                pg->allocd = 1;
+            }
+            p->newpages = NULL;
+        }
+    END
+
     for (int i = 0; i < REGION_COUNT; i++) {
         if (regions[i])
-            /*finished &= */sweep_pool_region(i, sweep_mask);
+            /*finished &= */sweep_pool_region(pfl, i, sweep_mask);
     }
+
+
+    // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
+    FOR_EACH_HEAP
+        for (int i = 0; i < N_POOLS; i++) {
+            pool_t* p = &HEAP(norm_pools)[i];
+            *pfl[i] = NULL;
+            if (p->freelist) {
+                p->nfree = page_metadata(p->freelist)->nfree;
+            }
+        }
+    END
 
 #ifdef GC_TIME
     double sweep_pool_sec = clock_now() - t0;
