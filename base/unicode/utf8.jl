@@ -267,9 +267,9 @@ function convert(::Type{UTF8String}, dat::Vector{UInt8})
                 buf[out += 1] = dat[pos += 1]
             else
                 # Pick up surrogate pairs (CESU-8 format)
-                ch = (((((ch & 0x3f) << 6) | (dat[pos + 1] & 0x3f)) << 10)
-                        + (((dat[pos + 3] & 0x3f) << 6) | (dat[pos + 4] & 0x3f))
-                        - 0xc00)
+                ch = ((((((ch & 0x3f) << 6) | (dat[pos + 1] & 0x3f)) << 10)
+                       + (((dat[pos + 3] & 0x3f)%UInt32 << 6) | (dat[pos + 4] & 0x3f)))
+                      - 0x01f0c00)
                 pos += 4
                 output_utf8_4byte!(buf, out, ch)
                 out += 4
