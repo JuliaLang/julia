@@ -855,12 +855,12 @@ for f in (:+, :-)
         return r
     end
 end
-for f in (:.+, :.-)
-    fq = Expr(:quote, f)
+for (f,F) in ((:.+, DotAddFun()),
+              (:.-, DotSubFun()))
     for (arg1, arg2, T, fargs) in ((:(B::BitArray), :(x::Bool)    , Int                                   , :(b, x)),
-                                   (:(B::BitArray), :(x::Number)  , :(promote_array_type(GenericNFunc{$fq,2}(),typeof(x), Bool)), :(b, x)),
+                                   (:(B::BitArray), :(x::Number)  , :(promote_array_type($F, typeof(x), Bool)), :(b, x)),
                                    (:(x::Bool)    , :(B::BitArray), Int                                   , :(x, b)),
-                                   (:(x::Number)  , :(B::BitArray), :(promote_array_type(GenericNFunc{$fq,2}(),typeof(x), Bool)), :(x, b)))
+                                   (:(x::Number)  , :(B::BitArray), :(promote_array_type($F, typeof(x), Bool)), :(x, b)))
         @eval function ($f)($arg1, $arg2)
             r = Array($T, size(B))
             bi = start(B)
@@ -899,7 +899,7 @@ function div(x::Bool, B::BitArray)
 end
 function div(x::Number, B::BitArray)
     all(B) || throw(DivideError())
-    pt = promote_array_type(GenericNFunc{:div,2}(),typeof(x), Bool)
+    pt = promote_array_type(IDivFun(), typeof(x), Bool)
     y = div(x, true)
     reshape(pt[ y for i = 1:length(B) ], size(B))
 end
@@ -920,13 +920,13 @@ function mod(x::Bool, B::BitArray)
 end
 function mod(x::Number, B::BitArray)
     all(B) || throw(DivideError())
-    pt = promote_array_type(GenericNFunc{:mod,2}(), typeof(x), Bool)
+    pt = promote_array_type(ModFun(), typeof(x), Bool)
     y = mod(x, true)
     reshape(pt[ y for i = 1:length(B) ], size(B))
 end
 
-for f in (:div, :mod)
-    F = GenericNFunc{f,2}()
+for (f,F) in ((:div, IDivFun()),
+              (:mod, ModFun()))
     @eval begin
         function ($f)(B::BitArray, x::Number)
             F = Array(promote_array_type($F, typeof(x), Bool), size(B))
