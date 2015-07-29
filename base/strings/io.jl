@@ -195,22 +195,19 @@ macro b_str(s); :($(unescape_string(s)).data); end
 
 ## multiline strings ##
 
-global tab_indentation_width = 8
-
 """
 Calculate the width of leading blank space, and also return if string is blank
 
 ### Returns:
 * (width of leading whitespace, flag if string is totally blank)
 """
-function indentation(str::AbstractString)
+function indentation(str::AbstractString; tabwidth=8)
     count = 0
-    tabwid = tab_indentation_width
     for ch in str
         if ch == ' '
             count += 1
         elseif ch == '\t'
-            count = div(count + tabwid, tabwid) * tabwid
+            count = div(count + tabwidth, tabwidth) * tabwidth
         else
             return count, false
         end
@@ -224,7 +221,7 @@ Removes leading indentation from string
 ### Returns:
 * `ASCIIString` or `UTF8String` of multiline string, with leading indentation of `indent` removed
 """
-function unindent(str::AbstractString, indent::Int)
+function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
     pos = start(str)
     endpos = endof(str)
@@ -233,14 +230,13 @@ function unindent(str::AbstractString, indent::Int)
     truncate(buf,0)
     cutting = true
     col = 0     # current column (0 based)
-    tabwid = tab_indentation_width
     while pos <= endpos
         ch, pos = next(str,pos)
         if cutting
             if ch == ' '
                 col += 1
             elseif ch == '\t'
-                col = div(col + tabwid, tabwid) * tabwid
+                col = div(col + tabwidth, tabwidth) * tabwidth
             elseif ch == '\n'
                 # Now we need to output enough indentation
                 for i = 1:col-indent
@@ -259,7 +255,7 @@ function unindent(str::AbstractString, indent::Int)
                 write(buf, ch)
             end
         elseif ch == '\t'       # Handle internal tabs
-            upd = div(col + tabwid, tabwid) * tabwid
+            upd = div(col + tabwidth, tabwidth) * tabwidth
             # output the number of spaces that would have been seen
             # with original indentation
             for i = 1:(upd-col)
