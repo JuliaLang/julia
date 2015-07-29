@@ -1075,7 +1075,6 @@ export
 # help and reflection
     apropos,
     current_module,
-    editcmd,
     edit,
     code_typed,
     code_warntype,
