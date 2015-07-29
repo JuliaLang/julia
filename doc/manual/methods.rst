@@ -196,8 +196,8 @@ methods. To find out what the signatures of those methods are, use the
 
     julia> methods(f)
     # 2 methods for generic function "f":
-    f(x::Float64,y::Float64) at none:1
-    f(x::Number,y::Number) at none:1
+    f(x::Float64, y::Float64) at none:1
+    f(x::Number, y::Number) at none:1
 
 which shows that ``f`` has two methods, one taking two :obj:`Float64`
 arguments and one taking arguments of type :obj:`Number`. It also
@@ -384,7 +384,7 @@ arguments:
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
-    Warning: New definition
+    WARNING: New definition
         g(Any, Float64) at none:1
     is ambiguous with:
         g(Float64, Any) at none:1.
