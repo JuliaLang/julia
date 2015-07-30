@@ -19,3 +19,9 @@ end
 withenv("TEST"=>"") do
     @test ENV["TEST"] == ""
 end
+
+let c = collect(ENV)
+    @test isa(c, Vector)
+    @test length(ENV) == length(c)
+    @test isempty(ENV) || first(ENV) in c
+end
