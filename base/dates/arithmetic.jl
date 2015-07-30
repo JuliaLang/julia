@@ -82,12 +82,6 @@ for op in (:.+, :.-)
         ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
         ($op_){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = ($op)(x,y)
         ($op_){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
-
-        # AbstractArray{TimeType}, StridedArray{GeneralPeriod}
-        ($op_){T<:TimeType,P<:GeneralPeriod}(x::Range{T}, y::StridedArray{P}) = ($op_)(collect(x),y)
-        ($op_){T<:TimeType,P<:GeneralPeriod}(x::AbstractArray{T}, y::StridedArray{P}) =
-            reshape(TimeType[($op_)(x[i],y[i]) for i in eachindex(x, y)], promote_shape(size(x),size(y)))
-        ($op_){T<:TimeType,P<:GeneralPeriod}(y::StridedArray{P}, x::AbstractArray{T}) = ($op_)(x,y)
     end
 end
 
@@ -100,7 +94,29 @@ end
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)
 (-){T<:TimeType}(x::Range{T}, y::Range{T}) = collect(x) - collect(y)
-(-){T<:TimeType}(x::AbstractArray{T}, y::Range{T}) = y - collect(x)
-(-){T<:TimeType}(x::Range{T}, y::AbstractArray{T}) = collect(x) - y
-(-){T<:TimeType}(x::AbstractArray{T}, y::AbstractArray{T}) =
-    reshape(Period[x[i] - y[i] for i in eachindex(x, y)], promote_shape(size(x),size(y)))
+
+# promotion rules
+
+for (op,F) in ((:+,  Base.AddFun),
+               (:-,  Base.SubFun),
+               (:.+, Base.DotAddFun),
+               (:.-, Base.DotSubFun))
+    @eval begin
+        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = P
+        Base.promote_op{P1<:Period,P2<:Period}(::$F, ::Type{P1}, ::Type{P2}) = CompoundPeriod
+        Base.promote_op{D<:Date}(::$F, ::Type{D}, ::Type{D}) = Day
+        Base.promote_op{D<:DateTime}(::$F, ::Type{D}, ::Type{D}) = Millisecond
+    end
+end
+
+for (op,F) in ((:/,   Base.RDivFun),
+               (:%,   Base.RemFun),
+               (:div, Base.IDivFun),
+               (:mod, Base.ModFun),
+               (:./,  Base.DotRDivFun),
+               (:.%,  Base.DotRemFun))
+    @eval begin
+        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = typeof($op(1,1))
+        Base.promote_op{P<:Period,R<:Real}(::$F, ::Type{P}, ::Type{R}) = P
+    end
+end
