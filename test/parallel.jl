@@ -323,6 +323,24 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
     print("\n\nPassed all pmap tests that print errors.\n")
 
+    # Topology tests need to run externally since
+    # a given cluster at any time can only support a single topology and the
+    # current session is already running in parallel under the default
+    # topology.
+    # They also print errors to screen
+    print("\n\nTopology tests. \n")
+
+    script = joinpath(dirname(@__FILE__), "topology.jl")
+    cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
+
+    (strm, proc) = open(cmd)
+    wait(proc)
+    if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
+        println(readall(strm))
+        error("Topology tests failed : $cmd")
+    end
+
+
 @unix_only begin
     function test_n_remove_pids(new_pids)
         for p in new_pids

@@ -48,6 +48,7 @@ type JoinPGRPMsg <: AbstractMsg
     other_workers::Array
     self_is_local::Bool
     notify_oid::Tuple
+    topology::Symbol
 end
 type JoinCompleteMsg <: AbstractMsg
     notify_oid::Tuple
@@ -107,6 +108,11 @@ type WorkerConfig
 
     # Private dictionary used to store temporary information by Local/SSH managers.
     environ::Nullable{Dict}
+
+    # Connections to be setup depending on the network topology requested
+    ident::Nullable{Any}      # Worker as identified by the Cluster Manager.
+    # List of other worker idents this worker must connect with. Used with topology T_CUSTOM.
+    connect_idents::Nullable{Array}
 
     function WorkerConfig()
         wc = new()
@@ -192,14 +198,18 @@ end
 
 function check_worker_state(w::Worker)
     if w.state == W_CREATED
-        # Since higher pids connect with lower pids, the remote worker
-        # may not have connected to us yet. Wait for some time.
-        timeout =  worker_timeout() - (time() - w.ct_time)
-        timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
+        if PGRP.topology == :all_to_all
+            # Since higher pids connect with lower pids, the remote worker
+            # may not have connected to us yet. Wait for some time.
+            timeout =  worker_timeout() - (time() - w.ct_time)
+            timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @schedule (sleep(timeout); notify(w.c_state; all=true))
-        wait(w.c_state)
-        w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+            @schedule (sleep(timeout); notify(w.c_state; all=true))
+            wait(w.c_state)
+            w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        else
+            error("peer $(w.id) is not connected to $(myid()). Topology : " * string(PGRP.topology))
+        end
     end
 end
 
@@ -261,13 +271,22 @@ end
 type ProcessGroup
     name::AbstractString
     workers::Array{Any,1}
+    refs::Dict                  # global references
+    topology::Symbol
 
-    # global references
-    refs::Dict
-
-    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all)
 end
 const PGRP = ProcessGroup([])
+
+function topology(t)
+    assert(t in [:all_to_all, :master_slave, :custom])
+    if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
+        PGRP.topology = t
+    else
+        error("Workers with Topology $(PGRP.topology) already exist. Requested Topology $(t) cannot be set.")
+    end
+    t
+end
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 get_bind_addr(w::LocalProcess) = LPROC.bind_addr
@@ -393,14 +412,24 @@ function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = pop!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker)
-        pop!(map_sock_wrkr, w.r_stream)
-        if w.r_stream != w.w_stream
-            pop!(map_sock_wrkr, w.w_stream)
+        if isdefined(w, :r_stream)
+            pop!(map_sock_wrkr, w.r_stream, nothing)
+            if w.r_stream != w.w_stream
+                pop!(map_sock_wrkr, w.w_stream, nothing)
+            end
         end
 
-        # Notify the cluster manager of this workers death
         if myid() == 1
+            # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
+            if PGRP.topology != :all_to_all
+                for rpid in workers()
+                    try
+                        remote_do(rpid, deregister_worker, pid)
+                    catch
+                    end
+                end
+            end
         end
     end
     push!(map_del_wrkr, pid)
@@ -835,7 +864,7 @@ function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream)
             msg = deserialize(r_stream)
             # println("got msg: ", msg)
             handle_msg(msg, r_stream, w_stream)
-        end # end of while
+        end
     catch e
         iderr = worker_id_from_socket(r_stream)
         if (iderr < 1)
@@ -899,6 +928,7 @@ function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
     LPROC.id = msg.self_pid
     controller = Worker(1, r_stream, w_stream, cluster_manager)
     register_worker(LPROC)
+    topology(msg.topology)
 
     wait_tasks = Task[]
     for (connect_at, rpid, r_is_local) in msg.other_workers
@@ -1064,7 +1094,9 @@ end
 # for launching the workers. All keyword arguments (plus a few default values)
 # are available as a dictionary to the `launch` methods
 function addprocs(manager::ClusterManager; kwargs...)
+
     params = merge(default_addprocs_params(), AnyDict(kwargs))
+    topology(symbol(params[:topology]))
 
     # some libs by default start as many threads as cores which leads to
     # inefficient use of cores in a multi-process model.
@@ -1119,13 +1151,12 @@ end
 
 function set_valid_processes(plist::Array{Int})
     for pid in setdiff(plist, workers())
-        if myid() != pid
-            Worker(pid)
-        end
+        myid() != pid && Worker(pid)
     end
 end
 
 default_addprocs_params() = AnyDict(
+    :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(JULIA_HOME,julia_exename()),
     :exeflags => ``)
@@ -1211,22 +1242,36 @@ function create_worker(manager, wconfig)
     #   - each worker then sends a :join_complete back to the master along with its OS_PID and NUM_CORES
     # - once master receives a :join_complete it triggers rr_ntfy_join (signifies that worker setup is complete)
 
-    # need to wait for lower worker pids to have completed connecting, since the numerical value
-    # of pids is relevant to the connection process, i.e., higher pids connect to lower pids and they
-    # require the value of config.connect_at which is set only upon connection completion
+    join_list = []
+    if PGRP.topology == :all_to_all
+        # need to wait for lower worker pids to have completed connecting, since the numerical value
+        # of pids is relevant to the connection process, i.e., higher pids connect to lower pids and they
+        # require the value of config.connect_at which is set only upon connection completion
+        for jw in PGRP.workers
+            if (jw.id != 1) && (jw.id < w.id)
+                (jw.state == W_CREATED) && wait(jw.c_state)
+                push!(join_list, jw)
+            end
+        end
 
-    lower_wlist = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state == W_CREATED), PGRP.workers)
-    for wl in lower_wlist
-        if wl.state == W_CREATED
-            wait(wl.c_state)
+    elseif PGRP.topology == :custom
+        # wait for requested workers to be up before connecting to them.
+        filterfunc(x) = (x.id != 1) && isdefined(x, :config) && (get(x.config.ident) in get(wconfig.connect_idents, []))
+
+        wlist = filter(filterfunc, PGRP.workers)
+        while length(wlist) < length(get(wconfig.connect_idents, []))
+            sleep(1.0)
+            wlist = filter(filterfunc, PGRP.workers)
+        end
+
+        for wl in wlist
+            (wl.state == W_CREATED) && wait(wl.c_state)
+            push!(join_list, wl)
         end
     end
 
-    # filter list to workers in a running state
-    join_list = filter(x -> (x.id != 1) && (x.id < w.id) && (x.state==W_CONNECTED), PGRP.workers)
-
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
-    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid))
+    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid, PGRP.topology))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait_full(rr_ntfy_join)
