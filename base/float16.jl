@@ -98,7 +98,7 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-convert(::Type{Bool},    x::Float16) = (x!=0)
+convert(::Type{Bool},    x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
 convert(::Type{UInt128}, x::Float16) = convert(UInt128, Float32(x))
 
