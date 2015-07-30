@@ -156,7 +156,7 @@ floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
 ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
-convert(::Type{Bool}, x::BigFloat) = (x != 0)
+convert(::Type{Bool}, x::BigFloat) = x==0 ? false : x==1 ? true : throw(InexactError())
 function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(BigInt,x)

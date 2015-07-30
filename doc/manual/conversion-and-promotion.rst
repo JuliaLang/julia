@@ -119,9 +119,9 @@ Defining New Conversions
 
 To define a new conversion, simply provide a new method for :func:`convert`.
 That's really all there is to it. For example, the method to convert a
-number to a boolean is simply this::
+real number to a boolean is this::
 
-    convert(::Type{Bool}, x::Number) = (x!=0)
+    convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 The type of the first argument of this method is a :ref:`singleton
 type <man-singleton-types>`, ``Type{Bool}``, the only instance of
@@ -134,7 +134,7 @@ since the type is a singleton, there would never be any reason to use its value
 within the body.
 When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
-to zero:
+to one and zero:
 
 .. doctest::
 
@@ -160,8 +160,8 @@ This is the actual implementation in julia::
                                                throw(InexactError()))
 
     julia> convert(Bool, 1im)
-    InexactError()
-     in convert at complex.jl:40
+    ERROR: InexactError()
+     in convert at complex.jl:18
 
 
 Case Study: Rational Conversions
