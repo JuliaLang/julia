@@ -335,8 +335,11 @@ extern JITMemoryManager *createJITMemoryManagerWin();
 #endif
 #endif //_OS_WINDOWS_
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
-#define CUSTOM_MEMORY_MANAGER 1
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerOSX
 extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
+#elif defined(_OS_LINUX_) && defined(LLVM37)
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerUnix
+extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 #endif
 
 #ifndef JULIA_ENABLE_THREADING
@@ -5992,7 +5995,7 @@ extern "C" void jl_init_codegen(void)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #elif defined(CUSTOM_MEMORY_MANAGER)
-        .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManagerOSX()})
+        .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{CUSTOM_MEMORY_MANAGER()})
 #elif defined(USE_ORCMCJIT) // ORCJIT forgets to create one if one isn't created for it
         .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()})
 #endif
