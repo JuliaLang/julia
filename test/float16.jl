@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 f = Float16(2.)
 g = Float16(1.)
 
@@ -17,6 +19,22 @@ g = Float16(1.)
 @test convert(Bool,Float16(0.0)) == false
 @test convert(Bool,Float16(1.0)) == true
 @test_throws InexactError convert(Bool,Float16(0.1))
+x = Float32(rand())
+y = Float32(rand())
+z = Float32(rand())
+@test_approx_eq Float16(x)^2 Float16(x^2)
+@test round(Int,Float16(x)) == round(Int,x)
+@test trunc(Int,Float16(x)) == trunc(Int,x)
+@test floor(Int,Float16(x)) == floor(Int,x)
+@test ceil(Int,Float16(x)) == ceil(Int,x)
+@test round(Float16(x)) == round(x)
+@test trunc(Float16(x)) == trunc(x)
+@test floor(Float16(x)) == floor(x)
+@test ceil(Float16(x)) == ceil(x)
+@test_approx_eq fma(Float16(x),Float16(y),Float16(z)) fma(x,y,z)
+@test_approx_eq muladd(Float16(x),Float16(y),Float16(z)) muladd(x,y,z)
+@test convert(Int128,Float16(-1.0)) == Int128(-1)
+@test convert(UInt128,Float16(5.0)) == UInt128(5)
 
 @test -f === Float16(-2.)
 
