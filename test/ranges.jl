@@ -659,3 +659,8 @@ test_range_sum_diff(1:5, linspace(0, 8, 5),
                     linspace(1, 13, 5), linspace(1, -3, 5))
 test_range_sum_diff(1.:5., linspace(0, 8, 5),
                     linspace(1, 13, 5), linspace(1, -3, 5))
+
+# Issue #12388
+let r = 0x02:0x05
+    @test r[2:3] == 0x03:0x04
+end

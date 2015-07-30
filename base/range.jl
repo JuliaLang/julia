@@ -81,7 +81,7 @@ colon(a::Real, b::Real) = colon(promote(a,b)...)
 
 colon{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
-range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, a+len-1)
+range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 
 colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
 
