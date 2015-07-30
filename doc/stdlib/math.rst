@@ -417,17 +417,11 @@ Mathematical Operators
 Mathematical Functions
 ----------------------
 
-.. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
+.. function:: isapprox(x::Number, y::Number; rtol::Real=sqrt(eps), atol::Real=0)
 
-   Inexact equality comparison - behaves slightly different depending on types of input args:
+   Inexact equality comparison: ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.  The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``.
 
-   * For ``AbstractFloat`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
-
-   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``AbstractFloat``, the other is promoted, and the method above is called instead.
-
-   * For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
-
-   For default tolerance arguments, ``maxeps = max(eps(abs(x)), eps(abs(y)))``.
+   For real or complex floating-point values, ``rtol`` defaults to ``sqrt(eps(typeof(real(x-y))))``.  This corresponds to requiring equality of about half of the significand digits.   For other types, ``rtol`` defaults to zero.
 
 .. function:: sin(x)
 

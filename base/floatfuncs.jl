@@ -165,33 +165,11 @@ for f in (:round, :ceil, :floor, :trunc)
     end
 end
 
-# isapprox: Tolerant comparison of floating point numbers
-function isapprox(x::AbstractFloat, y::AbstractFloat; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
-    (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
-end
-
-# promotion of non-floats
-isapprox(x::Real, y::AbstractFloat; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
-isapprox(x::AbstractFloat, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
-
-# other real numbers
-isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = abs(x-y) <= atol
-
-# complex numbers
-isapprox(z::Complex, w::Complex; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
-
-# real-complex combinations
-isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
-isapprox(z::Complex, x::Real; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
+# isapprox: approximate equality of numbers
+isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0) =
+    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y)))
 
 # default tolerance arguments
-rtoldefault(x::AbstractFloat, y::AbstractFloat) = cbrt(max(eps(x), eps(y)))
-atoldefault(x::AbstractFloat, y::AbstractFloat) = sqrt(max(eps(x), eps(y)))
-
-# promotion of non-floats
-for fun in (:rtoldefault, :atoldefault)
-    @eval begin
-        ($fun)(x::Real, y::AbstractFloat) = ($fun)(promote(x,y)...)
-        ($fun)(x::AbstractFloat, y::Real) = ($fun)(promote(x,y)...)
-    end
-end
+rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
+rtoldefault{T<:Real}(::Type{T}) = 0
+rtoldefault{T<:Number,S<:Number}(x::T, y::S) = rtoldefault(promote_type(real(T),real(S)))
