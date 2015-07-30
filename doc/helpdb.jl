@@ -1645,7 +1645,7 @@ Any[
       ERROR: InexactError()
        in convert at int.jl:196
 
-   If \"T\" is a \"FloatingPoint\" or \"Rational\" type, then it will
+   If \"T\" is a \"AbstractFloat\" or \"Rational\" type, then it will
    return the closest value to \"x\" representable by \"T\".
 
       julia> x = 1/3
@@ -9117,12 +9117,12 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
    Inexact equality comparison - behaves slightly different depending
    on types of input args:
 
-   * For \"FloatingPoint\" numbers, \"isapprox\" returns \"true\" if
+   * For \"AbstractFloat\" numbers, \"isapprox\" returns \"true\" if
      \"abs(x-y) <= atol + rtol*max(abs(x), abs(y))\".
 
    * For \"Integer\" and \"Rational\" numbers, \"isapprox\" returns
      \"true\" if \"abs(x-y) <= atol\". The *rtol* argument is ignored.
-     If one of \"x\" and \"y\" is \"FloatingPoint\", the other is
+     If one of \"x\" and \"y\" is \"AbstractFloat\", the other is
      promoted, and the method above is called instead.
 
    * For \"Complex\" numbers, the distance in the complex plane is
@@ -11044,8 +11044,8 @@ Mmap.mmap(type::Type{Array{T, N}}, dims)
 
 ("Base","float","float(x)
 
-   Convert a number, array, or string to a \"FloatingPoint\" data
-   type. For numeric data, the smallest suitable \"FloatingPoint\"
+   Convert a number, array, or string to a \"AbstractFloat\" data
+   type. For numeric data, the smallest suitable \"AbstractFloat\"
    type is used. Converts strings to \"Float64\".
 
 "),
@@ -11246,7 +11246,7 @@ golden
 
 "),
 
-("Base","prevfloat","prevfloat(f) -> FloatingPoint
+("Base","prevfloat","prevfloat(f) -> AbstractFloat
 
    Get the previous floating point number in lexicographic order
 
@@ -11493,7 +11493,7 @@ golden
 
 "),
 
-("Base","precision","precision(num::FloatingPoint)
+("Base","precision","precision(num::AbstractFloat)
 
    Get the precision of a floating point number, as defined by the
    effective number of bits in the mantissa.

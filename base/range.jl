@@ -22,7 +22,7 @@ end
 
 # to make StepRange constructor inlineable, so optimizer can see `step` value
 function steprange_last{T}(start::T, step, stop)
-    if isa(start,FloatingPoint) || isa(step,FloatingPoint)
+    if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
     z = zero(step)
@@ -102,13 +102,13 @@ range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+s
 
 ## floating point ranges
 
-immutable FloatRange{T<:FloatingPoint} <: Range{T}
+immutable FloatRange{T<:AbstractFloat} <: Range{T}
     start::T
     step::T
     len::T
     divisor::T
 end
-FloatRange(a::FloatingPoint, s::FloatingPoint, l::Real, d::FloatingPoint) =
+FloatRange(a::AbstractFloat, s::AbstractFloat, l::Real, d::AbstractFloat) =
     FloatRange{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
 
 # float rationalization helper
@@ -129,7 +129,7 @@ function rat(x)
     return a, b
 end
 
-function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
+function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     start == stop && return FloatRange{T}(start,step,1,1)
     (0 < step) != (start < stop) && return FloatRange{T}(start,step,0,1)
@@ -159,27 +159,27 @@ function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
     FloatRange{T}(start, step, floor(r)+1, one(step))
 end
 
-colon{T<:FloatingPoint}(a::T, b::T) = colon(a, one(a), b)
+colon{T<:AbstractFloat}(a::T, b::T) = colon(a, one(a), b)
 
-colon{T<:Real}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
-colon{T<:FloatingPoint}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
-colon{T<:FloatingPoint}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
+colon{T<:Real}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
+colon{T<:AbstractFloat}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
+colon{T<:AbstractFloat}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
 
-range(a::FloatingPoint, len::Integer) = FloatRange(a,one(a),len,one(a))
-range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,one(a))
-range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
-range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
+range(a::AbstractFloat, len::Integer) = FloatRange(a,one(a),len,one(a))
+range(a::AbstractFloat, st::AbstractFloat, len::Integer) = FloatRange(a,st,len,one(a))
+range(a::Real, st::AbstractFloat, len::Integer) = FloatRange(float(a), st, len, one(st))
+range(a::AbstractFloat, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
 ## linspace and logspace
 
-immutable LinSpace{T<:FloatingPoint} <: Range{T}
+immutable LinSpace{T<:AbstractFloat} <: Range{T}
     start::T
     stop::T
     len::T
     divisor::T
 end
 
-function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
+function linspace{T<:AbstractFloat}(start::T, stop::T, len::T)
     len == round(len) || throw(InexactError())
     0 <= len || error("linspace($start, $stop, $len): negative length")
     if len == 0
@@ -226,13 +226,13 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
     end
     return LinSpace(start, stop, len, n)
 end
-function linspace{T<:FloatingPoint}(start::T, stop::T, len::Real)
+function linspace{T<:AbstractFloat}(start::T, stop::T, len::Real)
     T_len = convert(T, len)
     T_len == len || throw(InexactError())
     linspace(start, stop, T_len)
 end
 linspace(start::Real, stop::Real, len::Real=50) =
-    linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., len)
+    linspace(promote(AbstractFloat(start), AbstractFloat(stop))..., len)
 
 function show(io::IO, r::LinSpace)
     print(io, "linspace(")

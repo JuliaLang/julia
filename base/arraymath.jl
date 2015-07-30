@@ -39,7 +39,7 @@ end
 ## Binary arithmetic operators ##
 
 promote_array_type{Scalar, Arry}(F, ::Type{Scalar}, ::Type{Arry}) = promote_op(F, Scalar, Arry)
-promote_array_type{S<:Real, A<:FloatingPoint}(F, ::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}) = S
 

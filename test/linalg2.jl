@@ -315,7 +315,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         end
 
         # issue #10234
-        if elty <: FloatingPoint || elty <: Complex
+        if elty <: AbstractFloat || elty <: Complex
             let z = zeros(elty, 100)
                 z[1] = -Inf
                 for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]

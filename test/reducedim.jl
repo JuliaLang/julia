@@ -125,7 +125,7 @@ A = [1.0 3.0 6.0;
 
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], 2) == reshape([6, 16.4], 2, 1)
-@test std(FloatingPoint[1,2,3], 1) == [1.0]
+@test std(AbstractFloat[1,2,3], 1) == [1.0]
 @test sum(Any[1 2;3 4],1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], 1)[1] == [5,5]
 

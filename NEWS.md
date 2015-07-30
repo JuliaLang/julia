@@ -92,6 +92,8 @@ Language changes
 
   * `String` is renamed to `AbstractString` ([#8872]).
 
+  * `FloatingPoint` is renamed to `AbstractFloat` ([#12162]).
+
   * `None` is deprecated; use `Union{}` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
@@ -382,7 +384,7 @@ Deprecated or removed
      end
     ```
 
-  * indexing with Reals that are not subtypes of Integers (Rationals, FloatingPoint, etc.) has been deprecated ([#10458]).
+  * indexing with Reals that are not subtypes of Integers (Rationals, AbstractFloat, etc.) has been deprecated ([#10458]).
 
   * `push!(A)` has been deprecated, use `append!` instead of splatting arguments to `push!` ([#10400]).
 
@@ -1542,3 +1544,4 @@ Too numerous to mention.
 [#12034]: https://github.com/JuliaLang/julia/issues/12034
 [#12087]: https://github.com/JuliaLang/julia/issues/12087
 [#12137]: https://github.com/JuliaLang/julia/issues/12137
+[#12162]: https://github.com/JuliaLang/julia/issues/12162

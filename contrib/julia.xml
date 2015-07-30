@@ -115,7 +115,7 @@
       <item> FileMonitor </item>
       <item> FileOffset </item>
       <item> Filter </item>
-      <item> FloatingPoint </item>
+      <item> AbstractFloat </item>
       <item> Float16 </item>
       <item> Float32 </item>
       <item> Float64 </item>

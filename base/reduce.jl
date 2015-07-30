@@ -247,7 +247,7 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
-function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
+function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     n = length(A)
     c = r_promote(AddFun(), zero(T)::T)
     if n == 0

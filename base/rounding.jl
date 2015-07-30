@@ -66,18 +66,18 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-call{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
+call{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
 
-_convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Nearest}) = convert(T,x)
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Down})
+_convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Nearest}) = convert(T,x)
+function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Down})
     y = convert(T,x)
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Up})
+function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Up})
     y = convert(T,x)
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:ToZero})
+function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:ToZero})
     y = convert(T,x)
     if x > 0.0
         y > x ? prevfloat(y) : y

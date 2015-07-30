@@ -84,7 +84,7 @@ action:
     julia> typeof(ans)
     UInt8
 
-    julia> convert(FloatingPoint, x)
+    julia> convert(AbstractFloat, x)
     12.0
 
     julia> typeof(ans)
@@ -96,14 +96,14 @@ requested conversion:
 
 .. doctest::
 
-    julia> convert(FloatingPoint, "foo")
-    ERROR: MethodError: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
-    This may have arisen from a call to the constructor FloatingPoint(...),
+    julia> convert(AbstractFloat, "foo")
+    ERROR: MethodError: `convert` has no method matching convert(::Type{AbstractFloat}, ::ASCIIString)
+    This may have arisen from a call to the constructor AbstractFloat(...),
     since type constructors fall back to convert methods.
     Closest candidates are:
       call{T}(::Type{T}, ::Any)
-      convert(::Type{FloatingPoint}, !Matched::Bool)
-      convert(::Type{FloatingPoint}, !Matched::Int8)
+      convert(::Type{AbstractFloat}, !Matched::Bool)
+      convert(::Type{AbstractFloat}, !Matched::Int8)
       ...
 
 Some languages consider parsing strings as numbers or formatting
@@ -175,7 +175,7 @@ right after the declaration of the type and its constructors::
     convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
     convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
 
-    function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
+    function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
         if isnan(x); return zero(T)//zero(T); end
         if isinf(x); return sign(x)//zero(T); end
         y = x
@@ -190,9 +190,9 @@ right after the declaration of the type and its constructors::
             y = 1/y
         end
     end
-    convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
+    convert{T<:Integer}(rt::Type{Rational{T}}, x::AbstractFloat) = convert(rt,x,eps(x))
 
-    convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+    convert{T<:AbstractFloat}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
     convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 The initial four convert methods provide conversions to rational types.
@@ -372,7 +372,7 @@ mechanism with the following promotion rules::
     promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
     promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
     promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+    promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 The first rule asserts that promotion of a rational number with its own
 numerator/denominator type, simply promotes to itself. The second rule

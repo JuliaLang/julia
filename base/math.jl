@@ -111,10 +111,10 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
 end
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
-cbrt(x::FloatingPoint) = x^(1//3)
-exp2(x::FloatingPoint) = 2^x
+cbrt(x::AbstractFloat) = x^(1//3)
+exp2(x::AbstractFloat) = 2^x
 for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
-    @eval ($f)(x::FloatingPoint) = error("not implemented for ", typeof(x))
+    @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
 # TODO: GNU libc has exp10 as an extension; should openlibm?
@@ -140,7 +140,7 @@ sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
 hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
-function hypot{T<:FloatingPoint}(x::T, y::T)
+function hypot{T<:AbstractFloat}(x::T, y::T)
     x = abs(x)
     y = abs(y)
     if x < y
@@ -160,7 +160,7 @@ function hypot{T<:FloatingPoint}(x::T, y::T)
 end
 
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2{T<:FloatingPoint}(y::T, x::T) = Base.no_op_err("atan2", T)
+atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
 
 for f in (:atan2, :hypot)
     @eval begin
@@ -170,16 +170,16 @@ for f in (:atan2, :hypot)
     end
 end
 
-max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
+max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
 
 @vectorize_2arg Real max
 
-min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
+min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
 @vectorize_2arg Real min
 
-minmax{T<:FloatingPoint}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
+minmax{T<:AbstractFloat}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
                                        ifelse((y < x) | (signbit(y) > signbit(x)), (y, x),
                                        ifelse((y > x) | (signbit(y) < signbit(x)), (x, y),
                                        ifelse(x == x, (x, x), (y, y)))))
@@ -188,7 +188,7 @@ ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), 
 ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
 # TODO: vectorize ldexp
 
-function exponent{T<:FloatingPoint}(x::T)
+function exponent{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     k = Int(xe >> significand_bits(T))
@@ -204,7 +204,7 @@ function exponent{T<:FloatingPoint}(x::T)
 end
 @vectorize_1arg Real exponent
 
-function significand{T<:FloatingPoint}(x::T)
+function significand{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     if xe == 0 # x is subnormal
@@ -222,7 +222,7 @@ function significand{T<:FloatingPoint}(x::T)
 end
 @vectorize_1arg Real significand
 
-function frexp{T<:FloatingPoint}(x::T)
+function frexp{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     k = Int(xe >> significand_bits(T))
@@ -242,7 +242,7 @@ function frexp{T<:FloatingPoint}(x::T)
     reinterpret(T,xu), k
 end
 
-function frexp{T<:FloatingPoint}(A::Array{T})
+function frexp{T<:AbstractFloat}(A::Array{T})
     f = similar(A)
     e = Array(Int, size(A))
     for i in eachindex(A)

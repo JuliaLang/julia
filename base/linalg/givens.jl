@@ -44,7 +44,7 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
+function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
     twopar = 2one(T)
@@ -116,7 +116,7 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     twopar, onepar, zeropar = 2one(T), one(T), zero(T)
     czero = zero(Complex{T})
 

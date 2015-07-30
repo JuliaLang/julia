@@ -612,12 +612,12 @@ for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
     float_r = float(_r)
     big_r = big(_r)
     @test typeof(big_r).name === typeof(_r).name
-    if eltype(_r) <: FloatingPoint
+    if eltype(_r) <: AbstractFloat
         @test isa(float_r, typeof(_r))
         @test eltype(big_r) === BigFloat
     else
         @test isa(float_r, Range)
-        @test eltype(float_r) <: FloatingPoint
+        @test eltype(float_r) <: AbstractFloat
         @test eltype(big_r) === BigInt
     end
 end
