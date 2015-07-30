@@ -152,6 +152,9 @@ y = BigFloat(1)
 @test convert(Float64, BigFloat(0.5)) == 0.5
 @test convert(Float32, BigFloat(0.5)) == Float32(0.5)
 @test convert(Float16, BigFloat(0.5)) == Float16(0.5)
+@test convert(Bool, BigFloat(0.0)) == false
+@test convert(Bool, BigFloat(1.0)) == true
+@test_throws InexactError convert(Bool, BigFloat(0.1))
 
 # exponent
 x = BigFloat(0)

@@ -14,6 +14,10 @@ g = Float16(1.)
 @test isless(g, f)
 @test !isless(f, g)
 
+@test convert(Bool,Float16(0.0)) == false
+@test convert(Bool,Float16(1.0)) == true
+@test_throws InexactError convert(Bool,Float16(0.1))
+
 @test -f === Float16(-2.)
 
 @test f+g === Float16(3f0)
