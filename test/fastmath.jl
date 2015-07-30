@@ -138,18 +138,22 @@ for T in (Complex64, Complex128, Complex{BigFloat})
     half = (1+1im)/T(2)
     third = (1-1im)/T(3)
 
+    # some of these functions promote their result to double
+    # precision, but we want to check equality at precision T
+    rtol = Base.rtoldefault(real(T))
+
     for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
               :acos, :acosh, :asin, :asinh, :atan, :atanh, :cos,
               :cosh, :exp10, :exp2, :exp, :expm1, :log10, :log1p,
               :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
-        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)))
-        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)))
+        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)), rtol=rtol)
+        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)), rtol=rtol)
     end
     for f in (:+, :-, :*, :/, :(==), :!=, :^)
         @test isapprox((@eval @fastmath $f($half, $third)),
-                       (@eval $f($half, $third)))
+                       (@eval $f($half, $third)), rtol=rtol)
         @test isapprox((@eval @fastmath $f($third, $half)),
-                       (@eval $f($third, $half)))
+                       (@eval $f($third, $half)), rtol=rtol)
     end
 end
 

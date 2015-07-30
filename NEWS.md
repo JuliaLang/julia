@@ -311,6 +311,8 @@ Library improvements
 
     * The `MathConst` type has been renamed `Irrational` ([#11922]).
 
+    * `isapprox` now has simpler and more sensible default tolerances ([#12393]).
+
   * Random numbers
 
     * Streamlined random number generation APIs [#8246].
@@ -1554,3 +1556,4 @@ Too numerous to mention.
 [#12087]: https://github.com/JuliaLang/julia/issues/12087
 [#12137]: https://github.com/JuliaLang/julia/issues/12137
 [#12162]: https://github.com/JuliaLang/julia/issues/12162
+[#12393]: https://github.com/JuliaLang/julia/issues/12393
