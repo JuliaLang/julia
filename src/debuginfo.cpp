@@ -1068,6 +1068,34 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
     return found;
 }
 
+#if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+extern "C" void __register_frame(void*);
+extern "C" void __deregister_frame(void*);
+
+template <typename callback>
+static const char *processFDE(const char *Entry, callback f)
+{
+    const char *P = Entry;
+    uint32_t Length = *((const uint32_t *)P);
+    P += 4;
+    uint32_t Offset = *((const uint32_t *)P);
+    if (Offset != 0) {
+        f(Entry);
+    }
+    return P + Length;
+}
+
+template <typename callback>
+static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
+{
+    const char *P = (const char*)EHFrameAddr;
+    const char *End = P + EHFrameSize;
+    do  {
+        P = processFDE(P, f);
+    } while(P != End);
+}
+#endif
+
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
 
 /*
@@ -1091,65 +1119,162 @@ public:
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 };
 
-extern "C" void __register_frame(void*);
-extern "C" void __deregister_frame(void*);
-
 static void (*libc_register_frame)(void*)   = NULL;
 static void (*libc_deregister_frame)(void*) = NULL;
-
-static const char *processFDE(const char *Entry, bool isDeregister)
-{
-    const char *P = Entry;
-    uint32_t Length = *((const uint32_t *)P);
-    P += 4;
-    uint32_t Offset = *((const uint32_t *)P);
-    if (Offset != 0) {
-        if (isDeregister) {
-            if (!libc_deregister_frame) {
-                libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
-            }
-            assert(libc_deregister_frame);
-            libc_deregister_frame(const_cast<char *>(Entry));
-            __deregister_frame(const_cast<char *>(Entry));
-        }
-        else {
-            if (!libc_register_frame) {
-                libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
-            }
-            assert(libc_register_frame);
-            libc_register_frame(const_cast<char *>(Entry));
-            __register_frame(const_cast<char *>(Entry));
-        }
-    }
-    return P + Length;
-}
 
 // This implementation handles frame registration for local targets.
 // Memory managers for remote targets should re-implement this function
 // and use the LoadAddr parameter.
-void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size)
+void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
+                                              uint64_t LoadAddr,
+                                              size_t Size)
 {
-    // On OS X OS X __register_frame takes a single FDE as an argument.
-    // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
-    const char *P = (const char *)Addr;
-    const char *End = P + Size;
-    do  {
-        P = processFDE(P, false);
-    } while(P != End);
+  // On OS X OS X __register_frame takes a single FDE as an argument.
+  // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
+  processFDEs(Addr, Size, [](const char *Entry) {
+        if (!libc_register_frame) {
+          libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
+        }
+        assert(libc_register_frame);
+        libc_register_frame(const_cast<char *>(Entry));
+        __register_frame(const_cast<char *>(Entry));
+    });
 }
 
-void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size)
+void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
+                                                uint64_t LoadAddr,
+                                                size_t Size)
 {
-    const char *P = (const char *)Addr;
-    const char *End = P + Size;
-    do  {
-        P = processFDE(P, true);
-    } while(P != End);
+   processFDEs(Addr, Size, [](const char *Entry) {
+        if (!libc_deregister_frame) {
+          libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
+        }
+        assert(libc_deregister_frame);
+        libc_deregister_frame(const_cast<char *>(Entry));
+        __deregister_frame(const_cast<char *>(Entry));
+    });
 }
 
-RTDyldMemoryManager *createRTDyldMemoryManagerOSX()
+RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
 {
     return new RTDyldMemoryManagerOSX();
+}
+
+#endif
+
+#if defined(_OS_LINUX_) && defined(LLVM37)
+
+#include "llvm/ExecutionEngine/SectionMemoryManager.h"
+class RTDyldMemoryManagerUnix : public SectionMemoryManager
+{
+    RTDyldMemoryManagerUnix(const RTDyldMemoryManagerUnix&) = delete;
+    void operator=(const RTDyldMemoryManagerUnix&) = delete;
+
+public:
+    RTDyldMemoryManagerUnix() {};
+    ~RTDyldMemoryManagerUnix() override {};
+    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+};
+
+struct unw_table_entry
+{
+    int32_t start_ip_offset;
+    int32_t fde_offset;
+};
+
+// static uint8_t *consume_leb128(uint8_t *Addr, size_t Size)
+// {
+//     uint8_t *P = Addr;
+//     while ((*P >> 7) != 0 && P < Addr + Size)
+//         ++P;
+//     return P;
+// }
+
+template <typename U, typename T>
+static U safe_trunc(T t)
+{
+    assert((t >= static_cast<T>(std::numeric_limits<U>::min()))
+           && (t <= static_cast<T>(std::numeric_limits<U>::max())));
+    return static_cast<U>(t);
+}
+
+void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
+                                               uint64_t LoadAddr,
+                                               size_t Size)
+{
+    // System unwinder
+    __register_frame(Addr);
+    // Our unwinder
+    unw_dyn_info_t *di = new unw_dyn_info_t;
+    // In a shared library, this is set to the address of the PLT.
+    // For us, just put 0 to emulate a static library. This field does
+    // not seem to be used on our supported architectures.
+    di->gp = 0;
+    // I'm not a great fan of the naming of this constant, but it means the
+    // right thing, which is a table of FDEs and ips. The remote is unimportant
+    di->format = UNW_INFO_FORMAT_IP_OFFSET;
+    di->u.ti.name_ptr = 0;
+    di->u.ti.segbase = (unw_word_t)Addr;
+    // Now first count the number of FDEs
+    size_t nentries = 0;
+    processFDEs((char*)Addr, Size, [&](const char *Entry){ nentries++; });
+
+    uintptr_t start_ip = (uintptr_t)-1;
+    uintptr_t end_ip = 0;
+
+    // Then allocate a table and fill in the information
+    // While we're at it, also record the start_ip and size,
+    // which we fill in the table
+    unw_table_entry *table = new unw_table_entry[nentries];
+    size_t cur_entry = 0;
+    processFDEs((char*)Addr, Size, [&](const char *Entry) {
+            const uintptr_t *EntryPtr = ((const uintptr_t*)Entry) + 1;
+            uintptr_t start = *EntryPtr + (uintptr_t)EntryPtr; // Assume pcrel | sabs8
+            EntryPtr++;
+            uintptr_t size = *EntryPtr;
+
+            if (start < start_ip)
+                start_ip = start;
+            if (end_ip < (start + size))
+                end_ip = start+size;
+        });
+
+    processFDEs((char*)Addr, Size, [&](const char *Entry) {
+            const uintptr_t *EntryPtr = ((const uintptr_t*)Entry) + 1;
+            uintptr_t start = *EntryPtr + (uintptr_t)EntryPtr; // Assume pcrel | sabs8
+            table[cur_entry].start_ip_offset =
+                safe_trunc<int32_t>((intptr_t)start - (intptr_t)start_ip);
+            table[cur_entry].fde_offset =
+                safe_trunc<int32_t>((intptr_t)Entry - (intptr_t)Addr);
+            cur_entry++;
+        });
+
+    assert(end_ip != 0);
+
+    di->u.ti.table_len = nentries;
+    di->u.ti.table_data = (unw_word_t*)table;
+    di->start_ip = start_ip;
+    di->end_ip = end_ip;
+
+    JL_SIGATOMIC_BEGIN();
+    _U_dyn_register(di);
+    JL_SIGATOMIC_END();
+}
+
+void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
+                                           uint64_t LoadAddr,
+                                           size_t Size)
+{
+    __deregister_frame(Addr);
+    // Deregistering with our unwinder requires a lookup table to find the
+    // the allocated entry above (or we could look in libunwind's internal
+    // data structures).
+}
+
+RTDyldMemoryManager* createRTDyldMemoryManagerUnix()
+{
+    return new RTDyldMemoryManagerUnix();
 }
 
 #endif
