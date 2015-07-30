@@ -48,6 +48,28 @@ include(joinpath(dir, "queens.jl"))
     end
 end
 
+dc_path = joinpath(dir, "dictchannel.jl")
+include(dc_path)
+
+w_set=filter!(x->x != myid(), workers())
+pid = length(w_set) > 0 ? w_set[1] : myid()
+
+remotecall_fetch(pid, f->(include(f); nothing), dc_path)
+dc=RemoteRef(()->DictChannel(), pid)
+
+@test isready(dc) == false
+put!(dc, 1, 2)
+put!(dc, "Hello", "World")
+@test isready(dc) == true
+@test isready(dc, 1) == true
+@test isready(dc, "Hello") == true
+@test isready(dc, 2) == false
+@test fetch(dc, 1) == 2
+@test fetch(dc, "Hello") == "World"
+@test take!(dc, 1) == 2
+@test isready(dc, 1) == false
+
+
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))
 

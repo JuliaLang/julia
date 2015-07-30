@@ -23,6 +23,7 @@ export
     Markdown,
 
 # Types
+    AbstractChannel,
     AbstractMatrix,
     AbstractSparseArray,
     AbstractSparseMatrix,

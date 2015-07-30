@@ -231,6 +231,7 @@ function test_channel(c)
 end
 
 test_channel(Channel(10))
+test_channel(RemoteRef(()->Channel(10)))
 
 c=Channel{Int}(1)
 @test_throws MethodError put!(c, "Hello")
