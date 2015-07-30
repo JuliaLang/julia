@@ -296,7 +296,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         a0 = rand(rng..., T)       ::T
         a1 = rand(rng..., T, 5)    ::Vector{T}
         a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
-        if T <: FloatingPoint
+        if T <: AbstractFloat
             for a in [a0, a1..., a2...]
                 @test 0.0 <= a < 1.0
             end

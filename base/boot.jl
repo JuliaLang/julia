@@ -133,7 +133,7 @@ export
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
-    FloatingPoint, Float16, Float32, Float64,
+    AbstractFloat, Float16, Float32, Float64,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
@@ -180,14 +180,14 @@ const (===) = is
 
 abstract Number
 abstract Real     <: Number
-abstract FloatingPoint <: Real
+abstract AbstractFloat <: Real
 abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
 
-bitstype 16 Float16 <: FloatingPoint
-bitstype 32 Float32 <: FloatingPoint
-bitstype 64 Float64 <: FloatingPoint
+bitstype 16 Float16 <: AbstractFloat
+bitstype 32 Float32 <: AbstractFloat
+bitstype 64 Float64 <: AbstractFloat
 
 bitstype 8  Bool <: Integer
 bitstype 32 Char

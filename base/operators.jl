@@ -11,13 +11,13 @@ super(T::DataType) = T.super
 ==(x,y) = x === y
 
 isequal(x, y) = x == y
-isequal(x::FloatingPoint, y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::Real,          y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::FloatingPoint, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 
-isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
 =={T}(::Type{T}, ::Type{T}) = true  # encourage more specialization on types (see #11425)
 ==(T::Type, S::Type)        = typeseq(T, S)
@@ -327,7 +327,7 @@ for f in (:+, :-)
             range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
         end
 
-        function $f{T<:FloatingPoint}(r1::FloatRange{T}, r2::FloatRange{T})
+        function $f{T<:AbstractFloat}(r1::FloatRange{T}, r2::FloatRange{T})
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))
@@ -346,7 +346,7 @@ for f in (:+, :-)
             end
         end
 
-        function $f{T<:FloatingPoint}(r1::LinSpace{T}, r2::LinSpace{T})
+        function $f{T<:AbstractFloat}(r1::LinSpace{T}, r2::LinSpace{T})
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))

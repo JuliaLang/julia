@@ -159,7 +159,7 @@ tryparse{T<:ByteString}(::Type{Float32}, s::SubString{T}) = ccall(:jl_try_substr
 
 tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
 
-function parse{T<:FloatingPoint}(::Type{T}, s::AbstractString)
+function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
     nf = tryparse(T, s)
     isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
