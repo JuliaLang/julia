@@ -841,3 +841,11 @@ err(z, x) = abs(z - x) / abs(x)
 
 # issue #10994: handle embedded NUL chars for string parsing
 @test_throws ArgumentError parse(BigFloat, "1\0")
+
+# serialization (issue #12386)
+let b = IOBuffer()
+    x = 2.1*big(pi)
+    serialize(b, x)
+    seekstart(b)
+    @test deserialize(b) == x
+end
