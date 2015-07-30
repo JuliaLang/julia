@@ -577,6 +577,25 @@ function utf16_get_supplementary(lead::UInt16, trail::UInt16)
     Base.get_supplementary(lead, trail)
 end
 
+function is_utf8_start(byte::UInt8)
+    depwarn("""
+            Base.is_utf8_start(c::UInt8) was undocumented and unexported,
+            and has been removed.  Use !Base.is_valid_continuation(c) instead,
+            however it is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("is_utf8_start"))
+    !Base.is_valid_continuation(byte)
+end
+function is_utf8_continuation(byte::UInt8)
+    depwarn("""
+            Base.is_utf8_continuation(c::UInt8) was undocumented and unexported,
+            and has been removed.  Use Base.is_valid_continuation(c) instead,
+            however it is also undocumented and unexported, and may change in the future.
+            """,
+            symbol("is_utf8_continuation"))
+    Base.is_valid_continuation(byte)
+end
+
 # 11280, mmap
 
 export msync
