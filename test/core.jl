@@ -3166,3 +3166,10 @@ end
     a
     NInitializedTestType() = new()
 end
+
+# issue #12394
+type Empty12394 end
+let x = Array(Empty12394,1), y = [Empty12394()]
+    @test_throws UndefRefError x==y
+    @test_throws UndefRefError y==x
+end

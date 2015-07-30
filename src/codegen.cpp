@@ -1862,22 +1862,23 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
     bool isteq = jl_types_equal(rt1, rt2);
     bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
-    if (isteq && isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1))
-        return ConstantInt::get(T_int1, 1);
+    bool issingleton = isteq && isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1);
     if (arg1 && !varg1) {
         varg1 = isbits ? auto_unbox(arg1, ctx) : emit_expr(arg1, ctx);
-        if (arg2 && !varg2 && !isbits && varg1->getType() == jl_pvalue_llvmt &&
+        if (!issingleton && arg2 && !varg2 && !isbits && varg1->getType() == jl_pvalue_llvmt &&
             rt1 != (jl_value_t*)jl_sym_type && might_need_root(arg1)) {
             make_gcroot(varg1, ctx);
         }
     }
-    Value *answer;
     if (arg2 && !varg2)
         varg2 = isbits ? auto_unbox(arg2, ctx) : emit_expr(arg2, ctx);
+    if (issingleton)
+        return ConstantInt::get(T_int1, 1);
     if (isleaf && !isteq && !jl_is_type_type(rt1) && !jl_is_type_type(rt2)) {
         ctx->gc.argDepth = last_depth;
         return ConstantInt::get(T_int1, 0);
     }
+    Value *answer;
     Type *at1 = varg1->getType();
     Type *at2 = varg2->getType();
     if (at1 != jl_pvalue_llvmt && at2 != jl_pvalue_llvmt) {
