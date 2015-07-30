@@ -699,7 +699,7 @@ function deserialize{K,V}(s::SerializationState, T::Type{Dict{K,V}})
     return t
 end
 
-deserialize(s::SerializationState, ::Type{BigFloat}) = BigFloat(deserialize(s))
+deserialize(s::SerializationState, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
 
 deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
 
