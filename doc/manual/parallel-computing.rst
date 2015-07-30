@@ -463,6 +463,30 @@ variable takes on all values added to the channel. An empty, closed channel
 causes the ``for`` loop to terminate.
 
 
+RemoteRefs and AbstractChannels
+-------------------------------
+
+A ``RemoteRef`` is a proxy for an implementation of an ``AbstractChannel``
+
+A concrete implementation of an ``AbstractChannel`` (like ``Channel``), is required
+to implement ``put!``, ``take!``, ``fetch``, ``isready`` and ``wait``. The remote object
+referred to by a ``RemoteRef()`` or ``RemoteRef(pid)`` is stored in a ``Channel{Any}(1)``,
+i.e., a channel of size 1 capable of holding objects of ``Any`` type.
+
+Methods ``put!``, ``take!``, ``fetch``, ``isready`` and ``wait`` on a ``RemoteRef`` are proxied onto
+the backing store on the remote process.
+
+The constructor ``RemoteRef(f::Function, pid)`` allows us to construct references to channels holding
+more than one value of a specific type. ``f()`` is a function executed on ``pid`` and it must return
+an ``AbstractChannel``.
+
+For example, ``RemoteRef(()->Channel{Int}(10), pid)``, will return a reference to a channel of type ``Int``
+and size 10.
+
+``RemoteRef`` can thus be used to refer to user implemented ``AbstractChannel`` objects. A simple
+example of this is provided in ``examples/dictchannel.jl`` which uses a dictionary as its remote store.
+
+
 Shared Arrays
 -------------
 
