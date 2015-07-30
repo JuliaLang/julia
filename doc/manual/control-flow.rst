@@ -778,9 +778,9 @@ compare ``x`` to zero instead of catching an exception. The exception is much
 slower than simply comparing and branching.
 
 ``try/catch`` statements also allow the :exc:`Exception` to be saved in a
-variable. In this contrived example, the following example calculates the
+variable. The following contrived example calculates the
 square root of the second element of ``x`` if ``x`` is indexable, otherwise
-assumes ``x`` is a real number and returns its square root:
+assuming ``x`` to be a real number and returning its square root:
 
 .. doctest::
 
