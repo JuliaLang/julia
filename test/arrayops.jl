@@ -1216,6 +1216,7 @@ b = rand(6,7)
 # return type declarations (promote_op)
 module RetTypeDecl
     using Base.Test
+    import Base: +, *, .*
 
     immutable MeterUnits{T,P} <: Number
         val::T
