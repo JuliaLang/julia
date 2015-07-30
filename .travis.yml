@@ -21,7 +21,10 @@ notifications:
           - http://status.julialang.org/put/travis
           - http://julia.mit.edu:8000/travis-hook
 before_install:
+    - make check-whitespace
     - if [ `uname` = "Linux" ]; then
+        sudo apt-get install jq -y;
+        contrib/travis_fastfail.sh || exit 1;
         BUILDOPTS="-j3 USEGCC=1 LLVM_CONFIG=llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR LIBUNWIND OPENLIBM; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
@@ -39,6 +42,8 @@ before_install:
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
         brew update;
+        brew install -v jq;
+        contrib/travis_fastfail.sh || exit 1;
         brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
@@ -49,10 +54,9 @@ before_install:
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
-    - git clone -q git://git.kitenet.net/moreutils
 script:
-    - make check-whitespace || exit 1
     - make $BUILDOPTS -C base version_git.jl.phony
+    - git clone -q git://git.kitenet.net/moreutils
     - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - if [ `uname` = "Darwin" ]; then
         for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
