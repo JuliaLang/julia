@@ -254,9 +254,9 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
     return pobj
 end
 
-function compile(mod::Symbol)
+compile(mod::Symbol) = compile(string(mod))
+function compile(name::ByteString)
     myid() == 1 || error("can only compile from node 1")
-    name = string(mod)
     path = find_in_path(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
     cachepath = LOAD_CACHE_PATH[1]
