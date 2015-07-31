@@ -314,6 +314,11 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type, bool toju
 
 // --- argument passing and scratch space utilities ---
 
+// Emit code to convert argument to form expected by C ABI
+// ty = desired LLVM type
+// jt = Julia type of formal argument
+// jv = value of actual argument
+// aty = Julia inferred type of actual argument
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *aty, bool addressOf,
                               bool byRef, bool inReg,
@@ -633,7 +638,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                             jl_svec_len(ctx->sp)/2);
     }
     JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall return type");
+        jl_rethrow_with_add("error interpreting llvmcall argument tuple");
     }
     }
     {
@@ -643,7 +648,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                             jl_svec_len(ctx->sp)/2);
     }
     JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall argument tuple");
+        jl_rethrow_with_add("error interpreting llvmcall return type");
     }
     }
     {
