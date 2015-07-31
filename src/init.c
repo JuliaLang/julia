@@ -1149,8 +1149,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_enable(1);
 
-    if (jl_options.image_file)
-        jl_init_restored_modules();
+    if (jl_options.image_file) {
+        jl_array_t *temp = jl_module_init_order;
+        JL_GC_PUSH1(&temp);
+        jl_module_init_order = NULL;
+        jl_init_restored_modules(temp);
+        JL_GC_POP();
+    }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
