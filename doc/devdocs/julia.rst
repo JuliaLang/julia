@@ -20,3 +20,4 @@
    sysimg
    llvm
    stdio
+   promote-op
