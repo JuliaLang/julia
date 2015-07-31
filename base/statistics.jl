@@ -177,7 +177,15 @@ varm(iterable, m::Number; corrected::Bool=true) =
 
 ## variances over ranges
 
-varm(v::Range, m::Number) = var(v)
+function varm(v::Range, m::Number)
+    f = first(v) - m
+    s = step(v)
+    l = length(v)
+    if l == 0 || l == 1
+           return NaN
+    end
+    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+end
 
 function var(v::Range)
     s = step(v)

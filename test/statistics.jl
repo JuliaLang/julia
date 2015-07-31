@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 # middle
 
 @test middle(3) === 3.0
@@ -43,6 +45,8 @@ end
 @test median!([1 2; 3 4]) == 2.5
 
 # mean
+@test_throws ArgumentError mean(())
+@test mean((1,2,3)) === 2.
 @test mean([0]) === 0.
 @test mean([1.]) === 1.
 @test mean([1.,3]) == 2.
@@ -96,6 +100,9 @@ end
 @test_approx_eq var([1], 1; mean=[2], corrected=false) [1.0]
 
 @test var(1:8) == 6.
+@test varm(1:8,1) == varm(collect(1:8),1)
+@test isnan(var(1:1))
+@test isnan(var(1:-1))
 
 @test_approx_eq varm([1,2,3], 2) 1.
 @test_approx_eq var([1,2,3]) 1.
@@ -108,6 +115,7 @@ end
 @test_approx_eq var((1,2,3); corrected=false) 2.0/3
 @test_approx_eq var((1,2,3); mean=0) 7.
 @test_approx_eq var((1,2,3); mean=0, corrected=false) 14.0/3
+@test_throws ArgumentError var((1,2,3); mean=())
 
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2) [2.5 2.5]'
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) [2.0 2.0]'
@@ -300,4 +308,4 @@ end
 
 @test_throws ArgumentError histrange([1, 10], 0)
 @test_throws ArgumentError histrange([1, 10], -1)
-
+@test_throws ArgumentError histrange(Float64[],-1)
