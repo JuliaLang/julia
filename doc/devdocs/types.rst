@@ -263,7 +263,7 @@ Some :obj:`TypeVar` interactions depend on the ``bound`` state, even when there 
 
    # These would be the same no matter whether we used S or T
    julia> Array{Array{S}} <: Array{Array}
-   false
+   true
 
    julia> Array{Array{S}} <: Array{Array{S}}
    true
