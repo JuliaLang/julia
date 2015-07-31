@@ -3111,16 +3111,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
             jl_error("Linenode in value position");
         return NULL;
     }
-    if (jl_is_quotenode(expr)) {
-        jl_value_t *jv = jl_fieldref(expr,0);
-        if (jl_is_bitstype(jl_typeof(jv))) {
-            return emit_expr(jv, ctx, isboxed, valuepos);
-        }
-        if (!jl_is_symbol(jv)) {
-            jl_add_linfo_root(ctx->linfo, jv);
-        }
-        return literal_pointer_val(jv);
-    }
     if (jl_is_gotonode(expr)) {
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             int labelname = jl_gotonode_label(expr);
@@ -3166,17 +3156,33 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
         }
         return NULL;
     }
+    if (jl_is_lambda_info(expr)) {
+        return emit_lambda_closure(expr, ctx);
+    }
     if (!jl_is_expr(expr)) {
+        int needroot = true;
+        if (jl_is_quotenode(expr)) {
+            expr = jl_fieldref(expr,0);
+            if (jl_is_symbol(expr)) {
+                needroot = false;
+            }
+        }
         // numeric literals
-        int needroot = 1;
         if (jl_is_int32(expr)) {
-            needroot = !((uint32_t)(jl_unbox_int32(expr)+512) < 1024);
+            int32_t val = jl_unbox_int32(expr);
+            if ((uint32_t)(val+512) < 1024) {
+                // this can be gotten from the box cache
+                needroot = false;
+                expr = jl_box_int32(val);
+            }
         }
         else if (jl_is_int64(expr)) {
-            needroot = !((uint64_t)(jl_unbox_int64(expr)+512) < 1024);
-        }
-        else if (jl_is_lambda_info(expr)) {
-            return emit_lambda_closure(expr, ctx);
+            uint64_t val = jl_unbox_uint64(expr);
+            if ((uint64_t)(val+512) < 1024) {
+                // this can be gotten from the box cache
+                needroot = false;
+                expr = jl_box_int64(val);
+            }
         }
         if (needroot) {
             jl_add_linfo_root(ctx->linfo, expr);
