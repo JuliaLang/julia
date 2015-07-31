@@ -444,7 +444,7 @@ reverse(p::Pair) = Pair(p.second, p.first)
 endof(p::Pair) = 2
 
 # some operators not defined yet
-global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, .∈, ∉, .∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 this_module = current_module()
 baremodule Operators
@@ -503,7 +503,9 @@ export
     ⋅,
     ×,
     ∈,
+    .∈,
     ∉,
+    .∉,
     ∋,
     ∌,
     ⊆,
@@ -527,6 +529,6 @@ import ..this_module: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose, call,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, .∈, ∉, .∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end
