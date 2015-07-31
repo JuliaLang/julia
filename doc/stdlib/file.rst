@@ -13,7 +13,20 @@
 
    Set the current working directory.
 
+   ::
+              cd(f, [dir])
+
+   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
+
 .. function:: cd(f, [dir])
+
+   ::
+              cd(dir::AbstractString)
+
+   Set the current working directory.
+
+   ::
+              cd(f, [dir])
 
    Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 
@@ -112,7 +125,7 @@
 .. function:: cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
    Copy the file, link, or directory from *src* to *dest*.
-   \"remove_destination=true\" will first remove an existing `dst`.
+   "remove_destination=true" will first remove an existing `dst`.
 
    If `follow_symlinks=false`, and src is a symbolic link, dst will be created as a symbolic link.
    If `follow_symlinks=true` and src is a symbolic link, dst will be a copy of the file or directory
@@ -129,7 +142,7 @@
 .. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
    Move the file, link, or directory from *src* to *dest*.
-   \"remove_destination=true\" will first remove an existing `dst`.
+   "remove_destination=true" will first remove an existing `dst`.
 
 .. function:: rm(path::AbstractString; recursive=false)
 
@@ -289,3 +302,4 @@
    If the last component of a path contains a dot, split the path into everything
    before the dot and everything including and after the dot. Otherwise, return
    a tuple of the argument unmodified and the empty string.
+
