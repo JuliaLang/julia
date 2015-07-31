@@ -82,6 +82,7 @@ endif
 
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) contrib/add_license_to_files.jl #add license headers
+	@$(JULIA_EXECUTABLE) doc/genstdlib.jl
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
