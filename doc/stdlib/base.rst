@@ -98,14 +98,6 @@ Getting Around
 
    Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
 
-.. function:: help(name)
-
-   Get help for a function. ``name`` can be an object or a string.
-
-.. function:: apropos(string)
-
-   Search documentation for functions related to ``string``.
-
 .. function:: which(f, types)
 
    Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.

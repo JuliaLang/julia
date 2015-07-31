@@ -13,7 +13,6 @@
 
 module DocCheck
 
-import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT
 import Base: argtype_decl, uncompressed_ast
 
 export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented_by_file, undocumented_rst,
