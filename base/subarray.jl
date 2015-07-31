@@ -167,13 +167,13 @@ end
                     push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
                 end
                 push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
-                push!(Itypes, rangetype(iv, j))
+                push!(Itypes, indextype(iv, j))
             else
                 # We have a linear index that spans more than one
                 # dimension of the parent
                 N += 1
                 push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
-                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)::Array{Int,1}))
                 push!(Itypes, Array{Int, 1})
                 Iindex_lin = length(Itypes)
                 Jindex_lin = Jindex
@@ -215,7 +215,7 @@ end
     quote
         Inew = $Inew
         $exfirst
-        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
+        SubArray{$T,$N,$PV,typeof(Inew),$LD}(V.parent, Inew, $dims, f, $strideexpr)
     end
 end
 
@@ -258,11 +258,11 @@ end
             elseif Jindex < length(Jp) || Jindex == NV || IVindex == length(IVp)
                 # simple indexing
                 push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
-                push!(Itypes, rangetype(iv, j))
+                push!(Itypes, indextype(iv, j))
                 push!(ItypesLD, Itypes[end])
             else
                 # We have a linear index that spans more than one dimension of the parent
-                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)::Array{Int,1}))
                 push!(Itypes, Array{Int, 1})
                 push!(ItypesLD, Itypes[end])
                 break
@@ -302,15 +302,24 @@ end
         $preex
         Inew = $Inew
         $exfirst
-        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
+        SubArray{$T,$N,$PV,typeof(Inew),$LD}(V.parent, Inew, $dims, f, $strideexpr)
     end
 end
 
-function rangetype(T1, T2)
-    rt = return_types(getindex, Tuple{T1, T2})
-    length(rt) == 1 || error("Can't infer return type")
-    rt[1]
-end
+# These pretty much only have to get the container-type right,
+# for use in nextLD. The actual index type is set by typeof(I).
+indextype{A<:AbstractArray,I<:Integer}(::Type{A}, ::Type{I}) = eltype(A)
+indextype{A<:UnitRange,I<:UnitRange}(::Type{A}, ::Type{I}) = A
+indextype{A<:Range,I<:UnitRange}(::Type{A}, ::Type{I}) = A
+indextype{A<:UnitRange,I<:Range}(::Type{A}, ::Type{I}) = I
+indextype{A<:Range,I<:Range}(::Type{A}, ::Type{I}) = A
+indextype{A<:AbstractArray,I<:Range}(::Type{A}, ::Type{I}) = A
+indextype{A<:Range,I<:AbstractArray}(::Type{A}, ::Type{I}) = Array{Int,1}
+indextype{A<:AbstractArray,I<:AbstractArray}(::Type{A}, ::Type{I}) = Array{Int,1}
+indextype(::Type{Colon}, ::Type{Colon}) = Colon
+indextype{I<:Integer}(::Type{Colon}, ::Type{I}) = Int
+indextype{I<:AbstractArray}(::Type{Colon}, ::Type{I}) = I
+indextype{A<:AbstractArray}(::Type{A}, ::Type{Colon}) = A
 
 reindex(a, b) = a[b]
 reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
