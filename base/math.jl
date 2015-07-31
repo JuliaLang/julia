@@ -13,7 +13,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, modf, ^, mod2pi,
+       clamp, clamp!, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
        besselj0, besselj1, besselj, besseljx,
        bessely0, bessely1, bessely, besselyx,
@@ -45,6 +45,13 @@ clamp{T}(x::AbstractArray{T,2}, lo, hi) =
     [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]
 clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
+
+function clamp!{T}(x::AbstractArray{T}, lo, hi)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lo, hi)
+    end
+    x
+end
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
 macro horner(x, p...)

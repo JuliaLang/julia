@@ -1,5 +1,25 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@test clamp(0, 1, 3) == 1
+@test clamp(1, 1, 3) == 1
+@test clamp(2, 1, 3) == 2
+@test clamp(3, 1, 3) == 3
+@test clamp(4, 1, 3) == 3
+
+@test clamp(0.0, 1, 3) == 1.0
+@test clamp(1.0, 1, 3) == 1.0
+@test clamp(2.0, 1, 3) == 2.0
+@test clamp(3.0, 1, 3) == 3.0
+@test clamp(4.0, 1, 3) == 3.0
+
+@test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+
+begin
+    x = [0.0, 1.0, 2.0, 3.0, 4.0]
+    clamp!(x, 1, 3)
+    @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+end
+
 # frexp,ldexp,significand,exponent
 for T in (Float16,Float32,Float64)
     for z in (zero(T),-zero(T))
