@@ -463,8 +463,8 @@ variable takes on all values added to the channel. An empty, closed channel
 causes the ``for`` loop to terminate.
 
 
-Shared Arrays (Experimental)
------------------------------------------------
+Shared Arrays
+-------------
 
 Shared Arrays use system shared memory to map the same array across
 many processes.  While there are some similarities to a :class:`DArray`,
@@ -552,6 +552,99 @@ would result in undefined behavior: because each process fills the
 execute (for any particular element of ``S``) will have its ``pid``
 retained.
 
+As a more extended and complex example, consider running the following
+"kernel" in parallel::
+
+    q[i,j,t+1] = q[i,j,t] + u[i,j,t]
+
+In this case, if we try to split up the work using a one-dimensional
+index, we are likely to run into trouble: if ``q[i,j,t]`` is near the
+end of the block assigned to one worker and ``q[i,j,t+1]`` is near the
+beginning of the block assigned to another, it's very likely that
+``q[i,j,t]`` will not be ready at the time it's needed for computing
+``q[i,j,t+1]``.  In such cases, one is better off chunking the array
+manually.  Let's split along the second dimension::
+
+   # This function retuns the (irange,jrange) indexes assigned to this worker
+   @everywhere function myrange(q::SharedArray)
+       idx = indexpids(q)
+       if idx == 0
+           # This worker is not assigned a piece
+           return 1:0, 1:0
+       end
+       nchunks = length(procs(q))
+       splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
+       1:size(q,1), splits[idx]+1:splits[idx+1]
+   end
+
+   # Here's the kernel
+   @everywhere function advection_chunk!(q, u, irange, jrange, trange)
+       @show (irange, jrange, trange)  # display so we can see what's happening
+       for t in trange, j in jrange, i in irange
+           q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
+       end
+       q
+   end
+
+   # Here's a convenience wrapper for a SharedArray implementation
+   @everywhere advection_shared_chunk!(q, u) = advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
+
+Now let's compare three different versions, one that runs in a single process::
+
+   advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1)
+
+one that uses ``@parallel``::
+
+   function advection_parallel!(q, u)
+       for t = 1:size(q,3)-1
+           @sync @parallel for j = 1:size(q,2)
+               for i = 1:size(q,1)
+                   q[i,j,t+1]= q[i,j,t] + u[i,j,t]
+               end
+           end
+       end
+       q
+   end
+
+and one that delegates in chunks::
+
+   function advection_shared!(q, u)
+       @sync begin
+           for p in procs(q)
+               @async remotecall_wait(p, advection_shared_chunk!, q, u)
+           end
+       end
+       q
+   end
+
+If we create SharedArrays and time these functions, we get the following results (with ``julia -p 4``)::
+
+   q = SharedArray(Float64, (500,500,500))
+   u = SharedArray(Float64, (500,500,500))
+
+   # Run once to JIT-compile
+   advection_serial!(q, u)
+   advection_parallel!(q, u)
+   advection_shared!(q,u)
+
+   # Now the real results:
+   julia> @time advection_serial!(q, u);
+   (irange,jrange,trange) = (1:500,1:500,1:499)
+    830.220 milliseconds (216 allocations: 13820 bytes)
+
+   julia> @time advection_parallel!(q, u);
+      2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)
+
+   julia> @time advection_shared!(q,u);
+           From worker 2:	(irange,jrange,trange) = (1:500,1:125,1:499)
+           From worker 4:	(irange,jrange,trange) = (1:500,251:375,1:499)
+           From worker 3:	(irange,jrange,trange) = (1:500,126:250,1:499)
+           From worker 5:	(irange,jrange,trange) = (1:500,376:500,1:499)
+    238.119 milliseconds (2264 allocations: 169 KB)
+
+The biggest advantage of ``advection_shared!`` is that it minimizes traffic
+among the workers, allowing each to compute for an extended time on the
+assigned piece.
 
 .. _man-clustermanagers:
 
