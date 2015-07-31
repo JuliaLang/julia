@@ -10,7 +10,8 @@ BUILDDIR ?= .
 
 SRCS = \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop simplevector
+	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
+	llvm-simdloop simplevector
 
 HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 
@@ -93,6 +94,7 @@ $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc flis
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: table.c
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: gc-debug.c
+$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: signals-*.c
 
 $(BUILDDIR)/support/libsupport.a: support/*.h support/*.c
 	$(MAKE) -C support BUILDDIR='$(abspath $(BUILDDIR)/support)'

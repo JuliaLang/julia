@@ -12,26 +12,7 @@
 #include <assert.h>
 #include <fcntl.h>
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/resource.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#endif
-
-#if defined(__APPLE__)
-#include <AvailabilityMacros.h>
-#define __need_ucontext64_t
-#ifdef MAC_OS_X_VERSION_10_10
-#include <sys/_types/_ucontext64.h>
-#else
-#include <machine/_structs.h>
-#endif
-#endif
-
 #include <errno.h>
-#include <signal.h>
 
 #if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
 #include <getopt.h>
@@ -52,36 +33,15 @@ DLLEXPORT char * dirname(char *);
 
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
-// Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
-// eventually we can probably integrate this into OpenLibm.
-#if defined(_COMPILER_MINGW_)
-void __cdecl __MINGW_NOTHROW _fpreset (void);
-void __cdecl __MINGW_NOTHROW fpreset (void);
-#else
-void __cdecl _fpreset (void);
-void __cdecl fpreset (void);
-#endif
-#define _FPE_INVALID        0x81
-#define _FPE_DENORMAL       0x82
-#define _FPE_ZERODIVIDE     0x83
-#define _FPE_OVERFLOW       0x84
-#define _FPE_UNDERFLOW      0x85
-#define _FPE_INEXACT        0x86
-#define _FPE_UNEMULATED     0x87
-#define _FPE_SQRTNEG        0x88
-#define _FPE_STACKOVERFLOW  0x8a
-#define _FPE_STACKUNDERFLOW 0x8b
-#define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 #include <windows.h>
 #include <dbghelp.h>
 #include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+#else
+#include <sys/resource.h>
+#include <unistd.h>
 #endif
-
-DLLEXPORT void jlbacktrace();
-DLLEXPORT void gdbbacktrace();
-DLLEXPORT void gdblookup(ptrint_t ip);
 
 static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 
@@ -124,8 +84,6 @@ jl_options_t jl_options = { 0,    // quiet
 };
 
 int jl_boot_file_loaded = 0;
-int exit_on_sigint = 0;
-
 char *jl_stack_lo;
 char *jl_stack_hi;
 size_t jl_page_size;
@@ -133,7 +91,7 @@ size_t jl_page_size;
 static void jl_find_stack_bottom(void)
 {
     size_t stack_size;
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+#ifndef _OS_WINDOWS_
     struct rlimit rl;
 
     // When using memory sanitizer, increase stack size because msan bloats stack usage
@@ -163,360 +121,6 @@ static void jl_find_stack_bottom(void)
     jl_stack_hi = (char*)&stack_size;
     jl_stack_lo = jl_stack_hi - stack_size;
 }
-
-// what to do on SIGINT
-DLLEXPORT void jl_sigint_action(void)
-{
-    if (exit_on_sigint) jl_exit(130); // 128+SIGINT
-    jl_throw(jl_interrupt_exception);
-}
-
-#ifdef _OS_WINDOWS_
-static char *strsignal(int sig)
-{
-    switch (sig) {
-    case SIGINT:         return "SIGINT"; break;
-    case SIGILL:         return "SIGILL"; break;
-    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
-    case SIGFPE:         return "SIGFPE"; break;
-    case SIGSEGV:        return "SIGSEGV"; break;
-    case SIGTERM:        return "SIGTERM"; break;
-    case SIGBREAK:       return "SIGBREAK"; break;
-    case SIGABRT:        return "SIGABRT"; break;
-    }
-    return "?";
-}
-
-void __cdecl crt_sig_handler(int sig, int num)
-{
-    switch (sig) {
-    case SIGFPE:
-        fpreset();
-        signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler);
-        switch(num) {
-        case _FPE_INVALID:
-        case _FPE_OVERFLOW:
-        case _FPE_UNDERFLOW:
-        default:
-            jl_errorf("Unexpected FPE Error 0x%X", num);
-            break;
-        case _FPE_ZERODIVIDE:
-            jl_throw(jl_diverror_exception);
-            break;
-        }
-        break;
-    case SIGINT:
-        signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
-        if (jl_defer_signal) {
-            jl_signal_pending = sig;
-        }
-        else {
-            jl_signal_pending = 0;
-            jl_sigint_action();
-        }
-        break;
-    default: // SIGSEGV, (SSIGTERM, IGILL)
-        ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
-        bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
-        jlbacktrace();
-        gc_debug_print_status();
-        raise(sig);
-    }
-}
-#else
-void fpe_handler(int arg)
-{
-    (void)arg;
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGFPE);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
-    jl_throw(jl_diverror_exception);
-}
-#endif
-
-#ifndef _OS_WINDOWS_
-static int is_addr_on_stack(void *addr)
-{
-#ifdef COPY_STACKS
-    return ((char*)addr > (char*)jl_stack_lo-3000000 &&
-            (char*)addr < (char*)jl_stack_hi);
-#else
-    return ((char*)addr > (char*)jl_current_task->stack-8192 &&
-            (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
-#endif
-}
-
-#ifndef SIGINFO
-#define SIGINFO SIGUSR1
-#endif
-
-void sigdie_handler(int sig, siginfo_t *info, void *context)
-{
-    if (sig != SIGINFO) {
-        sigset_t sset;
-        uv_tty_reset_mode();
-        sigfillset(&sset);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        signal(sig, SIG_DFL);
-    }
-    jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
-#ifdef __APPLE__
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss);
-#else
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (ucontext_t*)context);
-#endif
-    jlbacktrace();
-    gc_debug_print_status();
-    if (sig != SIGSEGV &&
-        sig != SIGBUS &&
-        sig != SIGILL &&
-        sig != SIGINFO) {
-        raise(sig);
-    }
-}
-#endif
-
-#if defined(__linux__) || defined(__FreeBSD__)
-extern int in_jl_;
-void segv_handler(int sig, siginfo_t *info, void *context)
-{
-    sigset_t sset;
-
-    if (sig == SIGSEGV && (in_jl_ || is_addr_on_stack(info->si_addr))) { // stack overflow
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_throw(jl_stackovf_exception);
-    }
-    else if (info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_throw(jl_readonlymemory_exception);
-    }
-#ifdef SEGV_EXCEPTION
-    else if (sig == SIGSEGV) {
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_throw(jl_segv_exception);
-    }
-#else
-    else {
-        sigdie_handler(sig, info, context);
-    }
-#endif
-}
-#endif
-
-volatile sig_atomic_t jl_signal_pending = 0;
-volatile sig_atomic_t jl_defer_signal = 0;
-
-#ifdef _OS_WINDOWS_
-BOOL (*pSetThreadStackGuarantee)(PULONG);
-void restore_signals(void)
-{
-    SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
-}
-
-void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
-{
-    assert(excpt != NULL);
-#if defined(_CPU_X86_64_)
-    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
-#elif defined(_CPU_X86_)
-    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
-#else
-#error WIN16 not supported :P
-#endif
-    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
-    jl_exception_in_transit = excpt;
-#if defined(_CPU_X86_64_)
-    *(DWORD64*)Rsp = 0;
-    ctxThread->Rsp = Rsp;
-    ctxThread->Rip = (DWORD64)&jl_rethrow;
-#elif defined(_CPU_X86_)
-    *(DWORD32*)Esp = 0;
-    ctxThread->Esp = Esp;
-    ctxThread->Eip = (DWORD)&jl_rethrow;
-#endif
-}
-
-volatile HANDLE hMainThread = NULL;
-
-static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
-{
-    int sig;
-    //windows signals use different numbers from unix (raise)
-    switch(wsig) {
-        case CTRL_C_EVENT: sig = SIGINT; break;
-        //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
-        // etc.
-        default: sig = SIGTERM; break;
-    }
-    if (jl_defer_signal) {
-        jl_signal_pending = sig;
-    }
-    else {
-        jl_signal_pending = 0;
-        if (exit_on_sigint) jl_exit(130);
-        if ((DWORD)-1 == SuspendThread(hMainThread)) {
-            //error
-            jl_safe_printf("error: SuspendThread failed\n");
-            return 0;
-        }
-        CONTEXT ctxThread;
-        memset(&ctxThread,0,sizeof(CONTEXT));
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!GetThreadContext(hMainThread, &ctxThread)) {
-            //error
-            jl_safe_printf("error: GetThreadContext failed\n");
-            return 0;
-        }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!SetThreadContext(hMainThread,&ctxThread)) {
-            jl_safe_printf("error: SetThreadContext failed\n");
-            //error
-            return 0;
-        }
-        if ((DWORD)-1 == ResumeThread(hMainThread)) {
-            jl_safe_printf("error: ResumeThread failed\n");
-            //error
-            return 0;
-        }
-    }
-    return 1;
-}
-
-static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
-{
-    if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
-        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-            case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
-                return EXCEPTION_CONTINUE_EXECUTION;
-            case EXCEPTION_STACK_OVERFLOW:
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
-                return EXCEPTION_CONTINUE_EXECUTION;
-            case EXCEPTION_ACCESS_VIOLATION:
-                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
-                    return EXCEPTION_CONTINUE_EXECUTION;
-                }
-        }
-        jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
-        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-            case EXCEPTION_ACCESS_VIOLATION:
-                jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
-            case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-                jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
-            case EXCEPTION_BREAKPOINT:
-                jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
-            case EXCEPTION_DATATYPE_MISALIGNMENT:
-                jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
-            case EXCEPTION_FLT_DENORMAL_OPERAND:
-                jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
-            case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-                jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
-            case EXCEPTION_FLT_INEXACT_RESULT:
-                jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
-            case EXCEPTION_FLT_INVALID_OPERATION:
-                jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
-            case EXCEPTION_FLT_OVERFLOW:
-                jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
-            case EXCEPTION_FLT_STACK_CHECK:
-                jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
-            case EXCEPTION_FLT_UNDERFLOW:
-                jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
-            case EXCEPTION_ILLEGAL_INSTRUCTION:
-                jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
-            case EXCEPTION_IN_PAGE_ERROR:
-                jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
-            case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
-            case EXCEPTION_INT_OVERFLOW:
-                jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
-            case EXCEPTION_INVALID_DISPOSITION:
-                jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
-            case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-                jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
-            case EXCEPTION_PRIV_INSTRUCTION:
-                jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
-            case EXCEPTION_SINGLE_STEP:
-                jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
-            case EXCEPTION_STACK_OVERFLOW:
-                jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
-            default:
-                jl_safe_printf("UNKNOWN"); break;
-        }
-        jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
-        jlbacktrace();
-        static int recursion = 0;
-        if (recursion++)
-            exit(1);
-        else
-            jl_exit(1);
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
-{
-    return _exception_handler(ExceptionInfo,1);
-}
-
-#if defined(_CPU_X86_64_)
-EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext)
-{
-    EXCEPTION_POINTERS ExceptionInfo;
-    ExceptionInfo.ExceptionRecord = ExceptionRecord;
-    ExceptionInfo.ContextRecord = ContextRecord;
-
-    EXCEPTION_DISPOSITION rval;
-    switch (_exception_handler(&ExceptionInfo,1)) {
-        case EXCEPTION_CONTINUE_EXECUTION:
-            rval = ExceptionContinueExecution; break;
-        case EXCEPTION_CONTINUE_SEARCH:
-            rval = ExceptionContinueSearch; break;
-#ifndef _MSC_VER
-        case EXCEPTION_EXECUTE_HANDLER:
-            rval = ExceptionExecuteHandler; break;
-#endif
-    }
-
-    return rval;
-}
-#endif
-#else // #ifdef _OS_WINDOWS_
-
-void restore_signals(void)
-{
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigprocmask(SIG_SETMASK, &sset, 0);
-}
-
-void sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    if (jl_defer_signal) {
-        jl_signal_pending = sig;
-    }
-    else {
-        jl_signal_pending = 0;
-        sigset_t sset;
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGINT);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        jl_sigint_action();
-    }
-}
-#endif
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
@@ -742,148 +346,6 @@ void init_stdio()
 char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
-unsigned sig_stack_size = SIGSTKSZ;
-#elif defined(_OS_WINDOWS_)
-#define sig_stack_size 131072 // 128k
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
-
-#ifndef _OS_WINDOWS_
-static void *signal_stack;
-#endif
-
-#ifdef _OS_DARWIN_
-#include <mach/mach_traps.h>
-#include <mach/task.h>
-#include <mach/mig_errors.h>
-static mach_port_t segv_port = 0;
-
-extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
-
-void *mach_segv_listener(void *arg)
-{
-    (void)arg;
-    while (1) {
-        int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
-        jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
-        jl_exit(128+SIGSEGV);
-    }
-}
-
-#ifdef SEGV_EXCEPTION
-void darwin_segv_handler(unw_context_t *uc)
-{
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
-    jl_exception_in_transit = jl_segv_exception;
-    jl_rethrow();
-}
-#endif
-
-void darwin_stack_overflow_handler(unw_context_t *uc)
-{
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
-    jl_exception_in_transit = jl_stackovf_exception;
-    jl_rethrow();
-}
-
-void darwin_accerr_handler(unw_context_t *uc)
-{
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
-    jl_exception_in_transit = jl_readonlymemory_exception;
-    jl_rethrow();
-}
-
-#define HANDLE_MACH_ERROR(msg, retval) \
-    if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
-
-#ifdef LIBOSXUNWIND
-extern kern_return_t profiler_segv_handler(mach_port_t,mach_port_t,mach_port_t,exception_type_t,exception_data_t,mach_msg_type_number_t);
-extern volatile mach_port_t mach_profiler_thread;
-#endif
-
-enum x86_trap_flags {
-    USER_MODE = 0x4,
-    WRITE_FAULT = 0x2,
-    PAGE_PRESENT = 0x1
-};
-
-//exc_server uses dlsym to find symbol
-DLLEXPORT
-kern_return_t catch_exception_raise(mach_port_t            exception_port,
-                                    mach_port_t            thread,
-                                    mach_port_t            task,
-                                    exception_type_t       exception,
-                                    exception_data_t       code,
-                                    mach_msg_type_number_t code_count)
-{
-    unsigned int count = MACHINE_THREAD_STATE_COUNT;
-    unsigned int exc_count = X86_EXCEPTION_STATE64_COUNT;
-    x86_thread_state64_t state, old_state;
-    x86_exception_state64_t exc_state;
-    kern_return_t ret;
-    //memset(&state,0,sizeof(x86_thread_state64_t));
-    //memset(&exc_state,0,sizeof(x86_exception_state64_t));
-#ifdef LIBOSXUNWIND
-    if (thread == mach_profiler_thread) {
-        return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
-    }
-#endif
-    ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
-    HANDLE_MACH_ERROR("thread_get_state(1)",ret);
-    uint64_t fault_addr = exc_state.__faultvaddr;
-#ifdef SEGV_EXCEPTION
-    if (1) {
-#else
-    if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
-#endif
-        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-        HANDLE_MACH_ERROR("thread_get_state(2)",ret);
-        old_state = state;
-        // memset(&state,0,sizeof(x86_thread_state64_t));
-        // Setup libunwind information
-        state.__rsp = (uint64_t)signal_stack + sig_stack_size;
-        state.__rsp -= sizeof(unw_context_t);
-        state.__rsp &= -16;
-        unw_context_t *uc = (unw_context_t*)state.__rsp;
-        state.__rsp -= 512;
-        // This is for alignment. In particular note that the sizeof(void*) is necessary
-        // since it would usually specify the return address (i.e., we are aligning the call
-        // frame to a 16 byte boundary as required by the abi, but the stack pointer
-        // to point to the byte beyond that. Not doing this leads to funny behavior on
-        // the first access to an external function will fail due to stack misalignment
-        state.__rsp &= -16;
-        state.__rsp -= sizeof(void*);
-        memset(uc,0,sizeof(unw_context_t));
-        memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
-        state.__rdi = (uint64_t)uc;
-        if (is_addr_on_stack((void*)fault_addr))
-            state.__rip = (uint64_t)darwin_stack_overflow_handler;
-#ifdef SEGV_EXCEPTION
-        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0)
-            state.__rip = (uint64_t)darwin_segv_handler;
-#endif
-        else
-            state.__rip = (uint64_t)darwin_accerr_handler;
-
-        state.__rbp = state.__rsp;
-        ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
-        HANDLE_MACH_ERROR("thread_set_state",ret);
-        return KERN_SUCCESS;
-    }
-    else {
-        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-        HANDLE_MACH_ERROR("thread_get_state(3)",ret);
-        jl_safe_printf("\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
-        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (unw_context_t*)&state);
-        jlbacktrace();
-        return KERN_INVALID_ARGUMENT;
-    }
-}
-
-#endif
-
 int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
@@ -1000,16 +462,6 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.load = abspath(jl_options.load);
 }
 
-#ifdef _OS_DARWIN_
-void attach_exception_port()
-{
-    kern_return_t ret;
-    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
-    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
-}
-#endif
-
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     libsupport_init();
@@ -1059,20 +511,12 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     uv_dlopen("dbghelp.dll",&jl_dbghelp);
     if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
         hSymRefreshModuleList = 0;
-    ULONG StackSizeInBytes = sig_stack_size;
-    if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
-        pSetThreadStackGuarantee = NULL;
 #endif
 
 #if defined(JL_USE_INTEL_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
-#if defined(__linux__)
-        // Intel VTune Amplifier needs at least 64k for alternate stack.
-        if (SIGSTKSZ < 1<<16)
-            sig_stack_size = 1<<16;
-#endif
     }
 #endif
 
@@ -1161,124 +605,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_install_sigint_handler();
 }
 
-void jl_install_default_signal_handlers(void)
-{
-#ifndef _OS_WINDOWS_
-    signal_stack = malloc(sig_stack_size);
-    struct sigaction actf;
-    memset(&actf, 0, sizeof(struct sigaction));
-    sigemptyset(&actf.sa_mask);
-    actf.sa_handler = fpe_handler;
-    actf.sa_flags = 0;
-    if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGPIPE");
-    }
-#if defined (_OS_DARWIN_)
-    kern_return_t ret;
-    mach_port_t self = mach_task_self();
-    ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
-    HANDLE_MACH_ERROR("mach_port_allocate",ret);
-    ret = mach_port_insert_right(self,segv_port,segv_port,MACH_MSG_TYPE_MAKE_SEND);
-    HANDLE_MACH_ERROR("mach_port_insert_right",ret);
-
-    // Alright, create a thread to serve as the listener for exceptions
-    pthread_t thread;
-    pthread_attr_t attr;
-    if (pthread_attr_init(&attr) != 0) {
-        jl_error("pthread_attr_init failed");
-    }
-    pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
-        jl_error("pthread_create failed");
-    }
-    pthread_attr_destroy(&attr);
-
-    attach_exception_port();
-#else // defined(_OS_DARWIN_)
-    stack_t ss;
-    ss.ss_flags = 0;
-    ss.ss_size = sig_stack_size;
-    ss.ss_sp = signal_stack;
-    if (sigaltstack(&ss, NULL) < 0) {
-        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
-    }
-
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#endif // defined(_OS_DARWIN_)
-    struct sigaction act_die;
-    memset(&act_die, 0, sizeof(struct sigaction));
-    sigemptyset(&act_die.sa_mask);
-    act_die.sa_sigaction = sigdie_handler;
-    act_die.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGBUS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGILL, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGTERM, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGQUIT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#else // defined(_OS_WINDOWS_)
-    if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGFPE");
-    }
-    if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGILL");
-    }
-    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGINT");
-    }
-    if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGSEGV");
-    }
-    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTERM");
-    }
-    SetUnhandledExceptionFilter(exception_handler);
-#endif
-}
-
-DLLEXPORT void jl_install_sigint_handler(void)
-{
-#ifdef _OS_WINDOWS_
-    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
-#else
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = sigint_handler;
-    act.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGINT, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#endif
-}
-
 extern int asprintf(char **str, const char *fmt, ...);
-extern void *__stack_chk_guard;
 
 DLLEXPORT int jl_generating_output()
 {
@@ -1409,8 +736,6 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_complex_type = (jl_datatype_t*)basemod("Complex");
 }
-
-DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
 
 #ifdef __cplusplus
 }

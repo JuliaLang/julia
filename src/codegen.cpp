@@ -3429,8 +3429,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
 
 // --- generate function bodies ---
 
-extern char *jl_stack_lo;
-
 extern "C" jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t);
 
 // gc frame emission
