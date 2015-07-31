@@ -294,7 +294,6 @@ catch ex
     @test collect(1:5) == sort(map(x->parse(Int, x), errors))
 end
 
-
 try
     remotecall_fetch(id_other, ()->throw(ErrorException("foobar")))
 catch e
@@ -304,59 +303,46 @@ catch e
     @test e.captured.ex.msg == "foobar"
 end
 
-# pmap tests
-# needs at least 4 processors dedicated to the below tests
-nprocs() < 5 && remotecall_fetch(1, ()->addprocs(5-nprocs()))
-s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
-ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
-@test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
-@test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
-
-DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
-
-# retry, on error exit
-res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
-# Commenting out the below test for now since it depends on how the workers are scheduled on presumably already
-# overloaded systems in CI.
-#@test (length(res) < length(ups))
-@test isa(res[1], Exception)
-
-# no retry, on error exit
-res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
-#@test (length(res) < length(ups))
-@test isa(res[1], Exception)
-
-# retry, on error continue
-res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
-@test length(res) == length(ups)
-@test ups == bytestring(UInt8[UInt8(c) for c in res])
-
-# no retry, on error continue
-res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
-@test length(res) == length(ups)
-@test isa(res[1], Exception)
-
-
 # The below block of tests are usually run only on local development systems, since:
 # - tests which print errors
 # - addprocs tests are memory intensive
 # - ssh addprocs requires sshd to be running locally with passwordless login enabled.
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
+DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+
 if DoFullTest
-    println("Testing exception printing on remote worker from a `remote_do` call")
-    println("Please ensure the remote error and backtrace is displayed on screen")
+    # pmap tests
+    # needs at least 4 processors dedicated to the below tests
+    ppids = remotecall_fetch(1, ()->addprocs(4))
+    s = "abcdefghijklmnopqrstuvwxyz";
+    ups = uppercase(s);
+    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
+    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
-    Base.remote_do(id_other, ()->throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE")))
-    sleep(0.5)  # Give some time for the above error to be printed
+    # retry, on error exit
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=true, pids=ppids);
+    @test (length(res) < length(ups))
+    @test isa(res[1], Exception)
 
-    # Topology tests need to run externally since
-    # a given cluster at any time can only support a single topology and the
-    # current session is already running in parallel under the default
-    # topology.
-    # They also print errors to screen
-    print("\n\nTopology tests. \n")
+    # no retry, on error exit
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=true, pids=ppids);
+    @test (length(res) < length(ups))
+    @test isa(res[1], Exception)
 
+    # retry, on error continue
+    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=false, pids=ppids);
+    @test length(res) == length(ups)
+    @test ups == bytestring(UInt8[UInt8(c) for c in res])
+
+    # no retry, on error continue
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=false, pids=ppids);
+    @test length(res) == length(ups)
+    @test isa(res[1], Exception)
+
+    # Topology tests need to run externally since a given cluster at any
+    # time can only support a single topology and the current session
+    # is already running in parallel under the default topology.
     script = joinpath(dirname(@__FILE__), "topology.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
 
@@ -367,6 +353,11 @@ if DoFullTest
         error("Topology tests failed : $cmd")
     end
 
+    println("Testing exception printing on remote worker from a `remote_do` call")
+    println("Please ensure the remote error and backtrace is displayed on screen")
+
+    Base.remote_do(id_other, ()->throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE")))
+    sleep(0.5)  # Give some time for the above error to be printed
 
 @unix_only begin
     function test_n_remove_pids(new_pids)
