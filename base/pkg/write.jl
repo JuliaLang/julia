@@ -52,8 +52,8 @@ end
 
 function cleandeps(pkg::AbstractString)
     if isdir(".trash/$pkg/deps")
-        info("Cleaning .trash/$pkg/deps")
-        Git.run(`clean -qdfx deps`; dir=".trash/$pkg")
+        info("Cleaning ignored files in .trash/$pkg/deps")
+        Git.run(`clean -qdfX deps`; dir=".trash/$pkg")
     end
 end
 

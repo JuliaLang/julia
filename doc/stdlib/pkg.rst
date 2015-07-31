@@ -46,7 +46,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: rm(pkg; cleandeps=true)
 
    Remove all requirement entries for ``pkg`` from ``Pkg.dir("REQUIRE")`` and call ``Pkg.resolve()``.
-   If the keyword argument ``cleandeps`` is true, then ``git clean -qdfx deps`` is run in ``.trash/$pkg``
+   If the keyword argument ``cleandeps`` is true, then ``git clean -qdfX deps`` is run in ``.trash/$pkg``
    to clean build artifacts.
 
 .. function:: clone(url, [pkg])
