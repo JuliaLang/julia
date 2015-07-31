@@ -56,8 +56,9 @@ extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
+    assert(sig == SIGSEGV);
 
-    if (sig == SIGSEGV && (in_jl_ || is_addr_on_stack(info->si_addr))) { // stack overflow
+    if (in_jl_ || is_addr_on_stack(info->si_addr)) { // stack overflow, or restarting jl_
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -69,18 +70,16 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_readonlymemory_exception);
     }
+    else {
 #ifdef SEGV_EXCEPTION
-    else if (sig == SIGSEGV) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_segv_exception);
-    }
 #else
-    else {
         sigdie_handler(sig, info, context);
-    }
 #endif
+    }
 }
 #endif
 
