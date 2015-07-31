@@ -496,6 +496,7 @@ export
     cell,
     checkbounds,
     circshift,
+    clamp!,
     colon,
     conj!,
     copy!,
