@@ -1136,7 +1136,7 @@ DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t* worklist);
 DLLEXPORT jl_array_t *jl_restore_incremental(const char *fname);
 DLLEXPORT jl_array_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
-void jl_init_restored_modules(void);
+void jl_init_restored_modules(jl_array_t *init_order);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
