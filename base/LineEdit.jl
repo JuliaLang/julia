@@ -1326,6 +1326,28 @@ function commit_line(s)
     state(s, mode(s)).ias = InputAreaState(0, 0)
 end
 
+global physical_tab_size = 8
+
+function set_physical_tab_size(sz)
+    global physical_tab_size
+    0 < sz <= 16 || throw(ArgumentError("tab_size ($sz) must be > 0 and <= 16"))
+    oldsz = physical_tab_size
+    physical_tab_size = sz
+    return oldsz
+end
+
+function bracketed_paste(s)
+    global physical_tab_size
+    ps = state(s, mode(s))
+    input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+    input = replace(input, '\r', '\n')
+    if position(buffer(s)) == 0
+        indent = Base.indentation(input; tabwidth=LineEdit.physical_tab_size)[1]
+        input = Base.unindent(input[(indent+1):end], indent; tabwidth=LineEdit.physical_tab_size)
+    end
+    input
+end
+
 const default_keymap =
 AnyDict(
     # Tab
@@ -1429,13 +1451,7 @@ AnyDict(
     "\e[3~" => (s,o...)->edit_delete(s),
     # Bracketed Paste Mode
     "\e[200~" => (s,o...)->begin
-        ps = state(s, mode(s))
-        input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
-        input = replace(input, '\r', '\n')
-        if position(buffer(s)) == 0
-            indent = Base.indentation(input; tabwidth=4)[1]
-            input = Base.unindent(input[(indent+1):end], indent; tabwidth=4)
-        end
+        input = bracketed_paste(s)
         edit_insert(s, input)
     end,
     "^T" => (s,o...)->edit_transpose(s)
