@@ -261,7 +261,8 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
 
-   * ``RemoteRef``: Wait for and get the value of a remote reference.
+   * ``RemoteRef``: Wait for and get the value of a remote reference. If the remote value is an exception,
+                    throws a ``RemoteException`` which captures the remote exception and backtrace.
 
    * ``Channel`` : Wait for and get the first available item from the channel.
 
@@ -271,7 +272,8 @@ General Parallel Computing Support
 
 .. function:: remotecall_fetch(id, func, args...)
 
-   Perform ``fetch(remotecall(...))`` in one message.
+   Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException``
+   and thrown.
 
 .. function:: put!(RemoteRef, value)
 
@@ -327,13 +329,14 @@ General Parallel Computing Support
 
 .. function:: @spawn
 
-   Execute an expression on an automatically-chosen process, returning a
+   Creates a closure around an expression and runs it on an automatically-chosen process, returning a
    ``RemoteRef`` to the result.
 
 .. function:: @spawnat
 
-   Accepts two arguments, ``p`` and an expression, and runs the expression
-   asynchronously on process ``p``, returning a ``RemoteRef`` to the result.
+   Accepts two arguments, ``p`` and an expression. A closure is created around
+   the expression and run asynchronously on process ``p``. Returns a ``RemoteRef``
+   to the result.
 
 .. function:: @fetch
 
@@ -345,13 +348,14 @@ General Parallel Computing Support
 
 .. function:: @async
 
-   Schedule an expression to run on the local machine, also adding it to the
-   set of items that the nearest enclosing ``@sync`` waits for.
+   Wraps an expression in a closure and schedules it to run on the local machine. Also
+   adds it to the set of items that the nearest enclosing ``@sync`` waits for.
 
 .. function:: @sync
 
    Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``,
-   ``@spawnat`` and ``@parallel`` are complete.
+   ``@spawnat`` and ``@parallel`` are complete. All exceptions thrown by
+   enclosed async operations are collected and thrown as a ``CompositeException``.
 
 .. function:: @parallel
 
@@ -373,6 +377,11 @@ General Parallel Computing Support
         @sync @parallel for var = range
             body
         end
+
+.. function:: @everywhere
+
+    Execute an expression on all processes. Errors on any of the processes are
+    collected into a `CompositeException` and thrown.
 
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
