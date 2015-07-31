@@ -2233,6 +2233,10 @@ for i = -100:100
     @test prevpow2(i) == prevpow2(big(i))
 end
 
+@test  ispow2(64)
+@test !ispow2(42)
+@test !ispow2(~typemax(Int))
+
 @test nextpow(2,1) == 1
 @test prevpow(2,1) == 1
 @test nextpow(3,243) == 243
