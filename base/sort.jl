@@ -403,6 +403,7 @@ end
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
+sort(itr; kws...) = sort!(collect(itr); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
