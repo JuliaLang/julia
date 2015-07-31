@@ -43,3 +43,6 @@
 # Notably missing from this test suite at the moment
 # * Tests for other magnitudes of numbers - very small, very big, and combinations of small and big
 # * Tests for various odd combinations of types, e.g. isapprox(x::Integer, y::Rational)
+
+# issue #12375:
+@test !isapprox(1e17, 1)
