@@ -136,7 +136,7 @@ nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : n
 prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
 prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
-ispow2(x::Integer) = count_ones(x)==1
+ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 # smallest a^n >= x, with integer n
 function nextpow(a::Real, x::Real)

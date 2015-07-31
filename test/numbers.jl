@@ -2237,6 +2237,10 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
     @test prevpow2(T(42)) === T(32)
 end
 
+@test  ispow2(64)
+@test !ispow2(42)
+@test !ispow2(~typemax(Int))
+
 @test nextpow(2,1) == 1
 @test prevpow(2,1) == 1
 @test nextpow(3,243) == 243
