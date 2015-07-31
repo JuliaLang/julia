@@ -302,6 +302,39 @@ let
     FFTW.flops(plan64)
 end
 
+# This corrupt julia memory
+for T in (Float32, Float64)
+    size = 1024
+    a = T[1:size;]
+    b = T[1:size;]
+    # println((pointer(a), pointer(b)))
+    # ccall(:jl_breakpoint, Void, ())
+    # p1 = plan_fft!((a, b), flags=FFTW.MEASURE)
+    p1 = plan_fft!((a, b))
+    gc()
+    a = T[1:size;]
+    b = T[1:size;]
+
+    p1 * (a, b)
+
+    a = T[1:size;]
+    b = T[1:size;]
+    p1 * (a, b)
+
+    a = T[1:size;]
+    b = T[1:size;]
+    p1 * (a, b)
+
+    a = T[1:size;]
+    b = T[1:size;]
+    p1 * (a, b)
+    gc()
+
+    a = T[1:size;]
+    b = T[1:size;]
+    p1 * (a, b)
+end
+
 # issue #9772
 for x in (randn(10),randn(10,12))
     z = complex(x)

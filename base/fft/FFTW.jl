@@ -198,7 +198,8 @@ end
 # K is FORWARD/BACKWARD for forward/backward or r2c/c2r plans, respectively.
 # For r2r plans, K is a tuple of the transform kinds along each dimension.
 abstract FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T}
-for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
+for P in (:cFFTWPlan, :splitFFTWPlan, :rFFTWPlan, :r2rFFTWPlan)
+    # complex, split complex, r2c/c2r, and r2r
     @eval begin
         type $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
             plan::PlanPtr
@@ -292,6 +293,13 @@ function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
+function show{T,K,inplace}(io::IO, p::splitFFTWPlan{T,K,inplace})
+    print(io, inplace ? "FFTW in-place " : "FFTW ",
+          K < 0 ? "forward" : "backward", " split plan for ")
+    showfftdims(io, p.sz, p.istride, T)
+    version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
+end
+
 function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "real-to-complex" : "complex-to-real",
@@ -366,6 +374,24 @@ unsafe_execute!{T<:fftwSingle}(plan::cFFTWPlan{T},
                                X::StridedArray{T}, Y::StridedArray{T}) =
     ccall((:fftwf_execute_dft,libfftwf), Void,
           (PlanPtr,Ptr{T},Ptr{T}), plan, X, Y)
+
+for (Tr, fftw, lib) in ((Float32, "fftwf", libfftwf),
+                        (Float64, "fftw", libfftw))
+    @eval function unsafe_execute!(plan::splitFFTWPlan{$Tr, $FORWARD},
+                                   Xr::StridedArray{$Tr}, Xi::StridedArray{$Tr},
+                                   Yr::StridedArray{$Tr}, Yi::StridedArray{$Tr})
+        ccall(($(string(fftw, "_execute_split_dft")), $lib), Void,
+              (PlanPtr, Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}),
+              plan, Xr, Xi, Yr, Yi)
+    end
+    @eval function unsafe_execute!(plan::splitFFTWPlan{$Tr, $BACKWARD},
+                                   Xr::StridedArray{$Tr}, Xi::StridedArray{$Tr},
+                                   Yr::StridedArray{$Tr}, Yi::StridedArray{$Tr})
+        ccall(($(string(fftw, "_execute_split_dft")), $lib), Void,
+              (PlanPtr, Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}),
+              plan, Xi, Xr, Yi, Yr)
+    end
+end
 
 unsafe_execute!(plan::rFFTWPlan{Float64,FORWARD},
                 X::StridedArray{Float64}, Y::StridedArray{Complex128}) =
@@ -473,6 +499,34 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
             error("FFTW could not create plan") # shouldn't normally happen
         end
         return cFFTWPlan{$Tc,K,inplace,N}(plan, flags, R, X, Y)
+    end
+
+    @eval function call{K,inplace,N}(::Type{splitFFTWPlan{$Tr,K,inplace,N}},
+                                     Xr::StridedArray{$Tr,N},
+                                     Xi::StridedArray{$Tr,N},
+                                     Yr::StridedArray{$Tr,N},
+                                     Yi::StridedArray{$Tr,N},
+                                     region, flags::Integer, timelimit::Real)
+        set_timelimit($Tr, timelimit)
+        R = copy(region)
+        dims_r, howmany_r = dims_howmany(Xr, Yr, [size(Xr)...], R)
+        dims_i, howmany_i = dims_howmany(Xi, Yi, [size(Xi)...], R)
+        if dims_r != dims_i || howmany_r != howmany_i
+            error("Real and imaginary array must have the same shape and strides")
+        end
+        Ir, Ii = K == FORWARD ? (Xr, Xi) : (Xi, Xr)
+        Or, Oi = K == FORWARD ? (Yr, Yi) : (Yi, Yr)
+        plan = ccall(($(string(fftw,"_plan_guru64_split_dft")),$lib),
+                     PlanPtr,
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}, Ptr{$Tr}, UInt32),
+                     size(dims_r, 2), dims_r, size(howmany_r, 2), howmany_r,
+                     Ir, Ii, Or, Oi, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
+        end
+        return splitFFTWPlan{$Tr,K,inplace,N}(plan, flags, R, Xr, Yr)
     end
 
     @eval function call{inplace,N}(::Type{rFFTWPlan{$Tr,$FORWARD,inplace,N}},
@@ -627,6 +681,58 @@ end
 function *{T,K}(p::cFFTWPlan{T,K,true}, x::StridedArray{T})
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
+    return x
+end
+
+# Split complex plan
+
+for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
+    plan_f = symbol("plan_",f)
+    plan_f! = symbol("plan_",f,"!")
+    idirection = -direction
+    @eval begin
+        function $plan_f{T<:fftwReal,N}(X::NTuple{2,StridedArray{T,N}}, region;
+                                        flags::Integer=ESTIMATE,
+                                        timelimit::Real=NO_TIMELIMIT)
+            splitFFTWPlan{T,$direction,false,N}(X[1], X[2],
+                                                fakesimilar(flags, X[1], T),
+                                                fakesimilar(flags, X[2], T),
+                                                region, flags, timelimit)
+        end
+
+        function $plan_f!{T<:fftwReal,N}(X::NTuple{2,StridedArray{T,N}}, region;
+                                         flags::Integer=ESTIMATE,
+                                         timelimit::Real=NO_TIMELIMIT)
+            splitFFTWPlan{T,$direction,true,N}(X[1], X[2], X[1], X[2],
+                                               region, flags, timelimit)
+        end
+        $plan_f{T<:fftwReal}(X::NTuple{2,StridedArray{T}}; kws...) =
+            $plan_f(X, 1:ndims(X[1]); kws...)
+        $plan_f!{T<:fftwReal}(X::NTuple{2,StridedArray{T}}; kws...) =
+            $plan_f!(X, 1:ndims(X[1]); kws...)
+    end
+end
+
+function A_mul_B!{T}(y::NTuple{2,StridedArray{T}}, p::splitFFTWPlan{T},
+                     x::NTuple{2,StridedArray{T}})
+    assert_applicable(p, x[1], y[2])
+    assert_applicable(p, x[1], y[2])
+    unsafe_execute!(p, x[1], x[2], y[1], y[2])
+    return y
+end
+
+function *{T,K,N}(p::splitFFTWPlan{T,K,false}, x::NTuple{2,StridedArray{T,N}})
+    assert_applicable(p, x[1])
+    assert_applicable(p, x[2])
+    y = (Array(T, p.osz)::Array{T,N}, Array(T, p.osz)::Array{T,N})
+    unsafe_execute!(p, x[1], x[2], y[1], y[2])
+    return y
+end
+
+function *{T,K}(p::splitFFTWPlan{T,K,true}, x::NTuple{2,StridedArray{T}})
+    assert_applicable(p, x[1])
+    assert_applicable(p, x[2])
+    unsafe_execute!(p, x[1], x[2], x[1], x[2])
     return x
 end
 
