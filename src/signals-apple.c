@@ -118,14 +118,20 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         memset(uc,0,sizeof(unw_context_t));
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
-        if (is_addr_on_stack((void*)fault_addr))
+        if (is_addr_on_stack((void*)fault_addr)) {
             state.__rip = (uint64_t)darwin_stack_overflow_handler;
+        }
 #ifdef SEGV_EXCEPTION
-        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0)
+        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0) {
+            // no page mapped at this address
             state.__rip = (uint64_t)darwin_segv_handler;
+        }
 #endif
-        else
+        else {
+            if (!(exc_state.__err & WRITE_FAULT))
+                return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
             state.__rip = (uint64_t)darwin_accerr_handler;
+        }
 
         state.__rbp = state.__rsp;
         ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
