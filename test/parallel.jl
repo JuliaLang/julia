@@ -277,51 +277,78 @@ function test_iteration(in_c, out_c)
 end
 
 test_iteration(Channel(10), Channel(10))
+# make sure exceptions propagate when waiting on Tasks
+@test_throws CompositeException (@sync (@async error("oops")))
+try
+    @sync begin
+        for i in 1:5
+            @async error(i)
+        end
+    end
+catch ex
+    @test isa(ex, CompositeException)
+    @test length(ex) == 5
+    @test isa(ex.exceptions[1], CapturedException)
+    @test isa(ex.exceptions[1].ex, ErrorException)
+    errors = map(x->x.ex.msg, ex.exceptions)
+    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
+end
+
+
+try
+    remotecall_fetch(id_other, ()->throw(ErrorException("foobar")))
+catch e
+    @test isa(e, RemoteException)
+    @test isa(e.captured, CapturedException)
+    @test isa(e.captured.ex, ErrorException)
+    @test e.captured.ex.msg == "foobar"
+end
+
+# pmap tests
+# needs at least 4 processors dedicated to the below tests
+nprocs() < 5 && remotecall_fetch(1, ()->addprocs(5-nprocs()))
+s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
+ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
+@test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
+@test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
+
+DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+
+# retry, on error exit
+res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
+# Commenting out the below test for now since it depends on how the workers are scheduled on presumably already
+# overloaded systems in CI.
+#@test (length(res) < length(ups))
+@test isa(res[1], Exception)
+
+# no retry, on error exit
+res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
+#@test (length(res) < length(ups))
+@test isa(res[1], Exception)
+
+# retry, on error continue
+res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
+@test length(res) == length(ups)
+@test ups == bytestring(UInt8[UInt8(c) for c in res])
+
+# no retry, on error continue
+res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
+@test length(res) == length(ups)
+@test isa(res[1], Exception)
+
 
 # The below block of tests are usually run only on local development systems, since:
+# - tests which print errors
 # - addprocs tests are memory intensive
 # - ssh addprocs requires sshd to be running locally with passwordless login enabled.
-# - includes some tests that print errors
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
-if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
-    print("\n\nTesting correct error handling in pmap call. Please ignore printed errors when specified.\n")
+if DoFullTest
+    println("Testing exception printing on remote worker from a `remote_do` call")
+    println("Please ensure the remote error and backtrace is displayed on screen")
 
-    # make sure exceptions propagate when waiting on Tasks
-    @test_throws ErrorException (@sync (@async error("oops")))
-
-    # pmap tests
-    # needs at least 4 processors (which are being created above for the @parallel tests)
-    s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
-    ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
-
-    pmappids = remotecall_fetch(1, () -> addprocs(4))
-
-    # retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true, pids=pmappids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true, pids=pmappids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false, pids=pmappids);
-    @test length(res) == length(ups)
-    @test ups == bytestring(UInt8[UInt8(c) for c in res])
-
-    # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false, pids=pmappids);
-    @test length(res) == length(ups)
-    @test isa(res[1], Exception)
-
-    remotecall_fetch(1, p->rmprocs(p), pmappids)
-
-    print("\n\nPassed all pmap tests that print errors.\n")
+    Base.remote_do(id_other, ()->throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE")))
+    sleep(0.5)  # Give some time for the above error to be printed
 
     # Topology tests need to run externally since
     # a given cluster at any time can only support a single topology and the

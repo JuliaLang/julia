@@ -607,6 +607,8 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 +------------------------------+
 | :exc:`BoundsError`           |
 +------------------------------+
+| :exc:`CompositeException`    |
++------------------------------+
 | :exc:`DivideError`           |
 +------------------------------+
 | :exc:`DomainError`           |
@@ -628,6 +630,8 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 | :exc:`OutOfMemoryError`      |
 +------------------------------+
 | :exc:`ReadOnlyMemoryError`   |
++------------------------------+
+| :exc:`RemoteException`       |
 +------------------------------+
 | :exc:`MethodError`           |
 +------------------------------+

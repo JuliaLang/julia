@@ -156,6 +156,8 @@ export
 # Exceptions
     ArgumentError,
     DimensionMismatch,
+    CapturedException,
+    CompositeException,
     EOFError,
     ErrorException,
     InvalidStateException,
@@ -165,6 +167,7 @@ export
     NullException,
     ParseError,
     ProcessExitedException,
+    RemoteException,
     SystemError,
     TypeError,
     AssertionError,
