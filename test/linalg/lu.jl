@@ -42,6 +42,7 @@ debug && println("(Automatic) Square LU decomposition")
         κ     = cond(a,1)
         lua   = factorize(a)
         l,u,p = lua[:L], lua[:U], lua[:p]
+        show(IOBuffer(), lua)
         @test_approx_eq l*u a[p,:]
         @test_approx_eq (l*u)[invperm(p),:] a
         @test_approx_eq a * inv(lua) eye(n)

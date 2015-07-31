@@ -28,6 +28,16 @@ function getindex(F::Schur, d::Symbol)
     end
 end
 
+function show(io::IO, F::Schur)
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "values:")
+    show(io, F[:values])
+    println(io, "\nT (quasi triangle):")
+    show(io, F[:T])
+    println(io, "\nZ (vectors):")
+    show(io, F[:Z])
+end
+
 function schur(A::StridedMatrix)
     SchurF = schurfact(A)
     SchurF[:T], SchurF[:Z], SchurF[:values]
@@ -80,6 +90,21 @@ function getindex(F::GeneralizedSchur, d::Symbol)
         throw(KeyError(d))
     end
 end
+
+function show(io::IO, F::GeneralizedSchur)
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "alpha:")
+    show(io, F[:alpha])
+    println(io, "\nbeta:")
+    show(io, F[:beta])
+    println(io, "\nT: (quasi triangle)")
+    show(io, F[:T])
+    println(io, "\nQ (left vectors):")
+    show(io, F[:Q])
+    println(io, "\nZ (right vectors):")
+    show(io, F[:Z])
+end
+
 
 function schur(A::StridedMatrix, B::StridedMatrix)
     SchurF = schurfact(A, B)

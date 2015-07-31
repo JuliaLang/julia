@@ -33,7 +33,7 @@ end
 function getindex(F::SVD, d::Symbol)
     if d == :U
         return F.U
-    elseif d == :S
+    elseif d == :S || d == :values
         return F.S
     elseif d == :Vt
         return F.Vt
@@ -42,6 +42,16 @@ function getindex(F::SVD, d::Symbol)
     else
         throw(KeyError(d))
     end
+end
+
+function show(io::IO, F::SVD)
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "U:")
+    show(io, F[:U])
+    println(io, "\nvalues:")
+    show(io, F[:values])
+    println(io, "\nV:")
+    show(io, F[:V])
 end
 
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
@@ -126,6 +136,20 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
     else
         throw(KeyError(d))
     end
+end
+
+function show(io::IO, F::GeneralizedSVD)
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "U:")
+    show(io, F[:U])
+    println(io, "\nV:")
+    show(io, F[:V])
+    println(io, "\nalpha:")
+    show(io, F[:alpha])
+    println(io, "\nbeta:")
+    show(io, F[:beta])
+    println(io, "\nR:")
+    show(io, F[:R])
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})

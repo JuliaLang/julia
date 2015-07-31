@@ -114,6 +114,23 @@ function getindex{T}(A::QRPivoted{T}, d::Symbol)
     end
 end
 
+function show(io::IO, F::Union{QR,QRCompactWY})
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "Q:")
+    show(io, F[:Q])
+    println(io, "\nR:")
+    show(io, F[:R])
+end
+function show(io::IO, F::QRPivoted)
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "Q:")
+    show(io, F[:Q])
+    println(io, "\nR:")
+    show(io, F[:R])
+    println(io, "\nP:")
+    show(io, F[:P])
+end
+
 # Type-stable interface to get Q
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)

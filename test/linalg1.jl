@@ -68,6 +68,7 @@ debug && println("QR decomposition (without pivoting)")
     for i = 1:2
         let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
             qra   = @inferred qrfact(a)
+            show(IOBuffer(), qra)
             @inferred qr(a)
             q, r  = qra[:Q], qra[:R]
             @test_throws KeyError qra[:Z]
@@ -95,6 +96,7 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is onl
                 @inferred qr(a, Val{true})
             end
             qrpa  = factorize(a[1:n1,:])
+            show(IOBuffer(), qrpa)
             q,r = qrpa[:Q], qrpa[:R]
             @test_throws KeyError qrpa[:Z]
             if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
@@ -142,6 +144,7 @@ debug && println("Matmul with QR factorizations")
 debug && println("non-symmetric eigen decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         d,v   = eig(a)
+        show(IOBuffer(), eigfact(a))
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
         f = eigfact(a)
         @test_approx_eq det(a) det(f)
@@ -161,6 +164,7 @@ debug && println("symmetric generalized eigenproblem")
         asym_sg = asym[1:n1, 1:n1]
         a_sg = a[:,n1+1:n2]
         f = eigfact(asym_sg, a_sg'a_sg)
+        show(IOBuffer(), f)
         eig(asym_sg, a_sg'a_sg) # same result, but checks that method works
         @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
@@ -185,6 +189,7 @@ debug && println("Non-symmetric generalized eigenproblem")
 debug && println("Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = schurfact(a)
+        show(IOBuffer(), f)
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
         @test_approx_eq sort(real(f[:values])) sort(real(d))
         @test_approx_eq sort(imag(f[:values])) sort(imag(d))
@@ -211,6 +216,7 @@ debug && println("Generalized Schur")
         a1_sf = a[1:n1, 1:n1]
         a2_sf = a[n1+1:n2, n1+1:n2]
         f = schurfact(a1_sf, a2_sf)
+        show(IOBuffer(), f)
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a1_sf
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a2_sf
         @test istriu(f[:S]) || eltype(a)<:Real
@@ -237,6 +243,7 @@ debug && println("Reorder Generalized Schur")
 debug && println("singular value decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         usv = svdfact(a)
+        show(IOBuffer(), usv)
         @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
         @test_approx_eq full(usv) a
         @test_approx_eq usv[:Vt]' usv[:V]
@@ -249,6 +256,7 @@ debug && println("Generalized svd")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         a_svd = a[1:n1, :]
         gsvd = svdfact(a,a_svd)
+        show(IOBuffer(), gsvd)
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
         @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a_svd
         @test_approx_eq usv[:Vt]' usv[:V]

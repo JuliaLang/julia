@@ -23,6 +23,14 @@ function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
     throw(KeyError(d))
 end
 
+function show(io::IO, F::Union{Eigen,GeneralizedEigen})
+    println(io, "$(typeof(F)) with factors:")
+    println(io, "values:")
+    show(io, F[:values])
+    println(io, "\nvectors:")
+    show(io, F[:vectors])
+end
+
 isposdef(A::Union{Eigen,GeneralizedEigen}) = all(A.values .> 0)
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
