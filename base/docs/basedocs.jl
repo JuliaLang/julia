@@ -16,8 +16,6 @@ const intro = doc"""
   For help on a specific function or macro, type `?` followed
   by its name, e.g. `?fft`, `?@time` or `?html`, and press
   enter.
-
-  You can also use `apropos("...")` to search the documentation.
   """
 
 keywords[:help] = keywords[:?] = keywords[:julia] = keywords[:wtf] = intro
