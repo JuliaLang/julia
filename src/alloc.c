@@ -324,7 +324,7 @@ DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
 }
 
 DLLEXPORT
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams)
+jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_module_t *ctx)
 {
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
@@ -339,7 +339,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams)
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
     }
-    li->module = jl_current_module;
+    li->module = ctx;
     li->sparams = sparams;
     li->tfunc = jl_nothing;
     li->fptr = &jl_trampoline;

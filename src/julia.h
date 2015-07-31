@@ -898,7 +898,7 @@ DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uin
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                                         jl_lambda_info_t *li);
-DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams);
+DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_module_t *ctx);
 DLLEXPORT jl_svec_t *jl_svec(size_t n, ...);
 DLLEXPORT jl_svec_t *jl_svec1(void *a);
 DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);
@@ -1149,6 +1149,7 @@ jl_value_t *jl_parse_next(void);
 DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                           char *filename, size_t namelen);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
+DLLEXPORT jl_value_t *jl_expand_in(jl_module_t *module, jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 DLLEXPORT void *jl_eval_string(const char *str);
 
@@ -1184,7 +1185,7 @@ DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 // compiler
 void jl_compile(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
-DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex, int delay_warn);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len);
