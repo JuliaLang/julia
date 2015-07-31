@@ -1585,9 +1585,10 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
         jl_printf(JL_STDERR, "\n");
     }
 }
-static void jl_finalize_deserializer(ios_t *f) {
+static jl_array_t *jl_finalize_deserializer(ios_t *f) {
+    jl_array_t *init_order = NULL;
     if (mode != MODE_MODULE)
-        jl_module_init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
+        init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
 
     // run reinitialization functions
     int pos = read_int32(f);
@@ -1595,20 +1596,17 @@ static void jl_finalize_deserializer(ios_t *f) {
         jl_reinit_item(f, (jl_value_t*)backref_list.items[pos], read_int32(f));
         pos = read_int32(f);
     }
+    return init_order;
 }
 
-void jl_init_restored_modules()
+void jl_init_restored_modules(jl_array_t *init_order)
 {
-    if (jl_module_init_order != NULL) {
-        jl_array_t *temp = jl_module_init_order;
-        jl_module_init_order = NULL;
-        JL_GC_PUSH1(&temp);
-        int i;
-        for(i=0; i < jl_array_len(temp); i++) {
-            jl_value_t *mod = jl_cellref(temp, i);
-            jl_module_run_initializer((jl_module_t*)mod);
-        }
-        JL_GC_POP();
+    if (!init_order)
+        return;
+    int i;
+    for(i=0; i < jl_array_len(init_order); i++) {
+        jl_value_t *mod = jl_cellref(init_order, i);
+        jl_module_run_initializer((jl_module_t*)mod);
     }
 }
 
@@ -1735,7 +1733,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
 
     int uid_ctr = read_int32(f);
     int gs_ctr = read_int32(f);
-    jl_finalize_deserializer(f); // done with f
+    jl_module_init_order = jl_finalize_deserializer(f); // done with f
 
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
@@ -1946,8 +1944,8 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
     mode = MODE_MODULE;
-    jl_array_t *last_module_init_order = jl_module_init_order;
     jl_array_t *restored = NULL;
+    jl_array_t *init_order = NULL;
     restored = (jl_array_t*)jl_deserialize_value(f, (jl_value_t**)&restored);
 
     size_t i = 0;
@@ -2015,7 +2013,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     // in postwork mode, all of the interconnects will be created
     mode = MODE_MODULE_POSTWORK;
     jl_deserialize_lambdas_from_mod(f); // hook up methods of external generic functions
-    jl_finalize_deserializer(f); // done with f
+    init_order = jl_finalize_deserializer(f); // done with f
 
     // Resort the internal method tables
     for (i = 0; i < methtable_list.len; i++) {
@@ -2056,8 +2054,9 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     ios_close(f);
     JL_SIGATOMIC_END();
 
-    jl_init_restored_modules();
-    jl_module_init_order = last_module_init_order;
+    JL_GC_PUSH1(&init_order);
+    jl_init_restored_modules(init_order);
+    JL_GC_POP();
 
     return restored;
 }
