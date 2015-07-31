@@ -499,15 +499,17 @@ specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a
 distinct portion of the array, thereby parallelizing initialization.
 
-Here's a brief example::
+Here's a brief example:
+
+.. doctest::
 
   julia> addprocs(3)
-  3-element Array{Any,1}:
+  3-element Array{Int64,1}:
    2
    3
    4
 
-  julia> S = SharedArray(Int, (3,4), init = S -> S[localindexes(S)] = myid())
+  julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
   3x4 SharedArray{Int64,2}:
    2  2  3  4
    2  3  3  4
@@ -522,9 +524,11 @@ Here's a brief example::
    2  3  3  4
    2  7  4  4
 
-:func:`localindexes` provides disjoint one-dimensional ranges of indexes,
+:func:`Base.localindexes` provides disjoint one-dimensional ranges of indexes,
 and is sometimes convenient for splitting up tasks among processes.
-You can, of course, divide the work any way you wish::
+You can, of course, divide the work any way you wish:
+
+.. doctest::
 
   julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
   3x4 SharedArray{Int64,2}:
