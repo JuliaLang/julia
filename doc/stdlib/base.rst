@@ -50,7 +50,20 @@ Getting Around
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
+   ::
+              edit(function, [types])
+
+   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
+
 .. function:: edit(function, [types])
+
+   ::
+              edit(file::AbstractString, [line])
+
+   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
+
+   ::
+              edit(function, [types])
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
 
@@ -62,7 +75,20 @@ Getting Around
 
    Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 
+   ::
+              less(function, [types])
+
+   Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
+
 .. function:: less(function, [types])
+
+   ::
+              less(file::AbstractString, [line])
+
+   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
+
+   ::
+              less(function, [types])
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 
@@ -74,7 +100,20 @@ Getting Around
 
    Send a printed form of ``x`` to the operating system clipboard ("copy").
 
+   ::
+              clipboard() -> AbstractString
+
+   Return a string with the contents of the operating system clipboard ("paste").
+
 .. function:: clipboard() -> AbstractString
+
+   ::
+              clipboard(x)
+
+   Send a printed form of ``x`` to the operating system clipboard ("copy").
+
+   ::
+              clipboard() -> AbstractString
 
    Return a string with the contents of the operating system clipboard ("paste").
 
@@ -105,7 +144,24 @@ Getting Around
    If ``types`` is an abstract type, then the method that would be called by ``invoke``
    is returned.
 
+   ::
+              which(symbol)
+
+   Return the module in which the binding for the variable referenced
+   by ``symbol`` was created.
+
 .. function:: which(symbol)
+
+   ::
+              which(f, types)
+
+   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
+
+   If ``types`` is an abstract type, then the method that would be called by ``invoke``
+   is returned.
+
+   ::
+              which(symbol)
 
    Return the module in which the binding for the variable referenced
    by ``symbol`` was created.
@@ -159,6 +215,8 @@ All Objects
 -----------
 
 .. function:: is(x, y) -> Bool
+
+   ::
               ===(x,y) -> Bool
               ≡(x,y) -> Bool
 
@@ -332,7 +390,10 @@ Types
 
 .. function:: <:(T1, T2)
 
-   Subtype operator, equivalent to ``issubtype(T1,T2)``.
+   ::
+              issubtype(type1, type2)
+
+   True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
 
 .. function:: subtypes(T::DataType)
 
@@ -362,13 +423,26 @@ Types
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
 
+   ::
+              sizeof(s::AbstractString)
+
+   The number of bytes in string ``s``.
+
 .. function:: eps([type])
 
-   The distance between 1.0 and the next larger representable floating-point value of ``type``. Only floating-point types are sensible arguments. If ``type`` is omitted, then ``eps(Float64)`` is returned.
+   ::
+              eps(::DateTime) -> Millisecond
+              eps(::Date) -> Day
+
+   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
 
 .. function:: eps(x)
 
-   The distance between ``x`` and the next larger representable floating-point value of the same type as ``x``.
+   ::
+              eps(::DateTime) -> Millisecond
+              eps(::Date) -> Day
+
+   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
 
 .. function:: promote_type(type1, type2)
 
@@ -558,10 +632,34 @@ Syntax
 
    Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``. If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
 
-.. function:: parse(str; raise=true)
+   ::
+              parse(str; raise=true)
 
    Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
+   ::
+              parse(type, str, [base])
+
+   Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number.
+   If the string does not contain a valid number, an error is raised.
+
+.. function:: parse(str; raise=true)
+
+   ::
+              parse(str, start; greedy=true, raise=true)
+
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``. If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
+
+   ::
+              parse(str; raise=true)
+
+   Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
+
+   ::
+              parse(type, str, [base])
+
+   Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number.
+   If the string does not contain a valid number, an error is raised.
 
 Nullables
 ---------
@@ -577,15 +675,59 @@ Nullables
    Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
    value if it is present; otherwise, throws a ``NullException``.
 
-.. function:: get(x, y)
+   ::
+              get(x, y)
 
    Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
    the value if it is present; otherwise, returns ``convert(T, y)``.
 
+   ::
+              get(collection, key, default)
+
+   Return the value stored for the given key, or the given default value if no mapping for the key is present.
+
+   ::
+              get(f::Function, collection, key)
+
+   Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
+
+   This is intended to be called using ``do`` block syntax::
+
+     get(dict, key) do
+         # default value calculated here
+
+.. function:: get(x, y)
+
+   ::
+              get(x)
+
+   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
+   value if it is present; otherwise, throws a ``NullException``.
+
+   ::
+              get(x, y)
+
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
+   the value if it is present; otherwise, returns ``convert(T, y)``.
+
+   ::
+              get(collection, key, default)
+
+   Return the value stored for the given key, or the given default value if no mapping for the key is present.
+
+   ::
+              get(f::Function, collection, key)
+
+   Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
+
+   This is intended to be called using ``do`` block syntax::
+
+     get(dict, key) do
+         # default value calculated here
+
 .. function:: isnull(x)
 
    Is the ``Nullable`` object ``x`` null, i.e. missing a value?
-
 
 System
 ------
@@ -619,6 +761,12 @@ System
 
    Send a signal to a process. The default is to terminate the process.
 
+   ::
+              kill(manager::FooManager, pid::Int, config::WorkerConfig)
+
+    Implemented by cluster managers. It is called on the master process, by ``rmprocs``. It should cause the remote worker specified
+    by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+
 .. function:: open(command, mode::AbstractString="r", stdio=DevNull)
 
    Start running ``command`` asynchronously, and return a tuple
@@ -629,12 +777,86 @@ System
    and ``stdio`` optionally specifies the process's standard output
    stream.
 
-.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+   ::
+              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
    on the resulting read or write stream, then closes the stream
    and waits for the process to complete.  Returns the value returned
    by ``f``.
+
+   ::
+              open(file_name, [read, write, create, truncate, append]) -> IOStream
+
+   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+
+   ::
+              open(file_name, [mode]) -> IOStream
+
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
+
+   ==== =================================
+    r    read
+    r+   read, write
+    w    write, create, truncate
+    w+   read, write, create, truncate
+    a    write, create, append
+    a+   read, write, create, append
+   ==== =================================
+
+   ::
+              open(f::function, args...)
+
+   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+
+   **Example**: ``open(readall, "file.txt")``
+
+.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   ::
+              open(command, mode::AbstractString="r", stdio=DevNull)
+
+   Start running ``command`` asynchronously, and return a tuple
+   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
+   reads from the process's standard output and ``stdio`` optionally
+   specifies the process's standard input stream.  If ``mode`` is
+   ``"w"``, then ``stream`` writes to the process's standard input
+   and ``stdio`` optionally specifies the process's standard output
+   stream.
+
+   ::
+              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
+   on the resulting read or write stream, then closes the stream
+   and waits for the process to complete.  Returns the value returned
+   by ``f``.
+
+   ::
+              open(file_name, [read, write, create, truncate, append]) -> IOStream
+
+   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+
+   ::
+              open(file_name, [mode]) -> IOStream
+
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
+
+   ==== =================================
+    r    read
+    r+   read, write
+    w    write, create, truncate
+    w+   read, write, create, truncate
+    a    write, create, append
+    a+   read, write, create, append
+   ==== =================================
+
+   ::
+              open(f::function, args...)
+
+   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+
+   **Example**: ``open(readall, "file.txt")``
 
 .. function:: Sys.set_process_title(title::AbstractString)
 
@@ -689,7 +911,40 @@ System
      * ``run(pipe(`ls`, "out.txt"))``
      * ``run(pipe("out.txt", `grep xyz`))``
 
+   ::
+              pipe(command; stdin, stdout, stderr, append=false)
+
+   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
+   the command's streams should be redirected. ``append`` controls whether file output
+   appends to the file.
+   This is a more general version of the 2-argument ``pipe`` function.
+   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
+   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
+   data source.
+
+   **Examples**:
+     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+     * ``run(pipe(`update`, stdout="log.txt", append=true))``
+
 .. function:: pipe(command; stdin, stdout, stderr, append=false)
+
+   ::
+              pipe(from, to, ...)
+
+   Create a pipeline from a data source to a destination. The source and destination can
+   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
+   argument must be a command. Strings refer to filenames.
+   When called with more than two arguments, they are chained together from left to right.
+   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
+   concise way to specify multi-stage pipelines.
+
+   **Examples**:
+     * ``run(pipe(`ls`, `grep xyz`))``
+     * ``run(pipe(`ls`, "out.txt"))``
+     * ``run(pipe("out.txt", `grep xyz`))``
+
+   ::
+              pipe(command; stdin, stdout, stderr, append=false)
 
    Redirect I/O to or from the given ``command``. Keyword arguments specify which of
    the command's streams should be redirected. ``append`` controls whether file output
@@ -785,7 +1040,6 @@ System
 
    Given ``@windows? a : b``, do ``a`` on Windows and ``b`` elsewhere. See documentation for Handling Platform Variations
    in the Calling C and Fortran Code section of the manual.
-
 
 Errors
 ------
@@ -930,7 +1184,29 @@ Events
    Times are in seconds.
    A timer is stopped and has its resources freed by calling ``close`` on it.
 
+   ::
+              Timer(delay, repeat=0)
+
+   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on
+   the timer object) at a specified interval.
+   Waiting tasks are also woken up when the timer is closed (by ``close``).
+   Use ``isopen`` to check whether a timer is still active after a wakeup.
+
 .. function:: Timer(delay, repeat=0)
+
+   ::
+              Timer(callback::Function, delay, repeat=0)
+
+   Create a timer to call the given callback function.
+   The callback is passed one argument, the timer object itself.
+   The callback will be invoked after the specified initial delay,
+   and then repeating with the given ``repeat`` interval.
+   If ``repeat`` is ``0``, the timer is only triggered once.
+   Times are in seconds.
+   A timer is stopped and has its resources freed by calling ``close`` on it.
+
+   ::
+              Timer(delay, repeat=0)
 
    Create a timer that wakes up tasks waiting for it (by calling ``wait`` on
    the timer object) at a specified interval.
@@ -993,7 +1269,20 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
+   ::
+              functionloc(m::Method)
+
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.
+
 .. function:: functionloc(m::Method)
+
+   ::
+              functionloc(f::Function, types)
+
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.
+
+   ::
+              functionloc(m::Method)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
@@ -1065,3 +1354,4 @@ Internals
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``, but do not execute it.
+

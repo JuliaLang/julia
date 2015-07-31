@@ -17,9 +17,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
    Run the Julia unit tests listed in ``tests``, which can be either a
    string or an array of strings, using ``numcores`` processors. (not exported)
 
-
 .. module:: Base.Test
-
 Test Framework
 --------------
 

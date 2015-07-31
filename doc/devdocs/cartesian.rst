@@ -137,6 +137,8 @@ Macro reference
 ~~~~~~~~~~~~~~~
 
 .. function:: @nloops N itersym rangeexpr bodyexpr
+
+   ::
               @nloops N itersym rangeexpr preexpr bodyexpr
               @nloops N itersym rangeexpr preexpr postexpr bodyexpr
 
@@ -191,6 +193,8 @@ Macro reference
     bounds-checking.
 
 .. function:: @nif N conditionexpr expr
+
+   ::
               @nif N conditionexpr expr elseexpr
 
     Generates a sequence of ``if ... elseif ... else ... end`` statements. For example::
@@ -200,6 +204,7 @@ Macro reference
     would generate::
 
         if i_1 > size(A, 1)
+
 	    error("Dimension ", 1, " too big")
         elseif i_2 > size(A, 2)
 	    error("Dimension ", 2, " too big")
