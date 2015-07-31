@@ -104,9 +104,10 @@ variable assignments:
 .. doctest::
 
    julia> expand( :(f() = 1) )
-   :($(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple),(top(svec))())), AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],Any[],0], :(begin  # none, line 1:
+   :($(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple),(top(svec))())), AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],0,Any[]], :(begin  # none, line 1:
            return 1
        end))))), false)))
+
 .. rubric:: Intermediate and compiled representations
 
 Inspecting the lowered form for functions requires selection of the specific method to display,

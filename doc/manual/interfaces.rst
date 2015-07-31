@@ -48,8 +48,10 @@ A simple example is an iterable sequence of square numbers with a defined length
            Base.start(::Squares) = 1
            Base.next(S::Squares, state) = (state*state, state+1)
            Base.done(S::Squares, s) = s > S.count;
+           Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
+           Base.length(S::Squares) = S.count;
 
-With only those definitions, the ``Squares`` type is already pretty powerful. We can iterate over all the elements:
+With only ``start``, ``next``, and ``done`` definitions, the ``Squares`` type is already pretty powerful. We can iterate over all the elements:
 
 .. doctest::
 
@@ -74,12 +76,7 @@ We can use many of the builtin methods that work with iterables, like :func:`in`
     julia> mean(Squares(100)), std(Squares(100))
     (3383.5,3024.355854282583)
 
-There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` sequence will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend :func:`length`, too:
-
-.. doctest::
-
-    julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
-           Base.length(S::Squares) = S.count;
+There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a ``Squares`` sequence will always be ``Int``. By extending the :func:`eltype` method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend :func:`length`, too.
 
 Now, when we ask Julia to :func:`collect` all the elements into an array it can preallocate a ``Vector{Int}`` of the right size instead of blindly ``push!``\ ing each element into a ``Vector{Any}``:
 
