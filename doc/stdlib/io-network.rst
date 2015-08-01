@@ -756,7 +756,7 @@ Network I/O
    and ``timedout``, giving the result of watching the file.
 
    This behavior of this function varies slightly across platforms.
-   See https://nodejs.org/api/fs.html#fs_caveat for more detailed information.
+   See https://nodejs.org/api/fs.html#fs_caveats for more detailed information.
 
 .. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
