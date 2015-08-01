@@ -124,6 +124,7 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
     else
         b.nb = 0
     end
+    n
 end
 
 function write(b::Base64EncodePipe, x::UInt8)
@@ -137,6 +138,7 @@ function write(b::Base64EncodePipe, x::UInt8)
         write(b.io, b64(b.b0,b.b1,x)...)
         b.nb = 0
     end
+    1
 end
 
 function close(b::Base64EncodePipe)
