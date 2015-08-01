@@ -347,3 +347,28 @@ for elty in (Float32, Float64, Complex64, Complex128)
     X, rcond, f, b, r = LAPACK.gesvx!(C,D)
     @test_approx_eq X A\B
 end
+
+# Test our own linear algebra functionaly against LAPACK
+for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    for nn in (5,10,15)
+        if elty <: Real
+            A = convert(Matrix{elty}, randn(10,nn))
+        else
+            A = convert(Matrix{elty}, complex(randn(10,nn),randn(10,nn)))
+        end    ## LU (only equal for real because LAPACK uses different absolute value when choosing permutations)
+        if elty <: Real
+            FJulia  = Base.LinAlg.generic_lufact!(copy(A))
+            FLAPACK = Base.LinAlg.LAPACK.getrf!(copy(A))
+            @test_approx_eq FJulia.factors FLAPACK[1]
+            @test_approx_eq FJulia.ipiv FLAPACK[2]
+            @test_approx_eq FJulia.info FLAPACK[3]
+        end
+
+        ## QR
+        FJulia  = invoke(qrfact!, Tuple{AbstractMatrix, Type{Val{false}}},
+                         copy(A), Val{false})
+        FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
+        @test_approx_eq FJulia.factors FLAPACK[1]
+        @test_approx_eq FJulia.τ FLAPACK[2]
+    end
+end

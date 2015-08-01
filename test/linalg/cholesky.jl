@@ -14,16 +14,6 @@ n2 = 2*n1
 
 srand(1234321)
 
-a = rand(n,n)
-for elty in (Float32, Float64, Complex64, Complex128)
-    a = convert(Matrix{elty}, a)
-    # cond
-    @test_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
-    @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
-    @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
-    @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
-end
-
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 a2real = randn(n,n)/2
@@ -111,4 +101,17 @@ begin
 
     @test sum(sum(norm, L*L' - XX)) < eps()
     @test sum(sum(norm, U'*U - XX)) < eps()
+end
+
+# Test generic cholfact!
+for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    if elty <: Complex
+        A = complex(randn(5,5), randn(5,5))
+    else
+        A = randn(5,5)
+    end
+    A = convert(Matrix{elty}, A'A)
+    for ul in (:U, :L)
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{Val{ul}}},copy(A), Val{ul}))
+    end
 end
