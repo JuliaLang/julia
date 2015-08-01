@@ -210,10 +210,13 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
             R[1,IR] = r
         end
     else
-        sizeR = CartesianIndex{N}(size(R))
-        @inbounds @simd for IA in CartesianRange(size(A))
-            IR = min(IA, sizeR)
-            R[IR] = op(R[IR], f(A[IA]))
+        sizeR1 = Base.size_skip1(size(R), A)
+        sizeA1 = Base.size_skip1(size(A), A)
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(IA, sizeR1)
+            @simd for i = 1:size(A, 1)
+                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+            end
         end
     end
     return R
@@ -287,10 +290,10 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     end
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
+    sizeR1 = size_skip1(size(Rval), A)
+    sizeA1 = size_skip1(size(A), A)
     k = 0
     if size(Rval, 1) < size(A, 1)
-        sizeR1 = size_skip1(size(Rval), A)
-        sizeA1 = size_skip1(size(A), A)
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(sizeR1, IA)
             tmpRv = Rval[1,IR]
@@ -307,14 +310,15 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
             Rind[1,IR] = tmpRi
         end
     else
-        sizeR = CartesianIndex(size(Rval))
-        @inbounds for IA in CartesianRange(size(A))
-            IR = min(sizeR, IA)
-            k += 1
-            tmpAv = A[IA]
-            if f(tmpAv, Rval[IR])
-                Rval[IR] = tmpAv
-                Rind[IR] = k
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(sizeR1, IA)
+            for i = 1:size(A, 1)
+                k += 1
+                tmpAv = A[i,IA]
+                if f(tmpAv, Rval[i,IR])
+                    Rval[i,IR] = tmpAv
+                    Rind[i,IR] = k
+                end
             end
         end
     end
