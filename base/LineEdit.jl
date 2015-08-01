@@ -1326,24 +1326,38 @@ function commit_line(s)
     state(s, mode(s)).ias = InputAreaState(0, 0)
 end
 
-global physical_tab_size = 8
+global tabwidth = 8
 
-function set_physical_tab_size(sz)
-    global physical_tab_size
+"""
+Returns the physical tab width for line editing and the REPL
+"""
+get_tabwidth() = tabwidth
+
+"""
+Sets the physical tab width for line editing and the REPL
+The default value is 8
+
+### Returns:
+*     Old value
+
+### Throws:
+*     ArgumentError
+"""
+function set_tabwidth!(sz)
+    global tabwidth
     0 < sz <= 16 || throw(ArgumentError("tab_size ($sz) must be > 0 and <= 16"))
-    oldsz = physical_tab_size
-    physical_tab_size = sz
+    oldsz = tabwidth
+    tabwidth = sz
     return oldsz
 end
 
 function bracketed_paste(s)
-    global physical_tab_size
     ps = state(s, mode(s))
     input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
     input = replace(input, '\r', '\n')
     if position(buffer(s)) == 0
-        indent = Base.indentation(input; tabwidth=LineEdit.physical_tab_size)[1]
-        input = Base.unindent(input[(indent+1):end], indent; tabwidth=LineEdit.physical_tab_size)
+        indent = Base.indentation(input; tabwidth=tabwidth)[1]
+        input = Base.unindent(input[(indent+1):end], indent; tabwidth=tabwidth)
     end
     input
 end
