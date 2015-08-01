@@ -1776,53 +1776,53 @@ U+1D500           𝔀            \\mbfscrw                                     
 U+1D501           𝔁            \\mbfscrx                                      MATHEMATICAL BOLD SCRIPT SMALL X
 U+1D502           𝔂            \\mbfscry                                      MATHEMATICAL BOLD SCRIPT SMALL Y
 U+1D503           𝔃            \\mbfscrz                                      MATHEMATICAL BOLD SCRIPT SMALL Z
-U+1D504           𝔄             \\mfrakA                                       MATHEMATICAL FRAKTUR CAPITAL A
-U+1D505           𝔅             \\mfrakB                                       MATHEMATICAL FRAKTUR CAPITAL B
-U+1D507           𝔇             \\mfrakD                                       MATHEMATICAL FRAKTUR CAPITAL D
-U+1D508           𝔈             \\mfrakE                                       MATHEMATICAL FRAKTUR CAPITAL E
-U+1D509           𝔉             \\mfrakF                                       MATHEMATICAL FRAKTUR CAPITAL F
-U+1D50A           𝔊             \\mfrakG                                       MATHEMATICAL FRAKTUR CAPITAL G
-U+1D50D           𝔍             \\mfrakJ                                       MATHEMATICAL FRAKTUR CAPITAL J
-U+1D50E           𝔎             \\mfrakK                                       MATHEMATICAL FRAKTUR CAPITAL K
-U+1D50F           𝔏             \\mfrakL                                       MATHEMATICAL FRAKTUR CAPITAL L
-U+1D510           𝔐             \\mfrakM                                       MATHEMATICAL FRAKTUR CAPITAL M
-U+1D511           𝔑             \\mfrakN                                       MATHEMATICAL FRAKTUR CAPITAL N
-U+1D512           𝔒             \\mfrakO                                       MATHEMATICAL FRAKTUR CAPITAL O
-U+1D513           𝔓             \\mfrakP                                       MATHEMATICAL FRAKTUR CAPITAL P
-U+1D514           𝔔             \\mfrakQ                                       MATHEMATICAL FRAKTUR CAPITAL Q
-U+1D516           𝔖             \\mfrakS                                       MATHEMATICAL FRAKTUR CAPITAL S
-U+1D517           𝔗             \\mfrakT                                       MATHEMATICAL FRAKTUR CAPITAL T
-U+1D518           𝔘             \\mfrakU                                       MATHEMATICAL FRAKTUR CAPITAL U
-U+1D519           𝔙             \\mfrakV                                       MATHEMATICAL FRAKTUR CAPITAL V
-U+1D51A           𝔚             \\mfrakW                                       MATHEMATICAL FRAKTUR CAPITAL W
-U+1D51B           𝔛             \\mfrakX                                       MATHEMATICAL FRAKTUR CAPITAL X
-U+1D51C           𝔜             \\mfrakY                                       MATHEMATICAL FRAKTUR CAPITAL Y
-U+1D51E           𝔞             \\mfraka                                       MATHEMATICAL FRAKTUR SMALL A
-U+1D51F           𝔟             \\mfrakb                                       MATHEMATICAL FRAKTUR SMALL B
-U+1D520           𝔠             \\mfrakc                                       MATHEMATICAL FRAKTUR SMALL C
-U+1D521           𝔡             \\mfrakd                                       MATHEMATICAL FRAKTUR SMALL D
-U+1D522           𝔢             \\mfrake                                       MATHEMATICAL FRAKTUR SMALL E
-U+1D523           𝔣             \\mfrakf                                       MATHEMATICAL FRAKTUR SMALL F
-U+1D524           𝔤             \\mfrakg                                       MATHEMATICAL FRAKTUR SMALL G
-U+1D525           𝔥             \\mfrakh                                       MATHEMATICAL FRAKTUR SMALL H
-U+1D526           𝔦             \\mfraki                                       MATHEMATICAL FRAKTUR SMALL I
-U+1D527           𝔧             \\mfrakj                                       MATHEMATICAL FRAKTUR SMALL J
-U+1D528           𝔨             \\mfrakk                                       MATHEMATICAL FRAKTUR SMALL K
-U+1D529           𝔩             \\mfrakl                                       MATHEMATICAL FRAKTUR SMALL L
-U+1D52A           𝔪             \\mfrakm                                       MATHEMATICAL FRAKTUR SMALL M
-U+1D52B           𝔫             \\mfrakn                                       MATHEMATICAL FRAKTUR SMALL N
-U+1D52C           𝔬             \\mfrako                                       MATHEMATICAL FRAKTUR SMALL O
-U+1D52D           𝔭             \\mfrakp                                       MATHEMATICAL FRAKTUR SMALL P
-U+1D52E           𝔮             \\mfrakq                                       MATHEMATICAL FRAKTUR SMALL Q
-U+1D52F           𝔯             \\mfrakr                                       MATHEMATICAL FRAKTUR SMALL R
-U+1D530           𝔰             \\mfraks                                       MATHEMATICAL FRAKTUR SMALL S
-U+1D531           𝔱             \\mfrakt                                       MATHEMATICAL FRAKTUR SMALL T
-U+1D532           𝔲             \\mfraku                                       MATHEMATICAL FRAKTUR SMALL U
-U+1D533           𝔳             \\mfrakv                                       MATHEMATICAL FRAKTUR SMALL V
-U+1D534           𝔴             \\mfrakw                                       MATHEMATICAL FRAKTUR SMALL W
-U+1D535           𝔵             \\mfrakx                                       MATHEMATICAL FRAKTUR SMALL X
-U+1D536           𝔶             \\mfraky                                       MATHEMATICAL FRAKTUR SMALL Y
-U+1D537           𝔷             \\mfrakz                                       MATHEMATICAL FRAKTUR SMALL Z
+U+1D504           𝔄            \\mfrakA                                       MATHEMATICAL FRAKTUR CAPITAL A
+U+1D505           𝔅            \\mfrakB                                       MATHEMATICAL FRAKTUR CAPITAL B
+U+1D507           𝔇            \\mfrakD                                       MATHEMATICAL FRAKTUR CAPITAL D
+U+1D508           𝔈            \\mfrakE                                       MATHEMATICAL FRAKTUR CAPITAL E
+U+1D509           𝔉            \\mfrakF                                       MATHEMATICAL FRAKTUR CAPITAL F
+U+1D50A           𝔊            \\mfrakG                                       MATHEMATICAL FRAKTUR CAPITAL G
+U+1D50D           𝔍            \\mfrakJ                                       MATHEMATICAL FRAKTUR CAPITAL J
+U+1D50E           𝔎            \\mfrakK                                       MATHEMATICAL FRAKTUR CAPITAL K
+U+1D50F           𝔏            \\mfrakL                                       MATHEMATICAL FRAKTUR CAPITAL L
+U+1D510           𝔐            \\mfrakM                                       MATHEMATICAL FRAKTUR CAPITAL M
+U+1D511           𝔑            \\mfrakN                                       MATHEMATICAL FRAKTUR CAPITAL N
+U+1D512           𝔒            \\mfrakO                                       MATHEMATICAL FRAKTUR CAPITAL O
+U+1D513           𝔓            \\mfrakP                                       MATHEMATICAL FRAKTUR CAPITAL P
+U+1D514           𝔔            \\mfrakQ                                       MATHEMATICAL FRAKTUR CAPITAL Q
+U+1D516           𝔖            \\mfrakS                                       MATHEMATICAL FRAKTUR CAPITAL S
+U+1D517           𝔗            \\mfrakT                                       MATHEMATICAL FRAKTUR CAPITAL T
+U+1D518           𝔘            \\mfrakU                                       MATHEMATICAL FRAKTUR CAPITAL U
+U+1D519           𝔙            \\mfrakV                                       MATHEMATICAL FRAKTUR CAPITAL V
+U+1D51A           𝔚            \\mfrakW                                       MATHEMATICAL FRAKTUR CAPITAL W
+U+1D51B           𝔛            \\mfrakX                                       MATHEMATICAL FRAKTUR CAPITAL X
+U+1D51C           𝔜            \\mfrakY                                       MATHEMATICAL FRAKTUR CAPITAL Y
+U+1D51E           𝔞            \\mfraka                                       MATHEMATICAL FRAKTUR SMALL A
+U+1D51F           𝔟            \\mfrakb                                       MATHEMATICAL FRAKTUR SMALL B
+U+1D520           𝔠            \\mfrakc                                       MATHEMATICAL FRAKTUR SMALL C
+U+1D521           𝔡            \\mfrakd                                       MATHEMATICAL FRAKTUR SMALL D
+U+1D522           𝔢            \\mfrake                                       MATHEMATICAL FRAKTUR SMALL E
+U+1D523           𝔣            \\mfrakf                                       MATHEMATICAL FRAKTUR SMALL F
+U+1D524           𝔤            \\mfrakg                                       MATHEMATICAL FRAKTUR SMALL G
+U+1D525           𝔥            \\mfrakh                                       MATHEMATICAL FRAKTUR SMALL H
+U+1D526           𝔦            \\mfraki                                       MATHEMATICAL FRAKTUR SMALL I
+U+1D527           𝔧            \\mfrakj                                       MATHEMATICAL FRAKTUR SMALL J
+U+1D528           𝔨            \\mfrakk                                       MATHEMATICAL FRAKTUR SMALL K
+U+1D529           𝔩            \\mfrakl                                       MATHEMATICAL FRAKTUR SMALL L
+U+1D52A           𝔪            \\mfrakm                                       MATHEMATICAL FRAKTUR SMALL M
+U+1D52B           𝔫            \\mfrakn                                       MATHEMATICAL FRAKTUR SMALL N
+U+1D52C           𝔬            \\mfrako                                       MATHEMATICAL FRAKTUR SMALL O
+U+1D52D           𝔭            \\mfrakp                                       MATHEMATICAL FRAKTUR SMALL P
+U+1D52E           𝔮            \\mfrakq                                       MATHEMATICAL FRAKTUR SMALL Q
+U+1D52F           𝔯            \\mfrakr                                       MATHEMATICAL FRAKTUR SMALL R
+U+1D530           𝔰            \\mfraks                                       MATHEMATICAL FRAKTUR SMALL S
+U+1D531           𝔱            \\mfrakt                                       MATHEMATICAL FRAKTUR SMALL T
+U+1D532           𝔲            \\mfraku                                       MATHEMATICAL FRAKTUR SMALL U
+U+1D533           𝔳            \\mfrakv                                       MATHEMATICAL FRAKTUR SMALL V
+U+1D534           𝔴            \\mfrakw                                       MATHEMATICAL FRAKTUR SMALL W
+U+1D535           𝔵            \\mfrakx                                       MATHEMATICAL FRAKTUR SMALL X
+U+1D536           𝔶            \\mfraky                                       MATHEMATICAL FRAKTUR SMALL Y
+U+1D537           𝔷            \\mfrakz                                       MATHEMATICAL FRAKTUR SMALL Z
 U+1D538           𝔸            \\BbbA                                         MATHEMATICAL DOUBLE-STRUCK CAPITAL A
 U+1D539           𝔹            \\BbbB                                         MATHEMATICAL DOUBLE-STRUCK CAPITAL B
 U+1D53B           𝔻            \\BbbD                                         MATHEMATICAL DOUBLE-STRUCK CAPITAL D
@@ -1868,58 +1868,58 @@ U+1D568           𝕨            \\Bbbw                                        
 U+1D569           𝕩            \\Bbbx                                         MATHEMATICAL DOUBLE-STRUCK SMALL X
 U+1D56A           𝕪            \\Bbby                                         MATHEMATICAL DOUBLE-STRUCK SMALL Y
 U+1D56B           𝕫            \\Bbbz                                         MATHEMATICAL DOUBLE-STRUCK SMALL Z
-U+1D56C           𝕬             \\mbffrakA                                     MATHEMATICAL BOLD FRAKTUR CAPITAL A
-U+1D56D           𝕭             \\mbffrakB                                     MATHEMATICAL BOLD FRAKTUR CAPITAL B
-U+1D56E           𝕮             \\mbffrakC                                     MATHEMATICAL BOLD FRAKTUR CAPITAL C
-U+1D56F           𝕯             \\mbffrakD                                     MATHEMATICAL BOLD FRAKTUR CAPITAL D
-U+1D570           𝕰             \\mbffrakE                                     MATHEMATICAL BOLD FRAKTUR CAPITAL E
-U+1D571           𝕱             \\mbffrakF                                     MATHEMATICAL BOLD FRAKTUR CAPITAL F
-U+1D572           𝕲             \\mbffrakG                                     MATHEMATICAL BOLD FRAKTUR CAPITAL G
-U+1D573           𝕳             \\mbffrakH                                     MATHEMATICAL BOLD FRAKTUR CAPITAL H
-U+1D574           𝕴             \\mbffrakI                                     MATHEMATICAL BOLD FRAKTUR CAPITAL I
-U+1D575           𝕵             \\mbffrakJ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL J
-U+1D576           𝕶             \\mbffrakK                                     MATHEMATICAL BOLD FRAKTUR CAPITAL K
-U+1D577           𝕷             \\mbffrakL                                     MATHEMATICAL BOLD FRAKTUR CAPITAL L
-U+1D578           𝕸             \\mbffrakM                                     MATHEMATICAL BOLD FRAKTUR CAPITAL M
-U+1D579           𝕹             \\mbffrakN                                     MATHEMATICAL BOLD FRAKTUR CAPITAL N
-U+1D57A           𝕺             \\mbffrakO                                     MATHEMATICAL BOLD FRAKTUR CAPITAL O
-U+1D57B           𝕻             \\mbffrakP                                     MATHEMATICAL BOLD FRAKTUR CAPITAL P
-U+1D57C           𝕼             \\mbffrakQ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Q
-U+1D57D           𝕽             \\mbffrakR                                     MATHEMATICAL BOLD FRAKTUR CAPITAL R
-U+1D57E           𝕾             \\mbffrakS                                     MATHEMATICAL BOLD FRAKTUR CAPITAL S
-U+1D57F           𝕿             \\mbffrakT                                     MATHEMATICAL BOLD FRAKTUR CAPITAL T
-U+1D580           𝖀             \\mbffrakU                                     MATHEMATICAL BOLD FRAKTUR CAPITAL U
-U+1D581           𝖁             \\mbffrakV                                     MATHEMATICAL BOLD FRAKTUR CAPITAL V
-U+1D582           𝖂             \\mbffrakW                                     MATHEMATICAL BOLD FRAKTUR CAPITAL W
-U+1D583           𝖃             \\mbffrakX                                     MATHEMATICAL BOLD FRAKTUR CAPITAL X
-U+1D584           𝖄             \\mbffrakY                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Y
-U+1D585           𝖅             \\mbffrakZ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Z
-U+1D586           𝖆             \\mbffraka                                     MATHEMATICAL BOLD FRAKTUR SMALL A
-U+1D587           𝖇             \\mbffrakb                                     MATHEMATICAL BOLD FRAKTUR SMALL B
-U+1D588           𝖈             \\mbffrakc                                     MATHEMATICAL BOLD FRAKTUR SMALL C
-U+1D589           𝖉             \\mbffrakd                                     MATHEMATICAL BOLD FRAKTUR SMALL D
-U+1D58A           𝖊             \\mbffrake                                     MATHEMATICAL BOLD FRAKTUR SMALL E
-U+1D58B           𝖋             \\mbffrakf                                     MATHEMATICAL BOLD FRAKTUR SMALL F
-U+1D58C           𝖌             \\mbffrakg                                     MATHEMATICAL BOLD FRAKTUR SMALL G
-U+1D58D           𝖍             \\mbffrakh                                     MATHEMATICAL BOLD FRAKTUR SMALL H
-U+1D58E           𝖎             \\mbffraki                                     MATHEMATICAL BOLD FRAKTUR SMALL I
-U+1D58F           𝖏             \\mbffrakj                                     MATHEMATICAL BOLD FRAKTUR SMALL J
-U+1D590           𝖐             \\mbffrakk                                     MATHEMATICAL BOLD FRAKTUR SMALL K
-U+1D591           𝖑             \\mbffrakl                                     MATHEMATICAL BOLD FRAKTUR SMALL L
-U+1D592           𝖒             \\mbffrakm                                     MATHEMATICAL BOLD FRAKTUR SMALL M
-U+1D593           𝖓             \\mbffrakn                                     MATHEMATICAL BOLD FRAKTUR SMALL N
-U+1D594           𝖔             \\mbffrako                                     MATHEMATICAL BOLD FRAKTUR SMALL O
-U+1D595           𝖕             \\mbffrakp                                     MATHEMATICAL BOLD FRAKTUR SMALL P
-U+1D596           𝖖             \\mbffrakq                                     MATHEMATICAL BOLD FRAKTUR SMALL Q
-U+1D597           𝖗             \\mbffrakr                                     MATHEMATICAL BOLD FRAKTUR SMALL R
-U+1D598           𝖘             \\mbffraks                                     MATHEMATICAL BOLD FRAKTUR SMALL S
-U+1D599           𝖙             \\mbffrakt                                     MATHEMATICAL BOLD FRAKTUR SMALL T
-U+1D59A           𝖚             \\mbffraku                                     MATHEMATICAL BOLD FRAKTUR SMALL U
-U+1D59B           𝖛             \\mbffrakv                                     MATHEMATICAL BOLD FRAKTUR SMALL V
-U+1D59C           𝖜             \\mbffrakw                                     MATHEMATICAL BOLD FRAKTUR SMALL W
-U+1D59D           𝖝             \\mbffrakx                                     MATHEMATICAL BOLD FRAKTUR SMALL X
-U+1D59E           𝖞             \\mbffraky                                     MATHEMATICAL BOLD FRAKTUR SMALL Y
-U+1D59F           𝖟             \\mbffrakz                                     MATHEMATICAL BOLD FRAKTUR SMALL Z
+U+1D56C           𝕬            \\mbffrakA                                     MATHEMATICAL BOLD FRAKTUR CAPITAL A
+U+1D56D           𝕭            \\mbffrakB                                     MATHEMATICAL BOLD FRAKTUR CAPITAL B
+U+1D56E           𝕮            \\mbffrakC                                     MATHEMATICAL BOLD FRAKTUR CAPITAL C
+U+1D56F           𝕯            \\mbffrakD                                     MATHEMATICAL BOLD FRAKTUR CAPITAL D
+U+1D570           𝕰            \\mbffrakE                                     MATHEMATICAL BOLD FRAKTUR CAPITAL E
+U+1D571           𝕱            \\mbffrakF                                     MATHEMATICAL BOLD FRAKTUR CAPITAL F
+U+1D572           𝕲            \\mbffrakG                                     MATHEMATICAL BOLD FRAKTUR CAPITAL G
+U+1D573           𝕳            \\mbffrakH                                     MATHEMATICAL BOLD FRAKTUR CAPITAL H
+U+1D574           𝕴            \\mbffrakI                                     MATHEMATICAL BOLD FRAKTUR CAPITAL I
+U+1D575           𝕵            \\mbffrakJ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL J
+U+1D576           𝕶            \\mbffrakK                                     MATHEMATICAL BOLD FRAKTUR CAPITAL K
+U+1D577           𝕷            \\mbffrakL                                     MATHEMATICAL BOLD FRAKTUR CAPITAL L
+U+1D578           𝕸            \\mbffrakM                                     MATHEMATICAL BOLD FRAKTUR CAPITAL M
+U+1D579           𝕹            \\mbffrakN                                     MATHEMATICAL BOLD FRAKTUR CAPITAL N
+U+1D57A           𝕺            \\mbffrakO                                     MATHEMATICAL BOLD FRAKTUR CAPITAL O
+U+1D57B           𝕻            \\mbffrakP                                     MATHEMATICAL BOLD FRAKTUR CAPITAL P
+U+1D57C           𝕼            \\mbffrakQ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Q
+U+1D57D           𝕽            \\mbffrakR                                     MATHEMATICAL BOLD FRAKTUR CAPITAL R
+U+1D57E           𝕾            \\mbffrakS                                     MATHEMATICAL BOLD FRAKTUR CAPITAL S
+U+1D57F           𝕿            \\mbffrakT                                     MATHEMATICAL BOLD FRAKTUR CAPITAL T
+U+1D580           𝖀            \\mbffrakU                                     MATHEMATICAL BOLD FRAKTUR CAPITAL U
+U+1D581           𝖁            \\mbffrakV                                     MATHEMATICAL BOLD FRAKTUR CAPITAL V
+U+1D582           𝖂            \\mbffrakW                                     MATHEMATICAL BOLD FRAKTUR CAPITAL W
+U+1D583           𝖃            \\mbffrakX                                     MATHEMATICAL BOLD FRAKTUR CAPITAL X
+U+1D584           𝖄            \\mbffrakY                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Y
+U+1D585           𝖅            \\mbffrakZ                                     MATHEMATICAL BOLD FRAKTUR CAPITAL Z
+U+1D586           𝖆            \\mbffraka                                     MATHEMATICAL BOLD FRAKTUR SMALL A
+U+1D587           𝖇            \\mbffrakb                                     MATHEMATICAL BOLD FRAKTUR SMALL B
+U+1D588           𝖈            \\mbffrakc                                     MATHEMATICAL BOLD FRAKTUR SMALL C
+U+1D589           𝖉            \\mbffrakd                                     MATHEMATICAL BOLD FRAKTUR SMALL D
+U+1D58A           𝖊            \\mbffrake                                     MATHEMATICAL BOLD FRAKTUR SMALL E
+U+1D58B           𝖋            \\mbffrakf                                     MATHEMATICAL BOLD FRAKTUR SMALL F
+U+1D58C           𝖌            \\mbffrakg                                     MATHEMATICAL BOLD FRAKTUR SMALL G
+U+1D58D           𝖍            \\mbffrakh                                     MATHEMATICAL BOLD FRAKTUR SMALL H
+U+1D58E           𝖎            \\mbffraki                                     MATHEMATICAL BOLD FRAKTUR SMALL I
+U+1D58F           𝖏            \\mbffrakj                                     MATHEMATICAL BOLD FRAKTUR SMALL J
+U+1D590           𝖐            \\mbffrakk                                     MATHEMATICAL BOLD FRAKTUR SMALL K
+U+1D591           𝖑            \\mbffrakl                                     MATHEMATICAL BOLD FRAKTUR SMALL L
+U+1D592           𝖒            \\mbffrakm                                     MATHEMATICAL BOLD FRAKTUR SMALL M
+U+1D593           𝖓            \\mbffrakn                                     MATHEMATICAL BOLD FRAKTUR SMALL N
+U+1D594           𝖔            \\mbffrako                                     MATHEMATICAL BOLD FRAKTUR SMALL O
+U+1D595           𝖕            \\mbffrakp                                     MATHEMATICAL BOLD FRAKTUR SMALL P
+U+1D596           𝖖            \\mbffrakq                                     MATHEMATICAL BOLD FRAKTUR SMALL Q
+U+1D597           𝖗            \\mbffrakr                                     MATHEMATICAL BOLD FRAKTUR SMALL R
+U+1D598           𝖘            \\mbffraks                                     MATHEMATICAL BOLD FRAKTUR SMALL S
+U+1D599           𝖙            \\mbffrakt                                     MATHEMATICAL BOLD FRAKTUR SMALL T
+U+1D59A           𝖚            \\mbffraku                                     MATHEMATICAL BOLD FRAKTUR SMALL U
+U+1D59B           𝖛            \\mbffrakv                                     MATHEMATICAL BOLD FRAKTUR SMALL V
+U+1D59C           𝖜            \\mbffrakw                                     MATHEMATICAL BOLD FRAKTUR SMALL W
+U+1D59D           𝖝            \\mbffrakx                                     MATHEMATICAL BOLD FRAKTUR SMALL X
+U+1D59E           𝖞            \\mbffraky                                     MATHEMATICAL BOLD FRAKTUR SMALL Y
+U+1D59F           𝖟            \\mbffrakz                                     MATHEMATICAL BOLD FRAKTUR SMALL Z
 U+1D5A0           𝖠            \\msansA                                       MATHEMATICAL SANS-SERIF CAPITAL A
 U+1D5A1           𝖡            \\msansB                                       MATHEMATICAL SANS-SERIF CAPITAL B
 U+1D5A2           𝖢            \\msansC                                       MATHEMATICAL SANS-SERIF CAPITAL C
@@ -2744,11 +2744,11 @@ U+1F3ED           🏭            \\:factory:                                   
 U+1F3EE           🏮            \\:izakaya_lantern:                            IZAKAYA LANTERN
 U+1F3EF           🏯            \\:japanese_castle:                            JAPANESE CASTLE
 U+1F3F0           🏰            \\:european_castle:                            EUROPEAN CASTLE
-U+1F3FB           🏻             \\:skin-tone-2:                                EMOJI MODIFIER FITZPATRICK TYPE-1-2
-U+1F3FC           🏼             \\:skin-tone-3:                                EMOJI MODIFIER FITZPATRICK TYPE-3
-U+1F3FD           🏽             \\:skin-tone-4:                                EMOJI MODIFIER FITZPATRICK TYPE-4
-U+1F3FE           🏾             \\:skin-tone-5:                                EMOJI MODIFIER FITZPATRICK TYPE-5
-U+1F3FF           🏿             \\:skin-tone-6:                                EMOJI MODIFIER FITZPATRICK TYPE-6
+U+1F3FB           🏻            \\:skin-tone-2:                                EMOJI MODIFIER FITZPATRICK TYPE-1-2
+U+1F3FC           🏼            \\:skin-tone-3:                                EMOJI MODIFIER FITZPATRICK TYPE-3
+U+1F3FD           🏽            \\:skin-tone-4:                                EMOJI MODIFIER FITZPATRICK TYPE-4
+U+1F3FE           🏾            \\:skin-tone-5:                                EMOJI MODIFIER FITZPATRICK TYPE-5
+U+1F3FF           🏿            \\:skin-tone-6:                                EMOJI MODIFIER FITZPATRICK TYPE-6
 U+1F400           🐀            \\:rat:                                        RAT
 U+1F401           🐁            \\:mouse2:                                     MOUSE
 U+1F402           🐂            \\:ox:                                         OX
