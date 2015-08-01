@@ -3419,8 +3419,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
                 jl_errorf("macro definition not allowed inside a local scope");
             }
             else {
-                jl_errorf("unsupported or misplaced expression \"%s\" in function %s",
-                          head->name, ctx->linfo->name->name);
+                std::ostringstream err;
+                err << "unsupported or misplaced expression '" << head->name
+                    << "' in function '" << ctx->linfo->name->name << "'";
+                emit_error(err.str(), ctx);
+                return V_null;
             }
         }
     }
