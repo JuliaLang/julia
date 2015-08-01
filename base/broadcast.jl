@@ -327,8 +327,9 @@ function .//(A::AbstractArray, B::AbstractArray)
     broadcast!(//, Array(type_rdiv(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
-type_pow(T,S) = promote_type(T,S)
-type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
+@generated function type_pow(T,S)
+    :(promote_type(Base.return_types(^,(T,S))...))
+end
 type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
 
 function .^(A::AbstractArray, B::AbstractArray)

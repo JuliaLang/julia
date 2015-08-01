@@ -385,13 +385,15 @@ function isqrt(x::BigInt)
     return z
 end
 
+^(x::BigInt, y::Bool) = y ? x : one(x)
+
 function ^(x::BigInt, y::Culong)
     z = BigInt()
     ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, y)
     return z
 end
 
-function bigint_pow(x::BigInt, y::Integer)
+function ^(x::BigInt, y::Integer)
     if y<0; throw(DomainError()); end
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
@@ -410,11 +412,6 @@ function bigint_pow(x::BigInt, y::Integer)
     end
     return x^convert(Culong, y)
 end
-
-^(x::BigInt , y::BigInt ) = bigint_pow(x, y)
-^(x::BigInt , y::Bool   ) = y ? x : one(x)
-^(x::BigInt , y::Integer) = bigint_pow(x, y)
-^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     p < 0 && throw(DomainError())
