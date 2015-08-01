@@ -8,6 +8,8 @@ Nullable() = Nullable{Union{}}()
 
 eltype{T}(::Type{Nullable{T}}) = T
 
+convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
+
 function convert{T}(::Type{Nullable{T}}, x::Nullable)
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
