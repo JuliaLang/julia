@@ -13,6 +13,11 @@ Mathematical Operators
 
    Unary minus operator.
 
+   ::
+              -(x, y)
+
+   Subtraction operator.
+
 .. _+:
 .. function:: +(x, y...)
 
@@ -22,13 +27,37 @@ Mathematical Operators
 .. _-:
 .. function:: -(x, y)
 
+   ::
+              -(x)
+
+   Unary minus operator.
+
+   ::
+              -(x, y)
+
    Subtraction operator.
 
 .. _*:
 .. function:: *(x, y...)
 
+   ::
+              *(A, B)
+   :noindex:
+
+   Matrix multiplication
+
+   ::
+              *(x, y...)
+
    Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
    ``*(x, y, z, ...)``.
+
+   ::
+              *(s, t)
+
+   Concatenate strings. The ``*`` operator is an alias to this function.
+
+   .. doctest::
 
 .. _/:
 .. function:: /(x, y)
@@ -46,6 +75,16 @@ Mathematical Operators
 .. function:: ^(x, y)
 
    Exponentiation operator.
+
+   ::
+              ^(s, n)
+
+   Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
+
+   .. doctest::
+
+   	julia> "Test "^3
+   	"Test Test Test "
 
 .. _.+:
 .. function:: .+(x, y)
@@ -92,6 +131,8 @@ Mathematical Operators
    ``fma``.
 
 .. function:: div(x, y)
+
+   ::
               ÷(x, y)
 
    The quotient from Euclidean division. Computes ``x/y``, truncated to an integer.
@@ -119,6 +160,8 @@ Mathematical Operators
    floating-point number 2pi.
 
 .. function:: rem(x, y)
+
+   ::
               %(x, y)
 
    Remainder from Euclidean division, returning a value of the same sign
@@ -207,6 +250,8 @@ Mathematical Operators
 
 .. _!=:
 .. function:: !=(x, y)
+
+   ::
               ≠(x,y)
 
    Not-equals comparison operator. Always gives the opposite answer as ``==``.
@@ -215,12 +260,18 @@ Mathematical Operators
 
 .. _===:
 .. function:: ===(x, y)
-              ≡(x,y)
 
-   See the :func:`is` operator
+   ::
+              is(x, y) -> Bool
+              ===(x,y) -> Bool
+              ≡(x,y) -> Bool
+
+   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``.
 
 .. _!==:
 .. function:: !==(x, y)
+
+   ::
               ≢(x,y)
 
    Equivalent to ``!is(x, y)``
@@ -236,6 +287,8 @@ Mathematical Operators
 
 .. _<=:
 .. function:: <=(x, y)
+
+   ::
               ≤(x,y)
 
    Less-than-or-equals comparison operator.
@@ -248,6 +301,8 @@ Mathematical Operators
 
 .. _>=:
 .. function:: >=(x, y)
+
+   ::
               ≥(x,y)
 
    Greater-than-or-equals comparison operator.
@@ -259,6 +314,8 @@ Mathematical Operators
 
 .. _.!=:
 .. function:: .!=(x, y)
+
+   ::
               .≠(x,y)
 
    Element-wise not-equals comparison operator.
@@ -270,6 +327,8 @@ Mathematical Operators
 
 .. _.<=:
 .. function:: .<=(x, y)
+
+   ::
               .≤(x,y)
 
    Element-wise less-than-or-equals comparison operator.
@@ -281,6 +340,8 @@ Mathematical Operators
 
 .. _.>=:
 .. function:: .>=(x, y)
+
+   ::
               .≥(x,y)
 
    Element-wise greater-than-or-equals comparison operator.
@@ -335,7 +396,6 @@ Mathematical Operators
    Matrix operator A \\ B\ :sup:`T`
 
 .. function:: A_mul_B!(Y, A, B) -> Y
-
 
    Calculates the matrix-matrix or matrix-vector product *A B* and stores the
    result in *Y*, overwriting the existing value of *Y*.
@@ -412,7 +472,6 @@ Mathematical Operators
 .. function:: At_rdiv_Bt(a,b)
 
    Matrix operator A\ :sup:`T` / B\ :sup:`T`
-
 
 Mathematical Functions
 ----------------------
@@ -609,7 +668,25 @@ Mathematical Functions
    There is an experimental variant in the ``Base.Math.JuliaLibm`` module,
    which is typically faster and more accurate.
 
+   ::
+              log(b,x)
+
+   Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
+
 .. function:: log(b,x)
+
+   ::
+              log(x)
+
+   Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative
+   ``Real`` arguments. Use complex negative arguments to obtain complex
+   results.
+
+   There is an experimental variant in the ``Base.Math.JuliaLibm`` module,
+   which is typically faster and more accurate.
+
+   ::
+              log(b,x)
 
    Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
 
@@ -688,6 +765,14 @@ Mathematical Functions
 
       .. doctest::
 
+   ::
+              round(z, RoundingModeReal, RoundingModeImaginary)
+
+   Returns the nearest integral value of the same type as the complex-valued
+   ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
+   The first :obj:`RoundingMode` is used for rounding the real components while
+   the second is used for rounding the imaginary components.
+
 	 julia> round(pi, 2)
 	 3.14
 
@@ -755,6 +840,40 @@ Mathematical Functions
 
 .. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
+   ::
+              round([T,] x, [digits, [base]], [r::RoundingMode])
+
+   ``round(x)`` rounds ``x`` to an integer value according to the default
+   rounding mode (see :func:`get_rounding`), returning a value of the same type as
+   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
+   integer, with ties (fractional values of 0.5) being rounded to the even
+   integer.
+
+   .. doctest::
+
+      julia> round(1.7)
+      2.0
+
+      julia> round(1.5)
+      2.0
+
+      julia> round(2.5)
+      2.0
+
+   The optional :obj:`RoundingMode` argument will change how the number gets rounded.
+
+   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
+   :exc:`InexactError` if the value is not representable.
+
+   ``round(x, digits)`` rounds to the specified number of digits after the
+   decimal place (or before if negative). ``round(x, digits, base)`` rounds
+   using a base other than 10.
+
+      .. doctest::
+
+   ::
+              round(z, RoundingModeReal, RoundingModeImaginary)
+
    Returns the nearest integral value of the same type as the complex-valued
    ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
    The first :obj:`RoundingMode` is used for rounding the real components while
@@ -782,13 +901,11 @@ Mathematical Functions
 
 .. function:: trunc([T,] x, [digits, [base]])
 
-   ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
-   value is less than or equal to ``x``.
+   ::
+              trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
-   ``trunc(T, x)`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
-
-   ``digits`` and ``base`` work as for :func:`round`.
+    Truncates the value of ``dt`` according to the provided ``Period`` type.
+    E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 
 .. function:: unsafe_trunc(T, x)
 
@@ -928,7 +1045,25 @@ Mathematical Functions
    precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
    equivalent to :func:`gamma(n+1) <gamma>`.
 
+   ::
+              factorial(n,k)
+
+   Compute ``factorial(n)/factorial(k)``
+
 .. function:: factorial(n,k)
+
+   ::
+              factorial(n)
+
+   Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
+   is computed as an integer (promoted to at least 64 bits).  Note
+   that this may overflow if ``n`` is not small, but you can use
+   ``factorial(big(n))`` to compute the result exactly in arbitrary
+   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
+   equivalent to :func:`gamma(n+1) <gamma>`.
+
+   ::
+              factorial(n,k)
 
    Compute ``factorial(n)/factorial(k)``
 
@@ -1152,7 +1287,21 @@ Mathematical Functions
 
    Riemann zeta function :math:`\zeta(s)`.
 
+   ::
+              zeta(s, z)
+
+   Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
+   the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
+
 .. function:: zeta(s, z)
+
+   ::
+              zeta(s)
+
+   Riemann zeta function :math:`\zeta(s)`.
+
+   ::
+              zeta(s, z)
 
    Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
    the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
@@ -1216,17 +1365,98 @@ Statistics
    Compute the middle of a scalar value, which is equivalent to ``x`` itself,
    but of the type of ``middle(x, x)`` for consistency.
 
-.. function:: middle(x, y)
+   ::
+              middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``, which is equivalent
    in both value and type to computing their mean (``(x + y) / 2``).
 
-.. function:: middle(range)
+   ::
+              middle(range)
 
    Compute the middle of a range, which consists in computing the mean of its extrema.
    Since a range is sorted, the mean is performed with the first and last element.
 
+   ::
+              middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and
+   then computing their mean.
+
+.. function:: middle(x, y)
+
+   ::
+              middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself,
+   but of the type of ``middle(x, x)`` for consistency.
+
+   ::
+              middle(x, y)
+
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
+   in both value and type to computing their mean (``(x + y) / 2``).
+
+   ::
+              middle(range)
+
+   Compute the middle of a range, which consists in computing the mean of its extrema.
+   Since a range is sorted, the mean is performed with the first and last element.
+
+   ::
+              middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and
+   then computing their mean.
+
+.. function:: middle(range)
+
+   ::
+              middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself,
+   but of the type of ``middle(x, x)`` for consistency.
+
+   ::
+              middle(x, y)
+
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
+   in both value and type to computing their mean (``(x + y) / 2``).
+
+   ::
+              middle(range)
+
+   Compute the middle of a range, which consists in computing the mean of its extrema.
+   Since a range is sorted, the mean is performed with the first and last element.
+
+   ::
+              middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and
+   then computing their mean.
+
 .. function:: middle(array)
+
+   ::
+              middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself,
+   but of the type of ``middle(x, x)`` for consistency.
+
+   ::
+              middle(x, y)
+
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
+   in both value and type to computing their mean (``(x + y) / 2``).
+
+   ::
+              middle(range)
+
+   Compute the middle of a range, which consists in computing the mean of its extrema.
+   Since a range is sorted, the mean is performed with the first and last element.
+
+   ::
+              middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and
    then computing their mean.
@@ -1250,7 +1480,27 @@ Statistics
    ``v`` in each bin.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
+   ::
+              hist(v, e) -> e, counts
+
+   Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
+   the bins. The result will be a vector of length ``length(e) - 1``, such that the
+   element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+
 .. function:: hist(v, e) -> e, counts
+
+   ::
+              hist(v[, n]) -> e, counts
+
+   Compute the histogram of ``v``, optionally using approximately ``n``
+   bins. The return values are a range ``e``, which correspond to the
+   edges of the bins, and ``counts`` containing the number of elements of
+   ``v`` in each bin.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+
+   ::
+              hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
    the bins. The result will be a vector of length ``length(e) - 1``, such that the
@@ -1296,7 +1546,19 @@ Statistics
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
+   ::
+              quantile(v, p)
+
+   Compute the quantile of a vector ``v`` at the probability ``p``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+
 .. function:: quantile(v, p)
+
+   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+
+   ::
+              quantile(v, p)
 
    Compute the quantile of a vector ``v`` at the probability ``p``.
    Note: Julia does not ignore ``NaN`` values in the computation.
@@ -1334,14 +1596,12 @@ Statistics
 
    Note: ``v2`` can be omitted, which indicates ``v2 = v1``.
 
-
 .. function:: cor(v1[, v2][, vardim=1, mean=nothing])
 
    Compute the Pearson correlation between the vector(s) in ``v1`` and ``v2``.
 
    Users can use the keyword argument ``vardim`` to specify the variable
    dimension, and ``mean`` to supply pre-computed mean values.
-
 
 Signal Processing
 -----------------
@@ -1581,7 +1841,20 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    Swap the first and second halves of each dimension of ``x``.
 
+   ::
+              fftshift(x,dim)
+
+   Swap the first and second halves of the given dimension of array ``x``.
+
 .. function:: fftshift(x,dim)
+
+   ::
+              fftshift(x)
+
+   Swap the first and second halves of each dimension of ``x``.
+
+   ::
+              fftshift(x,dim)
 
    Swap the first and second halves of the given dimension of array ``x``.
 
@@ -1612,7 +1885,21 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
    2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by
    the vectors ``u`` and ``v``.  Uses 2-D FFT algorithm
 
+   ::
+              conv2(B,A)
+
+   2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
+
 .. function:: conv2(B,A)
+
+   ::
+              conv2(u,v,A)
+
+   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by
+   the vectors ``u`` and ``v``.  Uses 2-D FFT algorithm
+
+   ::
+              conv2(B,A)
 
    2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
 
@@ -1663,7 +1950,6 @@ The following functions are defined within the ``Base.FFTW`` module.
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 
 .. currentmodule:: Base
-
 Numerical Integration
 ---------------------
 
@@ -1731,3 +2017,4 @@ some built-in integration support in Julia.
    For real-valued endpoints, the starting and/or ending points may be
    infinite.  (A coordinate transformation is performed internally to
    map the infinite interval to a finite one.)
+

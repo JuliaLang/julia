@@ -52,12 +52,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a DateTime type by parts. Arguments must be convertible to
    ``Int64``.
 
-.. function:: DateTime(periods::Period...) -> DateTime
+   ::
+              DateTime(periods::Period...) -> DateTime
 
    Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
    DateTime parts not provided will default to the value of ``Dates.default(period)``.
 
-.. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
     Create a DateTime through the adjuster API. The starting point will be constructed from the
     provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
@@ -66,12 +68,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
     is never satisfied).
 
-.. function:: DateTime(dt::Date) -> DateTime
+   ::
+              DateTime(dt::Date) -> DateTime
 
     Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
     parts of the new ``DateTime`` are assumed to be zero.
 
-.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
@@ -97,11 +101,322 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
    like "y-m-dTH:M:S.s".
 
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
+.. function:: DateTime(periods::Period...) -> DateTime
+
+   ::
+              DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
+    is never satisfied).
+
+   ::
+              DateTime(dt::Date) -> DateTime
+
+    Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
+    parts of the new ``DateTime`` are assumed to be zero.
+
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
+
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
+
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
+.. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+   ::
+              DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
+    is never satisfied).
+
+   ::
+              DateTime(dt::Date) -> DateTime
+
+    Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
+    parts of the new ``DateTime`` are assumed to be zero.
+
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
+
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
+
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
+.. function:: DateTime(dt::Date) -> DateTime
+
+   ::
+              DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
+    is never satisfied).
+
+   ::
+              DateTime(dt::Date) -> DateTime
+
+    Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
+    parts of the new ``DateTime`` are assumed to be zero.
+
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
+
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
+
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
+.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   ::
+              DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
+    is never satisfied).
+
+   ::
+              DateTime(dt::Date) -> DateTime
+
+    Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
+    parts of the new ``DateTime`` are assumed to be zero.
+
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
+
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
+
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
 .. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
 
    Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. ``format`` is a format string in the form described above (e.g. ``"yyyy-mm-dd"``).
 
 .. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   ::
+              DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
+    is never satisfied).
+
+   ::
+              DateTime(dt::Date) -> DateTime
+
+    Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
+    parts of the new ``DateTime`` are assumed to be zero.
+
+   ::
+              DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
+
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
+
+   ::
+              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
    Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 
@@ -110,12 +425,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a ``Date`` type by parts. Arguments must be convertible to
    ``Int64``.
 
-.. function:: Date(period::Period...) -> Date
+   ::
+              Date(period::Period...) -> Date
 
    Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
    Date parts not provided will default to the value of ``Dates.default(period)``.
 
-.. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
     Create a Date through the adjuster API. The starting point will be constructed from the
     provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
@@ -124,17 +441,225 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
     is never satisfied).
 
-.. function:: Date(dt::DateTime) -> Date
+   ::
+              Date(dt::DateTime) -> Date
 
     Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
     parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
-.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
+.. function:: Date(period::Period...) -> Date
+
+   ::
+              Date(y, [m, d]) -> Date
+
+   Construct a ``Date`` type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              Date(period::Period...) -> Date
+
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
+   Date parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+    Create a Date through the adjuster API. The starting point will be constructed from the
+    provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    is never satisfied).
+
+   ::
+              Date(dt::DateTime) -> Date
+
+    Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
+.. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+   ::
+              Date(y, [m, d]) -> Date
+
+   Construct a ``Date`` type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              Date(period::Period...) -> Date
+
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
+   Date parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+    Create a Date through the adjuster API. The starting point will be constructed from the
+    provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    is never satisfied).
+
+   ::
+              Date(dt::DateTime) -> Date
+
+    Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
+.. function:: Date(dt::DateTime) -> Date
+
+   ::
+              Date(y, [m, d]) -> Date
+
+   Construct a ``Date`` type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              Date(period::Period...) -> Date
+
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
+   Date parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+    Create a Date through the adjuster API. The starting point will be constructed from the
+    provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    is never satisfied).
+
+   ::
+              Date(dt::DateTime) -> Date
+
+    Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
+.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   ::
+              Date(y, [m, d]) -> Date
+
+   Construct a ``Date`` type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              Date(period::Period...) -> Date
+
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
+   Date parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+    Create a Date through the adjuster API. The starting point will be constructed from the
+    provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    is never satisfied).
+
+   ::
+              Date(dt::DateTime) -> Date
+
+    Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   ::
+              Date(y, [m, d]) -> Date
+
+   Construct a ``Date`` type by parts. Arguments must be convertible to
+   ``Int64``.
+
+   ::
+              Date(period::Period...) -> Date
+
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
+   Date parts not provided will default to the value of ``Dates.default(period)``.
+
+   ::
+              Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+    Create a Date through the adjuster API. The starting point will be constructed from the
+    provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+    will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    is never satisfied).
+
+   ::
+              Date(dt::DateTime) -> Date
+
+    Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+
+   ::
+              Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+   ::
+              Date(dt::AbstractString, df::DateFormat) -> Date
 
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
 
@@ -143,12 +668,29 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Returns a DateTime corresponding to the user's system
    time including the system timezone locale.
 
+   ::
+              now(::Type{UTC}) -> DateTime
+
+   Returns a DateTime corresponding to the user's system
+   time as UTC/GMT.
+
 .. function:: now(::Type{UTC}) -> DateTime
+
+   ::
+              now() -> DateTime
+
+   Returns a DateTime corresponding to the user's system
+   time including the system timezone locale.
+
+   ::
+              now(::Type{UTC}) -> DateTime
 
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
 
 .. function:: eps(::DateTime) -> Millisecond
+
+   ::
               eps(::Date) -> Day
 
    Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
@@ -157,6 +699,8 @@ Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
 .. function:: year(dt::TimeType) -> Int64
+
+   ::
               month(dt::TimeType) -> Int64
               week(dt::TimeType) -> Int64
               day(dt::TimeType) -> Int64
@@ -168,6 +712,8 @@ Accessor Functions
    Return the field part of a Date or DateTime as an ``Int64``.
 
 .. function:: Year(dt::TimeType) -> Year
+
+   ::
               Month(dt::TimeType) -> Month
               Week(dt::TimeType) -> Week
               Day(dt::TimeType) -> Day
@@ -177,6 +723,19 @@ Accessor Functions
               Millisecond(dt::TimeType) -> Millisecond
 
    Return the field part of a Date or DateTime as a ``Period`` type.
+
+   ::
+              Year(v)
+              Month(v)
+              Week(v)
+              Day(v)
+              Hour(v)
+              Minute(v)
+              Second(v)
+              Millisecond(v)
+
+   Construct a ``Period`` type with the given ``v`` value.
+   Input must be losslessly convertible to an ``Int64``.
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
@@ -298,11 +857,27 @@ Adjuster Functions
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the next ``dow``, allowing for no adjustment to occur.
 
+   ::
+              tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
+
+    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
+    ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
+    ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
+    process terminate when ``func`` returns false instead of true.
+
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
     Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the previous ``dow``, allowing for no adjustment to occur.
+
+   ::
+              toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
+
+    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
+    ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
+    ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
+    process terminate when ``func`` returns false instead of true.
 
 .. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
@@ -316,12 +891,32 @@ Adjuster Functions
 
 .. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
+   ::
+              tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+
+    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with
+    ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
+    ``dt`` to be considered as the next ``dow``, allowing for no adjustment to occur.
+
+   ::
+              tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
+
     Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
     ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
     ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
     process terminate when ``func`` returns false instead of true.
 
 .. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
+
+   ::
+              toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+
+    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with
+    ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
+    ``dt`` to be considered as the previous ``dow``, allowing for no adjustment to occur.
+
+   ::
+              toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
     Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
     ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
@@ -335,11 +930,25 @@ Adjuster Functions
     range of ``dr``, including those elements for which ``func`` returns ``true`` in the resulting
     Array, unless ``negate=true``, then only elements where ``func`` returns ``false`` are included.
 
-
 Periods
 ~~~~~~~
 
 .. function:: Year(v)
+
+   ::
+              Year(dt::TimeType) -> Year
+              Month(dt::TimeType) -> Month
+              Week(dt::TimeType) -> Week
+              Day(dt::TimeType) -> Day
+              Hour(dt::TimeType) -> Hour
+              Minute(dt::TimeType) -> Minute
+              Second(dt::TimeType) -> Second
+              Millisecond(dt::TimeType) -> Millisecond
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   ::
+              Year(v)
               Month(v)
               Week(v)
               Day(v)
@@ -393,7 +1002,6 @@ Conversion Functions
 
    Returns the number of Rata Die days since epoch from the
    given Date or DateTime.
-
 
 Constants
 ~~~~~~~~~
