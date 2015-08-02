@@ -9,7 +9,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         if length(ev)==length(dv)-1
             new(dv, ev, isupper)
         else
-            throw(DimensionMismatch("Length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
+            throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
     end
 end
@@ -35,7 +35,9 @@ end
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
 function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
-    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
+    if !(1<=i<=size(A,2) && 1<=j<=size(A,2))
+        throw(BoundsError(A,(i,j)))
+    end
     i == j ? A.dv[i] : (A.isupper && (i == j-1)) || (!A.isupper && (i == j+1)) ? A.ev[min(i,j)] : zero(T)
 end
 
@@ -81,7 +83,15 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-size(M::Bidiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(M.dv) : 1)
+function size(M::Bidiagonal, d::Integer)
+    if d < 1
+        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    elseif d <= 2
+        return length(M.dv)
+    else
+        return 1
+    end
+end
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -184,7 +194,7 @@ At_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = At_ldiv
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
     N = size(A, 2)
     if N != length(b) || N != length(x)
-        throw(DimensionMismatch())
+        throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
     end
     if !A.isupper #do forward substitution
         for j = 1:N
