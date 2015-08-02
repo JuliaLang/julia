@@ -503,6 +503,7 @@ end
 @test isfinite(-2//3) == true
 @test isfinite(5//0)  == false
 @test isfinite(-3//0) == false
+@test isfinite(pi)    == true
 
 @test isequal(-Inf,-Inf)
 @test isequal(-1.0,-1.0)
