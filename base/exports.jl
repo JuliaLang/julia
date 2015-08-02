@@ -1076,7 +1076,6 @@ export
     symbol,
 
 # help and reflection
-    apropos,
     current_module,
     edit,
     code_typed,
@@ -1086,7 +1085,6 @@ export
     code_native,
     fullname,
     functionloc,
-    help,
     isconst,
     isgeneric,
     isinteractive,

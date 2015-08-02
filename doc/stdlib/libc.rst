@@ -48,7 +48,10 @@
 
 .. function:: time(t::TmStruct)
 
-   Converts a ``TmStruct`` struct to a number of seconds since the epoch.
+   ::
+              time()
+
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 .. function:: strftime([format], time)
 

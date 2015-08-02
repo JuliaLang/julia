@@ -189,7 +189,6 @@
               <string>any</string>
               <string>any!</string>
               <string>append!</string>
-              <string>apropos</string>
               <string>ascii</string>
               <string>asec</string>
               <string>asecd</string>
@@ -497,7 +496,6 @@
               <string>hash</string>
               <string>haskey</string>
               <string>hcat</string>
-              <string>help</string>
               <string>hessfact</string>
               <string>hessfact!</string>
               <string>hex</string>

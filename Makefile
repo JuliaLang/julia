@@ -48,7 +48,7 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C deps
 
-julia-base: julia-deps $(build_docdir)/helpdb.jl
+julia-base: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C base
 
 julia-libccalltest:
@@ -82,6 +82,7 @@ endif
 
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) contrib/add_license_to_files.jl #add license headers
+	@$(JULIA_EXECUTABLE) doc/genstdlib.jl
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
@@ -96,7 +97,6 @@ release-candidate: release testall
 	@$(MAKE) -C doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
-	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -123,9 +123,6 @@ release-candidate: release testall
 	@echo 9. Announce on mailing lists
 	@echo 10. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
-
-$(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
-	@cp $< $@
 
 $(build_man1dir)/julia.1: doc/man/julia.1 | $(build_man1dir)
 	@mkdir -p $(build_man1dir)
@@ -183,7 +180,7 @@ $(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
 
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji VERSION $$(BASE_SRCS) $$(build_docdir)/helpdb.jl
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd base && \
 	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
 		-J $$(call cygpath_w,$$<) sysimg.jl \

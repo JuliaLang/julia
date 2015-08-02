@@ -15,7 +15,25 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``.
    If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
+   ::
+              dir(names...) -> AbstractString
+
+   Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
+   In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
+
 .. function:: dir(names...) -> AbstractString
+
+   ::
+              dir() -> AbstractString
+
+   Returns the absolute path of the package directory.
+   This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms
+   (i.e. ``~/.julia/v0.4`` in UNIX shell syntax).  If the ``JULIA_PKGDIR`` environment variable is set, then
+   that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``.
+   If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
+
+   ::
+              dir(names...) -> AbstractString
 
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
@@ -54,7 +72,24 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    The package repo is cloned by the name ``pkg`` if provided;
    if not provided, ``pkg`` is determined automatically from ``url``.
 
+   ::
+              clone(pkg)
+
+   If ``pkg`` has a URL registered in ``Pkg.dir("METADATA")``, clone it from that URL on the default branch.
+   The package does not need to have any registered versions.
+
 .. function:: clone(pkg)
+
+   ::
+              clone(url, [pkg])
+
+   Clone a package directly from the git URL ``url``.
+   The package does not need to be a registered in ``Pkg.dir("METADATA")``.
+   The package repo is cloned by the name ``pkg`` if provided;
+   if not provided, ``pkg`` is determined automatically from ``url``.
+
+   ::
+              clone(pkg)
 
    If ``pkg`` has a URL registered in ``Pkg.dir("METADATA")``, clone it from that URL on the default branch.
    The package does not need to have any registered versions.
@@ -63,7 +98,20 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Returns the names of available packages.
 
+   ::
+              available(pkg) -> Vector{VersionNumber}
+
+   Returns the version numbers available for package ``pkg``.
+
 .. function:: available(pkg) -> Vector{VersionNumber}
+
+   ::
+              available() -> Vector{ASCIIString}
+
+   Returns the names of available packages.
+
+   ::
+              available(pkg) -> Vector{VersionNumber}
 
    Returns the version numbers available for package ``pkg``.
 
@@ -71,7 +119,20 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Returns a dictionary mapping installed package names to the installed version number of each package.
 
+   ::
+              installed(pkg) -> Void | VersionNumber
+
+   If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``.
+
 .. function:: installed(pkg) -> Void | VersionNumber
+
+   ::
+              installed() -> Dict{ASCIIString,VersionNumber}
+
+   Returns a dictionary mapping installed package names to the installed version number of each package.
+
+   ::
+              installed(pkg) -> Void | VersionNumber
 
    If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``.
 
@@ -95,7 +156,21 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    Pin ``pkg`` at the current version.
    To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
 
+   ::
+              pin(pkg, version)
+
+   Pin ``pkg`` at registered version ``version``.
+
 .. function:: pin(pkg, version)
+
+   ::
+              pin(pkg)
+
+   Pin ``pkg`` at the current version.
+   To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
+
+   ::
+              pin(pkg, version)
 
    Pin ``pkg`` at registered version ``version``.
 
@@ -112,7 +187,21 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Run the build scripts for all installed packages in depth-first recursive order.
 
+   ::
+              build(pkgs...)
+
+   Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
+   This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
+
 .. function:: build(pkgs...)
+
+   ::
+              build()
+
+   Run the build scripts for all installed packages in depth-first recursive order.
+
+   ::
+              build(pkgs...)
 
    Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
    This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
@@ -142,6 +231,20 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
 
-.. function:: test(pkgs...)
+   ::
+              test(pkgs...)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
+
+.. function:: test(pkgs...)
+
+   ::
+              test()
+
+   Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
+
+   ::
+              test(pkgs...)
+
+   Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
+
