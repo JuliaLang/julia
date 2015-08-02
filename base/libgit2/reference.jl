@@ -1,10 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function GitReference(repo::GitRepo, ref_name::AbstractString)
+function GitReference(repo::GitRepo, refname::AbstractString)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
-                   ref_ptr_ptr, repo.ptr, ref_name)
+                   ref_ptr_ptr, repo.ptr, refname)
+    return GitReference(ref_ptr_ptr[])
+end
+
+function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = GitConst.HEAD_FILE;
+                          force::Bool=false, msg::AbstractString="")
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_reference_create, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
+                   ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
+                   isempty(msg) ? Cstring_NULL : msg)
     return GitReference(ref_ptr_ptr[])
 end
 
@@ -49,6 +59,20 @@ function branch(ref::GitReference)
     return bytestring(str_ptr_ptr[])
 end
 
+function ishead(ref::GitReference)
+    isempty(ref) && return false
+    err = ccall((:git_branch_is_head, :libgit2), Cint,
+                  (Ptr{Void},), ref.ptr)
+    return err == 1
+end
+
+function isbranch(ref::GitReference)
+    isempty(ref) && return false
+    err = ccall((:git_reference_is_branch, :libgit2), Cint,
+                  (Ptr{Void},), ref.ptr)
+    return err == 1
+end
+
 function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     git_otype = getobjecttype(T)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -63,16 +87,6 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
         throw(Error.GitError(err))
     end
     return T(obj_ptr_ptr[])
-end
-
-function create_reference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = GitConst.HEAD_FILE;
-                          force::Bool=false, msg::AbstractString="")
-    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_reference_create, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
-                   ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
-                   isempty(msg) ? Cstring_NULL : msg)
-    return GitReference(ref_ptr_ptr[])
 end
 
 function create_branch(repo::GitRepo, commit_obj::GitCommit, bname::AbstractString;

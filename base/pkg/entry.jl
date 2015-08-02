@@ -232,11 +232,11 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
         LibGit2.transact(r) do repo
             LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
             LibGit2.branch!(repo, branch, track=LibGit2.GitConst.REMOTE_ORIGIN)
-            do_merge && LibGit2.merge!(repo, fast_forward=true) # merge changes
+            do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
             if do_pull
                 info("Pulling $pkg latest $branch...")
                 LibGit2.fetch(repo)
-                LibGit2.merge!(repo, fast_forward=true)
+                LibGit2.merge!(repo, fastforward=true)
             end
             resolve()
         end
@@ -332,7 +332,7 @@ function update(branch::AbstractString)
             end
         end
         LibGit2.fetch(repo)
-        LibGit2.merge!(repo, fast_forward=true) || LibGit2.rebase!(repo, "origin/$branch")
+        LibGit2.merge!(repo, fastforward=true) || LibGit2.rebase!(repo, "origin/$branch")
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
@@ -356,7 +356,7 @@ function update(branch::AbstractString)
                 info("Updating $pkg...")
                 @recover begin
                     LibGit2.fetch(repo)
-                    LibGit2.merge!(repo, fast_forward=true)
+                    LibGit2.merge!(repo, fastforward=true)
                 end
             end
         end

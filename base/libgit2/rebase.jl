@@ -35,7 +35,7 @@ function Base.next(rb::GitRebase)
                       (Ptr{Ptr{RebaseOperation}}, Ptr{Void}),
                        rb_op_ptr_ptr, rb.ptr)
     catch err
-        err.code == Int(Error.ITEROVER) && return nothing
+        err.code == Error.ITEROVER && return nothing
         rethrow(err)
     end
     return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr_ptr[]), 1)

@@ -39,7 +39,7 @@ function url(rmt::GitRemote)
 end
 
 function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
-               fetch_opts::FetchOptions = FetchOptions(),
+               options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
     msg = "libgit2.fetch: $msg"
     no_refs = (length(refspecs) == 0)
@@ -47,7 +47,7 @@ function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
     try
         @check ccall((:git_remote_fetch, :libgit2), Cint,
             (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
-            rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(fetch_opts), msg)
+            rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options), msg)
     finally
         !no_refs && finalize(sa)
     end
@@ -55,13 +55,13 @@ end
 
 function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                                  force::Bool = false,
-                                 push_opts::PushOptions = PushOptions())
+                                 options::PushOptions = PushOptions())
     no_refs = (length(refspecs) == 0)
     !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_push, :libgit2), Cint,
                       (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
-                       rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(push_opts))
+                       rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options))
     finally
         !no_refs && finalize(sa)
     end

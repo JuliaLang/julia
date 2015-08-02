@@ -3,6 +3,7 @@
 module GitConst
 
     const HEAD_FILE  = "HEAD"
+    const FETCH_HEAD  = "FETCH_HEAD"
     const REMOTE_ORIGIN = "origin"
 
     # objs
@@ -153,28 +154,30 @@ module GitConst
     # merge
     const MERGE_TREE_FIND_RENAMES = Cint(1 << 0)
 
-    const MERGE_FILE_FAVOR_NORMAL = Cint(0)
-    const MERGE_FILE_FAVOR_OURS   = Cint(1)
-    const MERGE_FILE_FAVOR_THEIRS = Cint(2)
-    const MERGE_FILE_FAVOR_UNION  = Cint(3)
+    @enum(GIT_MERGE_FILE, MERGE_FILE_DEFAULT                  = 0,       # Defaults
+                          MERGE_FILE_STYLE_MERGE              = 1 << 0,  # Create standard conflicted merge files
+                          MERGE_FILE_STYLE_DIFF3              = 1 << 1,  # Create diff3-style files
+                          MERGE_FILE_SIMPLIFY_ALNUM           = 1 << 2,  # Condense non-alphanumeric regions for simplified diff file
+                          MERGE_FILE_IGNORE_WHITESPACE        = 1 << 3,  # Ignore all whitespace
+                          MERGE_FILE_IGNORE_WHITESPACE_CHANGE = 1 << 4,  # Ignore changes in amount of whitespace
+                          MERGE_FILE_IGNORE_WHITESPACE_EOL    = 1 << 5,  # Ignore whitespace at end of line
+                          MERGE_FILE_DIFF_PATIENCE            = 1 << 6,  # Use the "patience diff" algorithm
+                          MERGE_FILE_DIFF_MINIMAL             = 1 << 7)  # Take extra time to find minimal diff
 
-    const MERGE_AUTOMERGE_NORMAL       = Cint(0)
-    const MERGE_AUTOMERGE_FAVOR_OURS   = Cint(1)
-    const MERGE_AUTOMERGE_FAVOR_THEIRS = Cint(2)
-    const MERGE_AUTOMERGE_FAVOR_UNION  = Cint(3)
+    @enum(GIT_MERGE_FILE_FAVOR, MERGE_FILE_FAVOR_NORMAL = 0,
+                                MERGE_FILE_FAVOR_OURS   = 1,
+                                MERGE_FILE_FAVOR_THEIRS = 2,
+                                MERGE_FILE_FAVOR_UNION  = 3)
 
-    const MERGE_NO_FASTFORWARD   = Cint(1)
-    const MERGE_FASTFORWARD_ONLY = Cint(2)
+    @enum(GIT_MERGE_PREFERENCE, MERGE_PREFERENCE_NONE             = 0,
+                                MERGE_PREFERENCE_NO_FASTFORWARD   = 1,
+                                MERGE_PREFERENCE_FASTFORWARD_ONLY = 2)
 
-    const MERGE_ANALYSIS_NONE        = Cint(0)
-    const MERGE_ANALYSIS_NORMAL      = Cint(1 << 0)
-    const MERGE_ANALYSIS_UP_TO_DATE  = Cint(1 << 1)
-    const MERGE_ANALYSIS_FASTFORWARD = Cint(1 << 2)
-    const MERGE_ANALYSIS_UNBORN      = Cint(1 << 3)
-
-    const MERGE_PREFERENCE_NONE             = Cint(0)
-    const MERGE_PREFERENCE_NO_FASTFORWARD   = Cint(1 << 0)
-    const MERGE_PREFERENCE_FASTFORWARD_ONLY = Cint(1 << 1)
+    @enum(GIT_MERGE_ANALYSIS, MERGE_ANALYSIS_NONE        = 0,
+                              MERGE_ANALYSIS_NORMAL      = 1 << 0,
+                              MERGE_ANALYSIS_UP_TO_DATE  = 1 << 1,
+                              MERGE_ANALYSIS_FASTFORWARD = 1 << 2,
+                              MERGE_ANALYSIS_UNBORN      = 1 << 3)
 
     # reset
     const RESET_SOFT  = Cint(1) # Move the head to the given commit

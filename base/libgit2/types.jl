@@ -273,26 +273,29 @@ immutable DiffDelta
 end
 DiffDelta()=DiffDelta(Cint(0),Cuint(0),UInt16(0),UInt16(0),DiffFile(),DiffFile())
 
-immutable MergeOptionsStruct
+immutable MergeOptions
     version::Cuint
-    flags::Cint
+    tree_flags::Cint
     rename_threshold::Cuint
     target_limit::Cuint
     metric::Ptr{Void}
     file_favor::Cint
+    file_flags::Cuint
 end
-MergeOptionsStruct(; flags::Cint = Cint(0),
-                     rename_threshold::Cuint = Cuint(50),
-                     target_limit::Cuint = Cuint(200),
-                     metric::Ptr{Void} = Ptr{Void}(0),
-                     file_favor::Cint = GitConst.MERGE_FILE_FAVOR_NORMAL
-)=MergeOptionsStruct(one(Cuint),
-                     flags,
-                     rename_threshold,
-                     target_limit,
-                     metric,
-                     file_favor
-                    )
+MergeOptions(; tree_flags::Cint = Cint(0),
+               rename_threshold::Cuint = Cuint(50),
+               target_limit::Cuint = Cuint(200),
+               metric::Ptr{Void} = C_NULL,
+               file_favor::Cint = Cint(GitConst.MERGE_FILE_FAVOR_NORMAL),
+               file_flags::Cuint =Cuint(GitConst.MERGE_FILE_DEFAULT)
+)=MergeOptions(one(Cuint),
+               tree_flags,
+               rename_threshold,
+               target_limit,
+               metric,
+               file_favor,
+               file_flags
+              )
 
 immutable PushOptions
     version::Cuint
@@ -385,6 +388,13 @@ immutable StatusEntry
     index_to_workdir::Ptr{DiffDelta}
 end
 StatusEntry()=StatusEntry(Cuint(0), C_NULL, C_NULL)
+
+immutable FetchHead
+    name::AbstractString
+    url::AbstractString
+    oid::Oid
+    ismerge::Bool
+end
 
 # Abstract object types
 abstract AbstractGitObject
