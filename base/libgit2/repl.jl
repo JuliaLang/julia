@@ -7,7 +7,7 @@ List of git commands:
 - [x] add
 - [x] branch
 - [x] clone
-- [ ] checkout
+- [x] checkout
 - [x] commit
 - [x] init
 - [x] log
@@ -142,6 +142,12 @@ function repl_cmd(ex)
                     return
                 end
                 repl_commit(repo, cmd[2:end])
+            elseif cmd[1] == "checkout"
+                if !has_params || cmd[2] == "help"
+                    println("usage: checkout (<branch>|<commitish>)")
+                    return
+                end
+                repl_checkout(repo, cmd[2])
             else
                 warn("unknown command: $ex. Use \'help\' command.")
             end
@@ -152,22 +158,20 @@ function repl_cmd(ex)
 end
 
 function repl_help()
-    println("""List of git commands:
- add\t Add file contents to the index
- branch\t List, create, or delete branches
- clone\t Clone a repository into a current directory
- commit\t Commit record changes to the repository
- init\t Create an empty Git repository or reinitialize an existing one in current directory
- log\t Show commit logs
- reset\t\ Reset current HEAD to the specified state
- rm\t Remove files from the working tree and from the index
- status\t Show the working tree status
- tag\t Create, list or delete a tag objects
+    println("""List of commands:
+ add      Add file contents to the index
+ branch   List, create, or delete branches
+ checkout Checkout a branch or paths to the working tree
+ clone    Clone a repository into a current directory
+ commit   Commit record changes to the repository
+ init     Create an empty Git repository or reinitialize an existing one in current directory
+ log      Show commit logs
+ reset    Reset current HEAD to the specified state
+ rm       Remove files from the working tree and from the index
+ status   Show the working tree status
+ tag      Create, list or delete a tag objects
 
-For particular command parameters use: <command> help
-""")
-# checkout\t Checkout a branch or paths to the working tree
-
+For particular command parameters use: <command> help""")
 end
 
 function repl_add{T<:AbstractString}(repo::GitRepo, force_add::Bool, files::Vector{T})
@@ -203,14 +207,8 @@ function repl_branch{T<:AbstractString}(repo::GitRepo, cmd::Symbol, branch::T)
                         finalize(x[1])
                     end, bi)
         end
-        # get HEAD name
-        head_name = with(head(repo)) do href
-            if isattached(repo)
-                shortname(href)
-            else
-                "(detached from $(string(Oid(href))[1:7]))"
-            end
-        end
+
+        head_name = headname(repo) # get HEAD name
 
         # prepare output
         output = Tuple{AbstractString,Symbol}[]
@@ -267,7 +265,33 @@ end
 
 function repl_commit{T<:AbstractString}(repo::GitRepo, msg::Vector{T})
     m = chomp(join(msg, " "))*"\n"
-    commit(repo, m)
+    cmd_oid = commit(repo, m)
+    head_name = headname(repo) # get HEAD name
+    print("[$head_name $(string(cmd_oid)[1:7])] $m")
+    return
+end
+
+function repl_checkout{T<:AbstractString}(repo::GitRepo, branch::T)
+    # get branch tree
+    btree_oid = revparseid(repo, "$branch^{tree}")
+
+    # checout selected branch
+    with(get(GitTree, repo, btree_oid)) do btree
+        checkout_tree(repo, btree)
+    end
+
+    # switch head to the branch
+    branch_ref = lookup_branch(repo, branch)
+    if branch_ref != nothing
+        head!(repo, branch_ref)
+        finalize(branch_ref)
+    else
+        # detatch HEAD
+        boid = revparseid(repo, branch)
+        checkout!(repo, string(boid))
+    end
+
+    println("Switched to ",(branch_ref == nothing ? "" : "branch "),"'$branch'")
     return
 end
 
