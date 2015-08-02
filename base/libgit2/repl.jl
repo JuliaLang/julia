@@ -8,7 +8,7 @@ List of git commands:
 - [x] branch
 - [x] clone
 - [ ] checkout
-- [ ] commit
+- [x] commit
 - [x] init
 - [x] log
 - [x] reset
@@ -266,8 +266,9 @@ function repl_tag{T<:AbstractString}(repo::GitRepo, cmd::Symbol, tag::T)
 end
 
 function repl_commit{T<:AbstractString}(repo::GitRepo, msg::Vector{T})
-    m = chomp(join(msg, " "))
+    m = chomp(join(msg, " "))*"\n"
     commit(repo, m)
+    return
 end
 
 function repl_log(repo::GitRepo, msg_count::Int)
