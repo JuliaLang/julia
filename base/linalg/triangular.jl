@@ -112,10 +112,34 @@ getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data
 getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
 getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[i,j])
 
-setindex!(A::UpperTriangular, x, i::Integer, j::Integer) = i <= j ? (A.data[i,j] = x; A) : throw(BoundsError())
-setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer) = i < j ? (A.data[i,j] = x; A) : throw(BoundsError())
-setindex!(A::LowerTriangular, x, i::Integer, j::Integer) = i >= j ? (A.data[i,j] = x; A) : throw(BoundsError())
-setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer) = i > j ? (A.data[i,j] = x; A) : throw(BoundsError())
+function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
+    if i <= j
+        A.data[i,j] = x; A
+    else
+        throw(BoundsError(A,(i,j)))
+    end
+end
+function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
+    if i < j
+        A.data[i,j] = x; A
+    else
+        throw(BoundsError(A,(i,j)))
+    end
+end
+function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
+    if i >= j
+        A.data[i,j] = x; A
+    else
+        throw(BoundsError(A,(i,j)))
+    end
+end
+function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
+    if i > j
+        A.data[i,j] = x; A
+    else
+        throw(BoundsError(A,(i,j)))
+    end
+end
 
 istril(A::LowerTriangular) = true
 istril(A::UnitLowerTriangular) = true
@@ -319,7 +343,7 @@ end
 function A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = 1:m
@@ -335,7 +359,7 @@ end
 function A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = 1:m
@@ -352,7 +376,7 @@ end
 function A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = m:-1:1
@@ -368,7 +392,7 @@ end
 function A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = m:-1:1
@@ -385,7 +409,7 @@ end
 function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = m:-1:1
@@ -401,7 +425,7 @@ end
 function Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = m:-1:1
@@ -418,7 +442,7 @@ end
 function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = 1:m
@@ -434,7 +458,7 @@ end
 function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = 1:m
@@ -451,7 +475,7 @@ end
 function A_mul_B!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -467,7 +491,7 @@ end
 function A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -484,7 +508,7 @@ end
 function A_mul_B!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -500,7 +524,7 @@ end
 function A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -517,7 +541,7 @@ end
 function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -533,7 +557,7 @@ end
 function A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -550,7 +574,7 @@ end
 function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -566,7 +590,7 @@ end
 function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -584,7 +608,7 @@ end
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
     end
     for j = n:-1:1
         xj = b[j]
@@ -603,7 +627,7 @@ end
 function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
     end
     for j = n:-1:1
         xj = b[j]
@@ -617,7 +641,7 @@ end
 function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
     end
     for j = 1:n
         xj = b[j]
@@ -636,7 +660,7 @@ end
 function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector=b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("Second dimension of A, $n, length of x, $(length(x)), and length of b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
     end
     for j = 1:n
         xj = b[j]
@@ -651,7 +675,7 @@ end
 function A_rdiv_B!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -667,7 +691,7 @@ end
 function A_rdiv_B!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -684,7 +708,7 @@ end
 function A_rdiv_B!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -700,7 +724,7 @@ end
 function A_rdiv_B!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -717,7 +741,7 @@ end
 function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -733,7 +757,7 @@ end
 function A_rdiv_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = n:-1:1
@@ -750,7 +774,7 @@ end
 function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
@@ -766,7 +790,7 @@ end
 function A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("left and right hand side does not fit"))
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     for i = 1:m
         for j = 1:n
