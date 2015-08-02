@@ -430,7 +430,7 @@ public:
 };
 
 extern "C"
-const char *jl_demangle(const char *name)
+char *jl_demangle(const char *name)
 {
     const char *start = name + 6;
     const char *end = name + strlen(name);
@@ -456,13 +456,17 @@ void RegisterJuliaJITEventListener() {
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
 
-extern "C" void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, uintptr_t pointer, int *fromC, int skipC);
-
-void lookup_pointer(DIContext *context, const char **name, size_t *line, const char **filename, size_t pointer, int demangle, int *fromC)
+// *name and *filename are either NULL or malloc'd pointers
+void lookup_pointer(DIContext *context, char **name, size_t *line,
+                    char **filename, size_t pointer, int demangle,
+                    int *fromC)
 {
     DILineInfo info;
-    if (demangle && *name != NULL)
+    if (demangle && *name != NULL) {
+        char *oldname = *name;
         *name = jl_demangle(*name);
+        free(oldname);
+    }
 #ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
@@ -475,22 +479,25 @@ void lookup_pointer(DIContext *context, const char **name, size_t *line, const c
     info = context->getLineInfoForAddress(pointer, infoSpec);
 #ifndef LLVM35 // LLVM <= 3.4
     if (strcmp(info.getFunctionName(), "<invalid>") == 0) goto done;
-    if (demangle)
+    if (demangle) {
+        free(*name);
         *name = jl_demangle(info.getFunctionName());
-    else
-        *name = strdup(info.getFunctionName());
+    } else {
+        jl_copy_str(name, info.getFunctionName());
+    }
     *line = info.getLine();
-    *filename = strdup(info.getFileName());
+    jl_copy_str(filename, info.getFileName());
 #else
     if (strcmp(info.FunctionName.c_str(), "<invalid>") == 0) goto done;
-    *name = strdup(info.FunctionName.c_str());
+    jl_copy_str(name, info.FunctionName.c_str());
     *line = info.Line;
-    *filename = strdup(info.FileName.c_str());
+    jl_copy_str(filename, info.FileName.c_str());
 #endif
 done:
     // If this is a jlcall wrapper, set fromC to match JIT behavior
-    if (*name == NULL || memcmp(*name,"jlcall_",7) == 0)
+    if (*name == NULL || memcmp(*name, "jlcall_",7) == 0) {
         *fromC = true;
+    }
 }
 
 #ifdef _OS_DARWIN_
@@ -547,7 +554,9 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 
 extern "C" uint64_t jl_sysimage_base;
 
-void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
+// *name and *filename should be either NULL or malloc'd pointer
+void jl_getDylibFunctionInfo(char **name, size_t *line, char **filename,
+                             size_t pointer, int *fromC, int skipC)
 {
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
@@ -578,9 +587,10 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
         pSymbol->MaxNameLen = MAX_SYM_NAME;
         jl_in_stackwalk = 1;
-        if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
+        if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64,
+                        pSymbol)) {
             // SymFromAddr returned success
-            *name = strdup(pSymbol->Name);
+            jl_copy_str(name, pSymbol->Name);
         }
         else {
             // SymFromAddr failed
@@ -592,12 +602,12 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             // SymGetLineFromAddr64 returned success
             // record source file name and line number
             if (frame_info_line.FileName)
-                *filename = strdup(frame_info_line.FileName);
+                jl_copy_str(filename, frame_info_line.FileName);
             *line = frame_info_line.LineNumber;
         }
         else if (*fromC) {
             // No debug info, use dll name instead
-            *filename = fname;
+            jl_copy_str(filename, fname);
         }
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
@@ -613,8 +623,8 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             return;
         // In case we fail with the debug info lookup, we at least still
         // have the function name, even if we don't have line numbers
-        *name = dlinfo.dli_sname;
-        *filename = dlinfo.dli_fname;
+        jl_copy_str(name, dlinfo.dli_sname);
+        jl_copy_str(filename, dlinfo.dli_fname);
         fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
         DIContext *context = NULL;
@@ -743,27 +753,36 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #ifdef _OS_DARWIN_
 lookup:
 #endif
-        lookup_pointer(context, name, line, filename, pointer+slide, fbase == jl_sysimage_base, fromC);
+        lookup_pointer(context, name, line, filename, pointer+slide,
+                       fbase == jl_sysimage_base, fromC);
     }
     else {
         *fromC = 1;
     }
 }
 
-void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
+// Set *name and *filename to either NULL or malloc'd string
+void jl_getFunctionInfo(char **name, size_t *line, char **filename,
+                        size_t pointer, int *fromC, int skipC)
 {
     *name = NULL;
     *line = -1;
-    *filename = "no file";
+    *filename = NULL;
     *fromC = 0;
 
 #ifdef USE_MCJIT
-// With MCJIT we can get function information directly from the ObjectFile
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
+    // With MCJIT we can get function information directly from the ObjectFile
+    std::map<size_t, ObjectInfo, revcomp> &objmap =
+        jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it =
+        objmap.lower_bound(pointer);
 
-    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.SectionSize > pointer) {
+    if (it != objmap.end() &&
+        (intptr_t)(*it).first + (*it).second.SectionSize > pointer) {
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
+        // *name should always be NULL here, free it anyway just to be more
+        // robust
+        free(*name);
         *name = jl_demangle((*it).second.name);
         DIContext *context = NULL; // versions of MCJIT < 3.7 can't handle MachO relocations
 #else
@@ -779,6 +798,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #endif
 #endif
         lookup_pointer(context, name, line, filename, pointer, 1, fromC);
+        delete context;
         return;
     }
 
@@ -796,8 +816,8 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
             return;
         }
 
-        *name = (*it).second.name.c_str();
-        *filename = (*it).second.filename.c_str();
+        jl_copy_str(name, (*it).second.name.c_str());
+        jl_copy_str(filename, (*it).second.filename.c_str());
 
         if ((*it).second.lines.empty()) {
             *fromC = 1;
@@ -811,14 +831,17 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
         if ((*it).second.func) {
             DISubprogram debugscope =
                 DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
-            *filename = debugscope.getFilename().data();
+            jl_copy_str(filename, debugscope.getFilename().data());
             // the DISubprogram has the un-mangled name, so use that if
             // available. However, if the scope need not be the current
             // subprogram.
-            if (debugscope.getName().data() != NULL)
-                *name = debugscope.getName().data();
-            else
+            if (debugscope.getName().data() != NULL) {
+                jl_copy_str(name, debugscope.getName().data());
+            } else {
+                char *oldname = *name;
                 *name = jl_demangle(*name);
+                free(oldname);
+            }
         }
 
         vit++;
@@ -837,7 +860,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
         return;
     }
 #endif // USE_MCJIT
-    jl_getDylibFunctionInfo(name,line,filename,pointer,fromC,skipC);
+    jl_getDylibFunctionInfo(name, line, filename, pointer, fromC, skipC);
 }
 
 int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
