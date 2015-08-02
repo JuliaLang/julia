@@ -5,16 +5,16 @@
 
 List of git commands:
 - [x] add
-- [ ] branch
+- [x] branch
 - [x] clone
+- [ ] checkout
 - [ ] commit
-- [ ] fetch
 - [x] init
 - [x] log
 - [x] reset
 - [x] rm
 - [x] status
-- [ ] tag
+- [x] tag
 """
 
 function repl_cmd(ex)
@@ -49,7 +49,7 @@ function repl_cmd(ex)
             warn(ex)
         end
     else
-        repo = GitRepo(repopath)
+        repo = GitRepoExt(repopath)
         try
             if cmd[1] == "help"
                 repl_help()
@@ -88,6 +88,54 @@ function repl_cmd(ex)
                     return
                 end
                 repl_reset(repo, cmd[2:end])
+            elseif cmd[1] == "branch"
+                runcmd = if has_params
+                    if cmd[2] == "local"
+                        :listlocal
+                    elseif  cmd[2] == "remote"
+                        :listremote
+                    elseif  cmd[2] == "all"
+                        :listall
+                    elseif length(cmd) == 3
+                        if cmd[2] == "add"
+                            :add
+                        elseif cmd[2] == "delete"
+                            :delete
+                        else
+                            :help
+                        end
+                    else
+                        :help
+                    end
+                else
+                    :listlocal
+                end
+                if runcmd == :help
+                    println("usage: branch [(local|remote|all)|(add|delete) <branch>]")
+                    return
+                end
+                repl_branch(repo, runcmd, cmd[end])
+            elseif cmd[1] == "tag"
+                runcmd = if has_params
+                    if length(cmd) == 3
+                        if cmd[2] == "add"
+                            :add
+                        elseif cmd[2] == "delete"
+                            :delete
+                        else
+                            :help
+                        end
+                    else
+                        :help
+                    end
+                else
+                    :list
+                end
+                if runcmd == :help
+                    println("usage: tag [(add|delete) <tag>]")
+                    return
+                end
+                repl_tag(repo, runcmd, cmd[end])
             else
                 warn("unknown command: $ex. Use \'help\' command.")
             end
@@ -100,19 +148,19 @@ end
 function repl_help()
     println("""List of git commands:
  add\t Add file contents to the index
+ branch\t List, create, or delete branches
  clone\t Clone a repository into a current directory
  init\t Create an empty Git repository or reinitialize an existing one in current directory
  log\t Show commit logs
  reset\t\ Reset current HEAD to the specified state
  rm\t Remove files from the working tree and from the index
  status\t Show the working tree status
+ tag\t Create, list or delete a tag objects
 
 For particular command parameters use: <command> help
 """)
-# branch\t\tList, create, or delete branches
-# commit\t\tRecord changes to the repository
-# fetch\t\tDownload objects and refs from another repository
-# tag\t\tCreate, list, delete or verify a tag object signed with GPG
+# checkout\t Checkout a branch or paths to the working tree
+# commit\t Record changes to the repository
 end
 
 function repl_add{T<:AbstractString}(repo::GitRepo, force_add::Bool, files::Vector{T})
@@ -135,13 +183,90 @@ function repl_reset{T<:AbstractString}(repo::GitRepo, files::Vector{T})
     return
 end
 
+function repl_branch{T<:AbstractString}(repo::GitRepo, cmd::Symbol, branch::T)
+    if cmd == :listlocal || cmd == :listremote || cmd == :listall
+        flags = cmd == :listlocal  ? Cint(GitConst.BRANCH_LOCAL) : (
+                cmd == :listremote ? Cint(GitConst.BRANCH_REMOTE) :
+                                     Cint(GitConst.BRANCH_LOCAL) |  Cint(GitConst.BRANCH_REMOTE))
+        # walk through branches
+        branches = with(GitBranchIter(repo, flags)) do bi
+            map(x-> try
+                        (shortname(x[1]), x[2])
+                    finally
+                        finalize(x[1])
+                    end, bi)
+        end
+        # get HEAD name
+        head_name = with(head(repo)) do href
+            if isattached(repo)
+                shortname(href)
+            else
+                "(detached from $(string(Oid(href))[1:7]))"
+            end
+        end
+
+        # prepare output
+        output = Tuple{AbstractString,Symbol}[]
+        for b in branches
+            c = if b[1] == head_name
+                :green
+            elseif b[2] == 1
+                :white
+            else
+                :red
+            end
+            push!(output, (b[1], c))
+        end
+
+        # if HEAD does not have branch insert it in output
+        cmd == :listremote || any(map(b->b[2] == :green, output)) || insert!(output, 1, (head_name, :green))
+        for (b, c) in output
+            c == :green ? print("* ") : print("  ")
+            print_with_color(c, "$b\n")
+        end
+    elseif cmd == :add
+        with(head(repo)) do href
+            with(peel(GitCommit, href)) do hcommit
+                create_branch(repo, hcommit, branch)
+            end
+        end
+    elseif cmd == :delete
+        bref = lookup_branch(repo, branch)
+        bref != nothing && try
+            delete_branch(bref)
+        finally
+            finalize(bref)
+        end
+    end
+    return
+end
+
+function repl_tag{T<:AbstractString}(repo::GitRepo, cmd::Symbol, tag::T)
+    if cmd == :list
+        for t in sort(tag_list(repo))
+            println(t)
+        end
+    elseif cmd == :add
+        with(head(repo)) do href
+            with(peel(GitCommit, href)) do hcommit
+                tag_create(repo, tag,  string(Oid(hcommit)))
+            end
+        end
+    elseif cmd == :delete
+        tag_delete(repo, tag)
+    end
+    return
+end
+
 function repl_log(repo::GitRepo, msg_count::Int)
-    msgs = map(
-        (oid,r)->with(get(GitCommit, r, oid)) do cmt
+    msgs = with(GitRevWalker(repo)) do walker
+        map((oid,r)->with(get(GitCommit, r, oid)) do cmt
                         sig = author(cmt)
                         msg = message(cmt)
                         (Oid(cmt), sig, msg)
-                    end, repo, count = msg_count)
+                    end,
+            walker, count = msg_count)
+    end
     for msg in msgs
         print_with_color(:yellow, "Commit: $(string(msg[1]))\n")
         println("Author:\t$(msg[2].name) $(msg[2].email)")

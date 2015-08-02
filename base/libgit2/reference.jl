@@ -98,6 +98,10 @@ function create_branch(repo::GitRepo, commit_obj::GitCommit, bname::AbstractStri
     return GitReference(ref_ptr_ptr[])
 end
 
+function delete_branch(branch::GitReference)
+    @check ccall((:git_branch_delete, :libgit2), Cint, (Ptr{Void},), branch.ptr)
+end
+
 function head!(repo::GitRepo, ref::GitReference)
     ref_name = name(ref)
     @check ccall((:git_repository_set_head, :libgit2), Cint,
@@ -142,4 +146,47 @@ function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
              ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? Cstring_NULL : msg)
     return GitReference(ref_ptr_ptr[])
+end
+
+function GitBranchIter(r::GitRepo, flags::Cint=Cint(GitConst.BRANCH_LOCAL))
+    bi_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_branch_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, r.ptr, flags)
+    return GitBranchIter(bi_ptr[])
+end
+
+function Base.start(bi::GitBranchIter)
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    btype = Cint[0]
+    err = ccall((:git_branch_next, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
+                  ref_ptr_ptr, btype, bi.ptr)
+    err != Int(Error.GIT_OK) && return (nothing, -1, true)
+    return (GitReference(ref_ptr_ptr[]), btype[1], false)
+end
+
+Base.done(bi::GitBranchIter, state) = Bool(state[3])
+
+function Base.next(bi::GitBranchIter, state)
+    ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    btype = Cint[0]
+    err = ccall((:git_branch_next, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
+                  ref_ptr_ptr, btype, bi.ptr)
+    err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
+    return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[1], false))
+end
+
+function Base.map(f::Function, bi::GitBranchIter)
+    res = nothing
+    s = start(bi)
+    while !done(bi, s)
+        val = f(s[1:2])
+        if res == nothing
+            res = Array(typeof(val),0)
+        end
+        push!(res, val)
+        val, s = next(bi, s)
+    end
+    return res
 end
