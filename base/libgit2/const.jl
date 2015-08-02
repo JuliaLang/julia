@@ -26,10 +26,6 @@ module GitConst
     const REF_SYMBOLIC = Cint(2)
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
-    # branch
-    const BRANCH_LOCAL  = Cint(1)
-    const BRANCH_REMOTE = Cint(2)
-
     # file
     const FILEMODE_NEW             = Cint(00000)
     const FILEMODE_TREE            = Cint(16384)
@@ -264,4 +260,6 @@ module GitConst
                                REPOSITORY_OPEN_NO_SEARCH = 1<<0, # only open the repository if it can be immediately found
                                REPOSITORY_OPEN_CROSS_FS  = 1<<1, # open will not continue searching across FS boundaries
                                REPOSITORY_OPEN_BARE      = 1<<2) # open repository as a bare repo
+
+    @enum(GIT_BRANCH, BRANCH_LOCAL = 1, BRANCH_REMOTE = 2)
 end

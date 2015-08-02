@@ -420,6 +420,7 @@ for (typ, ref, sup, fnc) in (
             (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
             (:GitRebase,     :Void, :AbstractGitObject, :(:git_rebase_free)),
             (:GitStatus,     :Void, :AbstractGitObject, :(:git_status_list_free)),
+            (:GitBranchIter, :Void, :AbstractGitObject, :(:git_branch_iterator_free)),
             (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
             (:GitAnyObject,  :Void, :GitObject, nothing),
             (:GitCommit,     :Void, :GitObject, nothing),
