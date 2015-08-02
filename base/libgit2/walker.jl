@@ -46,62 +46,63 @@ function Base.sort!(w::GitRevWalker; by::Cint = GitConst.SORT_NONE, rev::Bool=fa
     return w
 end
 
-function Base.map(f::Function, repo::GitRepo;
+function repository(w::GitRevWalker)
+    ptr = ccall((:git_revwalk_repository, :libgit2), Ptr{Void}, (Ptr{Void},), w.ptr)
+    ptr != C_NULL && return GitRepo(ptr)
+    return  nothing
+end
+
+function Base.map(f::Function, walker::GitRevWalker;
                   oid::Oid=Oid(),
                   range::AbstractString="",
                   by::Cint = GitConst.SORT_NONE,
                   rev::Bool=false,
                   count::Int=0)
-    walker = GitRevWalker(repo)
     res = nothing
-    try
-        sort!(walker, by=by, rev=rev)
-        if !iszero(oid)
-            push!(walker, oid)
-        elseif !isempty(range)
-            push!(walker, range)
-        else
-            push_head!(walker)
-        end
-        s = start(walker)
+    sort!(walker, by=by, rev=rev)
+    if !iszero(oid)
+        push!(walker, oid)
+    elseif !isempty(range)
+        push!(walker, range)
+    else
+        push_head!(walker)
+    end
+    s = start(walker)
 
-        c = 0
-        while !done(walker, s)
-            val = f(s[1], repo)
-            if res == nothing
-                res = Array(typeof(val),0)
-            end
-            push!(res, val)
-            val, s = next(walker, s)
-            c +=1
-            count == c && break
+    c = 0
+    repo = repository(walker)
+    while !done(walker, s)
+        val = f(s[1], repo)
+        if res == nothing
+            res = Array(typeof(val),0)
         end
-    finally
-        finalize(walker)
+        push!(res, val)
+        val, s = next(walker, s)
+        c +=1
+        count == c && break
     end
     return res
 end
 
-function Base.count(f::Function, repo::GitRepo;
+function Base.count(f::Function, walker::GitRevWalker;
                   oid::Oid=Oid(),
                   by::Cint = GitConst.SORT_NONE,
                   rev::Bool=false)
     c = 0
-    with(GitRevWalker(repo)) do walker
-        sort!(walker, by=by, rev=rev)
-        if !iszero(oid)
-            push!(walker, oid)
-        else
-            push_head!(walker)
-        end
-        s = start(walker)
+    sort!(walker, by=by, rev=rev)
+    if !iszero(oid)
+        push!(walker, oid)
+    else
+        push_head!(walker)
+    end
+    s = start(walker)
 
-        val = true
-        while !done(walker, s) && val
-            val = f(s[1], repo)
-            _, s = next(walker, s)
-            c += 1
-        end
+    val = true
+    repo = repository(walker)
+    while !done(walker, s) && val
+        val = f(s[1], repo)
+        _, s = next(walker, s)
+        c += 1
     end
     return c
 end
