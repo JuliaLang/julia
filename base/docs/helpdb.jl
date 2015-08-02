@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Base.LinAlg.BLAS
 
 doc"""
@@ -2933,17 +2935,11 @@ cis
 doc"""
 ```rst
 ::
-           isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
+           isapprox(x::Number, y::Number; rtol::Real=sqrt(eps), atol::Real=0)
 
-Inexact equality comparison - behaves slightly different depending on types of input args:
+Inexact equality comparison: ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.  The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``.
 
-* For ``AbstractFloat`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
-
-* For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``AbstractFloat``, the other is promoted, and the method above is called instead.
-
-* For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
-
-For default tolerance arguments, ``maxeps = max(eps(abs(x)), eps(abs(y)))``.
+For real or complex floating-point values, ``rtol`` defaults to ``sqrt(eps(typeof(real(x-y))))``.  This corresponds to requiring equality of about half of the significand digits.   For other types, ``rtol`` defaults to zero.
 ```
 """
 isapprox
@@ -3680,7 +3676,7 @@ The returned value is an object with boolean fields ``changed``, ``renamed``,
 and ``timedout``, giving the result of watching the file.
 
 This behavior of this function varies slightly across platforms.
-See https://nodejs.org/api/fs.html#fs_caveat for more detailed information.
+See https://nodejs.org/api/fs.html#fs_caveats for more detailed information.
 ```
 """
 watch_file
