@@ -147,7 +147,8 @@ function fetch{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        fetch(rmt, refspecs, msg="from $(url(rmt))")
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
+        fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     catch err
         warn("fetch: $err")
     finally
@@ -168,7 +169,7 @@ function push{T<:AbstractString}(repo::GitRepo;
     end
     try
         po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
-        push(rmt, refspecs, force=force, push_opts=po)
+        push(rmt, refspecs, force=force, options=po)
     catch err
         warn("push: $err")
     finally
@@ -270,8 +271,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
         try
             # detach commit
             obj_oid = Oid(peeled)
-            ref = create_reference(repo, obj_oid,
-                force=force,
+            ref = GitReference(repo, obj_oid, force=force,
                 msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
             finalize(ref)
 
@@ -347,43 +347,44 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     return (fc-1, sc-1)
 end
 
-""" git merge [--ff-only] [<committish>] """
-function merge!(repo::GitRepo, committish::AbstractString=""; fast_forward::Bool=false)
-    # get head annotated upstream reference
-    ret = with(head(repo)) do head_ref
-        brn_ref = upstream(head_ref)
-        upst_ann  = isempty(committish) ? GitAnnotated(repo, brn_ref) : GitAnnotated(repo, committish)
-        try
-            ma, mp = merge_analysis(repo, upst_ann)
-            (ma & GitConst.MERGE_ANALYSIS_UP_TO_DATE == GitConst.MERGE_ANALYSIS_UP_TO_DATE) && return true
-            if (ma & GitConst.MERGE_ANALYSIS_FASTFORWARD == GitConst.MERGE_ANALYSIS_FASTFORWARD)
-                # do fastforward: checkout tree and update branch references
-                # hur_oid = Oid(hur)
-                # with(get(GitCommit, repo, hur_oid)) do cmt
-                #     checkout_tree(repo, cmt)
-                # end
-                # target!(hr, hur_oid, msg="pkg.libgit2.megre!: fastforward $(name(hur)) into $(name(hr))")
-                # head!(repo, hur, msg="--fastforward")
-
-                brn_ref_oid = Oid(brn_ref)
-                target!(head_ref, brn_ref_oid, msg="pkg.libgit2.megre!: fastforward $(name(brn_ref)) into $(name(head_ref))")
-                reset!(repo, brn_ref_oid, GitConst.RESET_HARD)
-            elseif (ma & GitConst.MERGE_ANALYSIS_NORMAL == GitConst.MERGE_ANALYSIS_NORMAL)
-                fast_forward && return false # do not do merge
-                merge!(repo, hua)
-                cleanup(repo)
-                info("Review and commit merged changes.")
-            else
-                warn("Unknown merge analysis result. Merging is not possible.")
-                return false
+""" git merge [--ff-only] [<committish> | FETCH_HEAD] """
+function merge!(repo::GitRepo;
+                committish::AbstractString = "",
+                branch::AbstractString = "",
+                fastforward::Bool = false,
+                options = MergeOptions())
+    # merge into head branch
+    with(head(repo)) do head_ref
+        upst_anns = if !isempty(committish) # merge committish into HEAD
+            if committish == GitConst.FETCH_HEAD # merge FETCH_HEAD
+                fheads = fetchheads(repo)
+                filter!(fh->fh.ismerge, fheads)
+                length(fheads) == 0 && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no fetch reference for this branch."))
+                map(fh->GitAnnotated(repo,fh), fheads)
+            else # merge commitish
+                [GitAnnotated(repo, committish)]
             end
-            return true
+        else
+            if !isempty(branch) # merge provided branch into HEAD
+                with(GitReference(repo, branch)) do brn_ref
+                    [GitAnnotated(repo, brn_ref)]
+                end
+            else # try to get tracking remote branch for the head
+                !isattached(repo) && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no tracking information for the current branch."))
+                with(upstream(head_ref)) do tr_brn_ref
+                    [GitAnnotated(repo, tr_brn_ref)]
+                end
+            end
+        end
+
+        try
+            merge!(repo, upst_anns, fastforward, options)
         finally
-            finalize(upst_ann)
-            finalize(brn_ref)
+            for ann in upst_anns
+                finalize(ann)
+            end
         end
     end
-    return ret
 end
 
 """ git rebase --merge [--onto <newbase>] [<upstream>] """

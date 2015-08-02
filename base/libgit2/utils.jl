@@ -4,3 +4,5 @@ function version()
           (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}), major, minor, patch)
     return VersionNumber(major[1], minor[1], patch[1])
 end
+
+isset(val::Integer, flag::Integer) = (val & flag == flag)

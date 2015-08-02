@@ -162,3 +162,19 @@ function clone(repo_url::AbstractString, repo_path::AbstractString,
             repo_ptr_ptr, repo_url, repo_path, clone_opts_ref)
     return GitRepo(repo_ptr_ptr[])
 end
+
+function fetchheads(repo::GitRepo)
+    fhr = Ref{Vector{FetchHead}}(FetchHead[])
+    @check ccall((:git_repository_fetchhead_foreach, :libgit2), Cint,
+                  (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                   repo.ptr, fetchhead_foreach_cb, fhr)
+    return fhr[]
+end
+
+function remotes(repo::GitRepo)
+    out = Ref(StrArrayStruct())
+    @check ccall((:git_remote_list, :libgit2), Cint,
+                  (Ptr{Void}, Ptr{Void}), out, repo.ptr)
+    return convert(Vector{AbstractString}, out[])
+end
+
