@@ -33,7 +33,6 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload::Ptr{Void})
     url = bytestring(url_ptr)
-    println(allowed_types)
 
     # for HTTPS use keyboard-interactive prompt
     if startswith(url, "https")
@@ -53,7 +52,6 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
         else
             bytestring(username_ptr)
         end
-        println(username)
 
         publickey = if "GITHUB_PUB_KEY" in keys(ENV)
             ENV["GITHUB_PUB_KEY"]
@@ -61,7 +59,6 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             keydef = homedir()*"/.ssh/id_rsa.pub"
             prompt("Public key location", default=keydef)
         end
-        println(publickey)
 
         privatekey = if "GITHUB_PRV_KEY" in keys(ENV)
             ENV["GITHUB_PRV_KEY"]
@@ -69,14 +66,12 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             keydef = homedir()*"/.ssh/id_rsa"
             prompt("Private key location", default=keydef)
         end
-        println(privatekey)
 
         passphrase= if "GITHUB_PRV_KEY_PASS" in keys(ENV)
-            ENV["GITHUB_PRV_KEY"]
+            ENV["GITHUB_PRV_KEY_PASS"]
         else
             prompt("Private key passphrase", password=true)
         end
-        println(passphrase)
 
         err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),

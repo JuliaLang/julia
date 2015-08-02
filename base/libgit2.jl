@@ -170,8 +170,6 @@ function push{T<:AbstractString}(repo::GitRepo;
     try
         po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
         push(rmt, refspecs, force=force, options=po)
-    catch err
-        warn("push: $err")
     finally
         finalize(rmt)
     end

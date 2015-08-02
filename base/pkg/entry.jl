@@ -394,7 +394,8 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         fork = response["ssh_url"]
         branch = "pull-request/$(commit[1:8])"
         info("Pushing changes as branch $branch")
-        LibGit2.push(repo, remoteurl=fork, refspecs=["$commit:refs/heads/$branch"])
+        refspecs = ["HEAD:refs/heads/$branch"]  # workaround for $commit:refs/heads/$branch
+        LibGit2.push(repo, remoteurl=fork, refspecs=refspecs)
         pr_url = "$(response["html_url"])/compare/$branch"
         info("To create a pull-request, open:\n\n  $pr_url\n")
     end
