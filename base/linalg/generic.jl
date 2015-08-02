@@ -23,7 +23,9 @@ function generic_scale!(X::AbstractArray, s::Number)
 end
 
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
-    length(C) == length(X) || throw(DimensionMismatch("first array argument must be the same length as the second array argument"))
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+    end
     for i = 1:length(X)
         @inbounds C[i] = X[i]*s
     end
@@ -58,7 +60,7 @@ end
 gradient(F::AbstractVector) = gradient(F, [1:length(F);])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
 
-diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
+diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
@@ -233,7 +235,7 @@ norm(x::Number, p::Real=2) =
 function vecdot(x::AbstractVector, y::AbstractVector)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("Vector x has length $lx, but vector y has length $(length(y))"))
+        throw(DimensionMismatch("vector x has length $lx, but vector y has length $(length(y))"))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
@@ -301,7 +303,7 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::StridedMatrix) = error("argument must be a square matrix")
+inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
