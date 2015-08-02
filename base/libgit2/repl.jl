@@ -24,11 +24,11 @@ function repl_cmd(ex)
 
     if cmd[1] == "init"
         if has_params && cmd[2] == "help"
-            println("usage: init [--bare]")
+            println("usage: init [bare]")
             return
         end
         try
-            repo = init(repopath, has_params ? Cuint(cmd[2] == "--bare") : Cuint(0))
+            repo = init(repopath, has_params ? Cuint(cmd[2] == "bare") : Cuint(0))
             finalize(repo)
             println("Initialized empty Git repository in $repopath")
         catch ex
@@ -41,11 +41,11 @@ function repl_cmd(ex)
         end
         try
             repourl = cmd[2]
-            repo = clone(repourl, repopath, isbare=("--bare" in cmd), )
+            repo = clone(repourl, repopath, isbare=("bare" in cmd), )
             finalize(repo)
             println("Cloned $repourl into $repopath")
         catch ex
-            println("usage: clone [--bare] <url>")
+            println("usage: clone [bare] <url>")
             warn(ex)
         end
     else
@@ -65,7 +65,7 @@ function repl_cmd(ex)
                 repl_log(repo, msg_count)
             elseif cmd[1] == "status"
                 if has_params && cmd[2] == "help"
-                    println("usage: status [-long]")
+                    println("usage: status [long]")
                     return
                 end
                 repl_status(repo, "long" in cmd)
@@ -136,6 +136,12 @@ function repl_cmd(ex)
                     return
                 end
                 repl_tag(repo, runcmd, cmd[end])
+            elseif cmd[1] == "commit"
+                if !has_params || cmd[2] == "help"
+                    println("usage: commit <message>")
+                    return
+                end
+                repl_commit(repo, cmd[2:end])
             else
                 warn("unknown command: $ex. Use \'help\' command.")
             end
@@ -150,6 +156,7 @@ function repl_help()
  add\t Add file contents to the index
  branch\t List, create, or delete branches
  clone\t Clone a repository into a current directory
+ commit\t Commit record changes to the repository
  init\t Create an empty Git repository or reinitialize an existing one in current directory
  log\t Show commit logs
  reset\t\ Reset current HEAD to the specified state
@@ -160,7 +167,7 @@ function repl_help()
 For particular command parameters use: <command> help
 """)
 # checkout\t Checkout a branch or paths to the working tree
-# commit\t Record changes to the repository
+
 end
 
 function repl_add{T<:AbstractString}(repo::GitRepo, force_add::Bool, files::Vector{T})
@@ -256,6 +263,11 @@ function repl_tag{T<:AbstractString}(repo::GitRepo, cmd::Symbol, tag::T)
         tag_delete(repo, tag)
     end
     return
+end
+
+function repl_commit{T<:AbstractString}(repo::GitRepo, msg::Vector{T})
+    m = chomp(join(msg, " "))
+    commit(repo, m)
 end
 
 function repl_log(repo::GitRepo, msg_count::Int)
