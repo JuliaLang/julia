@@ -338,10 +338,12 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     fst_id = revparseid(repo, fst)
     snd_id = revparseid(repo, snd)
     base_id = merge_base(repo, string(fst_id), string(snd_id))
-    fc = count((i,r)->i!=base_id, repo, oid=fst_id,
-                by=GitConst.SORT_TOPOLOGICAL)
-    sc = count((i,r)->i!=base_id, repo, oid=snd_id,
-                by=GitConst.SORT_TOPOLOGICAL)
+    fc = with(GitRevWalker(repo)) do walker
+        count((i,r)->i!=base_id, walker, oid=fst_id, by=GitConst.SORT_TOPOLOGICAL)
+    end
+    sc = with(GitRevWalker(repo)) do walker
+        count((i,r)->i!=base_id, walker, oid=snd_id, by=GitConst.SORT_TOPOLOGICAL)
+    end
     return (fc-1, sc-1)
 end
 
@@ -424,10 +426,12 @@ end
 
 """ Returns all commit authors """
 function authors(repo::GitRepo)
-    athrs = map(
-        (oid,repo)->author(get(GitCommit, repo, oid))::Signature, #TODO: cleanup
-        repo) #, by = GitConst.SORT_TIME)
-    return athrs
+    return with(GitRevWalker(repo)) do walker
+        map((oid,repo)->with(get(GitCommit, repo, oid)) do cmt
+                            author(cmt)::Signature
+                        end,
+            walker) #, by = GitConst.SORT_TIME)
+    end
 end
 
 function snapshot(repo::GitRepo)

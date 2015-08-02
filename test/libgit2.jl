@@ -172,13 +172,17 @@ temp_dir() do dir_cache
         LibGit2.with(LibGit2.GitConfig, repo) do cfg
             credentials!(cfg)
         end
-        oids = LibGit2.map((oid,repo)->string(oid), repo, by = LibGit2.GitConst.SORT_TIME)
+        oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+            LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.GitConst.SORT_TIME)
+        end
         @test length(oids) > 0
         finalize(repo)
 
         LibGit2.with(LibGit2.GitRepo, path) do repo
             oid = LibGit2.Oid(oids[end])
-            oids = LibGit2.map((oid,repo)->(oid,repo), repo, oid=oid, by=LibGit2.GitConst.SORT_TIME)
+            oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                LibGit2.map((oid,repo)->(oid,repo), walker, oid=oid, by=LibGit2.GitConst.SORT_TIME)
+            end
             @test length(oids) > 0
         end
     end
