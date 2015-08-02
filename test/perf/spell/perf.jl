@@ -83,7 +83,7 @@ function spelltest(tests; bias=0, verbose=false)
             w = correct(wrong)
             if w!=target
                 bad += 1
-                unknown += !(target in NWORDS)
+                unknown += !(target in keys(NWORDS))
                 if verbose
                     @printf("correct(%s) => %s (%d); expected %s (%d)\n",
                             wrong, w, NWORDS[w], target, NWORDS[target])

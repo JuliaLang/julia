@@ -83,8 +83,8 @@ end
 
 macro timeit_init(ex,init,name,desc,group...)
     quote
-        t = zeros(ntrials)
-        for i=0:ntrials
+        t = zeros(mintrials)
+        for i=0:mintrials
             $(esc(init))
             e = 1000*(@elapsed $(esc(ex)))
             if i > 0
