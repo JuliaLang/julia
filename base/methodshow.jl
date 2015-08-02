@@ -83,34 +83,36 @@ show(io::IO, mt::MethodTable) = show_method_table(io, mt)
 
 inbase(m::Module) = m == Base ? true : m == Main ? false : inbase(module_parent(m))
 fileurl(file) = let f = find_source_file(file); f == nothing ? "" : "file://"*f; end
-#TODO: Convert to libgit2
-# function url(m::Method)
-#     M = m.func.code.module
-#     (m.func.code.file == :null || m.func.code.file == :string) && return ""
-#     file = string(m.func.code.file)
-#     line = m.func.code.line
-#     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-#     if inbase(M)
-#         return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
-#     else
-#         try
-#             d = dirname(file)
-#             u = Git.readchomp(`config remote.origin.url`, dir=d)
-#             u = match(Git.GITHUB_REGEX,u).captures[1]
-#             root = cd(d) do # dir=d confuses --show-toplevel, apparently
-#                 Git.readchomp(`rev-parse --show-toplevel`)
-#             end
-#             if startswith(file, root)
-#                 commit = Git.readchomp(`rev-parse HEAD`, dir=d)
-#                 return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
-#             else
-#                 return fileurl(file)
-#             end
-#         catch
-#             return fileurl(file)
-#         end
-#     end
-# end
+
+function url(m::Method)
+    M = m.func.code.module
+    (m.func.code.file == :null || m.func.code.file == :string) && return ""
+    file = string(m.func.code.file)
+    line = m.func.code.line
+    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    if inbase(M)
+        return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
+    else
+        try
+            d = dirname(file)
+            return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
+                LibGit2.with(LibGit2.GitConfig(repo)) do cfg
+                    u = LibGit2.get(cfg, "remote.origin.url", "")
+                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    commit = string(LibGit2.head_oid(repo))
+                    root = LibGit2.path(repo)
+                    if startswith(file, root)
+                        "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                    else
+                        fileurl(file)
+                    end
+                end
+            end
+        catch
+            return fileurl(file)
+        end
+    end
+end
 
 function writemime(io::IO, ::MIME"text/html", m::Method)
     print(io, m.func.code.name)
