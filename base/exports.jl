@@ -857,6 +857,7 @@ export
     lpad,
     lstrip,
     match,
+    match!,
     matchall,
     ndigits,
     nextind,
