@@ -4,6 +4,120 @@ debug = false
 
 using Base.Test
 
+# basic tridiagonal operations
+n = 5
+
+srand(123)
+
+d = 1 .+ rand(n)
+dl = -rand(n-1)
+du = -rand(n-1)
+v = randn(n)
+B = randn(n,2)
+
+for elty in (Float32, Float64, Complex64, Complex128, Int)
+    if elty == Int
+        srand(61516384)
+        d = rand(1:100, n)
+        dl = -rand(0:10, n-1)
+        du = -rand(0:10, n-1)
+        v = rand(1:100, n)
+        B = rand(1:100, n, 2)
+    else
+        d = convert(Vector{elty}, d)
+        dl = convert(Vector{elty}, dl)
+        du = convert(Vector{elty}, du)
+        v = convert(Vector{elty}, v)
+        B = convert(Matrix{elty}, B)
+    end
+    ε = eps(abs2(float(one(elty))))
+    T = Tridiagonal(dl, d, du)
+    @test size(T, 1) == n
+    @test size(T) == (n, n)
+    F = diagm(d)
+    for i = 1:n-1
+        F[i,i+1] = du[i]
+        F[i+1,i] = dl[i]
+    end
+    @test full(T) == F
+
+    # elementary operations on tridiagonals
+    @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
+    @test transpose(T) == Tridiagonal(du, d, dl)
+    @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+
+    # test interconversion of Tridiagonal and SymTridiagonal
+    @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+    @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
+    @test SymTridiagonal(d, dl) + Tridiagonal(du, d, du) == SymTridiagonal(2d, dl+du)
+
+    # tridiagonal linear algebra
+    @test_approx_eq T*v F*v
+    invFv = F\v
+    @test_approx_eq T\v invFv
+    # @test_approx_eq Base.solve(T,v) invFv
+    # @test_approx_eq Base.solve(T, B) F\B
+    Tlu = factorize(T)
+    x = Tlu\v
+    @test_approx_eq x invFv
+    @test_approx_eq det(T) det(F)
+
+    @test_approx_eq T * Base.LinAlg.UnitUpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * Base.LinAlg.UnitLowerTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * UpperTriangular(eye(n)) F*eye(n)
+    @test_approx_eq T * LowerTriangular(eye(n)) F*eye(n)
+
+    # symmetric tridiagonal
+    if elty <: Real
+        Ts = SymTridiagonal(d, dl)
+        Fs = full(Ts)
+        invFsv = Fs\v
+        Tldlt = ldltfact(Ts)
+        x = Tldlt\v
+        @test_approx_eq x invFsv
+        @test_approx_eq full(full(Tldlt)) Fs
+    end
+
+    # eigenvalues/eigenvectors of symmetric tridiagonal
+    if elty === Float32 || elty === Float64
+        DT, VT = eig(Ts)
+        D, Vecs = eig(Fs)
+        @test_approx_eq DT D
+        @test_approx_eq abs(VT'Vecs) eye(elty, n)
+    end
+
+    # Test det(A::Matrix)
+    # In the long run, these tests should step through Strang's
+    #  axiomatic definition of determinants.
+    # If all axioms are satisfied and all the composition rules work,
+    #  all determinants will be correct except for floating point errors.
+
+    # The determinant of the identity matrix should always be 1.
+    for i = 1:10
+        A = eye(elty, i)
+        @test_approx_eq det(A) one(elty)
+    end
+
+    # The determinant of a Householder reflection matrix should always be -1.
+    for i = 1:10
+        A = eye(elty, 10)
+        A[i, i] = -one(elty)
+        @test_approx_eq det(A) -one(elty)
+    end
+
+    # The determinant of a rotation matrix should always be 1.
+    if elty != Int
+        for theta = convert(Vector{elty}, pi ./ [1:4;])
+            R = [cos(theta) -sin(theta);
+                 sin(theta) cos(theta)]
+            @test_approx_eq convert(elty, det(R)) one(elty)
+        end
+
+    # issue #1490
+    @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+    end
+end
+
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
 function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
     n = size(a, 1)

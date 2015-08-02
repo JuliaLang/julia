@@ -1051,3 +1051,19 @@ let
     @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 end
 
+# test sparse matrix norms
+Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
+Ar = sprandn(10,10,.1)
+Ai = ceil(Int,Ar*100)
+@test_approx_eq norm(Ac,1)     norm(full(Ac),1)
+@test_approx_eq norm(Ac,Inf)   norm(full(Ac),Inf)
+@test_approx_eq vecnorm(Ac)    vecnorm(full(Ac))
+@test_approx_eq norm(Ar,1)     norm(full(Ar),1)
+@test_approx_eq norm(Ar,Inf)   norm(full(Ar),Inf)
+@test_approx_eq vecnorm(Ar)    vecnorm(full(Ar))
+@test_approx_eq norm(Ai,1)     norm(full(Ai),1)
+@test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
+@test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
+
+@test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
+@test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
