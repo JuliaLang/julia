@@ -13,7 +13,7 @@ const AUTH_DATA = Dict{Any,Any}(
 
 function user()
     usr = LibGit2.getconfig("github.user", "")
-    if isempty(usr)
+    if isempty(usr) #TODO: add `config` command to Git REPL and change below info
         throw(PkgError("""
         no GitHub user name configured; please configure it with:
 

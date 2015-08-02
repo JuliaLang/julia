@@ -420,7 +420,7 @@ function publish(branch::AbstractString)
         ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
 
         # get changed files
-        for path in LibGit2.diff_files(repo, "origin/metadata-v2", LibGit2.GitConst.HEAD_FILE)
+        for path in LibGit2.diff_files(repo, "origin/$branch", LibGit2.GitConst.HEAD_FILE)
             m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
             m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
             pkg, ver = m.captures; ver = convert(VersionNumber,ver)
