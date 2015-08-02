@@ -13,6 +13,21 @@ function GitRepo(path::AbstractString)
     return GitRepo(repo_ptr_ptr[])
 end
 
+function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(GitConst.REPOSITORY_OPEN_DEFAULT))
+    separator = @unix? ":" : ";"
+    repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    err = ccall((:git_repository_open_ext, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
+                 repo_ptr_ptr, path, flags, separator)
+    if err != Int(Error.GIT_OK)
+        if repo_ptr_ptr[] != C_NULL
+            finalize(GitRepo(repo_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
+    return GitRepo(repo_ptr_ptr[])
+end
+
 function cleanup(r::GitRepo)
     if r.ptr != C_NULL
         ccall((:git_repository__cleanup, :libgit2), Void, (Ptr{Void},), r.ptr)

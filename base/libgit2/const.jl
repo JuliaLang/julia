@@ -259,4 +259,9 @@ module GitConst
                                 SUBMODULE_IGNORE_UNTRACKED    = 2,  # dirty if tracked files change
                                 SUBMODULE_IGNORE_DIRTY        = 3,  # only dirty if HEAD moved
                                 SUBMODULE_IGNORE_ALL          = 4)  # never dirty
+
+    @enum(GIT_REPOSITORY_OPEN, REPOSITORY_OPEN_DEFAULT   = 0,    # default value
+                               REPOSITORY_OPEN_NO_SEARCH = 1<<0, # only open the repository if it can be immediately found
+                               REPOSITORY_OPEN_CROSS_FS  = 1<<1, # open will not continue searching across FS boundaries
+                               REPOSITORY_OPEN_BARE      = 1<<2) # open repository as a bare repo
 end
