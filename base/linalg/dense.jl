@@ -71,7 +71,7 @@ vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(BoundsError())
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
     end
     idx = 1
     for j = 0:n-1
@@ -89,7 +89,7 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(BoundsError())
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
     end
     idx = 1
     for j = 0:n-1
@@ -122,7 +122,9 @@ function gradient(F::Vector, h::Vector)
 end
 
 function diagind(m::Integer, n::Integer, k::Integer=0)
-    -m <= k <= n || throw(BoundsError())
+    if !(-m <= k <= n)
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+    end
     k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
 
