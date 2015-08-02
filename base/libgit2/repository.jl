@@ -48,6 +48,16 @@ function head_oid(repo::GitRepo)
     return oid
 end
 
+function headname(repo::GitRepo)
+    with(head(repo)) do href
+        if isattached(repo)
+            shortname(href)
+        else
+            "(detached from $(string(Oid(href))[1:7]))"
+        end
+    end
+end
+
 function isbare(repo::GitRepo)
     return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) == 1
 end

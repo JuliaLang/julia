@@ -216,7 +216,8 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         end
     end
     try
-        if !isempty(track) # setup tracking #TODO: what is branch tracks other then "origin" remote
+        #TODO: what if branch tracks other then "origin" remote
+        if !isempty(track) # setup tracking
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
