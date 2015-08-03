@@ -139,6 +139,20 @@ indexpids(S::SharedArray) = S.pidx
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
+"""
+    localindexes(S::SharedArray)
+
+A range describing the "default" indexes to be handled by the current
+process.  This range should be interpreted in the sense of linear
+indexing, i.e., as a sub-range of `1:length(S)`.  Returns an empty
+range in the parent process (or any one for which `indexpids` returns
+0).
+
+It's worth emphasizing that `localindexes` exists purely as a
+convenience, and you can partition work on the array among workers any
+way you wish.  For a SharedArray, all indexes should be equally fast
+for each worker process.
+"""
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
