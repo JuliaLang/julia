@@ -1130,6 +1130,7 @@ DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac
 DLLEXPORT void jl_atexit_hook(int status);
 DLLEXPORT void NORETURN jl_exit(int status);
 
+DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 DLLEXPORT ios_t *jl_create_system_image(void);
 DLLEXPORT void jl_save_system_image(const char *fname);
