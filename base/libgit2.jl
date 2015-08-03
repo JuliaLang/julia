@@ -58,7 +58,11 @@ function iscommit(id::AbstractString, repo::GitRepo)
     res = true
     try
         c = get(GitCommit, repo, id)
-        finalize(c)
+        if c === nothing
+            res = false
+        else
+            finalize(c)
+        end
     catch
         res = false
     end
@@ -158,9 +162,9 @@ end
 
 """ git push [<url>|<repository>] [<refspecs>]"""
 function push{T<:AbstractString}(repo::GitRepo;
-              refspecs::Vector{T}=AbstractString[],
               remote::AbstractString="origin",
               remoteurl::AbstractString="",
+              refspecs::Vector{T}=AbstractString[],
               force::Bool=false)
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
