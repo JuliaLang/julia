@@ -9,14 +9,15 @@ List of git commands:
 - [x] clone
 - [x] checkout
 - [x] commit
+- [x] fetch
 - [x] init
 - [x] log
+- [x] push
 - [x] reset
 - [x] rm
 - [x] status
 - [x] tag
 """
-
 function repl_cmd(ex)
     cmd = split(ex)
     has_params = length(cmd) > 1
@@ -36,7 +37,7 @@ function repl_cmd(ex)
         end
     elseif cmd[1] == "clone"
         if has_params && cmd[2] == "help"
-            repl_clone_help()
+            println("usage: clone [bare] <url>")
             return
         end
         try
@@ -148,6 +149,28 @@ function repl_cmd(ex)
                     return
                 end
                 repl_checkout(repo, cmd[2])
+            elseif cmd[1] == "fetch"
+                if has_params && cmd[2] == "help"
+                    println("usage: fetch [<repository>] [<refspec>]")
+                    return
+                end
+                url, rs = if has_params
+                    length(cmd) == 3 ? (cmd[2], cmd[3]) : (cmd[2], "")
+                else
+                    ("", "")
+                end
+                repl_fetch(repo, url, rs)
+            elseif cmd[1] == "push"
+                if has_params && cmd[2] == "help"
+                    println("usage: push [<repository>] [<refspec>]")
+                    return
+                end
+                url, rs = if has_params
+                    length(cmd) == 3 ? (cmd[2], cmd[3]) : (cmd[2], "")
+                else
+                    ("", "")
+                end
+                repl_push(repo, url, rs)
             else
                 warn("unknown command: $ex. Use \'help\' command.")
             end
@@ -164,8 +187,10 @@ function repl_help()
  checkout Checkout a branch or paths to the working tree
  clone    Clone a repository into a current directory
  commit   Commit record changes to the repository
+ fetch    Download objects and refs from another repository
  init     Create an empty Git repository or reinitialize an existing one in current directory
  log      Show commit logs
+ push     Update remote refs along with associated objects
  reset    Reset current HEAD to the specified state
  rm       Remove files from the working tree and from the index
  status   Show the working tree status
@@ -182,6 +207,16 @@ end
 
 function repl_rm{T<:AbstractString}(repo::GitRepo, files::Vector{T})
     remove!(repo, files...)
+    return
+end
+
+function repl_fetch{T<:AbstractString}(repo::GitRepo, url::T, refspec::T)
+    fetch(repo, remoteurl=url, refspecs=[refspec])
+    return
+end
+
+function repl_push{T<:AbstractString}(repo::GitRepo, url::T, refspec::T)
+    push(repo, remoteurl=url, refspecs=[refspec])
     return
 end
 
@@ -264,7 +299,7 @@ function repl_tag{T<:AbstractString}(repo::GitRepo, cmd::Symbol, tag::T)
 end
 
 function repl_commit{T<:AbstractString}(repo::GitRepo, msg::Vector{T})
-    m = chomp(join(msg, " "))*"\n"
+    m = join(msg, " ")*"\n"
     cmd_oid = commit(repo, m)
     head_name = headname(repo) # get HEAD name
     print("[$head_name $(string(cmd_oid)[1:7])] $m")

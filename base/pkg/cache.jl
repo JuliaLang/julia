@@ -47,11 +47,11 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     end
     try
         LibGit2.set_remote_url(repo, url)
-        in_cache = map(sha1->LibGit2.iscommit(sha1, repo), sha1s)
+        in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         if !all(in_cache)
             info("Updating cache of $pkg...")
             LibGit2.fetch(repo)
-            in_cache = map(sha1->LibGit2.iscommit(sha1, repo), sha1s)
+            in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         end
         sha1s[!in_cache]
     finally
