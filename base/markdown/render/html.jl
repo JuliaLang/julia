@@ -13,7 +13,7 @@ function withtag(f, io::IO, tag, attrs...)
         htmlesc(io, value)
         print(io, "\"")
     end
-    f == nothing && return print(io, " />")
+    f === nothing && return print(io, " />")
 
     print(io, ">")
     f()

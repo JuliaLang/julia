@@ -1014,9 +1014,9 @@ function (.^){T<:Number}(B::BitArray, x::T)
         catch err
             uerr = err
         end
-        if zerr == nothing && uerr == nothing
+        if zerr === nothing && uerr === nothing
             t = promote_type(typeof(z), typeof(u))
-        elseif zerr == nothing
+        elseif zerr === nothing
             t = typeof(z)
         else
             t = typeof(u)
@@ -1024,13 +1024,13 @@ function (.^){T<:Number}(B::BitArray, x::T)
         F = Array(t, size(B))
         for i = 1:length(B)
             if B[i]
-                if uerr == nothing
+                if uerr === nothing
                     F[i] = u
                 else
                     throw(uerr)
                 end
             else
-                if zerr == nothing
+                if zerr === nothing
                     F[i] = z
                 else
                     throw(zerr)

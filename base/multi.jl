@@ -1045,7 +1045,7 @@ end
 
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
-    if m != nothing
+    if m !== nothing
         (m.captures[2], parse(Int16, m.captures[1]))
     else
         ("", Int16(-1))
@@ -1414,7 +1414,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
         for (pididx, wpid) in enumerate(pids)
             @async begin
                 tasklet = getnext_tasklet()
-                while (tasklet != nothing)
+                while (tasklet !== nothing)
                     (idx, fvals) = tasklet
                     busy_workers[pididx] = true
                     try

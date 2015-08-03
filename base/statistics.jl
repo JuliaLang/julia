@@ -41,7 +41,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
     count = 1
     value, state = next(iterable, state)
-    if mean == nothing
+    if mean === nothing
         # Use Welford algorithm as seen in (among other places)
         # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
@@ -160,14 +160,14 @@ varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
 
 function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
     convert(momenttype(T), mean == 0 ? varzm(A; corrected=corrected) :
-                           mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
+                           mean === nothing ? varm(A, Base.mean(A); corrected=corrected) :
                            isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
                            throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::momenttype(T)
 end
 
 function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(A, region; corrected=corrected) :
-    mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
+    mean === nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
     isa(mean, AbstractArray) ? varm(A, mean::AbstractArray, region; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -285,21 +285,21 @@ covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corr
 
 function cov(x::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; corrected=corrected) :
-    mean == nothing ? covm(x, Base.mean(x); corrected=corrected) :
+    mean === nothing ? covm(x, Base.mean(x); corrected=corrected) :
     isa(mean, Number) ? covm(x, mean; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; vardim=vardim, corrected=corrected) :
-    mean == nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
+    mean === nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
     isa(mean, AbstractArray) ? covm(x, mean; vardim=vardim, corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x, y; corrected=corrected) :
-    mean == nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
+    mean === nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
     isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -307,7 +307,7 @@ end
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, mean=nothing)
     if mean == 0
         covzm(x, y; vardim=vardim, corrected=corrected)
-    elseif mean == nothing
+    elseif mean === nothing
         covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
     elseif isa(mean, (Any,Any))
         covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
@@ -421,21 +421,21 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
 
 function cor(x::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x) :
-    mean == nothing ? corm(x, Base.mean(x)) :
+    mean === nothing ? corm(x, Base.mean(x)) :
     isa(mean, Number) ? corm(x, mean) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
     mean == 0 ? corzm(x; vardim=vardim) :
-    mean == nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
+    mean === nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
     isa(mean, AbstractArray) ? corm(x, mean; vardim=vardim) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x, y) :
-    mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
+    mean === nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
     isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -443,7 +443,7 @@ end
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
     if mean == 0
         corzm(x, y; vardim=vardim)
-    elseif mean == nothing
+    elseif mean === nothing
         corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
     elseif isa(mean, (Any,Any))
         corm(x, mean[1], y, mean[2]; vardim=vardim)

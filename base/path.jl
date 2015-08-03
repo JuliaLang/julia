@@ -32,7 +32,7 @@ isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2]
 function splitdir(path::ByteString)
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
-    m == nothing && return (a,b)
+    m === nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, bytestring(m.captures[3])
 end
@@ -44,14 +44,14 @@ basename(path::AbstractString) = splitdir(path)[2]
 function splitext(path::AbstractString)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
-    m == nothing && return (path,"")
+    m === nothing && return (path,"")
     a*m.captures[1], bytestring(m.captures[2])
 end
 
 function pathsep(paths::AbstractString...)
     for path in paths
         m = match(path_separator_re, path)
-        m != nothing && return m.match[1]
+        m !== nothing && return m.match[1]
     end
     return path_separator
 end

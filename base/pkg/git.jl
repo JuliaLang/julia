@@ -111,14 +111,14 @@ const GITHUB_REGEX =
 function set_remote_url(url::AbstractString; remote::AbstractString="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)
     m = match(GITHUB_REGEX,url)
-    m == nothing && return
+    m === nothing && return
     push = "git@github.com:$(m.captures[1]).git"
     push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
 end
 
 function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
-    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
+    m === nothing ? url : "git://github.com/$(m.captures[1]).git"
 end
 
 end # module

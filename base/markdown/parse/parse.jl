@@ -53,7 +53,7 @@ function parseinline(stream::IO, md::MD, config::Config)
     while !eof(stream)
         char = peek(stream)
         if haskey(config.inner, char) &&
-                (inner = parseinline(stream, md, config.inner[char])) != nothing
+                (inner = parseinline(stream, md, config.inner[char])) !== nothing
             c = takebuf_string(buffer)
             !isempty(c) && push!(content, c)
             buffer = IOBuffer()

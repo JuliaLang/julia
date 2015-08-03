@@ -43,14 +43,14 @@ function github_table(stream::IO, md::MD)
         rows = []
         cols = 0
         align = nothing
-        while (row = parserow(stream)) != nothing
+        while (row = parserow(stream)) !== nothing
             if length(rows) == 0
                 row[1] == "" && return false
                 cols = length(row)
             end
-            if align == nothing && length(rows) == 1 # Must have a --- row
+            if align === nothing && length(rows) == 1 # Must have a --- row
                 align = parsealign(row)
-                (align == nothing || length(align) != cols) && return false
+                (align === nothing || length(align) != cols) && return false
             else
                 push!(rows, map(x -> parseinline(x, md), rowlength!(row, cols)))
             end

@@ -17,9 +17,9 @@ for c in child_nodes(root(xdoc))
         latex = nothing
         for el in ("AMS", "IEEE", "mathlatex", "latex")
             latex = find_element(ce, el)
-            latex != nothing && break
+            latex !== nothing && break
         end
-        if latex != nothing
+        if latex !== nothing
             L = strip(content(latex))
             id = attribute(ce, "id")
             U = string(map(s -> Char(parse(Int, s, 16)),

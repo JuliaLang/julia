@@ -52,7 +52,7 @@ showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
 function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false, compact = false,
                        sz=(s = tty_size(); (s[1]-3, s[2])))
     shown_set = get(task_local_storage(), :SHOWNSET, nothing)
-    if shown_set == nothing
+    if shown_set === nothing
         shown_set = ObjectIdDict()
         task_local_storage(:SHOWNSET, shown_set)
     end

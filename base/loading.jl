@@ -36,7 +36,7 @@ end
 function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
-    file2 != nothing && return file2
+    file2 !== nothing && return file2
     file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
     isfile(file2) ? file2 : nothing
 end
@@ -68,9 +68,9 @@ function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_l
             content = remotecall_fetch(node, open, readbytes, path_to_try)
         end
         restored = _include_from_serialized(content)
-        if restored != nothing
+        if restored !== nothing
             others = filter(x -> x != myid(), procs())
-            refs = Any[ @spawnat p (nothing != _include_from_serialized(content)) for p in others]
+            refs = Any[ @spawnat p (nothing !== _include_from_serialized(content)) for p in others]
             for (id, ref) in zip(others, refs)
                 if !fetch(ref)
                     warn("node state is inconsistent: node $id failed to load cache from $path_to_try")
@@ -91,7 +91,7 @@ function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
     paths = @fetchfrom node find_all_in_cache_path(mod)
     for path_to_try in paths
         restored = _require_from_serialized(node, path_to_try, toplevel_load)
-        if restored == nothing
+        if restored === nothing
             warn("deserialization checks failed while attempting to load cache from $path_to_try")
         else
             return restored
@@ -120,7 +120,7 @@ function require(mod::Symbol)
     try
         toplevel_load = false
         restored = _require_from_serialized(1, mod, last)
-        if restored != nothing
+        if restored !== nothing
             for M in restored
                 if isdefined(M, :__META__)
                     push!(Base.Docs.modules, M)
@@ -131,7 +131,7 @@ function require(mod::Symbol)
         if JLOptions().incremental != 0
             # spawn off a new incremental compile task from node 1 for recursive `require` calls
             cachefile = compile(mod)
-            if nothing == _require_from_serialized(1, cachefile, last)
+            if nothing === _require_from_serialized(1, cachefile, last)
                 warn("require failed to create a precompiled cache file")
             end
             return
@@ -189,7 +189,7 @@ macro __FILE__() source_path() end
 
 function include_from_node1(path::AbstractString)
     prev = source_path(nothing)
-    path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
+    path = (prev === nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -203,7 +203,7 @@ function include_from_node1(path::AbstractString)
             result = include_string(remotecall_fetch(1, readall, path), path)
         end
     finally
-        if prev == nothing
+        if prev === nothing
             delete!(tls, :SOURCE_PATH)
         else
             tls[:SOURCE_PATH] = prev
