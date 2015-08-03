@@ -341,7 +341,7 @@ function hist_from_file(hp, file)
             error(invalid_history_message, repr(line[1]), " at line ", countlines)
         while !isempty(line)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
-            m == nothing && break
+            m === nothing && break
             if m.captures[1] == "mode"
                 mode = symbol(m.captures[2])
             end
@@ -387,7 +387,7 @@ function add_history(hist::REPLHistoryProvider, s)
         mode == hist.modes[end] && str == hist.history[end] && return
     push!(hist.modes, mode)
     push!(hist.history, str)
-    hist.history_file == nothing && return
+    hist.history_file === nothing && return
     entry = """
     # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
     # mode: $mode

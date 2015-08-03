@@ -83,16 +83,16 @@ end
 
 VersionNumber(v::AbstractString) = begin
     m = match(VERSION_REGEX, v)
-    m == nothing && throw(ArgumentError("invalid version string: $v"))
+    m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(Int, major)
-    minor = minor != nothing ? parse(Int, minor) : 0
-    patch = patch != nothing ? parse(Int, patch) : 0
-    if prerl != nothing && !isempty(prerl) && prerl[1] == '-'
+    minor = minor !== nothing ? parse(Int, minor) : 0
+    patch = patch !== nothing ? parse(Int, patch) : 0
+    if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl != nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
-    build = build != nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
+    prerl = prerl !== nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
+    build = build !== nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 

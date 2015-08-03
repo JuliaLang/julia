@@ -245,7 +245,7 @@ function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::
 
     skipblanks = get(optsd, :skipblanks, true)
 
-    offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
+    offset_handler = (dims === nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
 
     for retry in 1:2
         try
@@ -259,7 +259,7 @@ function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::
             else
                 rethrow(ex)
             end
-            offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
+            offset_handler = (dims === nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
         end
     end
 

@@ -59,7 +59,7 @@ function eigs(A, B;
         which=:LM
     end
 
-    if sigma != nothing && !iscmplx && isa(sigma,Complex)
+    if sigma !== nothing && !iscmplx && isa(sigma,Complex)
         throw(ArgumentError("complex shifts for real problems are not yet supported"))
     end
     sigma = isshift ? convert(T,sigma) : zero(T)

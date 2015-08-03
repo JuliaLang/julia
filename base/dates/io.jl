@@ -120,7 +120,7 @@ function parse(x::AbstractString,df::DateFormat)
     cursor = 1
     for slot in df.slots
         cursor, pe = getslot(x,slot,df,cursor)
-        pe != nothing && push!(periods,pe)
+        pe !== nothing && push!(periods,pe)
         cursor > endof(x) && break
     end
     return sort!(periods,rev=true,lt=periodisless)

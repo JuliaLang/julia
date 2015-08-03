@@ -95,16 +95,16 @@ push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
 @unix_only begin
 start(::EnvHash) = 0
-done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
+done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
 
 function next(::EnvHash, i)
     env = ccall(:jl_environ, Any, (Int32,), i)
-    if env == nothing
+    if env === nothing
         throw(BoundsError())
     end
     env::ByteString
     m = match(r"^(.*?)=(.*)$"s, env)
-    if m == nothing
+    if m === nothing
         error("malformed environment entry: $env")
     end
     (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), i+1)
@@ -128,7 +128,7 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     unsafe_copy!(pointer(buf), pos, len)
     env = utf8(UTF16String(buf))
     m = match(r"^(=?[^=]+)=(.*)$"s, env)
-    if m == nothing
+    if m === nothing
         error("malformed environment entry: $env")
     end
     (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), (pos+len*2, blk))
@@ -155,12 +155,12 @@ function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)
-        val != nothing ? (ENV[key]=val) : _unsetenv(key)
+        val !== nothing ? (ENV[key]=val) : _unsetenv(key)
     end
     try f()
     finally
         for (key,val) in old
-            val != nothing ? (ENV[key]=val) : _unsetenv(key)
+            val !== nothing ? (ENV[key]=val) : _unsetenv(key)
         end
     end
 end
