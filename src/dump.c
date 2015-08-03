@@ -2063,21 +2063,25 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     return restored;
 }
 
-DLLEXPORT jl_array_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
+DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
 {
     ios_t f;
+    jl_array_t *modules;
     ios_static_buffer(&f, (char*)buf, sz);
-    return _jl_restore_incremental(&f);
+    modules = _jl_restore_incremental(&f);
+    return modules ? (jl_value_t*) modules : jl_nothing;
 }
 
-DLLEXPORT jl_array_t *jl_restore_incremental(const char *fname)
+DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 {
     ios_t f;
+    jl_array_t *modules;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         jl_printf(JL_STDERR, "Cache file \"%s\" not found\n", fname);
-        return NULL;
+        return jl_nothing;
     }
-    return _jl_restore_incremental(&f);
+    modules = _jl_restore_incremental(&f);
+    return modules ? (jl_value_t*) modules : jl_nothing;
 }
 
 // --- init ---
