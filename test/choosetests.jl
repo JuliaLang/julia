@@ -32,7 +32,7 @@ function choosetests(choices = [])
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
         "base64", "serialize", "functors", "misc",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "intset","floatfuncs"
+        "intset", "floatfuncs", "compile"
     ]
 
     if Base.USE_GPL_LIBS
