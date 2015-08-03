@@ -405,3 +405,6 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 
 @test @compat typeof(Array{Rational{Int}}(2,2,2,2,2)) == Array{Rational{Int},5}
 @test @compat size(Array{Rational{Int}}(2,2,2,2,2)) == (2,2,2,2,2)
+
+@compat utf8(Mmap.mmap(@__FILE__(),Vector{Uint8},11,1)) == "sing Compat"
+
