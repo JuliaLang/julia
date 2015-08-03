@@ -537,8 +537,10 @@ JL_CALLABLE(jl_f_kwcall)
 
 extern int jl_lineno;
 
-DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex, int delay_warn)
 {
+    static int jl_warn_on_eval = 0;
+    int last_delay_warn = jl_warn_on_eval;
     if (m == NULL)
         m = jl_main_module;
     if (jl_is_symbol(ex))
@@ -547,16 +549,31 @@ DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     int last_lineno = jl_lineno;
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
+    if (!delay_warn && jl_options.incremental && jl_generating_output()) {
+        if (m != last_m) {
+            jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n", m->name->name, last_m->name->name);
+            jl_static_show(JL_STDERR, ex);
+            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
+        }
+        else if (jl_warn_on_eval) {
+            jl_printf(JL_STDERR, "WARNING: eval from staged function in module %s:    \n", m->name->name);
+            jl_static_show(JL_STDERR, ex);
+            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for these modules **\n\n");
+        }
+    }
     JL_TRY {
+        jl_warn_on_eval = delay_warn && (jl_warn_on_eval || m != last_m); // compute whether a warning was suppressed
         jl_current_task->current_module = jl_current_module = m;
         v = jl_toplevel_eval(ex);
     }
     JL_CATCH {
+        jl_warn_on_eval = last_delay_warn;
         jl_lineno = last_lineno;
         jl_current_module = last_m;
         jl_current_task->current_module = task_last_m;
         jl_rethrow();
     }
+    jl_warn_on_eval = last_delay_warn;
     jl_lineno = last_lineno;
     jl_current_module = last_m;
     jl_current_task->current_module = task_last_m;
@@ -578,7 +595,7 @@ JL_CALLABLE(jl_f_top_eval)
         m = (jl_module_t*)args[0];
         ex = args[1];
     }
-    return jl_toplevel_eval_in(m, ex);
+    return jl_toplevel_eval_in(m, ex, 0);
 }
 
 JL_CALLABLE(jl_f_isdefined)

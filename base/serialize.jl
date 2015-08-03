@@ -534,7 +534,7 @@ function deserialize(s::SerializationState, ::Type{LambdaStaticData})
         linfo = known_lambda_data[lnumber]::LambdaStaticData
         makenew = false
     else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}), C_NULL, C_NULL)::LambdaStaticData
+        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL)::LambdaStaticData
         makenew = true
     end
     deserialize_cycle(s, linfo)
