@@ -58,9 +58,10 @@ function _include_from_serialized(content::Vector{UInt8})
 end
 
 # returns an array of modules loaded, or nothing if failed
-function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_load::Bool)
+function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteString, toplevel_load::Bool)
     restored = nothing
     if toplevel_load && myid() == 1 && nprocs() > 1
+        recompile_stale(mod, path_to_try)
         # broadcast top-level import/using from node 1 (only)
         if node == myid()
             content = open(readbytes, path_to_try)
@@ -78,6 +79,7 @@ function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_l
             end
         end
     elseif node == myid()
+        myid() == 1 && recompile_stale(mod, path_to_try)
         restored = ccall(:jl_restore_incremental, Any, (Ptr{Uint8},), path_to_try)
     else
         content = remotecall_fetch(node, open, readbytes, path_to_try)
@@ -97,8 +99,9 @@ end
 
 function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
     paths = @fetchfrom node find_all_in_cache_path(mod)
+    sort!(paths, by=mtime, rev=true) # try newest cachefiles first
     for path_to_try in paths
-        restored = _require_from_serialized(node, path_to_try, toplevel_load)
+        restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
         if restored === nothing
             warn("deserialization checks failed while attempting to load cache from $path_to_try")
         else
@@ -112,9 +115,30 @@ end
 const package_locks = Dict{Symbol,Condition}()
 const package_loaded = Set{Symbol}()
 
+# used to optionally track dependencies when requiring a module:
+const _require_dependencies = ByteString[]
+const _track_dependencies = [false]
+function _include_dependency(_path::AbstractString)
+    prev = source_path(nothing)
+    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
+    if _track_dependencies[1]
+        push!(_require_dependencies, abspath(path))
+    end
+    return path, prev
+end
+function include_dependency(path::AbstractString)
+    _include_dependency(path)
+    return nothing
+end
+
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
 function require(mod::Symbol)
+    # dependency-tracking is only used for one top-level include(path),
+    # and is not applied recursively to imported modules:
+    old_track_dependencies = _track_dependencies[1]
+    _track_dependencies[1] = false
+
     global toplevel_load
     loading = get(package_locks, mod, false)
     if loading !== false
@@ -133,7 +157,7 @@ function require(mod::Symbol)
         if JLOptions().incremental != 0
             # spawn off a new incremental compile task from node 1 for recursive `require` calls
             cachefile = compile(mod)
-            if nothing === _require_from_serialized(1, cachefile, last)
+            if nothing === _require_from_serialized(1, mod, cachefile, last)
                 warn("require failed to create a precompiled cache file")
             end
             return
@@ -154,6 +178,7 @@ function require(mod::Symbol)
         toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
+        _track_dependencies[1] = old_track_dependencies
     end
     nothing
 end
@@ -189,9 +214,8 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::AbstractString)
-    prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(path) : joinpath(dirname(prev),path)
+function include_from_node1(_path::AbstractString)
+    path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -248,6 +272,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
+    serialize(io, :(Base._track_dependencies[1] = true))
     serialize(io, :(Base.include($(abspath(input)))))
     if source !== nothing
         serialize(io, quote
@@ -271,4 +296,74 @@ function compile(name::ByteString)
     cachefile = abspath(cachepath, name*".ji")
     create_expr_cache(path, cachefile)
     return cachefile
+end
+
+module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
+
+isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_deserialize_verify_header, Cint, (Ptr{Void},), f.ios)
+
+function cache_dependencies(f::IO)
+    modules = Tuple{Symbol,UInt64}[]
+    files = ByteString[]
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        push!(modules,
+              (symbol(readbytes(f, n)), # module symbol
+               ntoh(read(f, UInt64)))) # module UUID (timestamp)
+    end
+    read(f, Int64) # total bytes for file dependencies
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        push!(files, bytestring(readbytes(f, n)))
+    end
+    return modules, files
+end
+
+function cache_dependencies(cachefile::AbstractString)
+    io = open(cachefile, "r")
+    try
+        !isvalid_cache_header(io) && throw(ArgumentError("invalid cache file $cachefile"))
+        return cache_dependencies(io)
+    finally
+        close(io)
+    end
+end
+
+function stale_cachefile(cachefile::AbstractString, cachefile_mtime::Real=mtime(cachefile))
+    io = open(cachefile, "r")
+    try
+        if !isvalid_cache_header(io)
+            return true # invalid cache file
+        end
+        modules, files = cache_dependencies(io)
+        for f in files
+            if mtime(f) > cachefile_mtime
+                return true
+            end
+        end
+        # files are not stale, so module list is valid and needs checking
+        for (M,uuid) in modules
+            if !isdefined(Main, M)
+                require(M) # should recursively recompile module M if stale
+            end
+            if module_uuid(Main.(M)) != uuid
+                return true
+            end
+        end
+        return false # fresh cachefile
+    finally
+        close(io)
+    end
+end
+
+function recompile_stale(mod, cachefile)
+    cachestat = stat(cachefile)
+    if iswritable(cachestat) && stale_cachefile(cachefile, cachestat.mtime)
+        if isinteractive() || 0 != ccall(:jl_generating_output, Cint, ())
+            info("Recompiling stale cache file $cachefile for module $mod.")
+        end
+        create_expr_cache(find_in_path(string(mod)), cachefile)
+    end
 end
