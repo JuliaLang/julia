@@ -367,7 +367,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
         rethrow(e)
 
     finally
-        if s != nothing
+        if s !== nothing
             close(s)
         end
     end

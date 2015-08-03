@@ -13,7 +13,7 @@ function git_contributors(dir::AbstractString, n::Int=typemax(Int))
     tty = @windows? "CON:" : "/dev/tty"
     for line in eachline(pipe(tty, Git.cmd(`shortlog -nes`, dir=dir)))
         m = match(r"\s*(\d+)\s+(.+?)\s+\<(.+?)\>\s*$", line)
-        m == nothing && continue
+        m === nothing && continue
         commits, name, email = m.captures
         if haskey(contrib,email)
             contrib[email][1] += parse(Int,commits)

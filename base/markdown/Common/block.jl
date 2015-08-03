@@ -168,7 +168,7 @@ function list(stream::IO, block::MD)
     withstream(stream) do
         eatindent(stream) || return false
         b = startswith(stream, num_or_bullets)
-        (b == nothing || b == "") && return false
+        (b === nothing || b == "") && return false
         ordered = !(b[1] in bullets)
         if ordered
             b = b[end - 1] == '.' ? r"^\d+\. " : r"^\d+\) "

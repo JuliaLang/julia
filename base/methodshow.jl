@@ -82,7 +82,7 @@ end
 show(io::IO, mt::MethodTable) = show_method_table(io, mt)
 
 inbase(m::Module) = m == Base ? true : m == Main ? false : inbase(module_parent(m))
-fileurl(file) = let f = find_source_file(file); f == nothing ? "" : "file://"*f; end
+fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 function url(m::Method)
     M = m.func.code.module
     (m.func.code.file == :null || m.func.code.file == :string) && return ""

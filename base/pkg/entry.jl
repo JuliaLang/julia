@@ -31,7 +31,7 @@ end
 
 function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
-    editor != nothing ||
+    editor !== nothing ||
         error("set the EDITOR environment variable to an edit command")
     editor = Base.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
@@ -173,7 +173,7 @@ function clone(url_or_pkg::AbstractString)
     else
         url = url_or_pkg
         m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || error("can't determine package name from URL: $url")
+        m !== nothing || error("can't determine package name from URL: $url")
         pkg = m.captures[1]
     end
     clone(url,pkg)
@@ -313,7 +313,7 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         Git.readchomp(`rev-parse --verify $commit`, dir=dir)
     isempty(url) && (url = Git.readchomp(`config remote.origin.url`, dir=dir))
     m = match(Git.GITHUB_REGEX, url)
-    m == nothing && error("not a GitHub repo URL, can't make a pull request: $url")
+    m === nothing && error("not a GitHub repo URL, can't make a pull request: $url")
     owner, repo = m.captures[2:3]
     user = GitHub.user()
     info("Forking $owner/$repo to $user")
@@ -346,7 +346,7 @@ function publish(branch::AbstractString)
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
         path = chomp(line)
         m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
-        m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+        m !== nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
         pkg, ver = m.captures; ver = convert(VersionNumber,ver)
         sha1 = readchomp(joinpath("METADATA",path))
         if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
@@ -443,7 +443,7 @@ function resolve(
             if ver1 === nothing
                 info("Installing $pkg v$ver2")
                 Write.install(pkg, Read.sha1(pkg,ver2))
-            elseif ver2 == nothing
+            elseif ver2 === nothing
                 info("Removing $pkg v$ver1")
                 Write.remove(pkg)
             else
@@ -455,10 +455,10 @@ function resolve(
         end
     catch
         for (pkg,(ver1,ver2)) in reverse!(changed)
-            if ver1 == nothing
+            if ver1 === nothing
                 info("Rolling back install of $pkg")
                 @recover Write.remove(pkg)
-            elseif ver2 == nothing
+            elseif ver2 === nothing
                 info("Rolling back deleted $pkg to v$ver1")
                 @recover Write.install(pkg, Read.sha1(pkg,ver1))
             else
@@ -469,7 +469,7 @@ function resolve(
         rethrow()
     end
     # re/build all updated/installed packages
-    build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
+    build(map(x->x[1], filter(x -> x[2][2] !== nothing, changes)))
 end
 
 function write_tag_metadata(pkg::AbstractString, ver::VersionNumber, commit::AbstractString, force::Bool=false)

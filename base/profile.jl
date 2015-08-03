@@ -26,11 +26,11 @@ end
 function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
-    if n == nothing && delay == nothing
+    if n === nothing && delay === nothing
         return Int(n_cur), delay_cur
     end
-    nnew = (n == nothing) ? n_cur : n
-    delaynew = (delay == nothing) ? delay_cur : delay
+    nnew = (n === nothing) ? n_cur : n
+    delaynew = (delay === nothing) ? delay_cur : delay
     init(nnew, delaynew)
 end
 
@@ -69,11 +69,11 @@ function getdict(data::Vector{UInt})
 end
 
 function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
-    if filename == nothing && linerange == nothing
+    if filename === nothing && linerange === nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
-    filename == nothing && throw(ArgumentError("if supplying linerange, you must also supply the filename"))
-    if linerange == nothing
+    filename === nothing && throw(ArgumentError("if supplying linerange, you must also supply the filename"))
+    if linerange === nothing
         return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
     else
         return callersf(li -> li.func == funcname && li.file == filename && in(li.line, linerange), bt, lidict)
