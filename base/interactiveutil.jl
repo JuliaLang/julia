@@ -24,7 +24,7 @@ function edit(file::AbstractString, line::Integer)
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         f = find_source_file(file)
-        f != nothing && (file = f)
+        f !== nothing && (file = f)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(edname, "emacs") || edname == "gedit"
@@ -293,7 +293,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
         return meths
     end
     d = f.env.defs
-    while d != nothing
+    while d !== nothing
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&

@@ -276,7 +276,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !('-' in flags)
+    if padding !== nothing && !('-' in flags)
         push!(blk.args, pad(width-precision, padding, ' '))
     end
     # print sign
@@ -297,7 +297,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer
     push!(blk.args, :(write(out, pointer(DIGITS), pt)))
     # print padding
-    if padding != nothing && '-' in flags
+    if padding !== nothing && '-' in flags
         push!(blk.args, pad(width-precision, padding, ' '))
     end
     # return arg, expr
@@ -339,7 +339,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !('-' in flags) && !('0' in flags)
+    if padding !== nothing && !('-' in flags) && !('0' in flags)
         push!(blk.args, pad(width-1, padding, ' '))
     end
     # print sign
@@ -347,7 +347,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
-    if padding != nothing && !('-' in flags) && '0' in flags
+    if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width-1, padding, '0'))
     end
     # print digits
@@ -359,7 +359,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         '#' in flags && push!(blk.args, :(write(out, '.')))
     end
     # print space padding
-    if padding != nothing && '-' in flags
+    if padding !== nothing && '-' in flags
         push!(blk.args, pad(width-1, padding, ' '))
     end
     # return arg, expr
@@ -427,7 +427,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !('-' in flags) && !('0' in flags)
+    if padding !== nothing && !('-' in flags) && !('0' in flags)
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
@@ -435,7 +435,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
                     push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
-    if padding != nothing && !('-' in flags) && '0' in flags
+    if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width, padding, '0'))
     end
     # print digits
@@ -453,7 +453,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     push!(blk.args, :(print_exp_e(out, exp)))
     # print space padding
-    if padding != nothing && '-' in flags
+    if padding !== nothing && '-' in flags
         push!(blk.args, pad(width, padding, ' '))
     end
     # return arg, expr
@@ -521,7 +521,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !('-' in flags) && !('0' in flags)
+    if padding !== nothing && !('-' in flags) && !('0' in flags)
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
@@ -533,7 +533,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push!(blk.args, :(write(out, $ch)))
     end
     # print zero padding
-    if padding != nothing && !('-' in flags) && '0' in flags
+    if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width, padding, '0'))
     end
     # print digits
@@ -561,7 +561,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     push!(blk.args, :(print_exp_a(out, exp)))
     # print space padding
-    if padding != nothing && '-' in flags
+    if padding !== nothing && '-' in flags
         push!(blk.args, pad(width, padding, ' '))
     end
     # return arg, expr

@@ -24,7 +24,7 @@ end
 
 default_handler(r::Success) = r.res
 function default_handler(r::Failure)
-    if r.resultexpr != nothing
+    if r.resultexpr !== nothing
         error("test failed: $(r.resultexpr)\n in expression: $(r.expr)")
     else
         error("test failed in expression: $(r.expr)")
@@ -57,9 +57,9 @@ end
 function do_test_throws(body, qex, bt, extype)
     handler()(try
         body()
-        Failure(qex, "$qex did not throw $(extype == nothing ? "anything" : extype)")
+        Failure(qex, "$qex did not throw $(extype === nothing ? "anything" : extype)")
     catch err
-        if extype == nothing
+        if extype === nothing
             Base.warn("""
             @test_throws without an exception type is deprecated;
             Use `@test_throws $(typeof(err)) $(qex)` instead.
@@ -193,7 +193,7 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
 
     m, n = size(a)
     @test n==size(b, 2) && m==size(b, 1)
-    err==nothing && (err=m^3*(eps(S)+eps(T)))
+    err === nothing && (err=m^3*(eps(S)+eps(T)))
     for i=1:n
         v1, v2 = a[:, i], b[:, i]
         @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
