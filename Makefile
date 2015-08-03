@@ -170,7 +170,7 @@ CORE_SRCS := base/boot.jl base/coreimg.jl \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/tuple.jl
-BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
+BASE_SRCS := $(shell find base -name \*.jl)
 
 $(build_private_libdir)/inference0.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
