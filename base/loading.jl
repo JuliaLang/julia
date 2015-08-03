@@ -104,9 +104,28 @@ end
 const package_locks = Dict{Symbol,Condition}()
 const package_loaded = Set{Symbol}()
 
+# used to optionally track dependencies when requiring a module:
+const _require_dependencies = ByteString[]
+const _track_dependencies = [false]
+function _include_dependency(_path::AbstractString)
+    prev = source_path(nothing)
+    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
+    if _track_dependencies[1]
+        push!(_require_dependencies, abspath(path))
+    end
+    return path, prev
+end
+function include_dependency(path::AbstractString)
+    _include_dependency(path)
+    return nothing
+end
+
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
-function require(mod::Symbol)
+function _require(mod::Symbol, track_dependencies::Bool)
+    old_track_dependencies = _track_dependencies[1]
+    _track_dependencies[1] = track_dependencies
+
     global toplevel_load
     loading = get(package_locks, mod, false)
     if loading !== false
@@ -152,9 +171,12 @@ function require(mod::Symbol)
         toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
+        _track_dependencies[1] = old_track_dependencies
     end
     nothing
 end
+
+require(mod::Symbol) = _require(mod, false)
 
 # remote/parallel load
 
@@ -187,9 +209,8 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::AbstractString)
-    prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(path) : joinpath(dirname(prev),path)
+function include_from_node1(_path::AbstractString)
+    path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
