@@ -103,18 +103,12 @@
        (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
        (eq? (cadr (caddr e)) (cadadr e))))
 
-(define (lambda-ex? e)
-  (and (pair? e) (eq? (car e) 'lambda)))
-
 (define (expand-toplevel-expr- e)
   (let ((ex (expand-toplevel-expr-- e)))
     (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
           ((simple-assignment? ex)  (cadr ex))
-          ((and (length= ex 2) (eq? (car ex) 'body)
-                (not (lambda-ex? (cadadr ex))))
+          ((and (length= ex 2) (eq? (car ex) 'body))
            ;; (body (return x)) => x
-           ;; if x is not a lambda expr, so we don't think it is a thunk
-           ;; to be called immediately.
            (cadadr ex))
           (else ex))))
 

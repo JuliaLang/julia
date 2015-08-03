@@ -294,10 +294,9 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp)
     JL_GC_PUSH1(&sp);
     if (jl_svec_len(l->sparams) > 0)
         sp = jl_svec_append(sp, l->sparams);
-    jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
+    jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp, l->module);
     nli->name = l->name;
     nli->fptr = l->fptr;
-    nli->module = l->module;
     nli->file = l->file;
     nli->line = l->line;
     nli->def  = l->def;
@@ -937,7 +936,7 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
         }
         ex = oldast;
     }
-    func = (jl_function_t*)jl_toplevel_eval_in(m->func->linfo->module, (jl_value_t*)ex);
+    func = (jl_function_t*)jl_toplevel_eval_in(m->func->linfo->module, (jl_value_t*)ex, 1); // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
     func->linfo->name = m->func->linfo->name;
     JL_GC_POP();
     return func;

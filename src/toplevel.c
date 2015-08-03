@@ -58,6 +58,8 @@ jl_module_t *jl_new_main_module(void)
 
     jl_main_module = jl_new_module(jl_symbol("Main"));
     jl_main_module->parent = jl_main_module;
+    if (old_main) // don't block continued loading of incremental caches
+        jl_main_module->uuid = old_main->uuid;
     jl_current_module = jl_main_module;
 
     jl_core_module->parent = jl_main_module;
@@ -700,14 +702,13 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
 static jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 {
     jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparams);
+        jl_new_lambda_info(linfo->ast, linfo->sparams, linfo->module);
     new_linfo->tfunc = linfo->tfunc;
     new_linfo->name = linfo->name;
     new_linfo->roots = linfo->roots;
     new_linfo->specTypes = linfo->specTypes;
     new_linfo->unspecialized = linfo->unspecialized;
     new_linfo->specializations = linfo->specializations;
-    new_linfo->module = linfo->module;
     new_linfo->def = linfo->def;
     new_linfo->capt = linfo->capt;
     new_linfo->file = linfo->file;
