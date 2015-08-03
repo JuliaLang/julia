@@ -980,6 +980,7 @@ function start_worker(out::IO)
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)
+    ccall((:sync, "libc"), Void, ())   # necessary for SGE, which redirects and buffers stdout
     # close STDIN; workers will not use it
     #close(STDIN)
 
