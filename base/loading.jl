@@ -122,9 +122,11 @@ end
 
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
-function _require(mod::Symbol, track_dependencies::Bool)
+function require(mod::Symbol)
+    # dependency-tracking is only used for one top-level include(path),
+    # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[1]
-    _track_dependencies[1] = track_dependencies
+    _track_dependencies[1] = false
 
     global toplevel_load
     loading = get(package_locks, mod, false)
@@ -175,8 +177,6 @@ function _require(mod::Symbol, track_dependencies::Bool)
     end
     nothing
 end
-
-require(mod::Symbol) = _require(mod, false)
 
 # remote/parallel load
 
@@ -267,6 +267,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
+    serialize(io, :(Base._track_dependencies[1] = true))
     serialize(io, :(Base.include($(abspath(input)))))
     if source !== nothing
         serialize(io, quote
@@ -290,4 +291,27 @@ function compile(name::ByteString)
     cachefile = abspath(cachepath, name*".ji")
     create_expr_cache(path, cachefile)
     return cachefile
+end
+
+module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
+
+function cache_dependencies(cachefile::AbstractString)
+    modules = Tuple{ByteString,UInt64}[]
+    files = ByteString[]
+    open(cachefile, "r") do f
+        while true
+            n = ntoh(read(f, Int32))
+            n == 0 && break
+            push!(modules,
+                  (bytestring(readbytes(f, n)), # module name
+                   ntoh(read(f, UInt64)))) # module UUID (timestamp)
+        end
+        read(f, Int64) # total bytes for file dependencies
+        while true
+            n = ntoh(read(f, Int32))
+            n == 0 && break
+            push!(files, bytestring(readbytes(f, n)))
+        end
+    end
+    return modules, files
 end
