@@ -31,8 +31,8 @@ function choosetests(choices = [])
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
         "base64", "serialize", "functors", "misc",
-        "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "intset","floatfuncs"
+        "enums", "cmdlineargs", "i18n", "libdl", "int",
+        "intset","floatfuncs", "interactiveutil"
     ]
 
     if Base.USE_GPL_LIBS
