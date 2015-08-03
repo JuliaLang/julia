@@ -32,7 +32,7 @@ function cd(f::Function, args...; kws...)
         Base.cd(()->f(args...; kws...), dir)
     catch err
         if isa(err, PkgError)
-            print_with_color(:red, "PkgMgr Error: $(err.msg)")
+            print_with_color(:red, "ERROR: $(err.msg)")
         else
             throw(err)
         end
