@@ -478,9 +478,9 @@ Mathematical Functions
 
 .. function:: isapprox(x::Number, y::Number; rtol::Real=sqrt(eps), atol::Real=0)
 
-      Inexact equality comparison: ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.  The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``.
+   Inexact equality comparison: ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.  The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``.
 
-      For real or complex floating-point values, ``rtol`` defaults to ``sqrt(eps(typeof(real(x-y))))``.  This corresponds to requiring equality of about half of the significand digits.   For other types, ``rtol`` defaults to zero.
+   For real or complex floating-point values, ``rtol`` defaults to ``sqrt(eps(typeof(real(x-y))))``.  This corresponds to requiring equality of about half of the significand digits.   For other types, ``rtol`` defaults to zero.
 
 .. function:: sin(x)
 
