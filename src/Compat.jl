@@ -498,4 +498,32 @@ if VERSION < v"0.4.0-dev+5305"
     end
 end
 
+if VERSION < v"0.4.0-dev+5697"
+    @eval module Mmap
+        function mmap{T,N}(io::IO,
+            ::Type{Array{T,N}}=Vector{UInt8},
+            dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+            offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
+            mmap_array(T,dims,io::IO,offset)
+        end
+
+        mmap{T<:Array,N}(file::String,
+                         ::Type{T}=Vector{UInt8},
+                         dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
+                         offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+            open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::Array{eltype(T),N}
+
+        # using a length argument instead of dims
+        mmap{T<:Array}(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) =
+            mmap(io, T, (len,), offset; grow=grow, shared=shared)
+        mmap{T<:Array}(file::String, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+            open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::Vector{eltype(T)}
+
+        # constructors for non-file-backed (anonymous) mmaps
+        mmap{T<:Array,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
+        mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+    end
+    export Mmap
+end
+
 end # module
