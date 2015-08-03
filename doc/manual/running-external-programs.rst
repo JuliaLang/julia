@@ -308,8 +308,6 @@ powerful one. To give some sense of the complex pipelines that can be
 created easily, here are some more sophisticated examples, with
 apologies for the excessive use of Perl one-liners:
 
-.. doctest::
-
     julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`;
 
     julia> run(pipe(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))

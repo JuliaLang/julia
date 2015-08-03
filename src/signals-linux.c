@@ -1,5 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
-//
+
 // Linux
 //
 // Linux can use the BSD timers, but this is the more careful approach.
