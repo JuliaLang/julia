@@ -1295,8 +1295,6 @@ DLLEXPORT void restore_signals(void);
 DLLEXPORT void jl_install_sigint_handler(void);
 DLLEXPORT void jl_sigatomic_begin(void);
 DLLEXPORT void jl_sigatomic_end(void);
-void jl_install_default_signal_handlers(void);
-
 
 // tasks and exceptions -------------------------------------------------------
 

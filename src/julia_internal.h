@@ -11,6 +11,8 @@ extern "C" {
 #endif
 
 extern size_t jl_page_size;
+extern char *jl_stack_lo;
+extern char *jl_stack_hi;
 extern jl_function_t *jl_typeinf_func;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
@@ -75,6 +77,7 @@ JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_tuple);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
+void jl_install_default_signal_handlers(void);
 
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;

@@ -96,8 +96,6 @@ static void _infer_stack_direction(void)
 }
 
 static int mangle_pointers;
-extern char *jl_stack_lo;
-extern char *jl_stack_hi;
 
 static void _probe_arch(void)
 {
