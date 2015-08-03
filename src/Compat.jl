@@ -504,7 +504,7 @@ if VERSION < v"0.4.0-dev+5697"
             ::Type{Array{T,N}}=Vector{UInt8},
             dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
             offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
-            mmap_array(T,dims,io::IO,offset)
+            mmap_array(T,dims,io::IO,convert(FileOffset,offset))
         end
 
         mmap{T<:Array,N}(file::String,
