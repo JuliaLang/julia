@@ -12,6 +12,7 @@ fi
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 
 # Get the basename of the file we're trying to checksum
+ARG1=$1
 BASENAME=$(basename $1)
 
 # Print out a hash, and wrap around if we're longer than 64 characters
@@ -66,15 +67,15 @@ MD5_PROG=""
 find_checksum_progs()
 {
     if [ ! -z $(which sha512sum) ]; then
-        SHA512_PROG="sha512sum $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
+        SHA512_PROG="sha512sum $ARG1 | awk '{ print \$1; }'"
     elif [ ! -z $(which shasum) ]; then
-        SHA512_PROG="shasum -a 512 $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
+        SHA512_PROG="shasum -a 512 $ARG1 | awk '{ print \$1; }'"
     fi
 
     if [ ! -z $(which md5sum) ]; then
-        MD5_PROG="md5sum $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
+        MD5_PROG="md5sum $ARG1 | awk '{ print \$1; }'"
     elif [ ! -z $(which md5) ]; then
-        MD5_PROG="md5 -q $DIR/srccache/$BASENAME"
+        MD5_PROG="md5 -q $ARG1"
     fi
 }
 
