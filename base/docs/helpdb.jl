@@ -7006,7 +7006,19 @@ doc"""
 ::
            logm(A)
 
-Compute the matrix logarithm of ``A``.
+If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a warning is printed and whenever possible a nonprincipal matrix function is returned.
+
+If `A` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if `A` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
+
+.. [AH12] Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling
+   and squaring algorithms for the matrix logarithm", SIAM Journal on
+   Scientific Computing, 34(4), 2012, C153-C169.
+   `doi:10.1137/110852553 <http://dx.doi.org/10.1137/110852553>`_
+.. [AHR13] Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton,
+   "Computing the Fréchet derivative of the matrix logarithm and estimating
+   the condition number", SIAM Journal on Scientific Computing, 35(4), 2013,
+   C394-C410.
+   `doi:10.1137/120885991 <http://dx.doi.org/10.1137/120885991>`_
 ```
 """
 logm
@@ -10713,9 +10725,13 @@ doc"""
 ::
            sqrtm(A)
 
-Compute the matrix square root of ``A``. If ``B = sqrtm(A)``, then ``B*B == A`` within roundoff error.
+If ``A`` has no negative real eigenvalues, compute the principal matrix square root of ``A``, that is the unique matrix :math:`X` with eigenvalues having positive real part such that :math:`X^2 = A`. Otherwise, a nonprincipal square root is returned.
 
-``sqrtm`` uses a polyalgorithm, computing the matrix square root using Schur factorizations (:func:`schurfact`) unless it detects the matrix to be Hermitian or real symmetric, in which case it computes the matrix square root from an eigendecomposition (:func:`eigfact`). In the latter situation for positive definite matrices, the matrix square root has ``Real`` elements, otherwise it has ``Complex`` elements.
+If `A` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method, which computes the complex Schur form (:func:`schur`) and then the complex square root of the triangular factor.
+
+.. [BH83] Åke Björck and Sven Hammarling, "A Schur method for the square root
+   of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140.
+   `doi:10.1016/0024-3795(83)80010-X <http://dx.doi.org/10.1016/0024-3795(83)80010-X>`_
 ```
 """
 sqrtm
@@ -10750,7 +10766,17 @@ doc"""
 ::
            expm(A)
 
-Compute the matrix exponential of ``A``.
+Compute the matrix exponential of ``A``, defined by
+
+.. math::
+   e^A = \sum_{n=0}^{\inf} \frac{A^n}{n!}.
+
+For symmetric or Hermitian ``A``, an eigendecomposition (:func:`eigfact`) is used, otherwise the scaling and squaring algorithm (see [H05]_) is chosen.
+
+.. [H05] Nicholas J. Higham, "The squaring and scaling method for the matrix
+   exponential revisited", SIAM Journal on Matrix Analysis and Applications,
+   26(4), 2005, 1179-1193.
+   `doi:10.1137/090768539 <http://dx.doi.org/10.1137/090768539>`_
 ```
 """
 expm
@@ -13705,8 +13731,13 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
 
    where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
 
-.. [Bischof1987] C Bischof and C Van Loan, The WY representation for products of Householder matrices, SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009
-.. [Schreiber1989] R Schreiber and C Van Loan, A storage-efficient WY representation for products of Householder transformations, SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005
+.. [Bischof1987] C Bischof and C Van Loan, "The WY representation for products
+   of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13.
+   `doi:10.1137/0908009 <http://dx.doi.org/10.1137/0908009>`_
+.. [Schreiber1989] R Schreiber and C Van Loan, "A storage-efficient WY
+   representation for products of Householder transformations",
+   SIAM J Sci Stat Comput 10 (1989), 53-57.
+   `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 
 ::
            qrfact(A) -> SPQR.Factorization
