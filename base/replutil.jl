@@ -340,14 +340,17 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
-    process_entry(lastname, lastfile, lastline, n) = show_trace_entry(io, lastname, lastfile, lastline, n)
+    show_backtrace(io,
+                    try
+                        symbol(string(eval_user_input))
+                    catch
+                        :(:) #for when client.jl is not yet defined
+                    end, t, set)
+end
 
-    process_backtrace(process_entry,
-                        try
-                            symbol(string(eval_user_input))
-                        catch
-                            :(:) #for when client.jl is not yet defined
-                        end, t, set)
+function show_backtrace(io::IO, top_function::Symbol, t, set)
+    process_entry(lastname, lastfile, lastline, n) = show_trace_entry(io, lastname, lastfile, lastline, n)
+    process_backtrace(process_entry, top_function, t, set)
 end
 
 # process the backtrace, up to (but not including) top_function
