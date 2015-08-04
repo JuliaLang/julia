@@ -1,11 +1,10 @@
-JULIAHOME = $(abspath ../..)
+JULIAHOME := $(abspath ../..)
+BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
-
-BUILDDIR ?= .
 
 SRCS = hashing timefuncs ptrhash operators \
 	utf8 ios htable bitvector \

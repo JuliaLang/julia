@@ -47,7 +47,7 @@ export File,
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
             _sizeof_uv_fs, uv_error
 
-include("file_constants.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 abstract AbstractFile <: IO
 

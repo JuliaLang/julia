@@ -2,7 +2,8 @@
 
 ## Note:
 ##   It is generally preferable to change these options, for
-##   your local machine, in a file named `Make.user` in this directory
+##   your local machine, in a file named `Make.user` in the toplevel
+##   and build directories
 
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH=
@@ -71,9 +72,25 @@ WITH_GC_DEBUG_ENV = 0
 # Prevent picking up $ARCH from the environment variables
 ARCH=
 
+# pick up BUILDROOT from O= if it isn't already set (from recursive make)
+ifeq ($(BUILDROOT),)
+ifeq ("$(origin O)", "command line")
+  BUILDROOT := $(abspath $O)
+  BUILDDIR := $(abspath $(BUILDROOT)/$(shell $(JULIAHOME)/contrib/relative_path.sh $(JULIAHOME) $(SRCDIR)))
+  $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
+else
+  BUILDROOT:=$(JULIAHOME)
+endif
+endif
+export BUILDROOT
+
 # we include twice to pickup user definitions better
+# include from JULIAHOME first so that BUILDROOT can override
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
+include $(BUILDROOT)/Make.user
 endif
 
 # disable automatic Makefile rules
@@ -110,7 +127,7 @@ includedir = $(prefix)/include
 sysconfdir = $(prefix)/etc
 
 # Directories where things get built into
-build_prefix = $(JULIAHOME)/usr
+build_prefix = $(BUILDROOT)/usr
 build_staging = $(build_prefix)-staging
 build_bindir = $(build_prefix)/bin
 build_libdir = $(build_prefix)/lib
@@ -398,6 +415,9 @@ endif
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
+include $(BUILDROOT)/Make.user
 endif
 
 ifeq ($(SANITIZE),1)
