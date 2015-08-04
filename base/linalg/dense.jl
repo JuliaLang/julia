@@ -339,9 +339,12 @@ sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
 function inv{T}(A::StridedMatrix{T})
+    n = chksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
+    if (T <: Union{Real, Complex}) && (n == 1 || n == 2 || n == 3)
+        Ai = small_inv(AA)
+    elseif istriu(AA)
         Ai = inv(UpperTriangular(AA))
     elseif istril(AA)
         Ai = inv(LowerTriangular(AA))
@@ -349,6 +352,45 @@ function inv{T}(A::StridedMatrix{T})
         Ai = inv(lufact(AA))
     end
     return convert(typeof(AA), Ai)
+end
+
+# Computes inverses for 1x1, 2x2, 3x3 matrices
+function small_inv{T}(A::StridedMatrix{T})
+    n = chksquare(A)
+    d = det(A)
+    if d == zero(T)
+        throw(SingularException(2))
+    end
+    if n == 1
+        Ainv = zeros(T, 1,1)
+        Ainv[1,1] = 1 / A[1,1]
+    end
+    if n == 2
+        Ainv = zeros(T, 2,2)
+        @inbounds begin
+            Ainv[1,1] =  A[2,2] / d
+            Ainv[1,2] = -A[1,2] / d
+            Ainv[2,1] = -A[2,1] / d
+            Ainv[2,2] =  A[1,1] / d
+        end
+    end
+    if n == 3
+        Ainv = zeros(T, 3,3)
+        @inbounds begin
+            Ainv[1,1] =  (A[2,2]*A[3,3] - A[2,3]*A[3,2]) / d
+            Ainv[2,1] = -(A[2,1]*A[3,3] - A[2,3]*A[3,1]) / d
+            Ainv[3,1] =  (A[2,1]*A[3,2] - A[2,2]*A[3,1]) / d
+
+            Ainv[1,2] = -(A[1,2]*A[3,3] - A[1,3]*A[3,2]) / d
+            Ainv[2,2] =  (A[1,1]*A[3,3] - A[1,3]*A[3,1]) / d
+            Ainv[3,2] = -(A[1,1]*A[3,2] - A[1,2]*A[3,1]) / d
+
+            Ainv[1,3] =  (A[1,2]*A[2,3] - A[1,3]*A[2,2]) / d
+            Ainv[2,3] = -(A[1,1]*A[2,3] - A[1,3]*A[2,1]) / d
+            Ainv[3,3] =  (A[1,1]*A[2,2] - A[1,2]*A[2,1]) / d
+        end
+    end
+    Ainv
 end
 
 function factorize{T}(A::Matrix{T})

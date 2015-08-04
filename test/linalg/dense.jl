@@ -438,3 +438,16 @@ for elty in (Float32, Float64, Complex64, Complex128)
     # symmetric, indefinite
     @test_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)
 end
+
+# Test specialized inverses for n = 1,2,3
+let
+    for n = 1:3
+        for T in [Float32, Float64, Complex64, Complex128]
+            A = rand(T, n,n)
+            @test_approx_eq inv(A) inv(lufact(A))
+            if n > 1
+                @test_throws Base.LinAlg.SingularException inv(ones(T, n, n))
+            end
+        end
+    end
+end
