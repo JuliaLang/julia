@@ -287,21 +287,21 @@ try
         end
     end
 catch ex
-    @test isa(ex, CompositeException)
+    @test typeof(ex) == CompositeException
     @test length(ex) == 5
-    @test isa(ex.exceptions[1], CapturedException)
-    @test isa(ex.exceptions[1].ex, ErrorException)
+    @test typeof(ex.exceptions[1]) == CapturedException
+    @test typeof(ex.exceptions[1].ex) == ErrorException
     errors = map(x->x.ex.msg, ex.exceptions)
     @test collect(1:5) == sort(map(x->parse(Int, x), errors))
 end
 
 try
     remotecall_fetch(id_other, ()->throw(ErrorException("foobar")))
-catch e
-    @test isa(e, RemoteException)
-    @test isa(e.captured, CapturedException)
-    @test isa(e.captured.ex, ErrorException)
-    @test e.captured.ex.msg == "foobar"
+catch ex
+    @test typeof(ex) == RemoteException
+    @test typeof(ex.captured) == CapturedException
+    @test typeof(ex.captured.ex) == ErrorException
+    @test ex.captured.ex.msg == "foobar"
 end
 
 # The below block of tests are usually run only on local development systems, since:
