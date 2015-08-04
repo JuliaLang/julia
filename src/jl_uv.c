@@ -772,6 +772,42 @@ DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode);
 }
 
+typedef void (* queue_cb_t)(int);
+struct work_baton {
+    uv_work_t req;
+    queue_cb_t work_func;
+    queue_cb_t notify_func;
+    int idx;
+};
+
+#include <sys/syscall.h>
+void jl_work_wrapper(uv_work_t *req) {
+    printf("tid %d\n", syscall(SYS_gettid));
+    struct work_baton *baton = (struct work_baton*) req->data;
+    baton->work_func(baton->idx);
+}
+
+void jl_work_notifier(uv_work_t *req, int status) {
+    printf("Finished %d\n", status);
+    struct work_baton *baton = (struct work_baton*) req->data;
+    baton->notify_func(baton->idx);
+    free(baton);
+}
+
+DLLEXPORT int jl_queue_work(void * work_func, void * notify_func, int idx)
+{
+    struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
+    baton->req.data = (void*) baton;
+    baton->work_func = work_func;
+    baton->notify_func = notify_func;
+    baton->idx = idx;
+
+    uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
+
+    return 0;
+}
+
+
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)
 int uv___stream_fd(uv_stream_t *handle);
