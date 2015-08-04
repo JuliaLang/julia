@@ -1,4 +1,6 @@
-JULIAHOME = $(abspath ..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+JULIAHOME := $(abspath $(SRCDIR)/..)
+BUILDDIR ?= .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
@@ -6,20 +8,23 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-BUILDDIR ?= .
-
 SRCS = \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	llvm-simdloop simplevector
 
-HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
+HEADERS = $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
 
+# -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
+#  for gcc/clang, suggested content is:
+#  #include_next <options.h>
+#  #define ARGUMENT_TO_OVERRIDE 1
 FLAGS = \
-	-D_GNU_SOURCE -Iflisp -Isupport \
+	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
+	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
-	-I$(BUILDDIR) -I$(JULIAHOME)/deps/valgrind
+	-I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif
@@ -73,44 +78,44 @@ release debug: %: libjulia-%
 $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
-$(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) ./bin2hex.scm < $< > $@)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(SRCDIR)/bin2hex.scm < $< > $@)
 
-export julia_flisp_boot=$(BUILDDIR)/julia_flisp.boot
-$(julia_flisp_boot): julia-parser.scm julia-syntax.scm \
-	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm $(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) ./mk_julia_flisp_boot.scm)
+$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
+		julia-parser.scm julia-syntax.scm match.scm utils.scm mk_julia_flisp_boot.scm) \
+		$(FLISP_EXECUTABLE)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(SRCDIR)/mk_julia_flisp_boot.scm $(dir $<) $(notdir $<) $@)
 
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: table.c
-$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: gc-debug.c
-$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: signals-*.c
+$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-debug.c
+$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
 
-$(BUILDDIR)/support/libsupport.a: support/*.h support/*.c
-	$(MAKE) -C support BUILDDIR='$(abspath $(BUILDDIR)/support)'
+$(BUILDDIR)/support/libsupport.a: $(SRCDIR)/support/*.h $(SRCDIR)/support/*.c
+	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(BUILDDIR)/support/libsupport-debug.a: support/*.h support/*.c
-	$(MAKE) -C support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
+$(BUILDDIR)/support/libsupport-debug.a: $(SRCDIR)/support/*.h $(SRCDIR)/support/*.c
+	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a
-$(BUILDDIR)/flisp/libflisp.a: flisp/*.h flisp/*.c $(BUILDDIR)/support/libsupport.a
-	$(MAKE) -C flisp BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
+$(BUILDDIR)/flisp/libflisp.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport.a
+	$(MAKE) -C $(SRCDIR)/flisp BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
 $(FLISP_EXECUTABLE_debug): $(BUILDDIR)/flisp/libflisp-debug.a
-$(BUILDDIR)/flisp/libflisp-debug.a: flisp/*.h flisp/*.c $(BUILDDIR)/support/libsupport-debug.a
-	$(MAKE) -C flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
+$(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport-debug.a
+	$(MAKE) -C $(SRCDIR)/flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
-julia_version.h: ../VERSION
+$(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@echo "// This is an autogenerated header file" > $@.$(JULIA_BUILD_MODE).tmp
 	@echo "#ifndef JULIA_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
 	@echo "#define JULIA_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
@@ -132,11 +137,11 @@ else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
-$(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+$(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
-$(BUILDDIR)/libjulia-debug.a: julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
+$(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
@@ -147,7 +152,7 @@ else
   SONAME =
 endif
 
-$(build_shlibdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+$(build_shlibdir)/libjulia.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME)) $(CXXLDFLAGS)
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
@@ -159,14 +164,14 @@ libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 clean:
 	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
-	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o *~ $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a *#
+	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
 	-rm -f $(BUILDDIR)/julia_version.h
 
 clean-flisp:
-	-$(MAKE) -C flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
+	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
 clean-support:
-	-$(MAKE) -C support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
+	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 
 cleanall: clean clean-flisp clean-support
