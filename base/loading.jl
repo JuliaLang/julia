@@ -84,6 +84,14 @@ function _require_from_serialized(node::Int, path_to_try::ByteString, toplevel_l
         restored = _include_from_serialized(content)
     end
     # otherwise, continue search
+
+    if restored !== nothing
+        for M in restored
+            if isdefined(M, :__META__)
+                push!(Base.Docs.modules, M)
+            end
+        end
+    end
     return restored
 end
 
@@ -119,14 +127,8 @@ function require(mod::Symbol)
     last = toplevel_load::Bool
     try
         toplevel_load = false
-        restored = _require_from_serialized(1, mod, last)
-        if restored !== nothing
-            for M in restored
-                if isdefined(M, :__META__)
-                    push!(Base.Docs.modules, M)
-                end
-            end
-            return true
+        if nothing !== _require_from_serialized(1, mod, last)
+            return
         end
         if JLOptions().incremental != 0
             # spawn off a new incremental compile task from node 1 for recursive `require` calls
