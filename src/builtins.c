@@ -1119,11 +1119,10 @@ static uptrint_t bits_hash(void *b, size_t sz)
     }
 }
 
-DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
+static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
 {
-    if (jl_is_symbol(v))
+    if (tv == (jl_value_t*)jl_sym_type)
         return ((jl_sym_t*)v)->hash;
-    jl_value_t *tv = (jl_value_t*)jl_typeof(v);
     if (tv == (jl_value_t*)jl_simplevector_type) {
         uptrint_t h = 0;
         size_t l = jl_svec_len(v);
@@ -1165,11 +1164,21 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
             u = f==NULL ? 0 : jl_object_id(f);
         }
         else {
-            u = bits_hash(vo, dt->fields[f].size);
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_svecref(dt->types, f);
+            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
+            if (fieldtype->haspadding)
+                u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
+            else
+                u = bits_hash(vo, dt->fields[f].size);
         }
         h = bitmix(h, u);
     }
     return h;
+}
+
+DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
+{
+    return jl_object_id_(jl_typeof(v), v);
 }
 
 // init -----------------------------------------------------------------------

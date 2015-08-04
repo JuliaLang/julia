@@ -3173,3 +3173,17 @@ let x = Array(Empty12394,1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
+
+# object_id of haspadding field
+immutable HasPadding
+    x::Bool
+    y::Int
+end
+immutable HasHasPadding
+    x::HasPadding
+end
+hashaspadding = HasHasPadding(HasPadding(true,1))
+hashaspadding2 = HasHasPadding(HasPadding(true,1))
+unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
+unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
+@test object_id(hashaspadding) == object_id(hashaspadding2)
