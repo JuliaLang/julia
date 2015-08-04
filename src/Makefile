@@ -1,6 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
-BUILDDIR ?= .
+BUILDDIR := .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
