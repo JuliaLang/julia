@@ -31,6 +31,7 @@
 /Rmath-julia*
 
 # git-externals:
+/srccache
 /libgit2
 /libgit2-*
 /libuv
