@@ -36,7 +36,7 @@ checksum_error()
     echo "  But \`$CHECKSUM_PROG\` results in:" >&2
     print_hash "$CURR_CHECKSUM"
     echo "  This can happen due to bad downloads or network proxies, please check your" >&2
-    echo "  network proxy/firewall settings and delete deps/$BASENAME" >&2
+    echo "  network proxy/firewall settings and delete deps/srccache/$BASENAME" >&2
     echo "  to force a redownload when you are ready" >&2
     echo "===============================================================================" >&2
     exit 2
@@ -66,15 +66,15 @@ MD5_PROG=""
 find_checksum_progs()
 {
     if [ ! -z $(which sha512sum) ]; then
-        SHA512_PROG="sha512sum $BASENAME | awk '{ print \$1; }'"
+        SHA512_PROG="sha512sum $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
     elif [ ! -z $(which shasum) ]; then
-        SHA512_PROG="shasum -a 512 $BASENAME | awk '{ print \$1; }'"
+        SHA512_PROG="shasum -a 512 $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
     fi
 
     if [ ! -z $(which md5sum) ]; then
-        MD5_PROG="md5sum $BASENAME | awk '{ print \$1; }'"
+        MD5_PROG="md5sum $DIR/srccache/$BASENAME | awk '{ print \$1; }'"
     elif [ ! -z $(which md5) ]; then
-        MD5_PROG="md5 -q $BASENAME"
+        MD5_PROG="md5 -q $DIR/srccache/$BASENAME"
     fi
 }
 
