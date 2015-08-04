@@ -132,46 +132,48 @@ static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
+/* read and write in network (bigendian) order: */
+
 static void write_int32(ios_t *s, int32_t i)
 {
-    write_uint8(s, i       & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, (i>>16) & 0xff);
     write_uint8(s, (i>>24) & 0xff);
+    write_uint8(s, (i>>16) & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
+    write_uint8(s, i       & 0xff);
 }
 
 static int32_t read_int32(ios_t *s)
 {
-    int b0 = read_uint8(s);
-    int b1 = read_uint8(s);
-    int b2 = read_uint8(s);
     int b3 = read_uint8(s);
+    int b2 = read_uint8(s);
+    int b1 = read_uint8(s);
+    int b0 = read_uint8(s);
     return b0 | (b1<<8) | (b2<<16) | (b3<<24);
 }
 
 static void write_uint64(ios_t *s, uint64_t i)
 {
-    write_int32(s, i       & 0xffffffff);
     write_int32(s, (i>>32) & 0xffffffff);
+    write_int32(s, i       & 0xffffffff);
 }
 
 static uint64_t read_uint64(ios_t *s)
 {
-    uint64_t b0 = (uint32_t)read_int32(s);
     uint64_t b1 = (uint32_t)read_int32(s);
+    uint64_t b0 = (uint32_t)read_int32(s);
     return b0 | (b1<<32);
 }
 
 static void write_uint16(ios_t *s, uint16_t i)
 {
-    write_uint8(s, i       & 0xff);
     write_uint8(s, (i>> 8) & 0xff);
+    write_uint8(s, i       & 0xff);
 }
 
 static uint16_t read_uint16(ios_t *s)
 {
-    int b0 = read_uint8(s);
     int b1 = read_uint8(s);
+    int b0 = read_uint8(s);
     return b0 | (b1<<8);
 }
 
@@ -947,6 +949,54 @@ void jl_serialize_mod_list(ios_t *s)
         }
     }
     write_int32(s, 0);
+}
+
+// serialize the global _require_dependencies array of pathnames that
+// are include depenencies
+void jl_serialize_dependency_list(ios_t *s)
+{
+     size_t total_size = 0;
+     static jl_array_t *deps = NULL;
+     if (!deps)
+          deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_require_dependencies"));
+     if (deps) {
+          // sort!(deps) so that we can easily eliminate duplicates
+          static jl_value_t *sort_func = NULL;
+          if (!sort_func)
+               sort_func = jl_get_global(jl_base_module, jl_symbol("sort!"));
+          jl_apply((jl_function_t*)sort_func, (jl_value_t**)&deps, 1);
+
+          size_t l = jl_array_len(deps);
+          jl_value_t *prev = NULL;
+          for (size_t i=0; i < l; i++) {
+               jl_value_t *dep = jl_cellref(deps, i);
+               size_t slen = jl_string_len(dep);
+               if (!prev ||
+                   memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
+                    total_size += 4 + slen;
+               }
+               prev = dep;
+          }
+          total_size += 4;
+     }
+     // write the total size so that we can quickly seek past all of the
+     // dependencies if we don't need them
+     write_uint64(s, total_size);
+     if (deps) {
+          size_t l = jl_array_len(deps);
+          jl_value_t *prev = NULL;
+          for (size_t i=0; i < l; i++) {
+               jl_value_t *dep = jl_cellref(deps, i);
+               size_t slen = jl_string_len(dep);
+               if (!prev ||
+                   memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
+                    write_int32(s, slen);
+                    ios_write(s, jl_string_data(dep), slen);
+               }
+               prev = dep;
+          }
+          write_int32(s, 0); // terminator, for ease of reading
+     }
 }
 
 // --- deserialize ---
@@ -1893,6 +1943,7 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     serializer_worklist = worklist;
     jl_serialize_mod_list(&f); // this can throw, keep it early (before any actual initialization)
+    jl_serialize_dependency_list(&f);
 
     JL_SIGATOMIC_BEGIN();
     arraylist_new(&reinit_list, 0);
@@ -1937,6 +1988,8 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
         ios_close(f);
         return NULL;
     }
+    size_t deplen = read_uint64(f);
+    ios_skip(f, deplen); // skip past the dependency list
     JL_SIGATOMIC_BEGIN();
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);

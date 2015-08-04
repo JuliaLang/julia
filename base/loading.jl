@@ -104,9 +104,30 @@ end
 const package_locks = Dict{Symbol,Condition}()
 const package_loaded = Set{Symbol}()
 
+# used to optionally track dependencies when requiring a module:
+const _require_dependencies = ByteString[]
+const _track_dependencies = [false]
+function _include_dependency(_path::AbstractString)
+    prev = source_path(nothing)
+    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
+    if _track_dependencies[1]
+        push!(_require_dependencies, abspath(path))
+    end
+    return path, prev
+end
+function include_dependency(path::AbstractString)
+    _include_dependency(path)
+    return nothing
+end
+
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
 function require(mod::Symbol)
+    # dependency-tracking is only used for one top-level include(path),
+    # and is not applied recursively to imported modules:
+    old_track_dependencies = _track_dependencies[1]
+    _track_dependencies[1] = false
+
     global toplevel_load
     loading = get(package_locks, mod, false)
     if loading !== false
@@ -152,6 +173,7 @@ function require(mod::Symbol)
         toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
+        _track_dependencies[1] = old_track_dependencies
     end
     nothing
 end
@@ -187,9 +209,8 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::AbstractString)
-    prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(path) : joinpath(dirname(prev),path)
+function include_from_node1(_path::AbstractString)
+    path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -246,6 +267,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             task_local_storage()[:SOURCE_PATH] = $(source)
         end)
     end
+    serialize(io, :(Base._track_dependencies[1] = true))
     serialize(io, :(Base.include($(abspath(input)))))
     if source !== nothing
         serialize(io, quote
@@ -269,4 +291,27 @@ function compile(name::ByteString)
     cachefile = abspath(cachepath, name*".ji")
     create_expr_cache(path, cachefile)
     return cachefile
+end
+
+module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
+
+function cache_dependencies(cachefile::AbstractString)
+    modules = Tuple{ByteString,UInt64}[]
+    files = ByteString[]
+    open(cachefile, "r") do f
+        while true
+            n = ntoh(read(f, Int32))
+            n == 0 && break
+            push!(modules,
+                  (bytestring(readbytes(f, n)), # module name
+                   ntoh(read(f, UInt64)))) # module UUID (timestamp)
+        end
+        read(f, Int64) # total bytes for file dependencies
+        while true
+            n = ntoh(read(f, Int32))
+            n == 0 && break
+            push!(files, bytestring(readbytes(f, n)))
+        end
+    end
+    return modules, files
 end
