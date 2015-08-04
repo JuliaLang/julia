@@ -7,7 +7,11 @@
 extern "C" {
 #endif
 
-#include "options.h"
+//** Configuration options that affect the Julia ABI **//
+// if this is not defined, only individual dimension sizes are
+// stored and not total length, to save space.
+#define STORE_ARRAY_LEN
+//** End Configuration options **//
 
 #include "libsupport.h"
 #include <stdint.h>
@@ -1567,7 +1571,7 @@ DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_USE_PRECOMPILED_NO 0
 
 // Version information
-#include "julia_version.h"
+#include <julia_version.h>
 
 DLLEXPORT extern int jl_ver_major(void);
 DLLEXPORT extern int jl_ver_minor(void);

@@ -1,4 +1,6 @@
-JULIAHOME = $(abspath ..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+JULIAHOME := $(abspath $(SRCDIR)/..)
+BUILDDIR ?= .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
@@ -16,8 +18,8 @@ ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
 
-OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.dbg.obj)
+OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
@@ -45,14 +47,14 @@ default: release
 all: release debug
 release debug :  % : julia-%
 
-%.o: %.c
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.dbg.obj: %.c
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
 ifneq ($(USEMSVC), 1)
-julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
+$(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
 		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
