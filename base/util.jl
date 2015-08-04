@@ -377,3 +377,71 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+
+# ccall execution in a different thread in libuv's thread pool
+immutable CFunction{n}
+    pointer::Ptr{Void}
+    rettype::Type
+    argtypes::NTuple{n,Type}
+end
+
+macro wrapper(f, rettype, argtypes...)
+    f = isa(f,Symbol) ? Meta.quot(f) : f
+    wrap = :(function wrapper(args_ptr::Ptr{Void}, retval_ptr::Ptr{Void}) p = args_ptr end)
+    body = wrap.args[2].args
+    args = Symbol[]
+    for (i,T) in enumerate(argtypes)
+        arg = symbol("arg$i")
+        push!(body, :($arg = unsafe_load(convert(Ptr{$T}, p))))
+        push!(body, :(p += sizeof($T)))
+        push!(args, arg)
+    end
+    push!(body, :(ret = ccall($f, $rettype, ($(argtypes...),), $(args...))))
+    push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
+    push!(body, :(return sizeof($rettype)))
+    :(let
+        $wrap
+        f = cfunction(wrapper, Int, (Ptr{Void},Ptr{Void}))
+        CFunction(f, $rettype, ($(argtypes...),))
+    end)
+end
+
+# The default libuv threadpool size is 4. For more parallelism, set
+# "UV_THREADPOOL_SIZE" in the environment and restart Julia
+const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
+
+const thread_notifiers = [Nullable{Condition}() for i in 1:max_ccall_threads]
+const threadcall_restrictor = Semaphore(max_ccall_threads)
+
+function notify_fun(idx)
+    global thread_notifiers
+    notify(get(thread_notifiers[idx]))
+    return
+end
+
+function threadcall{n}(f::CFunction{n}, args...)
+    global thread_notifiers
+    global threadcall_restrictor
+
+    length(args) == n || error("wrong number of arguments: $args")
+
+    acquire(threadcall_restrictor)
+    idx = findfirst(x->isnull(x), thread_notifiers)
+    thread_notifiers[idx] = Nullable{Condition}(Condition())
+
+    buf = IOBuffer()
+    for i in 1:n
+        write(buf, convert(f.argtypes[i], args[i]))
+    end
+    args_arr = takebuf_array(buf)
+
+    ret_arr = Array(Uint8, sizeof(f.rettype))
+
+    ccall(:jl_queue_work, Void, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}, Cint), f.pointer, args_arr, ret_arr, cfunction(notify_fun, Void, (Cint,)), idx)
+
+    wait(get(thread_notifiers[idx]))
+    thread_notifiers[idx] = Nullable{Condition}()
+    release(threadcall_restrictor)
+
+    read(IOBuffer(ret_arr), f.rettype)
+end
