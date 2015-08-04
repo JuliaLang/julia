@@ -304,7 +304,7 @@ function logm(A::StridedMatrix)
         end
     end
     if np_real_eigs
-        warn("Matrix with nonpositive real eigenvalues, a nonprimary matrix logarithm will be returned.")
+        warn("Matrix with nonpositive real eigenvalues, a nonprincipal matrix logarithm will be returned.")
     end
 
     if isreal(A) && ~np_real_eigs
