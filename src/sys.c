@@ -731,6 +731,14 @@ DLLEXPORT jl_sym_t* jl_get_OS_NAME()
 #endif
 }
 
+DLLEXPORT jl_sym_t* jl_get_ARCH()
+{
+    static jl_sym_t* ARCH = NULL;
+    if (!ARCH)
+        ARCH = (jl_sym_t*) jl_get_global(jl_base_module, jl_symbol("ARCH"));
+    return ARCH;
+}
+
 #ifdef __cplusplus
 }
 #endif

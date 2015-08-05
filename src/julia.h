@@ -977,7 +977,7 @@ DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
-DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld);
+DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 
 // arrays
@@ -1073,6 +1073,8 @@ DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 DLLEXPORT long jl_getallocationgranularity(void);
 DLLEXPORT int jl_is_debugbuild(void);
+DLLEXPORT jl_sym_t* jl_get_OS_NAME();
+DLLEXPORT jl_sym_t* jl_get_ARCH();
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1569,6 +1571,8 @@ DLLEXPORT extern int jl_ver_minor(void);
 DLLEXPORT extern int jl_ver_patch(void);
 DLLEXPORT extern int jl_ver_is_release(void);
 DLLEXPORT extern const char* jl_ver_string(void);
+DLLEXPORT const char *jl_git_branch();
+DLLEXPORT const char *jl_git_commit();
 
 // nullable struct representations
 typedef struct {
