@@ -2100,7 +2100,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     ios_close(f);
     JL_SIGATOMIC_END();
 
-    JL_GC_PUSH1(&init_order);
+    JL_GC_PUSH2(&init_order,&restored);
     jl_init_restored_modules(init_order);
     JL_GC_POP();
 
