@@ -949,6 +949,25 @@ void jl_serialize_mod_list(ios_t *s)
     write_int32(s, 0);
 }
 
+// "magic" string and version header of .ji file
+static const int JI_FORMAT_VERSION = 0;
+static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
+static const uint16_t BOM = 0xFEFF; // byte-order marker
+static void jl_serialize_header(ios_t *s)
+{
+    ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
+    write_uint16(s, JI_FORMAT_VERSION);
+    ios_write(s, (char *) &BOM, 2);
+    write_uint8(s, sizeof(void*));
+    const char *OS_NAME = jl_get_OS_NAME()->name, *ARCH = jl_get_ARCH()->name;
+    ios_write(s, OS_NAME, strlen(OS_NAME)+1);
+    ios_write(s, ARCH, strlen(ARCH)+1);
+    ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
+    const char *branch = jl_git_branch(), *commit = jl_git_commit();
+    ios_write(s, branch, strlen(branch)+1);
+    ios_write(s, commit, strlen(commit)+1);
+}
+
 // --- deserialize ---
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
@@ -1525,6 +1544,29 @@ int jl_deserialize_verify_mod_list(ios_t *s)
     }
 }
 
+static int readstr_verify(ios_t *s, const char *str)
+{
+    size_t len = strlen(str);
+    for (size_t i=0; i < len; ++i)
+        if ((char) read_uint8(s) != str[i])
+            return 0;
+    return 1;
+}
+
+static int jl_deserialize_header(ios_t *s)
+{
+    uint16_t bom;
+    return (readstr_verify(s, JI_MAGIC) &&
+            read_uint16(s) == JI_FORMAT_VERSION &&
+            ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
+            read_uint8(s) == sizeof(void*) &&
+            readstr_verify(s, jl_get_OS_NAME()->name) && !read_uint8(s) &&
+            readstr_verify(s, jl_get_ARCH()->name) && !read_uint8(s) &&
+            readstr_verify(s, JULIA_VERSION_STRING) && !read_uint8(s) &&
+            readstr_verify(s, jl_git_branch()) && !read_uint8(s) &&
+            readstr_verify(s, jl_git_commit()) && !read_uint8(s));
+}
+
 jl_array_t *jl_module_init_order;
 
 static void jl_finalize_serializer(ios_t *f) {
@@ -1892,6 +1934,7 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         return 1;
     }
     serializer_worklist = worklist;
+    jl_serialize_header(&f);
     jl_serialize_mod_list(&f); // this can throw, keep it early (before any actual initialization)
 
     JL_SIGATOMIC_BEGIN();
@@ -1933,7 +1976,8 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
         ios_close(f);
         return NULL;
     }
-    if (!jl_deserialize_verify_mod_list(f)) {
+    if (!jl_deserialize_header(f) ||
+        !jl_deserialize_verify_mod_list(f)) {
         ios_close(f);
         return NULL;
     }

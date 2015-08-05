@@ -21,7 +21,10 @@ try
     end
 
     Base.compile(Foo_module)
-    eval(Main, :(import $Foo_module))
+
+    # use _require_from_serialized to ensure that the test fails if
+    # the module doesn't load from the image:
+    @test nothing !== Base._require_from_serialized(myid(), Foo_module, true)
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)
