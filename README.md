@@ -106,6 +106,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `gc_enable()` is now `gc_enable(true)` and `gc_disable()` is now `gc_enable(false)` [#11647](https://github.com/JuliaLang/julia/pull/11647)
 
+* `base64` is now `base64encode` [#9157](https://github.com/JuliaLang/julia/pull/9157)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

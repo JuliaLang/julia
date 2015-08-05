@@ -408,3 +408,4 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 
 @compat utf8(Mmap.mmap(@__FILE__(),Vector{Uint8},11,1)) == "sing Compat"
 
+@test base64encode("hello world") == "aGVsbG8gd29ybGQ="
