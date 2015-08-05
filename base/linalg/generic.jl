@@ -535,3 +535,8 @@ det(x::Number) = x
 logdet(A::AbstractMatrix) = logdet(lufact(A))
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
+# isapprox: approximate equality of arrays [like isapprox(Number,Number)]
+function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+    d = norm(x - y)
+    return isfinite(d) ? d <= atol + rtol*max(norm(x), norm(y)) : x == y
+end
