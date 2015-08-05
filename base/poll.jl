@@ -250,6 +250,8 @@ function stop_watching(t::_FDWatcher)
             t.active = (false, false)
             uv_error("start_watching (FD)",
                      ccall(:uv_poll_stop, Int32, (Ptr{Void},), t.handle))
+        else
+            start_watching(t) # make sure the READABLE / WRITEABLE state is updated
         end
     end
 end
@@ -293,7 +295,7 @@ function wait(fdw::FDWatcher)
 end
 function wait(fdw::_FDWatcher; readable=true, writable=true)
     local events
-    while true
+    while fdw.refcount != (0, 0)
         start_watching(fdw)
         events = wait(fdw.notify)
         if isa(events, FDEvent) &&
@@ -316,7 +318,7 @@ end
 
 @windows_only begin
     function wait(socket::WindowsRawSocket; readable=false, writable=false)
-        fdw = _FDWatcher(fd, readable, writable)
+        fdw = _FDWatcher(socket, readable, writable)
         try
             return wait(fdw, readable=readable, writable=writable)
         finally
