@@ -26,7 +26,7 @@ errno_h.jl:
 	@$(call PRINT_PERL, echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)
 
 fenv_constants.jl: ../src/fenv_constants.h
-	@$(PRINT_PERL) $(CPP_STDOUT) -DJULIA -I../deps/openlibm/include ../src/fenv_constants.h | tail -n 8 | perl -ple 's/\sFE_UN\w+/ 0x10/g; s/\sFE_O\w+/ 0x08/g; s/\sFE_DI\w+/ 0x04/g; s/\sFE_INV\w+/ 0x01/g; s/\sFE_TON\w+/ 0x00/g; s/\sFE_UP\w+/ 0x800/g; s/\sFE_DO\w+/ 0x400/g; s/\sFE_TOW\w+/ 0xc00/g' > $@
+	@$(PRINT_PERL) $(CPP_STDOUT) -DJULIA ../src/fenv_constants.h | tail -n 8 | perl -ple 's/\sFE_UN\w+/ 0x10/g; s/\sFE_O\w+/ 0x08/g; s/\sFE_DI\w+/ 0x04/g; s/\sFE_INV\w+/ 0x01/g; s/\sFE_TON\w+/ 0x00/g; s/\sFE_UP\w+/ 0x800/g; s/\sFE_DO\w+/ 0x400/g; s/\sFE_TOW\w+/ 0xc00/g' > $@
 
 file_constants.jl: ../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA ../src/file_constants.h | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
