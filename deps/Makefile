@@ -660,8 +660,8 @@ endif # LLVM_VER
 # Apply version-specific LLVM patches
 LLVM_PATCH_LIST=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: | $$(SRCDIR)/$1.patch
-	cd $$(LLVM_SRC_DIR) && patch -p1 < $$<
+$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/$1.patch
+	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/$1.patch
 	echo 1 > $$@
 LLVM_PATCH_LIST += $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
