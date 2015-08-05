@@ -190,7 +190,7 @@ $(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
 		-J $(call cygpath_w,$<) coreimg.jl)
 
-RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
+RELBUILDROOT := $(call cygpath_w,$(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/"))
 COMMA:=,
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $(JULIAHOME)/VERSION $$(BASE_SRCS)
@@ -266,11 +266,7 @@ ifeq ($(OS),WINNT)
 define std_dll
 julia-deps: | $$(build_bindir)/lib$(1).dll
 $$(build_bindir)/lib$(1).dll: | $$(build_bindir)
-ifeq ($$(BUILD_OS),$$(OS))
-	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(build_bindir) ;
-else
-	cp $$(call wine_pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_bindir) ;
-endif
+	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_bindir) ;
 JL_LIBS += $(1)
 endef
 $(eval $(call std_dll,gfortran-3))
