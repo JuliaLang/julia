@@ -56,6 +56,7 @@ pid = length(w_set) > 0 ? w_set[1] : myid()
 
 remotecall_fetch(pid, f->(include(f); nothing), dc_path)
 dc=RemoteRef(()->DictChannel(), pid)
+@test typeof(dc) == RemoteRef{DictChannel}
 
 @test isready(dc) == false
 put!(dc, 1, 2)
