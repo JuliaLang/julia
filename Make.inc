@@ -605,7 +605,11 @@ LLVM_CONFIG ?= llvm-config$(EXE)
 JCPPFLAGS+=-DSYSTEM_LLVM
 LLVM_VER = $(shell $(LLVM_CONFIG) --version)
 else
-LLVM_CONFIG=$(build_bindir)/llvm-config$(EXE)
+ifeq ($(BUILD_OS),$(OS))
+LLVM_CONFIG = $(build_bindir)/llvm-config$(EXE)
+else
+LLVM_CONFIG = $(build_bindir)/llvm-config-host
+endif
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
