@@ -317,7 +317,7 @@ Library improvements
 
     * The `MathConst` type has been renamed `Irrational` ([#11922]).
 
-    * `isapprox` now has simpler and more sensible default tolerances ([#12393]).
+    * `isapprox` now has simpler and more sensible default tolerances ([#12393]), supports arrays, and has synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively ([#12472]).
 
   * Numbers
 
@@ -1563,6 +1563,7 @@ Too numerous to mention.
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
+[#12025]: https://github.com/JuliaLang/julia/issues/12025
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
 [#12034]: https://github.com/JuliaLang/julia/issues/12034
 [#12087]: https://github.com/JuliaLang/julia/issues/12087
@@ -1570,4 +1571,5 @@ Too numerous to mention.
 [#12162]: https://github.com/JuliaLang/julia/issues/12162
 [#12393]: https://github.com/JuliaLang/julia/issues/12393
 [#12458]: https://github.com/JuliaLang/julia/issues/12458
+[#12472]: https://github.com/JuliaLang/julia/issues/12472
 [#12491]: https://github.com/JuliaLang/julia/issues/12491
