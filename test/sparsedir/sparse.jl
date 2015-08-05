@@ -1065,5 +1065,17 @@ Ai = ceil(Int,Ar*100)
 @test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
+# test sparse matrix cond
+A = sparse([1.0])
+Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
+Ar = sprandn(20,20,.5)
+@test cond(A,1) == 1.0
+@test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
+@test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
+@test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
+@test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
+@test_throws ArgumentError cond(A,2)
+@test_throws ArgumentError cond(A,3)
+
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
