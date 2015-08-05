@@ -11,6 +11,8 @@ try
 
     open(file, "w") do f
         print(f, """
+              # Auto-compile this module:
+               # pragma compile
               module $Foo_module
               @doc "foo function" foo(x) = x + 1
               include_dependency("foo.jl")
@@ -22,7 +24,9 @@ try
               """)
     end
 
-    cachefile = Base.compile(Foo_module)
+    # make sure the "#pragma compile" causes Foo to be compiled
+    cachefile = Base.autocompile_on_node1(Foo_module, file)
+    @test nothing !== cachefile
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't load from the image:
@@ -41,7 +45,6 @@ try
                                    [:Base,:Core,:Main])
         @test sort(deps[2]) == [file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
     end
-
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)

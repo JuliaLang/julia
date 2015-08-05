@@ -264,7 +264,15 @@ To create a custom system image that can be used to start julia with the -J opti
 recompile Julia after modifying the file ``base/userimg.jl`` to require the desired modules.
 
 To create an incremental precompiled module file,
-call ``Base.compile(modulename::Symbol)``.
+you can call ``Base.compile(modulename::Symbol)``.  Alternatively, if you
+put ``#pragma compile`` at the top of your module file (before any
+non-comment code), then the module will be automatically compiled the
+first time it is imported.   Compiling a module also recursively compiles
+any modules that are imported therein.   If you know that it is *not*
+safe to compile your module, you should put ``#pragma compile false``
+at the top of its file, which cause ``Base.compile`` to throw an error
+(and thereby prevent the module from being imported any other compiled
+module).
 The resulting cache files will be stored in ``Base.LOAD_CACHE_PATH[1]``.
 
 In order to make your module work with precompilation,
