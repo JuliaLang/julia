@@ -1269,7 +1269,9 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: $(BUILDDIR)/lapack-$(LAPACK_VER)/m
 	$(MAKE) -C $(dir $@) lapacklib $(LAPACK_MFLAGS)
 	touch -c $@
 $(BUILDDIR)/lapack-$(LAPACK_VER)/checked: $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a
+ifeq ($(BUILD_OS),$(OS))
 	$(MAKE) -C $(dir $@) lapack_testing $(LAPACK_MFLAGS) -k
+endif
 	touch $@
 $(LAPACK_OBJ_SOURCE): $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) $(dir $<)/SRC/*.o $(dir $<)/INSTALL/dlamch.o $(dir $<)/INSTALL/dsecnd_INT_ETIME.o $(dir $<)/INSTALL/ilaver.o $(dir $<)/INSTALL/slamch.o $(LIBBLAS) -o $@
@@ -1364,7 +1366,9 @@ $(ARPACK_OBJ_SOURCE): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx $(ARPACK_OBJ_SOURCE)
 	$(JLCHECKSUM) $<
 	cp $< $(dir $@)/TESTS/testA.mtx
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
+endif
 	echo 1 > $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked | $(build_shlibdir)
 	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
