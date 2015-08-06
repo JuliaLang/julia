@@ -732,6 +732,15 @@ f = parse(BigFloat,"6.2230152778611417071440640537801242405902521687211671331011
 # BigInt division
 @test a / BigInt(2) == c
 
+# div
+@test div(big"1.0",big"0.1") == 9
+@test div(1,big"0.1") == 9
+@test div(1.0,big"0.1") == 9
+@test div(big"1.0",0.1) == 9
+@test div(big"1",big"0.1") == 9
+@test div(big"1",0.1) == 9
+
+
 # old tests
 tol = 1e-12
 
