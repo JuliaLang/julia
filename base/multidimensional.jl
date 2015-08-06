@@ -180,6 +180,16 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # These are not defined on directly ongetindex and unsafe_getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
+# Multidimensional indexing doesn't really need to call to_index - the only
+# conversion that needs to take place is calling `find` on AbstractArray{Bool}.
+# The scalar to_index methods will take care of the rest.
+to_multidimensional_index(x) = x
+to_multidimensional_index(X::AbstractArray{Bool}) = find(X)
+
+to_multidimensional_indexes() = ()
+to_multidimensional_indexes(i1) = (to_multidimensional_index(i1),)
+to_multidimensional_indexes(i1, I...) = (to_multidimensional_index(i1), to_multidimensional_indexes(I...)...)
+
 # Note that it's most efficient to call checkbounds first, and then to_index
 @inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
     checkbounds(A, I...)
@@ -189,7 +199,7 @@ end
     N = length(I)
     quote
         # This is specifically *not* inlined.
-        @nexprs $N d->(I_d = to_index(I[d]))
+        @nexprs $N d->(I_d = to_multidimensional_index(I[d]))
         dest = similar(A, @ncall $N index_shape A I)
         @ncall $N checksize dest I
         @ncall $N _unsafe_getindex! dest l A I
@@ -291,7 +301,7 @@ _iterable(v) = repeated(v)
     _unsafe_setindex!(l, A, x, J...)
 end
 @inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
-    _unsafe_batchsetindex!(l, A, _iterable(x), to_indexes(J...)...)
+    _unsafe_batchsetindex!(l, A, _iterable(x), to_multidimensional_indexes(J...)...)
 end
 
 # 1-d logical indexing: override the above to avoid calling find (in to_index)
