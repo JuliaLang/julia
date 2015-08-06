@@ -291,14 +291,14 @@ static const char *git_info_string(const char *fld) {
 
 DLLEXPORT const char *jl_git_branch()
 {
-    static char *branch = NULL;
+    static const char *branch = NULL;
     if (!branch) branch = git_info_string("branch");
     return branch;
 }
 
 DLLEXPORT const char *jl_git_commit()
 {
-    static char *commit = NULL;
+    static const char *commit = NULL;
     if (!commit) commit = git_info_string("commit");
     return commit;
 }
