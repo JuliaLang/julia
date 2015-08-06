@@ -409,20 +409,6 @@ function push!(A)
     A
 end
 
-# 10458
-to_index_nodep(i::Real) = convert(Int,i)::Int
-
-function to_index(i::Real)
-    depwarn("indexing with non Integer Reals is deprecated", :to_index)
-    to_index_nodep(i)
-end
-
-to_index{T<:Integer}(A::AbstractArray{T}) = A
-function to_index{T<:Real}(A::AbstractArray{T})
-    depwarn("indexing with non Integer AbstractArrays is deprecated", :to_index)
-    Int[to_index_nodep(x) for x in A]
-end
-
 function to_index(I::Tuple)
     depwarn("to_index(I::Tuple) is deprecated, use to_indexes(I...) instead.", :to_index)
     to_indexes(I...)
