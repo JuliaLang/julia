@@ -76,7 +76,7 @@ end
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
 function show_type_parameter(io::IO, p::ANY)
-    if p == ByteString
+    if p === ByteString
         print(io, "ByteString")
     else
         show(io, p)
@@ -85,7 +85,7 @@ end
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (length(x.parameters) > 0 || x.name === Tuple.name) && x != Tuple
+    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
         print(io, '{')
         n = length(x.parameters)
         for i = 1:n
