@@ -3193,3 +3193,10 @@ let x = (1,2)
     @eval f12517() = Val{$x}
     @test f12517() === Val{(1,2)}
 end
+
+# issue #12476
+function f12476(a)
+    (k, v) = a
+    v
+end
+@inferred f12476(1.0 => 1)
