@@ -1104,6 +1104,7 @@ export
     evalfile,
     include,
     include_string,
+    include_dependency,
 
 # RTS internals
     finalizer,

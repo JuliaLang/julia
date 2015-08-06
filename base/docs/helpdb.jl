@@ -14567,6 +14567,21 @@ include
 doc"""
 ```rst
 ::
+           include_dependency(path::AbstractString)
+
+In a module, declare that the file specified by `path` (relative or
+absolute) is a dependency for precompilation; that is, the
+module will need to be recompiled if this file changes.
+
+This is only needed if your module depends on a file that is not
+used via `include`.   It has no effect outside of compilation.
+```
+"""
+include_dependency
+
+doc"""
+```rst
+::
            randn!([rng], A::Array{Float64,N})
 
 Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
