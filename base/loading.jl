@@ -361,9 +361,7 @@ end
 function recompile_stale(mod, cachefile)
     cachestat = stat(cachefile)
     if iswritable(cachestat) && stale_cachefile(cachefile, cachestat.mtime)
-        if isinteractive() || 0 != ccall(:jl_generating_output, Cint, ())
-            info("Recompiling stale cache file $cachefile for module $mod.")
-        end
+        info("Recompiling stale cache file $cachefile for module $mod.")
         create_expr_cache(find_in_path(string(mod)), cachefile)
     end
 end
