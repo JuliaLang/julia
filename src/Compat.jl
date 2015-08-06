@@ -2,6 +2,11 @@ module Compat
 
 using Base.Meta
 
+if VERSION < v"0.4.0-dev+2340"
+    const base64encode = base64
+    export base64encode
+end
+
 if VERSION >= v"0.4.0-dev+3184"
     include("ngenerate.jl")
     using .CompatCartesian
