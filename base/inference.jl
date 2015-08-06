@@ -598,7 +598,7 @@ const limit_tuple_type_n = function (t, lim::Int)
     return t
 end
 
-let stagedcache=Dict{Any,Any}()
+let stagedcache=ObjectIdDict()
     global func_for_method
     function func_for_method(m::Method, tt, env)
         if !m.isstaged
