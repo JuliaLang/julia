@@ -7,10 +7,11 @@ insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
 Foo_module = :Foo4b3a94a1a081a8cb
 try
-    file = joinpath(dir, "$Foo_module.jl")
+    Foo_file = joinpath(dir, "$Foo_module.jl")
 
-    open(file, "w") do f
+    open(Foo_file, "w") do f
         print(f, """
+              __precompile__(true)
               module $Foo_module
               @doc "foo function" foo(x) = x + 1
               include_dependency("foo.jl")
@@ -22,10 +23,17 @@ try
               """)
     end
 
-    cachefile = Base.compile(Foo_module)
+    if myid() == 1
+        @test_throws Base.PrecompilableError __precompile__(true)
+        @test_throws LoadError include(Foo_file) # from __precompile__(true)
+    end
+
+    Base.require(Foo_module)
+    cachefile = joinpath(dir, "$Foo_module.ji")
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't load from the image:
+    println(STDERR, "\nNOTE: The following 'replacing module' warning indicates normal operation:")
     @test nothing !== Base._require_from_serialized(myid(), Foo_module, true)
 
     let Foo = eval(Main, Foo_module)
@@ -39,9 +47,19 @@ try
         deps = Base.cache_dependencies(cachefile)
         @test sort(deps[1]) == map(s -> (s, Base.module_uuid(eval(s))),
                                    [:Base,:Core,:Main])
-        @test sort(deps[2]) == [file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
+        @test sort(deps[2]) == [Foo_file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
     end
 
+    Baz_file = joinpath(dir, "Baz.jl")
+    open(Baz_file, "w") do f
+        print(f, """
+              __precompile__(false)
+              module Baz
+              end
+              """)
+    end
+    println(STDERR, "\nNOTE: The following 'LoadError: __precompile__(false)' indicates normal operation")
+    @test_throws ErrorException Base.compilecache("Baz") # from __precompile__(false)
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)
