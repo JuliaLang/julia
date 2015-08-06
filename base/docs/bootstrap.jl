@@ -11,13 +11,18 @@ _expand_ = nothing
 setexpand!(f) = global _expand_ = f
 
 macro doc(args...)
-  _expand_(args...)
+    _expand_(args...)
 end
 
 setexpand!() do str, obj
-  # str, obj = ex.args[1], ex.args[2]
-  push!(docs, (current_module(), str, obj))
-  return esc(obj)
+    push!(docs, (current_module(), str, obj))
+    return esc(obj)
+end
+
+function loaddocs()
+    for (mod, str, obj) in docs
+        eval(mod, :(Base.@doc($str, $obj, false)))
+    end
 end
 
 end

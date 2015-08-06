@@ -157,3 +157,17 @@ f1_11993()
 @test (@doc f2_11993) !== nothing
 
 f2_11993()
+
+# issue #11798
+
+module I11798
+
+"read"
+read(x) = x
+
+end
+
+let fd = meta(I11798)[I11798.read]
+    @test fd.order[1] == which(I11798.read, Tuple{Any})
+    @test fd.meta[fd.order[1]] == doc"read"
+end
