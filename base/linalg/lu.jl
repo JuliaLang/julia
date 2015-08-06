@@ -152,18 +152,37 @@ Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 function det{T,S}(A::LU{T,S})
     n = chksquare(A)
     A.info > 0 && return zero(typeof(A.factors[1]))
-    return prod(diag(A.factors)) * (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T))
+    P = one(T)
+    c = 0
+    @inbounds for i = 1:n
+        P *= A.factors[i,i]
+        if A.ipiv[i] != i
+                c += 1
+        end
+    end
+    s = (isodd(c) ? -one(T) : one(T))
+    return P * s
 end
 
 function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
-    dg = diag(A.factors)
-    s = (isodd(sum(A.ipiv .!= 1:n)) ? -one(T) : one(T)) * prod(sign(dg))
-    sum(log(abs(dg))), s
+    c = 0
+    P = one(T)
+    abs_det = zero(T)
+    @inbounds for i = 1:n
+        dg_ii = A.factors[i,i]
+        P *= sign(dg_ii)
+        if A.ipiv[i] != i
+            c += 1
+        end
+        abs_det += log(abs(dg_ii))
+    end
+    s = (isodd(c) ? -one(T) : one(T)) * P
+    abs_det, s
 end
 
 function logdet{T<:Real,S}(A::LU{T,S})
-    d,s = logabsdet(A)
+    d, s = logabsdet(A)
     if s < 0
         throw(DomainError())
     end
@@ -174,13 +193,20 @@ _mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we 
 _mod2pi(x) = mod2pi(x)
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
-    s = sum(log(diag(A.factors)))
-    if isodd(sum(A.ipiv .!= 1:n))
+    s = zero(T)
+    c = 0
+    @inbounds for i = 1:n
+        if A.ipiv[i] != i
+            c += 1
+        end
+        s += log(A.factors[i,i])
+    end
+    if isodd(c)
         s = Complex(real(s), imag(s)+π)
     end
     r, a = reim(s)
     a = π - _mod2pi(π - a) #Take principal branch with argument (-pi,pi]
-    complex(r,a)
+    complex(r, a)
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
