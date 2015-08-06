@@ -1,11 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-"""
-This file contains markdown extensions designed to make documenting
-Julia easy peasy.
-
-We start by borrowing GitHub's `fencedcode` extension – more to follow.
-"""
+# This file contains markdown extensions designed to make documenting
+# Julia easy peasy.
+#
+# We start by borrowing GitHub's `fencedcode` extension – more to follow.
 
 include("interp.jl")
 
