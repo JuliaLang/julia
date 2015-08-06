@@ -53,6 +53,45 @@ function find_all_in_cache_path(mod::Symbol)
     paths
 end
 
+const r_compilable = r"^#\s*pragma\s+compile(\s+true)?\s*$"
+const r_ncompilable = r"^#\s*pragma\s+compile\s+false\s*$"
+
+# return true if "#pragma compilable [true]" appears in the file before
+# any Julia code, false for "#pragma compile false", default otherwise
+function compilable(path::AbstractString, default::Bool=false)
+    return open(path, "r") do f
+        for line in eachline(f)
+            s = lstrip(line)
+            if !isempty(s)
+                if s[1] == '#'
+                    ismatch(r_compilable, s) && return true
+                    ismatch(r_ncompilable, s) && return false
+                else
+                    return default
+                end
+            end
+        end
+        return default
+    end
+end
+
+# compile path on node 1 if path is #pragma compilable,
+# returning the cachefile path, or nothing otherwise
+function autocompile_on_node1(mod::Symbol, path::AbstractString)
+    if myid() == 1
+        if compilable(path)
+            if isinteractive()
+                info("Compiling module $mod from $path...")
+            end
+            return compile(mod)
+        else
+            return nothing
+        end
+    else
+        return remotecall_fetch(1, autocompile_on_node1, mod, path)
+    end
+end
+
 function _include_from_serialized(content::Vector{UInt8})
     return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{Uint8},Int), content, sizeof(content))
 end
@@ -166,6 +205,19 @@ function require(mod::Symbol)
         name = string(mod)
         path = find_in_node_path(name, source_dir(), 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
+
+        if last || nprocs() == 1
+            cachefile = autocompile_on_node1(mod, path)
+            if cachefile !== nothing
+                if nothing === _require_from_serialized(1, cachefile, last)
+                    warn("require failed to create a precompiled cache file")
+                else
+                    return
+                end
+            end
+        end
+
+        # could not compile, just include(path)
         if last && myid() == 1 && nprocs() > 1
             # broadcast top-level import/using from node 1 (only)
             content = open(readall, path)
@@ -289,6 +341,7 @@ function compile(name::ByteString)
     myid() == 1 || error("can only compile from node 1")
     path = find_in_path(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
+    !compilable(path, true) && throw(ArgumentError("$name has #pragma compile false"))
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
         mkpath(cachepath)

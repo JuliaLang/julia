@@ -32,6 +32,8 @@ New language features
     but instead of loading it into the current session saves the result of compiling it in
     `~/.julia/lib/v0.4` ([#8745]).
 
+      * Put `#pragma compilable` at the top of your module file to automatically compile it when it is imported ([#12475]).
+
       * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.
 
       * New option `--output-incremental={yes|no}` added to invoke the equivalent of ``Base.compile`` from the command line.
@@ -1557,3 +1559,4 @@ Too numerous to mention.
 [#12137]: https://github.com/JuliaLang/julia/issues/12137
 [#12162]: https://github.com/JuliaLang/julia/issues/12162
 [#12393]: https://github.com/JuliaLang/julia/issues/12393
+[#12475]: https://github.com/JuliaLang/julia/issues/12475
