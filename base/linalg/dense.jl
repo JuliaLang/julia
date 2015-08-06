@@ -189,7 +189,9 @@ expm(x::Number) = exp(x)
 ## "Functions of Matrices: Theory and Computation", SIAM
 function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     n = chksquare(A)
-    n<2 && return exp(A)
+    if ishermitian(A)
+        return full(expm(Hermitian(A)))
+    end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
     I    = eye(T,n)
@@ -278,10 +280,12 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
+expm(x::Number) = exp(x)
+
 function logm(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
-        return logm(Hermitian(A))
+        return full(logm(Hermitian(A)))
     end
 
     # Use Schur decomposition
@@ -313,12 +317,13 @@ function logm(A::StridedMatrix)
         return retmat
     end
 end
+
 logm(a::Number) = (b = log(complex(a)); imag(b) == 0 ? real(b) : b)
 logm(a::Complex) = log(a)
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issym(A)
-        return sqrtm(Symmetric(A))
+        return full(sqrtm(Symmetric(A)))
     end
     n = chksquare(A)
     SchurF = schurfact(complex(A))
@@ -328,13 +333,14 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
     if ishermitian(A)
-        return sqrtm(Hermitian(A))
+        return full(sqrtm(Hermitian(A)))
     end
     n = chksquare(A)
     SchurF = schurfact(A)
     R = full(sqrtm(UpperTriangular(SchurF[:T])))
     SchurF[:vectors]*R*SchurF[:vectors]'
 end
+
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
