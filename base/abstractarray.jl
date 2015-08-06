@@ -478,7 +478,7 @@ _unsafe_getindex(::LinearSlow, A::AbstractVector) = (@_inline_meta; unsafe_getin
 _unsafe_getindex(l::LinearSlow, A::AbstractArray) = (@_inline_meta; _unsafe_getindex(l, A, 1))
 
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
-_unsafe_getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_unsafe_getindex(::LinearIndexing, A::AbstractArray, I...) = (@_inline_meta; getindex(A, I...))
 
 ## LinearFast Scalar indexing
 _getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined for ", typeof(A))
@@ -489,7 +489,7 @@ function _getindex(::LinearFast, A::AbstractArray, I::Real...)
     checkbounds(A, J...)
     unsafe_getindex(A, sub2ind(size(A), J...))
 end
-_unsafe_getindex(::LinearFast, A::AbstractArray, I::Int) = (@_inline_meta; getindex(A, I))
+_unsafe_getindex(::LinearFast, A::AbstractArray, I::Real) = (@_inline_meta; getindex(A, I))
 function _unsafe_getindex(::LinearFast, A::AbstractArray, I::Real...)
     @_inline_meta
     unsafe_getindex(A, sub2ind(size(A), to_indexes(I...)...))
@@ -499,10 +499,14 @@ end
 @generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
     N = length(I)
     if N == AN
-        :(error("indexing not defined for ", typeof(A)))
+        if all(x->x===Int, I)
+            :(error("indexing not defined for ", typeof(A)))
+        else
+            :($(Expr(:meta, :inline)); getindex(A, to_indexes(I...)...))
+        end
     elseif N > AN
         # Drop trailing ones
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
+        Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
             $(Expr(:meta, :inline))
@@ -511,38 +515,37 @@ end
         end
     else
         # Expand the last index into the appropriate number of indices
-        Jsplat = Expr[:(J[$d]) for d = 1:N-1]
+        Isplat = Expr[:(I[$d]) for d = 1:N-1]
         i = 0
         for d=N:AN
-            push!(Jsplat, :(s[$(i+=1)]))
+            push!(Isplat, :(s[$(i+=1)]))
         end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
+        szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
-            # ind2sub requires all dimensions to be nonzero, so checkbounds first
-            J = to_indexes(I...)
-            checkbounds(A, J...)
-            s = ind2sub($sz, J[$N])
-            unsafe_getindex(A, $(Jsplat...))
+            # ind2sub requires all dimensions to be > 0:
+            (&)($(szcheck...)) || throw_boundserror(A, I)
+            s = ind2sub($sz, to_index(I[$N]))
+            getindex(A, $(Isplat...))
         end
     end
 end
 @generated function _unsafe_getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
     N = length(I)
     if N == AN
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N]
-        :($(Expr(:meta, :inline)); getindex(A, $(Isplat...)))
+        :($(Expr(:meta, :inline)); getindex(A, I...))
     elseif N > AN
         # Drop trailing dimensions (unchecked)
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
+        Isplat = Expr[:(I[$d]) for d = 1:AN]
         quote
             $(Expr(:meta, :inline))
             unsafe_getindex(A, $(Isplat...))
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
+        Isplat = Expr[:(I[$d]) for d = 1:N-1]
         for d=N:AN
             push!(Isplat, :(s[$(d-N+1)]))
         end
@@ -575,8 +578,9 @@ _unsafe_setindex!(::LinearFast, A::AbstractArray, v) = (@_inline_meta; unsafe_se
 _unsafe_setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defined for ", typeof(A))
 _unsafe_setindex!(::LinearSlow, A::AbstractVector, v) = (@_inline_meta; unsafe_setindex!(A, v, 1))
 _unsafe_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_inline_meta; _unsafe_setindex!(l, A, v, 1))
+
 _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
-_unsafe_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_unsafe_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = (@_inline_meta; setindex!(A, v, I...))
 
 ## LinearFast Scalar indexing
 _setindex!(::LinearFast, A::AbstractArray, v, I::Int) = error("indexed assignment not defined for ", typeof(A))
@@ -587,7 +591,7 @@ function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     checkbounds(A, J...)
     unsafe_setindex!(A, v, sub2ind(size(A), J...))
 end
-_unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Int) = (@_inline_meta; setindex!(A, v, I))
+_unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Real) = (@_inline_meta; setindex!(A, v, I))
 function _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     @_inline_meta
     unsafe_setindex!(A, v, sub2ind(size(A), to_indexes(I...)...))
@@ -597,10 +601,14 @@ end
 @generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...)
     N = length(I)
     if N == AN
-        :(error("indexed assignment not defined for ", typeof(A)))
+        if all(x->x===Int, I)
+            :(error("indexing not defined for ", typeof(A)))
+        else
+            :($(Expr(:meta, :inline)); setindex!(A, v, to_indexes(I...)...))
+        end
     elseif N > AN
         # Drop trailing ones
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
+        Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
             $(Expr(:meta, :inline))
@@ -609,37 +617,37 @@ end
         end
     else
         # Expand the last index into the appropriate number of indices
-        Jsplat = Expr[:(J[$d]) for d = 1:N-1]
+        Isplat = Expr[:(I[$d]) for d = 1:N-1]
         i = 0
         for d=N:AN
-            push!(Jsplat, :(s[$(i+=1)]))
+            push!(Isplat, :(s[$(i+=1)]))
         end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
+        szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
-            J = to_indexes(I...)
-            checkbounds(A, J...)
+            # ind2sub requires all dimensions to be > 0:
+            (&)($(szcheck...)) || throw_boundserror(A, I)
             s = ind2sub($sz, to_index(I[$N]))
-            unsafe_setindex!(A, v, $(Jsplat...))
+            setindex!(A, v, $(Isplat...))
         end
     end
 end
 @generated function _unsafe_setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...)
     N = length(I)
     if N == AN
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N]
-        :(setindex!(A, v, $(Isplat...)))
+        :($(Expr(:meta, :inline)); setindex!(A, v, I...))
     elseif N > AN
         # Drop trailing dimensions (unchecked)
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
+        Isplat = Expr[:(I[$d]) for d = 1:AN]
         quote
             $(Expr(:meta, :inline))
             unsafe_setindex!(A, v, $(Isplat...))
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
+        Isplat = Expr[:(I[$d]) for d = 1:N-1]
         for d=N:AN
             push!(Isplat, :(s[$(d-N+1)]))
         end
