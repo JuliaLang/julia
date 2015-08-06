@@ -263,9 +263,22 @@ incremental compile and custom system image.
 To create a custom system image that can be used to start julia with the -J option,
 recompile Julia after modifying the file ``base/userimg.jl`` to require the desired modules.
 
-To create an incremental precompiled module file,
-call ``Base.compile(modulename::Symbol)``.
-The resulting cache files will be stored in ``Base.LOAD_CACHE_PATH[1]``.
+To create an incremental precompiled module file, add
+``__precompile__()`` at the top of your module file (before the
+``module`` starts).  This will cause it to be automatically compiled
+the first time it is imported.  Alternatively, you can manually call
+``Base.compilecache(modulename)``.  The resulting cache files will be
+stored in ``Base.LOAD_CACHE_PATH[1]``.  Subsequently, the module is
+automatically recompiled upon ``import`` whenever any of its
+dependencies change; dependencies are modules it imports, the Julia
+build, files it includes, or explicit dependencies declared by
+``include_dependency(path)`` in the module file(s).  Precompiling a
+module also recursively precompiles any modules that are imported
+therein.  If you know that it is *not* safe to precompile your module
+(for the reasons described below), you should put
+``__precompile__(false)`` in the module file to cause ``Base.compilecache`` to
+throw an error (and thereby prevent the module from being imported by
+any other precompiled module).
 
 In order to make your module work with precompilation,
 however, you may need to change your module to explicitly separate any
@@ -379,15 +392,15 @@ Other known potential failure scenarios include:
        # or move the assignment into the runtime:
        __init__() = global mystdout = Base.STDOUT #= also works =#
 
-Several additional restrictions are placed on the operations that can be done while compiling code
+Several additional restrictions are placed on the operations that can be done while precompiling code
 to help the user avoid other wrong-behavior situations:
 
 1. Calling ``eval`` to cause a side-effect in another module.
-   This will also cause a warning to be emitted when the incremental compile flag is set.
+   This will also cause a warning to be emitted when the incremental precompile flag is set.
 
 2. ``global const`` statements from local scope after ``__init__()`` has been started (see issue #12010 for plans to add an error for this)
 
-3. Replacing a module (or calling ``workspace()``) is a runtime error while doing an incremental compile.
+3. Replacing a module (or calling ``workspace()``) is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 

@@ -1657,7 +1657,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                         jl_errorf("invalid redefinition of constant %s", mod->name->name); // this also throws
                     }
                     if (jl_generating_output() && jl_options.incremental) {
-                        jl_errorf("cannot replace module %s during incremental compile", mod->name->name);
+                        jl_errorf("cannot replace module %s during incremental precompile", mod->name->name);
                     }
                     jl_printf(JL_STDERR, "WARNING: replacing module %s\n", mod->name->name);
                 }

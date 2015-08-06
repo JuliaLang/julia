@@ -28,13 +28,19 @@ New language features
   * The syntax `function foo end` can be used to introduce a generic function without
     yet adding any methods ([#8283]).
 
-  * Incremental compilation of modules: `Base.compile(module::Symbol)` imports the named module,
-    but instead of loading it into the current session saves the result of compiling it in
+  * Incremental precompilation of modules: call ``__precompile__()`` at the top of a
+    module file to automatically precompile it when it is imported ([#12491]), or manually
+    run `Base.compile(modulename)`. The resulting precompiled `.ji` file is saved in
     `~/.julia/lib/v0.4` ([#8745]).
 
-      * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.
+      * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.  In particular, to be safely precompilable a module may need an `__init__` function to separate code that must be executed at runtime rather than precompile-time.  Modules that are *not* precompilable should call `__precompile__(false)`.
 
-      * New option `--output-incremental={yes|no}` added to invoke the equivalent of ``Base.compile`` from the command line.
+      * The precompiled `.ji` file includes a list of dependencies (modules and files that
+        were imported/included at precompile-time), and the module is automatically recompiled
+        upon `import` when any of its dependencies have changed.  Explicit dependencies
+        on other files can be declared with `include_dependency(path)` ([#12458]).
+
+      * New option `--output-incremental={yes|no}` added to invoke the equivalent of ``Base.compilecache`` from the command line.
 
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
@@ -1557,3 +1563,5 @@ Too numerous to mention.
 [#12137]: https://github.com/JuliaLang/julia/issues/12137
 [#12162]: https://github.com/JuliaLang/julia/issues/12162
 [#12393]: https://github.com/JuliaLang/julia/issues/12393
+[#12458]: https://github.com/JuliaLang/julia/issues/12458
+[#12491]: https://github.com/JuliaLang/julia/issues/12491
