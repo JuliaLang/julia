@@ -18,11 +18,13 @@ rr=RemoteRef()
 a = rand(5,5)
 put!(rr, a)
 @test rr[2,3] == a[2,3]
+@test rr[] == a
 
 rr=RemoteRef(workers()[1])
 a = rand(5,5)
 put!(rr, a)
 @test rr[1,5] == a[1,5]
+@test rr[] == a
 
 dims = (20,20,20)
 
