@@ -460,7 +460,7 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef
+type RemoteRef{RemoteStore}
     where::Int
     whence::Int
     id::Int
@@ -488,14 +488,13 @@ end
 
 RemoteRef(w::LocalProcess) = RemoteRef(w.id)
 RemoteRef(w::Worker) = RemoteRef(w.id)
-RemoteRef(pid::Integer=myid()) = RemoteRef(pid, myid(), next_ref_id())
+RemoteRef(pid::Integer=myid()) = RemoteRef(def_rv_channel, pid)
 
 function RemoteRef(f::Function, pid::Integer=myid())
-    remotecall_fetch(pid, f-> begin
-        rr = RemoteRef()
-        lookup_ref(rr2id(rr), f)
-        rr
-    end, f)
+    remotecall_fetch(pid, (f, rrid) -> begin
+        rv=lookup_ref(rrid, f)
+        RemoteRef{typeof(rv.c)}(myid(), rrid[1], rrid[2])
+    end, f, next_rrid_tuple())
 end
 
 hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
