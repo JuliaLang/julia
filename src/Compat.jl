@@ -533,4 +533,14 @@ if VERSION < v"0.4.0-dev+5697"
     export Mmap
 end
 
+if VERSION < v"0.4.0-dev+6521"
+    __precompile__(::Bool) = nothing
+    export __precompile__
+end
+
+if VERSION < v"0.4.0-dev+6506"
+    include_dependency(::AbstractString) = nothing
+    export include_dependency
+end
+
 end # module
