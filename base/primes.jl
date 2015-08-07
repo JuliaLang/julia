@@ -6,31 +6,42 @@
 #     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
 #     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
 #
-function primesmask(s::AbstractVector{Bool})
-    n = length(s)
-    n < 2 && return s; s[2] = true
-    n < 3 && return s; s[3] = true
-    r = isqrt(n)
-    for x = 1:r
-        xx = x*x
-        for y = 1:r
-            yy = y*y
-            i, j, k = 4xx+yy, 3xx+yy, 3xx-yy
-            i <= n && (s[i] $= (i%12==1)|(i%12==5))
-            j <= n && (s[j] $= (j%12==7))
-            1 <= k <= n && (s[k] $= (x>y)&(k%12==11))
+function primesmask(sieve::AbstractVector{Bool})
+    @inbounds begin
+        limit = length(sieve)
+        limit < 2 && return sieve; sieve[2] = true
+        limit < 3 && return sieve; sieve[3] = true
+        r = isqrt(limit)    # highest factor
+        for x = 1:r; x² = x*x
+            for y = 1:r; y² = y*y
+                n = 4x² + y²
+                if n ≤ limit && (n % 12 == 1 || n % 12 == 5)
+                    sieve[n] = !sieve[n]
+                end
+                n = 3x² + y²
+                if n ≤ limit && n % 12 == 7
+                    sieve[n] = !sieve[n]
+                end
+                n = 3x² - y²
+                if x > y && n ≤ limit && n % 12 == 11
+                    sieve[n] = !sieve[n]
+                end
+            end
+        end
+        for i = 5:r; i² = i*i
+            if sieve[i]
+                for j = i²:i²:limit
+                    sieve[j] = false
+                end
+            end
         end
     end
-    for i = 5:r
-        s[i] && (s[i*i:i*i:n] = false)
-    end
-    return s
+    return sieve
 end
-primesmask(n::Int) = primesmask(falses(n))
-primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
-    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
-primes(n::Union{Integer,AbstractVector{Bool}}) = find(primesmask(n))
+"Returns a collection of the prime numbers ≤ `limit`."
+primes(limit::Integer) = limit <= typemax(Int) ? find(primesmask(falses(Int(limit)))) :
+    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $limit"))
 
 const PRIMES = primes(2^16)
 
