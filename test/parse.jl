@@ -274,3 +274,15 @@ for T in (UInt8,UInt16,UInt32,UInt64)
 end
 
 @test parse("1 == 2|>3") == Expr(:comparison, 1, :(==), Expr(:call, :(|>), 2, 3))
+
+# issue #12501 and pr #12502
+parse("""
+      baremodule A
+      "a" in b
+      end
+      """)
+parse("""
+      baremodule A
+      "a"
+      end
+      """)
