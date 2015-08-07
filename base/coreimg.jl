@@ -17,6 +17,9 @@ print(x::ANY) = show(x)
 println(x::ANY) = ccall(:jl_, Void, (Any,), x) # includes a newline
 print(a::ANY...) = for x=a; print(x); end
 
+# Doc macro shim.
+macro doc(str, def) Expr(:escape, def) end
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("reflection.jl")
@@ -45,9 +48,6 @@ typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  DenseArra
 typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  DenseArray{T,2}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 include("array.jl")
-
-# Doc macro shim
-macro doc(ex) esc(ex.args[2]) end
 
 #TODO: eliminate Dict from inference
 include("hashing.jl")

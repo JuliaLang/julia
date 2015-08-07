@@ -263,11 +263,11 @@ function funcdoc(meta, def, def′, name)
     end
 end
 
-function typedoc(meta, def, name)
+function typedoc(meta, def, def′, name)
     quote
         @init
         $(esc(def))
-        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def))))
+        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def′))))
         nothing
     end
 end
@@ -304,15 +304,14 @@ function docm(meta, def, define = true)
 
     fexpr(def′)                && return funcdoc(meta, def, def′, namify(def′))
     isexpr(def′, :call)        && return funcdoc(meta, nothing, def′, namify(def′))
-    isexpr(def′, :type)        && return typedoc(meta, def, namify(def′.args[2]))
+    isexpr(def′, :type)        && return typedoc(meta, def, def′, namify(def′.args[2]))
     isexpr(def′, :macro)       && return namedoc(meta, def, symbol("@", namify(def′)))
     isexpr(def′, :abstract)    && return namedoc(meta, def, namify(def′))
     isexpr(def′, :bitstype)    && return namedoc(meta, def, def′.args[2])
     isexpr(def′, :module)      && return namedoc(meta, def, def′.args[2])
     isexpr(def′, :(=), :const) && return namedoc(meta, def, namify(def′))
 
-    isexpr(def′, :macrocall) && (def = namify(def′))
-    return objdoc(meta, def)
+    objdoc(meta, def′)
 end
 
 function docm(ex)
