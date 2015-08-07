@@ -1166,8 +1166,8 @@ immutable UUID
 end
 UUID(u::AbstractString) = convert(UUID, u)
 
-function uuid4()
-    u = rand(UInt128)
+function uuid4(rng::AbstractRNG=GLOBAL_RNG)
+    u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
     UUID(u)
