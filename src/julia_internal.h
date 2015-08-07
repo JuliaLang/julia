@@ -176,6 +176,23 @@ DLLEXPORT void jl_raise_debugger(void);
 #ifdef _OS_DARWIN_
 DLLEXPORT void attach_exception_port(void);
 #endif
+// Set *name and *filename to either NULL or malloc'd string
+void jl_getFunctionInfo(char **name, size_t *line, char **filename,
+                        uintptr_t pointer, int *fromC, int skipC);
+
+// *to is NULL or malloc'd pointer, from is allowed to be NULL
+static inline char *jl_copy_str(char **to, const char *from)
+{
+    if (!from) {
+        free(*to);
+        *to = NULL;
+        return NULL;
+    }
+    size_t len = strlen(from) + 1;
+    *to = (char*)realloc(*to, len);
+    memcpy(*to, from, len);
+    return *to;
+}
 
 // timers
 // Returns time in nanosec
