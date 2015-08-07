@@ -131,6 +131,30 @@ function include_dependency(path::AbstractString)
     return nothing
 end
 
+# We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
+# and PrecompilableError(false) when a module doesn't want to be precompiled but is
+immutable PrecompilableError <: Exception
+    isprecompilable::Bool
+end
+function show(io::IO, ex::PrecompilableError)
+    if ex.isprecompilable
+        print(io, "__precompile__(true) is only allowed in module files being imported")
+    else
+        print(io, "__precompile__(false) is not allowed in files that are being precompiled")
+    end
+end
+precompilableerror(ex::PrecompilableError, c) = ex.isprecompilable == c
+precompilableerror(ex::LoadError, c) = precompilableerror(ex.error, c)
+precompilableerror(ex, c) = false
+
+# put at the top of a file to force it to be precompiled (true), or
+# to be prevent it from being precompiled (false).
+function __precompile__(isprecompilable::Bool=true)
+    if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ()))
+        throw(PrecompilableError(isprecompilable))
+    end
+end
+
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
 function require(mod::Symbol)
@@ -155,8 +179,8 @@ function require(mod::Symbol)
             return
         end
         if JLOptions().incremental != 0
-            # spawn off a new incremental compile task from node 1 for recursive `require` calls
-            cachefile = compile(mod)
+            # spawn off a new incremental precompile task from node 1 for recursive `require` calls
+            cachefile = compilecache(mod)
             if nothing === _require_from_serialized(1, mod, cachefile, last)
                 warn("require failed to create a precompiled cache file")
             end
@@ -166,13 +190,26 @@ function require(mod::Symbol)
         name = string(mod)
         path = find_in_node_path(name, source_dir(), 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
-        if last && myid() == 1 && nprocs() > 1
-            # broadcast top-level import/using from node 1 (only)
-            content = open(readall, path)
-            refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in procs() ]
-            for r in refs; wait(r); end
-        else
-            eval(Main, :(Base.include_from_node1($path)))
+        try
+            if last && myid() == 1 && nprocs() > 1
+                # include on node 1 first to check for PrecompilableErrors
+                eval(Main, :(Base.include_from_node1($path)))
+
+                # broadcast top-level import/using from node 1 (only)
+                refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in filter(x -> x != 1, procs()) ]
+                for r in refs; wait(r); end
+            else
+                eval(Main, :(Base.include_from_node1($path)))
+            end
+        catch ex
+            if !precompilableerror(ex, true)
+                rethrow() # rethrow non-precompilable=true errors
+            end
+            isinteractive() && info("Precompiling module $mod...")
+            cachefile = compilecache(mod)
+            if nothing === _require_from_serialized(1, mod, cachefile, last)
+                error("__precompile__(true) but require failed to create a precompiled cache file")
+            end
         end
     finally
         toplevel_load = last
@@ -284,9 +321,9 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
     return pobj
 end
 
-compile(mod::Symbol) = compile(string(mod))
-function compile(name::ByteString)
-    myid() == 1 || error("can only compile from node 1")
+compilecache(mod::Symbol) = compilecache(string(mod))
+function compilecache(name::ByteString)
+    myid() == 1 || error("can only precompile from node 1")
     path = find_in_path(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
     cachepath = LOAD_CACHE_PATH[1]
@@ -294,7 +331,9 @@ function compile(name::ByteString)
         mkpath(cachepath)
     end
     cachefile = abspath(cachepath, name*".ji")
-    create_expr_cache(path, cachefile)
+    if !success(create_expr_cache(path, cachefile))
+        error("Failed to precompile $name to $cachefile")
+    end
     return cachefile
 end
 
