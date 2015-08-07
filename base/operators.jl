@@ -101,7 +101,7 @@ for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun
     end
 end
 
-\(x::Number,y::Number) = y/x
+\(x,y) = (y'/x')'
 
 # .<op> defaults to <op>
 ./(x::Number,y::Number) = x/y
