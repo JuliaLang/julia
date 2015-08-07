@@ -1101,6 +1101,7 @@ export
     workspace,
 
 # loading source files
+    __precompile__,
     evalfile,
     include,
     include_string,
