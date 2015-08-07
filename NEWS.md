@@ -28,7 +28,7 @@ New language features
   * The syntax `function foo end` can be used to introduce a generic function without
     yet adding any methods ([#8283]).
 
-  * Incremental precompilation of modules: call ``__precompile__()`` at the top of a
+  * Incremental precompilation of modules: call `VERSION >= v"0.4.0-dev+6521" && __precompile__()` at the top of a
     module file to automatically precompile it when it is imported ([#12491]), or manually
     run `Base.compile(modulename)`. The resulting precompiled `.ji` file is saved in
     `~/.julia/lib/v0.4` ([#8745]).
@@ -40,7 +40,7 @@ New language features
         upon `import` when any of its dependencies have changed.  Explicit dependencies
         on other files can be declared with `include_dependency(path)` ([#12458]).
 
-      * New option `--output-incremental={yes|no}` added to invoke the equivalent of ``Base.compilecache`` from the command line.
+      * New option `--output-incremental={yes|no}` added to invoke the equivalent of `Base.compilecache` from the command line.
 
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
