@@ -210,6 +210,7 @@ import Base.Random: uuid4, UUID
 # UUID
 a = uuid4()
 @test a == UUID(string(a)) == UUID(utf16(string(a))) == UUID(utf32(string(a)))
+@test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
