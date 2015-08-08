@@ -809,6 +809,7 @@ endif
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(call make-install,$(LIBUV_SRC_DIR),)
 	$(INSTALL_NAME_CMD)libuv.$(SHLIB_EXT) $(build_shlibdir)/libuv.$(SHLIB_EXT)
+	touch -c $@
 
 clean-libuv:
 	-$(MAKE) -C $(BUILDDIR)/$(LIBUV_SRC_DIR) clean
@@ -1441,6 +1442,7 @@ $(BUILDDIR)/fftw-$(FFTW_VER)-%/config.status: $(SRCDIR)/srccache/fftw-$(FFTW_VER
 
 $(FFTW_SINGLE_SRC_TARGET): $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C $(dir $<)
+	touch -c $@
 $(BUILDDIR)/fftw-$(FFTW_VER)-single/checked: $(FFTW_SINGLE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
@@ -1463,6 +1465,7 @@ endif
 
 $(FFTW_DOUBLE_SRC_TARGET): $(BUILDDIR)/fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C $(dir $<)
+	touch -c $@
 $(BUILDDIR)/fftw-$(FFTW_VER)-double/checked: $(FFTW_DOUBLE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
@@ -1781,6 +1784,7 @@ $(BUILDDIR)/gmp-$(GMP_VER)/config.status: $(SRCDIR)/srccache/gmp-$(GMP_VER)/conf
 	touch -c $@
 $(GMP_SRC_TARGET): $(BUILDDIR)/gmp-$(GMP_VER)/config.status
 	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	touch -c $@
 $(BUILDDIR)/gmp-$(GMP_VER)/checked: $(GMP_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check
@@ -1846,6 +1850,7 @@ $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/
 	touch -c $@
 $(MPFR_SRC_TARGET): $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status
 	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	touch -c $@
 $(BUILDDIR)/mpfr-$(MPFR_VER)/checked: $(MPFR_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
