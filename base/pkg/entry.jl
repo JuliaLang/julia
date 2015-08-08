@@ -551,7 +551,9 @@ function resolve(
 end
 
 function write_tag_metadata(repo::GitRepo, pkg::AbstractString, ver::VersionNumber, commit::AbstractString, force::Bool=false)
-    content = LibGit2.cat(repo, LibGit2.GitBlob, "$commit:REQUIRE")
+    content = with(GitRepo,pkg) do pkg_repo
+        LibGit2.cat(pkg_repo, LibGit2.GitBlob, "$commit:REQUIRE")
+    end
     reqs = content != nothing ? Reqs.read(split(content, '\n', keep=false)) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
@@ -686,7 +688,6 @@ function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=
                 if LibGit2.isdirty(repo)
                     info("Committing METADATA for $pkg")
                     LibGit2.commit(repo, "Tag $pkg v$ver")
-                    #run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
                 else
                     info("No METADATA changes to commit")
                 end
