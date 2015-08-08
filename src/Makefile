@@ -4,22 +4,28 @@ BUILDDIR := .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
+ifeq ($(USE_COPY_STACKS),1)
+JCFLAGS += -DCOPY_STACKS
+endif
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS = \
+SRCS := \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	llvm-simdloop simplevector
+ifeq ($(JULIAGC),MARKSWEEP)
+SRCS += gc
+endif
 
-HEADERS = $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
 #  for gcc/clang, suggested content is:
 #  #include_next <options.h>
 #  #define ARGUMENT_TO_OVERRIDE 1
-FLAGS = \
+FLAGS := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
@@ -31,22 +37,22 @@ endif
 
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
-LLVMLINK = $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs) $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --system-libs 2> /dev/null)
+LLVMLINK := $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs) $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK = $(shell $(LLVM_CONFIG) --ldflags) -lLLVM
+LLVMLINK := $(shell $(LLVM_CONFIG) --ldflags) -lLLVM
 else
-LLVMLINK = $(shell $(LLVM_CONFIG) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG) --version)
+LLVMLINK := $(shell $(LLVM_CONFIG) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG) --version)
 endif
 FLAGS += -DLLVM_SHLIB
 endif
 
-COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
-DEBUG_LIBS = $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
-RELEASE_LIBS = $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(COMMON_LIBS)
+COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
+DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
+RELEASE_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(COMMON_LIBS)
 
-OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
@@ -54,20 +60,12 @@ SHIPFLAGS += $(FLAGS)
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
 
-ifeq ($(JULIAGC),MARKSWEEP)
-SRCS += gc
-endif
-
-ifeq ($(USE_COPY_STACKS),1)
-JCFLAGS += -DCOPY_STACKS
-endif
-
-FLISP_EXECUTABLE_debug = $(BUILDDIR)/flisp/flisp-debug
-FLISP_EXECUTABLE_release = $(BUILDDIR)/flisp/flisp
+FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
+FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp
 ifeq ($(OS),WINNT)
-FLISP_EXECUTABLE = $(FLISP_EXECUTABLE_release)
+FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
 else
-FLISP_EXECUTABLE = $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
+FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
 endif
 
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
@@ -78,13 +76,15 @@ release debug: %: libjulia-%
 $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
+LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
+
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
@@ -130,12 +130,12 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	mv $@.$(JULIA_BUILD_MODE).tmp $@
 
 ifneq ($(USEMSVC), 1)
-CXXLD = $(CXX) -shared
+CXXLD := $(CXX) -shared
 ifeq ($(OS),WINNT)
 CXXLD += -Wl,--out-implib,$(build_libdir)/$(notdir $@).a
 endif
 else
-CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
+CXXLD := $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
@@ -148,9 +148,9 @@ $(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
 ifeq ($(SHLIB_EXT), so)
-  SONAME = -Wl,-soname=libjulia.so
+  SONAME := -Wl,-soname=libjulia.so
 else
-  SONAME =
+  SONAME :=
 endif
 
 $(build_shlibdir)/libjulia.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)

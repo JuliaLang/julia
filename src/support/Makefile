@@ -6,7 +6,7 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS = hashing timefuncs ptrhash operators \
+SRCS := hashing timefuncs ptrhash operators \
 	utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
@@ -20,12 +20,12 @@ SRCS += _setjmp.win64 _longjmp.win64
 endif
 endif
 
-HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 
-OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
+FLAGS := $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden
 endif

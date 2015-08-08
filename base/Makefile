@@ -4,21 +4,21 @@ JULIAHOME := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
-TAGGED_RELEASE_BANNER = ""
+TAGGED_RELEASE_BANNER := ""
 
 ifneq ($(USEMSVC), 1)
-CPP_STDOUT = $(CPP) -P
+CPP_STDOUT := $(CPP) -P
 else
-CPP_STDOUT = $(CPP) -E
+CPP_STDOUT := $(CPP) -E
 endif
 
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
-PCRE_CONST = 0x[0-9a-fA-F]+|[0-9]+
+PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
 ifeq ($(USE_SYSTEM_PCRE), 1)
-  PCRE_INCL_PATH = $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
+  PCRE_INCL_PATH := $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
 else
-  PCRE_INCL_PATH = $(build_includedir)/pcre2.h
+  PCRE_INCL_PATH := $(build_includedir)/pcre2.h
 endif
 
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
