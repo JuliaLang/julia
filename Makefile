@@ -21,7 +21,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(addprefix $(BUILDROOT)/,. base src ui doc deps test test/perf)
+BUILDDIRS := $(abspath $(addprefix $(BUILDROOT)/,. base src ui doc deps test test/perf))
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -30,6 +30,22 @@ $(BUILDDIRMAKE): | $(BUILDDIRS)
 	@echo 'BUILDROOT=$(BUILDROOT)' >> $@
 	@echo 'include $(JULIAHOME)/$(patsubst $(BUILDROOT)/%,%,$(@:/Makefile=))/Makefile' >> $@
 julia-deps: | $(BUILDDIRMAKE)
+configure-y: | $(BUILDDIRMAKE)
+configure:
+ifeq ("$(origin O)", "command line")
+	@if [ "$$(ls '$(BUILDROOT)' 2> /dev/null)" ]; then \
+		echo 'WARNING: configure called on non-empty directory $(BUILDROOT)'; \
+		read -p "Proceed [y/n]? " answer; \
+	else \
+		answer=y;\
+	fi; \
+	[ $$answer = 'y' ] && $(MAKE) configure-$$answer
+else
+	$(error "cannot rerun configure from within a build directory")
+endif
+else
+configure:
+	$(error "must specify O=builddir to run the Julia `make configure` target")
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
@@ -124,15 +140,16 @@ release-candidate: release testall
 	@echo
 
 	@echo 1. Remove deprecations in base/deprecated.jl
-	@echo 2. Bump VERSION
-	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 5. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
-	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 8. Update checksums on AWS for tarball and packaged binaries
-	@echo 9. Announce on mailing lists
-	@echo 10. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 2. Update references to the julia version in the source directories, such as in README.md
+	@echo 3. Bump VERSION
+	@echo 4. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 5. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 6. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
+	@echo 7. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 8. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 9. Update checksums on AWS for tarball and packaged binaries
+	@echo 10. Announce on mailing lists
+	@echo 11. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
