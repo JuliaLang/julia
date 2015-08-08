@@ -226,11 +226,16 @@ ifneq (,$(findstring MSYS,$(BUILD_OS)))
 override BUILD_OS := WINNT
 endif
 
+ifeq ($(BUILD_OS), WINNT)
+PATH := $(PATH):$(build_libdir):$(build_private_libdir):/c/Program Files/7-zip:$(JULIAHOME)/dist-extras
+HOST_EXE = .exe
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+HOST_EXE = .exe
+else
+HOST_EXE =
+endif
 ifeq ($(OS), WINNT)
 fPIC =
-ifeq ($(BUILD_OS), WINNT)
-PATH := $(PATH):$(build_libdir):$(build_private_libdir):/c/Program Files/7-zip
-endif
 EXE = .exe
 else
 fPIC = -fPIC
@@ -601,14 +606,14 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config$(EXE)
+LLVM_CONFIG ?= llvm-config$(HOST_EXE)
 JCPPFLAGS+=-DSYSTEM_LLVM
 LLVM_VER = $(shell $(LLVM_CONFIG) --version)
 else
 ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG = $(build_bindir)/llvm-config$(EXE)
+LLVM_CONFIG = $(build_bindir)/llvm-config$(HOST_EXE)
 else
-LLVM_CONFIG = $(build_bindir)/llvm-config-host
+LLVM_CONFIG = $(build_bindir)/llvm-config-host$(HOST_EXE)
 endif
 endif
 
