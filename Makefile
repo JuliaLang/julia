@@ -8,11 +8,11 @@ include $(JULIAHOME)/Make.inc
 # prefix/share/julia/site/VERSDIR (not prefix/share/julia/VERSDIR/site ...
 # so that prefix/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
-VERSDIR = v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
+VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
 #file name of make binary-dist result
 ifeq ($(JULIA_BINARYDIST_TARNAME),)
-	JULIA_BINARYDIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
+	JULIA_BINARYDIST_TARNAME := julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
 endif
 
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
@@ -208,10 +208,10 @@ $(build_bindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_bi
 
 
 # public libraries, that are installed in $(prefix)/lib
-JL_LIBS = julia julia-debug
+JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = suitesparse_wrapper Rmath
+JL_PRIVATE_LIBS := suitesparse_wrapper Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif

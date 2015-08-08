@@ -8,28 +8,28 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS = repl
+SRCS := repl
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
 endif
 
-FLAGS = -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
+FLAGS := -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
 
-OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
+LLVMLINK := $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
 else
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
+LLVMLINK := $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
 endif
 else
-LLVMLINK =
+LLVMLINK :=
 endif
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(LLVMLINK) $(RPATH)
 
@@ -69,9 +69,9 @@ julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 
 ifneq ($(USEMSVC), 1)
-CXXLD = $(CXX)
+CXXLD := $(CXX)
 else
-CXXLD = $(LD)
+CXXLD := $(LD)
 endif
 
 $(build_bindir)/julia$(EXE): $(OBJS)
