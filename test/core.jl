@@ -3187,3 +3187,9 @@ hashaspadding2 = HasHasPadding(HasPadding(true,1))
 unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
 unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
 @test object_id(hashaspadding) == object_id(hashaspadding2)
+
+# issue #12517
+let x = (1,2)
+    @eval f() = Val{$x}
+    @test f() === Val{(1,2)}
+end

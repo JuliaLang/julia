@@ -1589,14 +1589,18 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
     if (!jl_is_leaf_type((jl_value_t*)ty))
         return false;
     jl_sym_t *name = NULL;
-    if (jl_is_quotenode(fld) && jl_is_symbol(jl_fieldref(fld,0))) {
+    if (jl_is_quotenode(fld) && jl_is_symbol(jl_fieldref(fld,0)))
         name = (jl_sym_t*)jl_fieldref(fld,0);
-    }
+    int idx = -1;
+    if (name)
+        idx = jl_field_index(ty, name, 0);
+    else if (jl_is_long(fld))
+        idx = jl_unbox_long(fld)-1;
+    else if (jl_is_quotenode(fld) && jl_is_long(jl_fieldref(fld,0)))
+        idx = jl_unbox_long(jl_fieldref(fld,0))-1;
     for(size_t i=0; i < jl_svec_len(ty->types); i++) {
-        if (!(ty->fields[i].isptr ||
-              (name && name != jl_field_name(ty,i)))) {
+        if (!(ty->fields[i].isptr || (idx >= 0 && (size_t)idx != i)))
             return false;
-        }
     }
     return true;
 }
