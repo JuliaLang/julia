@@ -2,6 +2,7 @@
 
 using Base.Test
 
+olderr = STDERR
 dir = mktempdir()
 insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
@@ -32,8 +33,15 @@ try
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't load from the image:
-    println(STDERR, "\nNOTE: The following 'replacing module' warning indicates normal operation:")
-    @test nothing !== Base._require_from_serialized(myid(), Foo_module, true)
+    try
+        rd, wr = redirect_stderr()
+        @test nothing !== Base._require_from_serialized(myid(), Foo_module, true)
+        sleep(5)
+        redirect_stderr(olderr)
+    catch exc
+        redirect_stderr(olderr)
+        rethow(exc)
+    end
 
     let Foo = eval(Main, Foo_module)
         @test Foo.foo(17) == 18
@@ -57,8 +65,14 @@ try
               end
               """)
     end
-    println(STDERR, "\nNOTE: The following 'LoadError: __precompile__(false)' indicates normal operation")
-    @test_throws ErrorException Base.compilecache("Baz") # from __precompile__(false)
+    try
+        rd, wr = redirect_stderr()
+        Base.compilecache("Baz") # from __precompile__(false)
+    catch exc
+        redirect_stderr(olderr)
+        isa(exc, ErrorException) || rethrow(exc)
+        search(exc.msg, "__precompile__(false)") == 0 && rethrow(exc)
+    end
 
     # Issue #12720
     FooBar_file = joinpath(dir, "FooBar.jl")
@@ -79,9 +93,18 @@ try
               end
               """)
     end
-    println(STDERR, "\nNOTE: The following 'LoadError: break me' indicates normal operation")
-    @test_throws ErrorException Base.require(:FooBar)
+    try
+        rd, wr = redirect_stderr()
+        Base.require(:FooBar)
+    catch exc
+        redirect_stderr(olderr)
+        isa(exc, ErrorException) || rethrow(exc)
+        search(exc.msg, "ERROR: LoadError: break me") == 0 && rethrow(exc)
+    end
 finally
+    if STDERR != olderr
+        redirect_stderr(olderr)
+    end
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
