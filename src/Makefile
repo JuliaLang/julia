@@ -88,12 +88,13 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) 
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(SRCDIR)/bin2hex.scm < $< > $@)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
 $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm mk_julia_flisp_boot.scm) \
 		$(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(SRCDIR)/mk_julia_flisp_boot.scm $(dir $<) $(notdir $<) $@)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) \
+		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp)
