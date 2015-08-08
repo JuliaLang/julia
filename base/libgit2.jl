@@ -151,7 +151,7 @@ function fetch{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb()))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     catch err
         warn("fetch: $err")
@@ -172,7 +172,7 @@ function push{T<:AbstractString}(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb))
+        po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb()))
         push(rmt, refspecs, force=force, options=po)
     finally
         finalize(rmt)

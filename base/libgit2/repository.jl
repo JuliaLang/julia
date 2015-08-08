@@ -190,9 +190,10 @@ end
 
 function fetchheads(repo::GitRepo)
     fhr = Ref{Vector{FetchHead}}(FetchHead[])
+    ffcb = fetchhead_foreach_cb()
     @check ccall((:git_repository_fetchhead_foreach, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                   repo.ptr, fetchhead_foreach_cb, fhr)
+                   repo.ptr, ffcb, fhr)
     return fhr[]
 end
 
