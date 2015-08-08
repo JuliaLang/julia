@@ -24,9 +24,9 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK := $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
-LLVMLINK := $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
 endif
 else
 LLVMLINK :=
