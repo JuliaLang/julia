@@ -189,7 +189,8 @@ endif
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE:=
-HOSTCC := $(CC)
+# delayed expansion of $(CC), since it won't be computed until later
+HOSTCC = $(CC)
 else
 HOSTCC := gcc
 override OPENBLAS_DYNAMIC_ARCH := 1
