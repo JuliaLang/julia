@@ -229,11 +229,11 @@ endif
 
 ifeq ($(BUILD_OS), WINNT)
 PATH := $(PATH):$(build_libdir):$(build_private_libdir):/c/Program Files/7-zip:$(JULIAHOME)/dist-extras
-HOST_EXE := .exe
+BUILD_EXE := .exe
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-HOST_EXE := .exe
+BUILD_EXE := .exe
 else
-HOST_EXE :=
+BUILD_EXE :=
 endif
 ifeq ($(OS), WINNT)
 fPIC :=
@@ -607,16 +607,29 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config$(HOST_EXE)
 JCPPFLAGS+=-DSYSTEM_LLVM
-LLVM_VER := $(shell $(LLVM_CONFIG) --version)
+endif
+
+ifeq ($(origin LLVM_CONFIG), undefined)
+ifeq ($(USE_SYSTEM_LLVM), 1)
+LLVM_CONFIG := llvm-config$(EXE)
 else
-ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG := $(build_bindir)/llvm-config$(HOST_EXE)
-else
-LLVM_CONFIG := $(build_bindir)/llvm-config-host$(HOST_EXE)
+LLVM_CONFIG := $(build_bindir)/llvm-config$(EXE)
+endif
+endif # LLVM_CONFIG undefined
+
+ifneq ($(BUILD_OS),$(OS))
+LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
+ifeq (exists, $$(shell [ -d '$(LLVM_CONFIG_HOST)' ] && echo exists ))
+ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
+# llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
+# use delayed expansion (= not :=) because spawn isn't defined until later
+LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
 endif
 endif
+else
+LLVM_CONFIG_HOST := $(LLVM_CONFIG)
+endif # SYSTEM_LLVM
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG := pcre2-config
