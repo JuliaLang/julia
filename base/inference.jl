@@ -181,22 +181,24 @@ const typeof_tfunc = function (t)
     if isType(t)
         t = t.parameters[1]
         if isa(t,TypeVar)
-            Type
+            DataType
         else
             Type{typeof(t)}
         end
     elseif isa(t,DataType)
         if isleaftype(t)
             Type{t}
+        elseif t === Any
+            DataType
         else
             Type{TypeVar(:_,t)}
         end
     elseif isa(t,Union)
         Union{map(typeof_tfunc, t.types)...}
-    elseif isa(t,TypeVar)
+    elseif isa(t,TypeVar) && !(Any <: t.ub)
         Type{t}
     else
-        Type
+        DataType
     end
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc)
