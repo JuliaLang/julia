@@ -254,7 +254,7 @@ end
 
 function funcdoc(meta, def, def′, name)
     f = esc(name)
-    m = :(which($f, $(esc(signature(def′)))))
+    m = :(methods($f, $(esc(signature(def′))))[1])
     quote
         @init
         $(esc(def))
