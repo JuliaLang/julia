@@ -171,3 +171,16 @@ let fd = meta(I11798)[I11798.read]
     @test fd.order[1] == which(I11798.read, Tuple{Any})
     @test fd.meta[fd.order[1]] == doc"read"
 end
+
+module I12515
+
+immutable EmptyType{T} end
+
+"A new method"
+Base.collect{T}(::Type{EmptyType{T}}) = "borked"
+
+end
+
+let fd = meta(I12515)[Base.collect]
+    @test fd.order[1].sig == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+end
