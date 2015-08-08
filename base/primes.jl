@@ -1,36 +1,119 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Sieve of Atkin for generating primes:
-#     https://en.wikipedia.org/wiki/Sieve_of_Atkin
-# Code very loosely based on this:
-#     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
-#     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
-#
-function primesmask(s::AbstractVector{Bool})
-    n = length(s)
-    n < 2 && return s; s[2] = true
-    n < 3 && return s; s[3] = true
-    r = isqrt(n)
-    for x = 1:r
-        xx = x*x
-        for y = 1:r
-            yy = y*y
-            i, j, k = 4xx+yy, 3xx+yy, 3xx-yy
-            i <= n && (s[i] $= (i%12==1)|(i%12==5))
-            j <= n && (s[j] $= (j%12==7))
-            1 <= k <= n && (s[k] $= (x>y)&(k%12==11))
+# Primes generating functions
+#     https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
+#     https://en.wikipedia.org/wiki/Wheel_factorization
+#     http://primesieve.org
+#     Jonathan Sorenson, "An analysis of two prime number sieves", Computer Science Technical Report Vol. 1028, 1991
+const wheel         = [4,  2,  4,  2,  4,  6,  2,  6]
+const wheel_primes  = [7, 11, 13, 17, 19, 23, 29, 31]
+const wheel_indices = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7 ]
+
+@inline wheel_index(n) = ( (d, r) = divrem(n - 1, 30); return 8d + wheel_indices[r+1] )
+@inline wheel_prime(n) = ( (d, r) = ((n - 1) >>> 3, (n - 1) & 7); return 30d + wheel_primes[r+1] )
+
+function _primesmask(limit::Int)
+    limit < 7 && throw(ArgumentError("limit must be at least 7, got $limit"))
+    n = wheel_index(limit)
+    m = wheel_prime(n)
+    sieve = ones(Bool, n)
+    @inbounds for i = 1:wheel_index(isqrt(limit))
+        if sieve[i]; p = wheel_prime(i)
+            q = p * p
+            j = (i - 1) & 7 + 1
+            while q ≤ m
+                sieve[wheel_index(q)] = false
+                q = q + wheel[j] * p
+                j = j & 7 + 1
+            end
         end
     end
-    for i = 5:r
-        s[i] && (s[i*i:i*i:n] = false)
-    end
-    return s
+    return sieve
 end
-primesmask(n::Int) = primesmask(falses(n))
+
+function _primesmask(lo::Int, hi::Int)
+    7 ≤ lo ≤ hi || throw(ArgumentError("the condition 7 ≤ lo ≤ hi must be met"))
+    lo == 7 && return _primesmask(hi)
+    wlo, whi = wheel_index(lo - 1), wheel_index(hi)
+    m = wheel_prime(whi)
+    sieve = ones(Bool, whi - wlo)
+    small_primes = primes(isqrt(hi))
+    @inbounds for i in 4:length(small_primes)
+        p = small_primes[i]
+        j = wheel_index(2 * div(lo - p - 1, 2p) + 1)
+        q = p * wheel_prime(j + 1); j = j & 7 + 1
+        while q ≤ m
+            sieve[wheel_index(q)-wlo] = false
+            q = q + wheel[j] * p
+            j = j & 7 + 1
+        end
+    end
+    return sieve
+end
+
+# Sieve of the primes up to limit represented as an array of booleans
+function primesmask(limit::Int)
+    limit < 1 && throw(ArgumentError("limit must be at least 1, got $limit"))
+    sieve = falses(limit)
+    limit < 2 && return sieve; sieve[2] = true
+    limit < 3 && return sieve; sieve[3] = true
+    limit < 5 && return sieve; sieve[5] = true
+    limit < 7 && return sieve
+    wheel_sieve = _primesmask(limit)
+    @inbounds for i in eachindex(wheel_sieve)
+        Base.unsafe_setindex!(sieve, wheel_sieve[i], wheel_prime(i))
+    end
+    return sieve
+end
 primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
     throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
-primes(n::Union{Integer,AbstractVector{Bool}}) = find(primesmask(n))
+function primesmask(lo::Int, hi::Int)
+    0 < lo ≤ hi || throw(ArgumentError("the condition 0 < lo ≤ hi must be met"))
+    sieve = falses(hi - lo + 1)
+    lo ≤ 2 ≤ hi && (sieve[3-lo] = true)
+    lo ≤ 3 ≤ hi && (sieve[4-lo] = true)
+    lo ≤ 5 ≤ hi && (sieve[6-lo] = true)
+    hi < 7 && return sieve
+    wheel_sieve = _primesmask(max(7, lo), hi)
+    lsi = lo - 1
+    lwi = wheel_index(lsi)
+    @inbounds for i in eachindex(wheel_sieve)
+        Base.unsafe_setindex!(sieve, wheel_sieve[i], wheel_prime(i + lwi) - lsi)
+    end
+    return sieve
+end
+primesmask{T<:Integer}(lo::T, hi::T) = lo <= hi <= typemax(Int) ? primesmask(Int(lo), Int(hi)) :
+    throw(ArgumentError("both endpoints of the interval to sieve must be ≤ $(typemax(Int)), got $lo and $hi"))
+
+function primes(n::Int)
+    list = Int[]
+    n < 2 && return list; push!(list, 2)
+    n < 3 && return list; push!(list, 3)
+    n < 5 && return list; push!(list, 5)
+    n < 7 && return list
+    sizehint!(list, floor(Int, n / log(n)))
+    sieve = _primesmask(n)
+    @inbounds for i in eachindex(sieve)
+        sieve[i] && push!(list, wheel_prime(i))
+    end
+    return list
+end
+
+function primes(lo::Int, hi::Int)
+    lo ≤ hi || throw(ArgumentError("the condition lo ≤ hi must be met"))
+    list = Int[]
+    lo ≤ 2 ≤ hi && push!(list, 2)
+    lo ≤ 3 ≤ hi && push!(list, 3)
+    lo ≤ 5 ≤ hi && push!(list, 5)
+    hi < 7 && return list
+    sieve = _primesmask(max(7, lo), hi)
+    lwi = wheel_index(lo - 1)
+    @inbounds for i in eachindex(sieve)
+        sieve[i] && push!(list, wheel_prime(i + lwi))
+    end
+    return list
+end
 
 const PRIMES = primes(2^16)
 

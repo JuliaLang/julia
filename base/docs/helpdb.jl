@@ -2947,12 +2947,22 @@ isapprox
 doc"""
 ```rst
 ::
-           primes(n)
+           primes([lo,] hi)
 
-Returns a collection of the prime numbers <= ``n``.
+Returns a collection of the prime numbers (from ``lo``, if specified) up to ``hi``.
 ```
 """
 primes
+
+doc"""
+```rst
+::
+           primesmask([lo,] hi)
+
+Returns a prime sieve, as a ``BitArray``, of the positive integers (from ``lo``, if specified) up to ``hi``. Useful when working with either primes or composite numbers.
+```
+"""
+primesmask
 
 doc"""
 ```rst
