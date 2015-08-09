@@ -597,7 +597,7 @@ function _uv_hook_close(t::Timer)
     unpreserve_handle(t)
     disassociate_julia_struct(t)
     t.handle = C_NULL
-    notify(t.cond)
+    notify_error(t.cond, EOFError())
     nothing
 end
 
@@ -621,10 +621,12 @@ end
 function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     t = Timer(timeout, repeat)
     @schedule begin
-        while isopen(t)
-            wait(t)
-            isopen(t) && cb(t)
-        end
+        try
+            while isopen(t)
+                wait(t)
+                cb(t)
+            end
+        end # ignore possible exception on close()
     end
     t
 end

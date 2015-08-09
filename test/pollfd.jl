@@ -106,3 +106,11 @@ for i in 1:n
         )
     end
 end
+
+# issue #12473
+# make sure 1-shot timers work
+let a = []
+    Timer(t->push!(a,1), 0.01, 0)
+    sleep(0.2)
+    @test a == [1]
+end
