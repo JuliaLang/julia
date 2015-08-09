@@ -228,9 +228,7 @@ end
 
 ## LineEditREPL ##
 
-type LineEditREPL <: AbstractREPL
-    t::TextTerminal
-    hascolor::Bool
+type MIRepl
     prompt_color::AbstractString
     input_color::AbstractString
     answer_color::AbstractString
@@ -244,16 +242,31 @@ type LineEditREPL <: AbstractREPL
     specialdisplay
     interface
     backendref::REPLBackendRef
-    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
-        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing)
+    MIRepl(prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
+        in_help,envcolors,waserror,specialdisplay) =
+    new(prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
+            in_help,envcolors,waserror,specialdisplay)
+end
+
+type LineEditREPL <: AbstractREPL
+    t
+    hascolor::Bool
+    mi::MIRepl
+    LineEditREPL(t,hascolor,args...) =
+        new(t,hascolor,MIRepl(args...,false,nothing))
 end
 outstream(r::LineEditREPL) = r.t
-specialdisplay(r::LineEditREPL) = r.specialdisplay
+specialdisplay(r::MIRepl) = r.specialdisplay
+specialdisplay(r::LineEditREPL) = specialdisplay(r.mi)
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
+function print_response(repl::LineEditREPL, val::ANY, bt, show_value::Bool, have_color::Bool)
+    repl.mi.waserror = bt !== nothing
+    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+end
+
+LineEditREPL(t, envcolors = false) =  LineEditREPL(t,
                                               true,
                                               julia_green,
                                               Base.input_color(),
@@ -263,11 +276,11 @@ LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               false, false, false, envcolors)
 
 type REPLCompletionProvider <: CompletionProvider
-    r::LineEditREPL
+    r::MIRepl
 end
 
 type ShellCompletionProvider <: CompletionProvider
-    r::LineEditREPL
+    r::MIRepl
 end
 
 immutable LatexCompletions <: CompletionProvider; end
@@ -604,6 +617,8 @@ function find_hist_file()
 end
 
 backend(r::AbstractREPL) = r.backendref
+backend(r::MIRepl) = r.backendref
+backend(r::LineEditREPL) = backend(r.mi)
 
 send_to_backend(ast, backend::REPLBackendRef) = send_to_backend(ast, backend.repl_channel, backend.response_channel)
 function send_to_backend(ast, req, rep)
@@ -630,7 +645,9 @@ function respond(f, repl, main; pass_empty = false)
     end
 end
 
+reset(repl::MIRepl) = nothing
 function reset(repl::LineEditREPL)
+    reset(repl.mi)
     raw!(repl.t, false)
     print(repl.t,Base.text_colors[:normal])
 end
@@ -661,7 +678,9 @@ function mode_keymap(julia_prompt)
     end)
 end
 
-function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
+setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, kwargs...) =
+    setup_interface(repl, repl.mi; hascolor=hascolor, kwargs...)
+function setup_interface(repl::AbstractREPL, mirepl::MIRepl; hascolor = false, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -689,15 +708,15 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     ############################### Stage I ################################
 
     # This will provide completions for REPL and help mode
-    replc = REPLCompletionProvider(repl)
+    replc = REPLCompletionProvider(mirepl)
 
     # Set up the main Julia prompt
     julia_prompt = Prompt("julia> ";
         # Copy colors from the prompt object
-        prompt_prefix = hascolor ? repl.prompt_color : "",
+        prompt_prefix = hascolor ? mirepl.prompt_color : "",
         prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
+            (mirepl.envcolors ? Base.input_color : mirepl.input_color) : "",
+        keymap_func_data =  mirepl,
         complete = replc,
         on_enter = return_callback)
 
@@ -705,10 +724,10 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
     # Setup help mode
     help_mode = Prompt("help?> ",
-        prompt_prefix = hascolor ? repl.help_color : "",
+        prompt_prefix = hascolor ? mirepl.help_color : "",
         prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
+            (mirepl.envcolors ? Base.input_color : mirepl.input_color) : "",
+        keymap_func_data = mirepl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
         on_done = respond(repl, julia_prompt) do line
@@ -722,11 +741,11 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
-        prompt_prefix = hascolor ? repl.shell_color : "",
+        prompt_prefix = hascolor ? mirepl.shell_color : "",
         prompt_suffix = hascolor ?
-            (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
-        complete = ShellCompletionProvider(repl),
+            (mirepl.envcolors ? Base.input_color : mirepl.input_color) : "",
+        keymap_func_data = mirepl,
+        complete = ShellCompletionProvider(mirepl),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
@@ -742,7 +761,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
                                               :shell => shell_mode,
                                               :help  => help_mode))
-    if repl.history_file
+    if mirepl.history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
             finalizer(replc, replc->close(f))
@@ -751,7 +770,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
             info("Disabling history file for this session.")
-            repl.history_file = false
+            mirepl.history_file = false
         end
     end
     history_reset_state(hp)
@@ -853,14 +872,14 @@ end
 
 function run_frontend(repl::LineEditREPL, backend)
     d = REPLDisplay(repl)
-    dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
+    dopushdisplay = repl.mi.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     if !isdefined(repl,:interface)
-        interface = repl.interface = setup_interface(repl)
+        interface = repl.mi.interface = setup_interface(repl)
     else
-        interface = repl.interface
+        interface = repl.mi.interface
     end
-    repl.backendref = backend
+    repl.mi.backendref = backend
     run_interface(repl.t, interface)
     dopushdisplay && popdisplay(d)
 end
@@ -887,9 +906,9 @@ outstream(s::StreamREPL) = s.stream
 
 StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
-answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
+answer_color(r::LineEditREPL) = r.mi.envcolors ? Base.answer_color() : r.mi.answer_color
 answer_color(r::StreamREPL) = r.answer_color
-input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
+input_color(r::LineEditREPL) = r.mi.envcolors ? Base.input_color() : r.mi.input_color
 input_color(r::StreamREPL) = r.input_color
 
 

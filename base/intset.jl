@@ -193,7 +193,11 @@ isempty(s::IntSet) =
 function first(s::IntSet)
     n = next(s,0)[1]
     if n >= s.limit
-        throw(ArgumentError("set must be non-empty"))
+        if s.fill1s
+            return s.limit
+        else
+            throw(ArgumentError("set must be non-empty"))
+        end
     end
     return n
 end
