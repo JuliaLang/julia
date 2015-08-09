@@ -3190,6 +3190,6 @@ unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
 
 # issue #12517
 let x = (1,2)
-    @eval f() = Val{$x}
-    @test f() === Val{(1,2)}
+    @eval f12517() = Val{$x}
+    @test f12517() === Val{(1,2)}
 end
