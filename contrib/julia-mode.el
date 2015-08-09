@@ -402,6 +402,8 @@ high.")
 containing paren before point, so we can align succeeding code
 with it. Returns nil if we're not within nested parens."
   (save-excursion
+    ;; Back up to previous line (beginning-of-line was already called)
+    (backward-char)
     (let ((min-pos (max (- (point) julia-max-paren-lookback)
                         (point-min)))
           (open-count 0))
@@ -611,6 +613,14 @@ c"
 # a =
 # b =
 c"))
+
+  (ert-deftest julia--test-indent-leading-paren ()
+    "`(` at the beginning of a line should not affect indentation."
+    (julia--should-indent
+     "
+(1)"
+     "
+(1)"))
 
   (defun julia--run-tests ()
     (interactive)
