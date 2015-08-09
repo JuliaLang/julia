@@ -17,7 +17,11 @@ ALLSPHINXOPTS    := -d $(BUILDDIR)/_build/doctrees $(PAPEROPT_$(PAPER)) $(SPHINX
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS   := $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
+ifeq ($(abspath .),$(abspath $(SRCDIR)))
+JULIA_ENV        := $(BUILDDIR)/../deps/build/julia-env
+else
 JULIA_ENV        := $(BUILDDIR)/../deps/julia-env
+endif
 ACTIVATE         := $(JULIA_ENV)/bin/activate
 SPHINX_BUILD     := $(JULIA_ENV)/bin/sphinx-build
 

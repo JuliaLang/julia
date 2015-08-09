@@ -1,7 +1,11 @@
 ## high-level setup ##
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
+ifeq ($(abspath .),$(abspath $(SRCDIR)))
+BUILDDIR := build
+else
 BUILDDIR := .
+endif
 include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 
