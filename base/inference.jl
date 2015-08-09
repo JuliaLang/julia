@@ -625,7 +625,9 @@ end
 function abstract_call_gf(f, fargs, argtype, e)
     argtypes = argtype.parameters
     tm = _topmod()
-    if length(argtypes)>1 && (argtypes[1] <: Tuple) && argtypes[2]===Int
+    if length(argtypes)>1 && argtypes[2]===Int && (argtypes[1] <: Tuple ||
+       (isa(argtypes[1], DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
+        (argtypes[1]::DataType).name === Main.Base.Pair.name))
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
         if istopfunction(tm, f, :getindex)
