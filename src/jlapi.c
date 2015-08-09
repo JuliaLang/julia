@@ -80,8 +80,8 @@ DLLEXPORT void jl_exception_clear(void)
 // get the name of a type as a string
 DLLEXPORT const char *jl_typename_str(jl_value_t *v)
 {
-    if (jl_is_tuple(v))
-        return "Tuple";
+    if (!jl_is_datatype(v))
+        return NULL;
     return ((jl_datatype_t*)v)->name->name->name;
 }
 
