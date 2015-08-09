@@ -345,3 +345,14 @@ function function_module(f, types::ANY)
     end
     m[1].func.code.module
 end
+
+function print_specialized_signature(io::IO,code::LambdaStaticData)
+    print(io, code.name, '(')
+    if isdefined(code,6)
+        specTypes = code.(6)
+        print(io,join(map(x->string("::",x),specTypes.parameters),","))
+    else
+        print(io, "...")
+    end
+    print(io,')')
+end

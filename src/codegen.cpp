@@ -380,6 +380,10 @@ static std::vector<Type *> three_pvalue_llvmt;
 
 static std::map<jl_fptr_t, Function*> builtin_func_map;
 
+// Keeps a mapping of assigned C symbol names to the original
+// for use in debugging
+static std::map<jl_sym_t*, jl_lambda_info_t*> emitted_function_map;
+
 extern "C" DLLEXPORT void jl_gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
 {
     jl_gc_wb(parent, ptr);
@@ -4305,6 +4309,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     m = jl_Module;
 #endif
     funcName << "_" << globalUnique++;
+    emitted_function_map[jl_symbol(funcName.str().data())] = lam;
 
     ctx.sret = false;
     if (specsig) { // assumes !va
@@ -4437,11 +4442,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         do_malloc_log = false;
     }
     else {
-        // TODO: Fix when moving to new LLVM version
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #elif LLVM37
-        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        DICompileUnit *CU = dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         assert(CU.Verify());
@@ -6109,4 +6113,9 @@ extern "C" void jl_dump_llvm_value(void *v)
 extern "C" void jl_dump_llvm_type(void *v)
 {
     ((Type*)v)->dump(); putchar('\n');
+}
+
+extern "C" jl_lambda_info_t *jl_function_for_symbol(const char *name)
+{
+    return emitted_function_map[jl_symbol(name)];
 }

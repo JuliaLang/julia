@@ -202,6 +202,7 @@ static void write_float64(ios_t *s, double x)
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc);
 jl_value_t ***sysimg_gvars = NULL;
+size_t sysimg_gvars_size = 0;
 
 #ifdef HAVE_CPUID
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
@@ -232,6 +233,7 @@ static int jl_load_sysimg_so()
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
+        sysimg_gvars_size = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_size");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
@@ -412,7 +414,6 @@ static void jl_update_all_fptrs()
     if (gvars == 0) return;
     // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
     // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
-    sysimg_gvars = NULL;
     size_t i;
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_lambda_info_t *li = delayed_fptrs[i].li;
@@ -425,10 +426,22 @@ static void jl_update_all_fptrs()
             jl_fptr_to_llvm((void*)gvars[cfunc], li, 1);
         }
     }
-    delayed_fptrs_n = 0;
-    delayed_fptrs_max = 0;
-    free(delayed_fptrs);
-    delayed_fptrs = NULL;
+}
+
+// Looks up the correcsponding lambda info for a given address in the system
+// image. This is a linear search, because it's only used for debugging.
+DLLEXPORT jl_lambda_info_t *jl_lookup_li(void *addr)
+{
+    for (int i = 0; i < sysimg_gvars_size; ++i) {
+        if (sysimg_gvars[i] == addr) {
+            for (int j = 0; j < delayed_fptrs_n; ++j) {
+                if (i == delayed_fptrs[j].func  - 1 ||
+                    i == delayed_fptrs[j].cfunc - 1)
+                  return delayed_fptrs[j].li;
+            }
+        }
+    }
+    return NULL;
 }
 
 // --- serialize ---

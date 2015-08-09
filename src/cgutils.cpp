@@ -376,7 +376,13 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, c
                                  T_size,
                                  true,
                                  GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size,globalUnique+1),
+                                 ConstantInt::get(T_size, jl_sysimg_gvars.size()),
+                                 "jl_sysimg_gvars_size"));
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, globalUnique+1),
                                  "jl_globalUnique"));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);

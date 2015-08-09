@@ -1083,6 +1083,7 @@ DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
 
 // strings
 DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s);
+DLLEXPORT size_t jl_bytestring_length(jl_value_t *s);
 
 // modules and global variables
 extern DLLEXPORT jl_module_t *jl_main_module;
