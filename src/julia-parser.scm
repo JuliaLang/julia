@@ -705,12 +705,12 @@
 
 (define (parse-block s (down parse-eq))
   (parse-Nary s down '(#\newline #\;) 'block
-	      '(end else elseif catch finally) #t))
+              '(end else elseif catch finally) #t))
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
   (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
-			'(#\;) 'toplevel '(#\newline) #t)))
+                        '(#\;) 'toplevel '(#\newline) #t)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
       (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
@@ -2072,16 +2072,19 @@
 (define (doc-string-literal? e)
   (or (simple-string-literal? e)
       (and (length= e 3) (eq? (car e) 'macrocall)
-	   (simple-string-literal? (caddr e))
-	   (eq? (cadr e) '@doc_str))))
+           (simple-string-literal? (caddr e))
+           (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
-  (let* ((isstr (eqv? (peek-token s) #\"))
-	 (ex    (production s)))
-    (if (and (or isstr (doc-string-literal? ex))
-	     (not (closing-token? (peek-token s))))
-	`(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
-	ex)))
+  (let* ((ex    (production s)))
+    (if (and (doc-string-literal? ex)
+             (let loop ((t (peek-token s)))
+               (cond
+                ((closing-token? t) #f)
+                ((newline? t) (take-token s) (loop (peek-token s)))
+                (else #t))))
+        `(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
+        ex)))
 
 ; --- main entry point ---
 
