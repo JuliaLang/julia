@@ -30,7 +30,7 @@ New language features
 
   * Incremental precompilation of modules: call `VERSION >= v"0.4.0-dev+6521" && __precompile__()` at the top of a
     module file to automatically precompile it when it is imported ([#12491]), or manually
-    run `Base.compile(modulename)`. The resulting precompiled `.ji` file is saved in
+    run `Base.compilecache(modulename)`. The resulting precompiled `.ji` file is saved in
     `~/.julia/lib/v0.4` ([#8745]).
 
       * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.  In particular, to be safely precompilable a module may need an `__init__` function to separate code that must be executed at runtime rather than precompile-time.  Modules that are *not* precompilable should call `__precompile__(false)`.
