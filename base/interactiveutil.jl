@@ -48,14 +48,15 @@ function edit(file::AbstractString, line::Integer)
     nothing
 end
 
-function edit( m::Method )
+function edit(m::Method)
     tv, decls, file, line = arg_decl_parts(m)
-    edit( string(file), line )
+    edit(string(file), line)
 end
 
 edit(file::AbstractString) = edit(file, 1)
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
 
@@ -67,6 +68,7 @@ end
 less(file::AbstractString) = less(file, 1)
 less(f)          = less(functionloc(f)...)
 less(f, t::ANY)  = less(functionloc(f,t)...)
+less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
