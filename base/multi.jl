@@ -1467,12 +1467,15 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, N::Int)
-    chunks = splitrange(N, nworkers())
+    w=workers()
+    chunks = splitrange(N, length(w))
     results = cell(length(chunks))
-    for i in 1:length(chunks)
-        results[i] = @spawn f(first(chunks[i]), last(chunks[i]))
+    @sync begin
+        for i in 1:length(chunks)
+            @async results[i] = remotecall_fetch(w[i], f, first(chunks[i]), last(chunks[i]))
+        end
     end
-    mapreduce(fetch, reducer, results)
+    reduce(reducer, results)
 end
 
 function pfor(f, N::Int)
