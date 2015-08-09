@@ -7228,8 +7228,8 @@ A timer is stopped and has its resources freed by calling ``close`` on it.
 
 Create a timer that wakes up tasks waiting for it (by calling ``wait`` on
 the timer object) at a specified interval.
-Waiting tasks are also woken up when the timer is closed (by ``close``).
-Use ``isopen`` to check whether a timer is still active after a wakeup.
+Waiting tasks are woken with an error when the timer is closed (by ``close``).
+Use ``isopen`` to check whether a timer is still active.
 ```
 """
 Timer
