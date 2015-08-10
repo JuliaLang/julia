@@ -39,6 +39,54 @@ function doc(obj)
     end
 end
 
+# Variable bindings as values.
+
+moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
+
+function findsource(mod::Module, var::Symbol, seen = Set{Module}())
+    mod in seen && return
+    var in names(mod, true) && return mod
+    push!(seen, mod)
+    sources = filter(m -> m ≠ nothing && m ∉ seen,
+                     map(n -> findsource(n, var, seen),
+                         moduleusings(mod)))
+    isempty(sources) ? nothing : collect(sources)[1]
+end
+
+immutable Binding
+    mod::Module
+    var::Symbol
+
+    function Binding(mod::Module, var::Symbol)
+        mod′ = findsource(mod, var)
+        mod′ == nothing && error("$mod.$var not found.")
+        new(mod′, var)
+    end
+end
+
+function splitexpr(x::Expr)
+    isexpr(x, :macrocall) && return splitexpr(x.args[1])
+    isexpr(x, :.)         && return (x.args[1], x.args[2].args[1])
+    error("Invalid @var syntax `$x`.")
+end
+splitexpr(s::Symbol) = (module_name(current_module()), s)
+splitexpr(other)     = error("Invalid @var syntax `$other`.")
+
+isvar(x) = isexpr(x, :macrocall, :.)
+isvar(::Symbol) = true
+
+macro var(x)
+    mod, var = splitexpr(x)
+    :(Binding($(esc(mod)), $(quot(var))))
+end
+
+Base.show(io::IO, x::Binding) = print(io, "$(x.mod).$(x.var)")
+
+function doc(b::Binding)
+    d = invoke(doc, Tuple{Any}, b)
+    d == nothing ? doc(getfield(b.mod, b.var)) : d
+end
+
 # Function / Method support
 
 function signature(expr::Expr)
@@ -279,6 +327,14 @@ function objdoc(meta, def)
     end
 end
 
+function vardoc(meta, def, name)
+    quote
+        @init
+        $(esc(def))
+        doc!(@var($(esc(name))), $(mdify(meta)))
+    end
+end
+
 fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
@@ -297,19 +353,21 @@ function docm(meta, def, define = true)
         # `@doc "<doc string>" :(str_macro"")` syntax.
         #
         # Allow more general macrocall for now unless it causes confusion.
-        return objdoc(meta, namify(def′.args[1]))
+        return vardoc(meta, nothing, namify(def′.args[1]))
     end
 
     define || (def = nothing)
 
     fexpr(def′)                && return funcdoc(meta, def, def′, namify(def′))
+    isexpr(def′, :function)    && return namedoc(meta, def, namify(def′))
     isexpr(def′, :call)        && return funcdoc(meta, nothing, def′, namify(def′))
     isexpr(def′, :type)        && return typedoc(meta, def, def′, namify(def′.args[2]))
-    isexpr(def′, :macro)       && return namedoc(meta, def, symbol("@", namify(def′)))
+    isexpr(def′, :macro)       && return  vardoc(meta, def, symbol("@", namify(def′)))
     isexpr(def′, :abstract)    && return namedoc(meta, def, namify(def′))
     isexpr(def′, :bitstype)    && return namedoc(meta, def, def′.args[2])
+    isexpr(def′, :typealias)   && return  vardoc(meta, def, namify(def′))
     isexpr(def′, :module)      && return namedoc(meta, def, def′.args[2])
-    isexpr(def′, :(=), :const) && return namedoc(meta, def, namify(def′))
+    isexpr(def′, :(=), :const) && return  vardoc(meta, def, namify(def′))
 
     objdoc(meta, def′)
 end
@@ -318,7 +376,7 @@ function docm(ex)
     isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
     isexpr(ex, :->) && return docm(ex.args...)
     isexpr(ex, :call) && return findmethod(ex)
-    isexpr(ex, :macrocall) && (ex = namify(ex))
+    isvar(ex) && return :(doc(@var($(esc(ex)))))
     :(doc($(esc(ex))))
 end
 
@@ -344,7 +402,7 @@ Base.DocBootstrap.setexpand!(docm)
 # Names are resolved relative to the DocBootstrap module, so
 # inject the ones we need there.
 
-eval(Base.DocBootstrap, :(import ..Docs: @init, doc!, doc, @doc_str))
+eval(Base.DocBootstrap, :(import ..Docs: @init, @var, doc!, doc, @doc_str))
 
 Base.DocBootstrap.loaddocs()
 
