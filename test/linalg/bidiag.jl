@@ -34,6 +34,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test size(T) == (n, n)
         @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
         @test Bidiagonal(full(T), isupper) == T
+        @test big(T) == T
         z = zeros(elty, n)
 
         debug && println("Idempotent tests")
