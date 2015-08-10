@@ -310,7 +310,7 @@ $5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE)
 endif # NO_GIT
 
 distclean-$1:
-	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE)
+	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1
 endef
 
 
@@ -744,7 +744,7 @@ clean-llvm:
 distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
-		$(LLVM_SRC_DIR)
+		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
 
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
@@ -866,8 +866,8 @@ $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) $(BUILDDIR)/pcre2-$(PCRE_VER)/checked
 clean-pcre:
 	-$(MAKE) -C pcre2-$(PCRE_VER) clean
 	-rm -f $(build_shlibdir)/libpcre*
-distclean-pcre: clean-pcre
-	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER)
+distclean-pcre:
+	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
 get-pcre: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 configure-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/config.status
@@ -985,7 +985,7 @@ $(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ
 clean-dsfmt:
 	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 distclean-dsfmt:
-	-rm -rf $(SRCDIR)/srccache/dsfmt*.tar.gz $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER)
+	-rm -rf $(SRCDIR)/srccache/dsfmt*.tar.gz $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
 
 get-dsfmt: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
 configure-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
@@ -1025,7 +1025,7 @@ $(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
 clean-Rmath-julia:
 	-$(MAKE) -C $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER) clean
 distclean-Rmath-julia: clean-Rmath-julia
-	-rm -rf $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER)
+	-rm -rf $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER) $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)
 
 get-Rmath-julia: $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz
 configure-Rmath-julia: $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile
@@ -1202,11 +1202,12 @@ endif
 $(ATLAS_OBJ_TARGET): $(ATLAS_OBJ_SOURCE)
 	cp -f $(ATLAS_OBJ_SOURCE) $@
 	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $@
+	touch -c $@
 
 clean-atlas:
-	rm -rf atlas/build
+	rm -rf $(BUILDDIR)/atlas/build
 distclean-atlas:
-	rm -rf atlas
+	rm -rf $(BUILDDIR)/atlas
 
 get-atlas: $(SRCDIR)/srccache/atlas/configure $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 configure-atlas: $(BUILDDIR)/atlas/Make.top
@@ -1284,10 +1285,10 @@ $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	$(INSTALL_NAME_CMD)liblapack.$(SHLIB_EXT) $@
 
 clean-lapack:
-	-$(MAKE) -C lapack-$(LAPACK_VER) clean
+	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 	-rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
 distclean-lapack:
-	-rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
+	-rm -rf $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 get-lapack: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 configure-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc
@@ -1391,10 +1392,13 @@ $(ARPACK_OBJ_TARGET): $(PATCHELF)
 endif
 
 clean-arpack:
-	-$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
+	-$(MAKE) -C $(BUILDDIR)/arpack-ng-$(ARPACK_VER) clean
 	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	-rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
+		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
+		$(SRCDIR)/srccache/arpack-ng-3.2.0-testA.mtx \
+		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
 get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
 configure-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
@@ -1506,9 +1510,11 @@ clean-fftw-double:
 	-$(MAKE) -C $(BUILDDIR)/fftw-$(FFTW_VER)-double clean
 	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw: distclean-fftw-single distclean-fftw-double
-	-rm -rf $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single
+	-rm -rf $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz $(SRCDIR)/srccache/fftw-$(FFTW_VER)
 distclean-fftw-single:
+	-rm -rf $(BUILDDIR)/fftw-$(FFTW_VER)-single
 distclean-fftw-double:
+	-rm -rf $(BUILDDIR)/fftw-$(FFTW_VER)-double
 
 get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
@@ -1646,8 +1652,10 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 clean-suitesparse:
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER) clean
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/lib
+	-rm -f $(SUITESPARSE_OBJ_TARGET)
 distclean-suitesparse:
-	-rm -rf $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER)
+	-rm -rf $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz \
+		$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)
 
 get-suitesparse: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 configure-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile
@@ -1672,7 +1680,7 @@ $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT): $(SRCDIR)/SuiteSparse_wra
 	touch -c $@
 
 clean-suitesparse-wrapper:
-	-rm -f $(SUITESPARSE_OBJ_TARGET) $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
+	-rm -f $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
 distclean-suitesparse-wrapper: clean-suitesparse-wrapper
 
 get-suitesparse-wrapper:
@@ -1722,7 +1730,9 @@ clean-unwind:
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 	-rm -f $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 distclean-unwind:
-	-rm -rf $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)
+	-rm -rf $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz \
+		$(SRCDIR)/srccache/libunwind-$(UNWIND_VER) \
+		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
 get-unwind: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 configure-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status
@@ -1758,7 +1768,9 @@ clean-osxunwind:
 	-$(MAKE) -C $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER) clean $(OSXUNWIND_FLAGS)
 	-rm $(OSXUNWIND_OBJ_TARGET)
 distclean-osxunwind:
-	-rm -rf $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
+	-rm -rf $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz \
+		$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)
+
 
 get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
 configure-osxunwind: get-osxunwind
@@ -1807,7 +1819,9 @@ clean-gmp:
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 	-rm -f $(GMP_OBJ_TARGET)
 distclean-gmp:
-	-rm -rf $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2 $(SRCDIR)/srccache/gmp-$(GMP_VER)
+	-rm -rf $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2 \
+		$(SRCDIR)/srccache/gmp-$(GMP_VER) \
+		$(BUILDDIR)/gmp-$(GMP_VER)
 
 get-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
 configure-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/config.status
@@ -1872,7 +1886,9 @@ clean-mpfr:
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
 	-rm -f $(MPFR_OBJ_TARGET)
 distclean-mpfr:
-	-rm -rf $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2 $(SRCDIR)/srccache/mpfr-$(MPFR_VER)
+	-rm -rf $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2 \
+		$(SRCDIR)/srccache/mpfr-$(MPFR_VER) \
+		$(BUILDDIR)/mpfr-$(MPFR_VER)
 
 get-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status
@@ -1913,7 +1929,9 @@ clean-patchelf:
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
 	-rm -f $(PATCHELF_OBJ_TARGET)
 distclean-patchelf:
-	-rm -rf $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)
+	-rm -rf $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz \
+		$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER) \
+		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
 get-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status
@@ -1950,7 +1968,8 @@ clean-git:
 	-$(MAKE) -C $(BUILDDIR)/git-$(GIT_VER) clean
 	-rm -f $(GIT_OBJ_TARGET)
 distclean-git:
-	-rm -rf $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz $(SRCDIR)/srccache/git-$(GIT_VER)
+	-rm -rf $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz \
+		$(BUILDDIR)/git-$(GIT_VER)
 
 get-git: $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz
 configure-git: $(BUILDDIR)/git-$(GIT_VER)/config.status
@@ -1977,10 +1996,10 @@ endif
 	touch -c $@
 
 clean-virtualenv:
-	-$(MAKE) -C $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER) clean
 	-rm -rf $(VIRTUALENV_TARGET)
 distclean-virtualenv: clean-virtualenv
-	-rm -rf $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER)
+	-rm -rf $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz \
+		$(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER)
 
 get-virtualenv: $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 configure-virtualenv: get-virtualenv
