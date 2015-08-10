@@ -13,7 +13,7 @@ ifeq ($(USEMSVC), 1)
 SRCS += getopt
 endif
 
-FLAGS := -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
+FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
