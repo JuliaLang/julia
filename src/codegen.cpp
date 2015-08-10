@@ -21,6 +21,9 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/IntrinsicInst.h>
+#ifdef LLVM38
+#include <llvm/Analysis/BasicAliasAnalysis.h>
+#endif
 #ifdef LLVM37
 #include "llvm/IR/LegacyPassManager.h"
 #else
@@ -4129,6 +4132,16 @@ static Function *emit_function(jl_lambda_info_t *lam)
         for(i=0; i < nreq; i++) {
             jl_sym_t *argname = jl_decl_var(jl_cellref(largs,i));
             jl_varinfo_t &varinfo = ctx.vars[argname];
+#ifdef LLVM38
+            varinfo.dinfo = ctx.dbuilder->createParameterVariable(
+                SP,                                 // Scope (current function will be fill in later)
+                argname->name,                      // Variable name
+                i+1,                                // Argument number (1-based)
+                fil,                                // File
+                ctx.lineno == -1 ? 0 : ctx.lineno,  // Line
+                // Variable type
+                julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig));
+#else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
                 SP,         // Scope (current function will be fill in later)
@@ -4139,35 +4152,53 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
                 i+1);                   // Argument number (1-based)
-
+#endif
         }
         if (va) {
-            ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
-                llvm::dwarf::DW_TAG_arg_variable,    // Tag
-                SP,         // Scope (current function will be fill in later)
-                ctx.vaName->name, // Variable name
+#ifdef LLVM38
+            ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createParameterVariable(
+                SP,                     // Scope (current function will be fill in later)
+                ctx.vaName->name,       // Variable name
+                nreq + 1,               // Argument number (1-based)
                 fil,                    // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
+                julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false));
+#else
+
+            ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
+                llvm::dwarf::DW_TAG_arg_variable,   // Tag
+                SP,                                 // Scope (current function will be fill in later)
+                ctx.vaName->name,                   // Variable name
+                fil,                                // File
+                ctx.lineno == -1 ? 0 : ctx.lineno,  // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false),      // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
                 nreq + 1);              // Argument number (1-based)
+#endif
         }
         for(i=0; i < vinfoslen; i++) {
             jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
             jl_varinfo_t &varinfo = ctx.vars[s];
             if (varinfo.isArgument)
                 continue;
+#ifdef LLVM38
+            varinfo.dinfo = ctx.dbuilder->createAutoVariable(
+#else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_auto_variable,    // Tag
+#endif
                 SP,                     // Scope (current function will be fill in later)
                 s->name,                // Variable name
                 fil,                    // File
                 ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
-                0,                      // Flags (TODO: Do we need any)
-                0);                   // Argument number (1-based)
+                0                       // Flags (TODO: Do we need any)
+#ifndef LLVM38
+                ,0                      // Argument number (1-based)
+#endif
+                );
         }
         for(i=0; i < captvinfoslen; i++) {
             jl_array_t *vi = (jl_array_t*)jl_cellref(captvinfos, i);
@@ -4175,16 +4206,23 @@ static Function *emit_function(jl_lambda_info_t *lam)
             jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
             assert(jl_is_symbol(vname));
             jl_varinfo_t &varinfo = ctx.vars[vname];
+#ifdef LLVM38
+            varinfo.dinfo = ctx.dbuilder->createAutoVariable(
+#else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_auto_variable,    // Tag
+#endif
                 SP,                     // Scope (current function will be filled in later)
                 vname->name,            // Variable name
                 fil,                    // File
                 ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
-                0,                      // Flags (TODO: Do we need any)
-                0);                   // Argument number (1-based)
+                0                       // Flags (TODO: Do we need any)
+#ifndef LLVM38
+                ,0                      // Argument number (1-based)
+#endif
+                );
         }
     }
 
