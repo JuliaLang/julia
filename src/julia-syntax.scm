@@ -1207,16 +1207,18 @@
                                    (and catchb
                                         (not (block-returns? catchb))))
                                (gensy)))
-                     (retval (gensy))
+                     (retval (if hasret (gensy) #f))
                      (bb  (gensy))
+		     (finally-exception (gensy))
                      (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
                  (let ((tryb   (replace-return tryb bb ret retval))
                        (catchb (replace-return catchb bb ret retval)))
                    (expand-binding-forms
                     `(scope-block
                       (block
-                       (local ,retval)
+                       ,@(if hasret `((local ,retval)) '())
                        (local ,val)
+		       (local ,finally-exception)
                        (= ,err false)
                        ,@(if ret `((= ,ret false)) '())
                        (break-block
@@ -1227,8 +1229,9 @@
                                      tryb))
                              #f
                              (= ,err true)))
+		       (= ,finally-exception (the_exception))
                        ,finalb
-                       (if ,err (ccall 'jl_rethrow Void (tuple)))
+                       (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
                        ,(if hasret
                             (if ret
                                 `(if ,ret (return ,retval) ,val)
