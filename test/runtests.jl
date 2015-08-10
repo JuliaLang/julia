@@ -412,3 +412,11 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 
 @test nothing === __precompile__(false) # tests should never be precompiled
 @test nothing === include_dependency("foo")
+
+@test real(Int) == real(Complex{Int}) == Int
+
+@test isa(1.2, AbstractFloat)
+
+@test [1,2,3] ≈ [1,2,3+1e-9]
+@test [0,1] ≈ [1e-9, 1]
+@test [0,1] ≉ [1e-3, 1]

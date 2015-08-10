@@ -57,6 +57,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
+* `typealias AbstractFloat FloatingPoint` - `FloatingPoint` has been renamed to `AbstractFloat` [#12162](https://github.com/JuliaLang/julia/pull/12162)
+
 * `typealias AssertionError ErrorException` - `AssertionError` was introduced in [#9734](https://github.com/JuliaLang/julia/pull/9734); before `@assert` threw an `ErrorException`
 
 * For all unsigned integer types to their equivalents with uppercase `I`. [#8907](https://github.com/JuliaLang/julia/pull/8907)
@@ -83,6 +85,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `__precompile(iscompiled::Bool)__` and `include_dependency(path::AbstractString)` allow
   Julia 0.4 precompilation information to be provided (with no effect in earlier versions).
   (However, to enable precompiling in 0.4, it is better to explicitly put `VERSION >= v"0.4.0-dev+6521" && __precompile__()` before your `module` statement, so that Julia knows to precompile before anything in your module is evaluated.)
+
+* `isapprox(A, B)` for arrays ([JuliaLang/julia#12472](https://github.com/JuliaLang/julia/pull/12472)), and synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively.
 
 ## Renamed functions
 
