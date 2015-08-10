@@ -126,14 +126,57 @@ function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{
 end
 
 #Matrix-valued functions
-expm{T<:Real}(A::RealHermSymComplexHerm{T}) = (F = eigfact(A); F.vectors*Diagonal(exp(F.values))*F.vectors')
-function logm{T<:Real}(A::RealHermSymComplexHerm{T})
-    F = eigfact(A)
-    isposdef(F) && return F.vectors*Diagonal(log(F.values))*F.vectors'
-    return F.vectors*Diagonal(log(complex(F.values)))*F.vectors'
+function expm(A::Symmetric)
+    F = eigfact(full(A))
+    return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
 end
-function sqrtm{T<:Real}(A::RealHermSymComplexHerm{T})
-    F = eigfact(A)
-    isposdef(F) && return F.vectors*Diagonal(sqrt(F.values))*F.vectors'
-    return F.vectors*Diagonal(sqrt(complex(F.values)))*F.vectors'
+function expm{T}(A::Hermitian{T})
+    n = chksquare(A)
+    F = eigfact(full(A))
+    retmat = (F.vectors * Diagonal(exp(F.values))) * F.vectors'
+    if T <: Real
+        return real(Hermitian(retmat))
+    else
+        for i = 1:n
+            retmat[i,i] = real(retmat[i,i])
+        end
+        return Hermitian(retmat)
+    end
+end
+
+for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
+
+    @eval begin
+
+        function ($funm)(A::Symmetric)
+            F = eigfact(full(A))
+            if isposdef(F)
+                retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
+            else
+                retmat = (F.vectors * Diagonal(($func)(complex(F.values)))) * F.vectors'
+            end
+            return Symmetric(retmat)
+        end
+
+        function ($funm){T}(A::Hermitian{T})
+            n = chksquare(A)
+            F = eigfact(A)
+            if isposdef(F)
+                retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
+                if T <: Real
+                    return Hermitian(retmat)
+                else
+                    for i = 1:n
+                        retmat[i,i] = real(retmat[i,i])
+                    end
+                    return Hermitian(retmat)
+                end
+            else
+                retmat = (F.vectors * Diagonal(($func)(complex(F.values)))) * F.vectors'
+                return retmat
+            end
+        end
+
+    end
+
 end
