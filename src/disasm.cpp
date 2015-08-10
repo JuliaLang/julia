@@ -228,11 +228,14 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     }
     int skipC = 0;
     char *name;
-    size_t line;
     char *filename;
+    size_t line;
+    char *inlined_file;
+    size_t inlined_line;
     int fromC;
-    jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    jl_getFunctionInfo(&name, &filename, &line, &inlined_file, &inlined_line, pointer, &fromC, skipC, 1);
     free(filename);
+    free(inlined_file);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
