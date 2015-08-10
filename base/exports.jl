@@ -455,6 +455,8 @@ export
     zero,
     √,
     ∛,
+    ≈,
+    ≉,
 
 # specfun
     airy,

@@ -166,10 +166,14 @@ for f in (:round, :ceil, :floor, :trunc)
 end
 
 # isapprox: approximate equality of numbers
-isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0) =
+function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0)
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y)))
+end
+
+const ≈ = isapprox
+≉(x,y) = !(x ≈ y)
 
 # default tolerance arguments
 rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
 rtoldefault{T<:Real}(::Type{T}) = 0
-rtoldefault{T<:Number,S<:Number}(x::T, y::S) = rtoldefault(promote_type(real(T),real(S)))
+rtoldefault{T<:Number,S<:Number}(x::Union(T,Type{T}), y::Union(S,Type{S})) = rtoldefault(promote_type(real(T),real(S)))
