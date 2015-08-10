@@ -2017,11 +2017,11 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/C
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
 	touch -c $@
 $(LIBGIT2_OBJ_SOURCE): $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	touch -c $@
-$(LIBGIT2_SRC_DIR)/checked: $(LIBGIT2_OBJ_SOURCE)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/checked: $(LIBGIT2_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
-	$(CMAKE) --build $(dir $@) --target test
+	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
