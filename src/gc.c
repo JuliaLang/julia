@@ -1575,6 +1575,7 @@ NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
     gc_push_root(ta->consumers, d);
     gc_push_root(ta->donenotify, d);
     gc_push_root(ta->exception, d);
+    if (ta->backtrace) gc_push_root(ta->backtrace, d);
     if (ta->start)  gc_push_root(ta->start, d);
     if (ta->result) gc_push_root(ta->result, d);
     gc_mark_task_stack(ta, d);
