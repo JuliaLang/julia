@@ -476,7 +476,7 @@ Mathematical Operators
 Mathematical Functions
 ----------------------
 
-.. function:: isapprox(x::Number, y::Number; rtol::Real=sqrt(eps), atol::Real=0)
+.. function:: isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0)
 
    Inexact equality comparison: ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.  The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``.
 
