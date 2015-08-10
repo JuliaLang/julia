@@ -233,6 +233,7 @@ function gitignore(pkg::AbstractString; force::Bool=false)
     genfile(pkg,".gitignore",force) do io
         print(io, """
         *.jl.cov
+        *.jl.*.cov
         *.jl.mem
         """)
     end
