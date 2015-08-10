@@ -83,6 +83,24 @@ else
 endif
 endif
 export BUILDROOT
+unexport O
+
+# Make sure the user didn't try to specify a path that will confuse the shell / make
+METACHARACTERS := ][?*{}() $$%:;&|!\#,\\`\":
+ifneq (,$(findstring ',$(value BUILDROOT)))
+$(error cowardly refusing to build into directory with a single-quote in the path)
+endif
+ifneq (,$(findstring ',$(value JULIAHOME)))
+$(error cowardly refusing to build from source directory with a single-quote in the path)
+endif
+ifneq (,$(shell echo '$(value BUILDROOT)' | grep '[$(METACHARACTERS)]'))
+$(error cowardly refusing to build into directory with a shell-metacharacter in the path\
+    (got: $(value BUILDROOT)))
+endif
+ifneq (,$(shell echo '$(value JULIAHOME)' | grep '[$(METACHARACTERS)]'))
+$(error cowardly refusing to build from source directory with a shell-metacharacter in the path\
+    (got: $(value JULIAHOME)))
+endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
