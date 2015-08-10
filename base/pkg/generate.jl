@@ -162,6 +162,7 @@ end
 function travis(pkg::AbstractString; force::Bool=false)
     genfile(pkg,".travis.yml",force) do io
         print(io, """
+        # Documentation: http://docs.travis-ci.com/user/languages/julia/
         language: julia
         os:
           - linux
