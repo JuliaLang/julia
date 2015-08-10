@@ -303,6 +303,7 @@ function docm(meta, def, define = true)
     define || (def = nothing)
 
     fexpr(def′)                && return funcdoc(meta, def, def′, namify(def′))
+    isexpr(def′, :call)        && return funcdoc(meta, nothing, def′, namify(def′))
     isexpr(def′, :type)        && return typedoc(meta, def, namify(def′.args[2]))
     isexpr(def′, :macro)       && return namedoc(meta, def, symbol("@", namify(def′)))
     isexpr(def′, :abstract)    && return namedoc(meta, def, namify(def′))
@@ -317,9 +318,18 @@ end
 function docm(ex)
     isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
     isexpr(ex, :->) && return docm(ex.args...)
-    isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
+    isexpr(ex, :call) && return findmethod(ex)
     isexpr(ex, :macrocall) && (ex = namify(ex))
     :(doc($(esc(ex))))
+end
+
+function findmethod(ex)
+    f = esc(namify(ex.args[1]))
+    if any(x -> isexpr(x, :(::)), ex.args)
+        :(doc($f, methods($f, $(esc(signature(ex))))[1]))
+    else
+        :(doc($f, @which($(esc(ex)))))
+    end
 end
 
 # Not actually used; bootstrap version in bootstrap.jl
