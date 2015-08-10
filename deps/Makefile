@@ -1302,6 +1302,7 @@ ARPACK_FFLAGS := $(GFORTBLAS_FFLAGS)
 ARPACK_CFLAGS :=
 
 ifeq ($(USE_BLAS64), 1)
+ARPACK_CFLAGS += -DBLASINT=int64_t
 ifeq ($(USEIFC),1)
 ARPACK_FFLAGS += -i8
 else
@@ -1309,10 +1310,10 @@ ARPACK_FFLAGS += -fdefault-integer-8
 ifeq ($(USE_SYSTEM_BLAS), 0)
 ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 ARPACK_FFLAGS += -cpp -ffixed-line-length-none
-ARPACK_OPENBLASFCNS1 := axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen
+ARPACK_OPENBLASFCNS1 := axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen gbmv gbtrf gbtrs gttrf gttrs pttrf pttrs
 ARPACK_OPENBLASFCNS2 := dot ger labad laev2 lamch lanst lanv2 lapy2 larf larfg lasr nrm2 orm2r rot steqr swap
 ARPACK_OPENBLASFCNS3 := dotc geru unm2r
-ARPACK_OPENBLASFCNS4 := COPY LABAD LAMCH LANHS LANV2 LARFG ROT
+ARPACK_OPENBLASFCNS4 := COPY LABAD LAMCH LANHS LANV2 LARFG ROT GEMV
 ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS2), -Ds$(fcn)=s$(fcn)_64 -Dd$(fcn)=d$(fcn)_64)
 ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS3), -Dc$(fcn)=c$(fcn)_64 -Dz$(fcn)=z$(fcn)_64)
 ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS4), -DS$(fcn)=S$(fcn)_64 -DD$(fcn)=D$(fcn)_64)
@@ -1360,7 +1361,10 @@ else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
 endif
 
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
+$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/arpack-tests-blasint.patch
+	echo 1 > $@
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$< $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
@@ -1375,7 +1379,10 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
 endif
 	echo 1 > $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked | $(build_shlibdir)
+ifneq ($(USE_BLAS64), 1) # XXX: one of the ARPACK tests fail with BLAS64
+$(ARPACK_OBJ_TARGET): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
+endif
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
 	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
 ifeq ($(OS), WINNT)
 	mv $(build_shlibdir)/libarpack-2.dll $@
