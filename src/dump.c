@@ -1082,7 +1082,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         assert(mode != MODE_MODULE_POSTWORK);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)(uptrint_t)pos);
-        dt->uid = jl_assign_type_uid(); // make sure this has a new uid early so it goes in the type cache correctly
+        dt->uid = -1; // mark that this type needs a new uid
     }
 
     if (nf > 0) {
@@ -2027,6 +2027,88 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_function_t *method);
 
+static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
+{
+    assert(dt->uid == -1);
+    jl_svec_t *tt = dt->parameters;
+    size_t i, l = jl_svec_len(tt);
+    for (i = 0; i < l; i++) {
+        jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
+        if (jl_is_datatype(p) && p->uid == -1) {
+            jl_datatype_t *cachep = jl_recache_type(p, start);
+            if (p != cachep)
+                jl_svecset(tt, i, cachep);
+        }
+    }
+    dt->uid = 0;
+    jl_datatype_t *t = (jl_datatype_t*)jl_cache_type_(dt);
+    size_t j = start;
+    jl_value_t *v = t->instance;
+    while (j < flagref_list.len) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
+        int offs = (int)(intptr_t)flagref_list.items[j+1];
+        jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        if ((jl_value_t*)dt == o) {
+            if (t != dt) {
+                if (loc) *loc = (jl_value_t*)t;
+                if (offs > 0) backref_list.items[offs] = t;
+            }
+        }
+        else if (v == o) {
+            if (t->instance != v) {
+                *loc = t->instance;
+                if (offs > 0) backref_list.items[offs] = t->instance;
+            }
+        }
+        else {
+            j += 2;
+            continue;
+        }
+        // delete this item from the flagref list, so it won't be re-encountered later
+        flagref_list.len -= 2;
+        if (j >= flagref_list.len)
+            break;
+        flagref_list.items[j+0] = flagref_list.items[flagref_list.len+0];
+        flagref_list.items[j+1] = flagref_list.items[flagref_list.len+1];
+    }
+    return t;
+}
+
+static void jl_recache_types()
+{
+    size_t i = 0;
+    while (i < flagref_list.len) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
+        int offs = (int)(intptr_t)flagref_list.items[i++];
+        jl_value_t *v, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        jl_datatype_t *dt;
+        if (jl_is_datatype(o)) {
+            dt = (jl_datatype_t*)o;
+            v = dt->instance;
+        }
+        else {
+            dt = (jl_datatype_t*)jl_typeof(o);
+            v = o;
+        }
+        assert(dt);
+        jl_datatype_t *t = jl_recache_type(dt, i);
+        if (t != dt) {
+            jl_set_typeof(dt, (jl_value_t*)(ptrint_t)0x10); // invalidate the old value to help catch errors
+            if ((jl_value_t*)dt == o) {
+                if (loc) *loc = (jl_value_t*)t;
+                if (offs > 0) backref_list.items[offs] = t;
+            }
+        }
+        if (t->instance != v) {
+            jl_set_typeof(v, (jl_value_t*)(ptrint_t)0x20); // invalidate the old value to help catch errors
+            if (v == o) {
+                *loc = t->instance;
+                if (offs > 0) backref_list.items[offs] = t->instance;
+            }
+        }
+    }
+}
+
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f)) {
@@ -2053,65 +2135,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     jl_array_t *init_order = NULL;
     restored = (jl_array_t*)jl_deserialize_value(f, (jl_value_t**)&restored);
 
-    size_t i = 0;
-    while (i < flagref_list.len) {
-        jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
-        int offs = (int)(intptr_t)flagref_list.items[i++];
-        jl_value_t *v, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        jl_datatype_t *dt;
-        if (jl_is_datatype(o)) {
-            dt = (jl_datatype_t*)o;
-            v = dt->instance;
-        }
-        else {
-            dt = (jl_datatype_t*)jl_typeof(o);
-            v = o;
-        }
-        assert(dt);
-        jl_datatype_t *t = (jl_datatype_t*)jl_cache_type_(dt);
-        if (t != dt) {
-            jl_set_typeof(dt, (jl_value_t*)(ptrint_t)0x10); // invalidate the old value to help catch errors
-            if ((jl_value_t*)dt == o) {
-                if (loc) *loc = (jl_value_t*)t;
-                if (offs > 0) backref_list.items[offs] = t;
-            }
-        }
-        if (t->instance != v) {
-            jl_set_typeof(v, (jl_value_t*)(ptrint_t)0x20); // invalidate the old value to help catch errors
-            if (v == o) {
-                *loc = t->instance;
-                if (offs > 0) backref_list.items[offs] = t->instance;
-            }
-        }
-        size_t j = i;
-        while (j < flagref_list.len) {
-            jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
-            int offs = (int)(intptr_t)flagref_list.items[j+1];
-            jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-            if ((jl_value_t*)dt == o) {
-                if (t != dt) {
-                    if (loc) *loc = (jl_value_t*)t;
-                    if (offs > 0) backref_list.items[offs] = t;
-                }
-            }
-            else if (v == o) {
-                if (t->instance != v) {
-                    *loc = t->instance;
-                    if (offs > 0) backref_list.items[offs] = t->instance;
-                }
-            }
-            else {
-                j += 2;
-                continue;
-            }
-            // delete this item from the flagref list, so it won't be re-encountered later
-            flagref_list.len -= 2;
-            if (j >= flagref_list.len)
-                break;
-            flagref_list.items[j+0] = flagref_list.items[flagref_list.len+0];
-            flagref_list.items[j+1] = flagref_list.items[flagref_list.len+1];
-        }
-    }
+    jl_recache_types();
     jl_finalize_deserializer(f); // done with MODE_MODULE
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
@@ -2121,6 +2145,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     init_order = jl_finalize_deserializer(f); // done with f
 
     // Resort the internal method tables
+    size_t i;
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
