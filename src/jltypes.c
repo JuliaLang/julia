@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
@@ -1967,12 +1968,35 @@ static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
     }
 }
 
+static void validatecache(jl_svec_t *cache)
+{
+#ifdef TYPECACHE_VERIFY
+    size_t i, l = jl_svec_len(cache);
+    if (l > 0) {
+        jl_datatype_t *prev = (jl_datatype_t*)jl_svecref(cache, 0);
+        for (i = 1; i < l && prev; i++) {
+            jl_datatype_t *type = (jl_datatype_t*)jl_svecref(cache, i);
+            if (type) {
+                jl_value_t **key = jl_svec_data(type->parameters);
+                size_t n = jl_svec_len(type->parameters);
+                int cmp = typekey_compare(prev, key, n);
+                if (cmp <= 0) {
+                    printf("FATAL: found type cache corruption in %s at %zd\n", type->name->name->name, i);
+                }
+            }
+            prev = type;
+        }
+    }
+#endif
+}
+
 jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
         ssize_t idx = lookup_type_idx(type->name, type->parameters->data,
                                       jl_svec_len(type->parameters), ord);
+        validatecache(type->name->cache);
         if (idx >= 0)
             return jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
         cache_insert_type((jl_value_t*)type, ~idx, ord);

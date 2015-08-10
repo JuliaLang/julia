@@ -47,6 +47,9 @@
 #endif
 #endif
 
+// TYPECACHE_VERIFY forces a full verification of the type cache before every insertion
+// #define TYPECACHE_VERIFY
+
 // SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
 // This is not recommended, as the memory state after such an exception should
 // be considered untrusted, but can be helpful during development
