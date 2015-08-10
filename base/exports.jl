@@ -915,6 +915,7 @@ export
     randexp,
     srand,
     bitrand,
+    randjump,
 
 # bigfloat & precision
     precision,
