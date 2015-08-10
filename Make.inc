@@ -1019,3 +1019,8 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
+
+# Makefile debugging trick:
+# call print-VARIABLE to see the runtime value of any variable
+print-%:
+	@echo '$*=$($*)'
