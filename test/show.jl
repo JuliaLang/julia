@@ -166,6 +166,9 @@ end"""
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# issue #12477
+@test sprint(show, Union{Int64,Int32,Int16,Int8,Float64}) == "Union{Float64,Int16,Int32,Int64,Int8}"
+
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
 @test_repr "foo.bar[1]"
