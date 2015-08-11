@@ -113,32 +113,35 @@ getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? on
 getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[i,j])
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
-    if i <= j
-        A.data[i,j] = x; A
-    else
-        throw(BoundsError(A,(i,j)))
-    end
-end
-function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
-    if i < j
-        A.data[i,j] = x; A
-    else
-        throw(BoundsError(A,(i,j)))
-    end
-end
-function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
-    if i >= j
-        A.data[i,j] = x; A
-    else
-        throw(BoundsError(A,(i,j)))
-    end
-end
-function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i > j
-        A.data[i,j] = x; A
-    else
         throw(BoundsError(A,(i,j)))
     end
+    A.data[i,j] = x
+    return A
+end
+
+function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
+    if i >= j
+        throw(BoundsError(A,(i,j)))
+    end
+    A.data[i,j] = x
+    return A
+end
+
+function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
+    if i < j
+        throw(BoundsError(A,(i,j)))
+    end
+    A.data[i,j] = x
+    return A
+end
+
+function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
+    if i <= j
+        throw(BoundsError(A,(i,j)))
+    end
+    A.data[i,j] = x
+    return A
 end
 
 istril(A::LowerTriangular) = true
