@@ -333,3 +333,6 @@ let n = 12 #Size of matrix problem to test
         @test_throws BoundsError A[1,n+1]
     end
 end
+
+# Issue 12068
+SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
