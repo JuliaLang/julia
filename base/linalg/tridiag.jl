@@ -144,6 +144,41 @@ eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
 eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
+#tril and triu
+
+istriu(M::SymTridiagonal) = all(M.ev .== 0)
+istril(M::SymTridiagonal) = all(M.ev .== 0)
+
+function tril(M::SymTridiagonal, k::Integer=0)
+    n = length(M.dv)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k < -1
+        return SymTridiagonal(zeros(M.dv),zeros(M.ev))
+    elseif k == -1
+        return Tridiagonal(M.ev,zeros(M.dv),zeros(M.ev))
+    elseif k == 0
+        return Tridiagonal(M.ev,M.dv,zeros(M.ev))
+    elseif k >= 1
+        return M
+    end
+end
+
+function triu(M::SymTridiagonal, k::Integer=0)
+    n = length(M.dv)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k > 1
+        return SymTridiagonal(zeros(M.dv),zeros(M.ev))
+    elseif k == 1
+        return Tridiagonal(zeros(M.ev),zeros(M.dv),M.ev)
+    elseif k == 0
+        return Tridiagonal(zeros(M.ev),M.dv,M.ev)
+    elseif k <= -1
+        return M
+    end
+end
+
 ###################
 # Generic methods #
 ###################
@@ -316,6 +351,41 @@ function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
         return A.du[i]
     else
         return zero(T)
+    end
+end
+
+#tril and triu
+
+istriu(M::Tridiagonal) = all(M.ev .== 0)
+istril(M::Tridiagonal) = all(M.ev .== 0)
+
+function tril(M::Tridiagonal, k::Integer=0)
+    n = length(M.d)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k < -1
+        return Tridiagonal(zeros(M.dl),zeros(M.d),zeros(M.du))
+    elseif k == -1
+        return Tridiagonal(M.dl,zeros(M.d),zeros(M.du))
+    elseif k == 0
+        return Tridiagonal(M.dl,M.d,zeros(M.du))
+    elseif k >= 1
+        return M
+    end
+end
+
+function triu(M::Tridiagonal, k::Integer=0)
+    n = length(M.d)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k > 1
+        return Tridiagonal(zeros(M.dl),zeros(M.d),zeros(M.du))
+    elseif k == 1
+        return Tridiagonal(zeros(M.dl),zeros(M.d),M.du)
+    elseif k == 0
+        return Tridiagonal(zeros(M.dl),M.d,M.du)
+    elseif k <= -1
+        return M
     end
 end
 
