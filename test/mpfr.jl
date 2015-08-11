@@ -861,3 +861,5 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) == x
 end
+
+@test isnan(sqrt(BigFloat(NaN)))
