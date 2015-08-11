@@ -1002,7 +1002,8 @@ JL_CALLABLE(jl_f_instantiate_type)
     if (args[0] == (jl_value_t*)jl_uniontype_type) {
         size_t i;
         for(i=1; i < nargs; i++) {
-            if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
+            jl_value_t* ty = args[i];
+            if ((!jl_is_type(ty) && !jl_is_typevar(ty)) || jl_is_vararg_type(ty)) {
                 jl_type_error_rt("apply_type", "parameter of Union",
                                  (jl_value_t*)jl_type_type, args[i]);
             }

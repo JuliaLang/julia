@@ -3200,3 +3200,6 @@ function f12476(a)
     v
 end
 @inferred f12476(1.0 => 1)
+
+# don't allow Vararg{} in Union{} type constructor
+@test_throws TypeError Union{Int,Vararg{Int}}
