@@ -3207,3 +3207,7 @@ end
 # don't allow Vararg{} in Tuple{} type constructor in non-trailing position
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+
+# issue #12551 (make sure these don't throw in inference)
+Base.return_types(unsafe_load, (Ptr{nothing},))
+Base.return_types(getindex, (Vector{nothing},))
