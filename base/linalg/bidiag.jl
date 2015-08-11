@@ -109,6 +109,44 @@ ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
 istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
 
+function tril(M::Bidiagonal, k::Integer=0)
+    n = length(M.dv)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif M.isupper && k < 0
+        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+    elseif k < -1
+        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+    elseif !M.isupper && k == 0
+        return M
+    elseif M.isupper && k == 0
+        return Bidiagonal(M.dv,zeros(M.ev),M.isupper)
+    elseif !M.isupper && k == -1
+        return Bidiagonal(zeros(M.dv),M.ev,M.isupper)
+    elseif k > 0
+        return M
+    end
+end
+
+function triu(M::Bidiagonal, k::Integer=0)
+    n = length(M.dv)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif !M.isupper && k > 0
+        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+    elseif k > 1
+        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+    elseif M.isupper && k == 0
+        return M
+    elseif !M.isupper && k == 0
+        return Bidiagonal(M.dv,zeros(M.ev),M.isupper)
+    elseif M.isupper && k == 1
+        return Bidiagonal(zeros(M.dv),M.ev,M.isupper)
+    elseif k < 0
+        return M
+    end
+end
+
 function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     if n==0
         return M.dv
@@ -249,4 +287,3 @@ function eigvecs{T}(M::Bidiagonal{T})
     Q #Actually Triangular
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
-
