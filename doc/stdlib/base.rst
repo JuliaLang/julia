@@ -125,9 +125,23 @@ Getting Around
 
    When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
-.. function:: compile(module::Symbol)
+.. function:: compilecache(module::Symbol)
 
    Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in LOAD_CACHE_PATH[1], which defaults to `~/.julia/lib/VERSION`. See the manual section `Module initialization and precompilation` (under `Modules`) for important notes.
+
+.. function:: __precompile__(isprecompilable::Bool=true)
+
+   Specify whether the file calling this function is precompilable.  If
+   ``isprecompilable`` is ``true``, then ``__precompile__`` throws an exception
+   *unless* the file is being precompiled, and in a module file it causes
+   the module to be automatically precompiled when it is imported.
+   Typically, ``__precompile__()`` should occur before the ``module``
+   declaration in the file, or better yet ``VERSION >= v"0.4" &&
+   __precompile__()`` in order to be backward-compatible with Julia 0.3.
+
+   If a module or file is *not* safely precompilable, it should call
+   ``__precompile__(false)`` in order to throw an error if Julia attempts
+   to precompile it.
 
 .. function:: include(path::AbstractString)
 
@@ -136,6 +150,15 @@ Getting Around
 .. function:: include_string(code::AbstractString, [filename])
 
    Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
+
+.. function:: include_dependency(path::AbstractString)
+
+   In a module, declare that the file specified by `path` (relative or
+   absolute) is a dependency for precompilation; that is, the
+   module will need to be recompiled if this file changes.
+
+   This is only needed if your module depends on a file that is not
+   used via `include`.   It has no effect outside of compilation.
 
 .. function:: which(f, types)
 
@@ -1204,6 +1227,14 @@ Events
    If ``repeat`` is ``0``, the timer is only triggered once.
    Times are in seconds.
    A timer is stopped and has its resources freed by calling ``close`` on it.
+
+   ::
+              Timer(delay, repeat=0)
+
+   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on
+   the timer object) at a specified interval.
+   Waiting tasks are woken with an error when the timer is closed (by ``close``).
+   Use ``isopen`` to check whether a timer is still active.
 
 Reflection
 ----------
