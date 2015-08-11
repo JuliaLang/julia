@@ -20,7 +20,7 @@ end
 @doc ("I am a macro";)  :@ModuleMacroDoc.m
 
 @test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == ["I am a macro"]
+@test (@doc ModuleMacroDoc.@m) == "I am a macro"
 
 # General tests for docstrings.
 
@@ -129,17 +129,12 @@ let IT = DocsTest.IT
     @test typedoc.fields[:y] == doc"IT.y"
 end
 
-let TA = DocsTest.TA
-    @test meta(DocsTest)[TA] == doc"TA"
-end
+@test @doc(DocsTest.TA) == doc"TA"
 
-let mac = getfield(DocsTest, symbol("@mac"))
-    funcdoc = meta(DocsTest)[mac]
-    @test funcdoc.main == doc"@mac"
-end
+@test @doc(DocsTest.@mac) == doc"@mac"
 
-@test meta(DocsTest)[:G] == doc"G"
-@test meta(DocsTest)[:K] == doc"K"
+@test @doc(DocsTest.G) == doc"G"
+@test @doc(DocsTest.K) == doc"K"
 
 @test @doc(DocsTest.t(::AbstractString)) == doc"t-1"
 @test @doc(DocsTest.t(::Int, ::Any)) == doc"t-2"
