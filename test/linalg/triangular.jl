@@ -85,6 +85,25 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test !istril(A1)
         end
 
+        #tril/triu
+        if uplo1 == :L
+            @test tril(A1)    == A1
+            @test tril(A1,-1) == t1(tril(full(A1),-1))
+            @test tril(A1,1)  == t1(tril(tril(full(A1),1)))
+            @test_throws ArgumentError tril(A1,n+1)
+            @test triu(A1)    == t1(diagm(diag(A1)))
+            @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
+            @test_throws ArgumentError triu(A1,n+1)
+        else
+            @test triu(A1)    == A1
+            @test triu(A1,1)  == t1(triu(full(A1),1))
+            @test triu(A1,-1) == t1(triu(triu(full(A1),-1)))
+            @test_throws ArgumentError triu(A1,n+1)
+            @test tril(A1)    == t1(diagm(diag(A1)))
+            @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
+            @test_throws ArgumentError tril(A1,n+1)
+        end
+
         # factorize
         @test factorize(A1) == A1
 
