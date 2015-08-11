@@ -647,8 +647,6 @@ static Function *to_function(jl_lambda_info_t *li)
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
-    nested_compile = last_n_c;
-    jl_gc_inhibit_finalizers(nested_compile);
 #ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
@@ -679,6 +677,8 @@ static Function *to_function(jl_lambda_info_t *li)
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
     }
+    nested_compile = last_n_c;
+    jl_gc_inhibit_finalizers(nested_compile);
     JL_SIGATOMIC_END();
     return f;
 }
