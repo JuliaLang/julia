@@ -83,3 +83,4 @@ plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
 # writemime
 
 Base.writemime(io::IO, ::MIME"text/plain", md::MD) = plain(io, md)
+Base.writemime(io::IO, ::MIME"text/markdown", md::MD) = plain(io, md)
