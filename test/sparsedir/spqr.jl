@@ -9,18 +9,21 @@ m, n = 100, 10
 nn = 100
 
 for eltyA in (Float64, Complex{Float64})
-    for eltyB in (Float64, Complex{Float64})
+    for eltyB in (Int, Float64, Complex{Float64})
         if eltyA <: Real
             A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
         else
             A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], complex(randn(nn), randn(nn)), m, n)
         end
-        if eltyB <: Real
+        if eltyB == Int
+            B = rand(1:10, m, 2)
+        elseif eltyB <: Real
             B = randn(m, 2)
         else
             B = complex(randn(m, 2), randn(m, 2))
         end
 
+        @inferred A\B
         @test_approx_eq A\B[:,1] full(A)\B[:,1]
         @test_approx_eq A\B full(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]

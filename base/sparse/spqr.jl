@@ -144,5 +144,6 @@ function (\){T}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
     convert(typeof(B), solve(RETX_EQUALS_B, F, QtB))
 end
+(\){T,S}(F::Factorization{T}, B::StridedVecOrMat{S}) = F\convert(AbstractArray{T}, B)
 
 end # module
