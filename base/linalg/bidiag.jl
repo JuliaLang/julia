@@ -6,15 +6,15 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
     function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
-        if length(ev)==length(dv)-1
+        if length(ev) == length(dv)-1
             new(dv, ev, isupper)
         else
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
     end
 end
-Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
-Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = throw(ArgumentError("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
+Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(dv, ev, isupper)
+Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
 #Convert from BLAS uplo flag to boolean internal
 Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
@@ -54,6 +54,8 @@ function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal{T})
     A.isupper ? Tridiagonal(z, A.dv, A.ev) : Tridiagonal(A.ev, A.dv, z)
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
+
+big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
 
 ###################
 # LAPACK routines #
