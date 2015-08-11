@@ -29,21 +29,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
-    if isempty(pids)
-        # only use workers on the current host
-        pids = procs(myid())
-        if length(pids) > 1
-            pids = filter(x -> x != 1, pids)
-        end
-
-        onlocalhost = true
-    else
-        if !check_same_host(pids)
-            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
-        end
-
-        onlocalhost = myid() in procs(pids[1])
-    end
+    pids, onlocalhost = shared_pids(pids)
 
     local shm_seg_name = ""
     local s
@@ -114,6 +100,69 @@ end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
+# Create a SharedArray from a disk file
+function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+    isabspath(filename) || error("$filename is not an absolute path; try abspath(filename)?")
+    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+
+    pids, onlocalhost = shared_pids(pids)
+
+    # If not supplied, determine the appropriate mode
+    have_file = onlocalhost ? isfile(filename) : remotecall_fetch(pids[1], isfile, filename)
+    if mode == nothing
+        mode = have_file ? "r+" : "w+"
+    end
+    workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
+
+    # Ensure the file will be readable
+    mode in ("r", "r+", "w+", "a+") || error("mode must be readable, but I got $mode")
+    init==false || mode in ("r+", "w+", "a+") || error("cannot initialize array unless it is writable")
+
+    # Create the file if it doesn't exist, map it if it does
+    refs = Array(RemoteRef, length(pids))
+    func_mmap = mode -> open(filename, mode) do io
+        Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
+    end
+    local s
+    if onlocalhost
+        s = func_mmap(mode)
+        refs[1] = remotecall(pids[1], () -> func_mmap(workermode))
+    else
+        refs[1] = remotecall_wait(pids[1], () -> func_mmap(mode))
+    end
+
+    # Populate the rest of the workers
+    for i = 2:length(pids)
+        refs[i] = remotecall(pids[i], () -> func_mmap(workermode))
+    end
+
+    # Wait till all the workers have mapped the segment
+    for i in 1:length(refs)
+        wait(refs[i])
+    end
+
+    S = SharedArray{T,N}(dims, pids, refs, filename)
+
+    if onlocalhost
+        init_loc_flds(S)
+        # In the event that myid() is not part of pids, s will not be set
+        # in the init function above, hence setting it here if available.
+        S.s = s
+    else
+        S.pidx = 0
+    end
+
+    # if present, init function is called on each of the parts
+    if isa(init, Function)
+        @sync begin
+            for p in pids
+                @async remotecall_wait(p, init, S)
+            end
+        end
+    end
+    S
+end
+
 typealias SharedVector{T} SharedArray{T,1}
 typealias SharedMatrix{T} SharedArray{T,2}
 
@@ -154,6 +203,25 @@ function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     R = copy(S)
     stackdict[S] = R
     return R
+end
+
+function shared_pids(pids)
+    if isempty(pids)
+        # only use workers on the current host
+        pids = procs(myid())
+        if length(pids) > 1
+            pids = filter(x -> x != 1, pids)
+        end
+
+        onlocalhost = true
+    else
+        if !check_same_host(pids)
+            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
+        end
+
+        onlocalhost = myid() in procs(pids[1])
+    end
+    pids, onlocalhost
 end
 
 function range_1dim(S::SharedArray, pidx)
