@@ -784,16 +784,17 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function Dense{T<:VTypes}(A::VecOrMat{T})
+function convert{T<:VTypes}(::Type{Dense}, A::VecOrMat{T})
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
     unsafe_copy!(s.x, pointer(A), length(A))
     d
 end
-Dense(A::Sparse) = sparse_to_dense(A)
+convert(::Type{Dense}, A::VecOrMat) = Dense(float(A))
+convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function Sparse{Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv}, stype)
+function convert{Tv<:VTypes}(::Type{Sparse}, m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv}, stype)
 
     # check if columns are sorted
     iss = true
@@ -816,7 +817,7 @@ function Sparse{Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_l
     return o
 
 end
-function Sparse{Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
+function convert{Tv<:VTypes}(::Type{Sparse}, m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
     # check if array is symmetric and change stype if it is
@@ -826,7 +827,7 @@ function Sparse{Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_l
     o
 end
 
-function Sparse{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
+function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
     o = allocate_sparse(A.m, A.n, length(A.nzval), true, true, stype, Tv)
     s = unsafe_load(o.p)
     for i = 1:length(A.colptr)
@@ -841,7 +842,7 @@ function Sparse{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Inte
 
     return o
 end
-function Sparse{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long})
+function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_long})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -850,11 +851,18 @@ function Sparse{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long})
     o
 end
 
-Sparse(A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-Sparse{Tv<:VTypes}(A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+function convert{T}(::Type{Sparse},
+    A::Union{SparseMatrixCSC{T,SuiteSparse_long},
+             Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+             Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}},
+    args...)
+    return Sparse(float(A), args...)
+end
 
 # Useful when reading in files, but not type stable
-function Sparse(p::Ptr{C_SparseVoid})
+function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
 
     if p == C_NULL
         throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
@@ -898,9 +906,9 @@ function Sparse(p::Ptr{C_SparseVoid})
 
 end
 
-Sparse(A::Dense) = dense_to_sparse(A, SuiteSparse_long)
-Sparse(L::Factor) = factor_to_sparse!(copy(L))
-function Sparse(filename::ByteString)
+convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
+convert(::Type{Sparse}, L::Factor) = factor_to_sparse!(copy(L))
+function convert(::Type{Sparse}, filename::ByteString)
     open(filename) do f
         return read_sparse(f, SuiteSparse_long)
     end
