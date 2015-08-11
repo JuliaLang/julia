@@ -713,7 +713,7 @@ subsitution string with ``s``. Capture group 0 refers to the entire match object
 Named capture groups can be referenced in the substitution with ``g<groupname>``.
 For example::
 
-    julia> replace("first second", r"(\w+) (?P<agroup>\w+), s"\g<agroup> \1")
+    julia> replace("first second", r"(\w+) (?P<agroup>\w+)", s"\g<agroup> \1")
     julia> "second first"
 
 Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
