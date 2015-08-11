@@ -1904,3 +1904,16 @@ end
 
 # issue #11772
 @test_throws UndefRefError zip(cell(5)...)
+
+# don't allow Vararg{} in Union{} type constructor
+@test_throws TypeError Union{Int,Vararg{Int}}
+
+# don't allow Vararg{} in Tuple{} type constructor in non-trailing position
+@test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
+@test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+
+# issue #12569
+@test_throws ErrorException symbol("x"^10_000_000)
+@test_throws ErrorException gensym("x"^10_000_000)
+@test symbol("x") === symbol("x")
+@test split(string(gensym("abc")),'#')[3] == "abc"
