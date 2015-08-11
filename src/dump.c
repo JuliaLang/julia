@@ -1015,8 +1015,8 @@ void jl_serialize_dependency_list(ios_t *s)
             if (!prev || memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
                 write_int32(s, slen);
                 ios_write(s, jl_string_data(dep), slen);
+                write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
             }
-            write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
             prev = dep;
         }
         write_int32(s, 0); // terminator, for ease of reading
