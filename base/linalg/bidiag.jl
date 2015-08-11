@@ -6,11 +6,10 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
     function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
-        if length(ev) == length(dv)-1
-            new(dv, ev, isupper)
-        else
+        if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
+        new(dv, ev, isupper)
     end
 end
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(dv, ev, isupper)
@@ -35,7 +34,7 @@ end
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
 function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
-    if !(1<=i<=size(A,2) && 1<=j<=size(A,2))
+    if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
     end
     i == j ? A.dv[i] : (A.isupper && (i == j-1)) || (!A.isupper && (i == j+1)) ? A.ev[min(i,j)] : zero(T)
@@ -110,16 +109,16 @@ istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
 istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
 
 function diag{T}(M::Bidiagonal{T}, n::Integer=0)
-    if n==0
+    if n == 0
         return M.dv
-    elseif n==1
+    elseif n == 1
         return M.isupper ? M.ev : zeros(T, size(M,1)-1)
-    elseif n==-1
+    elseif n == -1
         return M.isupper ? zeros(T, size(M,1)-1) : M.ev
-    elseif -size(M,1)<n<size(M,1)
+    elseif -size(M,1) < n < size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(BoundsError("Matrix size is $(size(M)), n is $n"))
+        throw(ArgumentError("matrix size is $(size(M)), n is $n"))
     end
 end
 
@@ -162,7 +161,7 @@ function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
     if nA != n
-        throw(DimensionMismatch("Size of A is ($nA,$mA), corresponding dimension of B is $n"))
+        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copy!(tmp, 1, B, (i - 1)*n + 1, n)
@@ -179,7 +178,7 @@ for func in (:Ac_ldiv_B!, :At_ldiv_B!)
         tmp = similar(B,size(B,1))
         n = size(B, 1)
         if mA != n
-            throw(DimensionMismatch("Size of A' is ($mA,$nA), corresponding dimension of B is $n"))
+            throw(DimensionMismatch("size of A' is ($mA,$nA), corresponding dimension of B is $n"))
         end
         for i = 1:size(B,2)
             copy!(tmp, 1, B, (i - 1)*n + 1, n)
