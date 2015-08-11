@@ -797,3 +797,13 @@ i3 = itrunc(f)
 err(z, x) = abs(z - x) / abs(x)
 @test 1e-60 > err(eta(BigFloat("1.005")), BigFloat("0.693945708117842473436705502427198307157819636785324430166786"))
 @test 1e-60 > err(exp(eta(big(1.0))), 2.0)
+
+# serialization (issue #12386)
+let b = IOBuffer()
+    x = 2.1*big(pi)
+    serialize(b, x)
+    seekstart(b)
+    @test deserialize(b) == x
+end
+
+@test isnan(sqrt(BigFloat(NaN)))
