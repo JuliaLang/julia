@@ -557,13 +557,13 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
     scale!(X, 1./n)
 
     iter = 0
-    est_old = 0.
-    est = 0.
+    local est
+    local est_old
     est_ind = 0
     while iter < maxiter
-        iter = iter + 1
+        iter += 1
         Y = F \ X
-        est = 0.
+        est = zero(real(eltype(Y)))
         est_ind = 0
         for i = 1:t
             y = norm(Y[1:n,i], 1)
@@ -571,6 +571,9 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
                 est = y
                 est_ind = i
             end
+        end
+        if iter == 1
+            est_old = est
         end
         if est > est_old || iter == 2
             ind_best = est_ind
