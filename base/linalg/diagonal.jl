@@ -55,8 +55,8 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
 
-tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
-triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
+tril(D::Diagonal,i::Integer=0) = i == 0 ? D : zeros(D)
+triu(D::Diagonal,i::Integer=0) = i == 0 ? D : zeros(D)
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
 -(A::Diagonal)=Diagonal(-A.diag)
