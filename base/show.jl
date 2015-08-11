@@ -70,7 +70,8 @@ end
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    show_delim_array(io, x.types, '{', ',', '}', false)
+    sorted_types = sort!(collect(x.types); by=string)
+    show_comma_array(io, sorted_types, '{', '}')
 end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
