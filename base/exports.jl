@@ -1048,7 +1048,6 @@ export
     now,
 
 # errors
-    assert,
     backtrace,
     catch_backtrace,
     error,

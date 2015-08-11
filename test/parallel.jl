@@ -60,7 +60,7 @@ for p in procs(d)
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
     d[idxf] = Float64(idxf)
-    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == Float64(idxf)); D[idxl] = Float64(idxl); D[idxl];  end, d,idxf,idxl)
+    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin @assert D[idxf] == Float64(idxf); D[idxl] = Float64(idxl); D[idxl];  end, d,idxf,idxl)
     @test d[idxl] == rv
 end
 

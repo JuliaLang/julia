@@ -279,7 +279,7 @@ end
 const PGRP = ProcessGroup([])
 
 function topology(t)
-    assert(t in [:all_to_all, :master_slave, :custom])
+    @assert (t in [:all_to_all, :master_slave, :custom])
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else
@@ -1059,9 +1059,9 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     disable_threaded_libs()
 
     # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
-    assert(nprocs() <= 1)
-    assert(isempty(PGRP.refs))
-    assert(isempty(client_refs))
+    @assert nprocs() <= 1
+    @assert isempty(PGRP.refs)
+    @assert isempty(client_refs)
 
     # System is started in head node mode, cleanup entries related to the same
     empty!(PGRP.workers)
@@ -1191,7 +1191,7 @@ end
 
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
-    assert(LPROC.id == 1)
+    @assert LPROC.id == 1
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -1591,7 +1591,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 end
 
 function interrupt(pid::Integer)
-    assert(myid() == 1)
+    @assert myid() == 1
     w = map_pid_wrkr[pid]
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
@@ -1600,7 +1600,7 @@ end
 interrupt(pids::Integer...) = interrupt([pids...])
 
 function interrupt(pids::AbstractVector=workers())
-    assert(myid() == 1)
+    @assert myid() == 1
     @sync begin
         for pid in pids
             @async interrupt(pid)

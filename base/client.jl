@@ -383,7 +383,7 @@ function init_parallel()
     global PGRP
     global LPROC
     LPROC.id = 1
-    assert(length(PGRP.workers) == 0)
+    @assert length(PGRP.workers) == 0
     register_worker(LPROC)
 end
 

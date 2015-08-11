@@ -141,7 +141,7 @@ extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 subst(t::TagT,    env) = t===AnyT ? t : TagT(t.name, map(x->subst(x,env), t.params), t.vararg)
 subst(t::UnionT,  env) = UnionT(subst(t.a,env), subst(t.b,env))
 subst(t::Var,     env) = get(env, t, t)
-subst(t::UnionAllT, env) = (assert(!haskey(env, t.var));
+subst(t::UnionAllT, env) = (@assert !haskey(env, t.var);
                             newVar = Var(t.var.name, subst(t.var.lb, env), subst(t.var.ub, env));
                             UnionAllT(newVar, subst(t.T, extend(env, t.var, newVar))))
 subst(t, env) = t

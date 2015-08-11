@@ -374,6 +374,10 @@ end
 
 @deprecate ntuple(n::Integer, f::Function) ntuple(f, n)
 
+# 8856
+
+@deprecate assert(x) @assert x
+
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)

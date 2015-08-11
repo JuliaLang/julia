@@ -115,9 +115,9 @@ include("intfuncs.jl")
 include("nullable.jl")
 
 # I/O
+include("show.jl")
 include("task.jl")
 include("lock.jl")
-include("show.jl")
 include("stream.jl")
 include("socket.jl")
 include("stat.jl")

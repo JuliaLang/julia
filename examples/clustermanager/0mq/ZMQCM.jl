@@ -135,7 +135,7 @@ function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
         zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
-        assert(zid == manager.zid_self)
+        @assert zid == manager.zid_self
 
         from_zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
         mtype = bytestring(ZMQ.recv(manager.sub))
