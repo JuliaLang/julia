@@ -84,7 +84,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         debug && println("Diagonals")
         @test diag(T,2) == zeros(elty, n-2)
-        @test_throws BoundsError diag(T,n+1)
+        @test_throws ArgumentError diag(T,n+1)
 
         debug && println("Eigensystems")
         d1, v1 = eig(T)
