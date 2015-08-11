@@ -59,6 +59,12 @@ let n=10
         @test ctranspose(Symmetric(asym)) == Symmetric(conj(asym))
         @test ctranspose(Hermitian(asym)) == asym
 
+        #tril/triu
+        @test triu(Symmetric(asym),1) == triu(asym,1)
+        @test tril(Symmetric(asym),1) == tril(asym,1)
+        @test triu(Hermitian(asym),1) == triu(asym,1)
+        @test tril(Hermitian(asym),1) == tril(asym,1)
+
         eltya == BigFloat && continue # Revisit when implemented in julia
         d, v = eig(asym)
         @test_approx_eq asym*v[:,1] d[1]*v[:,1]
