@@ -31,6 +31,8 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -551,6 +553,7 @@ Language tooling improvements
 [#11242]: https://github.com/JuliaLang/julia/issues/11242
 [#11688]: https://github.com/JuliaLang/julia/issues/11688
 [#12231]: https://github.com/JuliaLang/julia/issues/12231
+[#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#12819]: https://github.com/JuliaLang/julia/issues/12819
 [#12872]: https://github.com/JuliaLang/julia/issues/12872
 [#13062]: https://github.com/JuliaLang/julia/issues/13062
