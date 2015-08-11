@@ -190,6 +190,11 @@ static void write_as_tag(ios_t *s, uint8_t tag)
     write_uint8(s, tag);
 }
 
+static void write_float64(ios_t *s, double x)
+{
+    write_uint64(s, *((uint64_t*)&x));
+}
+
 // --- Static Compile ---
 
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
@@ -952,7 +957,7 @@ void jl_serialize_mod_list(ios_t *s)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 1;
+static const int JI_FORMAT_VERSION = 2;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void jl_serialize_header(ios_t *s)
@@ -988,10 +993,10 @@ void jl_serialize_dependency_list(ios_t *s)
         size_t l = jl_array_len(deps);
         jl_value_t *prev = NULL;
         for (size_t i=0; i < l; i++) {
-            jl_value_t *dep = jl_cellref(deps, i);
+            jl_value_t *dep = jl_fieldref(jl_cellref(deps, i), 0);
             size_t slen = jl_string_len(dep);
             if (!prev || memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
-                total_size += 4 + slen;
+                total_size += 4 + slen + 8;
             }
             prev = dep;
         }
@@ -1004,12 +1009,14 @@ void jl_serialize_dependency_list(ios_t *s)
         size_t l = jl_array_len(deps);
         jl_value_t *prev = NULL;
         for (size_t i=0; i < l; i++) {
-            jl_value_t *dep = jl_cellref(deps, i);
+            jl_value_t *deptuple = jl_cellref(deps, i);
+            jl_value_t *dep = jl_fieldref(deptuple, 0);
             size_t slen = jl_string_len(dep);
             if (!prev || memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
                 write_int32(s, slen);
                 ios_write(s, jl_string_data(dep), slen);
             }
+            write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
             prev = dep;
         }
         write_int32(s, 0); // terminator, for ease of reading

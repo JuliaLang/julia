@@ -47,7 +47,7 @@ try
         deps = Base.cache_dependencies(cachefile)
         @test sort(deps[1]) == map(s -> (s, Base.module_uuid(eval(s))),
                                    [:Base,:Core,:Main])
-        @test sort(deps[2]) == [Foo_file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
+        @test map(x -> x[1], sort(deps[2])) == [Foo_file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
