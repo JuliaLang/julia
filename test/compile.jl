@@ -15,6 +15,7 @@ try
               module $Foo_module
               @doc "foo function" foo(x) = x + 1
               include_dependency("foo.jl")
+              include_dependency("foo.jl")
               module Bar
               @doc "bar function" bar(x) = x + 2
               include_dependency("bar.jl")
