@@ -57,7 +57,7 @@ end
 
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}})
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(BoundsError())
+        throw(BoundsError(x, rx))
     end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
