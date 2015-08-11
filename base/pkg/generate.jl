@@ -102,6 +102,8 @@ function init(pkg::AbstractString, url::AbstractString=""; config::Dict=Dict())
     info("Origin: $url")
     Git.run(`remote add origin $url`,dir=pkg)
     Git.set_remote_url(url,dir=pkg)
+    Git.run(`config branch.master.remote origin`, dir=pkg)
+    Git.run(`config branch.master.merge refs/heads/master`, dir=pkg)
 end
 
 function license(pkg::AbstractString, license::AbstractString,
