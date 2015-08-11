@@ -270,3 +270,8 @@ end
 
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509
+
+# issue #11618
+@test sum([-0.0]) === -0.0
+@test sum([-0.0, -0.0]) === -0.0
+@test prod([-0.0, -0.0]) === 0.0
