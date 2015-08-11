@@ -319,7 +319,6 @@ function logm(A::StridedMatrix)
         return retmat
     end
 end
-
 logm(a::Number) = (b = log(complex(a)); imag(b) == 0 ? real(b) : b)
 logm(a::Complex) = log(a)
 
@@ -328,21 +327,27 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
         return full(sqrtm(Symmetric(A)))
     end
     n = chksquare(A)
-    SchurF = schurfact(complex(A))
-    R = full(sqrtm(UpperTriangular(SchurF[:T])))
-    retmat = SchurF[:vectors]*R*SchurF[:vectors]'
-    all(imag(retmat) .== 0) ? real(retmat) : retmat
+    if istriu(A)
+        return full(sqrtm(UpperTriangular(A)))
+    else
+        SchurF = schurfact(complex(A))
+        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        return SchurF[:vectors] * R * SchurF[:vectors]'
+    end
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
     if ishermitian(A)
         return full(sqrtm(Hermitian(A)))
     end
     n = chksquare(A)
-    SchurF = schurfact(A)
-    R = full(sqrtm(UpperTriangular(SchurF[:T])))
-    SchurF[:vectors]*R*SchurF[:vectors]'
+    if istriu(A)
+        return full(sqrtm(UpperTriangular(A)))
+    else
+        SchurF = schurfact(A)
+        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        return SchurF[:vectors] * R * SchurF[:vectors]'
+    end
 end
-
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
