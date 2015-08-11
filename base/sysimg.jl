@@ -28,6 +28,8 @@ end
 
 ## Load essential files and libraries
 include("essentials.jl")
+include("docs/bootstrap.jl")
+using .DocBootstrap
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
@@ -55,9 +57,6 @@ include("functors.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
-
-include("docs/bootstrap.jl")
-using .DocBootstrap
 
 # numeric operations
 include("hashing.jl")

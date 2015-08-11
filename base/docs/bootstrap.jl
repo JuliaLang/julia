@@ -4,7 +4,12 @@ module DocBootstrap
 
 export @doc
 
-const docs = []
+type List
+    head
+    tail
+end
+
+docs = nothing
 
 _expand_ = nothing
 
@@ -15,14 +20,28 @@ macro doc(args...)
 end
 
 setexpand!() do str, obj
-    push!(docs, (current_module(), str, obj))
+    global docs = List((ccall(:jl_get_current_module, Any, ()), str, obj), docs)
     return esc(obj)
 end
 
+"""
+    DocBootstrap :: Module
+
+Basic docstring bootstrapping module that accumulates docstrings prior to the real docsystem
+being defined in `base/docs/Docs.jl`. Once the proper docsystem is loaded all docstrings
+that were stored in `DocBootstrap.docs` are migrated to their correct modules using
+`DocBootstrap.loaddocs()`.
+"""
+DocBootstrap
+
 function loaddocs()
-    for (mod, str, obj) in docs
+    node = docs
+    while node ≠ nothing
+        mod, str, obj = node.head
         eval(mod, :(Base.@doc($str, $obj, false)))
+        node = node.tail
     end
+    global docs = nothing
 end
 
 end
