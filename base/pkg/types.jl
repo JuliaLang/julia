@@ -3,7 +3,7 @@
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
-import Base: show, isempty, in, intersect, hash, deepcopy_internal, ==
+import Base: show, isempty, in, intersect, ==, hash, deepcopy_internal
 
 immutable VersionInterval
     lower::VersionNumber
@@ -17,6 +17,7 @@ isempty(i::VersionInterval) = i.upper <= i.lower
 in(v::VersionNumber, i::VersionInterval) = i.lower <= v < i.upper
 intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
 ==(a::VersionInterval, b::VersionInterval) = a.lower == b.lower && a.upper == b.upper
+hash(i::VersionInterval, h::UInt) = hash((i.lower, i.upper), h + (0x0f870a92db508386 % UInt))
 
 immutable VersionSet
     intervals::Vector{VersionInterval}
@@ -67,6 +68,7 @@ immutable Available
 end
 
 ==(a::Available, b::Available) = a.sha1 == b.sha1 && a.requires == b.requires
+hash(a::Available, h::UInt) = hash((a.sha1, a.requires), h + (0xbc8ae0de9d11d972 % UInt))
 
 show(io::IO, a::Available) = isempty(a.requires) ?
     print(io, "Available(", repr(a.sha1), ")") :
@@ -79,6 +81,7 @@ end
 Fixed(v::VersionNumber) = Fixed(v,Requires())
 
 ==(a::Fixed, b::Fixed) = a.version == b.version && a.requires == b.requires
+hash(f::Fixed, h::UInt) = hash((f.version, f.requires), h + (0x68628b809fd417ca % UInt))
 
 show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :

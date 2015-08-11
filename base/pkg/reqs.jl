@@ -2,7 +2,7 @@
 
 module Reqs
 
-import Base: ==
+import Base: ==, hash
 
 using ..Types
 
@@ -49,8 +49,8 @@ immutable Requirement <: Line
     end
 end
 
-# TODO: shouldn't be neccessary #4648
 ==(a::Line, b::Line) = a.content == b.content
+hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
