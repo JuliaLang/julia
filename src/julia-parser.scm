@@ -2083,7 +2083,7 @@
                 ((closing-token? t) #f)
                 ((newline? t) (take-token s) (loop (peek-token s)))
                 (else #t))))
-        `(macrocall (|.| Base (quote @doc)) ,ex ,(production s))
+        `(macrocall @doc ,ex ,(production s))
         ex)))
 
 ; --- main entry point ---
