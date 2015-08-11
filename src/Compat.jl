@@ -543,4 +543,27 @@ if VERSION < v"0.4.0-dev+6506"
     export include_dependency
 end
 
+if VERSION < v"0.4.0-dev+6425"
+    typealias AbstractFloat FloatingPoint
+    export AbstractFloat
+end
+
+if VERSION < v"0.4.0-dev+6068"
+    Base.real{T<:Real}(::Type{T}) = T
+    Base.real{T<:Real}(::Type{Complex{T}}) = T
+end
+
+if VERSION < v"0.4.0-dev+6578"
+    rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
+    rtoldefault{T<:Real}(::Type{T}) = 0
+    rtoldefault{T<:Number,S<:Number}(x::Union(T,Type{T}), y::Union(S,Type{S})) = rtoldefault(promote_type(real(T),real(S)))
+    function Base.isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+        d = norm(x - y)
+        return isfinite(d) ? d <= atol + rtol*max(norm(x), norm(y)) : x == y
+    end
+    const ≈ = isapprox
+    ≉(x,y) = !(x ≈ y)
+    export ≈, ≉
+end
+
 end # module
