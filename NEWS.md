@@ -44,6 +44,7 @@ New language features
 
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
+  * The `++` operator is now parsed, out of discussions about string concatenation, but no default meaning has been defined yet. ([#11030], [#11686])
 
 Language changes
 ----------------
@@ -1551,6 +1552,7 @@ Too numerous to mention.
 [#10914]: https://github.com/JuliaLang/julia/issues/10914
 [#10955]: https://github.com/JuliaLang/julia/issues/10955
 [#10994]: https://github.com/JuliaLang/julia/issues/10994
+[#11030]: https://github.com/JuliaLang/julia/issues/11030
 [#11067]: https://github.com/JuliaLang/julia/issues/11067
 [#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
@@ -1559,6 +1561,7 @@ Too numerous to mention.
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
+[#11686]: https://github.com/JuliaLang/julia/issues/11686
 [#11741]: https://github.com/JuliaLang/julia/issues/11741
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
