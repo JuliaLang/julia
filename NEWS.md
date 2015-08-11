@@ -1580,6 +1580,8 @@ Too numerous to mention.
 [#12087]: https://github.com/JuliaLang/julia/issues/12087
 [#12137]: https://github.com/JuliaLang/julia/issues/12137
 [#12162]: https://github.com/JuliaLang/julia/issues/12162
+[#12264]: https://github.com/JuliaLang/julia/issues/12264
+[#12385]: https://github.com/JuliaLang/julia/issues/12385
 [#12393]: https://github.com/JuliaLang/julia/issues/12393
 [#12458]: https://github.com/JuliaLang/julia/issues/12458
 [#12472]: https://github.com/JuliaLang/julia/issues/12472

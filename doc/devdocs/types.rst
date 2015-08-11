@@ -41,7 +41,7 @@ union with ``typejoin``:
     Int8
 
     julia> Union{Signed, Union{UInt8, Int8}}
-    Union{UInt8,Signed}
+    Union{Signed,UInt8}
 
     julia> typejoin(Signed, Union{UInt8, Int8})
     Integer
@@ -50,7 +50,7 @@ union with ``typejoin``:
     Tuple{Int64,Float64}
 
     julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
-    Union{Tuple{Integer,Float64},Tuple{Int64,Real}}
+    Union{Tuple{Int64,Real},Tuple{Integer,Float64}}
 
     julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
     Tuple{Integer,Real}
@@ -360,11 +360,11 @@ type:
    svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
    ERROR: UndefRefError: access to undefined reference
     in getindex at ./essentials.jl:211
-    in show_delim_array at show.jl:213
-    in show at show.jl:241
-    in anonymous at show.jl:1280
-    in with_output_limit at ./show.jl:1257
-    in showlimited at show.jl:1279
+    in show_delim_array at show.jl:214
+    in show at show.jl:242
+    in anonymous at show.jl:1281
+    in with_output_limit at ./show.jl:1258
+    in showlimited at show.jl:1280
     in display at multimedia.jl:120
     in display at multimedia.jl:151
 
