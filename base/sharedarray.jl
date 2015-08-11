@@ -3,11 +3,11 @@
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Array{RemoteRef}
+    refs::Vector{RemoteRef}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
-    segname::AbstractString
+    segname::UTF8String
 
     # Fields below are not to be serialized
     # Local shmem map.
@@ -19,7 +19,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # the local partition into the array when viewed as a single dimensional array.
     # this can be removed when @parallel or its equivalent supports looping on
     # a subset of workers.
-    loc_subarr_1d
+    loc_subarr_1d::SubArray{T,1,Array{T,N},Tuple{UnitRange{Int}},1}
 
     SharedArray(d,p,r,sn) = new(d,p,r,sn)
 end
@@ -119,6 +119,7 @@ typealias SharedMatrix{T} SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
+linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
@@ -175,14 +176,14 @@ end
 
 sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T}(S::SharedArray{T})
+function init_loc_flds{T,N}(S::SharedArray{T,N})
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         S.s = fetch(S.refs[S.pidx])
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
-        S.loc_subarr_1d = Array(T, 0)
+        S.loc_subarr_1d = sub(Array(T, ntuple(d->0,N)), 1:0)
     end
 end
 
@@ -209,30 +210,10 @@ end
 
 convert(::Type{Array}, S::SharedArray) = S.s
 
-# pass through getindex and setindex! - they always work on the complete array unlike DArrays
-getindex(S::SharedArray) = getindex(S.s)
+# pass through getindex and setindex! - unlike DArrays, these always work on the complete array
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
-getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-getindex(S::SharedArray, I::Colon) = getindex(S.s, I)
-@generated function getindex(S::SharedArray, I::Union{Real,AbstractVector,Colon}...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        getindex(S.s, $(Isplat...))
-    end
-end
 
-setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
-setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
-setindex!(S::SharedArray, x, I::Colon) = setindex!(S.s, x, I)
-@generated function setindex!(S::SharedArray, x, I::Union{Real,AbstractVector,Colon}...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        setindex!(S.s, x, $(Isplat...))
-    end
-end
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
