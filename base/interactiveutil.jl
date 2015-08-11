@@ -205,24 +205,24 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 # displaying type-ambiguity warnings
 
 function code_warntype(io::IO, f, t::ANY)
-    global show_expr_type_emphasize
-    global may_show_expr_type_emphasize
-    state = show_expr_type_emphasize::Bool
-    ct = code_typed(f, t)
-    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = true
-    for ast in ct
-        println(io, "Variables:")
-        vars = ast.args[2][1]
-        for v in vars
-            print(io, "  ", v[1])
-            show_expr_type(io, v[2])
+    task_local_storage(:TYPEEMPHASIZE, true)
+    try
+        ct = code_typed(f, t)
+        for ast in ct
+            println(io, "Variables:")
+            vars = ast.args[2][1]
+            for v in vars
+                print(io, "  ", v[1])
+                show_expr_type(io, v[2])
+                print(io, '\n')
+            end
+            print(io, "\nBody:\n  ")
+            show_unquoted(io, ast.args[3], 2)
             print(io, '\n')
         end
-        print(io, "\nBody:\n  ")
-        show_unquoted(io, ast.args[3], 2)
-        print(io, '\n')
+    finally
+        task_local_storage(:TYPEEMPHASIZE, false)
     end
-    show_expr_type_emphasize::Bool = may_show_expr_type_emphasize::Bool = false
     nothing
 end
 code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
