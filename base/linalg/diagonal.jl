@@ -42,8 +42,8 @@ setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setind
 function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
     if i == j
         unsafe_setindex!(D.diag, v, i)
-    else
-        v == 0 || throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
+    elseif v != 0
+        throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
     end
     D
 end
