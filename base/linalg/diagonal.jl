@@ -15,7 +15,7 @@ convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
     if d[1] != d[2]
-        throw(ArgumentError("Diagonal matrix must be square"))
+        throw(ArgumentError("diagonal matrix must be square"))
     end
     return Diagonal{T}(Array(T,d[1]))
 end
