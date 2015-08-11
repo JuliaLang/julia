@@ -45,6 +45,14 @@ New language features
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
 
+  * Support for inter-task communication using `Channels` ([#12264]).
+    See http://docs.julialang.org/en/latest/manual/parallel-computing/#channels for details.
+
+  * RemoteRefs now point to remote channels. The remote channels can be of length greater than 1.
+    Default continues to be of length 1 ([#12385]).
+    See http://docs.julialang.org/en/latest/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
+
+
 Language changes
 ----------------
 
