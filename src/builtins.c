@@ -1000,11 +1000,19 @@ JL_CALLABLE(jl_f_instantiate_type)
 {
     JL_NARGSV(instantiate_type, 1);
     if (args[0] == (jl_value_t*)jl_uniontype_type) {
-        size_t i;
-        for(i=1; i < nargs; i++) {
+        for(size_t i=1; i < nargs; i++) {
             jl_value_t* ty = args[i];
             if ((!jl_is_type(ty) && !jl_is_typevar(ty)) || jl_is_vararg_type(ty)) {
                 jl_type_error_rt("apply_type", "parameter of Union",
+                                 (jl_value_t*)jl_type_type, args[i]);
+            }
+        }
+    }
+    else if (args[0] == (jl_value_t*)jl_tuple_type) {
+        for(size_t i=1; i < nargs; i++) {
+            jl_value_t* ty = args[i];
+            if (jl_is_vararg_type(ty) && i != nargs-1) {
+                jl_type_error_rt("apply_type", "parameter of Tuple",
                                  (jl_value_t*)jl_type_type, args[i]);
             }
         }
