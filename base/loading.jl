@@ -116,13 +116,14 @@ const package_locks = Dict{Symbol,Condition}()
 const package_loaded = Set{Symbol}()
 
 # used to optionally track dependencies when requiring a module:
-const _require_dependencies = ByteString[]
+const _require_dependencies = Tuple{ByteString,Float64}[]
 const _track_dependencies = [false]
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
     path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
-    if _track_dependencies[1]
-        push!(_require_dependencies, abspath(path))
+    if myid() == 1 && _track_dependencies[1]
+        apath = abspath(path)
+        push!(_require_dependencies, (apath, mtime(apath)))
     end
     return path, prev
 end
@@ -343,7 +344,7 @@ isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_deserialize_verify_header, Ci
 
 function cache_dependencies(f::IO)
     modules = Tuple{Symbol,UInt64}[]
-    files = ByteString[]
+    files = Tuple{ByteString,Float64}[]
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
@@ -355,7 +356,7 @@ function cache_dependencies(f::IO)
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(files, bytestring(readbytes(f, n)))
+        push!(files, (bytestring(readbytes(f, n)), ntoh(read(f, Float64))))
     end
     return modules, files
 end
@@ -370,15 +371,15 @@ function cache_dependencies(cachefile::AbstractString)
     end
 end
 
-function stale_cachefile(cachefile::AbstractString, cachefile_mtime::Real=mtime(cachefile))
+function stale_cachefile(cachefile::AbstractString)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
             return true # invalid cache file
         end
         modules, files = cache_dependencies(io)
-        for f in files
-            if mtime(f) > cachefile_mtime
+        for (f,ftime) in files
+            if mtime(f) != ftime
                 return true
             end
         end
@@ -399,7 +400,7 @@ end
 
 function recompile_stale(mod, cachefile)
     cachestat = stat(cachefile)
-    if iswritable(cachestat) && stale_cachefile(cachefile, cachestat.mtime)
+    if iswritable(cachestat) && stale_cachefile(cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
         create_expr_cache(find_in_path(string(mod)), cachefile)
     end
