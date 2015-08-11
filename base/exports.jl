@@ -1247,6 +1247,7 @@ export
 # shared arrays
     sdata,
     indexpids,
+    localindexes,
 
 # paths and file names
     abspath,
