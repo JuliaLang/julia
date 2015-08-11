@@ -494,7 +494,7 @@ _getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = error("indexing not defined 
 _getindex(::LinearSlow, A::AbstractVector) = (@_inline_meta; getindex(A, 1))
 _getindex(l::LinearSlow, A::AbstractArray) = (@_inline_meta; _getindex(l, A, 1))
 _unsafe_getindex(::LinearFast, A::AbstractArray) = (@_inline_meta; unsafe_getindex(A, 1))
-_unsafe_getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = error("indexing not defined for ", typeof(A))
+_unsafe_getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = (@_inline_meta; getindex(A))
 _unsafe_getindex(::LinearSlow, A::AbstractVector) = (@_inline_meta; unsafe_getindex(A, 1))
 _unsafe_getindex(l::LinearSlow, A::AbstractArray) = (@_inline_meta; _unsafe_getindex(l, A, 1))
 
@@ -596,7 +596,7 @@ _setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defi
 _setindex!(::LinearSlow, A::AbstractVector, v) = (@_inline_meta; setindex!(A, v, 1))
 _setindex!(l::LinearSlow, A::AbstractArray, v) = (@_inline_meta; _setindex!(l, A, v, 1))
 _unsafe_setindex!(::LinearFast, A::AbstractArray, v) = (@_inline_meta; unsafe_setindex!(A, v, 1))
-_unsafe_setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defined for ", typeof(A))
+_unsafe_setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = (@_inline_meta; setindex!(A, v))
 _unsafe_setindex!(::LinearSlow, A::AbstractVector, v) = (@_inline_meta; unsafe_setindex!(A, v, 1))
 _unsafe_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_inline_meta; _unsafe_setindex!(l, A, v, 1))
 
