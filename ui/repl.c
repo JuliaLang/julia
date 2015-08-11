@@ -456,11 +456,11 @@ static void print_profile(void)
 
 static int true_main(int argc, char *argv[])
 {
-    if (jl_base_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
+    if (jl_core_module != NULL) {
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
         if (args == NULL) {
             args = jl_alloc_cell_1d(0);
-            jl_set_const(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
         }
         assert(jl_array_len(args) == 0);
         jl_array_grow_end(args, argc);

@@ -3,14 +3,13 @@
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
+// Options in here are NOT allowed to affect the jlapi, since that would require this header to be installed
+
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
+//
 
 // object layout options ------------------------------------------------------
-
-// if this is not defined, only individual dimension sizes are
-// stored and not total length, to save space.
-#define STORE_ARRAY_LEN
 
 // how much space we're willing to waste if an array outgrows its
 // original object
@@ -47,6 +46,9 @@
 // #define GC_VERIFY
 #endif
 #endif
+
+// TYPECACHE_VERIFY forces a full verification of the type cache before every insertion
+// #define TYPECACHE_VERIFY
 
 // SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
 // This is not recommended, as the memory state after such an exception should

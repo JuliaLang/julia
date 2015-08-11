@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-JULIAHOME = $(abspath ..)
+JULIAHOME := $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
 all: default
@@ -22,8 +22,8 @@ endif
 
 default:
 	mkdir -p $(build_libdir)
-	mkdir -p $(JULIAHOME)/deps/SuiteSparse-SYSTEM/lib
-	cd $(JULIAHOME)/deps/SuiteSparse-SYSTEM/lib && \
+	mkdir -p $(JULIAHOME)/deps/build/SuiteSparse-SYSTEM/lib
+	cd $(JULIAHOME)/deps/build/SuiteSparse-SYSTEM/lib && \
 	rm -f $(build_libdir)/lib{amd,cholmod,colamd,spqr,umfpack}.$(SHLIB_EXT)
 	$(CC) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libsuitesparseconfig.a $(NO_WHOLE_ARCHIVE) -o $(build_libdir)/libsuitesparseconfig.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(build_libdir)/libsuitesparseconfig.$(SHLIB_EXT)

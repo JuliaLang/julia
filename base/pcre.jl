@@ -4,7 +4,7 @@
 
 module PCRE
 
-include("pcre_h.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","pcre_h.jl"))  # include($BUILDROOT/base/pcre_h.jl)
 
 const PCRE_LIB = "libpcre2-8"
 

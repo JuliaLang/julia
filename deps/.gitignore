@@ -1,3 +1,6 @@
+/srccache
+/build
+
 /arpack-*
 /cfe-*
 /clang-*

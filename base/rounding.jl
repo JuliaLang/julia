@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module Rounding
-include("fenv_constants.jl")
+include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "fenv_constants.jl".data))) # include($BUILDROOT/base/fenv_constants.jl)
 
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
@@ -41,8 +41,8 @@ function from_fenv(r::Integer)
     end
 end
 
-set_rounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Cint, (Cint,), i)
-get_rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Cint, ())
+set_rounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
+get_rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Int32, ())
 
 set_rounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = set_rounding_raw(T,to_fenv(r))
 get_rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(get_rounding_raw(T))

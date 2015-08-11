@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#TODO: Move stdio detection from C to Julia (might require some Clang magic)
-include("uv_constants.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 import .Libc: RawFD, dup
 @windows_only import .Libc: WindowsRawSocket
