@@ -85,10 +85,10 @@ end # for eltya
 
 # test triu/tril bounds checking
 A = rand(5,7)
-@test_throws(BoundsError,triu(A,8))
-@test_throws(BoundsError,triu(A,-6))
-@test_throws(BoundsError,tril(A,8))
-@test_throws(BoundsError,tril(A,-6))
+@test_throws(ArgumentError,triu(A,8))
+@test_throws(ArgumentError,triu(A,-6))
+@test_throws(ArgumentError,tril(A,8))
+@test_throws(ArgumentError,tril(A,-6))
 
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
@@ -384,7 +384,7 @@ A = [ 1  5  9
       2  6 10
       3  7 11
       4  8 12 ]
-@test_throws BoundsError diag(A, -5)
+@test_throws ArgumentError diag(A, -5)
 @test diag(A,-4) == []
 @test diag(A,-3) == [4]
 @test diag(A,-2) == [3,8]
@@ -393,21 +393,21 @@ A = [ 1  5  9
 @test diag(A, 1) == [5,10]
 @test diag(A, 2) == [9]
 @test diag(A, 3) == []
-@test_throws BoundsError diag(A, 4)
+@test_throws ArgumentError diag(A, 4)
 
 @test diag(zeros(0,0)) == []
-@test_throws BoundsError diag(zeros(0,0),1)
-@test_throws BoundsError diag(zeros(0,0),-1)
+@test_throws ArgumentError diag(zeros(0,0),1)
+@test_throws ArgumentError diag(zeros(0,0),-1)
 
 @test diag(zeros(1,0)) == []
 @test diag(zeros(1,0),-1) == []
-@test_throws BoundsError diag(zeros(1,0),1)
-@test_throws BoundsError diag(zeros(1,0),-2)
+@test_throws ArgumentError diag(zeros(1,0),1)
+@test_throws ArgumentError diag(zeros(1,0),-2)
 
 @test diag(zeros(0,1)) == []
 @test diag(zeros(0,1),1) == []
-@test_throws BoundsError diag(zeros(0,1),-1)
-@test_throws BoundsError diag(zeros(0,1),2)
+@test_throws ArgumentError diag(zeros(0,1),-1)
+@test_throws ArgumentError diag(zeros(0,1),2)
 
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
