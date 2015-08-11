@@ -301,8 +301,8 @@ y = BigFloat(2)
 @test max(x,y) == x
 @test min(x,y) == y
 y = BigFloat(NaN)
-@test max(x,y) == x
-@test min(x,y) == x
+@test isnan(max(x,y))
+@test isnan(min(x,y))
 @test isnan(max(y,y))
 @test isnan(min(y,y))
 

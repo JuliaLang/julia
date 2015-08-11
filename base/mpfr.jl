@@ -584,12 +584,16 @@ function log1p(x::BigFloat)
 end
 
 function max(x::BigFloat, y::BigFloat)
+    isnan(x) && return x
+    isnan(y) && return y
     z = BigFloat()
     ccall((:mpfr_max, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[])
     return z
 end
 
 function min(x::BigFloat, y::BigFloat)
+    isnan(x) && return x
+    isnan(y) && return y
     z = BigFloat()
     ccall((:mpfr_min, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[])
     return z
