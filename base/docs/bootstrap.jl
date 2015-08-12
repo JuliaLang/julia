@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module DocBootstrap
+macro doc(args...)
+    DocBootstrap._expand_(args...)
+end
 
-export @doc
+module DocBootstrap
 
 type List
     head
@@ -14,10 +16,6 @@ docs = nothing
 _expand_ = nothing
 
 setexpand!(f) = global _expand_ = f
-
-macro doc(args...)
-    _expand_(args...)
-end
 
 setexpand!() do str, obj
     global docs = List((ccall(:jl_get_current_module, Any, ()), str, obj), docs)

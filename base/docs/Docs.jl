@@ -2,6 +2,60 @@
 
 module Docs
 
+"""
+The Docs module provides the `@doc` macro which can be used to set and retrieve
+documentation metadata for Julia objects. Please see docs for the `@doc` macro for more
+info.
+"""
+Docs
+
+"""
+# Documentation
+
+Functions, methods and types can be documented by placing a string before the definition:
+
+    \"""
+    # The Foo Function
+    `foo(x)`: Foo the living hell out of `x`.
+    \"""
+    foo(x) = ...
+
+The `@doc` macro can be used directly to both set and retrieve documentation / metadata. By
+default, documentation is written as Markdown, but any object can be placed before the
+arrow. For example:
+
+    @doc "blah" ->
+    function foo() ...
+
+The `->` is not required if the object is on the same line, e.g.
+
+    @doc "foo" foo
+
+## Documenting objects after they are defined
+You can document an object after its definition by
+
+    @doc "foo" function_to_doc
+    @doc "bar" TypeToDoc
+
+For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or `@doc "macro doc"
+:(string_macro"")` for string macros. Without the quote `:()` the expansion of the macro
+will be documented.
+
+## Retrieving Documentation
+You can retrieve docs for functions, macros and other objects as follows:
+
+    @doc foo
+    @doc @time
+    @doc md""
+
+## Functions & Methods
+Placing documentation before a method definition (e.g. `function foo() ...` or `foo() = ...`)
+will cause that specific method to be documented, as opposed to the whole function. Method
+docs are concatenated together in the order they were defined to provide docs for the
+function.
+"""
+:(Base.DocBootstrap.@doc)
+
 include("bindings.jl")
 
 import Base.Markdown: @doc_str, MD
@@ -31,10 +85,12 @@ macro init()
     end
 end
 
+"`doc!(obj, data)`: Associate the metadata `data` with `obj`."
 function doc!(obj, data)
     meta()[obj] = data
 end
 
+"`doc(obj)`: Get the metadata associated with `obj`."
 function doc(obj)
     for mod in modules
         haskey(meta(mod), obj) && return meta(mod)[obj]
@@ -124,6 +180,9 @@ function doc(f::Function, m::Method)
     end
 end
 
+"""
+`catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
+"""
 catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
@@ -343,83 +402,11 @@ end
 
 Base.DocBootstrap.setexpand!(docm)
 
-# Names are resolved relative to the DocBootstrap module, so
-# inject the ones we need there.
+# Names are resolved relative to the Base module, so inject the ones we need there.
 
-eval(Base.DocBootstrap, :(import ..Docs: @init, @var, doc!, doc, @doc_str))
+eval(Base, :(import .Docs: @init, @var, doc!, doc, @doc_str))
 
 Base.DocBootstrap.loaddocs()
-
-# Metametadata
-
-"""
-The Docs module provides the `@doc` macro which can be used
-to set and retreive documentation metadata for Julia objects.
-Please see docs for the `@doc` macro for more info.
-"""
-Docs
-
-"""
-# Documentation
-
-Functions, methods and types can be documented by placing a string before the
-definition:
-
-    \"""
-    # The Foo Function
-    `foo(x)`: Foo the living hell out of `x`.
-    \"""
-    foo(x) = ...
-
-The `@doc` macro can be used directly to both set and retrieve documentation /
-metadata. By default, documentation is written as Markdown, but any object can
-be placed before the arrow. For example:
-
-    @doc "blah" ->
-    function foo() ...
-
-The `->` is not required if the object is on the same line, e.g.
-
-    @doc "foo" foo
-
-# Documenting objects after they are defined
-You can document an object after its definition by
-
-    @doc "foo" function_to_doc
-    @doc "bar" TypeToDoc
-
-For functions, this currently only support documenting the whole function
-Instead of a specific method. See Functions & Methods section below
-
-For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or
-`@doc "macro doc" :(string_macro"")` for string macros. Without the quote `:()`
-the expansion of the macro will be documented.
-
-# Retrieving Documentation
-You can retrieve docs for functions, macros and other objects as
-follows:
-
-    @doc foo
-    @doc @time
-    @doc md""
-
-# Functions & Methods
-Placing documentation before a method definition (e.g. `function foo()
-...` or `foo() = ...`) will cause that specific method to be
-documented, as opposed to the whole function. Method docs are
-concatenated together in the order they were defined to provide docs
-for the function.
-"""
-:(Base.DocBootstrap.@doc)
-
-"`doc(obj)`: Get the doc metadata for `obj`."
-doc
-
-"""
-`catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta
-object.
-"""
-catdoc
 
 # MD support
 
