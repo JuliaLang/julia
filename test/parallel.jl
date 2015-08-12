@@ -42,7 +42,18 @@ end
 
 # TODO : Need a similar test of shmem cleanup for OSX
 
-# SharedArray tests
+##### SharedArray tests
+
+function check_pids_all(S::SharedArray)
+    pidtested = falses(size(S))
+    for p in procs(S)
+        idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], S)
+        @test all(sdata(S)[idxes_in_p] .== p)
+        pidtested[idxes_in_p] = true
+    end
+    @test all(pidtested)
+end
+
 d = Base.shmem_rand(1:100, dims)
 a = convert(Array, d)
 
@@ -85,6 +96,66 @@ for p in procs(d)
     @test d[idxf] == p
     @test d[idxl] == p
 end
+
+### SharedArrays from a file
+
+# Mapping an existing file
+fn = tempname()
+open(fn, "w") do io
+    write(io, 1:30)
+end
+sz = (6,5)
+Atrue = reshape(1:30, sz)
+
+S = SharedArray(fn, Int, sz)
+@test S == Atrue
+@test length(procs(S)) > 1
+@sync begin
+    for p in procs(S)
+        @async remotecall_wait(p, D->fill!(D.loc_subarr_1d, myid()), S)
+    end
+end
+check_pids_all(S)
+
+filedata = similar(Atrue)
+open(fn, "r") do io
+    read!(io, filedata)
+end
+@test filedata == sdata(S)
+
+# Error for write-only files
+@test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
+
+# Error for file doesn't exist, but not allowed to create
+@test_throws ArgumentError SharedArray(tempname(), Int, sz, mode="r")
+
+# Creating a new file
+fn2 = tempname()
+S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
+@test S == filedata
+filedata2 = similar(Atrue)
+open(fn2, "r") do io
+    read!(io, filedata2)
+end
+@test filedata == filedata2
+
+# Appending to a file
+fn3 = tempname()
+open(fn3, "w") do io
+    write(io, ones(UInt8, 4))
+end
+S = SharedArray(fn3, UInt8, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+len = prod(sz)+4
+@test filesize(fn3) == len
+filedata = Array(UInt8, len)
+open(fn3, "r") do io
+    read!(io, filedata)
+end
+@test all(filedata[1:4] .== 0x01)
+@test all(filedata[5:end] .== 0x02)
+
+
+### Utility functions
 
 # reshape
 
