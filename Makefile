@@ -486,8 +486,7 @@ clean: | $(CLEAN_TARGETS)
 		light-source-dist.tmp light-source-dist.tmp1 \
 		full-source-dist.tmp full-source-dist.tmp1
 	@rm -fr $(build_private_libdir)
-# Temporarily add this line to the Makefile to remove extras
-	@rm -fr $(build_datarootdir)/julia/extras
+	@rm -f $(build_prefix)/.examples
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
