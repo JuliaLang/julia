@@ -288,6 +288,7 @@ end
 # identity matrices via eye(Diagonal{type},n)
 eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
+# Matrix functions
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
 expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
