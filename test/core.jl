@@ -3211,3 +3211,20 @@ end
 # issue #12551 (make sure these don't throw in inference)
 Base.return_types(unsafe_load, (Ptr{nothing},))
 Base.return_types(getindex, (Vector{nothing},))
+
+# dispatch bug
+abstract AKoala{T}
+type KKoala{T} <: AKoala{T}
+end
+typealias ZKoala{J<:Number} KKoala{J}
+FKoala{T}(::AKoala{T},::AKoala{T}) = 1
+FKoala(::AKoala,::AKoala) = 2
+FKoala{T}(::KKoala{T},::KKoala{T}) = 3
+Koala_abs_sig1 = Tuple{ZKoala,KKoala{Int}}
+Koala_abs_sig2 = Tuple{ZKoala,ZKoala}
+Koala_conc_sig = Tuple{KKoala{Float64},KKoala{Int}}
+@test Koala_conc_sig <: Koala_abs_sig1
+@test Koala_conc_sig <: Koala_abs_sig2
+Koala_conc_matches = Set(map(m->m[3],Base._methods(FKoala, Koala_conc_sig, -1)))
+@show Koala_conc_matches <= Set(map(m->m[3],Base._methods(FKoala, Koala_abs_sig1, -1)))
+@show Koala_conc_matches <= Set(map(m->m[3],Base._methods(FKoala, Koala_abs_sig2, -1)))

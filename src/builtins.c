@@ -1090,7 +1090,7 @@ JL_CALLABLE(jl_f_invoke)
     else {
         jl_check_type_tuple(args[1], jl_gf_name(args[0]), "invoke");
     }
-    if (!jl_tuple_subtype(&args[2], nargs-2, (jl_datatype_t*)argtypes, 1))
+    if (!jl_tuple_subtype(&args[2], nargs-2, (jl_datatype_t*)argtypes, NULL, 1))
         jl_error("invoke: argument type error");
     jl_value_t *res = jl_gf_invoke((jl_function_t*)args[0],
                                    (jl_tupletype_t*)argtypes, &args[2], nargs-2);
@@ -1412,10 +1412,10 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
 #endif
     }
     else if (jl_is_float32(v)) {
-        n += jl_printf(out, "%g", jl_unbox_float32(v));
+        n += jl_printf(out, "%#g", jl_unbox_float32(v));
     }
     else if (jl_is_float64(v)) {
-        n += jl_printf(out, "%g", jl_unbox_float64(v));
+        n += jl_printf(out, "%#g", jl_unbox_float64(v));
     }
     else if (v == jl_true) {
         n += jl_printf(out, "true");

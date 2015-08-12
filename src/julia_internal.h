@@ -98,7 +98,7 @@ DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *dat
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 
 
-int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta);
+int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, jl_value_t *envpdt, int ta);
 
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);

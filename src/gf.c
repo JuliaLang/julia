@@ -977,7 +977,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt,
                 ti = (jl_value_t*)jl_bottom_type;
             }
         }
-        else if (jl_tuple_subtype(jl_svec_data(tt->parameters), nargs, m->sig, 0)) {
+        else if (jl_tuple_subtype(jl_svec_data(tt->parameters), nargs, m->sig, NULL, 0)) {
             break;
         }
         m = m->next;
@@ -1689,7 +1689,7 @@ DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_datatype_t *type
             env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
             if (env != (jl_value_t*)jl_false) break;
         }
-        else if (jl_tuple_subtype(jl_svec_data(types->parameters), typelen, m->sig, 0)) {
+        else if (jl_tuple_subtype(jl_svec_data(types->parameters), typelen, m->sig,NULL, 0)) {
             break;
         }
         m = m->next;
@@ -1846,25 +1846,25 @@ DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig, jl_svec_
 // Determine whether a typevar exists inside at most one DataType.
 // These are the typevars that will always be matched by any matching
 // arguments.
-static int tvar_exists_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int attop)
+static int tvar_exists_once_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int attop)
 {
-    int i, l=jl_nparams(sig);
+    int i, l=jl_nparams(sig), nfound=0;
     for(i=0; i < l; i++) {
         jl_value_t *a = jl_tparam(sig, i);
-        if (jl_is_vararg_type(a))
-            a = jl_tparam0(a);
+        if (jl_is_vararg_type(a) && jl_tparam0(a) == tv)
+            return 0; // matched more than once
         if (a == tv)
-            return 1;
+            nfound++;
         if (attop && jl_is_datatype(a)) {
             jl_svec_t *p = ((jl_datatype_t*)a)->parameters;
             int j;
             for(j=0; j < jl_svec_len(p); j++) {
                 if (jl_svecref(p,j) == tv)
-                    return 1;
+                    nfound++;
             }
         }
     }
-    return 0;
+    return nfound==1;
 }
 
 // returns a match as (argtypes, static_params, Method)
@@ -1934,7 +1934,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                     if (jl_is_typevar(jl_svecref(env,i)) &&
                         // if tvar is at the top level it will definitely be matched.
                         // see issue #5575
-                        !tvar_exists_at_top_level(jl_svecref(env,i-1), ml->sig, 1)) {
+                        !tvar_exists_once_at_top_level(jl_svecref(env,i-1), ml->sig, 1)) {
                         matched_all_typevars = 0;
                         break;
                     }
@@ -1949,8 +1949,8 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
                 // NOTE: jl_subtype check added in case the intersection is
                 // over-approximated.
-                if (matched_all_typevars && jl_types_equal(jl_svecref(matc,0), type) &&
-                    jl_subtype(type, (jl_value_t*)ml->sig, 0)) {
+                if (matched_all_typevars && jl_types_equal(jl_svecref(matc,0), type)  &&
+                    jl_subtype_le(type, (jl_value_t*)ml->sig, (jl_value_t*)env, 0, 0)) {
                     JL_GC_POP();
                     return (jl_value_t*)t;
                 }

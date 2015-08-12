@@ -857,6 +857,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 int jl_is_type(jl_value_t *v);
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 DLLEXPORT int jl_has_typevars(jl_value_t *v);
+int jl_subtype_le(jl_value_t *a, jl_value_t *b, jl_value_t* envb, int ta, int invariant);
 DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
