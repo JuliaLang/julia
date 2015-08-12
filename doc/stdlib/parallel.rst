@@ -202,7 +202,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -266,7 +266,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -330,7 +330,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -394,7 +394,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 

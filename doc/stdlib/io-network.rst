@@ -427,7 +427,7 @@ General I/O
 
 .. function:: fd(stream)
 
-   Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous `File`'s and `IOStream`'s
+   Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous ``File``'s and ``IOStream``'s
    not to any of the asynchronous streams.
 
 .. function:: redirect_stdout()
@@ -440,7 +440,7 @@ General I/O
    ::
               redirect_stdout(stream)
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a
    TcpSocket.
 
 .. function:: redirect_stdout(stream)
@@ -456,7 +456,7 @@ General I/O
    ::
               redirect_stdout(stream)
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a
    TcpSocket.
 
 .. function:: redirect_stderr([stream])
@@ -474,7 +474,7 @@ General I/O
 
 .. function:: truncate(file,n)
 
-   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\\0'
+   Resize the file or buffer given by the first argument to exactly ``n`` bytes, filling previously unallocated space with '\\0'
    if the file or buffer is grown
 
 .. function:: skipchars(stream, predicate; linecomment::Char)
@@ -1301,7 +1301,7 @@ Network I/O
 .. function:: listen([addr,]port) -> TcpServer
 
    Listen on port on the address specified by ``addr``. By default this listens on localhost only.
-   To listen on all interfaces pass, ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
+   To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
    ::
               listen(path) -> PipeServer
@@ -1314,7 +1314,7 @@ Network I/O
               listen([addr,]port) -> TcpServer
 
    Listen on port on the address specified by ``addr``. By default this listens on localhost only.
-   To listen on all interfaces pass, ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
+   To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
    ::
               listen(path) -> PipeServer
@@ -1363,11 +1363,11 @@ Network I/O
 .. function:: poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
    Monitor a file for changes by polling every ``interval_s`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
-   The `interval_s` should be a long period; the default is 5.007 seconds.
+   The ``interval_s`` should be a long period; the default is 5.007 seconds.
 
    Returns a pair of ``StatStruct`` objects ``(previous, current)`` when a change is detected.
 
-   To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect notification of changes.
+   To determine when a file was modified, compare ``mtime(prev) != mtime(current)`` to detect notification of changes.
    However, using ``watch_file`` for this operation is preferred, since it is more reliable and efficient,
    although in some situations it may not be available.
 
@@ -1383,11 +1383,11 @@ Network I/O
 
 .. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
-   Bind ``socket`` to the given ``host:port``. Note that `0.0.0.0` will listen on all devices.
+   Bind ``socket`` to the given ``host:port``. Note that ``0.0.0.0`` will listen on all devices.
 
 .. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
-   Send ``msg`` over ``socket to ``host:port``.
+   Send ``msg`` over ``socket`` to ``host:port``.
 
 .. function:: recv(socket::UDPSocket)
 
