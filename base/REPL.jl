@@ -784,15 +784,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
         # Bracketed Paste Mode
         "\e[200~" => (s,o...)->begin
-            ps = LineEdit.state(s, LineEdit.mode(s))
-            input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
-            input = replace(input, '\r', '\n')
-            if position(LineEdit.buffer(s)) == 0
-                indent = Base.indentation(input; tabwidth=4)[1]
-                input = Base.unindent(lstrip(input), indent; tabwidth=4)
-            end
+            input = LineEdit.bracketed_paste(s)
             buf = copy(LineEdit.buffer(s))
-            edit_insert(buf,input)
+            edit_insert(buf, input)
             string = takebuf_string(buf)
             curspos = position(LineEdit.buffer(s))
             pos = 0
