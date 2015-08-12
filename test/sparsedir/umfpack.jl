@@ -33,6 +33,9 @@ for Tv in (Float64, Complex128)
         @test_approx_eq x float([1:5;])
 
         @test norm(A'*x-b,1) < eps(1e4)
+
+        # Element promotion and type inference
+        @inferred lua\ones(Int, size(A, 2))
     end
 end
 
