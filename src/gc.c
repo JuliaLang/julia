@@ -260,7 +260,6 @@ static gcpage_t *page_metadata(void *data);
 static void pre_mark(void);
 static void post_mark(arraylist_t *list, int dryrun);
 static region_t *find_region(void *ptr, int maybe);
-jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p);
 
 #define PAGE_INDEX(region, data)              \
     ((GC_PAGE_DATA((data) - GC_PAGE_OFFSET) - \
