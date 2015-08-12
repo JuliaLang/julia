@@ -1168,11 +1168,25 @@ end
 logm(A::LowerTriangular) = logm(A.').'
 
 function sqrtm{T}(A::UpperTriangular{T})
-    n = size(A, 1)
-    TT = typeof(sqrt(zero(T)))
+    n = chksquare(A)
+    realmatrix = false
+    if isreal(A)
+        realmatrix = true
+        for i = 1:n
+            if real(A[i,i]) < 0
+                realmatrix = false
+                break
+            end
+        end
+    end
+    if realmatrix
+        TT = typeof(sqrt(zero(T)))
+    else
+        TT = typeof(sqrt(complex(-one(T))))
+    end
     R = zeros(TT, n, n)
     for j = 1:n
-        R[j,j] = sqrt(A[j,j])
+        R[j,j] = realmatrix?sqrt(A[j,j]):sqrt(complex(A[j,j]))
         for i = j-1:-1:1
             r = A[i,j]
             for k = i+1:j-1
@@ -1184,7 +1198,7 @@ function sqrtm{T}(A::UpperTriangular{T})
     return UpperTriangular(R)
 end
 function sqrtm{T}(A::UnitUpperTriangular{T})
-    n = size(A, 1)
+    n = chksquare(A)
     TT = typeof(sqrt(zero(T)))
     R = zeros(TT, n, n)
     for j = 1:n
