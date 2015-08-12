@@ -535,7 +535,6 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
     S = zeros(T, n, t)
 
     # Generate the block matrix
-    h = zeros(real(T), n)
     X = Array(T, n, t)
     X[1:n,1] = 1
     for j = 2:t
@@ -625,7 +624,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
 
         # Use the conjugate transpose
         Z = F' \ S
-        h_max = 0
+        h_max = zero(real(eltype(Z)))
+        h = zeros(real(eltype(Z)), n)
         h_ind = 0
         for i = 1:n
             h[i] = norm(Z[i,1:t], Inf)
@@ -640,7 +640,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
         end
         p = sortperm(h, rev=true)
         h = h[p]
-        ind = ind[p]
+        permute!(ind, p)
         if t > 1
             addcounter = t
             elemcounter = 0
