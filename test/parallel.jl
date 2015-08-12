@@ -154,6 +154,7 @@ end
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
 
+rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
 
