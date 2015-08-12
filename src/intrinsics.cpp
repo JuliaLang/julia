@@ -273,10 +273,15 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     }
     if (!x.isboxed) { // already unboxed, but sometimes need conversion
         Value *unboxed;
-        if (x.ispointer)
-            return builder.CreateLoad(builder.CreatePointerCast(x.V, to->getPointerTo()));
-        else
+        if (x.ispointer) {
+            if (jt == (jl_value_t*)jl_bool_type && to != T_int1)
+                return builder.CreateZExt(builder.CreateLoad(builder.CreatePointerCast(x.V, T_int1->getPointerTo())), to);
+            else
+                return builder.CreateLoad(builder.CreatePointerCast(x.V, to->getPointerTo()));
+        }
+        else {
             unboxed = x.V;
+        }
         Type *ty = unboxed->getType();
         // bools are stored internally as int8 (for now)
         if (ty == T_int1 && to == T_int8)
