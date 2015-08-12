@@ -355,12 +355,12 @@ for elty in (Float64, Complex{Float64})
     A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
     @test_approx_eq expm(logm(A5)) A5
     s = readline(rd)
-    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprimary matrix logarithm will be returned.")
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix logarithm will be returned.")
 
     A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
     @test_approx_eq expm(logm(A6)) A6
     s = readline(rd)
-    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprimary matrix logarithm will be returned.")
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix logarithm will be returned.")
     redirect_stderr(OLD_STDERR)
 
     A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
