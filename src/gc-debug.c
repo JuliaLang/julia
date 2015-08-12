@@ -1,5 +1,30 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+// Find the memory block in the pool that owns the byte pointed to by p.
+// For end of object pointer (which is always the case for pointer to a
+// singleton object), this usually returns the same pointer which points to
+// the next object but it can also return NULL if the pointer is pointing to
+// the end of the page.
+DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
+                                                        size_t *osize_p)
+{
+    region_t *r = find_region(p, 1);
+    if (!r)
+        return NULL;
+    char *page_begin = GC_PAGE_DATA(p) + GC_PAGE_OFFSET;
+    if (p < page_begin)
+        return NULL;
+    size_t ofs = p - page_begin;
+    int pg_idx = PAGE_INDEX(r, p);
+    gcpage_t *pagemeta = &r->meta[pg_idx];
+    int osize = pagemeta->osize;
+    if (osize == 0)
+        return NULL;
+    if (osize_p)
+        *osize_p = osize;
+    return (jl_taggedvalue_t*)((char*)p - (ofs % osize));
+}
+
 #ifdef GC_DEBUG_ENV
 #include <inttypes.h>
 #include <stdio.h>
@@ -262,8 +287,10 @@ static int gc_debug_alloc_check(jl_alloc_num_t *num)
     return ((num->num - num->min) % num->interv) == 0;
 }
 
+static char *gc_stack_lo;
 static void gc_debug_init()
 {
+    gc_stack_lo = (char*)gc_get_stack_ptr();
     char *env = getenv("JL_GC_NO_GENERATIONAL");
     if (env && strcmp(env, "0") != 0) {
         gc_debug_env.sweep_mask = GC_MARKED;
@@ -301,6 +328,25 @@ static inline void gc_debug_print()
     gc_debug_print_status();
 }
 
+static void gc_scrub_range(char *stack_lo, char *stack_hi)
+{
+    stack_lo = (char*)((uintptr_t)stack_lo & ~(uintptr_t)15);
+    for (char **stack_p = (char**)stack_lo;
+         stack_p > (char**)stack_hi;stack_p--) {
+        char *p = *stack_p;
+        size_t osize;
+        jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
+        if (!tag || gc_marked(tag) || osize <= sizeof_jl_taggedvalue_t)
+            continue;
+        memset(tag, 0xff, osize);
+    }
+}
+
+static void gc_scrub(char *stack_hi)
+{
+    gc_scrub_range(gc_stack_lo, stack_hi);
+}
+
 #else
 
 static inline int gc_debug_check_other()
@@ -319,6 +365,11 @@ static inline void gc_debug_print()
 
 static inline void gc_debug_init()
 {
+}
+
+static void gc_scrub(char *stack_hi)
+{
+    (void)stack_hi;
 }
 
 #endif
