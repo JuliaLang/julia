@@ -111,7 +111,7 @@ function mmap{T,N}(io::IO,
 
     file_desc = gethandle(io)
     # platform-specific mmapping
-     @unix_only begin
+    @unix_only begin
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file

@@ -127,12 +127,7 @@ end
 @test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@windows_only begin
-    @test_throws ArgumentError SharedArray(tempname(), Int, sz, mode="r")
-end
-@unix_only begin
-    @test_throws SystemError   SharedArray(tempname(), Int, sz, mode="r")
-end
+@test_throws ArgumentError SharedArray(tempname(), Int, sz, mode="r")
 
 # Creating a new file
 fn2 = tempname()
