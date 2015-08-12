@@ -29,7 +29,6 @@ end
 ## Load essential files and libraries
 include("essentials.jl")
 include("docs/bootstrap.jl")
-using .DocBootstrap
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
