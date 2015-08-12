@@ -41,6 +41,14 @@ function rst(io::IO, list::List)
     end
 end
 
+function rst(io::IO, q::BlockQuote)
+    s = sprint(buf -> plain(buf, q.content))
+    for line in split(rstrip(s), "\n")
+        println(io, "    ", line)
+    end
+    println(io)
+end
+
 function rst(io::IO, md::HorizontalRule)
     println(io, "–" ^ 5)
 end
