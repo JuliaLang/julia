@@ -215,7 +215,7 @@ for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
                         X::StridedArray{T, N}, Y::StridedArray)
                 p = new(plan, size(X), size(Y), strides(X), strides(Y),
                         alignment_of(X), alignment_of(Y), flags, R)
-                finalizer(p, destroy_plan)
+                finalizer(destroy_plan,p)
                 p
             end
         end

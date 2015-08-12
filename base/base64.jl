@@ -23,7 +23,7 @@ type Base64EncodePipe <: IO
 
     function Base64EncodePipe(io::IO)
         b = new(io,0,0,0)
-        finalizer(b, close)
+        finalizer(close,b)
         return b
     end
 end
@@ -173,7 +173,7 @@ type Base64DecodePipe <: IO
 
     function Base64DecodePipe(io::IO)
         b = new(io,[],[])
-        finalizer(b, close)
+        finalizer(close,b)
         return b
     end
 end

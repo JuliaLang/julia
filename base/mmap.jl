@@ -134,12 +134,14 @@ function mmap{T,N}(io::IO,
     end # @windows_only
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = pointer_to_array(convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    @unix_only finalizer(A, x -> systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),ptr,mmaplen) != 0))
-    @windows_only finalizer(A, x -> begin
+    @unix_only finalizer(A) do _
+        systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),ptr,mmaplen) != 0)
+    end
+    @windows_only finalizer(A) do _
         status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
         status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
         status || error("could not unmap view: $(Libc.FormatMessage())")
-    end)
+    end
     return A
 end
 

@@ -49,7 +49,7 @@ type BigFloat <: AbstractFloat
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
-        finalizer(z, Base.GMP._mpfr_clear_func)
+        finalizer(Base.GMP._mpfr_clear_func,z)
         return z
     end
     # Not recommended for general use

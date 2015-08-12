@@ -796,7 +796,7 @@ function setindex!{K}(wkh::WeakKeyDict{K}, v, key)
     # TODO: it might be better to avoid the finalizer, allow
     # wiped WeakRefs to remain in the table, and delete them as
     # they are discovered by getindex and setindex!.
-    finalizer(k, wkh.deleter)
+    finalizer(wkh.deleter,k)
     return t
 end
 

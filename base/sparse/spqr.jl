@@ -92,7 +92,7 @@ function backslash{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv}, B::D
     d = Dense(ccall((:SuiteSparseQR_C_backslash, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Cdouble, Ptr{C_Sparse{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
             ordering, tol, A.p, B.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 
@@ -104,7 +104,7 @@ function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv}},
         (Cint, Cdouble, Ptr{Sparse{Tv}}, Ptr{Void}),
             ordering, tol, A.p, common()))
-    finalizer(f, free!)
+    finalizer(free!,f)
     f
 end
 
@@ -119,7 +119,7 @@ function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
     d = Dense(ccall((:SuiteSparseQR_C_solve, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
             system, QR.p, B.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 
@@ -134,7 +134,7 @@ function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     d = Dense(ccall((:SuiteSparseQR_C_qmult, :libspqr), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
                 method, QR.p, X.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 

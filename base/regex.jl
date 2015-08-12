@@ -29,10 +29,10 @@ type Regex
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
                          C_NULL, Csize_t[], C_NULL))
-        finalizer(re, re->begin
-                              re.regex == C_NULL || PCRE.free_re(re.regex)
-                              re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
-                          end)
+        finalizer(re) do re
+            re.regex == C_NULL || PCRE.free_re(re.regex)
+            re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
+        end
         re
     end
 end

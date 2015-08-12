@@ -196,7 +196,7 @@ type Process
             err=DevNull
         end
         this = new(cmd, handle, in, out, err, typemin(Int32), typemin(Int32), false, Condition(), false, Condition())
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize,this)
         this
     end
 end

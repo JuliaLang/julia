@@ -47,7 +47,7 @@ type FileMonitor
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
         end
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize,this)
         this
     end
 end
@@ -69,7 +69,7 @@ type PollingFileWatcher <: UVPollingWatcher
             Libc.free(handle)
             throw(UVError("PollingFileWatcher", err))
         end
-        finalizer(this, uvfinalize)
+        finalizer(uvfinalize,this)
         return this
     end
 end
@@ -156,12 +156,12 @@ type FDWatcher <: UVPollingWatcher
     writable::Bool
     function FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
         this = new(_FDWatcher(fd, readable, writable), readable, writable)
-        finalizer(this, close)
+        finalizer(close,this)
         return this
     end
     @windows_only function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
         this = new(_FDWatcher(fd, readable, writable), readable, writable)
-        finalizer(this, close)
+        finalizer(close,this)
         return this
     end
 end
