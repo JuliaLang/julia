@@ -315,17 +315,21 @@ public:
 #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
 #           ifdef LLVM37
-            SymbolType = sym_iter.getType();
+                SymbolType = sym_iter.getType();
 #           else
-            sym_iter.getType(SymbolType);
+                sym_iter.getType(SymbolType);
 #           endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
 #           ifdef LLVM37
-            Addr = sym_iter.getAddress().get();
+                Addr = sym_iter.getAddress().get();
 #           else
-            sym_iter.getAddress(Addr);
+                sym_iter.getAddress(Addr);
 #           endif
-            sym_iter.getSection(Section);
+#           ifdef LLVM38
+                Section = sym_iter.getSection().get();
+#           else
+                sym_iter.getSection(Section);
+#           endif
             if (Section == EndSection) continue;
 #if defined(LLVM36)
             if (!Section->isText()) continue;
