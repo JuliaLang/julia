@@ -337,6 +337,13 @@ function typedoc(meta, def, def′)
     end
 end
 
+function moddoc(meta, def, name)
+    docex = :(@doc $meta $name)
+    def == nothing && return :(eval($name, $(quot(docex)))) |> esc
+    push!(unblock(def).args[3].args, docex)
+    return esc(Expr(:toplevel, def))
+end
+
 function objdoc(meta, def)
     quote
         @init
@@ -373,7 +380,7 @@ function docm(meta, def, define = true)
     isexpr(def′, :abstract)    ? namedoc(meta, def, namify(def′)) :
     isexpr(def′, :bitstype)    ? namedoc(meta, def, def′.args[2]) :
     isexpr(def′, :typealias)   ?  vardoc(meta, def, namify(def′)) :
-    isexpr(def′, :module)      ? namedoc(meta, def, def′.args[2]) :
+    isexpr(def′, :module)      ?  moddoc(meta, def, def′.args[2]) :
     isexpr(def′, :(=), :const,
                  :global)      ?  vardoc(meta, def, namify(def′)) :
     isvar(def′)                ? objdoc(meta, def′) :
