@@ -315,7 +315,10 @@ function docm(meta, def, define = true)
     isexpr(def′, :bitstype)    ? namedoc(meta, def, def′.args[2]) :
     isexpr(def′, :typealias)   ?  vardoc(meta, def, namify(def′)) :
     isexpr(def′, :module)      ? namedoc(meta, def, def′.args[2]) :
-    isexpr(def′, :(=), :const) ?  vardoc(meta, def, namify(def′)) :
+    isexpr(def′, :(=), :const,
+                 :global)      ?  vardoc(meta, def, namify(def′)) :
+    isvar(def′)                ? objdoc(meta, def′) :
+    isa(def′, Expr)            ? error("Invalid doc expression $def′") :
     objdoc(meta, def′)
 end
 
