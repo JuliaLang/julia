@@ -1326,30 +1326,14 @@ function commit_line(s)
     state(s, mode(s)).ias = InputAreaState(0, 0)
 end
 
+"""
+`Base.LineEdit.tabwidth` controls the presumed tab width of code pasted into the REPL.
+
+You can modify it by doing `eval(Base.LineEdit, :(tabwidth = 4))`, for example.
+
+Must satisfy `0 < tabwidth <= 16`.
+"""
 global tabwidth = 8
-
-"""
-Returns the physical tab width for line editing and the REPL
-"""
-get_tabwidth() = tabwidth
-
-"""
-Sets the physical tab width for line editing and the REPL
-The default value is 8
-
-### Returns:
-*     Old value
-
-### Throws:
-*     ArgumentError
-"""
-function set_tabwidth!(sz)
-    global tabwidth
-    0 < sz <= 16 || throw(ArgumentError("tab_size ($sz) must be > 0 and <= 16"))
-    oldsz = tabwidth
-    tabwidth = sz
-    return oldsz
-end
 
 function bracketed_paste(s)
     ps = state(s, mode(s))
