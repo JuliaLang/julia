@@ -102,7 +102,7 @@ SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
 # Create a SharedArray from a disk file
 function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
-    isabspath(filename) || error("$filename is not an absolute path; try abspath(filename)?")
+    isabspath(filename) || throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -115,8 +115,8 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
 
     # Ensure the file will be readable
-    mode in ("r", "r+", "w+", "a+") || error("mode must be readable, but I got $mode")
-    init==false || mode in ("r+", "w+", "a+") || error("cannot initialize array unless it is writable")
+    mode in ("r", "r+", "w+", "a+") || throw(ArgumentError("mode must be readable, but $mode is not"))
+    init==false || mode in ("r+", "w+", "a+") || throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
 
     # Create the file if it doesn't exist, map it if it does
     refs = Array(RemoteRef, length(pids))
