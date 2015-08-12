@@ -39,6 +39,7 @@ function lastdayofyear(dt::Date)
     y,m,d = yearmonthday(dt)
     return Date(UTD(value(dt)+daysinyear(y)-dayofyear(y,m,d)))
 end
+lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
 
 @vectorize_1arg TimeType firstdayofyear
 @vectorize_1arg TimeType lastdayofyear
