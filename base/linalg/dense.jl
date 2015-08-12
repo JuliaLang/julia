@@ -323,17 +323,53 @@ kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),resha
 kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
-^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
-
-function ^(A::AbstractMatrix, p::Number)
+# Matrix power
+^(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A),-p) : Base.power_by_squaring(A,p)
+function ^{T}(A::AbstractMatrix{T}, p::Real)
+    # For integer powers, use repeated squaring
     if isinteger(p)
         return A^Integer(real(p))
     end
-    checksquare(A)
-    v, X = eig(A)
-    any(v.<0) && (v = complex(v))
-    Xinv = ishermitian(A) ? X' : inv(X)
-    (X * Diagonal(v.^p)) * Xinv
+
+    # If possible, use diagonalization
+    if issymmetric(A) && T <: Real
+        return full(Symmetric(A)^p)
+    end
+    if ishermitian(A)
+        return full(Hermitian(A)^p)
+    end
+
+    # Otherwise, use Schur decomposition
+    n = checksquare(A)
+    if istriu(A)
+        #Integer part
+        retmat = full(A) ^ floor(p)
+        #Real part
+        retmat = retmat * full(powm(UpperTriangular(A), real(p - floor(p))))
+        d = diag(A)
+    else
+        S,Q,d = schur(complex(A))
+        R = UpperTriangular(S)^p
+        retmat = Q * R * Q'
+    end
+
+    # Check whether the matrix has nonpositive real eigs
+    np_real_eigs = false
+    for i = 1:n
+        if imag(d[i]) < eps() && real(d[i]) <= 0
+            np_real_eigs = true
+            break
+        end
+    end
+    if np_real_eigs
+        warn("Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+    end
+
+    if isreal(A) && !np_real_eigs
+        return real(retmat)
+    else
+        return retmat
+    end
 end
 
 # Matrix exponential
@@ -466,7 +502,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A::StridedMatrix)
+    logm(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -497,8 +533,11 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix)
+function logm{T}(A::StridedMatrix{T})
     # If possible, use diagonalization
+    if issymmetric(A) && T <: Real
+        return full(logm(Symmetric(A)))
+    end
     if ishermitian(A)
         return full(logm(Hermitian(A)))
     end

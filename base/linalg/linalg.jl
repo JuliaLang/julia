@@ -113,6 +113,7 @@ export
     ordschur,
     peakflops,
     pinv,
+    powm,
     qr,
     qrfact!,
     qrfact,

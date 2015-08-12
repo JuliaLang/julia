@@ -512,6 +512,39 @@ end
     @test_throws ArgumentError diag(zeros(0,1),2)
 end
 
+@testset "New matrix ^ implementation" for elty in (Float64, Complex{Float64})
+    A11  = convert(Matrix{elty}, [1 2 3; 4 7 1; 2 1 4])
+
+    OLD_STDERR = STDERR
+    rd,wr = redirect_stderr()
+
+    @test A11^(1/2) ≈ sqrtm(A11)
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    @test A11^(-1/2) ≈ inv(sqrtm(A11))
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    @test A11^(3/4) ≈ sqrtm(A11) * sqrtm(sqrtm(A11))
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    @test A11^(-3/4) ≈ inv(A11) * sqrtm(sqrtm(A11))
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    @test A11^(17/8) ≈ A11^2 * sqrtm(sqrtm(sqrtm(A11)))
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    @test A11^(-17/8) ≈ inv(A11^2 * sqrtm(sqrtm(sqrtm(A11))))
+    s = readline(rd)
+    @test contains(s, "WARNING: Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
+
+    redirect_stderr(OLD_STDERR)
+end
+
 @testset "Least squares solutions" begin
     a = [ones(20) 1:20 1:20]
     b = reshape(eye(8, 5), 20, 2)

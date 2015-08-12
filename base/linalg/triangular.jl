@@ -1662,13 +1662,79 @@ At_ldiv_B(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw
 Ac_ldiv_B(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 Ac_ldiv_B(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
+# Complex matrix power for upper triangular factor, see:
+#   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
+#     SIAM J. Matrix Anal. & Appl., 32 (3), (2011) 1056–1078.
+#   Higham and Lin, "An improved Schur-Padé algorithm for fractional powers of
+#     a matrix and their Fréchet derivatives", SIAM. J. Matrix Anal. & Appl.,
+#     34(3), (2013) 1341–1360.
+function powm(A0::UpperTriangular{T}, p::Real) where T<:BlasFloat
+
+    if abs(p) >= 1
+        ArgumentError("p must be a real number in (-1,1), got $p")
+    end
+
+    theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
+    n = checksquare(A0)
+
+    A, m, s = invsquaring(A0,theta)
+    A = I - A
+
+    # Compute accurate diagonal of I - T
+    sqrt_diag!(A0,A,s)
+    for i = 1:n
+        A[i,i] = -A[i,i]
+    end
+    # Compute the Padé approximant
+    c = 0.5 * (p - m) / (2 * m - 1)
+    triu!(A)
+    S = c * A
+    Stmp = similar(S)
+    for j = m-1:-1:1
+        j4 = 4 * j
+        c = (-p - j) / (j4 + 2)
+        for i = 1:n
+            @inbounds S[i,i] = S[i,i] + 1
+        end
+        copy!(Stmp,S)
+        scale!(S,A,c)
+        A_ldiv_B!(Stmp,S.data)
+
+        c = (p - j) / (j4 - 2)
+        for i = 1:n
+            @inbounds S[i,i] = S[i,i] + 1
+        end
+        copy!(Stmp,S)
+        scale!(S,A,c)
+        A_ldiv_B!(Stmp,S.data)
+    end
+    for i = 1:n
+        S[i,i] = S[i,i] + 1
+    end
+    copy!(Stmp,S)
+    scale!(S,A,-p)
+    A_ldiv_B!(Stmp,S.data)
+    for i = 1:n
+        @inbounds S[i,i] = S[i,i] + 1
+    end
+
+    blockpower!(A0,S,p/(2^s))
+    for m = 1:s
+        A_mul_B!(Stmp.data,S,S)
+        copy!(S,Stmp)
+        blockpower!(A0,S,p/(2^(s-m)))
+    end
+    return S
+end
+^(A::LowerTriangular, p::Integer) = ^(A.', p::Integer).'
+powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
-#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153-C169.
+#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153–C169.
 #   Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
-#     logarithm and estimating the condition number", SIAM J. Sci. Comput., 35(4),
-#     (2013), C394-C410.
+#     logarithm and estimating the condition number", SIAM J. Sci. Comput.,
+#     35(4), (2013), C394–C410.
 #
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
@@ -1809,7 +1875,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         A[i,i] = z0 / r
     end
 
-    # Compute the Gauss-Legendre quadrature formula
+    # Get the Gauss-Legendre quadrature points and weights
     R = zeros(Float64, m, m)
     for i = 1:m - 1
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
@@ -1853,6 +1919,168 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 
 end
 logm(A::LowerTriangular) = logm(A.').'
+
+# Auxiliary functions for logm and matrix power
+
+# Compute accurate diagonal of A = A0^s - I
+#   Al-Mohy, "A more accurate Briggs method for the logarithm",
+#      Numer. Algorithms, 59, (2012), 393–402.
+function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
+    n = checksquare(A0)
+    @inbounds for i = 1:n
+        a = complex(A0[i,i])
+        if s == 0
+            A[i,i] = a - 1
+        else
+            s0 = s
+            if imag(a) >= 0 && real(a) <= 0 && a != 0
+                a = sqrt(a)
+                s0 = s - 1
+            end
+            z0 = a - 1
+            a = sqrt(a)
+            r = 1 + a
+            for j = 1:s0-1
+                a = sqrt(a)
+                r = r * (1 + a)
+            end
+            A[i,i] = z0 / r
+        end
+    end
+end
+
+# Repeatedly compute the square roots of A so that in the end its
+# eigenvalues are close enough to the positive real line
+function invsquaring(A0::UpperTriangular, theta)
+    maxsqrt = 100
+    tmax = size(theta, 1)
+    n = checksquare(A0)
+    A = complex(copy(A0))
+    p = 0
+    m = 0
+
+    # Compute repeated roots
+    d = complex(diag(A))
+    dm1 = similar(d, n)
+    s = 0
+    for i = 1:n
+        dm1[i] = d[i] - 1.
+    end
+    while norm(dm1, Inf) > theta[tmax]
+        for i = 1:n
+            d[i] = sqrt(d[i])
+        end
+        for i = 1:n
+            dm1[i] = d[i] - 1
+        end
+        s = s + 1
+    end
+    s0 = s
+    for k = 1:min(s, maxsqrt)
+        A = sqrtm(A)
+    end
+
+    AmI = A - I
+    d2 = sqrt(norm(AmI^2, 1))
+    d3 = cbrt(norm(AmI^3, 1))
+    alpha2 = max(d2, d3)
+    foundm = false
+    if alpha2 <= theta[2]
+        m = alpha2<=theta[1]?1:2
+        foundm = true
+    end
+
+    while !foundm
+        more = false
+        if s > s0
+            d3 = cbrt(norm(AmI^3, 1))
+        end
+        d4 = norm(AmI^4, 1)^(1/4)
+        alpha3 = max(d3, d4)
+        if alpha3 <= theta[tmax]
+            for j = 3:tmax
+                if alpha3 <= theta[j]
+                    break
+                elseif alpha3 / 2 <= theta[5] && p < 2
+                    more = true
+                    p = p + 1
+                end
+            end
+            if j <= 6
+                m = j
+                foundm = true
+                break
+            elseif alpha3 / 2 <= theta[5] && p < 2
+                more = true
+                p = p + 1
+           end
+        end
+
+        if !more
+            d5 = norm(AmI^5, 1)^(1/5)
+            alpha4 = max(d4, d5)
+            eta = min(alpha3, alpha4)
+            if eta <= theta[tmax]
+                j = 0
+                for j = 6:tmax
+                    if eta <= theta[j]
+                        m = j
+                        break
+                    end
+                    break
+                end
+            end
+            if s == maxsqrt
+                m = tmax
+                break
+            end
+            A = sqrtm(A)
+            AmI = A - I
+            s = s + 1
+        end
+    end
+
+    # Compute accurate superdiagonal of T
+    p = 1 / 2^s
+    A = complex(A)
+    blockpower!(A, A0, p)
+    return A,m,s
+
+end
+
+# Compute accurate diagonal and superdiagonal of A = A0^p
+function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
+    n = checksquare(A0)
+    @inbounds for k = 1:n-1
+
+        Ak = complex(A0[k,k])
+        Akp1 = complex(A0[k+1,k+1])
+
+        Akp = Ak^p
+        Akp1p = Akp1^p
+
+        A[k,k] = Akp
+        A[k+1,k+1] = Akp1p
+
+        if Ak == Akp1
+            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
+            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+        else
+            logAk = log(Ak)
+            logAkp1 = log(Akp1)
+            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im * pi * unw(logAkp1-logAk)
+            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+            A[k,k+1] = A0[k,k+1] * dd
+        end
+    end
+end
+
+# Unwinding number
+unw(x::Real) = 0
+unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
+
+# End of auxiliary functions for logm and matrix power
 
 function sqrtm(A::UpperTriangular)
     realmatrix = false
