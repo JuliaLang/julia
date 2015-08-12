@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 export @var
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
