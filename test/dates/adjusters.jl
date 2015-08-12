@@ -183,6 +183,17 @@ end
 @test Dates.lastdayofquarter(Dates.DateTime(2014,8,2)) == Dates.DateTime(2014,9,30)
 @test Dates.lastdayofquarter(Dates.DateTime(2014,12,2)) == Dates.DateTime(2014,12,31)
 
+first = Dates.Date(2014,1,1)
+last = Dates.Date(2014,12,31)
+for i = 0:364
+    dt = first + Dates.Day(i)
+
+    @test Dates.firstdayofyear(dt) == first
+    @test Dates.firstdayofyear(DateTime(dt)) == DateTime(first)
+
+    @test Dates.lastdayofyear(dt) == last
+    @test Dates.lastdayofyear(DateTime(dt)) == DateTime(last)
+end
 
 # Adjusters
 # Adjuster Constructors
