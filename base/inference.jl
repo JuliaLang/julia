@@ -782,6 +782,26 @@ function precise_container_types(args, types, vtypes, sv)
     return result
 end
 
+# simulate iteration protocol on container type up to fixpoint
+function abstract_iteration(ty, vtypes, sv)
+    it = abstract_call(getfield(_topmod(),:start), Any[:_], Any[ty], vtypes, sv, :(start(_)))
+    isleaftype(it) || return Any
+    elem = Bottom
+    while true
+        state = abstract_call(getfield(_topmod(),:next), Any[:_0,:_1], Any[ty, it], vtypes, sv, :(next(_0,_1)))
+        isleaftype(state) || return Any
+        state<:Tuple && !isvatuple(state) && length(state.parameters) == 2 || return Any
+        it === state.parameters[2] || return Any # only handle iteration where the iteration state has constant type
+        new_elem = tmerge(elem, state.parameters[1])
+        if (new_elem <: elem)
+            break
+        else
+            elem = new_elem
+        end
+    end
+    elem
+end
+
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(af, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
     ctypes = precise_container_types(fargs, aargtypes, vtypes, sv)
@@ -819,8 +839,12 @@ function abstract_apply(af, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
         return Tuple
     end
     is(af,kwcall) && return Any
+    allargs_type = Any
+    if length(aargtypes) >= 1
+        allargs_type = reduce(tmerge, map(aty -> abstract_iteration(aty, vtypes, sv), aargtypes))
+    end
     # apply known function with unknown args => f(Any...)
-    return abstract_call(af, (), Any[Vararg{Any}], vtypes, sv, ())
+    return abstract_call(af, (), Any[Vararg{allargs_type}], vtypes, sv, ())
 end
 
 function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInfo, e)
