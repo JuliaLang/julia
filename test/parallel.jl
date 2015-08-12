@@ -124,10 +124,15 @@ end
 @test filedata == sdata(S)
 
 # Error for write-only files
-@test_throws ErrorException SharedArray(fn, Int, sz, mode="w")
+@test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@test_throws SystemError SharedArray(tempname(), Int, sz, mode="r")
+@windows_only begin
+    @test_throws ArgumentError SharedArray(tempname(), Int, sz, mode="r")
+end
+@unix_only begin
+    @test_throws SystemError   SharedArray(tempname(), Int, sz, mode="r")
+end
 
 # Creating a new file
 fn2 = tempname()
