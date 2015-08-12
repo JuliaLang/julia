@@ -56,6 +56,12 @@ end
 ctranspose(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
 
+#tril/triu
+tril(A::Hermitian,k::Integer=0) = tril(A.data,k)
+triu(A::Hermitian,k::Integer=0) = triu(A.data,k)
+tril(A::Symmetric,k::Integer=0) = tril(A.data,k)
+triu(A::Symmetric,k::Integer=0) = triu(A.data,k)
+
 ## Matvec
 A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
 A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(y::StridedVector{T}, A::Hermitian{T,S}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)

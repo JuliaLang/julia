@@ -84,10 +84,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_approx_eq D/D2 Diagonal(D.diag./D2.diag)
 
     # test triu/tril
-    @test triu!(copy(D),1) == zeros(D)
-    @test triu!(copy(D),0) == D
-    @test tril!(copy(D),1) == zeros(D)
-    @test tril!(copy(D),0) == D
+    @test triu(D,1) == zeros(D)
+    @test triu(D,0) == D
+    @test tril(D,1) == zeros(D)
+    @test tril(D,0) == D
 
     # factorize
     @test factorize(D) == D

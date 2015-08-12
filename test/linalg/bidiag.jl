@@ -42,6 +42,28 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             @test func(func(T)) == T
         end
 
+        debug && println("triu and tril")
+        @test tril(Bidiagonal(dv,ev,'U'),-1) == Bidiagonal(zeros(dv),zeros(ev),'U')
+        @test tril(Bidiagonal(dv,ev,'L'),-1) == Bidiagonal(zeros(dv),ev,'L')
+        @test tril(Bidiagonal(dv,ev,'U'),-2) == Bidiagonal(zeros(dv),zeros(ev),'U')
+        @test tril(Bidiagonal(dv,ev,'L'),-2) == Bidiagonal(zeros(dv),zeros(ev),'L')
+        @test tril(Bidiagonal(dv,ev,'U'),1)  == Bidiagonal(dv,ev,'U')
+        @test tril(Bidiagonal(dv,ev,'L'),1)  == Bidiagonal(dv,ev,'L')
+        @test tril(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,zeros(ev),'U')
+        @test tril(Bidiagonal(dv,ev,'L'))    == Bidiagonal(dv,ev,'L')
+        @test_throws ArgumentError tril(Bidiagonal(dv,ev,'U'),n+1)
+
+        @test triu(Bidiagonal(dv,ev,'L'),1)  == Bidiagonal(zeros(dv),zeros(ev),'L')
+        @test triu(Bidiagonal(dv,ev,'U'),1)  == Bidiagonal(zeros(dv),ev,'U')
+        @test triu(Bidiagonal(dv,ev,'U'),2)  == Bidiagonal(zeros(dv),zeros(ev),'U')
+        @test triu(Bidiagonal(dv,ev,'L'),2)  == Bidiagonal(zeros(dv),zeros(ev),'L')
+        @test triu(Bidiagonal(dv,ev,'U'),-1) == Bidiagonal(dv,ev,'U')
+        @test triu(Bidiagonal(dv,ev,'L'),-1) == Bidiagonal(dv,ev,'L')
+        @test triu(Bidiagonal(dv,ev,'L'))    == Bidiagonal(dv,zeros(ev),'L')
+        @test triu(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,ev,'U')
+        @test_throws ArgumentError triu(Bidiagonal(dv,ev,'U'),n+1)
+
+
         debug && println("Linear solver")
         Tfull = full(T)
         condT = cond(map(Complex128,Tfull))

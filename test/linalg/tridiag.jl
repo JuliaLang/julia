@@ -115,6 +115,25 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # issue #1490
     @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+
+    #tril/triu
+    @test_throws ArgumentError tril(SymTridiagonal(d,dl),n+1)
+    @test_throws ArgumentError tril(Tridiagonal(dl,d,du),n+1)
+    @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zeros(dl))
+    @test tril(SymTridiagonal(d,dl),1)  == Tridiagonal(dl,d,dl)
+    @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zeros(d),zeros(dl))
+    @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zeros(du))
+    @test tril(Tridiagonal(dl,d,du),1)  == Tridiagonal(dl,d,du)
+    @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zeros(d),zeros(du))
+
+    @test_throws ArgumentError triu(SymTridiagonal(d,dl),n+1)
+    @test_throws ArgumentError triu(Tridiagonal(dl,d,du),n+1)
+    @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zeros(dl),d,dl)
+    @test triu(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,d,dl)
+    @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zeros(dl),zeros(d),dl)
+    @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zeros(dl),d,du)
+    @test triu(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,d,du)
+    @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zeros(dl),zeros(d),du)
     end
 end
 
