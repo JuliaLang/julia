@@ -232,7 +232,6 @@ function unblock(ex)
     isexpr(ex, :block) || return ex
     exs = filter(ex->!isexpr(ex, :line), ex.args)
     length(exs) == 1 || return ex
-    # Recursive unblock'ing for macro expansion
     return unblock(exs[1])
 end
 
@@ -259,8 +258,8 @@ function namedoc(meta, def, name)
     end
 end
 
-function funcdoc(meta, def, def′, name)
-    f = esc(name)
+function funcdoc(meta, def, def′)
+    f = esc(namify(def′))
     m = :(methods($f, $(esc(signature(def′))))[1])
     quote
         @init
@@ -270,11 +269,11 @@ function funcdoc(meta, def, def′, name)
     end
 end
 
-function typedoc(meta, def, def′, name)
+function typedoc(meta, def, def′)
     quote
         @init
         $(esc(def))
-        doc!($(esc(name)), $(mdify(meta)), $(field_meta(unblock(def′))))
+        doc!($(esc(namify(def′.args[2]))), $(mdify(meta)), $(field_meta(unblock(def′))))
         nothing
     end
 end
@@ -297,45 +296,34 @@ end
 fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
-    # Quote, Unblock and Macroexpand
-    # * Always do macro expansion unless it's a quote (for consistency)
-    # * Unblock before checking for Expr(:quote) to support `->` syntax
-    # * Unblock after macro expansion to recognize structures of
-    #   the generated AST
     def′ = unblock(def)
-    if !isexpr(def′, :quote)
-        def = macroexpand(def)
-        def′ = unblock(def)
-    elseif length(def′.args) == 1 && isexpr(def′.args[1], :macrocall)
-        # Special case for documenting macros after definition with
-        # `@doc "<doc string>" :@macro` or
-        # `@doc "<doc string>" :(str_macro"")` syntax.
-        #
-        # Allow more general macrocall for now unless it causes confusion.
+
+    isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
         return vardoc(meta, nothing, namify(def′.args[1]))
-    end
+
+    def = macroexpand(def)
+    def′ = unblock(def)
 
     define || (def = nothing)
 
-    fexpr(def′)                && return funcdoc(meta, def, def′, namify(def′))
-    isexpr(def′, :function)    && return namedoc(meta, def, namify(def′))
-    isexpr(def′, :call)        && return funcdoc(meta, nothing, def′, namify(def′))
-    isexpr(def′, :type)        && return typedoc(meta, def, def′, namify(def′.args[2]))
-    isexpr(def′, :macro)       && return  vardoc(meta, def, symbol("@", namify(def′)))
-    isexpr(def′, :abstract)    && return namedoc(meta, def, namify(def′))
-    isexpr(def′, :bitstype)    && return namedoc(meta, def, def′.args[2])
-    isexpr(def′, :typealias)   && return  vardoc(meta, def, namify(def′))
-    isexpr(def′, :module)      && return namedoc(meta, def, def′.args[2])
-    isexpr(def′, :(=), :const) && return  vardoc(meta, def, namify(def′))
-
+    fexpr(def′)                ? funcdoc(meta, def, def′) :
+    isexpr(def′, :function)    ? namedoc(meta, def, namify(def′)) :
+    isexpr(def′, :call)        ? funcdoc(meta, nothing, def′) :
+    isexpr(def′, :type)        ? typedoc(meta, def, def′) :
+    isexpr(def′, :macro)       ?  vardoc(meta, def, symbol("@", namify(def′))) :
+    isexpr(def′, :abstract)    ? namedoc(meta, def, namify(def′)) :
+    isexpr(def′, :bitstype)    ? namedoc(meta, def, def′.args[2]) :
+    isexpr(def′, :typealias)   ?  vardoc(meta, def, namify(def′)) :
+    isexpr(def′, :module)      ? namedoc(meta, def, def′.args[2]) :
+    isexpr(def′, :(=), :const) ?  vardoc(meta, def, namify(def′)) :
     objdoc(meta, def′)
 end
 
 function docm(ex)
-    isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
-    isexpr(ex, :->) && return docm(ex.args...)
-    isexpr(ex, :call) && return findmethod(ex)
-    isvar(ex) && return :(doc(@var($(esc(ex)))))
+    isexpr(ex, :->)                        ? docm(ex.args...) :
+    isa(ex,Symbol) && haskey(keywords, ex) ? keywords[ex] :
+    isexpr(ex, :call)                      ? findmethod(ex) :
+    isvar(ex)                              ? :(doc(@var($(esc(ex))))) :
     :(doc($(esc(ex))))
 end
 
@@ -346,12 +334,6 @@ function findmethod(ex)
     else
         :(doc($f, @which($(esc(ex)))))
     end
-end
-
-# Not actually used; bootstrap version in bootstrap.jl
-
-macro doc(args...)
-    docm(args...)
 end
 
 # Swap out the bootstrap macro with the real one
@@ -425,7 +407,7 @@ documented, as opposed to the whole function. Method docs are
 concatenated together in the order they were defined to provide docs
 for the function.
 """
-:@Base.DocBootstrap.doc
+:(Base.DocBootstrap.@doc)
 
 "`doc(obj)`: Get the doc metadata for `obj`."
 doc

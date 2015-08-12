@@ -1,3 +1,5 @@
+export @var
+
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
 function findsource(mod::Module, var::Symbol, seen = Set{Module}())
