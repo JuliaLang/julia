@@ -141,7 +141,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test_approx_eq sqrtm(A1) |> t->t*t A1
+        @test sqrtm(A1) |> t->t*t ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
@@ -256,6 +256,14 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
     end
 end
+
+# Matrix square root
+Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
+Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
+@test sqrtm(Atn) |> t->t*t ≈ Atn
+@test typeof(sqrtm(Atn)[1,1]) <: Complex
+@test sqrtm(Atp) |> t->t*t ≈ Atp
+@test typeof(sqrtm(Atp)[1,1]) <: Real
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
