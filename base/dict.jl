@@ -432,7 +432,19 @@ Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
 Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
 Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
 
-Dict(kv) = dict_with_eltype(kv, eltype(kv))
+function Dict(kv)
+    try
+        Base.dict_with_eltype(kv, eltype(kv))
+    catch e
+        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
+            !all(x->isa(x,Union{Tuple,Pair}),kv)
+            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
+        else
+            rethrow(e)
+        end
+    end
+end
+
 dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype(kv, t) = Dict{Any,Any}(kv)

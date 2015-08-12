@@ -338,3 +338,9 @@ end
 d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
       [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+
+
+# Issue 12451
+@test_throws ArgumentError Dict(0)
+@test_throws ArgumentError Dict([1])
+@test_throws ArgumentError Dict([(1,2),0])
