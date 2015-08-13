@@ -18,12 +18,15 @@ DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
         return NULL;
     size_t ofs = p - page_begin;
     int pg_idx = PAGE_INDEX(r, p);
+    // Check if this is a free page
+    if (r->freemap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32)))
+        return NULL;
     gcpage_t *pagemeta = &r->meta[pg_idx];
     int osize = pagemeta->osize;
-    // New page
+    // Shouldn't be needed, just in case
     if (osize == 0)
         return NULL;
-    char *tag = (char*)p - (ofs % osize);
+    char *tag = (char*)p - ofs % osize;
     // Points to an "object" that gets into the next page
     if (tag + osize > GC_PAGE_DATA(p) + GC_PAGE_SZ)
         return NULL;
@@ -345,8 +348,18 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (!tag || gc_marked(tag) || osize <= sizeof_jl_taggedvalue_t)
             continue;
+        gcpage_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
-        page_metadata(tag)->allocd = 1;
+        pg->allocd = 1;
+        pg->gc_bits = 0x3;
+        // Find the age bit
+        char *page_begin = GC_PAGE_DATA(tag) + GC_PAGE_OFFSET;
+        int obj_id = (((char*)tag) - page_begin) / osize;
+        uint8_t *ages = pg->ages + obj_id / 8;
+        // Force this to be a young object to save some memory
+        // (especially on 32bit where it's more likely to have pointer-like
+        //  bit patterns)
+        *ages &= ~(1 << (obj_id % 8));
         memset(tag, 0xff, osize);
     }
 }
