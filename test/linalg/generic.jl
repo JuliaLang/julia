@@ -106,3 +106,7 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 @test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
+
+# Issue #11788
+@test_approx_eq norm([2.4e-322, 4.4e-323]) 2.47e-322
+@test_approx_eq norm([2.4e-322, 4.4e-323], 3) 2.4e-322
