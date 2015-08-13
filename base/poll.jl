@@ -172,12 +172,12 @@ function close(t::FDWatcher)
     close(t.watcher, r, w)
 end
 
-function uvfinalize(uv::Union(FileMonitor, PollingFileWatcher))
+function uvfinalize(uv::Union{FileMonitor, PollingFileWatcher})
     disassociate_julia_struct(uv)
     close(uv)
 end
 
-function close(t::Union(FileMonitor, PollingFileWatcher))
+function close(t::Union{FileMonitor, PollingFileWatcher})
     if t.handle != C_NULL
         ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
         t.handle = C_NULL
