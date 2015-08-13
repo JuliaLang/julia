@@ -338,6 +338,8 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (!tag || gc_marked(tag) || osize <= sizeof_jl_taggedvalue_t)
             continue;
+        // Make sure the sweep rebuild the freelist
+        page_metadata(tag)->allocd = 1;
         memset(tag, 0xff, osize);
     }
 }
