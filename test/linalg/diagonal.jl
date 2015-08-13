@@ -84,6 +84,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_approx_eq D/D2 Diagonal(D.diag./D2.diag)
 
     # test triu/tril
+    @test istriu(D)
+    @test istril(D)
     @test triu(D,1) == zeros(D)
     @test triu(D,0) == D
     @test tril(D,1) == zeros(D)
