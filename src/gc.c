@@ -2087,7 +2087,6 @@ void jl_gc_collect(int full)
             estimate_freed = live_bytes - scanned_bytes - perm_scanned_bytes + actual_allocd;
 
             gc_verify();
-            gc_scrub(stack_hi);
 
 #if defined(MEMPROFILE)
             all_pool_stats();
@@ -2132,6 +2131,7 @@ void jl_gc_collect(int full)
             sweep_weak_refs();
             gc_sweep_once(sweep_mask);
             sweeping = 1;
+            gc_scrub(stack_hi);
         }
         if (gc_sweep_inc(sweep_mask)) {
             // sweeping is over
