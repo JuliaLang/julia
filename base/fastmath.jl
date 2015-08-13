@@ -179,7 +179,7 @@ ComplexTypes = Union{Complex64, Complex128}
     abs2_fast{T<:ComplexTypes}(x::T) = real(x)*real(x) + imag(x)*imag(x)
     conj_fast{T<:ComplexTypes}(x::T) = T(real(x), -imag(x))
     inv_fast{T<:ComplexTypes}(x::T) = conj(x) / abs2(x)
-    sign_fast{T<:ComplexTypes}(x::T) = x / abs(x)
+    sign_fast{T<:ComplexTypes}(x::T) = x == 0 ? float(zero(x)) : x/abs(x)
 
     add_fast{T<:ComplexTypes}(x::T, y::T) =
         T(real(x)+real(y), imag(x)+imag(y))
