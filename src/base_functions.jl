@@ -3,20 +3,24 @@
 # Bit shifting and rotation (used by the six SHA-XYZ logical functions:
 #
 #   NOTE:  The naming of R and S appears backwards here (R is a SHIFT and
-#   S is a ROTATION) because the SHA-256/384/512 description document
+#   S is a ROTATION) because the SHA2-256/384/512 description document
 #   (see http://csrc.nist.gov/cryptval/shs/sha256-384-512.pdf) uses this
 #   same "backwards" definition.
 
+# 32-bit Rotate-right (equivalent to S32 in SHA-256) and rotate-left
+rrot(b,x,width) = ((x >> b) | (x << (width - b)))
+lrot(b,x,width) = ((x << b) | (x >> (width - b)))
+
 # Shift-right (used in SHA-256, SHA-384, and SHA-512):
-R(b,x)     = ((x) >> (b))
+R(b,x)          = (x >> b)
 # 32-bit Rotate-right (used in SHA-256):
-S32(b,x)   = (((x) >> (b)) | ((x) << (32 - (b))))
+S32(b,x)        = rrot(b,x,32)
 # 64-bit Rotate-right (used in SHA-384 and SHA-512):
-S64(b,x)   = (((x) >> (b)) | ((x) << (64 - (b))))
+S64(b,x)        = rrot(b,x,64)
 
 # Two of six logical functions used in SHA-256, SHA-384, and SHA-512:
-Ch(x,y,z)  = (((x) & (y)) $ ((~(x)) & (z)))
-Maj(x,y,z) = (((x) & (y)) $ ((x) & (z)) $ ((y) & (z)))
+Ch(x,y,z)  = ((x & y) $ (~x & z))
+Maj(x,y,z) = ((x & y) $ (x & z) $ (y & z))
 
 # Four of six logical functions used in SHA-256:
 Sigma0_256(x) =   (S32(2,  @compat(UInt32(x))) $ S32(13, @compat(UInt32(x))) $ S32(22, @compat(UInt32(x))))
@@ -34,3 +38,6 @@ sigma1_512(x) =   (S64(19, @compat(UInt64(x))) $ S64(61, @compat(UInt64(x))) $ R
 bswap!(x::Vector{UInt32})  = map!(bswap, x)
 bswap!(x::Vector{UInt64})  = map!(bswap, x)
 bswap!(x::Vector{UInt128}) = map!(bswap, x)
+
+# A mod function which maps [0..N-1] to [1..N]
+mod1(i, N) = mod(i-1, N) + 1
