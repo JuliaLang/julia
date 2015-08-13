@@ -16,7 +16,9 @@ function update!{T<:SHA_CTX}(context::T, data::Array{UInt8,1})
 
         if len >= freespace
             # Fill the buffer completely and process it
-            context.buffer[blocklen(T)-usedspace:blocklen(T)] = data[data_idx:data_idx+freespace]
+            for i in 1:freespace
+                context.buffer[usedspace + i] = data[data_idx + i]
+            end
 
             # Round bytecount up to the nearest blocklen
             context.bytecount += freespace
@@ -37,7 +39,9 @@ function update!{T<:SHA_CTX}(context::T, data::Array{UInt8,1})
     # Process as many complete blocks as possible, now that the buffer is full
     data_idx = one(len)
     while len - (data_idx - 1) >= blocklen(T)
-        context.buffer[1:end] = data[data_idx:data_idx+blocklen(T)-1]
+        for i in 1:blocklen(T)
+            context.buffer[i] = data[data_idx + i - 1]
+        end
         transform!(context)
         data_idx += blocklen(T)
     end
@@ -87,7 +91,7 @@ function digest!{T<:SHA_CTX}(context::T)
         end
     end
 
-    # Store the length of the input data (in bits)
+    # Store the length of the input data (in bits) at the end of the padding
     bitcount_buffer = reinterpret(typeof(context.bytecount), context.buffer)
     bitcount_idx = div(short_blocklen(T), sizeof(context.bytecount))+1
     bitcount_buffer[bitcount_idx] = bswap(context.bytecount*8)
