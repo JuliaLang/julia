@@ -2071,12 +2071,13 @@
 
 (define (doc-string-literal? e)
   (or (simple-string-literal? e)
+      (and (pair? e) (eq? 'string (car e))) ; string interpolation
       (and (length= e 3) (eq? (car e) 'macrocall)
            (simple-string-literal? (caddr e))
            (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
-  (let* ((ex    (production s)))
+  (let* ((ex (production s)))
     (if (and (doc-string-literal? ex)
              (let loop ((t (peek-token s)))
                (cond
