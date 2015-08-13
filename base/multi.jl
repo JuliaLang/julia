@@ -473,7 +473,7 @@ type RemoteRef{RemoteStore}
             return found
         end
         client_refs[r] = true
-        finalizer(r, send_del_client)
+        finalizer(send_del_client,r)
         r
     end
 end
@@ -1198,8 +1198,13 @@ function create_worker(manager, wconfig)
 
     (r_s, w_s) = connect(manager, w.id, wconfig)
     w = Worker(w.id, r_s, w_s, manager, wconfig)
+
     # install a finalizer to perform cleanup if necessary
-    finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
+    finalizer(w) do w
+        if myid() == 1
+            manage(w.manager, w.id, w.config, :finalize)
+        end
+    end
 
     # set when the new worker has finshed connections with all other workers
     ntfy_oid = next_rrid_tuple()

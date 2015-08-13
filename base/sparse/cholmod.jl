@@ -345,14 +345,14 @@ function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Float64
     d = Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Float64}},
         (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
         nrow, ncol, d, REAL, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex{Float64}})
     d = Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Complex{Float64}}},
         (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
         nrow, ncol, d, COMPLEX, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 
@@ -362,7 +362,7 @@ function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
     d = Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 zeros(m::Integer, n::Integer) = zeros(m, n, Float64)
@@ -371,7 +371,7 @@ function ones{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
     d = Dense(ccall((:cholmod_l_ones, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
@@ -380,7 +380,7 @@ function eye{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
     d = Dense(ccall((:cholmod_l_eye, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 eye(m::Integer, n::Integer) = eye(m, n, Float64)
@@ -390,7 +390,7 @@ function copy_dense{Tv<:VTypes}(A::Dense{Tv})
     d = Dense(ccall((:cholmod_l_copy_dense, :libcholmod), Ptr{C_Dense{Tv}},
         (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
          A.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 
@@ -424,7 +424,7 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer, sorted::B
                 Cint, Cint, Cint, Ptr{Void}),
             nrow, ncol, nzmax, sorted,
                 packed, stype, REAL, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer, sorted::Bool, packed::Bool, stype::Integer, ::Type{Complex{Float64}})
@@ -434,7 +434,7 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer, sorted::B
                  Cint, Cint, Cint, Ptr{Void}),
                 nrow, ncol, nzmax, sorted,
                 packed, stype, COMPLEX, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 function free_sparse!{Tv<:VTypes}(ptr::Ptr{C_Sparse{Tv}})
@@ -461,7 +461,7 @@ function aat{Tv<:VRealTypes}(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Csize_t, Cint, Ptr{UInt8}),
                 A.p, fset, length(fset), mode, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -470,7 +470,7 @@ function sparse_to_dense{Tv<:VTypes}(A::Sparse{Tv})
         Ptr{C_Dense{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 function dense_to_sparse{Tv<:VTypes}(D::Dense{Tv}, ::Type{SuiteSparse_long})
@@ -478,7 +478,7 @@ function dense_to_sparse{Tv<:VTypes}(D::Dense{Tv}, ::Type{SuiteSparse_long})
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Dense{Tv}}, Cint, Ptr{UInt8}),
                 D.p, true, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -489,7 +489,7 @@ function factor_to_sparse!{Tv<:VTypes}(F::Factor{Tv})
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F.p, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -530,7 +530,7 @@ function speye{Tv<:VTypes}(m::Integer, n::Integer, ::Type{Tv})
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Cint, Ptr{UInt8}),
                 m, n, xtyp(Tv), common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -539,7 +539,7 @@ function spzeros{Tv<:VTypes}(m::Integer, n::Integer, nzmax::Integer, ::Type{Tv})
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Csize_t, Cint, Ptr{UInt8}),
              m, n, nzmax, xtyp(Tv), common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -548,7 +548,7 @@ function transpose_{Tv<:VTypes}(A::Sparse{Tv}, values::Integer)
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 A.p, values, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -557,7 +557,7 @@ function copy_factor{Tv<:VTypes}(F::Factor{Tv})
         Ptr{C_Factor{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F.p, common()))
-    finalizer(f, free!)
+    finalizer(free!,f)
     f
 end
 function copy_sparse{Tv<:VTypes}(A::Sparse{Tv})
@@ -565,7 +565,7 @@ function copy_sparse{Tv<:VTypes}(A::Sparse{Tv})
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A.p, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 function copy{Tv<:VRealTypes}(A::Sparse{Tv}, stype::Integer, mode::Integer)
@@ -573,7 +573,7 @@ function copy{Tv<:VRealTypes}(A::Sparse{Tv}, stype::Integer, mode::Integer)
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Cint, Cint, Ptr{UInt8}),
                 A.p, stype, mode, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -608,7 +608,7 @@ function ssmult{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, stype::Integer, va
                 Cint, Ptr{UInt8}),
              A.p, B.p, stype, values,
                 sorted, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -626,7 +626,7 @@ function horzcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
              A.p, B.p, values, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -674,7 +674,7 @@ function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
     s = Sparse(ccall((@cholmod_name("vertcat", SuiteSparse_long), :libcholmod), Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 A.p, B.p, values, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -699,7 +699,7 @@ function analyze{Tv<:VTypes}(A::Sparse{Tv}, cmmn::Vector{UInt8})
         Ptr{C_Factor{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 A.p, cmmn))
-    finalizer(f, free!)
+    finalizer(free!,f)
     f
 end
 function analyze_p{Tv<:VTypes}(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
@@ -709,7 +709,7 @@ function analyze_p{Tv<:VTypes}(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
         Ptr{C_Factor{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long}, Csize_t, Ptr{UInt8}),
                 A.p, perm, C_NULL, 0, cmmn))
-    finalizer(f, free!)
+    finalizer(free!,f)
     f
 end
 function factorize!{Tv<:VTypes}(A::Sparse{Tv}, F::Factor{Tv}, cmmn::Vector{UInt8})
@@ -735,7 +735,7 @@ function solve{Tv<:VTypes}(sys::Integer, F::Factor{Tv}, B::Dense{Tv})
     d = Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 sys, F.p, B.p, common()))
-    finalizer(d, free!)
+    finalizer(free!,d)
     d
 end
 
@@ -747,7 +747,7 @@ function spsolve{Tv<:VTypes}(sys::Integer, F::Factor{Tv}, B::Sparse{Tv})
         Ptr{C_Sparse{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 sys, F.p, B.p, common()))
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 
@@ -761,7 +761,7 @@ function read_sparse(file::Libc.FILE, ::Type{SuiteSparse_long})
         throw(ArgumentError("sparse matrix construction failed. Check that input file is valid."))
     end
     s = Sparse(ptr)
-    finalizer(s, free!)
+    finalizer(free!,s)
     s
 end
 

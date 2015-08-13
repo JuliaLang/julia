@@ -660,7 +660,9 @@ end
 # finalizers
 let A = [1]
     local x = 0
-    finalizer(A, a->(x+=1))
+    finalizer(A) do _
+        x += 1
+    end
     finalize(A)
     @test x == 1
     A = 0

@@ -738,7 +738,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     if repl.history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
-            finalizer(replc, replc->close(f))
+            finalizer(replc) do _
+                close(f)
+            end
             hist_from_file(hp, f)
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)

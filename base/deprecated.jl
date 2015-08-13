@@ -766,3 +766,12 @@ end
 
 const FloatingPoint = AbstractFloat
 export FloatingPoint
+
+finalizer(::Union{Function,Ptr}, ::Union{Function,Ptr}) =
+    error("finalizer(f1::Union(Function,Ptr), f2::Union(Function,Ptr)) is ambiguous due to deprecation")
+
+function finalizer(o::ANY, f::Union{Function,Ptr})
+    depwarn(string("finalizer(o::ANY, f::Union(Function,Ptr)) is deprecated, ",
+                   "use finalizer(f::Union(Function,Ptr), o::ANY) instead"), :finalizer)
+    finalizer(f, o)
+end

@@ -11462,7 +11462,7 @@ issubtype
 doc"""
 ```rst
 ::
-           finalizer(x, function)
+           finalizer(function,x)
 
 Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 ```
