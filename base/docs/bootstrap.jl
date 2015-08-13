@@ -19,7 +19,7 @@ setexpand!(f) = global _expand_ = f
 
 setexpand!() do str, obj
     global docs = List((ccall(:jl_get_current_module, Any, ()), str, obj), docs)
-    return esc(obj)
+    return esc(Expr(:toplevel, obj))
 end
 
 """
