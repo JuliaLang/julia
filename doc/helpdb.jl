@@ -7834,8 +7834,8 @@ popdisplay(d::Display)
 
 ("Base","sign","sign(x)
 
-   Return \"+1\" if \"x\" is positive, \"0\" if \"x == 0\", and \"-1\"
-   if \"x\" is negative.
+   Return zero if \"x==0\" and x/|x| otherwise (i.e., ±1 for real
+   \"x\").
 
 "),
 

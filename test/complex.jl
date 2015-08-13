@@ -729,6 +729,26 @@ end
 @test log10(10+0im) === 1.0 + 0.0im
 @test log2(2+0im) === 1.0 + 0.0im
 
+# sign
+for T in (Float32, Float64)
+    z = convert(Complex{T}, 1)
+    @test typeof(sign(z)) == typeof(z)
+    z = convert(Complex{T}, 0)
+    @test typeof(sign(z)) == typeof(z)
+end
+for T in (Int32, Int64)
+    z = convert(Complex{T}, 1)
+    @test typeof(sign(z)) == typeof(float(z))
+    z = convert(Complex{T}, 0)
+    @test typeof(sign(z)) == typeof(float(z))
+end
+
+@test sign(0 + 0im) == 0
+@test sign(2 + 0im) == 1
+@test sign(-2 + 0im) == -1
+@test_approx_eq sign(1 + im) ((1 + im) / sqrt(2))
+@test_approx_eq sign(1 - im) ((1 - im) / sqrt(2))
+
 # cis
 @test_approx_eq cis(0.0+1.0im) 0.367879441171442321595523770161460867445811131031767834507836+0.0im
 @test_approx_eq cis(1.0+0.0im) 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
