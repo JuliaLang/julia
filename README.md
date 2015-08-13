@@ -138,13 +138,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Developer tips
 
-If you're adding additional compatibility code to this package, the following shell script is useful for extracting the version number from a git commit SHA:
+If you're adding additional compatibility code to this package, the [`bin/version.sh` script is useful for extracting the version number from a git commit SHA. For example, from the git repository of `julia`, run something like this:
 
 ```sh
-#! /bin/bash
-last_tag=$(git describe --tags --abbrev=0)
-git rev-list $1 ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g'
+bash $ /path/to/Compat/bin/version.sh e3aa57efbc6542efbcc7feac9b1309d628ac6f12
+2418
 ```
-This will print a number `XXXX`, and you can then test whether Julia
+
+This prints a number `XXXX`, and you can then test whether Julia
 is at least this version by `VERSION >= v"0.4.0-dev+XXXX"` (assuming
 it is a commit from the 0.4 development cycle).
