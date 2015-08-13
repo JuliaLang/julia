@@ -10,6 +10,7 @@ branches:
   only:
     - master
     - /release-.*/
+    - yyc/gc-debug-env
 
 skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue

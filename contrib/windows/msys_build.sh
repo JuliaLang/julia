@@ -49,6 +49,7 @@ fi
 
 echo "" > Make.user
 echo "" > get-deps.log
+echo "override WITH_GC_DEBUG_ENV=1" >> Make.user
 # set MARCH for consistency with how binaries get built
 if [ "$ARCH" = x86_64 ]; then
   bits=64

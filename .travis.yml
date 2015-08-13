@@ -25,7 +25,7 @@ before_install:
     - if [ `uname` = "Linux" ]; then
         sudo apt-get install jq -y;
         contrib/travis_fastfail.sh || exit 1;
-        BUILDOPTS="-j3 USEGCC=1 LLVM_CONFIG=llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
+        BUILDOPTS="-j3 USEGCC=1 LLVM_CONFIG=llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc WITH_GC_DEBUG_ENV=1";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR LIBUNWIND OPENLIBM; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
@@ -45,7 +45,7 @@ before_install:
         brew install -v jq;
         contrib/travis_fastfail.sh || exit 1;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
+        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc WITH_GC_DEBUG_ENV=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";

@@ -15,7 +15,13 @@ else
   # And for non-latest push builds in branches other than master or release*
   case $TRAVIS_BRANCH in
     master | release*)
-      ;;
+    ;;
+    yyc/gc-debug-env)
+        if [ $TRAVIS_REPO_SLUG = JuliaLang/julia ]; then
+           echo "Do not do the GC stress test on JuliaLang Travis"
+           exit 1
+        fi
+    ;;
     *)
       if ! [ \"$TRAVIS_BUILD_NUMBER\" = $(curl -H "$curlhdr" \
           $endpoint/branches/$TRAVIS_BRANCH | jq ".branch.number") ]; then
