@@ -34,19 +34,19 @@ const MONTHTOVALUE = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>english)
 const MONTHTOVALUEABBR = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>abbrenglish)
 
 # Date/DateTime Parsing
-abstract Slot{P<:AbstractTime}
+abstract Slot{P<:Any}
 
-immutable DelimitedSlot{P<:AbstractTime} <: Slot{P}
+immutable DelimitedSlot{P<:Any} <: Slot{P}
     i::Int
-    period::Type{P}
+    parser::Type{P}
     width::Int
     option::Int
     locale::AbstractString
 end
 
-immutable FixedWidthSlot{P<:AbstractTime} <: Slot{P}
+immutable FixedWidthSlot{P<:Any} <: Slot{P}
     i::Int
-    period::Type{P}
+    parser::Type{P}
     width::Int
     option::Int
     locale::AbstractString
@@ -58,9 +58,9 @@ immutable DateFormat
     trans #trans[i] == how to transition FROM slots[i] TO slots[i+1]
 end
 
-immutable DayOfWeekSlot <: AbstractTime end
+abstract DayOfWeekSlot
 
-duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
+duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
 # Dicts are not constant to allow for extensibility.
 SLOT_TYPE = Dict(
@@ -106,7 +106,7 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x) = !ismatch(r"[^0-9\s]",x) ? slot.period(x) : throw(SLOTERROR)
+slotparse(slot,x) = !ismatch(r"[^0-9\s]",x) ? slot.parser(x) : throw(SLOTERROR)
 function slotparse(slot::Slot{Month},x)
     if slot.option == 0
         ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
@@ -116,14 +116,14 @@ function slotparse(slot::Slot{Month},x)
         return Month(MONTHTOVALUE[slot.locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
 slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)
     endind = first(search(x,df.trans[slot.i],nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
-        return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.period))
+        return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.parser))
     end
     return nextind(x,endind), slotparse(slot,x[cursor:(endind-1)])
 end
@@ -145,8 +145,8 @@ function parse(x::AbstractString,df::DateFormat)
     return vcat(sort!(periods,rev=true,lt=periodisless), extra)
 end
 
-slotformat(slot::Slot{Year},dt) = lpad(string(value(slot.period(dt))),slot.width,"0")[(end-slot.width+1):end]
-slotformat(slot,dt) = lpad(string(value(slot.period(dt))),slot.width,"0")
+slotformat(slot::Slot{Year},dt) = lpad(string(value(slot.parser(dt))),slot.width,"0")[(end-slot.width+1):end]
+slotformat(slot,dt) = lpad(string(value(slot.parser(dt))),slot.width,"0")
 function slotformat(slot::Slot{Month},dt)
     if slot.option == 0
         return lpad(month(dt),slot.width,"0")
