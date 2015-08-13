@@ -2614,7 +2614,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         Value *r = emit_known_call((jl_value_t*)f, args-1, nargs+1, ctx, &theFptr, &f, expr);
         assert(r == NULL); (void) r;
         if (theFptr == NULL) {
-            just_emit_error("\"call\" is not a function", ctx);
+            just_emit_error("\"call\" is not a generic function", ctx);
             result = UndefValue::get(jl_pvalue_llvmt);
         }
         else {
@@ -2688,17 +2688,24 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         builder.SetInsertPoint(elseBB1);
         // not function
         myargs = emit_temp_slot(argStart, ctx);
+        jl_value_t *call_func = (jl_value_t*)jl_module_call_func(ctx->module);
+        Value *r2;
+        if (!jl_is_gf(call_func)) {
+            just_emit_error("\"call\" is not a generic function", ctx);
+            r2 = UndefValue::get(jl_pvalue_llvmt);
+        } else {
 #ifdef LLVM37
-        Value *r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
-                                        {literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
-                                        myargs,
-                                        ConstantInt::get(T_int32,nargs+1)});
+            r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
+                                    {literal_pointer_val(call_func),
+                                     myargs,
+                                     ConstantInt::get(T_int32, nargs + 1)});
 #else
-        Value *r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
-                                        literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
-                                        myargs,
-                                        ConstantInt::get(T_int32,nargs+1));
+            r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
+                                     literal_pointer_val(call_func),
+                                     myargs,
+                                     ConstantInt::get(T_int32, nargs + 1));
 #endif
+        }
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(mergeBB1);
         builder.SetInsertPoint(mergeBB1);

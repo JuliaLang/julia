@@ -1611,6 +1611,7 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_apply_generic)
 {
+    assert(jl_is_gf(F));
     jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
