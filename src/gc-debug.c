@@ -9,20 +9,27 @@ DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
                                                         size_t *osize_p)
 {
     region_t *r = find_region(p, 1);
+    // Not in the pool
     if (!r)
         return NULL;
     char *page_begin = GC_PAGE_DATA(p) + GC_PAGE_OFFSET;
+    // In the page header
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
     int pg_idx = PAGE_INDEX(r, p);
     gcpage_t *pagemeta = &r->meta[pg_idx];
     int osize = pagemeta->osize;
+    // New page
     if (osize == 0)
+        return NULL;
+    char *tag = (char*)p - (ofs % osize);
+    // Points to an "object" that gets into the next page
+    if (tag + osize > GC_PAGE_DATA(p) + GC_PAGE_SZ)
         return NULL;
     if (osize_p)
         *osize_p = osize;
-    return (jl_taggedvalue_t*)((char*)p - (ofs % osize));
+    return (jl_taggedvalue_t*)tag;
 }
 
 #ifdef GC_DEBUG_ENV
