@@ -156,7 +156,7 @@ function tril!(M::SymTridiagonal, k::Integer=0)
     elseif k < -1
         fill!(M.ev,0)
         fill!(M.dv,0)
-        return Tridiagonal(M.ev,M.dv,M.ev)
+        return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == -1
         fill!(M.dv,0)
         return Tridiagonal(M.ev,M.dv,zeros(M.ev))
@@ -166,7 +166,6 @@ function tril!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
 end
-tril(M::SymTridiagonal, k::Integer=0) = tril!(copy(M),k)
 
 function triu!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -175,7 +174,7 @@ function triu!(M::SymTridiagonal, k::Integer=0)
     elseif k > 1
         fill!(M.ev,0)
         fill!(M.dv,0)
-        return Tridiagonal(M.ev,M.dv,M.ev)
+        return Tridiagonal(M.ev,M.dv,copy(M.ev))
     elseif k == 1
         fill!(M.dv,0)
         return Tridiagonal(zeros(M.ev),M.dv,M.ev)
@@ -185,7 +184,6 @@ function triu!(M::SymTridiagonal, k::Integer=0)
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
 end
-triu(M::SymTridiagonal, k::Integer=0) = triu!(copy(M),k)
 
 ###################
 # Generic methods #
@@ -383,7 +381,6 @@ function tril!(M::Tridiagonal, k::Integer=0)
     end
     return M
 end
-tril(M::Tridiagonal, k::Integer=0) = tril!(copy(M),k)
 
 function triu!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
@@ -401,7 +398,6 @@ function triu!(M::Tridiagonal, k::Integer=0)
     end
     return M
 end
-triu(M::Tridiagonal, k::Integer=0) = triu!(copy(M),k)
 
 ###################
 # Generic methods #

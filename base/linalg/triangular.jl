@@ -157,7 +157,10 @@ function tril!(A::UpperTriangular,k::Integer=0)
         fill!(A.data,0)
         return A
     elseif k == 0
-        return UpperTriangular(diagm(diag(A)))
+        for j in 1:n, i in 1:j-1
+            A.data[i,j] = 0
+        end
+        return A
     else
         return UpperTriangular(tril!(A.data,k))
     end
@@ -200,7 +203,10 @@ function triu!(A::LowerTriangular,k::Integer=0)
         fill!(A.data,0)
         return A
     elseif k == 0
-        return LowerTriangular(diagm(diag(A)))
+        for j in 1:n, i in j+1:n
+            A.data[i,j] = 0
+        end
+        return A
     else
         return LowerTriangular(triu!(A.data,k))
     end
@@ -235,15 +241,6 @@ function tril!(A::UnitLowerTriangular,k::Integer=0)
     end
     return tril!(LowerTriangular(A.data),k)
 end
-
-tril(A::UpperTriangular,k::Integer=0)     = tril!(copy(A),k)
-tril(A::LowerTriangular,k::Integer=0)     = tril!(copy(A),k)
-tril(A::UnitUpperTriangular,k::Integer=0) = tril!(copy(A),k)
-tril(A::UnitLowerTriangular,k::Integer=0) = tril!(copy(A),k)
-triu(A::UpperTriangular,k::Integer=0)     = triu!(copy(A),k)
-triu(A::LowerTriangular,k::Integer=0)     = triu!(copy(A),k)
-triu(A::UnitUpperTriangular,k::Integer=0) = triu!(copy(A),k)
-triu(A::UnitLowerTriangular,k::Integer=0) = triu!(copy(A),k)
 
 transpose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(transpose(A.data))
 transpose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(transpose(A.data))

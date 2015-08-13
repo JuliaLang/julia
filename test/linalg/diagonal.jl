@@ -86,10 +86,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     # test triu/tril
     @test istriu(D)
     @test istril(D)
-    @test triu(D,1) == zeros(D)
-    @test triu(D,0) == D
-    @test tril(D,1) == zeros(D)
-    @test tril(D,0) == D
+    @test triu(D,1)  == zeros(D)
+    @test triu(D,0)  == D
+    @test triu(D,-1) == D
+    @test tril(D,1)  == D
+    @test tril(D,-1) == zeros(D)
+    @test tril(D,0)  == D
 
     # factorize
     @test factorize(D) == D
