@@ -121,7 +121,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-5. Setup Package Development Environment
+  5. There's several windows specific tools, like a portable installation of git, which are included when you install Julia using the installer, but are not built with make above.  If you need these you can run ```make win-extras``` and move things around by hand, or run ```make binary-dist``` and run the installer that it generates.  
+
+6. Setup Package Development Environment
   1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
@@ -177,6 +179,8 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
     ```
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
+
+  4.  See the steps in the MSYS2 section on building windows extras if needed.  
 
 7. Run Julia using the Julia executables directly
     ```
