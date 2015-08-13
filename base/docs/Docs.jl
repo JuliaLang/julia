@@ -187,7 +187,8 @@ catdoc(xs...) = vcat(xs...)
 # Type Documentation
 
 isdoc(x) = isexpr(x, :string, AbstractString) ||
-    (isexpr(x, :macrocall) && endswith(string(x.args[1]), "_str"))
+    (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str")) ||
+    (isexpr(x, :call) && x.args[1] == Expr(:., Base.Markdown, QuoteNode(:doc_str)))
 
 dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
 

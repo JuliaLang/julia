@@ -52,8 +52,10 @@ macro md_str(s, t...)
     mdexpr(s, t...)
 end
 
+doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
+
 macro doc_str(s, t...)
-    docexpr(s, t...)
+    :(doc_str($(mdexpr(s, t...)), @__FILE__, current_module()))
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
