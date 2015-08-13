@@ -196,3 +196,15 @@ end
 let fd = meta(I12515)[Base.collect]
     @test fd.order[1].sig == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
 end
+
+
+# PR #12593
+
+"$(1 + 1)"
+f12593_1() = 1
+
+"$(1 + 1) 2"
+f12593_2() = 1
+
+@test (@doc f12593_1) !== nothing
+@test (@doc f12593_2) !== nothing
