@@ -61,23 +61,21 @@ function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
-    elseif k != 0
+    elseif k > 0
         fill!(D.diag,0)
     end
     return D
 end
-triu(D::Diagonal,k::Integer=0) = triu!(copy(D),k)
 
 function tril!(D::Diagonal,k::Integer=0)
     n = size(D,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
-    elseif k != 0
+    elseif k < 0
         fill!(D.diag,0)
     end
     return D
 end
-tril(D::Diagonal,k::Integer=0) = tril!(copy(D),k)
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
 -(A::Diagonal)=Diagonal(-A.diag)
