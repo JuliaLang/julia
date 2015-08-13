@@ -121,7 +121,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-5. Setup Package Development Environment
+6. Setup Package Development Environment
   1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
@@ -294,6 +294,9 @@ just run `vagrant up` from that folder. To build with Cygwin instead of MSYS2,
 replace `config.vm.provision :shell, privileged: false, :inline => $script_msys2`
 (near the end of the file) with `config.vm.provision :shell, privileged: false, :inline => $script_cygwin`.
 
+## After compiling
+
+Compiling using one of the options above creates a minimal Julia installation, but not some extra components (like a built-in git installation) that are included if you use install from the binary installer.  If you need these, the easiest way to get them is to build the installer yourself using ```make win-extras``` followed by ```make binary-dist```, and then running the resulting installer.
 
 ## Windows Build Debugging
 
