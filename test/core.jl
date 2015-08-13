@@ -672,6 +672,14 @@ end
 @test names(Module(:anonymous), true, true) != [:anonymous]
 @test names(Module(:anonymous, false), true, true) == [:anonymous]
 
+# exception from __init__()
+@test_throws InitError include_string(
+    """
+    module TestInitError
+        __init__() = error()
+    end
+    """)
+
 # issue #7307
 function test7307(a, ret)
     try

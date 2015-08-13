@@ -40,6 +40,11 @@ type LoadError <: Exception
     error
 end
 
+type InitError <: Exception
+    mod::Symbol
+    error
+end
+
 type MethodError <: Exception
     f
     args

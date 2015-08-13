@@ -619,6 +619,8 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 +------------------------------+
 | :exc:`InexactError`          |
 +------------------------------+
+| :exc:`InitError`             |
++------------------------------+
 | :exc:`InterruptException`    |
 +------------------------------+
 | :exc:`InvalidStateException` |
