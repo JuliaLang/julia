@@ -149,65 +149,101 @@ istril(A::UnitLowerTriangular) = true
 istriu(A::UpperTriangular) = true
 istriu(A::UnitUpperTriangular) = true
 
-function tril(A::UpperTriangular,k::Integer=0)
+function tril!(A::UpperTriangular,k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k < 0
-        return UpperTriangular(zeros(A.data))
+        fill!(A.data,0)
+        return A
     elseif k == 0
         return UpperTriangular(diagm(diag(A)))
     else
-        return UpperTriangular(triu(tril(A.data,k)))
+        return UpperTriangular(tril!(A.data,k))
     end
 end
+triu!(A::UpperTriangular,k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
-triu(A::UpperTriangular,k::Integer=0) = UpperTriangular(triu(triu(A.data),k))
-
-function tril(A::UnitUpperTriangular,k::Integer=0)
+function tril!(A::UnitUpperTriangular,k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k < 0
-        return UnitUpperTriangular(zeros(A.data))
+        fill!(A.data,0)
+        return UpperTriangular(A.data)
     elseif k == 0
-        return UnitUpperTriangular(eye(A))
+        fill!(A.data,0)
+        for i in diagind(A)
+            A.data[i] = one(eltype(A))
+        end
+        return UpperTriangular(A.data)
     else
-        return UnitUpperTriangular(triu(tril(A.data,k)))
+        for i in diagind(A)
+            A.data[i] = one(eltype(A))
+        end
+        return UpperTriangular(tril!(A.data,k))
     end
 end
 
-triu(A::UnitUpperTriangular,k::Integer=0) = UnitUpperTriangular(triu(triu(A.data),k))
+function triu!(A::UnitUpperTriangular,k::Integer=0)
+    for i in diagind(A)
+        A.data[i] = one(eltype(A))
+    end
+    return triu!(UpperTriangular(A.data),k)
+end
 
-function triu(A::LowerTriangular,k::Integer=0)
+function triu!(A::LowerTriangular,k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k > 0
-        return LowerTriangular(zeros(A.data))
+        fill!(A.data,0)
+        return A
     elseif k == 0
         return LowerTriangular(diagm(diag(A)))
     else
-        return LowerTriangular(tril(triu(A.data,k)))
+        return LowerTriangular(triu!(A.data,k))
     end
 end
 
-tril(A::LowerTriangular,k::Integer=0) = LowerTriangular(tril(tril(A.data),k))
+tril!(A::LowerTriangular,k::Integer=0) = LowerTriangular(tril!(A.data,k))
 
-function triu(A::UnitLowerTriangular,k::Integer=0)
+function triu!(A::UnitLowerTriangular,k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k > 0
-        return UnitLowerTriangular(zeros(A.data))
+        fill!(A.data,0)
+        return LowerTriangular(A.data)
     elseif k == 0
-        return UnitLowerTriangular(eye(A))
+        fill!(A.data,0)
+        for i in diagind(A)
+            A.data[i] = one(eltype(A))
+        end
+        return LowerTriangular(A.data)
     else
-        return UnitLowerTriangular(tril(triu(A.data,k)))
+        for i in diagind(A)
+            A.data[i] = one(eltype(A))
+        end
+        return LowerTriangular(triu!(A.data,k))
     end
 end
 
-tril(A::UnitLowerTriangular,k::Integer=0) = UnitLowerTriangular(tril(tril(A.data),k))
+function tril!(A::UnitLowerTriangular,k::Integer=0)
+    for i in diagind(A)
+        A.data[i] = one(eltype(A))
+    end
+    return tril!(LowerTriangular(A.data),k)
+end
+
+tril(A::UpperTriangular,k::Integer=0)     = tril!(copy(A),k)
+tril(A::LowerTriangular,k::Integer=0)     = tril!(copy(A),k)
+tril(A::UnitUpperTriangular,k::Integer=0) = tril!(copy(A),k)
+tril(A::UnitLowerTriangular,k::Integer=0) = tril!(copy(A),k)
+triu(A::UpperTriangular,k::Integer=0)     = triu!(copy(A),k)
+triu(A::LowerTriangular,k::Integer=0)     = triu!(copy(A),k)
+triu(A::UnitUpperTriangular,k::Integer=0) = triu!(copy(A),k)
+triu(A::UnitLowerTriangular,k::Integer=0) = triu!(copy(A),k)
 
 transpose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(transpose(A.data))
 transpose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(transpose(A.data))
