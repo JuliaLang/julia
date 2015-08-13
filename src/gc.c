@@ -2086,8 +2086,8 @@ void jl_gc_collect(int full)
 #endif
             estimate_freed = live_bytes - scanned_bytes - perm_scanned_bytes + actual_allocd;
 
-            gc_scrub(stack_hi);
             gc_verify();
+            gc_scrub(stack_hi);
 
 #if defined(MEMPROFILE)
             all_pool_stats();
