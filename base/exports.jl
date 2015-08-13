@@ -164,6 +164,7 @@ export
     InvalidStateException,
     KeyError,
     LoadError,
+    InitError,
     MethodError,
     NullException,
     ParseError,
