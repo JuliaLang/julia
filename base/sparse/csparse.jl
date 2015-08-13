@@ -17,7 +17,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer,
                                 combine::Union{Function,Base.Func};
-                                keepzeros::bool = false)
+                                keepzeros::Bool = false)
 
     if length(I) == 0;
         return spzeros(eltype(V),nrow,ncol)
