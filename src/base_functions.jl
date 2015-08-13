@@ -38,6 +38,3 @@ sigma1_512(x) =   (S64(19, @compat(UInt64(x))) $ S64(61, @compat(UInt64(x))) $ R
 bswap!(x::Vector{UInt32})  = map!(bswap, x)
 bswap!(x::Vector{UInt64})  = map!(bswap, x)
 bswap!(x::Vector{UInt128}) = map!(bswap, x)
-
-# A mod function which maps [0..N-1] to [1..N]
-mod1(i, N) = mod(i-1, N) + 1
