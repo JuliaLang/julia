@@ -36,7 +36,7 @@ end
 
 function initDir()
     @unix_only return unixInitDir();
-    @windows_only return windowInitDir();
+    @windows_only return windowsInitDir();
 end
 
 function ldflags()
