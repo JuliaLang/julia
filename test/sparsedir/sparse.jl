@@ -5,7 +5,7 @@
 
 # test zeros can be kept
 @test nonzeros(sparse([1, 2], [1, 2], [0, 1])) == [1]
-@test nonzeros(sparse([1, 2], [1, 2], [0, 1]), keepzeros = true) == [0, 1]
+@test nonzeros(sparse([1, 2], [1, 2], [0, 1], keepzeros = true)) == [0, 1]
 
 # check matrix operations
 se33 = speye(3)
