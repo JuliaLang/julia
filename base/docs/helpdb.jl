@@ -2614,7 +2614,7 @@ rol
 doc"""
 ```rst
 ::
-           Mmap.mmap(io::Union(IOStream,AbstractString,Mmap.AnonymousMmap)[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+           Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
            Mmap.mmap(type::Type{Array{T,N}}, dims)
 
 Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.

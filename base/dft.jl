@@ -46,12 +46,12 @@ for f in (:fft, :bfft, :ifft)
     @eval begin
         $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(complexfloat(x), region)
         $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(complexfloat(x), region; kws...)
-        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, region=1:ndims(x)) = $f(complexfloat(x), region)
-        $pf{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, region; kws...) = $pf(complexfloat(x), region; kws...)
+        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region; kws...) = $pf(complexfloat(x), region; kws...)
     end
 end
-rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(float(x), region)
-plan_rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, region; kws...) = plan_rfft(float(x), region; kws...)
+rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(float(x), region)
+plan_rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region; kws...) = plan_rfft(float(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
 *{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(T, size(x)), x)
@@ -138,7 +138,7 @@ end
 for f in (:brfft, :irfft)
     @eval begin
         $f{T<:Real}(x::AbstractArray{T}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
-        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
+        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
     end
 end
 

@@ -1145,7 +1145,7 @@ Memory-mapped I/O
 
    Create an ``IO``-like object for creating zeroed-out mmapped-memory that is not tied to a file for use in ``Mmap.mmap``. Used by ``SharedArray`` for creating shared memory arrays.
 
-.. function:: Mmap.mmap(io::Union(IOStream,AbstractString,Mmap.AnonymousMmap)[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+.. function:: Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
 
    ::
               Mmap.mmap(type::Type{Array{T,N}}, dims)
@@ -1201,7 +1201,7 @@ Memory-mapped I/O
 .. function:: Mmap.mmap(io, BitArray, [dims, offset])
 
    ::
-              Mmap.mmap(io::Union(IOStream,AbstractString,Mmap.AnonymousMmap)[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+              Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
               Mmap.mmap(type::Type{Array{T,N}}, dims)
 
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
