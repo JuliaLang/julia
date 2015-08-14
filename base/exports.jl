@@ -1332,6 +1332,7 @@ export
     pointer_to_array,
     pointer_to_string,
     reenable_sigint,
+    @sigatomic,
     unsafe_copy!,
     unsafe_load,
     unsafe_pointer_to_objref,
