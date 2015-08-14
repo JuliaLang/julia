@@ -3,7 +3,7 @@
 """
 The Docs module provides the `@doc` macro which can be used to set and retrieve
 documentation metadata for Julia objects. Please see docs for the `@doc` macro for more
-info.
+information.
 """
 module Docs
 
@@ -357,6 +357,8 @@ function vardoc(meta, def, name)
     end
 end
 
+multidoc(meta, objs) = quote $([:(@doc $(esc(meta)) $(esc(obj))) for obj in objs]...) end
+
 fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
@@ -382,6 +384,7 @@ function docm(meta, def, define = true)
     isexpr(def′, :(=), :const,
                  :global)      ?  vardoc(meta, def, namify(def′)) :
     isvar(def′)                ? objdoc(meta, def′) :
+    isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
     isa(def′, Expr)            ? error("Invalid doc expression $def′") :
     objdoc(meta, def′)
 end
