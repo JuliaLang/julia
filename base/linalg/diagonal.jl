@@ -55,8 +55,27 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
 
-tril(D::Diagonal,i::Integer=0) = i == 0 ? D : zeros(D)
-triu(D::Diagonal,i::Integer=0) = i == 0 ? D : zeros(D)
+istriu(D::Diagonal) = true
+istril(D::Diagonal) = true
+function triu!(D::Diagonal,k::Integer=0)
+    n = size(D,1)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k > 0
+        fill!(D.diag,0)
+    end
+    return D
+end
+
+function tril!(D::Diagonal,k::Integer=0)
+    n = size(D,1)
+    if abs(k) > n
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    elseif k < 0
+        fill!(D.diag,0)
+    end
+    return D
+end
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
 -(A::Diagonal)=Diagonal(-A.diag)

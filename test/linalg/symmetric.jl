@@ -60,10 +60,16 @@ let n=10
         @test ctranspose(Hermitian(asym)) == asym
 
         #tril/triu
-        @test triu(Symmetric(asym),1) == triu(asym,1)
-        @test tril(Symmetric(asym),1) == tril(asym,1)
-        @test triu(Hermitian(asym),1) == triu(asym,1)
-        @test tril(Hermitian(asym),1) == tril(asym,1)
+        for di in -n:n
+            @test triu(Symmetric(a+a.'),di) == triu(a+a.',di)
+            @test tril(Symmetric(a+a.'),di) == tril(a+a.',di)
+            @test triu(Hermitian(asym),di) == triu(asym,di)
+            @test tril(Hermitian(asym),di) == tril(asym,di)
+            @test triu(Symmetric(a+a.',:L),di) == triu(a+a.',di)
+            @test tril(Symmetric(a+a.',:L),di) == tril(a+a.',di)
+            @test triu(Hermitian(asym,:L),di) == triu(asym,di)
+            @test tril(Hermitian(asym,:L),di) == tril(asym,di)
+        end
 
         eltya == BigFloat && continue # Revisit when implemented in julia
         d, v = eig(asym)
