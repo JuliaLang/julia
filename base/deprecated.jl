@@ -611,7 +611,7 @@ type SharedMemSpec
     create :: Bool
 end
 export mmap_array
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::FileOffset)
     depwarn("`mmap_array` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
     if isa(s,SharedMemSpec)
         a = Mmap.Anonymous(s.name, s.readonly, s.create)

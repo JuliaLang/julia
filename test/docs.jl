@@ -63,7 +63,7 @@ immutable IT
 end
 
 "TA"
-typealias TA Union(T, IT)
+typealias TA Union{T, IT}
 
 "@mac"
 macro mac() end

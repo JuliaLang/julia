@@ -195,7 +195,7 @@ immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
 
-immutable PartialQuickSort{T <: Union(Int,OrdinalRange)} <: Algorithm
+immutable PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
 
@@ -406,11 +406,11 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
-selectperm(v::AbstractVector, k::Union(Integer,OrdinalRange); kwargs...) =
+selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     selectperm!(Vector{eltype(k)}(length(v)), v, k; kwargs..., initialized=false)
 
 function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
-                                 k::Union(Int, OrdinalRange);
+                                 k::Union{Int, OrdinalRange};
                                  lt::Function=isless,
                                  by::Function=identity,
                                  rev::Bool=false,
