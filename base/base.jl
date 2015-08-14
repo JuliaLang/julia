@@ -34,17 +34,6 @@ type KeyError <: Exception
     key
 end
 
-type LoadError <: Exception
-    file::AbstractString
-    line::Int
-    error
-end
-
-type InitError <: Exception
-    mod::Symbol
-    error
-end
-
 type MethodError <: Exception
     f
     args
@@ -62,6 +51,21 @@ type AssertionError <: Exception
 
     AssertionError() = new("")
     AssertionError(msg) = new(msg)
+end
+
+#Generic wrapping of arbitrary exceptions
+#Subtypes should put the exception in an 'error' field
+abstract WrappedException <: Exception
+
+type LoadError <: WrappedException
+    file::AbstractString
+    line::Int
+    error
+end
+
+type InitError <: WrappedException
+    mod::Symbol
+    error
 end
 
 ccall(:jl_get_system_hooks, Void, ())
