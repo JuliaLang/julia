@@ -274,9 +274,6 @@ function return_types(f::Function, types::ANY)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x,types)
-        if linfo === Core.Inference.NF
-            error()
-        end
         (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
