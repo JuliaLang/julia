@@ -402,6 +402,8 @@ function recompile_stale(mod, cachefile)
     cachestat = stat(cachefile)
     if iswritable(cachestat) && stale_cachefile(cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
-        create_expr_cache(find_in_path(string(mod)), cachefile)
+        path = find_in_path(string(mod))
+        path === nothing && error("module $mod not found")
+        create_expr_cache(path, cachefile)
     end
 end
