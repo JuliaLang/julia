@@ -75,7 +75,7 @@ tstcvt(str4_UTF8,str4_UTF16,str4_UTF32)
 # Test invalid sequences
 
 strval(::Type{UTF8String}, dat) = dat
-strval(::Union(Type{UTF16String},Type{UTF32String}), dat) = UTF8String(dat)
+strval(::Union{Type{UTF16String},Type{UTF32String}}, dat) = UTF8String(dat)
 
 byt = 0x0
 for T in (UTF8String, UTF16String, UTF32String)
