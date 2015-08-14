@@ -55,6 +55,10 @@ before_install:
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
+    - mkfifo /tmp/julia-gc-debug && while true; do
+          cat /tmp/julia-gc-debug;
+      done &
+    - export JL_GC_DEBUG_FNAME=/tmp/julia-gc-debug
     - make $BUILDOPTS -C base version_git.jl.phony
     - git clone -q git://git.kitenet.net/moreutils
     - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"

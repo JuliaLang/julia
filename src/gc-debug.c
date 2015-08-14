@@ -51,6 +51,10 @@ DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
 #include <stdio.h>
 #endif
 
+#ifndef _OS_WINDOWS_
+#include <unistd.h>
+#endif
+
 void jl_(void *jl_value);
 
 // mark verification
@@ -349,8 +353,27 @@ static inline void gc_debug_print()
     gc_debug_print_status();
 }
 
+static inline FILE *debug_print_file()
+{
+    static FILE *fd = NULL;
+    if (!fd) {
+        const char *name = getenv("JL_GC_DEBUG_FNAME");
+        if (!name) {
+#ifdef _OS_WINDOWS_
+            name = "CON";
+#else
+            name = "/dev/tty";
+#endif
+        }
+        fd = fopen(name, "w");
+    }
+    return fd;
+}
+
 static void gc_scrub_range(char *stack_lo, char *stack_hi)
 {
+    size_t keep_alive_size = 0;
+    int keep_alive_count = 0;
     stack_lo = (char*)((uintptr_t)stack_lo & ~(uintptr_t)15);
     for (char **stack_p = (char**)stack_lo;
          stack_p > (char**)stack_hi;stack_p--) {
@@ -372,6 +395,18 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         //  bit patterns)
         *ages &= ~(1 << (obj_id % 8));
         memset(tag, 0xff, osize);
+        keep_alive_size += osize;
+        keep_alive_count++;
+    }
+    FILE *fd = debug_print_file();
+    if (fd) {
+        int pid = 0;
+#ifndef _OS_WINDOWS_
+        pid = getpid();
+#endif
+        fprintf(fd, "(%d): Keepalive: %d objects (%" PRIuPTR " bytes) \n",
+                pid, keep_alive_count, keep_alive_size);
+        fflush(fd);
     }
 }
 
