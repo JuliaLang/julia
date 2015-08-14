@@ -766,3 +766,19 @@ end
 
 const FloatingPoint = AbstractFloat
 export FloatingPoint
+
+# 11447
+
+function Regex(pattern::AbstractString, options::Integer)
+    flags = string([opt & options != 0? flag : ""
+        for (opt,flag) in [
+            (PCRE.CASELESS,  "i"),
+            (PCRE.MULTILINE, "m"),
+            (PCRE.DOTALL,    "s"),
+            (PCRE.EXTENDED,  "x")
+        ]
+    ]...)
+    depwarn("Constructing regexes with integer flags is deprecated, "*
+            "use string flags instead: Regex(\"$pattern\", \"$flags\").", :Regex)
+    Regex(pattern, flags)
+end
