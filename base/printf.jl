@@ -6,7 +6,7 @@ export @printf, @sprintf
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
-const SmallNumber = Union{SmallFloatingPoint,Base.Signed64,Base.Unsigned64,UInt128,Int128}
+const SmallNumber = Union{SmallFloatingPoint,Base.Integer64,UInt128,Int128}
 
 function gen(s::AbstractString)
     args = []
