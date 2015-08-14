@@ -300,7 +300,7 @@ static void jl_serialize_globalvals(ios_t *s)
             uintptr_t pos = offs - (char*)HT_NOTFOUND - 1;
             int32_t gv = jl_get_llvm_gv((jl_value_t*)p[i]);
             if (gv != 0) {
-                write_int32(s, pos);
+                write_int32(s, pos + 1);
                 write_int32(s, gv);
             }
         }
@@ -313,7 +313,7 @@ static void jl_deserialize_globalvals(ios_t *s)
     while (1) {
         intptr_t key = read_int32(s);
         if (key == 0) break;
-        jl_deserialize_gv(s, (jl_value_t*)backref_list.items[key]);
+        jl_deserialize_gv(s, (jl_value_t*)backref_list.items[key - 1]);
     }
 }
 
