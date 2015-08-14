@@ -446,3 +446,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
     # symmetric, indefinite
     @test_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)
 end
+
+# Test specialized determinants for n = 1,2,3,4
+let
+    for n = 1:4
+        for T in [Float32, Float64, Complex64, Complex128]
+            A = rand(T, n,n)
+            @test_approx_eq det(A) det(lufact(A))
+        end
+    end
+end

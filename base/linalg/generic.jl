@@ -533,8 +533,48 @@ function det{T}(A::AbstractMatrix{T})
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
+    if T <: Union{Real, Complex}
+        n = chksquare(A)
+        n == 1 && return A[1]
+        n == 2 && return det2x2(A)
+        n == 3 && return det3x3(A)
+        n == 4 && return det4x4(A)
+    end
     return det(lufact(A))
 end
+
+function det2x2(A)
+    @inbounds d = A[1,1]*A[2,2] - A[1,2]*A[2,1]
+    d
+end
+
+function det3x3(A)
+    @inbounds begin
+        d = A[1,1] * (A[2,2]*A[3,3] - A[2,3]*A[3,2]) -
+            A[1,2] * (A[2,1]*A[3,3] - A[2,3]*A[3,1]) +
+            A[1,3] * (A[2,1]*A[3,2] - A[2,2]*A[3,1])
+    end
+    d
+end
+
+function det4x4(A)
+    @inbounds begin
+    d = A[13] * A[10]  * A[7]  * A[4]  - A[9] * A[14] * A[7]  * A[4]   -
+        A[13] * A[6]   * A[11] * A[4]  + A[5] * A[14] * A[11] * A[4]   +
+        A[9]  * A[6]   * A[15] * A[4]  - A[5] * A[10] * A[15] * A[4]   -
+        A[13] * A[10]  * A[3]  * A[8]  + A[9] * A[14] * A[3]  * A[8]   +
+        A[13] * A[2]   * A[11] * A[8]  - A[1] * A[14] * A[11] * A[8]   -
+        A[9]  * A[2]   * A[15] * A[8]  + A[1] * A[10] * A[15] * A[8]   +
+        A[13] * A[6]   * A[3]  * A[12] - A[5] * A[14] * A[3]  * A[12]  -
+        A[13] * A[2]   * A[7]  * A[12] + A[1] * A[14] * A[7]  * A[12]  +
+        A[5]  * A[2]   * A[15] * A[12] - A[1] * A[6]  * A[15] * A[12]  -
+        A[9]  * A[6]   * A[3]  * A[16] + A[5] * A[10] * A[3]  * A[16]  +
+        A[9]  * A[2]   * A[7]  * A[16] - A[1] * A[10] * A[7]  * A[16]  -
+        A[5]  * A[2]   * A[11] * A[16] + A[1] * A[6]  * A[11] * A[16]
+    end
+    d
+end
+
 det(x::Number) = x
 
 logdet(A::AbstractMatrix) = logdet(lufact(A))
