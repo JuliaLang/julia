@@ -40,6 +40,8 @@ cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[
 
 triu(M::AbstractMatrix) = triu!(copy(M))
 tril(M::AbstractMatrix) = tril!(copy(M))
+triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
+tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
 triu!(M::AbstractMatrix) = triu!(M,0)
 tril!(M::AbstractMatrix) = tril!(M,0)
 

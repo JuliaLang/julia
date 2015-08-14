@@ -108,42 +108,40 @@ ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
 istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
 
-function tril(M::Bidiagonal, k::Integer=0)
+function tril!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif M.isupper && k < 0
-        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+        fill!(M.dv,0)
+        fill!(M.ev,0)
     elseif k < -1
-        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
-    elseif !M.isupper && k == 0
-        return M
+        fill!(M.dv,0)
+        fill!(M.ev,0)
     elseif M.isupper && k == 0
-        return Bidiagonal(M.dv,zeros(M.ev),M.isupper)
+        fill!(M.ev,0)
     elseif !M.isupper && k == -1
-        return Bidiagonal(zeros(M.dv),M.ev,M.isupper)
-    elseif k > 0
-        return M
+        fill!(M.dv,0)
     end
+    return M
 end
 
-function triu(M::Bidiagonal, k::Integer=0)
+function triu!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif !M.isupper && k > 0
-        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
+        fill!(M.dv,0)
+        fill!(M.ev,0)
     elseif k > 1
-        return Bidiagonal(zeros(M.dv),zeros(M.ev),M.isupper)
-    elseif M.isupper && k == 0
-        return M
+        fill!(M.dv,0)
+        fill!(M.ev,0)
     elseif !M.isupper && k == 0
-        return Bidiagonal(M.dv,zeros(M.ev),M.isupper)
+        fill!(M.ev,0)
     elseif M.isupper && k == 1
-        return Bidiagonal(zeros(M.dv),M.ev,M.isupper)
-    elseif k < 0
-        return M
+        fill!(M.dv,0)
     end
+    return M
 end
 
 function diag{T}(M::Bidiagonal{T}, n::Integer=0)
