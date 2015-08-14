@@ -4,7 +4,7 @@ BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
-TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(subst .jl,,$(wildcard *.jl linalg/*.jl)))
+TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl $(SRCDIR)/linalg/*.jl)))
 
 default: all
 
