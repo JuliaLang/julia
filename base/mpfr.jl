@@ -318,7 +318,7 @@ end
 # Unsigned Int
 function div(x::BigFloat, c::CulongMax)
     z = BigFloat()
-    ccall(($(string(:mpfr_div_ui)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, to_mpfr(RoundToZero))
+    ccall((:mpfr_div_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, to_mpfr(RoundToZero))
     ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
     return z
 end
