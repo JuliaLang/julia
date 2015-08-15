@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.llvmcall
+using Core.Intrinsics.llvmcall
 
 #function add1234(x::Tuple{Int32,Int32,Int32,Int32})
 #    llvmcall("""%3 = add <4 x i32> %1, %0
@@ -64,7 +64,33 @@ baremodule PlusTest
 end
 
 # issue #11800
-@test eval(Expr(:call,Core.Intrinsics.llvmcall,
+@test eval(Expr(:call, Core.Intrinsics.llvmcall,
     """%3 = add i32 %1, %0
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) == 3
+
+@test "llvmcall: argument value didn't match declared type" ==
+    @test_throws(ErrorException, llvmcall("ret i8 %0", Int8, Tuple{Int8}, 1)).msg
+
+@test "llvmcall: argument value didn't match declared type" ==
+    @test_throws(ErrorException, llvmcall("ret i8* %0", Int8, Tuple{Ptr{Any}}, C_NULL)).msg
+
+invalid_llvmasm_arg1() = llvmcall("ret jl_value_t* %0", Int8, Tuple{Any}, 1)
+@test startswith(@test_throws(ErrorException, code_llvm(invalid_llvmasm_arg1, Tuple{})).msg,
+    "error compiling invalid_llvmasm_arg1: Failed to parse LLVM Assembly: ")
+
+invalid_llvmasm_arg2() = llvmcall("ret i8* %0", Int8, Tuple{Any}, 1)
+@test startswith(@test_throws(ErrorException, code_llvm(invalid_llvmasm_arg2, Tuple{})).msg,
+    "error compiling invalid_llvmasm_arg2: Failed to parse LLVM Assembly: ")
+
+invalid_llvmasm_arg3() = llvmcall("ret i8 %0", Int8, Tuple{Int}, 1)
+@test startswith(@test_throws(ErrorException, code_llvm(invalid_llvmasm_arg3, Tuple{})).msg,
+    "error compiling invalid_llvmasm_arg3: Failed to parse LLVM Assembly: ")
+
+invalid_llvmasm_ret() = llvmcall("ret i8 %0", Int32, Tuple{Int8}, Int8(1))
+@test startswith(@test_throws(ErrorException, code_llvm(invalid_llvmasm_ret, Tuple{})).msg,
+    "error compiling invalid_llvmasm_ret: Failed to parse LLVM Assembly: ")
+
+invalid_llvmasm() = llvmcall("", Int32, Tuple{Int8}, Int8(1))
+@test startswith(@test_throws(ErrorException, code_llvm(invalid_llvmasm, Tuple{})).msg,
+    "error compiling invalid_llvmasm: Failed to parse LLVM Assembly: ")
