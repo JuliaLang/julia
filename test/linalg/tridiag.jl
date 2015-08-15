@@ -32,6 +32,9 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     end
     ε = eps(abs2(float(one(elty))))
     T = Tridiagonal(dl, d, du)
+    Ts = SymTridiagonal(d, dl)
+    @test_throws ArgumentError size(Ts,0)
+    @test size(Ts,3) == 1
     @test size(T, 1) == n
     @test size(T) == (n, n)
     F = diagm(d)
@@ -72,7 +75,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         Ts = SymTridiagonal(d, dl)
         Fs = full(Ts)
         invFsv = Fs\v
-        Tldlt = ldltfact(Ts)
+        Tldlt = factorize(Ts)
         x = Tldlt\v
         @test_approx_eq x invFsv
         @test_approx_eq full(full(Tldlt)) Fs
@@ -122,18 +125,27 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zeros(dl))
     @test tril(SymTridiagonal(d,dl),1)  == Tridiagonal(dl,d,dl)
     @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zeros(d),zeros(dl))
+    @test tril(SymTridiagonal(d,dl),-2) == Tridiagonal(zeros(dl),zeros(d),zeros(dl))
     @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zeros(du))
     @test tril(Tridiagonal(dl,d,du),1)  == Tridiagonal(dl,d,du)
     @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zeros(d),zeros(du))
+    @test tril(Tridiagonal(dl,d,du),-2) == Tridiagonal(zeros(dl),zeros(d),zeros(du))
 
     @test_throws ArgumentError triu!(SymTridiagonal(d,dl),n+1)
     @test_throws ArgumentError triu!(Tridiagonal(dl,d,du),n+1)
     @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zeros(dl),d,dl)
     @test triu(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,d,dl)
     @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zeros(dl),zeros(d),dl)
+    @test triu(SymTridiagonal(d,dl),2)  == Tridiagonal(zeros(dl),zeros(d),zeros(dl))
     @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zeros(dl),d,du)
     @test triu(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,d,du)
     @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zeros(dl),zeros(d),du)
+    @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zeros(dl),zeros(d),zeros(du))
+
+    @test !istril(SymTridiagonal(d,dl))
+    @test !istriu(SymTridiagonal(d,dl))
+    @test istriu(Tridiagonal(zeros(dl),d,du))
+    @test istril(Tridiagonal(dl,d,zeros(du)))
     end
 end
 
