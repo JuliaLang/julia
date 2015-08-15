@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
-import Base.LinAlg: BlasFloat, BlasComplex
+import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 
 debug = false
 
@@ -34,6 +34,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
         @test_approx_eq_eps A_ldiv_B!(D,eye(D)) D\eye(D) 2n^3*eps(relty)*(elty<:Complex ? 2:1)
         @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
+        @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
         b = rand(elty,n,n)
         b = sparse(b)
         @test_approx_eq A_ldiv_B!(D,copy(b)) full(D)\full(b)
@@ -92,6 +93,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test tril(D,1)  == D
     @test tril(D,-1) == zeros(D)
     @test tril(D,0)  == D
+    @test_throws ArgumentError tril(D,n+1)
+    @test_throws ArgumentError triu(D,n+1)
 
     # factorize
     @test factorize(D) == D
@@ -181,3 +184,4 @@ end
 let d = randn(n), D = Diagonal(d)
     @test_approx_eq inv(D) inv(full(D))
 end
+@test_throws SingularException inv(Diagonal(zeros(n)))
