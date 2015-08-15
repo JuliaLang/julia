@@ -12,3 +12,12 @@ u16 = utf16(u8)
 @test u8 == utf16(pointer(u16)) == utf16(convert(Ptr{Int16}, pointer(u16)))
 @test_throws UnicodeError utf16(utf32(Char(0x120000)))
 @test_throws UnicodeError utf16(UInt8[1,2,3])
+
+# Add tests for full coverage
+@test convert(UTF16String, "test") == "test"
+@test convert(UTF16String, u16) == u16
+@test convert(UTF16String, UInt16[[0x65, 0x66] [0x67, 0x68]]) == "efgh"
+@test convert(UTF16String, Int16[[0x65, 0x66] [0x67, 0x68]]) == "efgh"
+@test map(lowercase, utf16("TEST\U1f596")) == "test\U1f596"
+@test typeof(Base.unsafe_convert(Ptr{UInt16}, utf16("test"))) == Ptr{UInt16}
+
