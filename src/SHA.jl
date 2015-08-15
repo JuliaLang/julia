@@ -14,16 +14,19 @@ include("common.jl")
 
 # Create data types and convenience functions for each hash implemented
 for (f, ctx) in [(:sha1, :SHA1_CTX),
-				 (:sha224, :SHA224_CTX),
+                 (:sha224, :SHA224_CTX),
                  (:sha256, :SHA256_CTX),
                  (:sha384, :SHA384_CTX),
                  (:sha512, :SHA512_CTX)]
     @eval begin
-    	# Allows e.g. sha256(open("test.txt"))
+        # Allows things like:
+        # open("test.txt") do f
+        #     sha256(f)
+        # done
         function $f(io::IO)
-        	ctx = $ctx()
-        	update!(ctx, readbytes(io));
-			return bytes2hex(digest!(ctx))
+            ctx = $ctx()
+            update!(ctx, readbytes(io));
+            return bytes2hex(digest!(ctx))
         end
 
         # Allows the same as above, but on ByteStrings and Arrays
