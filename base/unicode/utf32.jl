@@ -11,7 +11,6 @@ sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
 
 const empty_utf32 = UTF32String(UInt32[0])
 
-utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
@@ -186,8 +185,6 @@ end
 convert(::Type{Vector{Char}}, str::UTF32String) = str.data
 convert(::Type{Array{Char}},  str::UTF32String) = str.data
 
-reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
-
 unsafe_convert{T<:Union{Int32,UInt32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
@@ -272,9 +269,11 @@ end
 
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
 pointer(x::Union{ByteString,UTF16String,UTF32String}) = pointer(x.data)
-pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
 pointer(x::ByteString, i::Integer) = pointer(x.data)+(i-1)
-pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
 pointer(x::Union{UTF16String,UTF32String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
-pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
-pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
+
+# pointer conversions of SubString of ASCII/UTF8/UTF16/UTF32:
+pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
+pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.string.data))
+pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.string.data))
