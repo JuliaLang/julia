@@ -28,7 +28,7 @@ DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    int pg_idx = PAGE_INDEX(r, p);
+    int pg_idx = page_index(r, p);
     // Check if this is a free page
     if (r->freemap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32)))
         return NULL;

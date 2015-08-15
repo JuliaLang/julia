@@ -159,8 +159,15 @@ typedef struct _gcpage_t {
     uint8_t *ages;
 } gcpage_t;
 
-#define PAGE_PFL_BEG(p) ((gcval_t**)((p->data) + (p)->fl_begin_offset))
-#define PAGE_PFL_END(p) ((gcval_t**)((p->data) + (p)->fl_end_offset))
+static inline gcval_t *page_pfl_beg(gcpage_t *p)
+{
+    return (gcval_t*)(p->data + p->fl_begin_offset);
+}
+
+static inline gcval_t *page_pfl_end(gcpage_t *p)
+{
+    return (gcval_t*)(p->data + p->fl_end_offset);
+}
 // round an address inside a gcpage's data to its beginning
 #define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
 
@@ -278,9 +285,11 @@ static void pre_mark(void);
 static void post_mark(arraylist_t *list, int dryrun);
 static region_t *find_region(void *ptr, int maybe);
 
-#define PAGE_INDEX(region, data)              \
-    ((GC_PAGE_DATA((data) - GC_PAGE_OFFSET) - \
-      &(region)->pages[0][0])/GC_PAGE_SZ)
+static inline int page_index(region_t *region, char *data)
+{
+    return (GC_PAGE_DATA(data - GC_PAGE_OFFSET) -
+            &region->pages[0][0]) / GC_PAGE_SZ;
+}
 
 NOINLINE static uintptr_t gc_get_stack_ptr()
 {
@@ -444,7 +453,7 @@ static region_t *find_region(void *ptr, int maybe)
 static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data, 0);
-    int pg_idx = PAGE_INDEX(r, (char*)data);
+    int pg_idx = page_index(r, (char*)data);
     return &r->meta[pg_idx];
 }
 
@@ -741,7 +750,8 @@ static NOINLINE void *malloc_page(void)
     VirtualAlloc(ptr, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
     current_pg_count++;
-    max_pg_count = max_pg_count < current_pg_count ? current_pg_count : max_pg_count;
+    max_pg_count = (max_pg_count < current_pg_count ?
+                    current_pg_count : max_pg_count);
     JL_UNLOCK(pagealloc);
     return ptr;
 }
@@ -751,8 +761,10 @@ static void free_page(void *p)
     int pg_idx = -1;
     int i;
     for(i = 0; i < REGION_COUNT && regions[i] != NULL; i++) {
-        pg_idx = PAGE_INDEX(regions[i], (char*)p+GC_PAGE_OFFSET);
-        if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
+        pg_idx = page_index(regions[i], (char*)p + GC_PAGE_OFFSET);
+        if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) {
+            break;
+        }
     }
     assert(i < REGION_COUNT && regions[i] != NULL);
     region_t *region = regions[i];
@@ -766,12 +778,16 @@ static void free_page(void *p)
         // ensure so we don't release more memory than intended
         size_t n_pages = (GC_PAGE_SZ + jl_page_size - 1) / GC_PAGE_SZ;
         decommit_size = jl_page_size;
-        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(jl_page_size - 1)); // round down to the nearest page
-        pg_idx = PAGE_INDEX(region, (char*)p+GC_PAGE_OFFSET);
-        if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
+        // round down to the nearest page
+        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(jl_page_size - 1));
+        pg_idx = page_index(region, (char*)p + GC_PAGE_OFFSET);
+        if (pg_idx + n_pages > REGION_PG_COUNT)
+            goto no_decommit;
         for (; n_pages--; pg_idx++) {
             msk = (uint32_t)(1 << ((pg_idx % 32)));
-            if (!(region->freemap[pg_idx/32] & msk)) goto no_decommit;
+            if (!(region->freemap[pg_idx/32] & msk)) {
+                goto no_decommit;
+            }
         }
     }
 #ifdef _OS_WINDOWS_
@@ -780,7 +796,8 @@ static void free_page(void *p)
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
 no_decommit:
-    if (regions_lb[i] > pg_idx/32) regions_lb[i] = pg_idx/32;
+    if (regions_lb[i] > pg_idx / 32)
+        regions_lb[i] = pg_idx / 32;
     current_pg_count--;
 }
 
@@ -1187,42 +1204,10 @@ static int total_pages = 0;
 static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
-static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
-{
-    region_t* region = regions[region_i];
-
-    // the actual sweeping
-    int ub = 0;
-    int lb = regions_lb[region_i];
-    for (int pg_i = 0; pg_i <= regions_ub[region_i]; pg_i++) {
-        uint32_t line = region->freemap[pg_i];
-        if (!!~line) {
-            ub = pg_i;
-            for (int j = 0; j < 32; j++) {
-                if (!((line >> j) & 1)) {
-                    gcpage_t *pg = &region->meta[pg_i*32 + j];
-                    int p_n = pg->pool_n;
-                    int t_n = pg->thread_n;
-                    pool_t *p;
-                    FOR_HEAP(t_n)
-                        p = &pools[p_n];
-                    END
-                    int osize = pg->osize;
-                    pfl[t_n * N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * N_POOLS + p_n], sweep_mask, osize);
-                }
-            }
-        }
-        else if (pg_i < lb) {
-            lb = pg_i;
-        }
-    }
-    regions_ub[region_i] = ub;
-    regions_lb[region_i] = lb;
-}
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_mask, int osize)
+static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
+                            int sweep_mask, int osize)
 {
 #ifdef FREE_PAGES_EAGER
     int freedall;
@@ -1243,13 +1228,15 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
 
     if (pg->gc_bits == GC_MARKED) {
         // this page only contains GC_MARKED and free cells
-        // if we are doing a quick sweep and nothing has been allocated inside since last sweep
-        // we can skip it
+        // if we are doing a quick sweep and nothing has been allocated
+        // inside since last sweep we can skip it
         if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
-            // the position of the freelist begin/end in this page is stored in its metadata
+            // the position of the freelist begin/end in this page is
+            // stored in its metadata. `-1` in fl_begin_offset means the
+            // page is full.
             if (pg->fl_begin_offset != (uint16_t)-1) {
-                *pfl = (gcval_t*)PAGE_PFL_BEG(pg);
-                pfl = prev_pfl = PAGE_PFL_END(pg);
+                *pfl = page_pfl_beg(pg);
+                pfl = prev_pfl = (gcval_t**)page_pfl_end(pg);
             }
             pg_skpd++;
             freedall = 0;
@@ -1368,6 +1355,39 @@ static void gc_sweep_once(int sweep_mask)
 #endif
 }
 
+static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
+{
+    region_t* region = regions[region_i];
+
+    // the actual sweeping
+    int ub = 0;
+    int lb = regions_lb[region_i];
+    for (int pg_i = 0; pg_i <= regions_ub[region_i]; pg_i++) {
+        uint32_t line = region->freemap[pg_i];
+        if (!!~line) {
+            ub = pg_i;
+            for (int j = 0; j < 32; j++) {
+                if (!((line >> j) & 1)) {
+                    gcpage_t *pg = &region->meta[pg_i*32 + j];
+                    int p_n = pg->pool_n;
+                    int t_n = pg->thread_n;
+                    pool_t *p;
+                    FOR_HEAP(t_n)
+                        p = &pools[p_n];
+                    END
+                    int osize = pg->osize;
+                    pfl[t_n * N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * N_POOLS + p_n], sweep_mask, osize);
+                }
+            }
+        }
+        else if (pg_i < lb) {
+            lb = pg_i;
+        }
+    }
+    regions_ub[region_i] = ub;
+    regions_lb[region_i] = lb;
+}
+
 // returns 0 if not finished
 static int gc_sweep_inc(int sweep_mask)
 {
@@ -1383,8 +1403,8 @@ static int gc_sweep_inc(int sweep_mask)
 
     gcval_t ***pfl = (gcval_t ***) alloca(jl_n_threads * N_POOLS * sizeof(gcval_t**));
 
-    // update metadata of pages that were pointed to by freelist or newpages from a pool
-    // i.e. pages being the current allocation target
+    // update metadata of pages that were pointed to by freelist or newpages
+    // from a pool, i.e. pages being the current allocation target
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
             pool_t* p = &pools[i];
@@ -1413,7 +1433,8 @@ static int gc_sweep_inc(int sweep_mask)
     }
 
 
-    // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
+    // null out terminal pointers of free lists and cache back pg->nfree in
+    // the pool_t
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
             pool_t* p = &pools[i];
