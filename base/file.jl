@@ -212,8 +212,8 @@ function mktempdir(parent=tempdir())
 end
 end
 
-function mktemp(fn::Function)
-    (tmp_path, tmp_io) = mktemp()
+function mktemp(fn::Function, parent=tempdir())
+    (tmp_path, tmp_io) = mktemp(parent)
     try
         fn(tmp_path, tmp_io)
     finally
@@ -222,8 +222,8 @@ function mktemp(fn::Function)
     end
 end
 
-function mktempdir(fn::Function)
-    tmpdir = mktempdir()
+function mktempdir(fn::Function, parent=tempdir())
+    tmpdir = mktempdir(parent)
     try
         fn(tmpdir)
     finally

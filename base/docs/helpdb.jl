@@ -5963,6 +5963,12 @@ doc"""
            mktempdir([parent=tempdir()])
 
 Create a temporary directory in the ``parent`` directory and return its path.
+
+::
+           mktempdir(f::function, [parent=tempdir()])
+
+Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove the
+temporary directory upon completion.
 ```
 """
 mktempdir
@@ -8887,6 +8893,12 @@ doc"""
 
 Returns ``(path, io)``, where ``path`` is the path of a new temporary file
 in ``parent`` and ``io`` is an open file object for this path.
+
+::
+           mktemp(f::function, [parent=tempdir()])
+
+Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the
+temporary file upon completion.
 ```
 """
 mktemp
