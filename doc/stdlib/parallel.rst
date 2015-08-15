@@ -607,7 +607,7 @@ General Parallel Computing Support
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-   Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
+   Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier.
    ``testcb`` is polled every ``pollint`` seconds.
 
 .. function:: @spawn
