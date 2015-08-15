@@ -4915,7 +4915,7 @@ Lower triangle of a matrix, overwriting ``M`` in the process.
 ::
            tril!(M, k)
 
-Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal, overwriting ``M`` in the process.
+Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 ```
 """
 tril!
@@ -5983,7 +5983,7 @@ Lower triangle of a matrix.
 ::
            tril(M, k)
 
-Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal.
+Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
 ```
 """
 tril
