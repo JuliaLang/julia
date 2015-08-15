@@ -2781,7 +2781,7 @@ doc"""
 ::
            timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
+Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier.
 ``testcb`` is polled every ``pollint`` seconds.
 ```
 """
@@ -5733,7 +5733,7 @@ doc"""
 ::
            lufact(A [,pivot=Val{true}]) -> F
 
-Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T``` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
+Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
    ======================= ========================= ========================================
    Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
@@ -10599,7 +10599,7 @@ strings; to construct ``MIME`` types in a more flexible manner use
 
 For example, if you define a ``MyImage`` type and know how to write
 it to a PNG file, you could define a function ``writemime(stream,
-::MIME"image/png", x::MyImage) = ...``` to allow your images to
+::MIME"image/png", x::MyImage) = ...`` to allow your images to
 be displayed on any PNG-capable ``Display`` (such as IJulia).
 As usual, be sure to ``import Base.writemime`` in order to add
 new methods to the built-in Julia function ``writemime``.

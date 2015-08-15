@@ -1048,7 +1048,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    For example, if you define a ``MyImage`` type and know how to write
    it to a PNG file, you could define a function ``writemime(stream,
-   ::MIME"image/png", x::MyImage) = ...``` to allow your images to
+   ::MIME"image/png", x::MyImage) = ...`` to allow your images to
    be displayed on any PNG-capable ``Display`` (such as IJulia).
    As usual, be sure to ``import Base.writemime`` in order to add
    new methods to the built-in Julia function ``writemime``.
