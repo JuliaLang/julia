@@ -731,7 +731,7 @@ static void free_page(void *p)
     }
     assert(i < REGION_COUNT && regions[i] != NULL);
     region_t *region = regions[i];
-    uint32_t msk = (uint32_t)(1 << ((pg_idx % 32)));
+    uint32_t msk = (uint32_t)(1 << (pg_idx % 32));
     assert(!(region->freemap[pg_idx/32] & msk));
     region->freemap[pg_idx/32] ^= msk;
     free(region->meta[pg_idx].ages);
