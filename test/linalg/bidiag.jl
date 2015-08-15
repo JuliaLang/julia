@@ -25,6 +25,14 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_throws ArgumentError Bidiagonal(dv,ev,'R')
     @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
     @test_throws ArgumentError Bidiagonal(dv,ev)
+
+    #getindex and size
+    BD = Bidiagonal(dv,ev,true)
+    @test_throws BoundsError BD[n+1,1]
+    @test_throws ArgumentError size(BD,0)
+    @test size(BD,3) == 1
+
+
     debug && println("Test upper and lower bidiagonal matrices")
     for isupper in (true, false)
         debug && println("isupper is: $(isupper)")
