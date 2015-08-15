@@ -106,3 +106,16 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 @test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
+
+# test ops on Numbers
+for elty in [Float32,Float64,Complex64,Complex128]
+    a = rand(elty)
+    @test trace(a)         == a
+    @test rank(zero(elty)) == 0
+    @test rank(one(elty))  == 1
+    @test !isfinite(cond(zero(elty)))
+    @test cond(a)          == one(elty)
+    @test issym(a)
+    @test ishermitian(one(elty))
+    @test_approx_eq det(a) a
+end
