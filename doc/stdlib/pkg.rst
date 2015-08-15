@@ -61,9 +61,11 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    Add a requirement entry for ``pkg`` to ``Pkg.dir("REQUIRE")`` and call ``Pkg.resolve()``.
    If ``vers`` are given, they must be ``VersionNumber`` objects and they specify acceptable version intervals for ``pkg``.
 
-.. function:: rm(pkg)
+.. function:: rm(pkg; cleandeps=true)
 
    Remove all requirement entries for ``pkg`` from ``Pkg.dir("REQUIRE")`` and call ``Pkg.resolve()``.
+   If the keyword argument ``cleandeps`` is true, then ``git clean -qdfX deps`` is run in ``.trash/$pkg``
+   to clean build artifacts.
 
 .. function:: clone(url, [pkg])
 

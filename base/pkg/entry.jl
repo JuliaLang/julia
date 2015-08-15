@@ -72,11 +72,12 @@ function add(pkg::AbstractString, vers::VersionSet)
 end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
-function rm(pkg::AbstractString)
-    edit(Reqs.rm,pkg) && return
+function rm(pkg::AbstractString; cleandeps=true)
+    edit(Reqs.rm,pkg) && return (cleandeps ? Write.cleandeps(pkg) : nothing)
     ispath(pkg) || return info("Nothing to be done")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
+    return (cleandeps ? Write.cleandeps(pkg) : nothing)
 end
 
 available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)

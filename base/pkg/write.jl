@@ -50,4 +50,11 @@ function remove(pkg::AbstractString)
     mv(pkg, ".trash/$pkg")
 end
 
+function cleandeps(pkg::AbstractString)
+    if isdir(".trash/$pkg/deps")
+        info("Cleaning ignored files in .trash/$pkg/deps")
+        Git.run(`clean -qdfX deps`; dir=".trash/$pkg")
+    end
+end
+
 end # module
