@@ -422,8 +422,8 @@ expressed concisely as::
         ###
     end
 
-With this definition, the function can be called with either one or two
-arguments, and ``10`` is automatically passed when a second argument is not
+With this definition, the function can be called with either two or three
+arguments, and ``10`` is automatically passed when a third argument is not
 specified:
 
 .. doctest::
