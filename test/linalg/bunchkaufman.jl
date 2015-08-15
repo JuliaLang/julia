@@ -38,7 +38,7 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         bc1 = factorize(asym)
         @test_approx_eq inv(bc1) * asym eye(n)
         @test_approx_eq_eps asym * (bc1\b) b 1000ε
-        @test_approx_eq inv(a.' + a) * (a.' + a) eye(n)
+        @test_approx_eq inv(bkfact(a.' + a)) * (a.' + a) eye(n)
         @test size(bc1) == size(bc1.LD)
         @test size(bc1,1) == size(bc1.LD,1)
         @test size(bc1,2) == size(bc1.LD,2)
