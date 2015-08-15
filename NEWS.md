@@ -397,6 +397,9 @@ Library improvements
     * New garbage collector tracked memory allocator functions: `jl_malloc`, `jl_calloc`,
     `jl_realloc`, and `jl_free` with libc API ([[#12034]]).
 
+    * `mktempdir` and `mktemp` now have variants that take a function as its
+      first argument for automated clean-up. ([[#9017]])
+
 Deprecated or removed
 ---------------------
 
@@ -1494,6 +1497,7 @@ Too numerous to mention.
 [#8905]: https://github.com/JuliaLang/julia/issues/8905
 [#8941]: https://github.com/JuliaLang/julia/issues/8941
 [#8958]: https://github.com/JuliaLang/julia/issues/8958
+[#9017]: https://github.com/JuliaLang/julia/issues/9017
 [#9049]: https://github.com/JuliaLang/julia/issues/9049
 [#9065]: https://github.com/JuliaLang/julia/issues/9065
 [#9083]: https://github.com/JuliaLang/julia/issues/9083
