@@ -937,7 +937,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    ::
               tril(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
 
 .. function:: tril(M, k)
 
@@ -949,7 +949,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    ::
               tril(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
 
 .. function:: tril!(M)
 
@@ -958,7 +958,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    ::
               tril!(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal, overwriting ``M`` in the process.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 
 .. function:: tril!(M, k)
 
@@ -970,7 +970,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    ::
               tril!(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal, overwriting ``M`` in the process.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 
 .. function:: diagind(M[, k])
 
