@@ -2040,9 +2040,9 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
         }
     }
     dt->uid = 0;
+    jl_value_t *v = dt->instance;
     jl_datatype_t *t = (jl_datatype_t*)jl_cache_type_(dt);
     size_t j = start;
-    jl_value_t *v = t->instance;
     while (j < flagref_list.len) {
         jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
         int offs = (int)(intptr_t)flagref_list.items[j+1];
