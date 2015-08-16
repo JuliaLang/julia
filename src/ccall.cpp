@@ -878,9 +878,7 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) && use_sret(&abi, rt)) {
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
-#if !defined(_OS_WINDOWS_) || defined(LLVM35)
             paramattrs[0].addAttribute(Attribute::StructRet);
-#endif
             fargt.push_back(PointerType::get(*prt, 0));
             fargt_sig.push_back(PointerType::get(*prt, 0));
             sret = 1;
@@ -1387,12 +1385,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     //    (*it)->dump();
 
     // the actual call
-    Value *ret = builder.CreateCall(prepare_call(llvmf),
+    CallInst *ret = builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
-    ((CallInst*)ret)->setAttributes(attrs);
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+    // llvm used to use the old mingw ABI, skipping this marking works around that difference
+    if (attrs.hasAttribute(1, Attribute::StructRet)) {
+        attrs.removeAttribute(jl_LLVMContext, 1, Attribute::StructRet);
+        ret->setMetadata("StructRet", md_StructRet);
+    }
+#endif
+    ret->setAttributes(attrs);
 
     if (cc != CallingConv::C)
-        ((CallInst*)ret)->setCallingConv(cc);
+        ret->setCallingConv(cc);
     if (!sret)
         result = ret;
     if (needStackRestore) {
