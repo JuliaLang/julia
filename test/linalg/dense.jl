@@ -450,9 +450,9 @@ end
 # test ops on Numbers
 for elty in [Float32,Float64,Complex64,Complex128]
     a = rand(elty)
-    @test_approx_eq expm(a) exp(a)
+    @test expm(a) == exp(a)
     @test isposdef(one(elty))
-    @test_approx_eq sqrtm(a) sqrt(a)
-    @test_approx_eq logm(a) log(a)
-    @test_approx_eq lyap(one(elty),a) -a/2
+    @test sqrtm(a) == sqrt(a)
+    @test logm(a) ≈ log(a)
+    @test lyap(one(elty),a) == -a/2
 end
