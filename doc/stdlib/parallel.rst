@@ -202,7 +202,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -266,7 +266,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -330,7 +330,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -394,7 +394,7 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
    ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -607,7 +607,7 @@ General Parallel Computing Support
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-   Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
+   Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier.
    ``testcb`` is polled every ``pollint`` seconds.
 
 .. function:: @spawn

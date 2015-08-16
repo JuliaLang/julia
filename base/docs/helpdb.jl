@@ -121,7 +121,7 @@ doc"""
 
 Overwrite ``B`` with the solution to ``A*X = alpha*B`` or one of
 the other three variants determined by ``side`` (A on left or
-right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+right of ``X``) and ``tA`` (transpose ``A``). Only the ``ul`` triangle
 of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
 (the diagonal is assumed to be all ones).  Returns the updated ``B``.
 ```
@@ -134,7 +134,7 @@ doc"""
            trsv!(ul, tA, dA, A, b)
 
 Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two
-variants determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A``
+variants determined by ``tA`` (transpose ``A``) and ``ul`` (triangle of ``A``
 used).  ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed
 to be all ones).  Returns the updated ``b``.
 ```
@@ -160,7 +160,7 @@ doc"""
            trsv(ul, tA, dA, A, b)
 
 Returns the solution to ``A*x = b`` or one of the other two variants
-determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` is used.)
+determined by ``tA`` (transpose ``A``) and ``ul`` (triangle of ``A`` is used.)
 ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be
 all ones).
 ```
@@ -209,7 +209,7 @@ doc"""
            trmv(side, ul, tA, dA, alpha, A, b)
 
 Returns ``alpha*A*b`` or one of the other three variants
-determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``).
 Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
 ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 ```
@@ -368,7 +368,7 @@ doc"""
 
 Returns the solution to ``A*X = alpha*B`` or one of
 the other three variants determined by ``side`` (A on left or
-right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+right of ``X``) and ``tA`` (transpose ``A``). Only the ``ul`` triangle
 of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
 (the diagonal is assumed to be all ones).
 ```
@@ -402,7 +402,7 @@ doc"""
            trmv!(side, ul, tA, dA, alpha, A, b)
 
 Update ``b`` as ``alpha*A*b`` or one of the other three variants
-determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``).
 Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
 ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 Returns the updated ``b``.
@@ -466,7 +466,7 @@ doc"""
            trmm!(side, ul, tA, dA, alpha, A, B)
 
 Update ``B`` as ``alpha*A*B`` or one of the other three variants
-determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``).
 Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
 ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 Returns the updated ``B``.
@@ -480,7 +480,7 @@ doc"""
            trmm(side, ul, tA, dA, alpha, A, B)
 
 Returns ``alpha*A*B`` or one of the other three variants
-determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``).
 Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
 ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 ```
@@ -1198,7 +1198,7 @@ extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of
 
 Setting optional ``shift`` keyword argument computes the factorization
 of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
-it should be a permutation of `1:size(A,1)` giving the ordering to use
+it should be a permutation of ``1:size(A,1)`` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
 The function calls the C library CHOLMOD and many other functions
@@ -1309,9 +1309,9 @@ codepoint (32-bit zero), which is not treated as a character in the
 string (so that it is mostly invisible in Julia); this allows the
 string to be passed directly to external functions requiring
 NUL-terminated data.  This NUL is appended automatically by the
-`utf32(s)` conversion function.  If you have a ``Char`` or ``UInt32`` array
+``utf32(s)`` conversion function.  If you have a ``Char`` or ``UInt32`` array
 ``A`` that is already NUL-terminated UTF-32 data, then you
-can instead use `UTF32String(A)`` to construct the string without
+can instead use ``UTF32String(A)`` to construct the string without
 making a copy of the data and treating the NUL as a terminator
 rather than as part of the string.
 
@@ -1341,7 +1341,7 @@ doc"""
 Download a file from the given url, optionally renaming it to the given local file name.
 Note that this function relies on the availability of external tools such as ``curl``,
 ``wget`` or ``fetch`` to download the file and is provided for convenience. For production
-use or situations in which more options are need, please use a package that provides the
+use or situations in which more options are needed, please use a package that provides the
 desired functionality instead.
 ```
 """
@@ -2088,7 +2088,7 @@ doc"""
 
 Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
 vector specifying the dimensions to reduce, and ``initial`` is the initial
-value to use in the reductions. For `+`, `*`, `max` and `min` the `initial`
+value to use in the reductions. For ``+``, ``*``, ``max`` and ``min`` the ``initial``
 argument is optional.
 
 The associativity of the reduction is implementation-dependent; if you
@@ -2781,7 +2781,7 @@ doc"""
 ::
            timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
+Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier.
 ``testcb`` is polled every ``pollint`` seconds.
 ```
 """
@@ -2838,7 +2838,7 @@ doc"""
 ::
            permutedims!(dest, src, perm)
 
-Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 ```
 """
 permutedims!
@@ -3324,7 +3324,7 @@ doc"""
 ::
            fd(stream)
 
-Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous `File`'s and `IOStream`'s
+Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous ``File``'s and ``IOStream``'s
 not to any of the asynchronous streams.
 ```
 """
@@ -3531,7 +3531,7 @@ complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD,
 
 Setting optional ``shift`` keyword argument computes the factorization
 of ``A+shift*I`` instead of ``A``.  If the ``perm`` argument is nonempty,
-it should be a permutation of `1:size(A,1)` giving the ordering to use
+it should be a permutation of ``1:size(A,1)`` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
 The function calls the C library CHOLMOD and many other functions
@@ -3603,7 +3603,7 @@ doc"""
            sumabs(itr)
 
 Sum absolute values of all elements in a collection. This is
-equivalent to `sum(abs(itr))` but faster.
+equivalent to ``sum(abs(itr))`` but faster.
 
 ::
            sumabs(A, dims)
@@ -3905,7 +3905,7 @@ doc"""
 ::
            transpose!(dest,src)
 
-Transpose array ``src`` and store the result in the preallocated array ``dest``, which should have a size corresponding to ``(size(src,2),size(src,1))``. No in-place transposition is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+Transpose array ``src`` and store the result in the preallocated array ``dest``, which should have a size corresponding to ``(size(src,2),size(src,1))``. No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 ```
 """
 transpose!
@@ -4283,7 +4283,7 @@ doc"""
 ::
            truncate(file,n)
 
-Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\\0'
+Resize the file or buffer given by the first argument to exactly ``n`` bytes, filling previously unallocated space with '\\0'
 if the file or buffer is grown
 ```
 """
@@ -4624,11 +4624,11 @@ doc"""
            poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
 Monitor a file for changes by polling every ``interval_s`` seconds until a change occurs or ``timeout_s`` seconds have elapsed.
-The `interval_s` should be a long period; the default is 5.007 seconds.
+The ``interval_s`` should be a long period; the default is 5.007 seconds.
 
 Returns a pair of ``StatStruct`` objects ``(previous, current)`` when a change is detected.
 
-To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect notification of changes.
+To determine when a file was modified, compare ``mtime(prev) != mtime(current)`` to detect notification of changes.
 However, using ``watch_file`` for this operation is preferred, since it is more reliable and efficient,
 although in some situations it may not be available.
 ```
@@ -4873,7 +4873,7 @@ doc"""
            mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
 Move the file, link, or directory from *src* to *dest*.
-\"remove_destination=true\" will first remove an existing `dst`.
+``remove_destination=true`` will first remove an existing ``dst``.
 ```
 """
 mv
@@ -4915,7 +4915,7 @@ Lower triangle of a matrix, overwriting ``M`` in the process.
 ::
            tril!(M, k)
 
-Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal, overwriting ``M`` in the process.
+Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 ```
 """
 tril!
@@ -4935,7 +4935,7 @@ doc"""
 ::
            ErrorException(msg)
 
-Generic error type. The error message, in the `.msg` field, may provide more specific details.
+Generic error type. The error message, in the ``.msg`` field, may provide more specific details.
 ```
 """
 ErrorException
@@ -5689,7 +5689,7 @@ Keyword arguments:
 
 ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
+``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
 
 ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
@@ -5733,7 +5733,7 @@ doc"""
 ::
            lufact(A [,pivot=Val{true}]) -> F
 
-Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T``` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
+Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
    ======================= ========================= ========================================
    Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
@@ -5983,7 +5983,7 @@ Lower triangle of a matrix.
 ::
            tril(M, k)
 
-Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal.
+Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
 ```
 """
 tril
@@ -6238,7 +6238,7 @@ doc"""
 ::
            readdir([dir]) -> Vector{ByteString}
 
-Returns the files and directories in the directory `dir` (or the current working directory if not given).
+Returns the files and directories in the directory ``dir`` (or the current working directory if not given).
 ```
 """
 readdir
@@ -7031,7 +7031,7 @@ doc"""
 
 If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a warning is printed and whenever possible a nonprincipal matrix function is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if `A` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
+If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if ``A`` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
 
 .. [AH12] Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling
    and squaring algorithms for the matrix logarithm", SIAM Journal on
@@ -7834,11 +7834,11 @@ doc"""
            cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
 Copy the file, link, or directory from *src* to *dest*.
-\"remove_destination=true\" will first remove an existing `dst`.
+``remove_destination=true`` will first remove an existing ``dst``.
 
-If `follow_symlinks=false`, and src is a symbolic link, dst will be created as a symbolic link.
-If `follow_symlinks=true` and src is a symbolic link, dst will be a copy of the file or directory
-`src` refers to.
+If ``follow_symlinks=false``, and ``src`` is a symbolic link, ``dst`` will be created as a symbolic link.
+If ``follow_symlinks=true`` and ``src`` is a symbolic link, ``dst`` will be a copy of the file or directory
+``src`` refers to.
 ```
 """
 cp
@@ -8079,7 +8079,7 @@ doc"""
 ::
            ParseError(msg)
 
-The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
+The expression passed to the ``parse`` function could not be interpreted as a valid Julia expression.
 ```
 """
 ParseError
@@ -8509,7 +8509,7 @@ doc"""
 ::
            Base.compilecache(module::Symbol)
 
-Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in LOAD_CACHE_PATH[1], which defaults to `~/.julia/lib/VERSION`. See the manual section `Module initialization and precompilation` (under `Modules`) for important notes.
+Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 ```
 """
 compilecache
@@ -9280,7 +9280,7 @@ doc"""
 ::
            send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
-Send ``msg`` over ``socket to ``host:port``.
+Send ``msg`` over ``socket`` to ``host:port``.
 ```
 """
 send
@@ -10182,7 +10182,7 @@ doc"""
 ::
            bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
-Bind ``socket`` to the given ``host:port``. Note that `0.0.0.0` will listen on all devices.
+Bind ``socket`` to the given ``host:port``. Note that ``0.0.0.0`` will listen on all devices.
 ```
 """
 bind
@@ -10544,7 +10544,7 @@ doc"""
 ::
            mapreducedim(f, op, A, dims[, initial])
 
-Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but
+Evaluates to the same as ``reducedim(op, map(f, A), dims, f(initial))``, but
 is generally faster because the intermediate array is avoided.
 ```
 """
@@ -10599,7 +10599,7 @@ strings; to construct ``MIME`` types in a more flexible manner use
 
 For example, if you define a ``MyImage`` type and know how to write
 it to a PNG file, you could define a function ``writemime(stream,
-::MIME"image/png", x::MyImage) = ...``` to allow your images to
+::MIME"image/png", x::MyImage) = ...`` to allow your images to
 be displayed on any PNG-capable ``Display`` (such as IJulia).
 As usual, be sure to ``import Base.writemime`` in order to add
 new methods to the built-in Julia function ``writemime``.
@@ -10756,7 +10756,7 @@ doc"""
 
 If ``A`` has no negative real eigenvalues, compute the principal matrix square root of ``A``, that is the unique matrix :math:`X` with eigenvalues having positive real part such that :math:`X^2 = A`. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method, which computes the complex Schur form (:func:`schur`) and then the complex square root of the triangular factor.
+If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method, which computes the complex Schur form (:func:`schur`) and then the complex square root of the triangular factor.
 
 .. [BH83] Åke Björck and Sven Hammarling, "A Schur method for the square root
    of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140.
@@ -11217,7 +11217,7 @@ doc"""
 ::
            ctranspose!(dest,src)
 
-Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``, which should have a size corresponding to ``(size(src,2),size(src,1))``. No in-place transposition is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``, which should have a size corresponding to ``(size(src,2),size(src,1))``. No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 ```
 """
 ctranspose!
@@ -11283,7 +11283,7 @@ doc"""
 ::
            cat(dims, A...)
 
-Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
+Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``, ``matrices[2]``, ... as diagonal blocks and matching zero blocks away from the diagonal.
 ```
 """
 cat
@@ -12158,7 +12158,7 @@ doc"""
            listen([addr,]port) -> TcpServer
 
 Listen on port on the address specified by ``addr``. By default this listens on localhost only.
-To listen on all interfaces pass, ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
+To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
 ::
            listen(path) -> PipeServer
@@ -12827,7 +12827,7 @@ doc"""
            sumabs2(itr)
 
 Sum squared absolute values of all elements in a collection. This
-is equivalent to `sum(abs2(itr))` but faster.
+is equivalent to ``sum(abs2(itr))`` but faster.
 
 ::
            sumabs2(A, dims)
@@ -13641,7 +13641,7 @@ doc"""
 ::
            LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while `including`, `requiring`, or `using` a file. The error specifics should be available in the `.error` field.
+An error occurred while ``include``\ ing, ``require``\ ing, or ``using`` a file. The error specifics should be available in the ``.error`` field.
 ```
 """
 LoadError
@@ -14072,7 +14072,7 @@ replaced elsewhere.
 ::
            redirect_stdout(stream)
 
-Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a
 TcpSocket.
 ```
 """
@@ -14629,12 +14629,12 @@ doc"""
 ::
            include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or
+In a module, declare that the file specified by ``path`` (relative or
 absolute) is a dependency for precompilation; that is, the
 module will need to be recompiled if this file changes.
 
 This is only needed if your module depends on a file that is not
-used via `include`.   It has no effect outside of compilation.
+used via ``include``.   It has no effect outside of compilation.
 ```
 """
 include_dependency
@@ -14710,8 +14710,8 @@ precision is set by the precision of the integration endpoints
 The integrand ``f(x)`` can return any numeric scalar, vector, or matrix
 type, or in fact any type supporting ``+``, ``-``, multiplication
 by real values, and a ``norm`` (i.e., any normed vector space).
-Alternatively, a different norm can be specified by passing a `norm`-like
-function as the `norm` keyword argument (which defaults to `vecnorm`).
+Alternatively, a different norm can be specified by passing a ``norm``-like
+function as the ``norm`` keyword argument (which defaults to ``vecnorm``).
 
 [Only one-dimensional integrals are provided by this function.  For
 multi-dimensional integration (cubature), there are many different
@@ -15080,7 +15080,7 @@ doc"""
 ::
            deepcopy(x)
 
-Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep copies of the original elements. Calling `deepcopy` on an object should generally have the same effect as serializing and then deserializing it.
+Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep copies of the original elements. Calling ``deepcopy`` on an object should generally have the same effect as serializing and then deserializing it.
 
 As a special case, functions can only be actually deep-copied if they are anonymous, otherwise they are just copied. The difference is only relevant in the case of closures, i.e. functions which may contain hidden internal references.
 

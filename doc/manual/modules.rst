@@ -249,6 +249,8 @@ A variable can be "reserved" for the current module without assigning to
 it by declaring it as ``global x`` at the top level. This can be used to
 prevent name conflicts for globals initialized after load time.
 
+.. _man-modules-initialization-precompilation:
+
 Module initialization and precompilation
 ----------------------------------------
 
