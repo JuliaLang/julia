@@ -634,7 +634,7 @@ static void julia_save()
     }
     else {
         ios_t *s = NULL;
-        if (jl_options.outputo)
+        if (jl_options.outputo || jl_options.outputbc)
             s = jl_create_system_image();
 
         if (jl_options.outputji) {
@@ -651,7 +651,7 @@ static void julia_save()
         }
 
         if (jl_options.outputbc)
-            jl_dump_bitcode((char*)jl_options.outputbc);
+            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, s->size);
 
         if (jl_options.outputo)
             jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
