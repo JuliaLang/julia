@@ -278,7 +278,7 @@ const getfield_tfunc = function (A, s0, name)
         end
         if isType(s0)
             sp = s0.parameters[1]
-            if isa(sp,DataType) && !any(x->isa(x,TypeVar), sp.parameters)
+            if isa(sp,DataType)
                 # TODO
                 #if fld === :parameters
                 #    return Type{sp.parameters}, true
