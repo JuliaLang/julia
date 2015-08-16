@@ -247,7 +247,6 @@ let bad = "bad\0name"
 end
 
 # issue #8529
-@test_throws ErrorException run(pipeline(Base.Pipe(C_NULL), `cat`))
 let fname = tempname()
     open(fname, "w") do f
         println(f, "test")
