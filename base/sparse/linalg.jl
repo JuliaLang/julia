@@ -518,12 +518,11 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     end
 end
 
-function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
+function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
     n = max(size(A)...)
     F = factorize(A)
-    t = min(t,n)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
     end
@@ -532,10 +531,13 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
     end
     ind = Array(Int64, n)
     ind_hist = Array(Int64, maxiter * t)
-    S = zeros(T, n, t)
+
+    Ti = typeof(float(zero(T)))
+
+    S = zeros(T <: Real ? Int : Ti, n, t)
 
     # Generate the block matrix
-    X = Array(T, n, t)
+    X = Array(Ti, n, t)
     X[1:n,1] = 1
     for j = 2:t
         repeated = true
@@ -585,39 +587,41 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = 2)
         S_old = copy(S)
         for j = 1:t
             for i = 1:n
-                S[i,j] = Y[i,j]==0?1:sign(Y[i,j])
+                S[i,j] = Y[i,j]==0?one(Y[i,j]):sign(Y[i,j])
             end
         end
 
-        # Check wether cols of S are parallel to cols of S or S_old
-        for j = 1:t
-            done = false
-            while ~done
-                repeated = false
-                if j > 1
-                    saux = S[1:n,j]' * S[1:n,1:j-1]
-                    for i = 1:j-1
-                        if abs(saux[i]) == n
-                            repeated = true
-                            break
+        if T <: Real
+            # Check wether cols of S are parallel to cols of S or S_old
+            for j = 1:t
+                done = false
+                while ~done
+                    repeated = false
+                    if j > 1
+                        saux = S[1:n,j]' * S[1:n,1:j-1]
+                        for i = 1:j-1
+                            if abs(saux[i]) == n
+                                repeated = true
+                                break
+                            end
                         end
                     end
-                end
-                if ~repeated
-                    saux2 = S[1:n,j]' * S_old[1:n,1:t]
-                    for i = 1:t
-                        if abs(saux2[i]) == n
-                            repeated = true
-                            break
+                    if ~repeated
+                        saux2 = S[1:n,j]' * S_old[1:n,1:t]
+                        for i = 1:t
+                            if abs(saux2[i]) == n
+                                repeated = true
+                                break
+                            end
                         end
                     end
-                end
-                if repeated
-                    for i = 1:n
-                        S[i,j] = rand()>=0.5?1:-1
+                    if repeated
+                        for i = 1:n
+                            S[i,j] = rand()>=0.5?1:-1
+                        end
+                    else
+                        done = true
                     end
-                else
-                    done = true
                 end
             end
         end
