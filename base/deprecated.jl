@@ -539,6 +539,55 @@ end
 
 export MathConst, @math_const
 
+# 11551
+
+macro unexportedwarn(old, new)
+    meta = Expr(:meta, :noinline)
+    if isa(old,Symbol)
+        oldname = Expr(:quote, old)
+        newname = Expr(:quote, new)
+        Expr(:toplevel,
+                :(function $old(args...)
+                $meta
+                depwarn(string("Base.", $oldname, " was undocumented and unexported,\n",
+                "and has been removed.  Use ", $newname, " instead,\n",
+                "however it is also undocumented and unexported, and may change in the future."),
+                $oldname)
+                $new(args...)
+                end))
+    elseif isa(old,Expr) && old.head == :call
+        oldcall = sprint(io->show_unquoted(io,old))
+        newcall = sprint(io->show_unquoted(io,new))
+        oldsym = if isa(old.args[1],Symbol)
+            old.args[1]
+        elseif isa(old.args[1],Expr) && old.args[1].head == :curly
+            old.args[1].args[1]
+        else
+            error("invalid usage of @unexportedwarn")
+        end
+        oldname = Expr(:quote, oldsym)
+        Expr(:toplevel,
+            :($(esc(old)) = begin
+                  $meta
+                  depwarn(string("Base.", $oldcall, " was undocumented and unexported,\n",
+                         "and has been removed.  Use ", $newcall, " instead,\n",
+                         "however it is also undocumented and unexported, and may change in the future."),
+                         $oldname)
+                  $(esc(new))
+              end))
+    else
+        error("invalid usage of @unexportedwarn")
+    end
+end
+
+@unexportedwarn utf16_is_surrogate(ch::Uint16) Base.is_surrogate_codeunit(ch)
+@unexportedwarn utf16_is_lead(ch::UInt16)      Base.is_surrogate_lead(ch)
+@unexportedwarn utf16_is_trail(ch::UInt16)     Base.is_surrogate_trail(ch)
+@unexportedwarn utf16_get_supplementary(lead::UInt16, trail::UInt16) Base.get_supplementary(lead, trail)
+
+@unexportedwarn is_utf8_start(ch::UInt8)         !Base.is_valid_continuation(ch)
+@unexportedwarn is_utf8_continuation(ch::UInt8)  Base.is_valid_continuation(ch)
+
 # 11280, mmap
 
 export msync
