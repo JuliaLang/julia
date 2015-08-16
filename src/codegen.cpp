@@ -407,9 +407,9 @@ struct jl_varinfo_t {
 static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc);
 
 extern "C"
-void jl_dump_bitcode(char *fname)
+void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len)
 {
-    jl_dump_shadow(fname, 0, NULL, 0, true);
+    jl_dump_shadow(fname, 0, sysimg_data, sysimg_len, true);
 }
 
 extern "C"
