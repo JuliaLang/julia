@@ -6,17 +6,30 @@ elseif !isfile(ARGS[1])
     error("file $(ARGS[1]) does not exist")
 end
 
-# test performance
-@time begin
-    const fh = open(ARGS[1], "r")
-    const bytes = readbytes(fh)
+
+function do_tests(filepath)
+    # test performance
+    print("read:    ")
+    @time begin
+        const fh = open(filepath, "r")
+        const bytes = readbytes(fh)
+    end
+    gc()
+
+    print("SHA-1:   ")
+    sha1(bytes)
+    gc()
+    @time sha1(bytes)
+
+    print("SHA-256: ")
+    sha256(bytes)
+    gc()
+    @time sha256(bytes)
+
+    print("SHA-512: ")
+    sha512(bytes)
+    gc()
+    @time sha512(bytes)
 end
 
-test_perf() = begin
-    ctx = SHA512_CTX()
-    update!(ctx, bytes)
-    hash = bytes2hex(digest!(ctx))
-end
-
-test_perf()
-@time test_perf()
+do_tests(ARGS[1])

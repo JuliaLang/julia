@@ -5,10 +5,15 @@ lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmo
 so_many_as = repmat([0x61], 1000000)
 data = Any["", "test", lorem, so_many_as]
 data_desc = ["the empty string", "the string \"test\"", "lorem ipsum", "one million a's"]
-#hash_types = [SHA224_CTX, SHA256_CTX, SHA384_CTX, SHA512_CTX]
-sha_funcs =  [sha224, sha256, sha384, sha512]
+sha_funcs = [sha1, sha224, sha256, sha384, sha512]
 
 answers = @compat Dict(
+sha1 => [
+"da39a3ee5e6b4b0d3255bfef95601890afd80709",
+"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",
+"19afa2a4a37462c7b940a6c4c61363d49c3a35f4",
+"34aa973cd4c4daa4f61eeb2bdbad27316534016f",
+],
 sha224 => [
 "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f",
 "90a3ed9e32b2aaf4c61c410eb925426119e1a9dc53d4286ade99a809",
@@ -35,23 +40,52 @@ sha512 => [
 ]
 )
 
+# First, test one-shots on everything
 nerrors = 0
 for idx in 1:length(data)
     println("Testing on $(data_desc[idx]):")
     for sha_func in sha_funcs
-        print("  $("$(sha_func)"[1:6]): ")
-        if sha_func(data[idx]) != answers[sha_func][idx]
+        hash = sha_func(data[idx])
+        print("  $("$(sha_func)"[1:min(6,end)]): ")
+        if hash != answers[sha_func][idx]
             warn(
             """
             Expected:
                 $(answers[sha_func][idx])
             Calculated:
-                $hash
+                $(hash)
             """)
             nerrors += 1
         else
             println("OK")
         end
     end
+end
+
+# Do a final test on the "so many a's" data where we chunk up the data into
+# two chunks (sized appropriately to avoid padding) to test multiple update!() calls
+println("Testing on one million a's (chunked):")
+for (ctx_func, sha_func) in [(SHA.SHA1_CTX, sha1),
+                            (SHA.SHA224_CTX, sha224),
+                            (SHA.SHA256_CTX, sha256),
+                            (SHA.SHA384_CTX, sha384),
+                            (SHA.SHA512_CTX, sha512)]
+    ctx = ctx_func()
+    SHA.update!(ctx, so_many_as[1:2*SHA.blocklen(typeof(ctx))])
+    SHA.update!(ctx, so_many_as[2*SHA.blocklen(typeof(ctx))+1:end])
+    hash = bytes2hex(SHA.digest!(ctx))
+    print("  $("$(sha_func)"[1:min(6,end)]): ")
+    if hash != answers[sha_func][end]
+        warn(
+            """
+            Expected:
+                $(answers[sha_func][end-1])
+            Calculated:
+                $(hash)
+            """)
+            nerrors += 1
+        else
+            println("OK")
+        end
 end
 exit(nerrors)

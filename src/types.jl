@@ -1,92 +1,86 @@
-# SHA-224/256/384/512 Various Length Definitions
-const SHA224_BLOCK_LENGTH   = 64
-const SHA224_DIGEST_LENGTH  = 28
-const SHA224_SHORT_BLOCK_LENGTH = (SHA224_BLOCK_LENGTH - 8)
-
-const SHA256_BLOCK_LENGTH   = 64
-const SHA256_DIGEST_LENGTH  = 32
-const SHA256_SHORT_BLOCK_LENGTH = (SHA256_BLOCK_LENGTH - 8)
-
-const SHA384_BLOCK_LENGTH   = 128
-const SHA384_DIGEST_LENGTH  = 48
-const SHA384_SHORT_BLOCK_LENGTH = (SHA384_BLOCK_LENGTH - 16)
-
-const SHA512_BLOCK_LENGTH   = 128
-const SHA512_DIGEST_LENGTH  = 64
-const SHA512_SHORT_BLOCK_LENGTH = (SHA512_BLOCK_LENGTH - 16)
-
+# Type hierarchy to aid in splitting up of SHA2 algorithms
+# as SHA224/256 are similar, and SHA-384/512 are similar
 abstract SHA_CTX
-abstract SHA_CTX_BIG <: SHA_CTX
-abstract SHA_CTX_SMALL <: SHA_CTX
+abstract SHA2_CTX_BIG <: SHA_CTX
+abstract SHA2_CTX_SMALL <: SHA_CTX
 
-# SHA-256/384/512 Context Structures
-type SHA224_CTX <: SHA_CTX_SMALL
-    # state length = 8
+
+# We derive SHA1_CTX straight from SHA_CTX since it doesn't need
+# to follow the split between "big" and "small" algorithms like
+# SHA2 needs to due to its two different Sigma_* functions
+type SHA1_CTX <: SHA_CTX
     state::Array{UInt32,1}
-    bitcount::UInt64
-    # buffer length = SHA224_BLOCK_LENGTH
-    buffer::Array{UInt32,1}
-    blocklen::Int
-    short_blocklen::Int
-    digest_len::Int
-
-    SHA224_CTX() = new( copy(sha224_initial_hash_value), 0,
-                        zeros(UInt8, SHA224_BLOCK_LENGTH),
-                        SHA224_BLOCK_LENGTH,
-                        SHA224_SHORT_BLOCK_LENGTH,
-                        SHA224_DIGEST_LENGTH)
+    bytecount::Uint64
+    buffer::Array{Uint8,1}
+    W::Array{Uint32,1}
 end
 
-
-type SHA256_CTX <: SHA_CTX_SMALL
-    # state length = 8
+# SHA-224/256/384/512 Context Structures
+type SHA224_CTX <: SHA2_CTX_SMALL
     state::Array{UInt32,1}
-    bitcount::UInt64
-    # buffer length = SHA256_BLOCK_LENGTH
-    buffer::Array{UInt32,1}
-    blocklen::Int
-    short_blocklen::Int
-    digest_len::Int
-
-    SHA256_CTX() = new( copy(sha256_initial_hash_value), 0,
-                        zeros(UInt8, SHA256_BLOCK_LENGTH),
-                        SHA256_BLOCK_LENGTH,
-                        SHA256_SHORT_BLOCK_LENGTH,
-                        SHA256_DIGEST_LENGTH)
+    bytecount::UInt64
+    buffer::Array{UInt8,1}
 end
 
+type SHA256_CTX <: SHA2_CTX_SMALL
+    state::Array{UInt32,1}
+    bytecount::UInt64
+    buffer::Array{UInt8,1}
+end
 
-type SHA384_CTX <: SHA_CTX_BIG
-    # state length = 8
+type SHA384_CTX <: SHA2_CTX_BIG
     state::Array{UInt64,1}
-    bitcount::UInt128
-    # buffer length = SHA384_BLOCK_LENGTH
-    buffer::Array{UInt64,1}
-    blocklen::Int
-    short_blocklen::Int
-    digest_len::Int
-
-    SHA384_CTX() = new( copy(sha384_initial_hash_value), 0,
-                        zeros(UInt8, SHA384_BLOCK_LENGTH),
-                        SHA384_BLOCK_LENGTH,
-                        SHA384_SHORT_BLOCK_LENGTH,
-                        SHA384_DIGEST_LENGTH)
+    bytecount::UInt128
+    buffer::Array{UInt8,1}
 end
 
-
-type SHA512_CTX <: SHA_CTX_BIG
-    # state length = 8
+type SHA512_CTX <: SHA2_CTX_BIG
     state::Array{UInt64,1}
-    bitcount::UInt128
-    # buffer length = SHA512_BLOCK_LENGTH
-    buffer::Array{UInt64,1}
-    blocklen::Int
-    short_blocklen::Int
-    digest_len::Int
-
-    SHA512_CTX() = new( copy(sha512_initial_hash_value), 0,
-                        zeros(UInt8, SHA512_BLOCK_LENGTH),
-                        SHA512_BLOCK_LENGTH,
-                        SHA512_SHORT_BLOCK_LENGTH,
-                        SHA512_DIGEST_LENGTH)
+    bytecount::UInt128
+    buffer::Array{UInt8,1}
 end
+
+# Define constants via functions so as not to bloat context objects.  Yay dispatch!
+# The difference in block length here is part of what separates the "big" and "small" SHA2 algorithms
+blocklen(::Type{SHA1_CTX}) = 64
+blocklen(::Type{SHA224_CTX}) = 64
+blocklen(::Type{SHA256_CTX}) = 64
+blocklen(::Type{SHA384_CTX}) = 128
+blocklen(::Type{SHA512_CTX}) = 128
+
+digestlen(::Type{SHA1_CTX}) = 20
+digestlen(::Type{SHA224_CTX}) = 28
+digestlen(::Type{SHA256_CTX}) = 32
+digestlen(::Type{SHA384_CTX}) = 48
+digestlen(::Type{SHA512_CTX}) = 64
+
+state_type(::Type{SHA1_CTX}) = Uint32
+state_type(::Type{SHA224_CTX}) = Uint32
+state_type(::Type{SHA256_CTX}) = Uint32
+state_type(::Type{SHA384_CTX}) = Uint64
+state_type(::Type{SHA512_CTX}) = Uint64
+
+# short_blocklen is the size of a block minus the width of bytecount
+short_blocklen{T<:SHA_CTX}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
+
+
+# Once the "blocklength" methods are defined, we can define our outer constructors for SHA types:
+for ALG in ["SHA224", "SHA256", "SHA384", "SHA512"]
+    TYPE = symbol("$(ALG)_CTX")
+    HASH_VAL = symbol("$(ALG)_initial_hash_value")
+    @eval begin
+        $TYPE() = $TYPE(copy($HASH_VAL), 0, zeros(Uint8, blocklen($TYPE)))
+    end
+end
+
+# SHA1 is special; he needs extra workspace
+SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(Uint8, blocklen(SHA1_CTX)), Array(Uint32, 80))
+
+# Make printing these types a little friendlier
+import Base.show
+show(io::IO, ::SHA1_CTX) = write(io, "SHA1 hash state")
+show(io::IO, ::SHA224_CTX) = write(io, "SHA-224 hash state")
+show(io::IO, ::SHA256_CTX) = write(io, "SHA-256 hash state")
+show(io::IO, ::SHA384_CTX) = write(io, "SHA-384 hash state")
+show(io::IO, ::SHA512_CTX) = write(io, "SHA-512 hash state")
+
