@@ -159,12 +159,14 @@ end
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
 function require(mod::Symbol)
-    # dependency-tracking is only used for one top-level include(path),
-    # and is not applied recursively to imported modules:
-    old_track_dependencies = _track_dependencies[1]
-    _track_dependencies[1] = false
-
+    global package_locks
+    global package_loaded
     global toplevel_load
+
+    if mod in package_loaded
+        return
+    end
+
     loading = get(package_locks, mod, false)
     if loading !== false
         # load already in progress for this module
@@ -172,6 +174,11 @@ function require(mod::Symbol)
         return
     end
     package_locks[mod] = Condition()
+
+    # dependency-tracking is only used for one top-level include(path),
+    # and is not applied recursively to imported modules:
+    old_track_dependencies = _track_dependencies[1]
+    _track_dependencies[1] = false
 
     last = toplevel_load::Bool
     try
@@ -197,8 +204,11 @@ function require(mod::Symbol)
                 eval(Main, :(Base.include_from_node1($path)))
 
                 # broadcast top-level import/using from node 1 (only)
-                refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in filter(x -> x != 1, procs()) ]
-                for r in refs; wait(r); end
+                sync_begin()
+                for p in workers()
+                    async_run_thunk(()->remotecall_fetch(p, ()->(eval(Main, :(Base.include_from_node1($path))); nothing)))
+                end
+                sync_end()
             else
                 eval(Main, :(Base.include_from_node1($path)))
             end
@@ -214,9 +224,10 @@ function require(mod::Symbol)
         end
     finally
         toplevel_load = last
+        _track_dependencies[1] = old_track_dependencies
+        push!(package_loaded, mod)
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
-        _track_dependencies[1] = old_track_dependencies
     end
     nothing
 end

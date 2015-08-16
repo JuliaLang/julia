@@ -1344,11 +1344,19 @@ end
 
 macro everywhere(ex)
     quote
-        @sync begin
-            for w in PGRP.workers
-                @async remotecall_fetch(w, ()->(eval(Main,$(Expr(:quote,ex))); nothing))
-            end
+        sync_begin()
+        thunk = ()->(eval(Main,$(Expr(:quote,ex))); nothing)
+        for pid in workers()
+            async_run_thunk(()->remotecall_fetch(pid, thunk))
+            yield() # ensure that the remotecall_fetch has been started
         end
+
+        # execute locally last.
+        if nprocs() > 1
+            async_run_thunk(thunk)
+        end
+
+        sync_end()
     end
 end
 
@@ -1467,14 +1475,17 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, N::Int)
-    w=workers()
-    chunks = splitrange(N, length(w))
-    results = cell(length(chunks))
-    @sync begin
-        for i in 1:length(chunks)
-            @async results[i] = remotecall_fetch(w[i], f, first(chunks[i]), last(chunks[i]))
-        end
+    chunks = splitrange(N, nworkers())
+    all_w = workers()[1:length(chunks)]
+
+    w_exec = Task[]
+    for (idx,pid) in enumerate(all_w)
+        t = Task(()->remotecall_fetch(pid, f, first(chunks[idx]), last(chunks[idx])))
+        schedule(t)
+        push!(w_exec, t)
     end
+
+    results = [wait(t) for t in w_exec]
     reduce(reducer, results)
 end
 

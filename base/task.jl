@@ -394,25 +394,7 @@ function sync_end()
     refs = spawns[1]
     task_local_storage(:SPAWNS, spawns[2])
 
-    c_ex = CompositeException()
-    for r in refs
-        try
-            wait(r)
-        catch ex
-            if !isa(r, Task) || (isa(r, Task) && !(r.state == :failed))
-                rethrow(ex)
-            end
-        finally
-            if isa(r, Task) && (r.state == :failed)
-                push!(c_ex, CapturedException(r.result, r.backtrace))
-            end
-        end
-    end
-
-    if length(c_ex) > 0
-        throw(c_ex)
-    end
-    nothing
+    waitall(refs)
 end
 
 macro sync(block)
@@ -446,4 +428,26 @@ end
 macro async(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(async_run_thunk($(esc(expr))))
+end
+
+function waitall(waitables::AbstractArray)
+    c_ex = CompositeException()
+    for w in waitables
+        try
+            wait(w)
+        catch ex
+            if !isa(w, Task) || (isa(w, Task) && !(w.state == :failed))
+                push!(c_ex, ex)
+            end
+        finally
+            if isa(w, Task) && (w.state == :failed)
+                push!(c_ex, CapturedException(w.result, w.backtrace))
+            end
+        end
+    end
+
+    if length(c_ex) > 0
+        throw(c_ex)
+    end
+    nothing
 end
