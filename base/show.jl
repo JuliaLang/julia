@@ -1166,17 +1166,25 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
     cartesianmap(print_slice, tail)
 end
 
-function whos(m::Module, pattern::Regex)
-    for v in sort(names(m))
-        s = string(v)
-        if isdefined(m,v) && ismatch(pattern, s)
-            println(rpad(s, 30), summary(eval(m,v)))
+function whos(m::Module, pattern::Regex; filter=[])
+    filtertypes = applicable(start, filter) ?
+        filter : [filter]
+    for ft in filtertypes
+        isa(ft, DataType) ||
+        throw(ArgumentError("Non-type object given to filter keyword"))
+    end
+    filtertest(var) = ! any(T -> typeof(var) <: T, filtertypes)
+    for n in sort(names(m))
+        s = string(n)
+        v = eval(m,n)
+        if isdefined(m,n) && ismatch(pattern, s) && filtertest(v)
+            println(rpad(s, 30), summary(v))
         end
     end
 end
-whos() = whos(r"")
-whos(m::Module) = whos(m, r"")
-whos(pat::Regex) = whos(current_module(), pat)
+whos(;filter=Module) = whos(r""; filter=filter)
+whos(m::Module; filter=[]) = whos(m, r""; filter=filter)
+whos(pat::Regex; filter=Module) = whos(current_module(), pat; filter=filter)
 
 # global flag for limiting output
 # TODO: this should be replaced with a better mechanism. currently it is only
