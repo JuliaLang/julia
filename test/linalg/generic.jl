@@ -117,5 +117,5 @@ for elty in [Float32,Float64,Complex64,Complex128]
     @test cond(a)          == one(elty)
     @test issym(a)
     @test ishermitian(one(elty))
-    @test_approx_eq det(a) a
+    @test det(a) == a
 end
