@@ -257,3 +257,36 @@ end
 @test length("\0w") == length("\0α") == 2
 @test strwidth("\0w") == strwidth("\0α") == 1
 @test normalize_string("\0W", casefold=true) == "\0w"
+
+# Make sure AbstractString case is covered (for utf8proc_map)
+@test normalize_string(utf32("\u006e\u0303"), :NFC) == "\u00f1"
+
+@test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, compat=true)
+@test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, stripmark=true)
+
+# Make sure fastplus is called for coverage
+@test lowercase('A') == 'a'
+@test uppercase('a') == 'A'
+
+@test is_assigned_char('A')
+
+# Get full coverage of isspace function
+@test isspace(' ')
+@test isspace('\t')
+@test isspace('\r')
+@test isspace('\u85')
+@test isspace('\ua0')
+@test !isspace('\ufffd')
+@test !isspace('\U10ffff')
+
+# Get full coverage of grapheme iterator functions
+let str = "This is a test"
+    g = graphemes(str)
+    h = hash(str)
+    @test hash(g) == h
+    @test convert(UTF16String, g) == str
+    io = IOBuffer()
+    show(io, g)
+    check = "length-14 GraphemeIterator{ASCIIString} for \"$str\""
+    @test takebuf_string(io) == check
+end
