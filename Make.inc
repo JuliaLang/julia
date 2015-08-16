@@ -484,9 +484,18 @@ endif
 #    if MARCH is set newer than the native processor, be forewarned that the compile might fail
 # JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
 #    since it is set equal to MARCH by default
+
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+else
+ifneq ($(XC_HOST),)
+XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
+MARCH := $(subst _,-,$(ARCH))
+endif
+endif
+
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
@@ -494,24 +503,25 @@ $(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w6
 else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
 $(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
+
 ifeq ($(BUILD_OS),Darwin)
-## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
+## Mac is a rather cool 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
 ## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
-ifeq ($(ARCH),x86_64)
-override ARCH := i686
-else ifeq ($(ARCH),i386)
-override ARCH := i686
+BUILD_ARCH := $(shell echo $(BUILD_MACHINE) | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(BUILD_ARCH),x86_64)
+BUILD_ARCH := i686
+else ifeq ($(BUILD_ARCH),i386)
+BUILD_ARCH := i686
 endif
-ifeq ($(ARCH),i686)
+ifeq ($(BUILD_ARCH),i686)
 ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
-override ARCH := x86_64
+BUILD_ARCH := x86_64
 endif
-BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+BUILD_MACHINE := $(BUILD_ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
+ifeq ($(BUILD_OS),$(OS))
+ARCH := $(BUILD_OS)
 endif
-else
-XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-MARCH := $(ARCH)
 endif
 
 ifneq ($(MARCH),)
