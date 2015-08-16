@@ -374,7 +374,7 @@ function wait()
             return result
         end
     end
-    assert(false)
+    @assert false
 end
 
 function pause()

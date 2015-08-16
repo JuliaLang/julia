@@ -2251,16 +2251,6 @@ Base.(:(|>))
 doc"""
 ```rst
 ::
-           assert(cond)
-
-Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``.
-```
-"""
-assert
-
-doc"""
-```rst
-::
            sech(x)
 
 Compute the hyperbolic secant of ``x``
@@ -12137,7 +12127,7 @@ doc"""
 ::
            @assert cond [text]
 
-Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
+Throw an ``AssertionError`` if ``cond`` is false.
 ```
 """
 :@assert

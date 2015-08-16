@@ -33,9 +33,8 @@ kwerr(kw) = error("unrecognized keyword argument \"", kw, "\"")
 
 systemerror(p, b::Bool) = b ? throw(Main.Base.SystemError(string(p))) : nothing
 
-## assertion functions and macros ##
+## assertion macro ##
 
-assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if !isempty(msgs) && isa(msg, Expr)

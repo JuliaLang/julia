@@ -761,7 +761,7 @@ end
 # arrays of types, or `nothing`.
 function precise_container_types(args, types, vtypes, sv)
     n = length(args)
-    assert(n == length(types))
+    @assert n == length(types)
     result = cell(n)
     for i = 1:n
         ai = args[i]; ti = types[i]
@@ -1430,7 +1430,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
 
     args = f_argnames(ast)
     la = length(args)
-    assert(is(ast.head,:lambda))
+    @assert is(ast.head,:lambda)
     vinflist = ast.args[2][1]::Array{Any,1}
     vars = map(vi->vi[1], vinflist)
     body = (ast.args[3].args)::Array{Any,1}
@@ -2406,7 +2406,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
                     if isvarargtype(methitype)
                         methitype = methitype.parameters[1]
                     else
-                        @assert i==nm
+                        @assert i == nm
                     end
                 end
             end

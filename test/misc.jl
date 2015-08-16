@@ -28,19 +28,6 @@ let bt = backtrace()
     end
 end
 
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    ex = @test_throws AssertionError begin
-        assert(false)
-        error("unexpected")
-    end
-    @test isempty(ex.msg)
-end
-
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
