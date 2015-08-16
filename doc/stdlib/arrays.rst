@@ -385,7 +385,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: cat(dims, A...)
 
-   Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
+   Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``, ``matrices[2]``, ... as diagonal blocks and matching zero blocks away from the diagonal.
 
 .. function:: vcat(A...)
 
@@ -657,7 +657,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: permutedims!(dest, src, perm)
 
-   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 
 .. function:: squeeze(A, dims)
 
@@ -815,7 +815,7 @@ Array functions
 
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
-   value to use in the reductions. For `+`, `*`, `max` and `min` the `initial`
+   value to use in the reductions. For ``+``, ``*``, ``max`` and ``min`` the ``initial``
    argument is optional.
 
    The associativity of the reduction is implementation-dependent; if you
@@ -824,7 +824,7 @@ Array functions
 
 .. function:: mapreducedim(f, op, A, dims[, initial])
 
-   Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but
+   Evaluates to the same as ``reducedim(op, map(f, A), dims, f(initial))``, but
    is generally faster because the intermediate array is avoided.
 
 .. function:: mapslices(f, A, dims)

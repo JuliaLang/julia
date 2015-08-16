@@ -362,9 +362,9 @@ type:
     in getindex at ./essentials.jl:211
     in show_delim_array at show.jl:214
     in show at show.jl:242
-    in anonymous at show.jl:1281
-    in with_output_limit at ./show.jl:1258
-    in showlimited at show.jl:1280
+    in anonymous at show.jl:1280
+    in with_output_limit at ./show.jl:1257
+    in showlimited at show.jl:1279
     in display at multimedia.jl:120
     in display at multimedia.jl:151
 

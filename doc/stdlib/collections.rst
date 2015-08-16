@@ -544,7 +544,7 @@ Iterable Collections
 .. function:: sumabs(itr)
 
    Sum absolute values of all elements in a collection. This is
-   equivalent to `sum(abs(itr))` but faster.
+   equivalent to ``sum(abs(itr))`` but faster.
 
    ::
               sumabs(A, dims)
@@ -558,7 +558,7 @@ Iterable Collections
               sumabs(itr)
 
    Sum absolute values of all elements in a collection. This is
-   equivalent to `sum(abs(itr))` but faster.
+   equivalent to ``sum(abs(itr))`` but faster.
 
    ::
               sumabs(A, dims)
@@ -574,7 +574,7 @@ Iterable Collections
 .. function:: sumabs2(itr)
 
    Sum squared absolute values of all elements in a collection. This
-   is equivalent to `sum(abs2(itr))` but faster.
+   is equivalent to ``sum(abs2(itr))`` but faster.
 
    ::
               sumabs2(A, dims)
@@ -588,7 +588,7 @@ Iterable Collections
               sumabs2(itr)
 
    Sum squared absolute values of all elements in a collection. This
-   is equivalent to `sum(abs2(itr))` but faster.
+   is equivalent to ``sum(abs2(itr))`` but faster.
 
    ::
               sumabs2(A, dims)

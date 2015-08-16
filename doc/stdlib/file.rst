@@ -32,7 +32,7 @@
 
 .. function:: readdir([dir]) -> Vector{ByteString}
 
-   Returns the files and directories in the directory `dir` (or the current working directory if not given).
+   Returns the files and directories in the directory ``dir`` (or the current working directory if not given).
 
 .. function:: mkdir(path, [mode])
 
@@ -125,24 +125,24 @@
 .. function:: cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
    Copy the file, link, or directory from *src* to *dest*.
-   "remove_destination=true" will first remove an existing `dst`.
+   ``remove_destination=true`` will first remove an existing ``dst``.
 
-   If `follow_symlinks=false`, and src is a symbolic link, dst will be created as a symbolic link.
-   If `follow_symlinks=true` and src is a symbolic link, dst will be a copy of the file or directory
-   `src` refers to.
+   If ``follow_symlinks=false``, and ``src`` is a symbolic link, ``dst`` will be created as a symbolic link.
+   If ``follow_symlinks=true`` and ``src`` is a symbolic link, ``dst`` will be a copy of the file or directory
+   ``src`` refers to.
 
 .. function:: download(url,[localfile])
 
    Download a file from the given url, optionally renaming it to the given local file name.
    Note that this function relies on the availability of external tools such as ``curl``,
    ``wget`` or ``fetch`` to download the file and is provided for convenience. For production
-   use or situations in which more options are need, please use a package that provides the
+   use or situations in which more options are needed, please use a package that provides the
    desired functionality instead.
 
 .. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
    Move the file, link, or directory from *src* to *dest*.
-   "remove_destination=true" will first remove an existing `dst`.
+   ``remove_destination=true`` will first remove an existing ``dst``.
 
 .. function:: rm(path::AbstractString; recursive=false)
 
@@ -166,19 +166,48 @@
    Returns ``(path, io)``, where ``path`` is the path of a new temporary file
    in ``parent`` and ``io`` is an open file object for this path.
 
+   ::
+              mktemp(f::function, [parent=tempdir()])
+
+   Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the
+   temporary file upon completion.
+
 .. function:: mktemp(f::function, [parent=tempdir()])
 
-    Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the
-    temporary file upon completion.
+   ::
+              mktemp([parent=tempdir()])
+
+   Returns ``(path, io)``, where ``path`` is the path of a new temporary file
+   in ``parent`` and ``io`` is an open file object for this path.
+
+   ::
+              mktemp(f::function, [parent=tempdir()])
+
+   Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the
+   temporary file upon completion.
 
 .. function:: mktempdir([parent=tempdir()])
 
    Create a temporary directory in the ``parent`` directory and return its path.
 
+   ::
+              mktempdir(f::function, [parent=tempdir()])
+
+   Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove the
+   temporary directory upon completion.
+
 .. function:: mktempdir(f::function, [parent=tempdir()])
 
-    Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove
-    the temporary directory upon completion.
+   ::
+              mktempdir([parent=tempdir()])
+
+   Create a temporary directory in the ``parent`` directory and return its path.
+
+   ::
+              mktempdir(f::function, [parent=tempdir()])
+
+   Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove the
+   temporary directory upon completion.
 
 .. function:: isblockdev(path) -> Bool
 

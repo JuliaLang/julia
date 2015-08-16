@@ -127,7 +127,7 @@ Getting Around
 
 .. function:: compilecache(module::Symbol)
 
-   Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in LOAD_CACHE_PATH[1], which defaults to `~/.julia/lib/VERSION`. See the manual section `Module initialization and precompilation` (under `Modules`) for important notes.
+   Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
@@ -153,12 +153,12 @@ Getting Around
 
 .. function:: include_dependency(path::AbstractString)
 
-   In a module, declare that the file specified by `path` (relative or
+   In a module, declare that the file specified by ``path`` (relative or
    absolute) is a dependency for precompilation; that is, the
    module will need to be recompiled if this file changes.
 
    This is only needed if your module depends on a file that is not
-   used via `include`.   It has no effect outside of compilation.
+   used via ``include``.   It has no effect outside of compilation.
 
 .. function:: which(f, types)
 
@@ -324,7 +324,7 @@ All Objects
 
 .. function:: deepcopy(x)
 
-   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep copies of the original elements. Calling `deepcopy` on an object should generally have the same effect as serializing and then deserializing it.
+   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep copies of the original elements. Calling ``deepcopy`` on an object should generally have the same effect as serializing and then deserializing it.
 
    As a special case, functions can only be actually deep-copied if they are anonymous, otherwise they are just copied. The difference is only relevant in the case of closures, i.e. functions which may contain hidden internal references.
 
@@ -1128,7 +1128,7 @@ Errors
 
 .. function:: ErrorException(msg)
 
-   Generic error type. The error message, in the `.msg` field, may provide more specific details.
+   Generic error type. The error message, in the ``.msg`` field, may provide more specific details.
 
 .. function:: InexactError()
 
@@ -1144,7 +1144,7 @@ Errors
 
 .. function:: LoadError(file::AbstractString, line::Int, error)
 
-   An error occurred while `including`, `requiring`, or `using` a file. The error specifics should be available in the `.error` field.
+   An error occurred while ``include``\ ing, ``require``\ ing, or ``using`` a file. The error specifics should be available in the ``.error`` field.
 
 .. function:: MethodError(f, args)
 
@@ -1168,7 +1168,7 @@ Errors
 
 .. function:: ParseError(msg)
 
-   The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
+   The expression passed to the ``parse`` function could not be interpreted as a valid Julia expression.
 
 .. function:: ProcessExitedException()
 
