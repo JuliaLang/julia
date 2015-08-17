@@ -286,3 +286,7 @@ parse("""
       "a"
       end
       """)
+
+# issue #12626
+@test parse("a .÷ 1") == Expr(:call, :.÷, :a, 1)
+@test parse("a .÷= 1") == Expr(:.÷=, :a, 1)
