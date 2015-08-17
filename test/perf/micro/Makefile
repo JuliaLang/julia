@@ -1,4 +1,4 @@
-JULIAHOME = $(abspath ../../..)
+JULIAHOME := $(abspath ../../..)
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/Versions.make
 
