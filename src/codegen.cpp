@@ -894,17 +894,6 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     assert(llvmf);
     JL_GC_POP();
 #ifdef USE_MCJIT
-    if (imaging_mode) {
-        // Copy the function out of the shadow module, unless this was done before
-        void *addr = (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
-        if (addr != nullptr) {
-            return addr;
-        }
-        Module *m = new Module("julia", jl_LLVMContext);
-        jl_setup_module(m, true);
-        FunctionMover mover(m, shadow_module);
-        llvmf = mover.CloneFunction(llvmf);
-    }
     return (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
     return jl_ExecutionEngine->getPointerToFunction(llvmf);
@@ -3562,8 +3551,21 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (fargt.size() != fargt_sig.size())
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
+    jl_compile(ff);
+    if (!lam->functionObject) {
+        jl_errorf("error compiling %s while creating cfunction", lam->name->name);
+    }
+
     std::stringstream funcName;
     funcName << "jlcapi_" << lam->name->name << "_" << globalUnique++;
+
+    // Backup the info for the nested compile
+    JL_SIGATOMIC_BEGIN(); // no errors expected beyond this point
+    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    DebugLoc olddl = builder.getCurrentDebugLocation();
+    bool last_n_c = nested_compile;
+    nested_compile = true;
+    jl_gc_inhibit_finalizers(nested_compile); // no allocations expected between the top of this function (when last scanned lam->cFunctionList) and here, which might have triggered running julia code
 
     // Create the Function stub
     Module *m;
@@ -3604,7 +3606,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     lam->cFunctionList = list2;
 
     // See whether this function is specsig or jlcall
-    jl_compile(ff);
     bool specsig;
     Function *theFptr;
     if (lam->specFunctionObject != NULL) {
@@ -3614,10 +3615,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     else {
         theFptr = (Function*)lam->functionObject;
         specsig = false;
-        if (!theFptr) {
-            jl_errorf("error compiling %s while creating cfunction", lam->name->name);
-        }
     }
+    assert(theFptr);
 
     // Alright, let's do this!
     // let's first emit the arguments
@@ -3738,6 +3737,29 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         abort();
     }
 #endif
+
+#ifdef USE_MCJIT
+    if (imaging_mode) {
+        // Copy the function out of the shadow module
+        Module *m = new Module("julia", jl_LLVMContext);
+        jl_setup_module(m, true);
+        FunctionMover mover(m, shadow_module);
+        Function *clone = mover.CloneFunction(cw);
+        FPM->run(*clone);
+    }
+    else {
+        FPM->run(*cw);
+    }
+#endif
+
+    // Restore the previous compile context
+    if (old != NULL) {
+        builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+    }
+    nested_compile = last_n_c;
+    jl_gc_inhibit_finalizers(nested_compile);
+    JL_SIGATOMIC_END();
 
     return cw;
 }
