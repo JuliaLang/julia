@@ -26,10 +26,6 @@ const utf8_trailing = [
     2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5,
 ]
 
-# Retained because although undocumented and unexported, used in a package (MutableStrings)
-# should be deprecated
-is_utf8_start(byte::UInt8) = ((byte&0xc0)!=0x80)
-
 ## required core functionality ##
 
 function endof(s::UTF8String)
@@ -117,7 +113,7 @@ function getindex(s::UTF8String, r::UnitRange{Int})
     if i < 1 || i > length(s.data)
         throw(BoundsError(s, i))
     end
-    if !is_utf8_start(d[i])
+    if is_valid_continuation(d[i])
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
     end
     if j > length(d)
@@ -345,6 +341,3 @@ end
 
 utf8(p::Ptr{UInt8}) = UTF8String(bytestring(p))
 utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))
-
-# The last case is the replacement character 0xfffd (3 bytes)
-utf8sizeof(c::Char) = c < Char(0x80) ? 1 : c < Char(0x800) ? 2 : c < Char(0x10000) ? 3 : c < Char(0x110000) ? 4 : 3
