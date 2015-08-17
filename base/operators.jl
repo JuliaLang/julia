@@ -306,6 +306,7 @@ setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
 # convert to a supported index type (Array, Colon, or Int)
 to_index(i::Int) = i
 to_index(i::Integer) = convert(Int,i)::Int
+to_index(x::Number) = x
 to_index(c::Colon) = c
 to_index(I::AbstractArray{Bool}) = find(I)
 to_index(A::AbstractArray) = A
