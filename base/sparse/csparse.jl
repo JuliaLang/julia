@@ -345,23 +345,26 @@ end
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1
-    for j = 1:A.n
-        p = A.colptr[j]                 # record current position
-        A.colptr[j] = nz                # set new position
-        while p < A.colptr[j+1]
-            if f(A.rowval[p], j, A.nzval[p], other)
-                A.nzval[nz] = A.nzval[p]
-                A.rowval[nz] = A.rowval[p]
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval = A.nzval
+    @inbounds for j = 1:A.n
+        p = colptr[j]                 # record current position
+        colptr[j] = nz                # set new position
+        while p < colptr[j+1]
+            if f(rowval[p], j, nzval[p], other)
+                nzval[nz] = nzval[p]
+                rowval[nz] = rowval[p]
                 nz += 1
             end
             p += 1
         end
     end
-    A.colptr[A.n + 1] = nz
+    colptr[A.n + 1] = nz
     nz -= 1
     if nz < nzorig
-        resize!(A.nzval, nz)
-        resize!(A.rowval, nz)
+        resize!(nzval, nz)
+        resize!(rowval, nz)
     end
     A
 end
@@ -372,13 +375,27 @@ call(::DropTolFun, i,j,x,other) = abs(x)>other
 immutable DropZerosFun <: Func{4} end
 call(::DropZerosFun, i,j,x,other) = x!=0
 immutable TriuFun <: Func{4} end
-call(::TriuFun, i,j,x,other) = j>=i
+call(::TriuFun, i,j,x,other) = j>=i + other
 immutable TrilFun <: Func{4} end
-call(::TrilFun, i,j,x,other) = i>=j
+call(::TrilFun, i,j,x,other) = i>=j - other
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
+droptol(A::SparseMatrixCSC) = droptol!(copy(A))
 dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
-triu!(A::SparseMatrixCSC) = fkeep!(A, TriuFun(), nothing)
-triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, TrilFun(), nothing)
-tril(A::SparseMatrixCSC) = tril!(copy(A))
+dropzeros(A::SparseMatrixCSC) = dropzeros!(copy(A))
+
+function triu!(A::SparseMatrixCSC, k::Integer=0)
+    m,n = size(A)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
+    fkeep!(A, TriuFun(), k)
+end
+
+function tril!(A::SparseMatrixCSC, k::Integer=0)
+    m,n = size(A)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
+    fkeep!(A, TrilFun(), k)
+end
