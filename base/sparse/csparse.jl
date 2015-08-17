@@ -375,13 +375,25 @@ call(::DropTolFun, i,j,x,other) = abs(x)>other
 immutable DropZerosFun <: Func{4} end
 call(::DropZerosFun, i,j,x,other) = x!=0
 immutable TriuFun <: Func{4} end
-call(::TriuFun, i,j,x,other) = j>=i
+call(::TriuFun, i,j,x,other) = j>=i + other
 immutable TrilFun <: Func{4} end
-call(::TrilFun, i,j,x,other) = i>=j
+call(::TrilFun, i,j,x,other) = i>=j - other
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
 dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
-triu!(A::SparseMatrixCSC) = fkeep!(A, TriuFun(), nothing)
-triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, TrilFun(), nothing)
-tril(A::SparseMatrixCSC) = tril!(copy(A))
+
+function triu!(A::SparseMatrixCSC, k::Integer=0)
+    m,n = size(A)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
+    fkeep!(A, TriuFun(), k)
+end
+
+function tril!(A::SparseMatrixCSC, k::Integer=0)
+    m,n = size(A)
+    if (k > 0 && k > n) || (k < 0 && -k > m)
+        throw(BoundsError())
+    end
+    fkeep!(A, TrilFun(), k)
+end
