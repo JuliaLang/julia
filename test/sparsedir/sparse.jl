@@ -1065,28 +1065,77 @@ Ai = ceil(Int,Ar*100)
 @test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
+# test sparse matrix normestinv
+function rel_lb_err(a,b)
+    if  b < Inf
+        (b-a)/b
+    else
+        1
+    end
+end
+
+function rel_ub_err(a,b)
+    if b < Inf
+        (a-b)/b
+    else
+        1
+    end
+end
+
+function safe_norm1inv(m)
+    try
+        norm(inv(m),1)
+    catch
+        Inf
+    end
+end
+
+test_normestinv_Ac =
+   Float64[begin
+               Ac = sprandn(10,10,.5) + im* sprandn(10,10,.5)
+               rel_lb_err(Base.SparseMatrix.normestinv(Ac,3), safe_norm1inv(full(Ac)))
+           end for _ in 1:1000]
+test_normestinv_Aci=
+    Float64[begin
+                Aci = ceil(Int64,100*sprand(10,10,.5))+ im*ceil(Int64,sprand(10,10,.5))
+                rel_lb_err(Base.SparseMatrix.normestinv(Aci,3), safe_norm1inv(full(Aci)))
+            end for _ in 1:1000]
+test_normestinv_Ar =
+    Float64[begin
+                Ar = sprandn(10,10,.5)
+                rel_lb_err(Base.SparseMatrix.normestinv(Ar,3), safe_norm1inv(full(Ar)))
+            end for _ in 1:1000]
+test_normestinv_Ari=
+    Float64[begin
+                Ari = ceil(Int64,100*sprandn(10,10,.5))
+                rel_lb_err(Base.SparseMatrix.normestinv(Ari,3), safe_norm1inv(full(Ari)))
+            end for _ in 1:1000]
+
+@test quantile(test_normestinv_Ac,.95) < 1e-8
+@test quantile(test_normestinv_Aci,.95) < 1e-8
+@test quantile(test_normestinv_Ar,.95) < 1e-8
+@test quantile(test_normestinv_Ari,.95) < 1e-8
+
+@test_throws ArgumentError Base.SparseMatrix.normestinv(sparse([1.]),0)
+@test_throws ArgumentError Base.SparseMatrix.normestinv(sparse([1.]),2)
+
 # test sparse matrix cond
 A = sparse([1.0])
-Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
-@test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
-@test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
-@test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
-@test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 
-# test sparse matrix normestinv
-Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
-Ar = sprandn(20,20,.5)
-Ari = ceil(Int64,100*Ar)
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
+test_cond_Ac = Float64[begin
+                         Ac = sprandn(10,10,.5) + im* sprandn(10,10,.5)
+                         rel_ub_err(cond(Ac,1), cond(full(Ac),1))
+                       end for _ in 1:1000]
+test_cond_Ar = Float64[begin
+                         Ar = sprandn(10,10,.5)
+                         rel_ub_err(cond(Ar,1), cond(full(Ar),1))
+                       end for _ in 1:1000]
+
+@test quantile(test_cond_Ac,.95) > .05
+@test quantile(test_cond_Ar,.95) > .05
 
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))

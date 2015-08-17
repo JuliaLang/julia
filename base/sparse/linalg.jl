@@ -503,13 +503,14 @@ end
 
 # cond
 function cond(A::SparseMatrixCSC, p::Real=2)
+    t = min(maximum(size(A)),6) # number of blocks in norm estimation
     if p == 1
         normA = norm(A, 1)
-        normAinv = normestinv(A)
+        normAinv = normestinv(A, t)
         return normA * normAinv
     elseif p == Inf
         normA = norm(A, Inf)
-        normAinv = normestinv(A')
+        normAinv = normestinv(A', t)
         return normA * normAinv
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
@@ -519,10 +520,28 @@ function cond(A::SparseMatrixCSC, p::Real=2)
 end
 
 function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
+    function _A_ldiv_B!(C,A,B)
+        copy!(C,A\B)
+    end
+    function _Ac_ldiv_B!(C,A,B)
+        copy!(C,A'\B)
+    end
+    (F, singular)  =
+        try
+            (factorize(A), false)
+        catch
+            (factorize(sparse([one(T)])), true)
+        end
+    if singular
+        return Inf
+    else
+        return norm1est(A,t,op! = _A_ldiv_B!, opc! = _Ac_ldiv_B!, F = F)
+    end
+end
+
+function norm1est{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))); op! = A_mul_B!, opc! = Ac_mul_B!, F = copy(A) )
     maxiter = 5
-    # Check the input
     n = max(size(A)...)
-    F = factorize(A)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
     end
@@ -536,9 +555,12 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
 
     S = zeros(Ti, n, t)
 
+    Y = Array(Ti,n,t)
+    Z = Array(Ti,n,t)
+
     # Generate the block matrix
     X = Array(Ti, n, t)
-    X[1:n,1] = 1
+    X[1:n,1] = one(Ti)
     for j = 2:t
         repeated = true
         while repeated
@@ -563,7 +585,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     est_ind = 0
     while iter < maxiter
         iter += 1
-        Y = F \ X
+        # Y = F \ X
+        op!(Y,F,X)
         est = zero(real(eltype(Y)))
         est_ind = 0
         for i = 1:t
@@ -627,7 +650,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
         end
 
         # Use the conjugate transpose
-        Z = F' \ S
+        # Z = F' \ S
+        opc!(Z,F,S)
         h_max = zero(real(eltype(Z)))
         h = zeros(real(eltype(Z)), n)
         h_ind = 0
