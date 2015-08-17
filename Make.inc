@@ -646,17 +646,17 @@ LLVM_CONFIG := $(build_bindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
 
-ifneq ($(BUILD_OS),$(OS))
+ifeq ($(BUILD_OS),$(OS))
+LLVM_CONFIG_HOST := $(LLVM_CONFIG)
+else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
-ifeq (exists, $$(shell [ -d '$(LLVM_CONFIG_HOST)' ] && echo exists ))
+ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
 ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
 # llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
 # use delayed expansion (= not :=) because spawn isn't defined until later
 LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
 endif
 endif
-else
-LLVM_CONFIG_HOST := $(LLVM_CONFIG)
 endif # SYSTEM_LLVM
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
