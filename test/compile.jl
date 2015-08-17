@@ -24,10 +24,8 @@ try
               """)
     end
 
-    if myid() == 1
-        @test_throws Base.PrecompilableError __precompile__(true)
-        @test_throws LoadError include(Foo_file) # from __precompile__(true)
-    end
+    # Issue #12623
+    @test __precompile__(true) === nothing
 
     Base.require(Foo_module)
     cachefile = joinpath(dir, "$Foo_module.ji")

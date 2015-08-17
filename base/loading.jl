@@ -148,10 +148,12 @@ precompilableerror(ex::PrecompilableError, c) = ex.isprecompilable == c
 precompilableerror(ex::LoadError, c) = precompilableerror(ex.error, c)
 precompilableerror(ex, c) = false
 
-# put at the top of a file to force it to be precompiled (true), or
-# to be prevent it from being precompiled (false).
+# Call __precompile__ at the top of a file to force it to be precompiled (true), or
+# to be prevent it from being precompiled (false).  __precompile__(true) is
+# ignored except within "require" call.
 function __precompile__(isprecompilable::Bool=true)
-    if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ()))
+    if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
+        !(isprecompilable && toplevel_load::Bool)
         throw(PrecompilableError(isprecompilable))
     end
 end
