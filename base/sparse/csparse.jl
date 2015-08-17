@@ -345,23 +345,26 @@ end
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1
-    for j = 1:A.n
-        p = A.colptr[j]                 # record current position
-        A.colptr[j] = nz                # set new position
-        while p < A.colptr[j+1]
-            if f(A.rowval[p], j, A.nzval[p], other)
-                A.nzval[nz] = A.nzval[p]
-                A.rowval[nz] = A.rowval[p]
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval = A.nzval
+    @inbounds for j = 1:A.n
+        p = colptr[j]                 # record current position
+        colptr[j] = nz                # set new position
+        while p < colptr[j+1]
+            if f(rowval[p], j, nzval[p], other)
+                nzval[nz] = nzval[p]
+                rowval[nz] = rowval[p]
                 nz += 1
             end
             p += 1
         end
     end
-    A.colptr[A.n + 1] = nz
+    colptr[A.n + 1] = nz
     nz -= 1
     if nz < nzorig
-        resize!(A.nzval, nz)
-        resize!(A.rowval, nz)
+        resize!(nzval, nz)
+        resize!(rowval, nz)
     end
     A
 end
