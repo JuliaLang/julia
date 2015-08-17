@@ -213,6 +213,8 @@ $(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
 
 RELBUILDROOT := $(call cygpath_w,$(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/"))
 COMMA:=,
+
+ifneq ($(OS),WINNT)
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $(JULIAHOME)/VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
@@ -221,6 +223,21 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $(JULIAH
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
+else
+HOST_LLC := $(BUILDDIR)/Host/usr/bin/llvm-llc$(BUILD_EXE)
+define sysimg_builder
+$$(build_private_libdir)/sys$1.bc: $$(build_private_libdir)/inference.ji $(JULIAHOME)/VERSION $$(BASE_SRCS)
+	@$$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
+	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-bc $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+		-J $$(call cygpath_w,$$<) sysimg.jl $(RELBUILDROOT) \
+		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
+.SECONDARY: $(build_private_libdir)/sys$1.o
+.SECONDARY: $(build_private_libdir)/sys$1.bc
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/sys$1.bc
+	$(HOST_LLC) $< -o=$@ -filetype=obj -march=$(MARCH)
+endef
+endif
+
 $(eval $(call sysimg_builder,,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,$(JULIA_EXECUTABLE_debug)))
 

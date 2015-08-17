@@ -21,6 +21,7 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Metadata.h>
 #ifdef LLVM38
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #endif
@@ -233,6 +234,10 @@ static MDNode* tbaa_sveclen;           // The len in a jl_svec_t
 static MDNode* tbaa_func;           // A jl_function_t
 static MDNode* tbaa_datatype;       // A jl_datatype_t
 static MDNode* tbaa_const;          // Memory that is immutable by the time LLVM can see it
+
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+static MDNode* md_StructRet;
+#endif
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
@@ -3582,7 +3587,14 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
             funcName.str(), m);
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+    // llvm used to use the old mingw ABI, skipping this marking works around that difference
+    if (attrs.hasAttribute(1, Attribute::StructRet)) {
+        attrs.removeAttribute(jl_LLVMContext, 1, Attribute::StructRet);
+    }
+#endif
     cw->setAttributes(attrs);
+
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
     builder.SetInsertPoint(b0);
     DebugLoc noDbg;
@@ -3717,10 +3729,17 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         sret = true;
     }
 
-    if (sret)
-        builder.CreateRetVoid();
-    else
+    if (sret) {
+        ReturnInst *ret = builder.CreateRetVoid();
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+        ret->setMetadata("StructRet", md_StructRet);
+#else
+        (void)ret;
+#endif
+    }
+    else {
         builder.CreateRet(r);
+    }
     finalize_gc_frame(&ctx);
 
 #ifdef JL_DEBUG_BUILD
@@ -4775,6 +4794,10 @@ static void init_julia_llvm_env(Module *m)
     tbaa_func = tbaa_make_child("jtbaa_func",tbaa_value);
     tbaa_datatype = tbaa_make_child("jtbaa_datatype",tbaa_value);
     tbaa_const = tbaa_make_child("jtbaa_const",tbaa_root,true);
+
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+    md_StructRet = MDNode::get(jl_LLVMContext, makeArrayRef<Value*>(ConstantInt::getTrue(Type::getInt1Ty(getGlobalContext()))));
+#endif
 
     // every variable or function mapped in this function must be
     // exported from libjulia, to support static compilation

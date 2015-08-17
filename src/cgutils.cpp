@@ -499,6 +499,19 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #endif
 #endif
 
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+    Value *clone_struct_ret = VMap[md_StructRet];
+    // llvm used to use the old mingw ABI, skipping this marking works around that difference
+    for (Value::use_iterator I = clone_struct_ret->use_begin(), E = clone_struct_ret->use_end(); I != E; ++I) {
+        CallInst *call = dyn_cast<CallInst>(*I);
+        if (call)
+            call->addAttribute(1, Attribute::StructRet);
+        ReturnInst *ret = dyn_cast<ReturnInst>(*I);
+        if (ret)
+            ret->getParent()->getParent()->addFnAttr(Attribute::StructRet);
+    }
+#endif
+
     // add metadata information
     jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
 
