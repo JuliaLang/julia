@@ -2159,9 +2159,9 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
         jl_cgval_t v2 = emit_unboxed(args[2], ctx); // unrooted!
         // FIXME: v.typ is roughly equiv. to expr_type, but with typeof(T) == Type{T} instead of DataType in a few cases
         if (v1.typ == (jl_value_t*)jl_datatype_type)
-            v1.typ = expr_type(args[1], ctx);
+            v1 = remark_julia_type(v1, expr_type(args[1], ctx)); // patch up typ if necessary
         if (v2.typ == (jl_value_t*)jl_datatype_type)
-            v2.typ = expr_type(args[2], ctx);
+            v2 = remark_julia_type(v2, expr_type(args[2], ctx)); // patch up typ if necessary
         // emit comparison test
         Value *ans = emit_f_is(v1, v2, ctx);
         ctx->gc.argDepth = last_depth;
@@ -2486,7 +2486,7 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             *ret = emit_getfield(args[1],
                                  (jl_sym_t*)jl_fieldref(args[2],0), ctx);
             if (ret->typ == (jl_value_t*)jl_any_type) // improve the type, if known from the expr
-                ret->typ = expr_type(expr, ctx);
+                *ret = remark_julia_type(*ret, expr_type(expr, ctx));
             JL_GC_POP();
             return true;
         }
