@@ -40,6 +40,25 @@ temp_pkg_dir() do
   @test endswith(str, string(Pkg.installed("Example")))
   Pkg.rm("Example")
   @test isempty(Pkg.installed())
+  @test !isempty(Pkg.available("Example"))
+  @test_throws ErrorException Pkg.available("FakePackageDoesn'tExist")
+  Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+  @test [keys(Pkg.installed())...] == ["Example"]
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test startswith(str, " - Example")
+  @test endswith(str, "master")
+  Pkg.free("Example")
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
+  Pkg.checkout("Example")
+  Pkg.free(("Example",))
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
+  Pkg.rm("Example")
+  @test isempty(Pkg.installed())
 end
 
 # testing a package with test dependencies causes them to be installed for the duration of the test
