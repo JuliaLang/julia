@@ -27,6 +27,30 @@ This is a good way to circumvent problems that arise from the order in which jul
 Julia's flisp interpreter uses ``value_t*`` objects; these can be displayed
 with ``call fl_print(ios_stdout, obj)``.
 
+Useful Julia variables for Inspecting
+-------------------------------------
+
+While the addresses of many variables, like singletons, can be be useful to print for many failures,
+there are a number of additional variables (see julia.h for a complete list) that are even more useful.
+
+- (when in ``jl_apply_generic``) ``f->linfo`` and ``jl_uncompress_ast(f->linfo, f->linfo->ast)`` :: for figuring out a bit about the call-stack
+- ``jl_lineno`` and ``jl_filename`` :: for figuring out what line in a test to go start debugging from (or figure out how far into a file has been parsed)
+- ``$1`` :: not really a variable, but still a useful shorthand for referring to the result of the last gdb command (such as ``print``)
+- ``jl_options`` :: sometimes useful, since it lists all of the command line options that were successfully parsed
+- ``jl_uv_stderr`` :: because who doesn't like to be able to interact with stdio
+
+
+Useful Julia functions for Inspecting those variables
+-----------------------------------------------------
+
+- ``gdblookup($rip)`` :: For looking up up the current function and line. (use ``$eip`` on i686 platforms)
+- ``jlbacktrace()`` :: For dumping the current julia backtrace stack to stderr. Only usable after ``record_backtrace()`` has been called.
+- ``jl_dump_llvm_value(Value*)`` :: For invoking ``Value->dump()`` in gdb, where it doesn't work natively. For example, ``f->linfo->functionObject``, ``f->linfo->specFunctionObject``, and ``to_function(f->linfo)``.
+- ``Type->dump()`` :: only works in lldb. Note: add something like ``;1`` to prevent lldb from printing its prompt over the output
+- ``jl_eval_string("expr")`` :: for invoking side-effects to modify the current state or to lookup symbols
+- ``jl_typeof(jl_value_t*)`` :: for extracting the type tag of a julia value (in gdb, call ``macro define jl_typeof jl_typeof`` first, or pick something short like ``ty`` for the first arg to define a shorthand)
+
+
 Inserting breakpoints for inspection from gdb
 ---------------------------------------------
 
@@ -37,14 +61,9 @@ In your ``gdb`` session, set a breakpoint in ``jl_breakpoint`` like so::
 Then within your Julia code, insert a call to ``jl_breakpoint`` by adding
 ::
 
-   ccall(:jl_breakpoint, Void, ())
-
-or alternatively
-::
-
    ccall(:jl_breakpoint, Void, (Any,), obj)
 
-if you want to inspect ``obj`` from within ``jl_breakpoint``.
+where ``obj`` can be any variable or tuple you want to be accessible in the breakpoint.
 
 It's particularly helpful to back up to the ``jl_apply`` frame, from which you can display the arguments to a function using, e.g.,
 ::
@@ -55,7 +74,7 @@ Another useful frame is ``to_function(jl_lambda_info_t *li, bool cstyle)``. The 
 
    #2  0x00007ffff7928bf7 in to_function (li=0x2812060, cstyle=false) at codegen.cpp:584
    584	        abort();
-   (gdb) p jl_(jl_uncompress_ast(li,li.ast))
+   (gdb) p jl_(jl_uncompress_ast(li, li.ast))
 
 Inserting breakpoints upon certain conditions
 ---------------------------------------------
