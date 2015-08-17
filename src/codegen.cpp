@@ -23,6 +23,7 @@
 #include <llvm/IR/IntrinsicInst.h>
 #ifdef LLVM38
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #endif
 #ifdef LLVM37
 #include "llvm/IR/LegacyPassManager.h"
