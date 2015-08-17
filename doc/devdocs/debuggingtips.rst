@@ -43,7 +43,7 @@ there are a number of additional variables (see julia.h for a complete list) tha
 Useful Julia functions for Inspecting those variables
 -----------------------------------------------------
 
-- ``gdblookup($rip)`` :: For looking up up the current function and line. (use ``$eip`` on i686 platforms)
+- ``gdblookup($rip)`` :: For looking up the current function and line. (use ``$eip`` on i686 platforms)
 - ``jlbacktrace()`` :: For dumping the current julia backtrace stack to stderr. Only usable after ``record_backtrace()`` has been called.
 - ``jl_dump_llvm_value(Value*)`` :: For invoking ``Value->dump()`` in gdb, where it doesn't work natively. For example, ``f->linfo->functionObject``, ``f->linfo->specFunctionObject``, and ``to_function(f->linfo)``.
 - ``Type->dump()`` :: only works in lldb. Note: add something like ``;1`` to prevent lldb from printing its prompt over the output
