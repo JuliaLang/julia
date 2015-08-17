@@ -264,7 +264,7 @@ end
 
 ## triu, tril
 
-function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
+function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     m,n = size(S)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
@@ -295,7 +295,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     A
 end
 
-function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
+function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     m,n = size(S)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
