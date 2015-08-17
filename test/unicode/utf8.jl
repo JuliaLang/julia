@@ -24,13 +24,3 @@ let str = UTF8String(b"this is a test\xed\x80")
     @test s8 == "This is a sill"
     @test convert(UTF8String, b"this is a test\xed\x80\x80") == "this is a test\ud000"
 end
-
-# Test undocumented, unexported function, used in a registered package
-@test Base.is_utf8_start(0x65)
-
-# Test undocumented, unexported function, used in a registered package
-@test Base.utf8sizeof('a') == 1
-@test Base.utf8sizeof('\uff') == 2
-@test Base.utf8sizeof('\uffff') == 3
-@test Base.utf8sizeof('\U1f596') == 4
-@test Base.utf8sizeof(Char(0x110000)) == 3
