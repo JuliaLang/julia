@@ -3211,3 +3211,22 @@ end
 # issue #12551 (make sure these don't throw in inference)
 Base.return_types(unsafe_load, (Ptr{nothing},))
 Base.return_types(getindex, (Vector{nothing},))
+
+# issue #12636
+module MyColors
+
+abstract Paint{T}
+immutable RGB{T<:FloatingPoint} <: Paint{T}
+    r::T
+    g::T
+    b::T
+end
+
+myeltype{T}(::Type{Paint{T}}) = T
+myeltype{P<:Paint}(::Type{P}) = myeltype(super(P))
+myeltype(::Type{Any}) = Any
+
+end
+
+@test @inferred(MyColors.myeltype(MyColors.RGB{Float32})) == Float32
+@test @inferred(MyColors.myeltype(MyColors.RGB)) == Any
