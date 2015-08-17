@@ -380,7 +380,9 @@ immutable TrilFun <: Func{4} end
 call(::TrilFun, i,j,x,other) = i>=j - other
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
+droptol(A::SparseMatrixCSC) = droptol!(copy(A))
 dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
+dropzeros(A::SparseMatrixCSC) = dropzeros!(copy(A))
 
 function triu!(A::SparseMatrixCSC, k::Integer=0)
     m,n = size(A)
