@@ -21,8 +21,7 @@ function rst{l}(io::IO, header::Header{l})
 end
 
 function rst(io::IO, code::Code)
-    println(io, "::")
-    println(io)
+    println(io, ".. code-block:: julia")
     for l in lines(code.code)
         println(io, "    ", l)
     end
@@ -60,7 +59,10 @@ rst(io::IO, md) = writemime(io, "text/rst", md)
 rstinline(x) = sprint(rstinline, x)
 
 function rstinline(io::IO, md...)
+    wasCode = false
     for el in md
+        wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
+        wasCode = isa(el, Code) && (wasCode = true)
         rstinline(io, el)
     end
 end
@@ -71,7 +73,9 @@ rstinline(io::IO, md::Vector) = !isempty(md) && rstinline(io, md...)
 
 rstinline(io::IO, md::Link) = rstinline(io, "`", md.text, " <", md.url, ">`_")
 
-rstinline(io::IO, s::AbstractString) = print(io, s)
+rstescape(s) = replace(s, "\\", "\\\\")
+
+rstinline(io::IO, s::AbstractString) = print(io, rstescape(s))
 
 rstinline(io::IO, md::Bold) = rstinline(io, "**", md.text, "**")
 
