@@ -284,17 +284,17 @@ keywords[:immutable] = doc"""
   See `type` and the manual for more information.
   """
 
-"""
-Executes an expression, printing the time it took to
-execute and the total number of bytes its execution caused to be
-allocated. Returns the value of the expression. For example:
-
-    @time begin
-      sleep(1)
-      2+2
-    end
-"""
-:@time
+# """
+# Executes an expression, printing the time it took to
+# execute and the total number of bytes its execution caused to be
+# allocated. Returns the value of the expression. For example:
+#
+#     @time begin
+#       sleep(1)
+#       2+2
+#     end
+# """
+# :@time
 
 doc"""
 Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
@@ -315,14 +315,14 @@ For example, this regex has all three flags enabled:
 """
 :(r"")
 
-"""
-    push!(collection, items...) → collection
-
-Insert `items` at the end of `collection`.
-
-    push!([1,2,3], 4) == [1,2,3,4]
-"""
-push!
+# """
+#     push!(collection, items...) → collection
+#
+# Insert `items` at the end of `collection`.
+#
+#     push!([1,2,3], 4) == [1,2,3,4]
+# """
+# push!
 
 if Base.USE_GPL_LIBS
 
