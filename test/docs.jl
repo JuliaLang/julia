@@ -37,6 +37,14 @@ end
 "f-2"
 f(x, y) = x + y
 
+"s-1"
+@generated function s(x)
+    :(x)
+end
+
+"s-2"
+@generated s(x, y) = :(x + y)
+
 "g"
 function g end
 
@@ -100,6 +108,15 @@ let f = DocsTest.f
     @test funcdoc.order == order
     @test funcdoc.meta[order[1]] == doc"f-1"
     @test funcdoc.meta[order[2]] == doc"f-2"
+end
+
+let s = DocsTest.s
+    funcdoc = meta(DocsTest)[s]
+    order = [methods(s, sig)[1] for sig in [(Any,), (Any, Any)]]
+    @test funcdoc.main == nothing
+    @test funcdoc.order == order
+    @test funcdoc.meta[order[1]] == doc"s-1"
+    @test funcdoc.meta[order[2]] == doc"s-2"
 end
 
 let g = DocsTest.g
