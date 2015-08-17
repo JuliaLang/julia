@@ -782,3 +782,5 @@ function Regex(pattern::AbstractString, options::Integer)
             "use string flags instead: Regex(\"$pattern\", \"$flags\").", :Regex)
     Regex(pattern, flags)
 end
+
+@deprecate colon{T<:AbstractFloat}(a::T, b::T) colon(a, one(a), b)

@@ -159,8 +159,6 @@ function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
     FloatRange{T}(start, step, floor(r)+1, one(step))
 end
 
-colon{T<:AbstractFloat}(a::T, b::T) = colon(a, one(a), b)
-
 colon{T<:Real}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
 colon{T<:AbstractFloat}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
 colon{T<:AbstractFloat}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)

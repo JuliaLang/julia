@@ -119,7 +119,7 @@ for (sz,T) in allsizes[2:end]
         @check_bit_operation setindex!(b1, x, j) T
     end
 
-    y = rand(0.0:1.0)
+    y = rand(0.0:1:1.0)
     @check_bit_operation setindex!(b1, y, 100) T
 
     for j in [1, 63, 64, 65, 127, 128, 129, 191, 192, 193, l-1]
@@ -144,7 +144,7 @@ for (sz,T) in allsizes[2:end]
     b2 = bitrand(100)
     @check_bit_operation setindex!(b1, b2, 1:100) T
 
-    y = rand(0.0:1.0)
+    y = rand(0.0:1:1.0)
     @check_bit_operation setindex!(b1, y, 1:100) T
 
     t1 = find(bitrand(l))
@@ -153,7 +153,7 @@ for (sz,T) in allsizes[2:end]
     b2 = bitrand(length(t1))
     @check_bit_operation setindex!(b1, b2, t1) T
 
-    y = rand(0.0:1.0)
+    y = rand(0.0:1:1.0)
     @check_bit_operation setindex!(b1, y, t1) T
 end
 

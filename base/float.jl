@@ -467,7 +467,7 @@ end
 for fn in (:float,:big)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
-        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
+        $fn(r::UnitRange) = UnitRange($fn(r.start), $fn(last(r)))
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
         function $fn(r::LinSpace)
             new_len = $fn(r.len)
