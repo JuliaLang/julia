@@ -359,7 +359,7 @@ end
 
 multidoc(meta, objs) = quote $([:(@doc $(esc(meta)) $(esc(obj))) for obj in objs]...) end
 
-fexpr(ex) = isexpr(ex, :function, :(=)) && isexpr(ex.args[1], :call)
+fexpr(ex) = isexpr(ex, :function, :stagedfunction, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
     def′ = unblock(def)
