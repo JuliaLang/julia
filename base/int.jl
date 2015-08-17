@@ -71,15 +71,19 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-typealias Signed64 Union{Int8,Int16,Int32,Int64}
-typealias Unsigned64 Union{UInt8,UInt16,UInt32,UInt64}
-typealias Integer64 Union{Signed64,Unsigned64}
+const Signed64Types = (Int8,Int16,Int32,Int64)
+const Unsigned64Types = (UInt8,UInt16,UInt32,UInt64)
+typealias Integer64 Union{Signed64Types...,Unsigned64Types...}
 
-div{T<:Signed64  }(x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
-div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
-rem{T<:Signed64  }(x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
-rem{T<:Unsigned64}(x::T, y::T) = box(T,urem_int(unbox(T,x),unbox(T,y)))
-mod{T<:Signed64  }(x::T, y::T) = box(T,smod_int(unbox(T,x),unbox(T,y)))
+for T in Signed64Types
+    @eval div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
+    @eval rem(x::$T, y::$T) = box($T,srem_int(unbox($T,x),unbox($T,y)))
+    @eval mod(x::$T, y::$T) = box($T,smod_int(unbox($T,x),unbox($T,y)))
+end
+for T in Unsigned64Types
+    @eval div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
+    @eval rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
+end
 
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 

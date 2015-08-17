@@ -319,8 +319,6 @@ static void jl_deserialize_globalvals(ios_t *s)
 
 static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
 {
-    // ensures all symbols referenced in the code have
-    // references in the system image to their global variable
     // since symbols are static, they might not have had a
     // reference anywhere in the code image other than here
     void *bp = ptrhash_get(&backref_table, v);
@@ -335,7 +333,41 @@ static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
     if (v->right) jl_serialize_gv_syms(s, v->right);
 }
 
-static void jl_deserialize_gv_syms(ios_t *s)
+static void jl_serialize_gv_others(ios_t *s)
+{
+    // ensures all objects referenced in the code have
+    // references in the system image to their global variable
+    // since codegen knows that some integer boxes are static,
+    // they might not have had a reference anywhere in the code
+    // image other than here
+    int32_t i;
+    for (i = -512; i < 512; i++) {
+        jl_value_t *v32 = jl_box_int32(i);
+        void *bp32 = ptrhash_get(&backref_table, v32);
+        if (bp32 == HT_NOTFOUND) {
+            int32_t gv32 = jl_get_llvm_gv(v32);
+            if (gv32 != 0) {
+                jl_serialize_value(s, v32);
+                write_int32(s, gv32);
+            }
+        }
+    }
+    for (i = -512; i < 512; i++) {
+        jl_value_t *v64 = jl_box_int64(i);
+        void *bp64 = ptrhash_get(&backref_table, v64);
+        if (bp64 == HT_NOTFOUND) {
+            int32_t gv64 = jl_get_llvm_gv(v64);
+            if (gv64 != 0) {
+                jl_serialize_value(s, v64);
+                write_int32(s, gv64);
+            }
+        }
+    }
+    jl_serialize_gv_syms(s, jl_get_root_symbol());
+    jl_serialize_value(s, NULL); // signal the end of this list
+}
+
+static void jl_deserialize_gv_others(ios_t *s)
 {
     while (1) {
         jl_value_t *v = jl_deserialize_value(s, NULL);
@@ -1737,8 +1769,7 @@ void jl_save_system_image_to_stream(ios_t *f)
         jl_serialize_gv(f, deser_tag[i]);
     }
     jl_serialize_globalvals(f);
-    jl_serialize_gv_syms(f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
-    jl_serialize_value(f, NULL); // signal the end of the symbols list
+    jl_serialize_gv_others(f); // serialize things that might not have visible gc roots roots with GlobalValue references
 
     write_int32(f, jl_get_t_uid_ctr());
     write_int32(f, jl_get_gs_ctr());
@@ -1828,7 +1859,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
         jl_deserialize_gv(f, deser_tag[i]);
     }
     jl_deserialize_globalvals(f);
-    jl_deserialize_gv_syms(f);
+    jl_deserialize_gv_others(f);
 
     int uid_ctr = read_int32(f);
     int gs_ctr = read_int32(f);

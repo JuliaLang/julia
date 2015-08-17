@@ -634,7 +634,7 @@ static void julia_save()
     }
     else {
         ios_t *s = NULL;
-        if (jl_options.outputo)
+        if (jl_options.outputo || jl_options.outputbc)
             s = jl_create_system_image();
 
         if (jl_options.outputji) {
@@ -651,7 +651,7 @@ static void julia_save()
         }
 
         if (jl_options.outputbc)
-            jl_dump_bitcode((char*)jl_options.outputbc);
+            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, s->size);
 
         if (jl_options.outputo)
             jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
@@ -711,6 +711,7 @@ void jl_get_builtin_hooks(void)
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
+    jl_typeerror_type = (jl_datatype_t*)core("TypeError");
 
 #ifdef SEGV_EXCEPTION
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
@@ -731,7 +732,6 @@ DLLEXPORT void jl_get_system_hooks(void)
 
     jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
     jl_argumenterror_type = (jl_datatype_t*)basemod("ArgumentError");
-    jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_complex_type = (jl_datatype_t*)basemod("Complex");

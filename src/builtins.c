@@ -960,6 +960,7 @@ int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, j
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig)
 {
+    assert(sig);
     assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
     // NOTE: if this call to inference is removed, type_annotate in inference.jl
@@ -992,7 +993,7 @@ JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
-    jl_trampoline_compile_function(f, 0, jl_anytuple_type);
+    jl_trampoline_compile_function(f, 0, f->linfo->specTypes ? : jl_anytuple_type);
     return jl_apply(f, args, nargs);
 }
 

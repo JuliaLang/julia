@@ -1522,9 +1522,12 @@ void jl_compile_all_defs(jl_function_t *gf)
     JL_GC_PUSH1(&func);
     while (m != (void*)jl_nothing) {
         if (jl_is_leaf_type((jl_value_t*)m->sig)) {
-            jl_get_specialization(gf, m->sig);
+            if (jl_get_specialization(gf, m->sig)) {
+                m = m->next;
+                continue;
+            }
         }
-        else if (m->func->linfo->unspecialized == NULL) {
+        if (m->func->linfo->unspecialized == NULL) {
             func = jl_instantiate_method(m->func, jl_emptysvec);
             if (func->env != (jl_value_t*)jl_emptysvec)
                 func->env = NULL;
