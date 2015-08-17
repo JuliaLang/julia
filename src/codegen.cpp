@@ -3855,6 +3855,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
     size_t captvinfoslen = jl_array_dim0(captvinfos);
     size_t nreq = largslen;
     int va = 0;
+    if (!lam->specTypes)
+        lam->specTypes = jl_anytuple_type;
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;
@@ -3921,7 +3923,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     Function *f = NULL;
 
     bool specsig = false;
-    if (!va && !hasCapt && lam->specTypes != NULL && lam->inferred) {
+    if (!va && !hasCapt && lam->specTypes != jl_anytuple_type && lam->inferred) {
         // no captured vars and not vararg
         // consider specialized signature
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
@@ -4382,37 +4384,30 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
 
     // step 11. check arg count
-    if (ctx.linfo->specTypes == NULL) {
+    if (jl_is_va_tuple(ctx.linfo->specTypes)) {
+        std::string msg;
+        Value *enough;
         if (va) {
-            Value *enough =
-                builder.CreateICmpUGE(argCount,
+            msg = "too few arguments";
+            enough = builder.CreateICmpUGE(argCount,
                                       ConstantInt::get(T_int32, nreq));
-            BasicBlock *elseBB =
-                BasicBlock::Create(getGlobalContext(), "else", f);
-            BasicBlock *mergeBB =
-                BasicBlock::Create(getGlobalContext(), "ifcont");
-            builder.CreateCondBr(enough, mergeBB, elseBB);
-            builder.SetInsertPoint(elseBB);
-            just_emit_error("too few arguments", &ctx);
-            builder.CreateUnreachable();
-            f->getBasicBlockList().push_back(mergeBB);
-            builder.SetInsertPoint(mergeBB);
         }
         else {
-            Value *enough =
+            msg = "wrong number of arguments";
+            enough =
                 builder.CreateICmpEQ(argCount,
                                      ConstantInt::get(T_int32, nreq));
-            BasicBlock *elseBB =
-                BasicBlock::Create(getGlobalContext(), "else", f);
-            BasicBlock *mergeBB =
-                BasicBlock::Create(getGlobalContext(), "ifcont");
-            builder.CreateCondBr(enough, mergeBB, elseBB);
-            builder.SetInsertPoint(elseBB);
-            just_emit_error("wrong number of arguments", &ctx);
-            builder.CreateUnreachable();
-            f->getBasicBlockList().push_back(mergeBB);
-            builder.SetInsertPoint(mergeBB);
         }
+        BasicBlock *elseBB =
+            BasicBlock::Create(getGlobalContext(), "else", f);
+        BasicBlock *mergeBB =
+            BasicBlock::Create(getGlobalContext(), "ifcont");
+        builder.CreateCondBr(enough, mergeBB, elseBB);
+        builder.SetInsertPoint(elseBB);
+        just_emit_error(msg, &ctx);
+        builder.CreateUnreachable();
+        f->getBasicBlockList().push_back(mergeBB);
+        builder.SetInsertPoint(mergeBB);
     }
 
     // step 12. move args into local variables
