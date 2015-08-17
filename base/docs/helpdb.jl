@@ -14633,7 +14633,8 @@ doc"""
            __precompile__(isprecompilable::Bool=true)
 
 Specify whether the file calling this function is precompilable.  If
-``isprecompilable`` is ``true``, then ``__precompile__`` throws an exception
+``isprecompilable`` is ``true``, then ``__precompile__`` throws an
+exception when the file is loaded by ``using``/``import``/``require``
 *unless* the file is being precompiled, and in a module file it causes
 the module to be automatically precompiled when it is imported.
 Typically, ``__precompile__()`` should occur before the ``module``
