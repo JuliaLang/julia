@@ -3858,10 +3858,37 @@ for (gees, gges, elty, relty) in
     end
 end
 # Reorder Schur forms
-for (trsen, tgsen, elty) in
-    ((:dtrsen_, :dtgsen_, :Float64),
-     (:strsen_, :stgsen_, :Float32))
+for (trexc, trsen, tgsen, elty) in
+    ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),
+     (:strexc_, :strsen_, :stgsen_, :Float32))
     @eval begin
+        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) = trexc!('V', ifst, ilst, T, Q)
+        function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          COMPQ
+#       INTEGER            IFST, ILST, INFO, LDQ, LDT, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
+            chkstride1(T, Q)
+            n = chksquare(T)
+            ldt = max(1, stride(T, 2))
+            ldq = max(1, stride(Q, 2))
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
+
+            ccall(($(blasfunc(trexc)), liblapack), Void,
+                  (Ptr{UInt8},  Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}),
+                  &compq, &n,
+                  T, &ldt, Q, &ldq,
+                  &ifst, &ilst,
+                  work, info)
+            @lapackerror
+            T, Q
+        end
         function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
@@ -3978,10 +4005,36 @@ for (trsen, tgsen, elty) in
     end
 end
 
-for (trsen, tgsen, elty) in
-    ((:ztrsen_, :ztgsen_, :Complex128),
-     (:ctrsen_, :ctgsen_, :Complex64))
+for (trexc, trsen, tgsen, elty) in
+    ((:ztrexc_, :ztrsen_, :ztgsen_, :Complex128),
+     (:ctrexc_, :ctrsen_, :ctgsen_, :Complex64))
     @eval begin
+        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) = trexc!('V', ifst, ilst, T, Q)
+        function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          COMPQ
+#       INTEGER            IFST, ILST, INFO, LDQ, LDT, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
+            chkstride1(T, Q)
+            n = chksquare(T)
+            ldt = max(1, stride(T, 2))
+            ldq = max(1, stride(Q, 2))
+            info = Array(BlasInt, 1)
+
+            ccall(($(blasfunc(trexc)), liblapack), Void,
+                  (Ptr{UInt8},  Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{BlasInt},
+                   Ptr{BlasInt}),
+                  &compq, &n,
+                  T, &ldt, Q, &ldq,
+                  &ifst, &ilst,
+                  info)
+            @lapackerror
+            T, Q
+        end
         function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
