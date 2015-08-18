@@ -70,6 +70,7 @@ function svdfact!(M::Bidiagonal, thin::Bool=true)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
+svdfact(M::Bidiagonal, thin::Bool=true) = svdfact!(copy(M),thin)
 
 ####################
 # Generic routines #
