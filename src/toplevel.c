@@ -140,6 +140,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_argumenterror_type = NULL;
         jl_methoderror_type = NULL;
         jl_loaderror_type = NULL;
+        jl_initerror_type = NULL;
         jl_current_task->tls = jl_nothing; // may contain an entry for :SOURCE_FILE that is not valid in the new base
     }
     // export all modules from Main
@@ -204,12 +205,18 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     arraylist_push(&module_stack, newm);
 
     if (outermost == NULL || jl_current_module == jl_main_module) {
-        size_t i, l=module_stack.len;
-        for(i = stackidx; i < l; i++) {
-            jl_module_load_time_initialize((jl_module_t*)module_stack.items[i]);
+        JL_TRY {
+            size_t i, l=module_stack.len;
+            for(i = stackidx; i < l; i++) {
+                jl_module_load_time_initialize((jl_module_t*)module_stack.items[i]);
+            }
+            assert(module_stack.len == l);
+            module_stack.len = stackidx;
         }
-        assert(module_stack.len == l);
-        module_stack.len = stackidx;
+        JL_CATCH {
+            module_stack.len = stackidx;
+            jl_rethrow();
+        }
     }
 
     return (jl_value_t*)newm;
@@ -584,8 +591,13 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
             jl_rethrow();
         }
         else {
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                           jl_exception_in_transit));
+            if(jl_typeis(jl_exception_in_transit, jl_initerror_type)) {
+                jl_rethrow();
+            }
+            else {
+                jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                               jl_exception_in_transit));
+            }
         }
     }
     jl_stop_parsing();
