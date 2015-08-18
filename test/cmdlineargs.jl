@@ -8,8 +8,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test readall(`$exename -v`) == readall(`$exename --version`)
 
     # --help
-    @test startswith(readall(`$exename -h`), "julia [options] [program] [args...]")
-    @test startswith(readall(`$exename --help`), "julia [options] [program] [args...]")
+    let header = "julia [switches] -- [programfile] [args...]"
+        @test startswith(readall(`$exename -h`), header)
+        @test startswith(readall(`$exename --help`), header)
+    end
 
     # --quiet
     # This flag is indirectly tested in test/repl.jl
