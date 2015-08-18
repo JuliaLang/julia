@@ -94,8 +94,10 @@ function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
-    for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
-        Y[multivec_row, col] += X[multivec_row, A.rowval[k]] * A.nzval[k]
+    rowval = A.rowval
+    nzval = A.nzval
+    @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
+        Y[multivec_row, col] += X[multivec_row, rowval[k]] * nzval[k]
     end
     Y
 end
