@@ -107,10 +107,10 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
     B
 end
 
-getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[i,j]))
-getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[i,j])
-getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
-getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[i,j])
+getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[j,i]))
+getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[j,i])
+getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[j,i]))
+getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[j,i])
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
@@ -281,6 +281,65 @@ function -(A::UnitUpperTriangular)
         Anew[i, i] = -1
     end
     UpperTriangular(Anew)
+end
+
+# copy and scale
+function copy!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::T, B::T)
+    n = size(B,1)
+    for j = 1:n
+        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+            @inbounds A[i,j] = B[i,j]
+        end
+    end
+    return A
+end
+function copy!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::T, B::T)
+    n = size(B,1)
+    for j = 1:n
+        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+            @inbounds A[i,j] = B[i,j]
+        end
+    end
+    return A
+end
+
+function scale!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::UpperTriangular, B::T, c::Number)
+    n = chksquare(B)
+    for j = 1:n
+        if isa(B, UnitUpperTriangular)
+            @inbounds A[j,j] = c
+        end
+        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+            @inbounds A[i,j] = c * B[i,j]
+        end
+    end
+end
+function scale!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::LowerTriangular, B::T, c::Number)
+    n = chksquare(B)
+    for j = 1:n
+        if isa(B, UnitLowerTriangular)
+            @inbounds A[j,j] = c
+        end
+        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+            @inbounds A[i,j] = c * B[i,j]
+        end
+    end
+end
+
+for (t1, t2) in ([:UnitLowerTriangular, :LowerTriangular],
+                 [:UnitUpperTriangular, :UpperTriangular])
+    @eval begin
+        function scale!{T,S<:Number}(A::$(t1){T}, c::S)
+            D = $(t2)(Array(promote_type(T,S), size(A)...));
+            scale!(D,A,c);
+            return D
+        end
+        function scale!{T,S<:Number}(A::$(t2){T}, c::S)
+            D = $(t2)(Array(promote_type(T,S), size(A)...));
+            scale!(D,A,c);
+            return D
+        end
+    end
 end
 
 # Binary operations
