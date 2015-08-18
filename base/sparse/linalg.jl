@@ -34,54 +34,39 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
 end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
-function A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
-    A.n == size(B, 1) || throw(DimensionMismatch())
-    A.m == size(C, 1) || throw(DimensionMismatch())
-    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    if β != 1
-        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
-    end
-    nzv = A.nzval
-    rv = A.rowval
-    for col = 1:A.n
-        for j in 1:size(C, 2)
-            αxj = α*B[col,j]
-            @inbounds for k = A.colptr[col]:(A.colptr[col + 1] - 1)
-                C[rv[k], j] += nzv[k]*αxj
-            end
-        end
-    end
-    C
-end
 
-function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
-    T = promote_type(TA,Tx)
-    A_mul_B!(one(T), A, x, zero(T), similar(x, T, A.m))
-end
-function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
-    T = promote_type(TA,Tx)
-    A_mul_B!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2))))
-end
-
-for (f, op) in ((:Ac_mul_B, :ctranspose),
-                (:At_mul_B, :transpose))
+for (f, op, transp) in ((:A_mul_B, :identity, false),
+                        (:Ac_mul_B, :ctranspose, true),
+                        (:At_mul_B, :transpose, true))
     @eval begin
         function $(symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
-            A.n == size(C, 1) || throw(DimensionMismatch())
-            A.m == size(B, 1) || throw(DimensionMismatch())
+            if $transp
+                A.n == size(C, 1) || throw(DimensionMismatch())
+                A.m == size(B, 1) || throw(DimensionMismatch())
+            else
+                A.n == size(B, 1) || throw(DimensionMismatch())
+                A.m == size(C, 1) || throw(DimensionMismatch())
+            end
             size(B, 2) == size(C, 2) || throw(DimensionMismatch())
             nzv = A.nzval
             rv = A.rowval
             if β != 1
                 β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
             end
-            for i = 1:A.n
+            for col = 1:A.n
                 for k = 1:size(C, 2)
-                    tmp = zero(eltype(C))
-                    @inbounds for j = A.colptr[i]:(A.colptr[i + 1] - 1)
-                        tmp += $(op)(nzv[j])*B[rv[j],k]
+                    if $transp
+                        tmp = zero(eltype(C))
+                        @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+                            tmp += $(op)(nzv[j])*B[rv[j],k]
+                        end
+                        C[col,k] += α*tmp
+                    else
+                        αxj = α*B[col,k]
+                        @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+                            C[rv[j], k] += nzv[j]*αxj
+                        end
                     end
-                    C[i,k] += α*tmp
                 end
             end
             C
