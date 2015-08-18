@@ -39,7 +39,7 @@ static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
 static int imagepathspecified = 0;
 
-static const char usage[] = "julia [options] [program] [args...]\n";
+static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
     " -v, --version             Display version information\n"
     " -h, --help                Print this message\n\n"
