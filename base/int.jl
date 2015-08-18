@@ -162,7 +162,7 @@ end
 
 ## integer conversions ##
 
-for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
+for to in tuple(IntTypes...), from in tuple(IntTypes...,Bool)
     if !(to === from)
         if to.size < from.size
             if issubtype(to, Signed)
@@ -233,7 +233,6 @@ convert(::Type{Signed}, x::UInt64 ) = convert(Int64,x)
 convert(::Type{Signed}, x::UInt128) = convert(Int128,x)
 convert(::Type{Signed}, x::Float32) = convert(Int,x)
 convert(::Type{Signed}, x::Float64) = convert(Int,x)
-convert(::Type{Signed}, x::Char)    = convert(Int,x)
 convert(::Type{Signed}, x::Bool)    = convert(Int,x)
 
 convert(::Type{Unsigned}, x::Int8   ) = convert(UInt8,x)
@@ -243,11 +242,10 @@ convert(::Type{Unsigned}, x::Int64  ) = convert(UInt64,x)
 convert(::Type{Unsigned}, x::Int128 ) = convert(UInt128,x)
 convert(::Type{Unsigned}, x::Float32) = convert(UInt,x)
 convert(::Type{Unsigned}, x::Float64) = convert(UInt,x)
-convert(::Type{Unsigned}, x::Char)    = convert(UInt,x)
 convert(::Type{Unsigned}, x::Bool)    = convert(UInt,x)
 
 convert(::Type{Integer}, x::Integer) = x
-convert(::Type{Integer}, x::Union{Real,Char}) = convert(Signed,x)
+convert(::Type{Integer}, x::Real) = convert(Signed,x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x
