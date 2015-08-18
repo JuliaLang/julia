@@ -1,31 +1,14 @@
-language: cpp # make a branch where you change this to objective-c if you want to test on Mac before having multi-OS support enabled
+language: julia
 os:
   - linux
   - osx
-compiler:
-  - gcc
+julia:
+  - release
+  - nightly
 notifications:
   email: false
-env:
-  matrix:
-    - JULIAVERSION="releases"
-    - JULIAVERSION="nightlies"
-before_install:
-  - if [ `uname` = "Linux" ]; then
-      sudo add-apt-repository ppa:staticfloat/julia-deps -y;
-      sudo add-apt-repository ppa:staticfloat/julia${JULIAVERSION} -y;
-      sudo apt-get update -qq -y;
-      sudo apt-get install libpcre3-dev julia -y;
-    elif [ `uname` = "Darwin" ]; then
-      if [ "$JULIAVERSION" = "nightlies" ]; then
-        wget -O julia.dmg "http://status.julialang.org/download/osx10.7+";
-      else
-        wget -O julia.dmg "http://status.julialang.org/stable/osx10.7+";
-      fi;
-      hdiutil mount julia.dmg;
-      cp -Ra /Volumes/Julia/*.app/Contents/Resources/julia ~;
-      export PATH="$PATH:$(echo ~)/julia/bin";
-    fi
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-script:
-  - julia -e 'Pkg.init(); Pkg.clone(pwd()); include(Pkg.dir("SHA","test","runtests.jl"))'
+sudo: false
+# uncomment the following lines to override the default test script
+#script:
+#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+#  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.test("SHA", coverage=true)'
