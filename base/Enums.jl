@@ -47,7 +47,7 @@ macro enum(T,syms...)
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1],Symbol)
-            i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
+            i = eval(current_module(),s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
                 throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
             end
