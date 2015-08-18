@@ -145,7 +145,7 @@ function show(io::IO, ex::PrecompilableError)
     end
 end
 precompilableerror(ex::PrecompilableError, c) = ex.isprecompilable == c
-precompilableerror(ex::LoadError, c) = precompilableerror(ex.error, c)
+precompilableerror(ex::WrappedException, c) = precompilableerror(ex.error, c)
 precompilableerror(ex, c) = false
 
 # Call __precompile__ at the top of a file to force it to be precompiled (true), or

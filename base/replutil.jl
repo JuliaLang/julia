@@ -93,6 +93,13 @@ function showerror(io::IO, ex::LoadError, bt; backtrace=true)
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
+function showerror(io::IO, ex::InitError, bt; backtrace=true)
+    print(io, "InitError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
+    print(io, "\nduring initialization of module $(ex.mod)")
+end
+showerror(io::IO, ex::InitError) = showerror(io, ex, [])
+
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt

@@ -542,9 +542,14 @@ void jl_module_run_initializer(jl_module_t *m)
         jl_apply(f, NULL, 0);
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "WARNING: error initializing module %s:\n", m->name->name);
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
+        if (jl_initerror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
+                                           jl_exception_in_transit));
+            jl_printf(JL_STDERR, "\n");
+        }
     }
 }
 
