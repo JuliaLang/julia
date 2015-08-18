@@ -552,7 +552,7 @@ jl_function_t *jl_module_call_func(jl_module_t *m)
 {
     if (m->call_func == NULL) {
         jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
-        if (cf == NULL || !jl_is_function(cf))
+        if (cf == NULL || !jl_is_function(cf) || !jl_is_gf(cf))
             cf = jl_bottom_func;
         m->call_func = cf;
     }

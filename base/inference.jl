@@ -889,7 +889,10 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
         # TODO: call() case
         return Any
     end
-    if !isa(f,Function) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
+    if !isa(f,Function) && !isa(f,IntrinsicFunction)
+        if !_iisdefined(:call)
+            return Any
+        end
         call_func = _ieval(:call)
         if isa(call_func,Function)
             return abstract_call(call_func, e.args,
