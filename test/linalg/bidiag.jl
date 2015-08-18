@@ -129,7 +129,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         debug && println("Singular systems")
         if (elty <: BlasReal)
-            @test_approx_eq full(svdfact!(copy(T))) full(svdfact!(copy(Tfull)))
+            @test_approx_eq full(svdfact(T)) full(svdfact!(copy(Tfull)))
             @test_approx_eq svdvals(Tfull) svdvals(T)
             u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
