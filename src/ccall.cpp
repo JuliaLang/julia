@@ -1172,12 +1172,51 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == (void *) &jl_is_leaf_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
+        assert(nargt == 1);
         jl_value_t *arg = args[4];
         jl_value_t *ty = expr_type(arg, ctx);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             int isleaf = jl_is_leaf_type(jl_tparam0(ty));
             JL_GC_POP();
             return ConstantInt::get(T_int32, isleaf);
+        }
+    }
+    if (fptr == (void*)&jl_function_ptr ||
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name, "jl_function_ptr"))) {
+        assert(nargt == 3);
+        jl_value_t *f = static_eval(args[4], ctx, false, false);
+        jl_value_t *frt = expr_type(args[6], ctx);
+        if (f && jl_is_function(f) &&
+                (jl_is_type_type((jl_value_t*)frt) && !jl_has_typevars(jl_tparam0(frt)))) {
+            jl_value_t *fargt = static_eval(args[8], ctx, true, true);
+            if (fargt) {
+                if (jl_is_tuple(fargt)) {
+                    // TODO: maybe deprecation warning, better checking
+                    fargt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(fargt), jl_nfields(fargt));
+                }
+            }
+            else {
+                fargt = expr_type(args[8], ctx);
+                if (jl_is_type_type((jl_value_t*)fargt))
+                    fargt = jl_tparam0(fargt);
+            }
+            if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
+                frt = jl_tparam0(frt);
+                JL_TRY {
+                    Value *llvmf = prepare_call(
+                            jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt));
+                    // make sure to emit any side-effects that may have been part of the original expression
+                    emit_expr(args[4], ctx);
+                    emit_expr(args[6], ctx);
+                    emit_expr(args[8], ctx);
+                    JL_GC_POP();
+                    return mark_or_box_ccall_result(builder.CreateBitCast(llvmf, lrt),
+                                                    args[2], rt, static_rt, ctx);
+                }
+                JL_CATCH {
+                }
+            }
         }
     }
 
