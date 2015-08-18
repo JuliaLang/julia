@@ -18,21 +18,24 @@ immutable Requirement <: Line
     versions::VersionSet
     system::Vector{AbstractString}
 
-    function Requirement(content::AbstractString)
+    function Requirement(content::AbstractString; pkg::AbstractString="")
         fields = split(replace(content, r"#.*$", ""))
         system = AbstractString[]
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,shift!(fields)[2:end])
         end
-        isempty(fields) && error("invalid requires entry: $content")
+        header = isempty(pkg) ? "" : "error parsing REQUIRE entry for package \"$pkg\"\n"
+        isempty(fields) && error(header * "invalid requires entry: $content")
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $content")
+            error(header * "invalid requires entry for $package: $content")
         versions = VersionNumber[fields...]
-        issorted(versions) || error("invalid requires entry for $package: $content")
+        issorted(versions) || error(header * "invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end
-    function Requirement(package::AbstractString, versions::VersionSet, system::Vector{AbstractString}=AbstractString[])
+    function Requirement(package::AbstractString,
+                         versions::VersionSet,
+                         system::Vector{AbstractString}=AbstractString[])
         content = ""
         for os in system
             content *= "@$os "
@@ -54,15 +57,20 @@ hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
-function read(readable::Union{IO,Base.AbstractCmd})
+function read(readable::Union{IO,Base.AbstractCmd}; pkg::AbstractString="")
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)
-        push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
+        push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line,pkg=pkg))
     end
     return lines
 end
-read(file::AbstractString) = isfile(file) ? open(read,file) : Line[]
+function read(file::AbstractString; pkg::AbstractString="")
+    isfile(file) || return Line[]
+    open(file) do io
+        read(io, pkg=pkg)
+    end
+end
 
 function write(io::IO, lines::Vector{Line})
     for line in lines
@@ -98,7 +106,7 @@ function parse(lines::Vector{Line})
     end
     return reqs
 end
-parse(x) = parse(read(x))
+parse(x; pkg::AbstractString="") = parse(read(x, pkg=pkg))
 
 function dependents(packagename::AbstractString)
     pkgs = AbstractString[]
