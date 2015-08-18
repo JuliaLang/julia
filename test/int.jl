@@ -54,8 +54,6 @@ for T in (Float32, Float64)
     @test convert(Unsigned, T(3.0)) === UInt(3)
 end
 
-@test convert(Unsigned, 'A') === UInt(65)
-
 @test trunc(3) == 3
 @test trunc(Integer, 3) == 3
 
