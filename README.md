@@ -414,3 +414,5 @@ adds Julia support to [Jupyter](http://jupyter.org/)/[IPython](http://ipython.or
 interaction between IJulia and Sublime Text.
 
 In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.
+## Books
+- [Learn Julia](http://manning.com/voncsefalvay/) by Chris von Csefalvay (Manning Publications). [Chapter 1](http://manning.com/voncsefalvay/Learn_Julia_MEAP_ch1.pdf)
