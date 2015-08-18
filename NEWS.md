@@ -57,6 +57,9 @@ New language features
 Language changes
 ----------------
 
+  * Module `__init__` methods no longer swallow thrown exceptions, they now
+    throw an `InitException` referencing the thrown exception. ([#12576])
+
   * Tuple types are now written as `Tuple{A, B}` instead of as `(A, B)`.
     Tuples of bits types are inlined into structs and arrays, like other
     immutable types.
