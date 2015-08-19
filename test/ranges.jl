@@ -383,3 +383,7 @@ end
 @test eltype(0:1//3:10) <: Rational
 @test (0:1//3:10)[1] == 0
 @test (0:1//3:10)[2] == 1//3
+
+# issue #12534
+@test length([1:10//3]) == 3
+@test [1:10//3] == Rational[1:3]
