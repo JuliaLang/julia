@@ -52,7 +52,8 @@ println("Loaded hash types: $(join([split(string(t()))[1] for t in sha_types], "
 nerrors = 0
 for idx in 1:length(data)
     desc = data_desc[idx]
-    print("Testing on $desc$(join(["." for z in 1:(34 -length(desc))]))")
+    print("Testing on $desc$(join(["." for z in 1:(34-length(desc))]))")
+    nerrors_old = nerrors
     for sha_func in sha_funcs
         hash = sha_func(data[idx])
         if hash != answers[sha_func][idx]
@@ -69,7 +70,7 @@ for idx in 1:length(data)
             print(".")
         end
     end
-    println("Done! [$nerrors errors]")
+    println("Done! [$(nerrors - nerrors_old) errors]")
 end
 
 # Do another test on the "so many a's" data where we chunk up the data into
