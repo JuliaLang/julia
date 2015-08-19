@@ -85,10 +85,6 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
 int octal_digit(char c);
 int hex_digit(char c);
 
-/* return a pointer to the first occurrence of ch in s, or NULL if not
-   found. character index of found character returned in *charn. */
-char *u8_strchr(const char *s, uint32_t ch, size_t *charn);
-
 /* same as the above, but searches a buffer of a given size instead of
    a NUL-terminated string. */
 char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn);
@@ -108,10 +104,6 @@ size_t u8_printf(const char *fmt, ...);
 
 /* determine whether a sequence of bytes is valid UTF-8. length is in bytes */
 DLLEXPORT int u8_isvalid(const char *str, size_t length);
-
-/* reverse a UTF-8 string. len is length in bytes. dest and src must both
-   be allocated to at least len+1 bytes. returns 1 for error, 0 otherwise */
-DLLEXPORT int u8_reverse(char *dest, char *src, size_t len);
 
 #ifdef __cplusplus
 }
