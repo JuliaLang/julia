@@ -489,24 +489,6 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
     return (buf-start);
 }
 
-char *u8_strchr(const char *s, uint32_t ch, size_t *charn)
-{
-    size_t i = 0, lasti=0;
-    uint32_t c;
-
-    *charn = 0;
-    while (s[i]) {
-        c = u8_nextchar(s, &i);
-        if (c == ch) {
-            /* it's const for us, but not necessarily the caller */
-            return (char*)&s[lasti];
-        }
-        lasti = i;
-        (*charn)++;
-    }
-    return NULL;
-}
-
 char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn)
 {
     size_t i = 0, lasti=0;
@@ -673,47 +655,6 @@ chkutf8:
     }
     return 2;   // Valid UTF-8
 }
-
-int u8_reverse(char *dest, char *src, size_t len)
-{
-    size_t si=0, di=len;
-    unsigned char c;
-
-    dest[di] = '\0';
-    while (si < len) {
-        c = (unsigned char)src[si];
-        if ((~c) & 0x80) {
-            di--;
-            dest[di] = c;
-            si++;
-        }
-        else {
-            switch (c>>4) {
-            case 0xC:
-            case 0xD:
-                di -= 2;
-                *((int16_t*)&dest[di]) = *((int16_t*)&src[si]);
-                si += 2;
-                break;
-            case 0xE:
-                di -= 3;
-                dest[di] = src[si];
-                *((int16_t*)&dest[di+1]) = *((int16_t*)&src[si+1]);
-                si += 3;
-                break;
-            case 0xF:
-                di -= 4;
-                *((int32_t*)&dest[di]) = *((int32_t*)&src[si]);
-                si += 4;
-                break;
-            default:
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
 #ifdef __cplusplus
 }
 #endif
