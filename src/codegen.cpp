@@ -394,7 +394,7 @@ struct jl_cgval_t {
         isboxed(V && V->getType() == jl_pvalue_llvmt),
         isghost(false),
         ispointer(this->isboxed),
-        isimmutable(this->isboxed && jl_is_immutable(typ)),
+        isimmutable(this->isboxed && jl_is_immutable_datatype(typ)),
         needsgcroot(this->isboxed)
     {
     }
