@@ -259,6 +259,12 @@ installed for the duration of the test. A package is tested by running its
 """
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
+"""
+    Pkg.dependents("PackageName")
+
+Find the direct dependents of the given package, i.e. all packages which include `MyPackage`
+in their `REQUIRE` file.
+"""
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
 
 end # module
