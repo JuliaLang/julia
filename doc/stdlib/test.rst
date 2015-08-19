@@ -14,8 +14,11 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
-   Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors. (not exported)
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``\ , which can be either a string or an array of strings, using ``numcores`` processors. (not exported)
 
 .. module:: Base.Test
 Test Framework
@@ -133,27 +136,44 @@ Macros
 
 .. function:: @test(ex)
 
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       @test(ex)
+
    Test the expression ``ex`` and calls the current handler to handle the result.
 
 .. function:: @test_throws(extype, ex)
 
-   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
-   The default handler returns the exception if it is of the expected type.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       @test_throws(extype, ex)
+
+   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
 
 .. function:: @test_approx_eq(a, b)
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account
-   small numerical errors.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       @test_approx_eq(a, b)
+
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account small numerical errors.
 
 .. function:: @test_approx_eq_eps(a, b, tol)
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account
-   a margin of tolerance given by ``tol``.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       @test_approx_eq_eps(a, b, tol)
+
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
 
 Functions
 ---------
 
 .. function:: with_handler(f, handler)
+
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
 

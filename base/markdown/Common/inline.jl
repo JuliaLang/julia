@@ -96,7 +96,7 @@ function en_dash(stream::IO, md::MD)
     end
 end
 
-const escape_chars = "\\`*_#+-.!{[(\$"
+const escape_chars = "\\`*_#+-.!{}[]()\$"
 
 @trigger '\\' ->
 function escapes(stream::IO, md::MD)
