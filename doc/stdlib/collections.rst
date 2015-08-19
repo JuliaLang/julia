@@ -1874,10 +1874,10 @@ is used, so that elements popped from the heap are given in ascending order.
 
    Return true iff an array is heap-ordered according to the given order.
 
-.. function:: heappush!(v, x, [ord])
+.. function:: heappeek(v)
 
-   Given a binary heap-ordered array, push a new element ``x``, preserving the heap
-   property. For efficiency, this function does not check that the array is
+   Given a binary heap-ordered array, return the lowest ordered
+   element. For efficiency, this function does not check that the array is
    indeed heap-ordered.
 
 .. function:: heappop!(v, [ord])
@@ -1886,3 +1886,24 @@ is used, so that elements popped from the heap are given in ascending order.
    element. For efficiency, this function does not check that the array is
    indeed heap-ordered.
 
+.. function:: heappush!(v, x, [ord])
+
+   Given a binary heap-ordered array, push a new element ``x``, preserving the heap
+   property. For efficiency, this function does not check that the array is
+   indeed heap-ordered.
+
+.. function:: heappushpop!(v, x, [ord])
+
+   Given a binary heap-ordered array, push a new element ``x``, preserving the heap
+   property, and then remove and return the lowest ordered element. Equivalent to
+   a push followed by a pop, but more efficient as the heap property is restored
+   only once. For efficiency, this function does not check that the array is
+   indeed heap-ordered.
+
+.. function:: heapreplace!(v, x, [ord])
+
+   Given a binary heap-ordered array, replace the lowest ordered element with
+   a new element ``x``, preserving the heap property. Equivalent to
+   a pop followed by a push, but more efficient as the heap property is restored
+   only once. For efficiency, this function does not check that the array is
+   indeed heap-ordered.

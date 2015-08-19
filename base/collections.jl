@@ -11,8 +11,11 @@ export
     enqueue!,
     heapify!,
     heapify,
+    heappeek,
     heappop!,
     heappush!,
+    heappushpop!,
+    heapreplace!,
     isheap,
     peek
 
@@ -61,6 +64,7 @@ end
 
 percolate_up!{T}(xs::AbstractArray{T}, i::Integer, o::Ordering) = percolate_up!(xs, i, xs[i], o)
 
+heappeek(xs::AbstractArray) = xs[1]
 
 # Binary min-heap pop.
 function heappop!(xs::AbstractArray, o::Ordering=Forward)
@@ -77,6 +81,24 @@ end
 function heappush!(xs::AbstractArray, x, o::Ordering=Forward)
     push!(xs, x)
     percolate_up!(xs, length(xs), x, o)
+    xs
+end
+
+
+# Binary min-heap pushpop (faster than push followed by pop, as only one percolate).
+function heappushpop!(xs::AbstractArray, x, o::Ordering=Forward)
+    if !isempty(xs) && lt(o, xs[1], x)
+        xs[1], x = x, xs[1]
+        percolate_down!(xs, 1, o)
+    end
+    x
+end
+
+
+# Binary min-heap replace (faster than pop followed by push, as only one percolate).
+function heapreplace!(xs::AbstractArray, x, o::Ordering=Forward)
+    xs[1] = x
+    percolate_down!(xs, 1, x, o)
     xs
 end
 
