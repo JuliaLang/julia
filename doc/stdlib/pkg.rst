@@ -295,3 +295,11 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
 
+.. function:: dependents("pkg")
+
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       Pkg.dependents("PackageName")
+
+   Find the direct dependents of the given package, i.e. all packages which include ``MyPackage`` in their ``REQUIRE`` file.
+
