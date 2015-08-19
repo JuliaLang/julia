@@ -317,7 +317,7 @@ end
 
 function funcdoc(meta, def, def′)
     f = esc(namify(def′))
-    m = :(methods($f, $(esc(signature(def′))))[1])
+    m = :(methods($f, $(esc(signature(def′))))[end])
     quote
         @init
         $(esc(def))
