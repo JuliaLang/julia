@@ -76,6 +76,17 @@ typealias TA Union{T, IT}
 "@mac"
 macro mac() end
 
+module Issue12700
+
+macro m() end
+
+end
+
+import .Issue12700: @m
+
+"Issue12700.@m"
+:@m
+
 "G"
 G = :G
 
@@ -149,6 +160,8 @@ end
 @test @doc(DocsTest.TA) == doc"TA"
 
 @test @doc(DocsTest.@mac) == doc"@mac"
+
+@test @doc(DocsTest.@m) == doc"Issue12700.@m"
 
 @test @doc(DocsTest.G) == doc"G"
 @test @doc(DocsTest.K) == doc"K"

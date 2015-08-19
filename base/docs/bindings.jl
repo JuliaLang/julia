@@ -6,7 +6,7 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
 function findsource(mod::Module, var::Symbol, seen = Set{Module}())
     mod in seen && return
-    var in names(mod, true) && return mod
+    var in names(mod, true, true) && return mod
     push!(seen, mod)
     sources = filter(m -> m ≠ nothing && m ∉ seen,
                      map(n -> findsource(n, var, seen),
