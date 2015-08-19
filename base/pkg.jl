@@ -63,8 +63,9 @@ publish() = cd(Entry.publish,Dir.getmetabranch())
 build() = cd(Entry.build)
 build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::AbstractString, license::AbstractString; force::Bool=false, authors::Union{AbstractString,Array} = [], config::Dict=Dict()) =
-    cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
+generate(pkg::AbstractString, license::AbstractString; force::Bool=false,
+         authors::Union{AbstractString,Array} = [], user=Generate.github_user(), config::Dict=Dict()) =
+    cd(Generate.package,pkg,license,force=force,authors=authors,user=user,config=config)
 
 
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)

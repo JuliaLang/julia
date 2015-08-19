@@ -117,6 +117,16 @@ temp_pkg_dir() do
   end
 end
 
+# testing a package with `user` keyword argument set
+temp_pkg_dir() do
+  Pkg.generate("PackageNewUser", "MIT";
+               config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"),
+               user="newuser")
+  url = Pkg.Git.readchomp(`config --get remote.origin.url`, dir=Pkg.dir("PackageNewUser"))
+  @test split(url, '/')[4] == "newuser"
+end
+
+
 # Testing with code-coverage
 temp_pkg_dir() do
   Pkg.generate("PackageWithCodeCoverage", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
