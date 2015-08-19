@@ -586,6 +586,20 @@ All Objects
 
      *   ``UnicodeError``
 
+   Converts a ``UTF8String`` to a ``UTF16String``
+
+   Returns:
+   --------
+
+
+     *   ``UTF16String``
+
+   Throws:
+   -------
+
+
+     *   ``UnicodeError``
+
    Converts an ``AbstractString`` to a ``UTF16String``
 
    Returns:
