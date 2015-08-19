@@ -2058,7 +2058,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (!sub1 && !sub2) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
 
-    bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
+    bool isbits = isleaf && isteq && jl_isbits(rt1);
     if (isbits) { // whether this type is unique'd by value
         return emit_bits_compare(arg1, arg2, ctx);
     }
@@ -2081,7 +2081,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (arg2.isboxed && arg2.needsgcroot)
         make_gcroot(arg2.V, ctx);
     Value *varg1 = boxed(arg1, ctx);
-    if (!arg1.isboxed && arg1.needsgcroot)
+    if (!arg1.isboxed)
         make_gcroot(varg1, ctx);
     Value *varg2 = boxed(arg2, ctx); // unrooted!
 #ifdef LLVM37
