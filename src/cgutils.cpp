@@ -1779,10 +1779,15 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     size_t nargs = 0;
     ConstantStruct *cst = NULL;
     ConstantVector *cvec = NULL;
+    ConstantArray *carr = NULL;
     if ((cst = dyn_cast<ConstantStruct>(constant)) != NULL)
         nargs = cst->getType()->getNumElements();
     else if ((cvec = dyn_cast<ConstantVector>(constant)) != NULL)
         nargs = cvec->getType()->getNumElements();
+    else if ((carr = dyn_cast<ConstantArray>(constant)) != NULL)
+        nargs = carr->getType()->getNumElements();
+    else if (isa<Function>(constant))
+        return NULL;
     else
         assert(false && "Cannot process this type of constant");
 
@@ -1850,8 +1855,10 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     Constant *c = NULL;
     if ((c = dyn_cast<Constant>(v)) != NULL) {
         jl_value_t *s = static_constant_instance(c,jt);
-        jl_add_linfo_root(ctx->linfo, s);
-        return literal_pointer_val(s);
+        if (s) {
+            jl_add_linfo_root(ctx->linfo, s);
+            return literal_pointer_val(s);
+        }
     }
 
     jl_datatype_t *jb = (jl_datatype_t*)jt;
