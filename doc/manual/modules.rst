@@ -236,7 +236,24 @@ Namespace miscellanea
 ---------------------
 
 If a name is qualified (e.g. ``Base.sin``), then it can be accessed even if
-it is not exported. This is often useful when debugging.
+it is not exported. This is often useful when debugging. Normally Julia
+variables, functions, types, and the fields of composite types are publicly
+accessible. Julia does not have corresponding "private" versions of these
+items that are inaccessible from outside the module.
+
+Exported names form the public facing API of a module. In some cases,
+unexported names are also part of the public API, such as found in the
+``Pkg`` and ``Profile`` modules in Base. In these cases, the unexported
+names should be clearly documented. Changes to public APIs should be made
+with care. Registered packages should bump their version number
+appropriately to signal the breaking change. Deprecation warnings are also
+appropriate.
+
+Unexported and undocumented names are not strictly part of the public API and
+may change at any time, with or without warning. Therefore, usage outside of
+their parent module carries certain risks.  We recommend that all such usage is
+clearly commented in code. At the same time, unexported but externally "popular"
+names should be considered for inclusion in the exported public API.
 
 Macro names are written with ``@`` in import and export statements, e.g.
 ``import Mod.@mac``. Macros in other modules can be invoked as ``Mod.@mac``
