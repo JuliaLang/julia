@@ -1,17 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
 # UTF-32 basic functions
-next(s::UTF32String, i::Int) = (s.data[i], i+1)
+next(s::UTF32String, i::Int) = (Char(s.data[i]), i+1)
 endof(s::UTF32String) = length(s.data) - 1
 length(s::UTF32String) = length(s.data) - 1
 
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
-sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
+sizeof(s::UTF32String) = sizeof(s.data) - sizeof(UInt32)
 
 const empty_utf32 = UTF32String(UInt32[0])
 
-convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
+convert(::Type{UTF32String}, c::Char) = UTF32String(UInt32[c, 0])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
 """
@@ -25,7 +24,7 @@ Converts an `AbstractString` to a `UTF32String`
 """
 function convert(::Type{UTF32String}, str::AbstractString)
     len, flags = unsafe_checkstring(str)
-    buf = Vector{Char}(len+1)
+    buf = Vector{UInt32}(len+1)
     out = 0
     @inbounds for ch in str ; buf[out += 1] = ch ; end
     @inbounds buf[out + 1] = 0 # NULL termination
@@ -42,7 +41,7 @@ Converts a `UTF32String` to a `UTF8String`
 *   `UnicodeError`
 """
 function convert(::Type{UTF8String},  str::UTF32String)
-    dat = reinterpret(UInt32, str.data)
+    dat = str.data
     len = sizeof(dat) >>> 2
     # handle zero length string quickly
     len <= 1 && return empty_utf8
@@ -68,9 +67,9 @@ function convert(::Type{UTF32String}, str::UTF8String)
     # Validate UTF-8 encoding, and get number of words to create
     len, flags = unsafe_checkstring(dat)
     # Optimize case where no characters > 0x7f
-    flags == 0 && @inbounds return fast_utf_copy(UTF32String, Char, len, dat, true)
+    flags == 0 && @inbounds return fast_utf_copy(UTF32String, UInt32, len, dat, true)
     # has multi-byte UTF-8 sequences
-    buf = Vector{Char}(len+1)
+    buf = Vector{UInt32}(len+1)
     @inbounds buf[len+1] = 0 # NULL termination
     local ch::UInt32, surr::UInt32
     out = 0
@@ -125,7 +124,7 @@ function convert(::Type{UTF32String}, str::UTF16String)
     # No surrogate pairs, do optimized copy
     (flags & UTF_UNICODE4) == 0 && @inbounds return UTF32String(copy!(Vector{Char}(len), dat))
     local ch::UInt32
-    buf = Vector{Char}(len)
+    buf = Vector{UInt32}(len)
     out = 0
     pos = 0
     @inbounds while out < len
@@ -147,7 +146,7 @@ Converts a `UTF32String` to `UTF16String`
 *   `UnicodeError`
 """
 function convert(::Type{UTF16String}, str::UTF32String)
-    dat = reinterpret(UInt32, str.data)
+    dat = str.data
     len = sizeof(dat)
     # handle zero length string quickly
     len <= 4 && return empty_utf16
@@ -160,56 +159,57 @@ end
 
 function convert(::Type{UTF32String}, str::ASCIIString)
     dat = str.data
-    @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
+    @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
 end
 
-function convert(::Type{UTF32String}, dat::AbstractVector{Char})
-    @inbounds return fast_utf_copy(UTF32String, Char, length(dat), dat, true)
+function convert(::Type{UTF32String}, dat::AbstractVector{UInt32})
+    @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
 end
 
-convert{T<:Union{Int32,UInt32}}(::Type{UTF32String}, data::AbstractVector{T}) =
-    convert(UTF32String, reinterpret(Char, data))
+convert{T<:Union{Int32,Char}}(::Type{UTF32String}, data::AbstractVector{T}) =
+    convert(UTF32String, reinterpret(UInt32, convert(Vector{T}, data)))
 
-convert{T<:AbstractString}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
+convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVector{S}) =
+    convert(T, utf32(v))
 
 # specialize for performance reasons:
-function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
+function convert{T<:ByteString, S<:Union{UInt32,Char,Int32}}(::Type{T}, data::AbstractVector{S})
     s = IOBuffer(Array(UInt8,length(data)), true, true)
     truncate(s,0)
     for x in data
-        print(s, x)
+        print(s, Char(x))
     end
     convert(T, takebuf_string(s))
 end
 
-convert(::Type{Vector{Char}}, str::UTF32String) = str.data
-convert(::Type{Array{Char}},  str::UTF32String) = str.data
+convert(::Type{Vector{UInt32}}, str::UTF32String) = str.data
+convert(::Type{Array{UInt32}},  str::UTF32String) = str.data
 
-unsafe_convert{T<:Union{Int32,UInt32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
+unsafe_convert{T<:Union{UInt32,Int32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return empty_utf32
     length(bytes) & 3 != 0 && throw(UnicodeError(UTF_ERR_ODD_BYTES_32,0,0))
-    data = reinterpret(Char, bytes)
+    data = reinterpret(UInt32, bytes)
     # check for byte-order mark (BOM):
-    if data[1] == Char(0x0000feff) # native byte order
-        d = Array(Char, length(data))
+    if data[1] == 0x0000feff # native byte order
+        d = Array(UInt32, length(data))
         copy!(d,1, data, 2, length(data)-1)
-    elseif data[1] == Char(0xfffe0000) # byte-swapped
-        d = Array(Char, length(data))
+    elseif data[1] == 0xfffe0000 # byte-swapped
+        d = Array(UInt32, length(data))
         for i = 2:length(data)
             @inbounds d[i-1] = bswap(data[i])
         end
     else
-        d = Array(Char, length(data) + 1)
+        d = Array(UInt32, length(data) + 1)
         copy!(d, 1, data, 1, length(data)) # assume native byte order
     end
     d[end] = 0 # NULL terminate
     UTF32String(d)
 end
 
-function isvalid(::Type{UTF32String}, str::Union{Vector{Char}, Vector{UInt32}})
+function isvalid(::Type{UTF32String}, str::Union{Vector{UInt32}, Vector{Char}})
     for i=1:length(str)
         @inbounds if !isvalid(Char, UInt32(str[i])) ; return false ; end
     end
@@ -219,9 +219,9 @@ isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
 
 utf32(x) = convert(UTF32String, x)
 
-utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
-utf32(p::Union{Ptr{UInt32}, Ptr{Int32}}, len::Integer) = utf32(convert(Ptr{Char}, p), len)
-function utf32(p::Union{Ptr{Char}, Ptr{UInt32}, Ptr{Int32}})
+utf32(p::Ptr{UInt32}, len::Integer) = utf32(pointer_to_array(p, len))
+utf32(p::Union{Ptr{Char}, Ptr{Int32}}, len::Integer) = utf32(convert(Ptr{UInt32}, p), len)
+function utf32(p::Union{Ptr{UInt32}, Ptr{Char}, Ptr{Int32}})
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf32(p, len)
@@ -233,7 +233,7 @@ function map(f, s::UTF32String)
     out[end] = 0
 
     @inbounds for i = 1:(length(d)-1)
-        c2 = f(d[i])
+        c2 = f(Char(d[i]))
         if !isa(c2, Char)
             throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
         end
