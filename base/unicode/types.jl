@@ -19,16 +19,16 @@ end
 # \throws     UnicodeError
 
 immutable UTF32String <: DirectIndexString
-    data::Vector{Char} # includes 32-bit NULL termination after string chars
+    data::Vector{UInt32} # includes 32-bit NULL termination after string chars
 
-    function UTF32String(data::Vector{Char})
-        if length(data) < 1 || data[end] != Char(0)
+    function UTF32String(data::Vector{UInt32})
+        if length(data) < 1 || data[end] != 0
             throw(UnicodeError(UTF_ERR_NULL_32_TERMINATE, 0, 0))
         end
         new(data)
     end
 end
-UTF32String(data::Vector{UInt32}) = UTF32String(reinterpret(Char, data))
+UTF32String(data::Vector{Char}) = UTF32String(reinterpret(UInt32, data))
 
 isvalid{T<:Union{ASCIIString,UTF8String,UTF16String,UTF32String}}(str::T) = isvalid(T, str.data)
 isvalid{T<:Union{ASCIIString,UTF8String,UTF16String,UTF32String}}(::Type{T}, str::T) = isvalid(T, str.data)
