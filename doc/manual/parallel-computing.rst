@@ -533,7 +533,7 @@ Here's a brief example:
    3
    4
 
-  julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
+  julia> S = SharedArray(Int, (3,4), init = S -> S[localindexes(S)] = myid())
   3x4 SharedArray{Int64,2}:
    2  2  3  4
    2  3  3  4
@@ -548,7 +548,7 @@ Here's a brief example:
    2  3  3  4
    2  7  4  4
 
-:func:`Base.localindexes` provides disjoint one-dimensional ranges of indexes,
+:func:`localindexes` provides disjoint one-dimensional ranges of indexes,
 and is sometimes convenient for splitting up tasks among processes.
 You can, of course, divide the work any way you wish:
 

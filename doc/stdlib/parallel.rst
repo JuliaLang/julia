@@ -666,8 +666,8 @@ General Parallel Computing Support
     Execute an expression on all processes. Errors on any of the processes are
     collected into a `CompositeException` and thrown.
 
-Shared Arrays (Experimental, UNIX-only feature)
------------------------------------------------
+Shared Arrays
+-------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
@@ -702,6 +702,10 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
    the SharedArray
+
+.. function:: localindexes(S::SharedArray)
+
+   Blah blah
 
 Cluster Manager Interface
 -------------------------
@@ -773,4 +777,3 @@ Cluster Manager Interface
     Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the
     first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two
     AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
-
