@@ -1,10 +1,14 @@
 using SHA
 using Compat
 
+# Define some data we will run our tests on
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 so_many_as = repmat([0x61], 1000000)
 data = Any["", "test", lorem, so_many_as]
+
+# Descriptions of the data, the SHA functions we'll run on the data, etc...
 data_desc = ["the empty string", "the string \"test\"", "lorem ipsum", "one million a's"]
+sha_types = [SHA.SHA1_CTX, SHA.SHA224_CTX, SHA.SHA256_CTX, SHA.SHA384_CTX, SHA.SHA512_CTX]
 sha_funcs = [sha1, sha224, sha256, sha384, sha512]
 
 answers = @compat Dict(
@@ -40,52 +44,89 @@ sha512 => [
 ]
 )
 
-# First, test one-shots on everything
+# Our code coverage reaches all the way to the show() methods for the SHA types, and gives us
+# an excuse to give readers of this code a little mental parsing workout.
+println("Loaded hash types: $(join([split(string(t()))[1] for t in sha_types], ", ", " and "))")
+
+# First, test processing the data in one go
 nerrors = 0
 for idx in 1:length(data)
-    println("Testing on $(data_desc[idx]):")
+    desc = data_desc[idx]
+    print("Testing on $desc$(join(["." for z in 1:(34 -length(desc))]))")
     for sha_func in sha_funcs
         hash = sha_func(data[idx])
-        print("  $("$(sha_func)"[1:min(6,end)]): ")
         if hash != answers[sha_func][idx]
+            print("\n")
             warn(
             """
-            Expected:
+            For $("$(sha_func)"[1:min(6,end)]) expected:
                 $(answers[sha_func][idx])
             Calculated:
                 $(hash)
             """)
             nerrors += 1
         else
-            println("OK")
+            print(".")
         end
     end
+    println("Done! [$nerrors errors]")
 end
 
-# Do a final test on the "so many a's" data where we chunk up the data into
-# two chunks (sized appropriately to avoid padding) to test multiple update!() calls
-println("Testing on one million a's (chunked):")
-for (ctx_func, sha_func) in [(SHA.SHA1_CTX, sha1),
-                            (SHA.SHA224_CTX, sha224),
-                            (SHA.SHA256_CTX, sha256),
-                            (SHA.SHA384_CTX, sha384),
-                            (SHA.SHA512_CTX, sha512)]
-    ctx = ctx_func()
+# Do another test on the "so many a's" data where we chunk up the data into
+# two chunks, (sized appropriately to AVOID overflow from one update to another)
+# in order to test multiple update!() calls
+print("Testing on one million a's (chunked properly)")
+nerrors_old = nerrors
+for idx in 1:length(sha_funcs)
+    ctx = sha_types[idx]()
     SHA.update!(ctx, so_many_as[1:2*SHA.blocklen(typeof(ctx))])
     SHA.update!(ctx, so_many_as[2*SHA.blocklen(typeof(ctx))+1:end])
     hash = bytes2hex(SHA.digest!(ctx))
-    print("  $("$(sha_func)"[1:min(6,end)]): ")
-    if hash != answers[sha_func][end]
+    if hash != answers[sha_funcs[idx]][end]
+        print("\n")
         warn(
-            """
-            Expected:
-                $(answers[sha_func][end-1])
-            Calculated:
-                $(hash)
-            """)
-            nerrors += 1
-        else
-            println("OK")
-        end
+        """
+        For $("$(sha_funcs[idx])"[1:min(6,end)]) expected:
+            $(answers[sha_funcs[idx]][end-1])
+        Calculated:
+            $(hash)
+        """)
+        nerrors += 1
+    else
+        print(".")
+    end
+end
+println("Done! [$(nerrors - nerrors_old) errors]")
+
+# Do another test on the "so many a's" data where we chunk up the data into
+# two chunks, (sized appropriately to CAUSE overflow from one update to another)
+# in order to test multiple update!() calls
+print("Testing on one million a's (chunked clumsily)")
+nerrors_old = nerrors
+for idx in 1:length(sha_funcs)
+    ctx = sha_types[idx]()
+    SHA.update!(ctx, so_many_as[1:int(1.5*SHA.blocklen(typeof(ctx)))])
+    SHA.update!(ctx, so_many_as[int(1.5*SHA.blocklen(typeof(ctx)))+1:end])
+    hash = bytes2hex(SHA.digest!(ctx))
+    if hash != answers[sha_funcs[idx]][end]
+        print("\n")
+        warn(
+        """
+        For $("$(sha_funcs[idx])"[1:min(6,end)]) expected:
+            $(answers[sha_funcs[idx]][end-1])
+        Calculated:
+            $(hash)
+        """)
+        nerrors += 1
+    else
+        print(".")
+    end
+end
+println("Done! [$(nerrors - nerrors_old) errors]")
+
+if nerrors == 0
+    println("ALL OK")
+else
+    println("Failed with $nerrors failures")
 end
 exit(nerrors)
