@@ -2,18 +2,19 @@
 
 # Base.require is the implementation for the `import` statement
 
-# `wd` is a working directory to search. from the top level (e.g the prompt)
-# it's just the cwd, otherwise it will be set to source_dir().
+# `wd` is a working directory to search. defaults to current working directory.
+# if `wd === nothing`, no extra path is searched.
 function find_in_path(name::AbstractString, wd = pwd())
     isabspath(name) && return name
-    if wd === nothing; wd = pwd(); end
     base = name
     if endswith(name,".jl")
         base = name[1:end-3]
     else
         name = string(base,".jl")
     end
-    isfile(joinpath(wd,name)) && return joinpath(wd,name)
+    if wd !== nothing
+        isfile(joinpath(wd,name)) && return joinpath(wd,name)
+    end
     for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
@@ -191,7 +192,7 @@ function require(mod::Symbol)
         end
 
         name = string(mod)
-        path = find_in_node_path(name, source_dir(), 1)
+        path = find_in_node_path(name, nothing, 1)
         path === nothing && throw(ArgumentError("$name not found in path"))
         try
             if last && myid() == 1 && nprocs() > 1
