@@ -11241,7 +11241,7 @@ Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defau
 
 For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
-For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
+For matrices, the matrix norm induced by the vector ``p``-norm is used, where valid values of ``p`` are ``1``, ``2``, or ``Inf``. (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
 ```
 """
 norm
