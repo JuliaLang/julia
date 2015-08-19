@@ -35,6 +35,4 @@ sigma0_512(x) =   (S64( 1, @compat(UInt64(x))) $ S64( 8, @compat(UInt64(x))) $ R
 sigma1_512(x) =   (S64(19, @compat(UInt64(x))) $ S64(61, @compat(UInt64(x))) $ R( 6,   @compat(UInt64(x))))
 
 # Let's be able to bswap arrays of these types as well
-bswap!(x::Vector{UInt32})  = map!(bswap, x)
-bswap!(x::Vector{UInt64})  = map!(bswap, x)
-bswap!(x::Vector{UInt128}) = map!(bswap, x)
+bswap!{T<:Integer}(x::Vector{T})  = map!(bswap, x)
