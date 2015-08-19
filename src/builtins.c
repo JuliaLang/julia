@@ -993,7 +993,7 @@ JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
-    jl_trampoline_compile_function(f, 0, f->linfo->specTypes ? : jl_anytuple_type);
+    jl_trampoline_compile_function(f, 0, f->linfo->specTypes ? f->linfo->specTypes : jl_anytuple_type);
     return jl_apply(f, args, nargs);
 }
 
