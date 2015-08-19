@@ -209,6 +209,9 @@ extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
 
+// libuv wrappers:
+DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
+
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define HAVE_CPUID
 #endif
