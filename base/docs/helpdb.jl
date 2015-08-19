@@ -5048,9 +5048,9 @@ doc"""
 Constructs a Channel that can hold a maximum of `sz` objects of type `T`. `put!` calls on a full channel block till an object is removed with `take!`.
 
 Other constructors:
-`Channel()` - equivalent to `Channel{Any}(32)` `Channel(sz::Int)` equivalent to `Channel{Any}(sz)`
 
-
+- `Channel()` - equivalent to `Channel{Any}(32)`
+- `Channel(sz::Int)` equivalent to `Channel{Any}(sz)`
 """
 Channel
 
