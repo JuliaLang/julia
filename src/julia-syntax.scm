@@ -75,6 +75,15 @@
                 ((comparison) (apply string (map deparse (cdr e))))
                 ((in) (string (deparse (cadr e)) " in " (deparse (caddr e))))
                 ((jlgensym) (string "GenSym(" (cdr e) ")"))
+		((line) (if (length= e 2)
+			    (string "# line " (cadr e))
+			    (string "# " (caddr e) ", line " (cadr e))))
+		((block)
+		 (string "begin\n"
+			 (string.join (map (lambda (ex) (string "    " (deparse ex)))
+					   (cdr e))
+				      "\n")
+			 "\nend"))
                 (else
                  (string e))))))
 
