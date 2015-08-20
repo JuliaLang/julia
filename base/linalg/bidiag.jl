@@ -207,7 +207,6 @@ function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     end
     B
 end
-A_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = A_ldiv_B!(A,copy(B))
 
 for func in (:Ac_ldiv_B!, :At_ldiv_B!)
     @eval function ($func)(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
