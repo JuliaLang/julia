@@ -42,6 +42,9 @@ debug && println("(Automatic) upper Cholesky factor")
         r     = capd[:U]
         κ     = cond(apd, 1) #condition number
 
+        #getindex
+        @test_throws KeyError capd[:Z]
+
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
         E = abs(apd - r'*r)
         for i=1:n, j=1:n
@@ -65,6 +68,7 @@ debug && println("(Automatic) upper Cholesky factor")
 
         apos = apd[1,1]            # test chol(x::Number), needs x>0
         @test_approx_eq cholfact(apos).factors √apos
+        @test_throws ArgumentError chol(-one(eltya))
 
         # test chol of 2x2 Strang matrix
         S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
@@ -87,6 +91,9 @@ debug && println("pivoted Choleksy decomposition")
                 @test_approx_eq apd * inv(cpapd) eye(n)
             end
             @test_approx_eq full(cpapd) apd
+
+            #getindex
+            @test_throws KeyError cpapd[:Z]
         end
     end
 end
