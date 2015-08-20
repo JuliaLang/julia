@@ -257,7 +257,7 @@ DLLEXPORT int jl_fs_unlink(char *path)
     return ret;
 }
 
-DLLEXPORT int jl_fs_rename(char *src_path, char *dst_path)
+DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
@@ -796,6 +796,7 @@ DLLEXPORT HANDLE jl_uv_handle(uv_stream_t *handle)
     }
 }
 #endif
+
 #ifdef __cplusplus
 }
 #endif
