@@ -2015,9 +2015,10 @@ DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 
 DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
+    char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
+    if (ios_mkstemp(&f, tmpfname) == NULL) {
+        jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", tmpfname);
         return 1;
     }
     serializer_worklist = worklist;
@@ -2051,6 +2052,11 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     arraylist_free(&reinit_list);
     ios_close(&f);
     JL_SIGATOMIC_END();
+
+    if (jl_fs_rename(tmpfname, fname) < 0) {
+        jl_printf(JL_STDERR, "Cannot write cache file \"%s\".\n", fname);
+        return 1;
+    }
 
     return 0;
 }
