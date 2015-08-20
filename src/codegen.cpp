@@ -3469,9 +3469,18 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     gc->maxDepth = 0;
 
     gc->gcframe = builder.CreateAlloca(jl_pvalue_llvmt, ConstantInt::get(T_int32, 0));
+#ifdef JL_DEBUG_BUILD
+    gc->gcframe->setName("gcrootframe");
+#endif
     gc->first_gcframe_inst = BasicBlock::iterator(gc->gcframe);
     gc->argSlot = builder.CreateConstGEP1_32(gc->gcframe, 2);
+#ifdef JL_DEBUG_BUILD
+    gc->argSlot->setName("locals");
+#endif
     gc->tempSlot = (GetElementPtrInst*)builder.CreateConstGEP1_32(gc->gcframe, 2);
+#ifdef JL_DEBUG_BUILD
+    gc->tempSlot->setName("temproots");
+#endif
     gc->last_gcframe_inst = BasicBlock::iterator((Instruction*)gc->tempSlot);
 }
 
