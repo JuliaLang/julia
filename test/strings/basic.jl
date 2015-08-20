@@ -268,7 +268,7 @@ c = Char['0','\0']
 d = UTF32String(c)
 @test d == "0"
 c[1] = 'A'
-@test d == "A"
+@test d == "0"
 
 # iteration
 @test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
