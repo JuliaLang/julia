@@ -62,9 +62,16 @@ immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
     stop::T
 
-    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-1))
+    UnitRange(start, stop) = new(start, unitrange_last(start,stop))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+
+unitrange_last(::Bool, stop::Bool) = stop
+unitrange_last{T<:Integer}(start::T, stop::T) =
+    ifelse(stop >= start, stop, convert(T,start-one(stop-start)))
+unitrange_last{T}(start::T, stop::T) =
+    ifelse(stop >= start, convert(T,start+floor(stop-start)),
+                          convert(T,start-one(stop-start)))
 
 colon(a::Real, b::Real) = colon(promote(a,b)...)
 
