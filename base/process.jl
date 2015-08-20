@@ -81,7 +81,15 @@ end
 
 immutable DevNullStream <: AsyncStream end
 const DevNull = DevNullStream()
+isreadable(::DevNullStream) = false
+iswritable(::DevNullStream) = true
+isopen(::DevNullStream) = true
+read(::DevNullStream, args...) = throw(EOFErorr())
+write(::DevNullStream, args...) = 0
+close(::DevNullStream) = nothing
+flush(::DevNullStream) = nothing
 copy(::DevNullStream) = DevNull
+
 uvhandle(::DevNullStream) = C_NULL
 uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
