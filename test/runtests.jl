@@ -97,6 +97,24 @@ end
 @test trunc(Int, [1.1 1.1]) == [1 1]
 @test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
 
+# n % Type
+for T in Any[Int16, Int32, UInt32, Int64, UInt64]
+    if !(T <: Unsigned)
+        @test convert(T, -200) %  Int8 === @compat Int8(56)
+        @test convert(T, -200) % UInt8 === 0x38
+        @test convert(T, -300) %  Int8 === @compat Int8(-44)
+        @test convert(T, -300) % UInt8 === 0xd4
+        @test convert(T, -128) %  Int8 === @compat Int8(-128)
+        @test convert(T, -128) % UInt8 === 0x80
+    end
+    @test convert(T,  127) %  Int8 === @compat Int8(127)
+    @test convert(T,  127) % UInt8 === 0x7f
+    @test convert(T,  128) %  Int8 === @compat Int8(-128)
+    @test convert(T,  128) % UInt8 === 0x80
+    @test convert(T,  200) %  Int8 === @compat Int8(-56)
+    @test convert(T,  300) % UInt8 === 0x2c
+end
+
 @test IPv4("1.2.3.4") == ip"1.2.3.4"
 @test IPv6("2001:1:2:3::1") == ip"2001:1:2:3::1"
 @test isless(ip"1.2.3.4", ip"1.2.3.5")

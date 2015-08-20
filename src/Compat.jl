@@ -96,6 +96,14 @@ if VERSION < v"0.4.0-dev+1827"
     end
 end
 
+if VERSION < v"0.4.0-dev+838"
+    Base.rem{T<:Integer}(n::Integer, ::Type{T}) = convert(T, n)
+elseif VERSION < v"0.4.0-dev+1037"
+    Base.rem{T<:Integer}(n::Integer, ::Type{T}) = itrunc(T, n)
+elseif VERSION < v"0.4.0-dev+1039"
+    Base.rem{T<:Integer}(n::Integer, ::Type{T}) = mod(n, T)
+end
+
 if VERSION < v"0.4.0-dev+1884"
     randexp(rng::MersenneTwister) = Base.Random.randmtzig_exprnd(rng)
     randexp() = Base.Random.randmtzig_exprnd()
