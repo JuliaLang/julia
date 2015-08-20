@@ -3548,9 +3548,9 @@ doc"""
 Connect to the host ``host`` on port ``port``
 
 ::
-           connect(path) -> Pipe
+           connect(path) -> PipeEndpoint
 
-Connect to the Named Pipe/Domain Socket at ``path``
+Connect to the Named Pipe / Domain Socket at ``path``
 
 ::
            connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
@@ -12163,7 +12163,7 @@ To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 ::
            listen(path) -> PipeServer
 
-Listens on/Creates a Named Pipe/Domain Socket
+Create and listen on a Named Pipe / Domain Socket
 ```
 """
 listen

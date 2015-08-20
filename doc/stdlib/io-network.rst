@@ -440,8 +440,7 @@ General I/O
    ::
               redirect_stdout(stream)
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a
-   TcpSocket.
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a PipeEndpoint, or a TcpSocket.
 
 .. function:: redirect_stdout(stream)
 
@@ -456,8 +455,7 @@ General I/O
    ::
               redirect_stdout(stream)
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a
-   TcpSocket.
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a PipeEndpoint, or a TcpSocket.
 
 .. function:: redirect_stderr([stream])
 
@@ -1264,9 +1262,9 @@ Network I/O
    Connect to the host ``host`` on port ``port``
 
    ::
-              connect(path) -> Pipe
+              connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    ::
               connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
@@ -1277,7 +1275,7 @@ Network I/O
     must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)``
     sets up TCP/IP socket connections in-between workers.
 
-.. function:: connect(path) -> Pipe
+.. function:: connect(path) -> PipeEndpoint
 
    ::
               connect([host],port) -> TcpSocket
@@ -1285,9 +1283,9 @@ Network I/O
    Connect to the host ``host`` on port ``port``
 
    ::
-              connect(path) -> Pipe
+              connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    ::
               connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
@@ -1306,7 +1304,7 @@ Network I/O
    ::
               listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listens on a Named Pipe / Domain Socket
 
 .. function:: listen(path) -> PipeServer
 
@@ -1319,7 +1317,7 @@ Network I/O
    ::
               listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listens on a Named Pipe / Domain Socket
 
 .. function:: getaddrinfo(host)
 

@@ -755,9 +755,9 @@ Cluster Manager Interface
    Connect to the host ``host`` on port ``port``
 
    ::
-              connect(path) -> Pipe
+              connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    ::
               connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)

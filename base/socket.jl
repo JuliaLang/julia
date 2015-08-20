@@ -347,7 +347,7 @@ accept(server::TCPServer) = accept(server, TCPSocket())
 # Libuv will internally reset the readable and writable flags on
 # this pipe after it has successfully accepted the connection, to
 # remember that before that this is an invalid pipe
-accept(server::PipeServer) = accept(server, init_pipe!(Pipe();
+accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
     readable=false, writable=false, julia_only=true))
 
 ##
@@ -393,7 +393,7 @@ function UDPSocket()
     this
 end
 
-function uvfinalize(uv::Union{TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket})
+function uvfinalize(uv::Union{TTY,PipeEndpoint,PipeServer,TCPServer,TCPSocket,UDPSocket})
     if (uv.status != StatusUninit && uv.status != StatusInit)
         close(uv)
     end

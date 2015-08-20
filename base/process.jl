@@ -309,7 +309,7 @@ macro setup_stdio()
     quote
         close_in,close_out,close_err = false,false,false
         in,out,err = stdios
-        if isa(stdios[1], Pipe)
+        if isa(stdios[1], PipeEndpoint)
             if stdios[1].handle == C_NULL
                 in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 link_pipe(in,false,stdios[1],true)
@@ -321,7 +321,7 @@ macro setup_stdio()
         elseif isa(stdios[1], IOStream)
             in = FS.File(RawFD(fd(stdios[1])))
         end
-        if isa(stdios[2], Pipe)
+        if isa(stdios[2], PipeEndpoint)
             if stdios[2].handle == C_NULL
                 out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 link_pipe(stdios[2],true,out,false)
@@ -333,7 +333,7 @@ macro setup_stdio()
         elseif isa(stdios[2], IOStream)
             out = FS.File(RawFD(fd(stdios[2])))
         end
-        if isa(stdios[3], Pipe)
+        if isa(stdios[3], PipeEndpoint)
             if stdios[3].handle == C_NULL
                 err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 link_pipe(stdios[3],true,err,false)
@@ -411,8 +411,8 @@ spawn(cmds::AbstractCmd, args...) = spawn(false, cmds, spawn_opts_swallow(args..
 
 macro tmp_rpipe(pipe, tmppipe, code, args...)
     esc(quote
-        $pipe = Pipe(C_NULL)
-        $tmppipe = Pipe(C_NULL)
+        $pipe = PipeEndpoint()
+        $tmppipe = PipeEndpoint()
         link_pipe($pipe, true, $tmppipe, false)
         r = begin
             $code
@@ -424,8 +424,8 @@ end
 
 macro tmp_wpipe(tmppipe, pipe, code)
     esc(quote
-        $pipe = Pipe(C_NULL)
-        $tmppipe = Pipe(C_NULL)
+        $pipe = PipeEndpoint()
+        $tmppipe = PipeEndpoint()
         link_pipe($tmppipe, false, $pipe, true)
         r = begin
             $code
@@ -444,7 +444,7 @@ function eachline(cmd::AbstractCmd, stdin)
 end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
-# return a (Pipe,Process) pair to write/read to/from the pipeline
+# return a (PipeEndpoint,Process) pair to write/read to/from the pipeline
 function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
