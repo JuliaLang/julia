@@ -58,7 +58,11 @@ randn!(MersenneTwister(42), A)
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
-    r = rand(convert(T, 97):convert(T, 122))
+    if T <: Integer
+        r = rand(UnitRange{T}(97, 122))
+    else
+        r = rand(convert(T, 97) : one(T) : convert(T, 122))
+    end
     @test typeof(r) == T
     @test 97 <= r <= 122
     r = rand(convert(T, 97):convert(T,2):convert(T, 122),2)[1]

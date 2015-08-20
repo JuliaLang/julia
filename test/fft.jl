@@ -296,8 +296,8 @@ for T in (Complex64, Complex128)
 end
 
 let
-    plan32 = plan_fft([1.0:2048.0;])
-    plan64 = plan_fft([1f0:2048f0;])
+    plan32 = plan_fft([1.0:1:2048.0;])
+    plan64 = plan_fft([1f0:1:2048f0;])
     FFTW.flops(plan32)
     FFTW.flops(plan64)
 end

@@ -10,7 +10,7 @@
 @test length(2.:.2:1.) == 0
 
 @test length(1:0) == 0
-@test length(0.0:-0.5) == 0
+@test length(0.0:1:-0.5) == 0
 @test length(1:2:0) == 0
 L32 = linspace(Int32(1), Int32(4), 4)
 L64 = linspace(Int64(1), Int64(4), 4)
@@ -132,7 +132,7 @@ r = (-4*Int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test (3.0 in r)
 
 @test !(1 in 1:0)
-@test !(1.0 in 1.0:0.0)
+@test !(1.0 in 1.0:1:0.0)
 
 # indexing range with empty range (#4309)
 @test (3:6)[5:4] == 7:6
@@ -230,9 +230,9 @@ end
 
 # operations with scalars
 @test (1:3) - 2 == -1:1
-@test (1:3) - 0.25 == 1-0.25:3-0.25
+@test (1:3) - 0.25 == (1-0.25):1:(3-0.25)
 @test (1:3) + 2 == 3:5
-@test (1:3) + 0.25 == 1+0.25:3+0.25
+@test (1:3) + 0.25 == (1+0.25):1:(3+0.25)
 @test (1:2:6) + 1 == 2:2:6
 @test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
 @test (1:2:6) - 1 == 0:2:4
@@ -349,7 +349,7 @@ for T = (Float32, Float64)
             @test [linspace(a,-b,0);] == []
             @test [linspace(a,-b,2);] == [a,-b]
             @test [linspace(a,-b,3);] == [a,(a-b)/2,-b]
-            for c = maxintfloat(T)-3:maxintfloat(T)
+            for c = (maxintfloat(T)-3):1:(maxintfloat(T))
                 s = linspace(-a,b,c)
                 @test first(s) == -a
                 @test last(s) == b
@@ -388,7 +388,7 @@ let
 end
 
 # issue #2959
-@test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
+@test 1.0:1:1.5 == 1.0:1.0:1.5 == 1.0:1:1.0
 #@test 1.0:(.3-.1)/.1 == 1.0:2.0
 
 let r = typemin(Int64):2:typemax(Int64), s = typemax(Int64):-2:typemin(Int64)
@@ -451,7 +451,7 @@ r7484 = 0.1:0.1:1
 @test [reverse(r7484);] == reverse([r7484;])
 
 # issue #7387
-for r in (0:1, 0.0:1.0)
+for r in (0:1, 0.0:1:1.0)
     @test r+im == [r;]+im
     @test r-im == [r;]-im
     @test r*im == [r;]*im
@@ -515,7 +515,7 @@ end
 @test promote(0:1:1, 2:5) === (0:1:1, 2:1:5)
 @test convert(StepRange{Int128,Int128}, 0:5) === Int128(0):Int128(1):Int128(5)
 @test convert(StepRange, 0:5) === 0:1:5
-@test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
+@test convert(StepRange{Int128,Int128}, 0.:1:5) === Int128(0):Int128(1):Int128(5)
 
 @test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
 @test convert(FloatRange{Float64}, 0:1/3:1) === 0:1/3:1
@@ -632,10 +632,10 @@ end
 @test_throws DimensionMismatch (1:5) .* (1:6)
 @test_throws DimensionMismatch (1:5) ./ (1:6)
 
-@test_throws DimensionMismatch (1.:5.) + (1.:6.)
-@test_throws DimensionMismatch (1.:5.) - (1.:6.)
-@test_throws DimensionMismatch (1.:5.) .* (1.:6.)
-@test_throws DimensionMismatch (1.:5.) ./ (1.:6.)
+@test_throws DimensionMismatch (1.:1:5.) + (1.:1:6.)
+@test_throws DimensionMismatch (1.:1:5.) - (1.:1:6.)
+@test_throws DimensionMismatch (1.:1:5.) .* (1.:1:6.)
+@test_throws DimensionMismatch (1.:1:5.) ./ (1.:1:6.)
 
 function test_range_sum_diff(r1, r2, r_sum, r_diff)
     @test r1 + r2 == r_sum
@@ -650,14 +650,14 @@ function test_range_sum_diff(r1, r2, r_sum, r_diff)
 end
 
 test_range_sum_diff(1:5, 0:2:8, 1:3:13, 1:-1:-3)
-test_range_sum_diff(1.:5., 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
+test_range_sum_diff(1.:1:5., 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
 test_range_sum_diff(linspace(1.,5.,5), linspace(0.,-4.,5),
                     linspace(1.,1.,5), linspace(1.,9.,5))
 
 test_range_sum_diff(1:5, 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
 test_range_sum_diff(1:5, linspace(0, 8, 5),
                     linspace(1, 13, 5), linspace(1, -3, 5))
-test_range_sum_diff(1.:5., linspace(0, 8, 5),
+test_range_sum_diff(1.:1:5., linspace(0, 8, 5),
                     linspace(1, 13, 5), linspace(1, -3, 5))
 
 # Issue #12388

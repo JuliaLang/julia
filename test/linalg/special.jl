@@ -7,7 +7,7 @@ n= 10 #Size of matrix to test
 srand(1)
 
 debug && println("Test interconversion between special matrix types")
-let a=[1.0:n;]
+let a=Float64[1:n;]
    A=Diagonal(a)
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
        debug && println("newtype is $(newtype)")
@@ -20,7 +20,7 @@ let a=[1.0:n;]
 
    for isupper in (true, false)
        debug && println("isupper is $(isupper)")
-       A=Bidiagonal(a, [1.0:n-1;], isupper)
+       A=Bidiagonal(a, Float64[1:n-1;], isupper)
        for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
            debug && println("newtype is $(newtype)")
            @test full(convert(newtype, A)) == full(A)
@@ -35,7 +35,7 @@ let a=[1.0:n;]
        end
    end
 
-   A = SymTridiagonal(a, [1.0:n-1;])
+   A = SymTridiagonal(a, [1.0:1:n-1;])
    for newtype in [Tridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
    end
@@ -45,24 +45,24 @@ let a=[1.0:n;]
    A = SymTridiagonal(a, zeros(n-1))
    @test full(convert(Bidiagonal,A)) == full(A)
 
-   A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
+   A = Tridiagonal(zeros(n-1), [1.0:1:n;], zeros(n-1)) #morally Diagonal
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
    end
-   A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+   A = Tridiagonal(ones(n-1), [1.0:1:n;], ones(n-1)) #not morally Diagonal
    for newtype in [SymTridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
    end
    for newtype in [Diagonal, Bidiagonal]
        @test_throws ArgumentError convert(newtype,A)
    end
-   A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+   A = Tridiagonal(zeros(n-1), [1.0:1:n;], ones(n-1)) #not morally Diagonal
    @test full(convert(Bidiagonal, A)) == full(A)
-   A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
+   A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:1:n;], ones(n-1)))
    @test full(convert(Bidiagonal, A)) == full(A)
-   A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+   A = Tridiagonal(ones(n-1), [1.0:1:n;], zeros(n-1)) #not morally Diagonal
    @test full(convert(Bidiagonal, A)) == full(A)
-   A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
+   A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:1:n;], zeros(n-1)))
    @test full(convert(Bidiagonal, A)) == full(A)
 
    A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
@@ -84,7 +84,7 @@ let a=[1.0:n;]
 end
 
 # Binary ops among special types
-let a=[1.0:n;]
+let a=[1.0:1:n;]
    A=Diagonal(a)
    Spectypes = [Diagonal, Bidiagonal, Tridiagonal, Matrix]
    for (idx, type1) in enumerate(Spectypes)
