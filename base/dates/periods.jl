@@ -173,7 +173,7 @@ type CompoundPeriod <: AbstractTime
             p = Period[]
             n = 0
         end
-        # canonicalize Period values so that 0 < ms < 1000 etcetera.
+        # canonicalize Periods by pushing "overflow" into the a coarser period.
         if n > 0
             pc = sizehint!(Period[], n)
             P = typeof(p[n])
@@ -198,7 +198,7 @@ type CompoundPeriod <: AbstractTime
                     break
                 end
             end
-            p = reverse(pc)
+            p = reverse!(pc)
             n = length(p)
         else
             return new(resize!(p, n))
@@ -233,7 +233,7 @@ type CompoundPeriod <: AbstractTime
                     break
                 end
             end
-            p = reverse(pc)
+            p = reverse!(pc)
         end
         return new(p)
     end
