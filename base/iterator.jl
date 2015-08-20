@@ -19,6 +19,25 @@ done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
+
+immutable EnumerateFrom{I}
+    itr::I
+    start::Int
+end
+
+enumerate(itr, start) = EnumerateFrom(itr, start)
+
+length(e::EnumerateFrom) = length(e.itr) - (e.start - 1)
+start(e::EnumerateFrom) = (e.start, Base.start(e.itr))
+function next(e::EnumerateFrom, state)
+    n = next(e.itr, state[2])
+    (state[1],n[1]), (state[1]+1,n[2])
+end
+done(e::EnumerateFrom, state) = done(e.itr, state[2])
+
+eltype{I}(::Type{EnumerateFrom{I}}) = Tuple{Int, eltype(I)}
+
+
 # zip
 
 abstract AbstractZipIterator
