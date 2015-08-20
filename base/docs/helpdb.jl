@@ -5561,26 +5561,6 @@ doc"""
 svdfact!
 
 doc"""
-```rst
-::
-
-           cartesianmap(f, dims)
-
-Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
-integers in the ranges ``1:m``, ``1:n``, etc.
-
-.. doctest::
-
-   julia> cartesianmap(println, (2,2))
-   11
-   21
-   12
-   22
-```
-"""
-cartesianmap
-
-doc"""
     hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
 Compute a "2d histogram" of a set of N points specified by N-by-2 matrix `M`. Arguments `e1` and `e2` are bins for each dimension, specified either as integer bin counts or vectors of bin edges. The result is a tuple of `edge1` (the bin edges used in the first dimension), `edge2` (the bin edges used in the second dimension), and `counts`, a histogram matrix of size `(length(edge1)-1, length(edge2)-1)`. Note: Julia does not ignore `NaN` values in the computation.

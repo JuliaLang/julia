@@ -550,19 +550,6 @@ end
 
 writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
-#=
-function writedlm_ndarray(io::IO, a::AbstractArray, dlm; opts...)
-    tail = size(a)[3:end]
-    function print_slice(idxs...)
-        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm; opts...)
-        if idxs != tail
-            print(io, "\n")
-        end
-    end
-    cartesianmap(print_slice, tail)
-end
-=#
-
 function writedlm(io::IO, itr, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
