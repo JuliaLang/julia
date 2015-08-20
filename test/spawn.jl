@@ -169,14 +169,15 @@ unmark(sock)
 close(sock)
 
 # issue #4535
-exename = joinpath(JULIA_HOME, Base.julia_exename())
+exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
     @test readall(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
-    p = Pipe()
-    run(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr = p))
-    @test readall(p) == "Hello World\n"
+    out = PipeEndpoint()
+    proc = spawn(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr = out))
+    @test readall(out) == "Hello World\n"
+    @test success(proc)
 end
 
 # issue #6310
