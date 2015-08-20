@@ -3253,3 +3253,9 @@ code_typed(A12612.f1, Tuple{})
 code_typed(A12612.f2, Tuple{})
 @test_throws ErrorException A12612.f1()
 @test_throws ErrorException A12612.f2()
+
+# issue #12569
+@test_throws ArgumentError symbol("x"^10_000_000)
+@test_throws ArgumentError gensym("x"^10_000_000)
+@test symbol("x") === symbol("x")
+@test split(string(gensym("abc")),'#')[3] == "abc"
