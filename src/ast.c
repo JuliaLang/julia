@@ -392,8 +392,12 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         }
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e))==wchartype) {
-        jl_value_t *wc =
-            jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
+        uint32_t u = *(uint32_t*)cp_data((cprim_t*)ptr(e));
+        if (u > 0x7f) {
+            u = (u <= 0x000007ff ? 0x0000c080 : u <= 0x0000ffff ? 0x00e08080 : 0xf0808080) |
+                (u & 0x3f) | ((u << 2) & 0x3f00) | ((u << 4) & 0x3f0000) | ((u << 6) & 0x3f000000);
+        }
+        jl_value_t *wc = jl_box32(jl_char_type, u);
         return wc;
     }
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jvtype) {

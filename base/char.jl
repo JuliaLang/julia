@@ -1,8 +1,25 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-convert(::Type{Char}, x::UInt32) = reinterpret(Char, x)
+function convert(::Type{UInt32}, c::Char)
+    u = reinterpret(UInt32, c)
+    u $= ifelse(
+        u <= 0x0000ffff,
+        ifelse(u <= 0x000000ff, 0x00000000, 0x0000c080),
+        ifelse(u <= 0x00ffffff, 0x00e08080, 0xf0808080),
+    )
+    ((u & 0x000000ff) >> 0) $ ((u & 0x0000ff00) >> 2) $
+    ((u & 0x00ff0000) >> 4) $ ((u & 0xff000000) >> 6)
+end
+
+function convert(::Type{Char}, u::UInt32)
+    u < 0x00200000 || throw(InexactError())
+    c = (u & 0x3f) | ((u << 2) & 0x3f00) | ((u << 4) & 0x3f0000) | ((u << 6) & 0x3f000000)
+    reinterpret(Char, ifelse(u <= 0x7f, u,
+        c | ifelse(u <= 0x000007ff, 0x0000c080,
+            ifelse(u <= 0x0000ffff, 0x00e08080, 0xf0808080))))
+end
+
 convert(::Type{Char}, x::Number) = Char(UInt32(x))
-convert(::Type{UInt32}, x::Char) = reinterpret(UInt32, x)
 convert{T<:Number}(::Type{T}, x::Char) = convert(T, UInt32(x))
 
 rem{T<:Number}(x::Char, ::Type{T}) = rem(UInt32(x), T)
@@ -29,11 +46,11 @@ done(c::Char, state) = state
 isempty(c::Char) = false
 in(x::Char, y::Char) = x == y
 
-==(x::Char, y::Char) = UInt32(x) == UInt32(y)
+==(x::Char, y::Char) = eq_int(unbox(Char,x), unbox(Char,y))
 ==(x::Char, y::Integer) = UInt32(x) == y
 ==(x::Integer, y::Char) = x == UInt32(y)
 
-isless(x::Char, y::Char)    = isless(UInt32(x), UInt32(y))
+isless(x::Char, y::Char)    = ult_int(unbox(Char,x), unbox(Char,y))
 isless(x::Char, y::Integer) = isless(UInt32(x), y)
 isless(x::Integer, y::Char) = isless(x, UInt32(y))
 
@@ -41,8 +58,6 @@ isless(x::Integer, y::Char) = isless(x, UInt32(y))
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
 +(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
-
-bswap(x::Char) = Char(bswap(UInt32(x)))
 
 print(io::IO, c::Char) = (write(io, c); nothing)
 

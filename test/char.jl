@@ -9,9 +9,6 @@
 # This is current behavior, but it seems incorrect
 @test getindex('a',1,1,1) == 'a'
 @test_throws BoundsError getindex('a',1,1,2)
-# bswap of a Char should be removed, only the underlying codeunit (UInt32)
-# should be swapped
-@test bswap('\U10200') == '\U20100'
 
 let
 
