@@ -277,7 +277,7 @@ Syntax / Keyword                Example                         Description
 ``bitstype``                    ``Int``,                        "Bits Type" :: A type with no fields, but a size. It
                                 ``Float64``                     is stored and defined by-value.
 
-``immutable``                   ``Pair{String,String}``         "Immutable" :: A type with all fields defined to be
+``immutable``                   ``Pair{Int,Int}``               "Immutable" :: A type with all fields defined to be
                                                                 constant. It is defined by-value. And may be stored
                                                                 with a type-tag.
 
