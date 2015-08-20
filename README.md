@@ -63,7 +63,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * For all unsigned integer types to their equivalents with uppercase `I`. [#8907](https://github.com/JuliaLang/julia/pull/8907)
 
-* `Cstring` and `Cwstring` for `Ptr{Cchar}` and `Ptr{Cwchar_t}`, respectively:
+* `Cstring` and `Cwstring` for `Ptr{UInt8}` and `Ptr{Cwchar_t}`, respectively:
   these should be used for passing NUL-terminated strings to `ccall`.  (In
   Julia 0.4, using these types also checks whether the string has embedded
   NUL characters [#10994](https://github.com/JuliaLang/julia/pull/10994).)
