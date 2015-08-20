@@ -47,10 +47,9 @@ function connect(manager::UnixDomainCM, pid::Int, config::WorkerConfig)
             end
             return (sock, sock)
         catch e
-            if (time() - t) > 10.0
+            if (time() - t) > 30.0
                 rethrow(e)
             else
-                gc()
                 sleep(0.1)
             end
         end
