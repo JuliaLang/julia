@@ -55,7 +55,7 @@ function add(pkg::AbstractString, vers::VersionSet)
                 outdated = :yes
             else
                 try
-                    run(pipe(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
+                    run(pipeline(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
                     outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
                         (:no) : (:yes)
                 end

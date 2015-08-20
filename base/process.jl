@@ -50,7 +50,7 @@ function show(io::IO, cmd::Cmd)
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})
-    print(io, "pipe(")
+    print(io, "pipeline(")
     show(io, cmds.a)
     print(io, ", ")
     print(io, isa(cmds, ErrOrCmds) ? "stderr=" : "stdout=")
@@ -100,7 +100,7 @@ type CmdRedirect <: AbstractCmd
 end
 
 function show(io::IO, cr::CmdRedirect)
-    print(io, "pipe(")
+    print(io, "pipeline(")
     show(io, cr.cmd)
     print(io, ", ")
     if cr.stream_no == STDOUT_NO
@@ -149,7 +149,7 @@ redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirec
 redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
 redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
-function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
         error("append set to true, but no output redirections specified")
     end
@@ -165,10 +165,10 @@ function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, a
     return cmd
 end
 
-pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
-pipe(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipe(cmd, stdin=src)
+pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
+pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
 
-pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
+pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
 typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
@@ -311,7 +311,9 @@ macro setup_stdio()
         in,out,err = stdios
         if isa(stdios[1], Pipe)
             if stdios[1].handle == C_NULL
-                error("pipes passed to spawn must be initialized")
+                in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+                link_pipe(in,false,stdios[1],true)
+                close_in = true
             end
         elseif isa(stdios[1], FileRedirect)
             in = FS.open(stdios[1].filename, JL_O_RDONLY)
@@ -321,7 +323,9 @@ macro setup_stdio()
         end
         if isa(stdios[2], Pipe)
             if stdios[2].handle == C_NULL
-                error("pipes passed to spawn must be initialized")
+                out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+                link_pipe(stdios[2],true,out,false)
+                close_out = true
             end
         elseif isa(stdios[2], FileRedirect)
             out = FS.open(stdios[2].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[2].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
@@ -331,7 +335,9 @@ macro setup_stdio()
         end
         if isa(stdios[3], Pipe)
             if stdios[3].handle == C_NULL
-                error("pipes passed to spawn must be initialized")
+                err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+                link_pipe(stdios[3],true,err,false)
+                close_err = true
             end
         elseif isa(stdios[3], FileRedirect)
             err = FS.open(stdios[3].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[3].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
@@ -345,9 +351,9 @@ end
 macro cleanup_stdio()
     esc(
     quote
-        close_in && close(in)
-        close_out && close(out)
-        close_err && close(err)
+        close_in && (isa(in,Ptr) ? close_pipe_sync(in) : close(in))
+        close_out && (isa(out,Ptr) ? close_pipe_sync(out) : close(out))
+        close_err && (isa(err,Ptr) ? close_pipe_sync(err) : close(err))
     end)
 end
 
