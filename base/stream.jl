@@ -215,10 +215,14 @@ end
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
-isreadable(io::Union{PipeEndpoint,TTY}) =
-    ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle)!=0
-iswritable(io::Union{PipeEndpoint,TTY}) =
-    ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle)!=0
+function isreadable(io::Union{PipeEndpoint,TTY})
+    isopen(io) || return false
+    return ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle) != 0
+end
+function iswritable(io::Union{PipeEndpoint,TTY})
+    isopen(io) || return false
+    return ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle) != 0
+end
 
 nb_available(stream::AsyncStream) = nb_available(stream.buffer)
 
@@ -303,14 +307,14 @@ function reinit_stdio()
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 
-function isopen{T<:Union{AsyncStream,UVServer}}(x::T)
+function isopen(x::Union{AsyncStream,UVServer})
     if !(x.status != StatusUninit && x.status != StatusInit)
         throw(ArgumentError("$T object not initialized"))
     end
     x.status != StatusClosed && x.status != StatusEOF
 end
 
-function check_open(x)
+function check_open(x::Union{AsyncStream,UVServer})
     if !isopen(x) || x.status == StatusClosing
         throw(ArgumentError("stream is closed or unusable"))
     end
@@ -507,6 +511,33 @@ function _uv_hook_close(uv::Union{AsyncStream,UVServer})
     try notify(uv.connectnotify) end
     nothing
 end
+
+
+##########################################
+# Pipe Abstraction
+#  (composed of two half-pipes)
+##########################################
+
+type Pipe <: AsyncStream
+    read::PipeEndpoint
+    write::PipeEndpoint
+end
+Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
+function init!(pipe::Pipe;julia_only_read=false,julia_only_write=false)
+     link_pipe(pipe.read, julia_only_read, pipe.write, julia_only_write);
+end
+
+show(io::IO,stream::Pipe) = print(io,
+    "Pipe(",
+    uv_status_string(stream.read), ", ",
+    uv_status_string(stream.write), ", ",
+    nb_available(stream.read.buffer), " bytes waiting)")
+isreadable(io::Pipe) = isreadable(io.read)
+iswritable(io::Pipe) = isreadable(io.write)
+read(io::Pipe, args...) = read(io.read, args...)
+write(io::Pipe, args...) = write(io.write, args...)
+close(io::Pipe) = (close(io.read); close(io.write))
+isopen(x::Pipe) = isopen(io.read) || isopen(io.write)
 
 ##########################################
 # Async Worker
