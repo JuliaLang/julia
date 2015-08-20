@@ -104,6 +104,80 @@ elseif VERSION < v"0.4.0-dev+1039"
     Base.rem{T<:Integer}(n::Integer, ::Type{T}) = mod(n, T)
 end
 
+import Base: srand, rand, rand!
+if VERSION < v"0.4.0-dev+1373" # PR #8854
+    function make_seed()
+        try
+            @unix_only seed = open("/dev/urandom") do io
+                a = Array(UInt32, 4)
+                read!(io, a)
+                a
+            end
+            @windows_only seed = let a = zeros(UInt32, 2)
+                Base.dSFMT.win32_SystemFunction036!(a)
+                a
+            end
+            return seed
+        catch
+            println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
+            seed = reinterpret(UInt64, time())
+            seed = hash(seed, convert(UInt64, getpid()))
+            try
+                seed = hash(seed, parse(UInt64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
+            end
+            return seed
+        end
+    end
+    if VERSION < v"0.4.0-dev+1352" # PR #8832
+        function srand(r::MersenneTwister, seed::Vector{UInt32})
+            r.seed = seed
+            Base.dSFMT.dsfmt_init_by_array(r.state, seed)
+            return r
+        end
+    else
+        function srand(r::MersenneTwister, seed::Vector{UInt32})
+            r.seed = seed
+            Base.dSFMT.dsfmt_init_by_array(r.state, seed)
+            r.idx = Base.dSFMT.dsfmt_get_min_array_size()
+            return r
+        end
+        rand(r::MersenneTwister, ::Type{UInt32})  = reinterpret(UInt64, Base.Random.rand_close1_open2(r)) % UInt32
+    end
+    srand(r::MersenneTwister, seed::Union(UInt32,Int32)) = srand(r, UInt32[seed])
+    srand(r::MersenneTwister, seed::Union(UInt64,Int64)) =
+        srand(r, UInt32[seed & 0xffffffff, seed >> 32])
+    srand(r::MersenneTwister) = srand(r, make_seed())
+
+    rand(r::MersenneTwister, ::Type{UInt8})   = rand(r, UInt32) % UInt8
+    rand(r::MersenneTwister, ::Type{UInt16})  = rand(r, UInt32) % UInt16
+    rand(r::MersenneTwister, ::Type{UInt32})  = reinterpret(UInt64, rand(r)) % UInt32
+    rand(r::MersenneTwister, ::Type{UInt64})  = convert(UInt64,rand(r, UInt32)) <<32 | rand(r, UInt32)
+    rand(r::MersenneTwister, ::Type{UInt128}) = convert(UInt128,rand(r, UInt64))<<64 | rand(r, UInt64)
+
+    for (T,Tu) in ((Int8,UInt8),(Int16,UInt16),(Int32,UInt32),(Int64,UInt64),(Int128,UInt128))
+        @eval rand(r::MersenneTwister, ::Type{$T}) = reinterpret($T, rand(r, $Tu))
+    end
+    rand(r::MersenneTwister, ::Type{Float64}) = rand(r)
+    rand(r::MersenneTwister, ::Type{Float64}) = rand(r)
+    rand{T<:Union(Float16,Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r))
+    rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
+    if VERSION < v"0.4.0-dev+1296" # commit 89befafa7deded0119d0186ef116e03ec91b9680
+        function rand!{T<:Number}(r::AbstractRNG, A::AbstractArray{T})
+            for i=1:length(A)
+                @inbounds A[i] = rand(r, T)
+            end
+            A
+        end
+    end
+    rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
+    rand(r::AbstractRNG, T::Type, d1::Int, dims::Int...) = rand!(r, Array(T, d1, dims...))
+    rand(r::MersenneTwister, ::Type{Bool}) = ((rand(r, UInt32) & 1) == 1)
+end
+
+if VERSION < v"0.4.0-dev+551" # PR #8320
+    srand() = srand(make_seed())
+end
+
 if VERSION < v"0.4.0-dev+1884"
     randexp(rng::MersenneTwister) = Base.Random.randmtzig_exprnd(rng)
     randexp() = Base.Random.randmtzig_exprnd()
