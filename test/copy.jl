@@ -47,3 +47,13 @@ for (dest, src, bigsrc, emptysrc, res) in [
 
     @test_throws BoundsError copy!(dest, 1, src(), 2, 2)
 end
+
+# test behavior of shallow and deep copying
+let a = Any[[1]], q = QuoteNode([1])
+    ca = copy(a); dca = deepcopy(a)
+    @test ca !== a
+    @test ca[1] === a[1]
+    @test dca !== a
+    @test dca[1] !== a[1]
+    @test deepcopy(q).value !== q.value
+end
