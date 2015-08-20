@@ -203,34 +203,45 @@ type CompoundPeriod <: AbstractTime
         else
             return new(resize!(p, n))
         end
-        # canonicalize Period values such that they are all either
-        # positive or negative.
+        # reduce the amount of mixed positive/negative Periods.
         if n > 0
-            # Since Periods have been reduced we know that the largest
-            # Period type will indicate the sign.
-            s = sign(value(p[1]))
-
             pc = sizehint!(Period[], n)
-            P = typeof(p[n])
-            v = value(p[n])
-            i = n - 1
-            while true
-                Pc, f = coarserperiod(P)
-                if i > 0 && typeof(p[i]) == P
-                    v += value(p[i])
-                    i -= 1
+            i = n
+            while i > 0
+                j = i
+
+                # Determine sign of the largest period which can be converted to via
+                # coarserperiod.
+                last = Union{}
+                current = typeof(p[i])
+                while i > 0 && current != last
+                    if typeof(p[i]) == current
+                        i -= 1
+                    end
+                    last, current = current, coarserperiod(current)[1]
                 end
-                v0 = f == 1 ? v : mod(v, f * s)
-                v0 != 0 && push!(pc, P(v0))
-                if v != v0
-                    P = Pc
-                    v = div(v - v0, f)
-                elseif i > 0
-                    P = typeof(p[i])
-                    v = value(p[i])
-                    i -= 1
-                else
-                    break
+                s = sign(value(p[i + 1]))
+
+                # Adjust all the periods based upon the largest period sign.
+                P = typeof(p[j])
+                v = 0
+                while j > i
+                    Pc, f = coarserperiod(P)
+                    if j > 0 && typeof(p[j]) == P
+                        v += value(p[j])
+                        j -= 1
+                    end
+                    v0 = f == 1 ? v : mod(v, f * s)
+                    v0 != 0 && push!(pc, P(v0))
+                    if v != v0
+                        P = Pc
+                        v = div(v - v0, f)
+                    elseif j > 0
+                        P = typeof(p[j])
+                        v = 0
+                    else
+                        break
+                    end
                 end
             end
             p = reverse!(pc)
