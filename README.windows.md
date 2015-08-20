@@ -296,13 +296,13 @@ replace `config.vm.provision :shell, privileged: false, :inline => $script_msys2
 
 ## After compiling
 
-Compiling using one of the options above creates a minimal Julia installation, but not some extra components (like a built-in git installation) that are included if you use install from the binary installer.  If you need these, the easiest way to get them is to build the installer yourself using ```make win-extras``` followed by ```make binary-dist```, and then running the resulting installer.
+Compiling using one of the options above creates a basic Julia build, but not some extra components (like a built-in git installation) that are included if you run the full Julia binary installer.  If you need these components, the easiest way to get them is to build the installer yourself using ```make win-extras``` followed by ```make binary-dist```, and then running the resulting installer.
 
 ## Windows Build Debugging
 
 ### GDB hangs with cygwin mintty
 
-- Run gdb under the windows console (cmd) instead. gdb [does not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications. You can use `cmd /c start` to start the windows console from mintty if necessary.
+- Run gdb under the windows console (cmd) instead. gdb [may not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications. You can use `cmd /c start` to start the windows console from mintty if necessary.
 
 ### GDB not attaching to the right process
 
@@ -311,6 +311,7 @@ Compiling using one of the options above creates a minimal Julia installation, b
 ### GDB not showing the right backtrace
 
 - When attaching to the julia process, GDB may not be attaching to the right thread. Use `info threads` command to show all the threads and `thread <threadno>` to switch threads.
+- Be sure to use a 32 bit version of GDB to debug a 32 bit build of Julia, or a 64 bit version of GDB to debug a 64 bit build of Julia.
 
 ### Build process is slow/eats memory/hangs my computer
 
