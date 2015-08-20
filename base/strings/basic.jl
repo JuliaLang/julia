@@ -67,7 +67,7 @@ function length(s::AbstractString)
     end
 end
 
-## String comparison functions ##
+## string comparison functions ##
 
 function cmp(a::AbstractString, b::AbstractString)
     if a === b

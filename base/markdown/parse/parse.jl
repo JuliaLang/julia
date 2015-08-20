@@ -67,7 +67,7 @@ function parseinline(stream::IO, md::MD, config::Config)
     return content
 end
 
-parseinline(s::String, md::MD, c::Config) =
+parseinline(s::AbstractString, md::MD, c::Config) =
     parseinline(IOBuffer(s), md, c)
 
 # TODO remove once GH #9888 is fixed

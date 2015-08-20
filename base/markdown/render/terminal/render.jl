@@ -92,7 +92,7 @@ function terminline(io::IO, content::Vector)
     end
 end
 
-function terminline(io::IO, md::String)
+function terminline(io::IO, md::AbstractString)
     print(io, md)
 end
 
