@@ -44,7 +44,7 @@ end
 
 function find_all_in_cache_path(mod::Symbol)
     name = string(mod)
-    paths = String[]
+    paths = AbstractString[]
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
         if isfile(path)

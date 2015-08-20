@@ -68,7 +68,7 @@ plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url
 
 plaininline(io::IO, md::Image) = plaininline(io, "![", md.alt, "](", md.url, ")")
 
-plaininline(io::IO, s::String) = print(io, s)
+plaininline(io::IO, s::AbstractString) = print(io, s)
 
 plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 

@@ -69,7 +69,7 @@ Test if the stream starts with the given string.
 `eat` specifies whether to advance on success (true by default).
 `padding` specifies whether leading whitespace should be ignored.
 """
-function startswith(stream::IO, s::String; eat = true, padding = false, newlines = true)
+function startswith(stream::IO, s::AbstractString; eat = true, padding = false, newlines = true)
     start = position(stream)
     padding && skipwhitespace(stream, newlines = newlines)
     result = true
@@ -90,7 +90,7 @@ function startswith(stream::IO, c::Char; eat = true)
     end
 end
 
-function startswith{T<:String}(stream::IO, ss::Vector{T}; kws...)
+function startswith{T<:AbstractString}(stream::IO, ss::Vector{T}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
@@ -169,7 +169,7 @@ i.e. `*word word*` but not `*word * word`.
 `repeat` specifies whether the delimiter can be repeated.
 Escaped delimiters are not yet supported.
 """
-function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
+function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false)
     delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
         if position(stream) >= 1
