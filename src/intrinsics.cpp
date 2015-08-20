@@ -337,9 +337,8 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     if (to == T_void) {
         return NULL;
     }
-    if (to->isAggregateType() && jl_is_immutable_datatype(bt)) // can lazy load on demand, no copy needed
-        return builder.CreateBitCast(v, to->getPointerTo());
-    return emit_reg2mem(emit_unbox(to, v, bt), ctx);
+    assert(!to->isAggregateType() && jl_is_immutable_datatype(bt));
+    return emit_unbox(to, v, bt);
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
