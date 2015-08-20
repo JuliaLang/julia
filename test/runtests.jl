@@ -338,9 +338,9 @@ end
 
 # is_valid_utf32
 s = utf32("abc")
-@test is_valid_utf32(s)
+@test isvalid(s)
 s = utf32(UInt32[65,0x110000])
-@test !is_valid_utf32(s)
+@test !isvalid(s)
 
 # isvalid
 let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
