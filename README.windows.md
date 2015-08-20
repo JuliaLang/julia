@@ -294,6 +294,9 @@ just run `vagrant up` from that folder. To build with Cygwin instead of MSYS2,
 replace `config.vm.provision :shell, privileged: false, :inline => $script_msys2`
 (near the end of the file) with `config.vm.provision :shell, privileged: false, :inline => $script_cygwin`.
 
+## After compiling
+
+Compiling using one of the options above creates a minimal Julia installation, but not some extra components (like a built-in git installation) that are included if you use install from the binary installer.  If you need these, the easiest way to get them is to build the installer yourself using ```make win-extras``` followed by ```make binary-dist```, and then running the resulting installer.
 
 ## Windows Build Debugging
 
