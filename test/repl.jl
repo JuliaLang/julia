@@ -9,9 +9,9 @@ function fake_repl()
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+    stdin_read,stdin_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
+    stdout_read,stdout_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
+    stderr_read,stderr_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
     Base.link_pipe(stdin_read,true,stdin_write,true)
     Base.link_pipe(stdout_read,true,stdout_write,true)
     Base.link_pipe(stderr_read,true,stderr_write,true)
