@@ -107,7 +107,7 @@ and statistical programming. For users coming to Julia from R, these are some
 noteworthy differences:
 
 - Julia's single quotes enclose characters, not strings.
-- Julia can create substrings by indexing into :obj:`String`\ s.  In R, strings
+- Julia can create substrings by indexing into strings. In R, strings
   must be converted into character vectors before creating substrings.
 - In Julia, like Python but unlike R, strings can be created with triple quotes
   ``""" ... """``. This syntax is convenient for constructing strings that

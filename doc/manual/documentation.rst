@@ -74,7 +74,7 @@ example:
     end
 
     "When applied to strings, concatenates them."
-    function *(x::String, y::String)
+    function *(x::AbstractString, y::AbstractString)
       # ... [insert secret sauce here] ...
     end
 

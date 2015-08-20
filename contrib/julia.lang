@@ -239,7 +239,7 @@
       <keyword>SparseMatrixCSC</keyword>
       <keyword>(D|Sub((Or)?D)?)Array</keyword>
       <keyword>Chars?</keyword>
-      <keyword>(ASCII|Byte|Char|DirectIndex|Generic|Rep|Rev|Rope|Sub|UTF8)?String</keyword>
+      <keyword>(Abstract|ASCII|Byte|Char|DirectIndex|Generic|Rep|Rev|Rope|Sub|UTF8)String</keyword>
       <keyword>Bool</keyword>
       <keyword>Number</keyword>
       <keyword>Real</keyword>

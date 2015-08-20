@@ -985,16 +985,16 @@ which denotes any number of trailing elements:
 
 .. doctest::
 
-    julia> isa(("1",), Tuple{String,Vararg{Int}})
+    julia> isa(("1",), Tuple{AbstractString,Vararg{Int}})
     true
 
-    julia> isa(("1",1), Tuple{String,Vararg{Int}})
+    julia> isa(("1",1), Tuple{AbstractString,Vararg{Int}})
     true
 
-    julia> isa(("1",1,2), Tuple{String,Vararg{Int}})
+    julia> isa(("1",1,2), Tuple{AbstractString,Vararg{Int}})
     true
 
-    julia> isa(("1",1,2,3.0), Tuple{String,Vararg{Int}})
+    julia> isa(("1",1,2,3.0), Tuple{AbstractString,Vararg{Int}})
     false
 
 Notice that ``Vararg{T}`` matches zero or more elements of type ``T``.

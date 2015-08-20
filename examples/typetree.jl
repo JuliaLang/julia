@@ -7,21 +7,21 @@ module TypeTrees
 
 # The node type holds the type of the cuurent node and a dict of subtypes
 type TTNode
-    strname::String
+    strname::AbstractString
     typ::Type
-    subtypes::Dict{String, TTNode}
+    subtypes::Dict{AbstractString, TTNode}
 
-    TTNode(sname::String, t::Type) = new(sname, t, Dict{String, TTNode}())
+    TTNode(sname::AbstractString, t::Type) = new(sname, t, Dict{AbstractString, TTNode}())
 end
 
 # Add a node to a dict if not added
-function add_ttnode(subtypes::Dict{String, TTNode}, sname::String, tnode::TTNode)
+function add_ttnode(subtypes::Dict{AbstractString, TTNode}, sname::AbstractString, tnode::TTNode)
     ret = get(subtypes, sname, nothing)
     (nothing == ret) && (ret = subtypes[sname] = tnode)
     ret
 end
 
-function add_ttnode(subtypes::Dict{String, TTNode}, sname::String, t::Type)
+function add_ttnode(subtypes::Dict{AbstractString, TTNode}, sname::AbstractString, t::Type)
     ret = get(subtypes, sname, nothing)
     (nothing == ret) && (subtypes[sname] = ret = TTNode(sname, t))
     ret
@@ -34,7 +34,7 @@ typ_name(t) = string(t.name)
 
 # Store a type and its type hierarchy chain
 # Recurse till we reach the top level type
-function store_type(sname::String, t::Union)
+function store_type(sname::AbstractString, t::Union)
     suptype = Union
     tnode = TTNode(sname, t)
 
@@ -51,26 +51,26 @@ function store_type(sname::String, t::Union)
     return tnode.subtypes
 end
 
-function store_type(sname::String, t::TypeConstructor)
+function store_type(sname::AbstractString, t::TypeConstructor)
     suptype = t.body
     subtypes = store_type(typ_name(suptype), suptype)
     tnode = add_ttnode(subtypes, sname, t)
     return tnode.subtypes
 end
 
-function store_type(sname::String, t::DataType)
+function store_type(sname::AbstractString, t::DataType)
     suptype = super(t)
     subtypes = (suptype != t) ? store_type(typ_name(suptype), suptype) : types_tree
     tnode = add_ttnode(subtypes, sname, t)
     return tnode.subtypes
 end
 
-function store_type(sname::String, t::Tuple)
+function store_type(sname::AbstractString, t::Tuple)
     tnode = add_ttnode(types_tree, sname, t)
     return tnode.subtypes
 end
 
-function store_type(sname::String, t)
+function store_type(sname::AbstractString, t)
     suptype = super(t)
     subtypes = (suptype != t) ? store_type(typ_name(suptype), suptype) : types_tree
     tnode = add_ttnode(subtypes, sname, t)
@@ -97,7 +97,7 @@ type_props(typ::DataType) = string("<<",
                                  " size:", typ.size,
                                  " >>")
 
-function print_tree(subtypes::Dict{String, TTNode}, pfx::String="")
+function print_tree(subtypes::Dict{AbstractString, TTNode}, pfx::AbstractString="")
     for n in sort!([keys(subtypes)...])
         v = subtypes[n]
         if(n == string(v.typ))
@@ -113,7 +113,7 @@ end
 # TODO: optionally take module names in command line
 # TODO: sort output
 # TODO: option to list subtrees of type tree, or other symbol types
-const types_tree = Dict{String, TTNode}()
+const types_tree = Dict{AbstractString, TTNode}()
 
 for m in (Base, Core, Main)
     store_all_from(m)

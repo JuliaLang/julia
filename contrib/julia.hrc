@@ -111,7 +111,7 @@
 <!-- General types -->
          <keywords region="mlStdFunc">
             <word name="Array"/>
-            <word name="String"/>
+            <word name="AbstractString"/>
             <word name="Bool"/>
             <word name="Number"/>
             <word name="Int"/>

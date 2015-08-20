@@ -541,7 +541,7 @@ function test_no_diagonal()
     @test issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 
-    @test issub(Ty((Int,String,Vector{Any})),
+    @test issub(Ty((Int,AbstractString,Vector{Any})),
                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Tuple{Integer,Integer},1}),
@@ -555,7 +555,7 @@ function test_no_diagonal()
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
 
-    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
                  (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 end
 
@@ -604,14 +604,14 @@ function test_3()
     @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)),
                  (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 
-    @test !issub(Ty((Int,String,Vector{Integer})),
+    @test !issub(Ty((Int,AbstractString,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
-    @test !issub(Ty((String,Int,Vector{Integer})),
+    @test !issub(Ty((AbstractString,Int,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
-    @test !issub(Ty((Int,String,Vector{Tuple{Integer}})),
+    @test !issub(Ty((Int,AbstractString,Vector{Tuple{Integer}})),
                  @UnionAll T tupletype(T,T,inst(ArrayT,tupletype(T),1)))
 
-    #@test !issub(Ty((Int,String,Vector{Any})),
+    #@test !issub(Ty((Int,AbstractString,Vector{Any})),
     #             @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
@@ -639,7 +639,7 @@ function test_3()
 
     @test  issub(Ty((Integer,Int)), @UnionAll T<:Ty(Integer) @UnionAll S<:T tupletype(T,S))
     @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(Int) @UnionAll S<:T tupletype(T,S))
-    @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(String) @UnionAll S<:T tupletype(T,S))
+    @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(AbstractString) @UnionAll S<:T tupletype(T,S))
 
     @test issub(Ty((Float32,Array{Float32,1})),
                 @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
@@ -687,7 +687,7 @@ end
 function test_4()
     @test isequal_type(UnionT(BottomT,BottomT), BottomT)
 
-    @test issub_strict(Int, Union{Int,String})
+    @test issub_strict(Int, Union{Int,AbstractString})
     @test issub_strict(Union{Int,Int8}, Integer)
 
     @test isequal_type(Union{Int,Int8}, Union{Int,Int8})
@@ -731,7 +731,7 @@ end
 function test_5()
     u = Ty(Union{Int8,Int})
 
-    @test issub(Ty((String,Array{Int,1})),
+    @test issub(Ty((AbstractString,Array{Int,1})),
                 (@UnionAll T UnionT(tupletype(T,inst(ArrayT,T,1)),
                                     tupletype(T,inst(ArrayT,Ty(Int),1)))))
 
@@ -773,21 +773,21 @@ end
 # tricky type variable lower bounds
 function test_6()
     # diagonal
-    #@test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+    #@test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
     #             (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
-    @test issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+    @test issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
                 (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 
-    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Integer})))),
+    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Integer})))),
                  (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 
     t = @UnionAll T tupletype(T,T,inst(RefT,T))
     @test isequal_type(t, rename(t))
 
-    @test !issub((@UnionAll T tupletype(T,Ty(String),inst(RefT,T))),
+    @test !issub((@UnionAll T tupletype(T,Ty(AbstractString),inst(RefT,T))),
                  (@UnionAll T tupletype(T,T,inst(RefT,T))))
 
-    @test !issub((@UnionAll T tupletype(T,inst(RefT,T),Ty(String))),
+    @test !issub((@UnionAll T tupletype(T,inst(RefT,T),Ty(AbstractString))),
                  (@UnionAll T tupletype(T,inst(RefT,T),T)))
 
     i = Ty(Int); ai = Ty(Integer)

@@ -770,7 +770,7 @@ want to accidentally extend a function that you didn't know existed, because tha
 easily cause a bug. This is most likely to happen with a method that takes a common type
 like a string or integer, because both you and the other module could define a method to
 handle such a common type. If you use ``importall``, then you'll replace the other module's
-implementation of ``bar(s::String)`` with your new implementation, which could easily do
+implementation of ``bar(s::AbstractString)`` with your new implementation, which could easily do
 something completely different (and break all/many future usages of the other functions
 in module Foo that depend on calling bar).
 
