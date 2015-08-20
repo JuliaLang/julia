@@ -1713,7 +1713,7 @@ static Value *tpropagate(Value *a, Value *b)
 static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 {
     builder.CreateStore(jt, builder.CreateBitCast(emit_typeptr_addr(newv), jl_ppvalue_llvmt));
-    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)), 16); // Julia's gc-alignment is 16-bytes
+    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)), sizeof(void*));
     return newv;
 }
 

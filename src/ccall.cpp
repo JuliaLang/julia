@@ -832,15 +832,13 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
 // --- code generator for ccall itself ---
 
-int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx);
-
 static Value *mark_or_box_ccall_result(Value *result, jl_value_t *rt_expr, jl_value_t *rt, bool static_rt, jl_codectx_t *ctx)
 {
     if (!static_rt && rt != (jl_value_t*)jl_any_type) {
         // box if type was not statically known
-        int nbits = try_to_determine_bitstype_nbits(rt_expr, ctx);
+        assert((jl_value_t*)jl_voidpointer_type == rt);
         return allocate_box_dynamic(emit_expr(rt_expr, ctx),
-                                    ConstantInt::get(T_size, nbits/8),
+                                    ConstantInt::get(T_size, sizeof(void*)),
                                     result);
     }
 

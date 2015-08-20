@@ -398,102 +398,84 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 
 static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
-    int nb = try_to_determine_bitstype_nbits(targ, ctx);
+    Value *vx = auto_unbox(x, ctx);
+    Type *vxt = vx->getType();
 
-    Type *llvmt = NULL;
-    jl_value_t *bt = NULL;
     jl_value_t *et = expr_type(targ, ctx);
+    jl_value_t *bt = NULL;
     if (jl_is_type_type(et) && jl_is_leaf_type(jl_tparam0(et)) &&
         jl_is_bitstype(jl_tparam0(et))) {
         bt = jl_tparam0(et);
     }
     else {
-        JL_TRY {
-            bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               jl_svec_data(ctx->sp),
-                                               jl_svec_len(ctx->sp)/2);
-        }
-        JL_CATCH {
-        }
+        bt = static_eval(targ, ctx, true, false);
     }
 
-    if (bt == NULL) {
+    if (vxt == T_void) {
+        return vx;
     }
-    else if (!jl_is_bitstype(bt)) {
-        emit_error("reinterpret: expected bits type as first argument", ctx);
+    if (!vxt->isSingleValueType()) {
+        emit_error("reinterpret: expected bitstype value as second argument", ctx);
         return UndefValue::get(jl_pvalue_llvmt);
     }
-    else {
-        llvmt = julia_type_to_llvm(bt);
-        if (llvmt == jl_pvalue_llvmt) {
-            // this happens if !jl_is_leaf_type(bt)
-            llvmt = NULL;
-            bt = NULL;
-        }
-        if (nb == -1)
-            nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
-    }
+    size_t nb = vxt->isPointerTy() ? sizeof(void*) * 8 : vxt->getPrimitiveSizeInBits();
+    if (nb == 1)
+        nb = 8;
+    assert(nb != 0);
 
-    if (nb == -1) {
-        emit_error("box: could not determine argument size", ctx);
-        return UndefValue::get(jl_pvalue_llvmt);
-    }
-
-    if (llvmt == NULL)
-        llvmt = IntegerType::get(jl_LLVMContext, nb);
-
-    Value *vx = auto_unbox(x, ctx);
-    Type *vxt = vx->getType();
-    if (llvmt->isAggregateType() && vxt->isPointerTy()) {
-        vxt = vxt->getContainedType(0);
-    }
-    //if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
-    //    jl_errorf("box: expected argument with %d bits, got %d", nb,
-    //              vx->getType()->getPrimitiveSizeInBits());
-
-    if (vxt != llvmt) {
-        if (vxt == T_void)
-            return vx;
-        if (!vxt->isSingleValueType()) {
-            emit_error("reinterpret: expected non-struct value as second argument", ctx);
+    Type *llvmt = vxt;
+    if (bt != NULL && jl_is_bitstype(bt)) {
+        size_t box_nb = jl_datatype_size(bt) * 8;
+        if (box_nb != nb) {
+            std::stringstream msg;
+            msg << "box: expected argument with " << box_nb << " bits, got " << nb;
+            emit_error(msg.str(), ctx);
             return UndefValue::get(jl_pvalue_llvmt);
         }
-        if (llvmt == T_int1) {
-            vx = builder.CreateTrunc(vx, llvmt);
-        }
-        else if (vxt == T_int1 && llvmt == T_int8) {
-            vx = builder.CreateZExt(vx, llvmt);
-        }
-        else {
-            // getPrimitiveSizeInBits() == 0 for pointers
-            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits() &&
-                !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
-                !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
-                emit_error("box: argument is of incorrect size", ctx);
-                return UndefValue::get(llvmt);
+
+        llvmt = julia_type_to_llvm(bt);
+        if (llvmt != jl_pvalue_llvmt) { // this can happen if !jl_is_leaf_type(bt)
+            if (vxt != llvmt) {
+                if (llvmt == T_int1) {
+                    vx = builder.CreateTrunc(vx, llvmt);
+                }
+                else if (vxt == T_int1 && llvmt == T_int8) {
+                    vx = builder.CreateZExt(vx, llvmt);
+                }
+                else {
+                    assert(box_nb == nb);
+                    // PtrToInt and IntToPtr ignore size differences
+                    if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
+                        vx = builder.CreatePtrToInt(vx, llvmt);
+                    }
+                    else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+                        vx = builder.CreateIntToPtr(vx, llvmt);
+                    }
+                    else {
+                        vx = builder.CreateBitCast(vx, llvmt);
+                    }
+                }
             }
-            // PtrToInt and IntToPtr ignore size differences
-            if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-                vx = builder.CreatePtrToInt(vx, llvmt);
-            }
-            else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
-                vx = builder.CreateIntToPtr(vx, llvmt);
-            }
-            else {
-                vx = builder.CreateBitCast(vx, llvmt);
-            }
+
+            return mark_julia_type(vx, bt);
         }
     }
 
-    if (bt != NULL) {
-        return mark_julia_type(vx, bt);
+    if (vxt == T_int1) {
+        llvmt = T_int8;
+        vx = builder.CreateZExt(vx, llvmt);
     }
+
+    // emit runtime checks
+    Value *typ = emit_expr(targ, ctx);
+    Value *cond = builder.CreateICmpEQ(builder.CreateLoad(builder.CreateGEP(
+                    builder.CreateBitCast(typ, T_pint32),
+                    ConstantInt::get(T_int32, offsetof(jl_datatype_t, size) / sizeof(int32_t)))),
+            ConstantInt::get(T_int32, nb / 8));
+    error_unless(cond, "box: expected bitsize of type and argument don't match", ctx);
 
     // dynamically-determined type; evaluate.
-    if (llvmt->isAggregateType()) {
-        vx = builder.CreateLoad(vx); // something stack allocated
-    }
-    return allocate_box_dynamic(emit_expr(targ, ctx), ConstantInt::get(T_size,nb), vx);
+    return allocate_box_dynamic(typ, ConstantInt::get(T_size, nb/8), vx);
 }
 
 static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
