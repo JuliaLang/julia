@@ -342,7 +342,7 @@ Library improvements
     * Streamlined random number generation APIs [#8246].
     The default `rand` no longer uses global state in the underlying C library,
     dSFMT, making it closer to being thread-safe ([#8399], [#8832]).
-    All APIs can now take an `AbstractRNG` argument ([#8854], [#9065]).
+    All APIs can now take an `AbstractRNG` argument ([#8854], [#9065]). The seed argument to `srand` is now optional ([#8320], [#8854]).
     The APIs accepting a range argument are extended to accept an arbitrary
     `AbstractArray` ([#9049]).
     Passing a range of `BigInt` to `rand` or `rand!` is now supported ([#9122]).
@@ -1469,6 +1469,7 @@ Too numerous to mention.
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
 [#8283]: https://github.com/JuliaLang/julia/issues/8283
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
+[#8320]: https://github.com/JuliaLang/julia/issues/8320
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8432]: https://github.com/JuliaLang/julia/issues/8432
