@@ -163,3 +163,40 @@ end"""
       end
   end
 end
+
+# make a fake METADATA
+
+const fake_test_dir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
+try
+    @test !isdir(Pkg.dir())
+    mkdir(fake_test_dir)
+    Pkg.Git.run(`clone git://github.com/JuliaLang/METADATA.jl $fake_test_dir/secret-meta`)
+    Pkg.init("$fake_test_dir/secret-meta")
+    Pkg.generate("SimpleFakePackage","MIT",config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
+    # put some stuff in there, commit it
+    src = """
+  module SimpleFakePackage
+
+  export fakery
+
+  fakery = notreal
+
+  end"""
+
+    Pkg.register("SimpleFakePackage")
+    open(Pkg.dir("SimpleFakePackage", "src", "SimpleFakePackage.jl"), "w") do f
+        println(f, src)
+    end
+    cd(Pkg.dir("SimpleFakePackage"))
+    # make a commit!
+    Pkg.Git.run(`add src/SimpleFakePackage.jl`)
+    Pkg.Git.run(`commit -a -m firstcommit `)
+    # let's tag our first version!
+    Pkg.tag("SimpleFakePackage",:patch)
+    try
+        Pkg.publish()
+    catch err # this will fail because our fake METADATA isn't on Github
+    end
+finally
+    rm(fake_test_dir, recursive=true)
+end
