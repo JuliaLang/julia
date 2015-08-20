@@ -1079,5 +1079,16 @@ Ar = sprandn(20,20,.5)
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 
+# test sparse matrix normestinv
+Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
+Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
+Ar = sprandn(20,20,.5)
+Ari = ceil(Int64,100*Ar)
+@test_approx_eq_eps Base.SparseMatrix.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
+@test_approx_eq_eps Base.SparseMatrix.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
+@test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
+@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
+
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
