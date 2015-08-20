@@ -1118,57 +1118,6 @@ end
 
 ## iteration utilities ##
 
-# slow, but useful
-function cartesianmap(body, t::Tuple{Vararg{Int}}, it...)
-    idx = length(t)-length(it)
-    if idx == 1
-        for i = 1:t[1]
-            body(i, it...)
-        end
-    elseif idx == 2
-        for j = 1:t[2]
-            for i = 1:t[1]
-                body(i, j, it...)
-            end
-        end
-    elseif idx > 1
-        for j = 1:t[idx]
-            for i = 1:t[idx-1]
-                cartesianmap(body, t, i, j, it...)
-            end
-        end
-    else
-        throw(ArgumentError("cartesianmap length(t) - length(it) ≤ 0"))
-    end
-end
-
-cartesianmap(body, t::Tuple{}) = (body(); nothing)
-
-function cartesianmap(body, t::Tuple{Int,})
-    for i = 1:t[1]
-        body(i)
-    end
-end
-
-function cartesianmap(body, t::Tuple{Int,Int})
-    for j = 1:t[2]
-        for i = 1:t[1]
-            body(i,j)
-        end
-    end
-end
-
-function cartesianmap(body, t::Tuple{Int,Int,Int})
-    for k = 1:t[3]
-        for j = 1:t[2]
-            for i = 1:t[1]
-                body(i,j,k)
-            end
-        end
-    end
-end
-
-##
 # generic map on any iterator
 function map(f, iters...)
     result = []
@@ -1242,13 +1191,14 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     R[ridx...] = r1
 
     first = true
-    cartesianmap(itershape) do idxs...
+    nidx = length(otherdims)
+    for I in CartesianRange(itershape)
         if first
             first = false
         else
-            ia = [idxs...]
-            idx[otherdims] = ia
-            ridx[otherdims] = ia
+            for i in 1:nidx
+                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
+            end
             R[ridx...] = f(reshape(A[idx...], Asliceshape))
         end
     end
