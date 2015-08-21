@@ -626,7 +626,8 @@ static void julia_save()
             return;
         }
         if (jl_options.outputji)
-            jl_save_incremental(jl_options.outputji, worklist);
+            if (jl_save_incremental(jl_options.outputji, worklist))
+                jl_exit(1);
         if (jl_options.outputbc)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
         if (jl_options.outputo)
