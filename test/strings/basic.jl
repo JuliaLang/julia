@@ -469,11 +469,11 @@ end
 
 # issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
-@test typeof(uppercase("abcdef")) == ASCIIString
+@test typeof(uppercase("abcdef")) == UTF8String
 @test typeof(uppercase(utf8(str))) == UTF8String
 @test typeof(uppercase(utf16(str))) == UTF16String
 @test typeof(uppercase(utf32(str))) == UTF32String
-@test typeof(lowercase("ABCDEF")) == ASCIIString
+@test typeof(lowercase("ABCDEF")) == UTF8String
 @test typeof(lowercase(utf8(str))) == UTF8String
 @test typeof(lowercase(utf16(str))) == UTF16String
 @test typeof(lowercase(utf32(str))) == UTF32String
