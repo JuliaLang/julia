@@ -51,7 +51,7 @@ end
 
 immutable DateFormat
     slots::Array{Slot,1}
-    prefix # optional transition from the start of a string to the 1st slot
+    prefix::AbstractString # optional transition from the start of a string to the 1st slot
     locale::AbstractString
 end
 
@@ -138,7 +138,7 @@ getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cur
 
 function parse(x::AbstractString,df::DateFormat)
     x = strip(replace(x, r"#.*$", ""))
-    x = replace(x,df.prefix,"")
+    startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
     if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
         throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
@@ -175,7 +175,7 @@ end
 slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
 
 function format(dt::TimeType,df::DateFormat)
-    f = ""
+    f = df.prefix
     for slot in df.slots
         f *= slotformat(slot,dt,df.locale)
         if isa(slot, DelimitedSlot)
