@@ -32,6 +32,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_throws ArgumentError size(BD,0)
     @test size(BD,3) == 1
 
+    debug && println("show")
+    dstring = sprint(Base.print_matrix,BD.dv')
+    estring = sprint(Base.print_matrix,BD.ev')
+    @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+    BD = Bidiagonal(dv,ev,false)
+    @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
 
     debug && println("Test upper and lower bidiagonal matrices")
     for isupper in (true, false)
