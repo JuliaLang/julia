@@ -1162,7 +1162,7 @@ export
     ntoh,
     open,
     pipeline,
-    PipeEndpoint,
+    Pipe,
     PipeBuffer,
     poll_fd,
     poll_file,

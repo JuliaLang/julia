@@ -174,8 +174,9 @@ if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
     @test readall(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
-    out = PipeEndpoint()
+    out = Pipe()
     proc = spawn(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr = out))
+    close(out.in)
     @test readall(out) == "Hello World\n"
     @test success(proc)
 end

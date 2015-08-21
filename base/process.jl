@@ -432,8 +432,10 @@ spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{Process
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
 function eachline(cmd::AbstractCmd, stdin)
-    out = PipeEndpoint()
-    processes = spawn(cmd, (stdin,out,STDERR))
+    stdout = Pipe()
+    processes = spawn(cmd, (stdin,stdout,STDERR))
+    close(stdout.in)
+    out = stdout.out
     # implicitly close after reading lines, since we opened
     return EachLine(out, ()->close(out))
 end
@@ -443,18 +445,24 @@ eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 function open(cmds::AbstractCmd, mode::AbstractString="r", other::AsyncStream=DevNull)
     if mode == "r+" || mode == "w+"
         other === DevNull || throw(ArgumentError("no other stream for mode rw+"))
-        in = PipeEndpoint()
-        out = PipeEndpoint()
+        in = Pipe()
+        out = Pipe()
+        processes = spawn(cmds, (in,out,STDERR))
+        close(in.out)
+        close(out.in)
     elseif mode == "r"
         in = other
-        out = PipeEndpoint()
+        out = Pipe()
+        processes = spawn(cmds, (in,out,STDERR))
+        close(out.in)
     elseif mode == "w"
-        in = PipeEndpoint()
+        in = Pipe()
         out = other
+        processes = spawn(cmds, (in,out,STDERR))
+        close(in.out)
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
     end
-    processes = spawn(cmds, (in,out,STDERR))
     return processes
 end
 
