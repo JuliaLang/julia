@@ -296,7 +296,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(detach(`$(julia_cmd())
+    io = open(detach(`$(julia_cmd())
             --output-ji $output --output-incremental=yes
             --startup-file=no --history-file=no
             --eval $code_object`), "w", STDOUT)
@@ -321,9 +321,9 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             delete!(task_local_storage(), :SOURCE_PATH)
         end)
     end
-    close(io)
-    wait(pobj)
-    return pobj
+    close(io.in)
+    wait(io)
+    return io
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))
