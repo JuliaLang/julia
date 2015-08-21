@@ -591,13 +591,8 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
             jl_rethrow();
         }
         else {
-            if(jl_typeis(jl_exception_in_transit, jl_initerror_type)) {
-                jl_rethrow();
-            }
-            else {
-                jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                               jl_exception_in_transit));
-            }
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                           jl_exception_in_transit));
         }
     }
     jl_stop_parsing();
