@@ -40,6 +40,7 @@ immutable DelimitedSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
+    transition::Union{Regex,AbstractString}
 end
 
 immutable FixedWidthSlot{T<:Any} <: Slot{T}
@@ -50,8 +51,7 @@ end
 
 immutable DateFormat
     slots::Array{Slot,1}
-    begtran # optional transition from the start of a string to the 1st slot
-    trans #trans[i] == how to transition FROM slots[i] TO slots[i+1]
+    prefix # optional transition from the start of a string to the 1st slot
     locale::AbstractString
 end
 
@@ -76,7 +76,6 @@ duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 function DateFormat(f::AbstractString,locale::AbstractString="english")
     slots = Slot[]
     prefix = ""
-    trans = []
     params = ()
     last_offset = 1
     for m in eachmatch(r"([a-zA-Z])\1*", f)
@@ -92,9 +91,8 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
         if isempty(params)
             prefix = tran
         else
-            slot = tran == "" ? FixedWidthSlot : DelimitedSlot
-            push!(slots,slot(params...))
-            push!(trans,tran)
+            slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+            push!(slots,slot)
         end
 
         params = (typ,letter,width)
@@ -103,13 +101,12 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
 
     tran = last_offset > endof(f) ? r"$" : f[last_offset:end]
     if !isempty(params)
-        slot = tran == "" ? FixedWidthSlot : DelimitedSlot
-        push!(slots,slot(params...))
-        push!(trans,tran)
+        slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+        push!(slots,slot)
     end
 
     duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
-    return DateFormat(slots,prefix,trans,locale)
+    return DateFormat(slots,prefix,locale)
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
@@ -126,26 +123,31 @@ end
 slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
 slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
 
-function getslot(x,slot::DelimitedSlot,transition,locale,cursor)
-    endind = first(search(x,transition,nextind(x,cursor)))
+function getslot(x,slot::DelimitedSlot,locale,cursor)
+    endind = first(search(x,slot.transition,nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
-        return (endof(x)+1, isdigit(s) ? slotparse(slot,s,locale) : default(slot.parser))
+        index = endof(x)+1
+    else
+        s = x[cursor:(endind-1)]
+        index = nextind(x,endind)
     end
-    return nextind(x,endind), slotparse(slot,x[cursor:(endind-1)],locale)
+    return index, slotparse(slot,s,locale)
 end
-getslot(x,slot,transition,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
+getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
 
 function parse(x::AbstractString,df::DateFormat)
     x = strip(replace(x, r"#.*$", ""))
-    x = replace(x,df.begtran,"")
+    x = replace(x,df.prefix,"")
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    (typeof(df.slots[1]) <: DelimitedSlot && first(search(x,df.trans[1])) == 0) && throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.trans[1])\", in date string"))
+    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
+        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
+    end
     periods = Period[]
     extra = []
     cursor = 1
-    for (i, slot) in enumerate(df.slots)
-        cursor, pe = getslot(x,slot,df.trans[i],df.locale,cursor)
+    for slot in df.slots
+        cursor, pe = getslot(x,slot,df.locale,cursor)
         pe != nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
         cursor > endof(x) && break
     end
@@ -174,9 +176,11 @@ slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000
 
 function format(dt::TimeType,df::DateFormat)
     f = ""
-    for (i, slot) in enumerate(df.slots)
+    for slot in df.slots
         f *= slotformat(slot,dt,df.locale)
-        f *= typeof(df.trans[i]) <: Regex ? "" : df.trans[i]
+        if isa(slot, DelimitedSlot)
+            f *= isa(slot.transition, AbstractString) ? slot.transition : ""
+        end
     end
     return f
 end
