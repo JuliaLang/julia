@@ -143,12 +143,15 @@ type PipeServer <: UVServer
         false,Condition())
 end
 
-function init_pipe!(pipe::Union{PipeEndpoint,PipeServer};readable::Bool=false,writable=false,julia_only=true)
-    if pipe.handle == C_NULL
-        malloc_julia_pipe!(pipe)
-    end
+function init_pipe!(pipe::Union{PipeEndpoint,PipeServer};
+                    readable::Bool = false,
+                    writable::Bool = false,
+                    julia_only::Bool = true)
     if pipe.status != StatusUninit
         error("pipe is already initialized")
+    end
+    if pipe.handle == C_NULL
+        malloc_julia_pipe!(pipe)
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), pipe.handle, writable,readable,julia_only))
     pipe.status = StatusInit
@@ -308,7 +311,7 @@ function reinit_stdio()
 end
 
 function isopen(x::Union{AsyncStream,UVServer})
-    if !(x.status != StatusUninit && x.status != StatusInit)
+    if x.status == StatusUninit || x.status == StatusInit
         throw(ArgumentError("$T object not initialized"))
     end
     x.status != StatusClosed && x.status != StatusEOF
@@ -518,26 +521,31 @@ end
 #  (composed of two half-pipes)
 ##########################################
 
-type Pipe <: AsyncStream
-    read::PipeEndpoint
-    write::PipeEndpoint
+abstract AbstractPipe <: AsyncStream
+# allows sharing implementation with Process and ProcessChain
+
+type Pipe <: AbstractPipe
+    in::PipeEndpoint # writable
+    out::PipeEndpoint # readable
 end
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
-function init!(pipe::Pipe;julia_only_read=false,julia_only_write=false)
-     link_pipe(pipe.read, julia_only_read, pipe.write, julia_only_write);
+function link_pipe(pipe::Pipe;
+               julia_only_read = false,
+               julia_only_write = false)
+     link_pipe(pipe.out, julia_only_read, pipe.in, julia_only_write);
 end
 
 show(io::IO,stream::Pipe) = print(io,
     "Pipe(",
-    uv_status_string(stream.read), ", ",
-    uv_status_string(stream.write), ", ",
-    nb_available(stream.read.buffer), " bytes waiting)")
-isreadable(io::Pipe) = isreadable(io.read)
-iswritable(io::Pipe) = isreadable(io.write)
-read(io::Pipe, args...) = read(io.read, args...)
-write(io::Pipe, args...) = write(io.write, args...)
-close(io::Pipe) = (close(io.read); close(io.write))
-isopen(x::Pipe) = isopen(io.read) || isopen(io.write)
+    uv_status_string(stream.in), ", ",
+    uv_status_string(stream.out), ", ",
+    nb_available(stream.out.buffer), " bytes waiting)")
+isreadable(io::AbstractPipe) = isreadable(io.out)
+iswritable(io::AbstractPipe) = iswritable(io.in)
+read{T<:AbstractPipe}(io::T, args...) = read(io.out, args...)
+write{T<:AbstractPipe}(io::T, args...) = write(io.in, args...)
+close(io::AbstractPipe) = (close(io.in); close(io.out))
+isopen(x::AbstractPipe) = isopen(io.in) || isopen(io.out)
 
 ##########################################
 # Async Worker
@@ -677,65 +685,94 @@ end
 
 ## pipe functions ##
 function malloc_julia_pipe!(x)
+    assert(x.handle == C_NULL)
     x.handle = Libc.malloc(_sizeof_uv_named_pipe)
-    associate_julia_struct(x.handle,x)
-    finalizer(x,uvfinalize)
+    associate_julia_struct(x.handle, x)
+    finalizer(x, uvfinalize)
 end
 
-_link_pipe(read_end::Ptr{Void},write_end::Ptr{Void}) = uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+function _link_pipe(read_end::Ptr{Void}, write_end::Ptr{Void})
+    uv_error("pipe_link",
+        ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+end
 
-function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool,readpipe::AsyncStream,writepipe::AsyncStream)
+function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
+                   write_end::Ptr{Void}, writable_julia_only::Bool,
+                   readpipe::AsyncStream, writepipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
-    uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+    uv_error("init_pipe(read)",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+    uv_error("init_pipe(write)",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+    _link_pipe(read_end, write_end)
+end
+
+function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
+                   write_end::Ptr{Void}, writable_julia_only::Bool)
+    uv_error("init_pipe(read)",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+    uv_error("init_pipe(write)",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
     _link_pipe(read_end,write_end)
 end
 
-function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
-    uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
-    _link_pipe(read_end,write_end)
-end
-
-function link_pipe(read_end::PipeEndpoint,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
+function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
+                   write_end::Ptr{Void}, writable_julia_only::Bool)
     if read_end.handle == C_NULL
         malloc_julia_pipe!(read_end)
     end
-    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
-    _link_pipe(read_end.handle,write_end)
+    init_pipe!(read_end;
+        readable = true, writable = false, julia_only = readable_julia_only)
+    uv_error("init_pipe",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+    _link_pipe(read_end.handle, write_end)
     read_end.status = StatusOpen
 end
-function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::PipeEndpoint,writable_julia_only::Bool)
+
+function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
+                   write_end::PipeEndpoint, writable_julia_only::Bool)
     if write_end.handle == C_NULL
         malloc_julia_pipe!(write_end)
     end
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
-    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
-    _link_pipe(read_end,write_end.handle)
+    uv_error("init_pipe",
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+    init_pipe!(write_end;
+        readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end, write_end.handle)
     write_end.status = StatusOpen
 end
-function link_pipe(read_end::PipeEndpoint,readable_julia_only::Bool,write_end::PipeEndpoint,writable_julia_only::Bool)
+
+function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
+                   write_end::PipeEndpoint, writable_julia_only::Bool)
     if write_end.handle == C_NULL
         malloc_julia_pipe!(write_end)
     end
     if read_end.handle == C_NULL
         malloc_julia_pipe!(read_end)
     end
-    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
-    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
-    _link_pipe(read_end.handle,write_end.handle)
+    init_pipe!(read_end;
+        readable = true, writable = false, julia_only = readable_julia_only)
+    init_pipe!(write_end;
+        readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end.handle, write_end.handle)
     write_end.status = StatusOpen
     read_end.status = StatusOpen
     nothing
 end
-close_pipe_sync(p::PipeEndpoint) = (ccall(:uv_pipe_close_sync,Void,(Ptr{Void},),p.handle); p.status = StatusClosed)
-close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-function close(stream::Union{AsyncStream,UVServer})
+function close_pipe_sync(p::PipeEndpoint)
+    ccall(:uv_pipe_close_sync, Void, (Ptr{Void},), p.handle)
+    p.status = StatusClosed
+    nothing
+end
+function close_pipe_sync(handle::UVHandle)
+    ccall(:uv_pipe_close_sync, Void, (UVHandle,), handle)
+end
+
+function close(stream::Union{AsyncStream, UVServer})
     if isopen(stream) && stream.status != StatusClosing
-        ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
+        ccall(:jl_close_uv,Void, (Ptr{Void},), stream.handle)
         stream.status = StatusClosing
     end
     nothing
@@ -766,7 +803,11 @@ function start_reading(stream::AsyncStream, cb::Function)
     end
     return failure_code
 end
-start_reading(stream::AsyncStream, cb::Bool) = (failure_code = start_reading(stream); stream.readcb = cb; return failure_code)
+function start_reading(stream::AsyncStream, cb::Bool)
+    failure_code = start_reading(stream)
+    stream.readcb = cb
+    return failure_code
+end
 
 function stop_reading(stream::AsyncStream)
     if stream.status == StatusActive
@@ -959,7 +1000,7 @@ end
 ## Libuv error handling ##
 type UVError <: Exception
     prefix::AbstractString
-    code::Int32
+    code::Int64 # TODO: change to Int32 when updating to libuv 1.0
     UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 
