@@ -1320,7 +1320,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     else if ((jl_value_t*)vt == jl_typeof(jl_nothing)) {
         n += jl_printf(out, "nothing");
     }
-    else if (vt == jl_ascii_string_type || vt == jl_utf8_string_type) {
+    else if (vt == jl_utf8_string_type) {
         n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
     }
     else if (vt == jl_uniontype_type) {

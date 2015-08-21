@@ -113,11 +113,6 @@ function convert(::Type{UTF16String}, str::UTF32String)
     return encode_to_utf16(dat, len + num4byte)
 end
 
-function convert(::Type{UTF32String}, str::ASCIIString)
-    dat = str.data
-    @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
-end
-
 function convert(::Type{UTF32String}, dat::AbstractVector{UInt32})
     @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
 end

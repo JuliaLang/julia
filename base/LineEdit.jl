@@ -743,7 +743,7 @@ end
 # This is different from the default eager redirect, which only looks at the current and lower
 # layers of the stack.
 immutable KeyAlias
-    seq::ASCIIString
+    seq::UTF8String
     KeyAlias(seq) = new(normalize_key(seq))
 end
 

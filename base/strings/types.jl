@@ -31,7 +31,6 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
-sizeof(s::SubString{ASCIIString}) = s.endof
 sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 
 # TODO: length(s::SubString) = ??
@@ -85,8 +84,6 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-isascii(s::SubString{ASCIIString}) = true
-
 function cmp{T<:ByteString,S<:ByteString}(a::SubString{T}, b::SubString{S})
     na = sizeof(a)
     nb = sizeof(b)
@@ -119,8 +116,6 @@ end
 
 reverse(s::AbstractString) = RevString(s)
 reverse(s::RevString) = s.string
-
-isascii(s::RevString{ASCIIString}) = true
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 

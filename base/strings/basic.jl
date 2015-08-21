@@ -208,7 +208,6 @@ strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 
 isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
-isascii(s::ASCIIString) = true
 
 ## string promotion rules ##
 
@@ -227,7 +226,6 @@ byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 1: valid ASCII
     # 2: valid UTF-8
 
-isvalid(::Type{ASCIIString}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) == 1
 isvalid(::Type{UTF8String}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) != 0
 
 ## uppercase and lowercase transformations ##
@@ -243,9 +241,6 @@ end
 
 ## string map, filter, has ##
 
-map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
-map_result(s::Union{ASCIIString,SubString{ASCIIString}}, a::Vector{UInt8}) = bytestring(a)
-
 function map(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
@@ -256,7 +251,7 @@ function map(f, s::AbstractString)
         end
         write(out, c2::Char)
     end
-    map_result(s, takebuf_array(out))
+    UTF8String(takebuf_array(out))
 end
 
 function filter(f, s::AbstractString)
@@ -269,4 +264,3 @@ function filter(f, s::AbstractString)
     end
     takebuf_string(out)
 end
-

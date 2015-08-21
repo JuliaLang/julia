@@ -295,7 +295,7 @@ function get_type_call(expr::Expr)
     length(return_types) == 1 || return (Any, false)
     return (return_types[1], true)
 end
-# Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (ASCIIString,true)
+# Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (UTF8String,true)
 function get_type(sym::Expr, fn)
     sym=expand(sym)
     val, found = get_value(sym, fn)

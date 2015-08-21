@@ -8,7 +8,7 @@ export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 type SimdError <: Exception
-    msg::ASCIIString
+    msg::UTF8String
 end
 
 # Parse iteration space expression

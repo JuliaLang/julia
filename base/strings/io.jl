@@ -37,9 +37,7 @@ function sprint(size::Integer, f::Function, args...; env=nothing)
     else
         f(s, args...)
     end
-    d = s.data
-    resize!(d,s.size)
-    bytestring(d)
+    bytestring(resize!(s.data, s.size))
 end
 sprint(f::Function, args...) = sprint(0, f, args...)
 
@@ -64,9 +62,7 @@ function print_to_string(xs...; env=nothing)
             print(s, x)
         end
     end
-    d = s.data
-    resize!(d,s.size)
-    return isvalid(ASCIIString, d) ? ASCIIString(d) : UTF8String(d)
+    UTF8String(resize!(s.data, s.size))
 end
 
 string_with_env(env, xs...) = print_to_string(xs...; env=env)
@@ -268,7 +264,7 @@ Removes leading indentation from string
 
 Returns:
 
-* `ASCIIString` or `UTF8String` of multiline string, with leading indentation of `indent` removed
+* `UTF8String` of multiline string, with leading indentation of `indent` removed
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

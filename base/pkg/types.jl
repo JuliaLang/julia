@@ -63,7 +63,7 @@ satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
 immutable Available
-    sha1::ASCIIString
+    sha1::UTF8String
     requires::Requires
 end
 

@@ -200,8 +200,8 @@ h11840(::TypeConstructor) = '3'
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{ASCIIString,ASCIIString},Tuple{UTF8String,ASCIIString},
-                            Tuple{ASCIIString,UTF8String},Tuple{Int,ASCIIString,Int}),
+@test Base.typeseq(typejoin(Tuple{UTF8String,UTF8String},Tuple{UTF16String,UTF8String},
+                            Tuple{UTF8String,UTF16String},Tuple{Int,UTF8String,Int}),
                    Tuple{Any,AbstractString,Vararg{Int}})
 @test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
                    Tuple{Int8,Vararg{Signed}})
@@ -575,10 +575,10 @@ end
 let
     local mytype
     function mytype(vec)
-        convert(Vector{Tuple{ASCIIString, DataType}}, vec)
+        convert(Vector{Tuple{UTF8String, DataType}}, vec)
     end
     some_data = Any[("a", Int32), ("b", Int32)]
-    @test isa(mytype(some_data),Vector{Tuple{ASCIIString, DataType}})
+    @test isa(mytype(some_data),Vector{Tuple{UTF8String, DataType}})
 end
 
 type MyArray{N} <: AbstractArray{Int, N}

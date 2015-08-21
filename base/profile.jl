@@ -177,7 +177,7 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-error_codes = Dict{Int,ASCIIString}(
+error_codes = Dict(
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
     -3=>"cannot start the timer for profiling",

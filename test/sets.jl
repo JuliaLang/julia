@@ -13,9 +13,9 @@ data_out = collect(s)
 @test length(data_out) == length(data_in)
 
 # hash
-s1 = Set{ASCIIString}(["bar", "foo"])
-s2 = Set{ASCIIString}(["foo", "bar"])
-s3 = Set{ASCIIString}(["baz"])
+s1 = Set(["bar", "foo"])
+s2 = Set(["foo", "bar"])
+s3 = Set(["baz"])
 @test hash(s1) == hash(s2)
 @test hash(s1) != hash(s3)
 

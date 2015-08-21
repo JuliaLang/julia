@@ -292,6 +292,6 @@ let str = ascii("This is a test")
     @test convert(UTF16String, g) == str
     io = IOBuffer()
     show(io, g)
-    check = "length-14 GraphemeIterator{ASCIIString} for \"$str\""
+    check = "length-14 GraphemeIterator{UTF8String} for \"$str\""
     @test takebuf_string(io) == check
 end

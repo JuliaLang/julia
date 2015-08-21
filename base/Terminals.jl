@@ -100,7 +100,7 @@ type TerminalBuffer <: UnixTerminal
 end
 
 type TTYTerminal <: UnixTerminal
-    term_type::ASCIIString
+    term_type::UTF8String
     in_stream::Base.TTY
     out_stream::Base.TTY
     err_stream::Base.TTY

@@ -491,12 +491,10 @@ export float32_isvalid, float64_isvalid
 
 # 11241
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
-@deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
 @deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
 @deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_utf32(str::UTF32String) isvalid(str)
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
-@deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
 @deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
 @deprecate is_valid_utf16(str) isvalid(UTF16String, str)
 @deprecate is_valid_utf32(str) isvalid(UTF32String, str)

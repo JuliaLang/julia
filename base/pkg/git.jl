@@ -63,9 +63,9 @@ function iscommit(sha1s::Vector; dir="")
 end
 
 immutable State
-    head::ASCIIString
-    index::ASCIIString
-    work::ASCIIString
+    head::UTF8String
+    index::UTF8String
+    work::UTF8String
 end
 
 function snapshot(; dir="")

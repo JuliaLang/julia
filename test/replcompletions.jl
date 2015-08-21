@@ -240,7 +240,7 @@ c, r, res = test_complete(s)
 @test r == 1:7
 @test s[r] == "prevind"
 
-for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+for (T, arg) in [(UTF8String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
@@ -271,7 +271,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test4(\"e\",r\" \","
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, Regex})[1])
+@test c[1] == string(methods(CompletionFoo.test4, Tuple{UTF8String, Regex})[1])
 @test r == 1:19
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
