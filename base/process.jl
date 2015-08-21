@@ -337,11 +337,13 @@ end
 function setup_stdio(stdio::FileRedirect, readable::Bool)
     if readable
         attr = JL_O_RDONLY
+        perm = zero(S_IRUSR)
     else
-        attr = JL_O_WRONLY | JL_O_CREAT | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+        attr = JL_O_WRONLY | JL_O_CREAT
         attr |= stdio.append ? JL_O_APPEND : JL_O_TRUNC
+        perm = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
     end
-    io = FS.open(stdio.filename, attr)
+    io = FS.open(stdio.filename, attr, perm)
     return (io, true)
 end
 
