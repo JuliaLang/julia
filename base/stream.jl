@@ -1015,7 +1015,7 @@ end
 ## Libuv error handling ##
 type UVError <: Exception
     prefix::AbstractString
-    code::Int64 # TODO: change to Int32 when updating to libuv 1.0
+    code::Int32
     UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 

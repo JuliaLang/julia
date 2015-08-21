@@ -206,7 +206,7 @@ type Process <: AbstractPipe
     in::AsyncStream
     out::AsyncStream
     err::AsyncStream
-    exitcode::Int32
+    exitcode::Int64
     termsignal::Int32
     exitcb::Callback
     exitnotify::Condition
@@ -222,7 +222,10 @@ type Process <: AbstractPipe
         if !isa(err, AsyncStream) || err === DevNull
             err=DevNull
         end
-        this = new(cmd, handle, in, out, err, typemin(Int32), typemin(Int32), false, Condition(), false, Condition())
+        this = new(cmd, handle, in, out, err,
+                   typemin(fieldtype(Process, :exitcode)),
+                   typemin(fieldtype(Process, :termsignal)),
+                   false, Condition(), false, Condition())
         finalizer(this, uvfinalize)
         this
     end
@@ -265,7 +268,7 @@ function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
     data = ccall(:jl_uv_process_data, Ptr{Void}, (Ptr{Void},), p)
     data == C_NULL && return
     proc = unsafe_pointer_to_objref(data)::Process
-    proc.exitcode = Int32(exit_status)
+    proc.exitcode = exit_status
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
@@ -587,7 +590,7 @@ function _contains_newline(bufptr::Ptr{Void}, len::Int32)
 end
 
 ## process status ##
-process_running(s::Process) = s.exitcode == typemin(Int32)
+process_running(s::Process) = s.exitcode == typemin(fieldtype(Process, :exitcode))
 process_running(s::Vector{Process}) = any(process_running, s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
