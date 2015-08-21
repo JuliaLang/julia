@@ -128,7 +128,14 @@ randjump(r::MersenneTwister, jumps::Integer) = randjump(r, jumps, dSFMT.JPOLY1e2
 
 ## initialization
 
-__init__() = srand()
+function __init__()
+    try
+        srand()
+    catch ex
+        Base.showerror_nostdio(ex,
+            "WARNING: Error during initialization of module Random")
+    end
+end
 
 
 ## make_seed()

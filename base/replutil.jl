@@ -191,6 +191,17 @@ function showerror(io::IO, ex::MethodError)
     show_method_candidates(io, ex)
 end
 
+#Show an error by directly calling jl_printf.
+#Useful in Base submodule __init__ functions where STDERR isn't defined yet.
+function showerror_nostdio(err, msg::AbstractString)
+    stderr_stream = ccall(:jl_stderr_stream, Ptr{Void}, ())
+    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, msg)
+    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, ":\n")
+    ccall(:jl_static_show, UInt, (Ptr{Void},Ptr{Void}), stderr_stream,
+          pointer_from_objref(err))
+    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, "\n")
+end
+
 const UNSHOWN_METHODS = ObjectIdDict(
     which(call, Tuple{Type, Vararg{Any}}) => true
 )
