@@ -177,6 +177,13 @@ f = "uuu-yyyy-dd"
 @test Dates.DateTime(gg,f) == dt
 @test Dates.format(dt,f) == gg
 
+# test prefix.
+s = "/1996/1/15"
+f = "/yyyy/m/d"
+@test Dates.DateTime(s,f) == dt
+@test Dates.format(dt,f) == s
+@test Dates.DateTime("1996/1/15",f) == dt
+
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)
 @test Dates.format(Dates.Date(2009,12,1),"yyyy年mm月dd日") == "2009年12月01日"
