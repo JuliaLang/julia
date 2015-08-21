@@ -663,7 +663,7 @@ function write_prompt(terminal, p::Prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
 end
-write_prompt(terminal, s::ASCIIString) = write(terminal, s)
+write_prompt(terminal, s::ByteString) = write(terminal, s)
 
 ### Keymap Support
 

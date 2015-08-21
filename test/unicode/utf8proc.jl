@@ -280,7 +280,7 @@ end
 @test !isspace('\U10ffff')
 
 # Get full coverage of grapheme iterator functions
-let str = "This is a test"
+let str = ascii("This is a test")
     g = graphemes(str)
     h = hash(str)
     @test hash(g) == h
