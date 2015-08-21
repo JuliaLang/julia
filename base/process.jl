@@ -84,8 +84,8 @@ const DevNull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
-read(::DevNullStream, args...) = throw(EOFErorr())
-write(::DevNullStream, args...) = 0
+read{T<:DevNullStream}(::T, args...) = throw(EOFErorr())
+write{T<:DevNullStream}(::T, args...) = 0
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 copy(::DevNullStream) = DevNull
@@ -181,7 +181,7 @@ pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
-type Process
+type Process <: AbstractPipe
     cmd::Cmd
     handle::Ptr{Void}
     in::AsyncStream
@@ -209,7 +209,7 @@ type Process
     end
 end
 
-type ProcessChain
+type ProcessChain <: AbstractPipe
     processes::Vector{Process}
     in::Redirectable
     out::Redirectable
@@ -268,10 +268,8 @@ function spawn(pc::ProcessChainOrNot, redirect::CmdRedirect, stdios::StdIOSet, e
 end
 
 function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
-    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)
@@ -279,21 +277,18 @@ function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Ca
     try
         spawn(pc, cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb)
         spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
-    catch err
+    finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
-        rethrow(err)
+        Libc.free(out_pipe)
+        Libc.free(in_pipe)
     end
-    close_pipe_sync(out_pipe)
-    close_pipe_sync(in_pipe)
     pc
 end
 
 function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
-    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)
@@ -301,79 +296,93 @@ function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb:
     try
         spawn(pc, cmds.a, (stdios[1], stdios[2], out_pipe), exitcb, closecb)
         spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
-    catch err
+    finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
-        rethrow(err)
+        Libc.free(out_pipe)
+        Libc.free(in_pipe)
     end
-    close_pipe_sync(out_pipe)
-    close_pipe_sync(in_pipe)
     pc
 end
 
-
-macro setup_stdio()
-    esc(
-    quote
-        close_in,close_out,close_err = false,false,false
-        in,out,err = stdios
-        if isa(stdios[1], PipeEndpoint)
-            if stdios[1].handle == C_NULL
-                in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                link_pipe(in,false,stdios[1],true)
-                close_in = true
-            end
-        elseif isa(stdios[1], FileRedirect)
-            in = FS.open(stdios[1].filename, JL_O_RDONLY)
-            close_in = true
-        elseif isa(stdios[1], IOStream)
-            in = FS.File(RawFD(fd(stdios[1])))
+function setup_stdio(stdio::PipeEndpoint, readable::Bool)
+    closeafter = false
+    if stdio.handle == C_NULL
+        io = Libc.malloc(_sizeof_uv_named_pipe)
+        if readable
+            link_pipe(io, false, stdio, true)
+        else
+            link_pipe(stdio, true, io, false)
         end
-        if isa(stdios[2], PipeEndpoint)
-            if stdios[2].handle == C_NULL
-                out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                link_pipe(stdios[2],true,out,false)
-                close_out = true
-            end
-        elseif isa(stdios[2], FileRedirect)
-            out = FS.open(stdios[2].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[2].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-            close_out = true
-        elseif isa(stdios[2], IOStream)
-            out = FS.File(RawFD(fd(stdios[2])))
-        end
-        if isa(stdios[3], PipeEndpoint)
-            if stdios[3].handle == C_NULL
-                err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                link_pipe(stdios[3],true,err,false)
-                close_err = true
-            end
-        elseif isa(stdios[3], FileRedirect)
-            err = FS.open(stdios[3].filename, JL_O_WRONLY | JL_O_CREAT | (stdios[3].append?JL_O_APPEND:JL_O_TRUNC), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-            close_err = true
-        elseif isa(stdios[3], IOStream)
-            err = FS.File(RawFD(fd(stdios[3])))
-        end
-    end)
+        closeafter = true
+    else
+        io = stdio.handle
+    end
+    return (io, closeafter)
 end
 
-macro cleanup_stdio()
-    esc(
-    quote
-        close_in && (isa(in,Ptr) ? close_pipe_sync(in) : close(in))
-        close_out && (isa(out,Ptr) ? close_pipe_sync(out) : close(out))
-        close_err && (isa(err,Ptr) ? close_pipe_sync(err) : close(err))
-    end)
+function setup_stdio(stdio::Pipe, readable::Bool)
+    if stdio.in.handle == C_NULL && stdio.out.handle == C_NULL
+        link_pipe(stdio)
+    end
+    io = readable ? stdio.out : stdio.in
+    return (io, false)
+end
+
+function setup_stdio(stdio::IOStream, readable::Bool)
+    io = FS.File(RawFD(fd(stdio)))
+    return (io, false)
+end
+
+function setup_stdio(stdio::FileRedirect, readable::Bool)
+    if readable
+        attr = JL_O_RDONLY
+    else
+        attr = JL_O_WRONLY | JL_O_CREAT | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+        attr |= stdio.append ? JL_O_APPEND : JL_O_TRUNC
+    end
+    io = FS.open(stdio.filename, attr)
+    return (io, true)
+end
+
+function setup_stdio(io, readable::Bool)
+    # if there is no specialization,
+    # assume that uvhandle and uvtype are defined for it
+    return io, false
+end
+
+function setup_stdio(stdio::Ptr{Void}, readable::Bool)
+    return (stdio, false)
+end
+
+function close_stdio(stdio::Ptr{Void})
+    close_pipe_sync(stdio)
+    Libc.free(stdio)
+end
+
+function close_stdio(stdio)
+    close(stdio)
+end
+
+function setup_stdio(anon::Function, stdio::StdIOSet)
+    in, close_in = setup_stdio(stdio[1], true)
+    out, close_out = setup_stdio(stdio[2], false)
+    err, close_err = setup_stdio(stdio[3], false)
+    anon(in, out, err)
+    close_in  && close_stdio(in)
+    close_out && close_stdio(out)
+    close_err && close_stdio(err)
 end
 
 function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3]);
-    @setup_stdio
     pp.exitcb = exitcb
     pp.closecb = closecb
-    pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
-                          in, out, err)
-    @cleanup_stdio
+    setup_stdio(stdios) do in, out, err
+        pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
+                              in, out, err)
+    end
     if isa(pc, ProcessChain)
         push!(pc.processes, pp)
     end
@@ -384,10 +393,10 @@ function spawn(pc::ProcessChainOrNot, cmds::AndCmds, stdios::StdIOSet, exitcb::C
     if pc == false
         pc = ProcessChain(stdios)
     end
-    @setup_stdio
-    spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
-    spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
-    @cleanup_stdio
+    setup_stdio(stdios) do in, out, err
+        spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
+        spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
+    end
     pc
 end
 
@@ -417,52 +426,31 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 spawn(pc::ProcessChainOrNot, cmds::AbstractCmd, args...) = spawn(pc, cmds, spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd, args...) = spawn(false, cmds, spawn_opts_swallow(args...)...)
 
-macro tmp_rpipe(pipe, tmppipe, code, args...)
-    esc(quote
-        $pipe = PipeEndpoint()
-        $tmppipe = PipeEndpoint()
-        link_pipe($pipe, true, $tmppipe, false)
-        r = begin
-            $code
-        end
-        close_pipe_sync($tmppipe)
-        r
-    end)
-end
-
-macro tmp_wpipe(tmppipe, pipe, code)
-    esc(quote
-        $pipe = PipeEndpoint()
-        $tmppipe = PipeEndpoint()
-        link_pipe($tmppipe, false, $pipe, true)
-        r = begin
-            $code
-        end
-        close_pipe_sync($tmppipe)
-        r
-    end)
-end
-
 function eachline(cmd::AbstractCmd, stdin)
-    @tmp_rpipe out tmp begin
-        processes = spawn(false, cmd, (stdin,tmp,STDERR))
-        # implicitly close after reading lines, since we opened
-        EachLine(out, ()->close(out))
-    end
+    out = PipeEndpoint()
+    processes = spawn(false, cmd, (stdin,out,STDERR))
+    # implicitly close after reading lines, since we opened
+    return EachLine(out, ()->close(out))
 end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
-# return a (PipeEndpoint,Process) pair to write/read to/from the pipeline
-function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
-    if mode == "r"
-        processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
-        (out, processes)
+# return a Process object to read-to/write-from the pipeline
+function open(cmds::AbstractCmd, mode::AbstractString="r", other::AsyncStream=DevNull)
+    if mode == "r+" || mode == "w+"
+        other === DevNull || throw(ArgumentError("no other stream for mode rw+"))
+        in = PipeEndpoint()
+        out = PipeEndpoint()
+    elseif mode == "r"
+        in = other
+        out = PipeEndpoint()
     elseif mode == "w"
-        processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdio,STDERR))
-        (inpipe, processes)
+        in = PipeEndpoint()
+        out = other
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
     end
+    processes = spawn(false, cmds, (in,out,STDERR))
+    return processes
 end
 
 function open(f::Function, cmds::AbstractCmd, args...)
@@ -479,15 +467,15 @@ function open(f::Function, cmds::AbstractCmd, args...)
     return ret
 end
 
-# TODO: convert this to use open(cmd, "r+"), with a single read/write pipe
+# TODO: deprecate this
 function readandwrite(cmds::AbstractCmd)
-    (out, processes) = @tmp_wpipe tmp inpipe open(cmds, "r", tmp)
-    (out, inpipe, processes)
+    processes = open(cmds, "r+")
+    (processes.out, processes.in, processes)
 end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
-    (out,pc) = open(cmd, "r", stdin)
-    bytes = readbytes(out)
+    pc = open(cmd, "r", stdin)
+    bytes = readbytes(pc.out)
     !success(pc) && pipeline_error(pc)
     return bytes
 end
