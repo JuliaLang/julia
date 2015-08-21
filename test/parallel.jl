@@ -501,3 +501,8 @@ let A = [], B = []
     end
     @test (A == [11]) != (B == [11])
 end
+
+let t = @task 42
+    schedule(t, ErrorException(""), error=true)
+    @test_throws ErrorException wait(t)
+end
