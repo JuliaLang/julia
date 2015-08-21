@@ -55,7 +55,7 @@ nb_available(s::AsyncStream) = nb_available(s.buffer)
 
 function eof(s::AsyncStream)
     wait_readnb(s,1)
-    !isopen(s) && nb_available(s.buffer)<=0
+    !isopen(s) && nb_available(s)<=0
 end
 
 const DEFAULT_READ_BUFFER_SZ = 10485760           # 10 MB
@@ -529,6 +529,7 @@ type Pipe <: AbstractPipe
     out::PipeEndpoint # readable
 end
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
+
 function link_pipe(pipe::Pipe;
                julia_only_read = false,
                julia_only_write = false)
@@ -539,13 +540,26 @@ show(io::IO,stream::Pipe) = print(io,
     "Pipe(",
     uv_status_string(stream.in), ", ",
     uv_status_string(stream.out), ", ",
-    nb_available(stream.out.buffer), " bytes waiting)")
+    nb_available(stream), " bytes waiting)")
 isreadable(io::AbstractPipe) = isreadable(io.out)
 iswritable(io::AbstractPipe) = iswritable(io.in)
 read{T<:AbstractPipe}(io::T, args...) = read(io.out, args...)
 write{T<:AbstractPipe}(io::T, args...) = write(io.in, args...)
+write{S<:AbstractPipe,T}(io::S, a::Array{T}) = write(io.in, a)
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(io.out, args...)
+read!{T<:AbstractPipe}(io::T, args...) = read!(io.out, args...)
+readbytes(io::AbstractPipe) = readbytes(io.out)
+readavailable(io::AbstractPipe) = readavailable(io.out)
+println{T<:AbstractPipe}(io::T, args...) = println(io.out, args...)
+flush(io::AbstractPipe) = flush(io.in)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(io.in, args...)
+isopen(io::AbstractPipe) = isopen(io.in) || isopen(io.out)
 close(io::AbstractPipe) = (close(io.in); close(io.out))
-isopen(x::AbstractPipe) = isopen(io.in) || isopen(io.out)
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(io.out, nb)
+wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(io.out, byte)
+wait_close(io::AbstractPipe) = (wait_close(io.in); wait_close(io.out))
+nb_available(io::AbstractPipe) = nb_available(io.out)
+eof(io::AbstractPipe) = eof(io.out)
 
 ##########################################
 # Async Worker
@@ -886,15 +900,15 @@ readline() = readline(STDIN)
 function readavailable(this::AsyncStream)
     buf = this.buffer
     @assert buf.seekable == false
-    wait_readnb(this,1)
+    wait_readnb(this, 1)
     takebuf_array(buf)
 end
 
-function readuntil(this::AsyncStream,c::UInt8)
+function readuntil(this::AsyncStream, c::UInt8)
     buf = this.buffer
     @assert buf.seekable == false
-    wait_readbyte(this,c)
-    readuntil(buf,c)
+    wait_readbyte(this, c)
+    readuntil(buf, c)
 end
 
 #function finish_read(pipe::PipeEndpoint)
