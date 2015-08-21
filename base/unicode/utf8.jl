@@ -192,16 +192,48 @@ function string(a::Union{ByteString,Char}...)
     UTF8String(s)
 end
 
+"""
+Reverses a UTF-8 encoded string
+
+### Returns:
+*   `UTF8String`
+
+### Throws:
+*   `UnicodeError`
+"""
 function reverse(s::UTF8String)
-    out = similar(s.data)
-    if ccall(:u8_reverse, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
-             out, s.data, length(out)) == 1
-        throw(UnicodeError(UTF_ERR_INVALID_8,0,0))
+    dat = s.data
+    n = length(dat)
+    n <= 1 && return s
+    buf = Vector{UInt8}(n)
+    out = n
+    pos = 1
+    @inbounds while out > 0
+        ch = dat[pos]
+        if ch > 0xdf
+            if ch < 0xf0
+                (out -= 3) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                buf[out + 1], buf[out + 2], buf[out + 3] = ch, dat[pos + 1], dat[pos + 2]
+                pos += 3
+            else
+                (out -= 4) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                buf[out+1], buf[out+2], buf[out+3], buf[out+4] = ch, dat[pos+1], dat[pos+2], dat[pos+3]
+                pos += 4
+            end
+        elseif ch > 0x7f
+            (out -= 2) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+            buf[out + 1], buf[out + 2] = ch, dat[pos + 1]
+            pos += 2
+        else
+            buf[out] = ch
+            out -= 1
+            pos += 1
+        end
     end
-    UTF8String(out)
+    UTF8String(buf)
 end
 
-## outputing UTF-8 strings ##
+## outputting UTF-8 strings ##
 
 write(io::IO, s::UTF8String) = write(io, s.data)
 

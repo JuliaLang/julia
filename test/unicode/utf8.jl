@@ -11,6 +11,7 @@ let ch = 0x10000
     end
 end
 
+
 let str = UTF8String(b"this is a test\xed\x80")
     @test next(str, 15) == ('\ufffd', 16)
     @test_throws BoundsError getindex(str, 0:3)
@@ -24,3 +25,13 @@ let str = UTF8String(b"this is a test\xed\x80")
     @test s8 == "This is a sill"
     @test convert(UTF8String, b"this is a test\xed\x80\x80") == "this is a test\ud000"
 end
+
+## Reverse of UTF8String
+@test reverse(UTF8String("")) == ""
+@test reverse(UTF8String("a")) == "a"
+@test reverse(UTF8String("abc")) == "cba"
+@test reverse(UTF8String("xyz\uff\u800\uffff\U10ffff")) == "\U10ffff\uffff\u800\uffzyx"
+for str in (b"xyz\xc1", b"xyz\xd0", b"xyz\xe0", b"xyz\xed\x80", b"xyz\xf0", b"xyz\xf0\x80",  b"xyz\xf0\x80\x80")
+    @test_throws UnicodeError reverse(UTF8String(str))
+end
+
