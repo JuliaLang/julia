@@ -132,3 +132,14 @@ let A = [1+2im 3+4im; 5+6im 7+8im], B = [2+7im 4+1im; 3+8im 6+5im]
         end
     end
 end
+
+# Issue 11978
+A = Array(Matrix{Float64}, 2, 2)
+A[1,1] = eye(3)
+A[1,2] = eye(3,2)
+A[2,1] = eye(2,3)
+A[2,2] = eye(2)
+b = Array(Vector{Float64}, 2)
+b[1] = ones(3)
+b[2] = ones(2)
+@test A*b == Vector{Float64}[[2,2,1], [2,2]]
