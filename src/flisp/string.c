@@ -73,17 +73,6 @@ value_t fl_string_width(value_t *args, u_int32_t nargs)
     return size_wrap(u8_strwidth(s));
 }
 
-value_t fl_string_reverse(value_t *args, u_int32_t nargs)
-{
-    argcount("string.reverse", nargs, 1);
-    if (!fl_isstring(args[0]))
-        type_error("string.reverse", "string", args[0]);
-    size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    value_t ns = cvalue_string(len);
-    u8_reverse((char*)cvalue_data(ns), (char*)cvalue_data(args[0]), len);
-    return ns;
-}
-
 value_t fl_string_encode(value_t *args, u_int32_t nargs)
 {
     argcount("string.encode", nargs, 1);
@@ -416,7 +405,6 @@ static builtinspec_t stringfunc_info[] = {
     { "string.char", fl_string_char },
     { "string.inc", fl_string_inc },
     { "string.dec", fl_string_dec },
-    { "string.reverse", fl_string_reverse },
     { "string.encode", fl_string_encode },
     { "string.decode", fl_string_decode },
     { "string.isutf8", fl_string_isutf8 },
