@@ -301,6 +301,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     */
     //JL_SIGATOMIC_BEGIN();
     if (!jl_setjmp(jl_current_task->ctx, 0)) {
+        bt_size = 0;  // backtraces don't survive task switches, see e.g. issue #12485
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
