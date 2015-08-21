@@ -216,7 +216,6 @@ type ProcessChain <: AbstractPipe
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
-typealias ProcessChainOrNot Union{Bool,ProcessChain}
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
@@ -261,48 +260,50 @@ function _uv_hook_close(proc::Process)
     notify(proc.closenotify)
 end
 
-function spawn(pc::ProcessChainOrNot, redirect::CmdRedirect, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    spawn(pc, redirect.cmd, (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
-                             redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
-                             redirect.stream_no == STDERR_NO ? redirect.handle : stdios[3]), exitcb, closecb)
+function spawn(redirect::CmdRedirect, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+    spawn(redirect.cmd,
+          (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
+           redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
+           redirect.stream_no == STDERR_NO ? redirect.handle : stdios[3]),
+          exitcb, closecb, chain=chain)
 end
 
-function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
+function spawn(cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if pc == false
-        pc = ProcessChain(stdios)
+    if isnull(chain)
+        chain = Nullable(ProcessChain(stdios))
     end
     try
-        spawn(pc, cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb)
-        spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
+        spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb, chain=chain)
+        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb, chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    pc
+    get(chain)
 end
 
-function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
+function spawn(cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
-    if pc == false
-        pc = ProcessChain(stdios)
+    if isnull(chain)
+        chain = Nullable(ProcessChain(stdios))
     end
     try
-        spawn(pc, cmds.a, (stdios[1], stdios[2], out_pipe), exitcb, closecb)
-        spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
+        spawn(cmds.a, (stdios[1], stdios[2], out_pipe), exitcb, closecb, chain=chain)
+        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb, chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
         Libc.free(out_pipe)
         Libc.free(in_pipe)
     end
-    pc
+    get(chain)
 end
 
 function setup_stdio(stdio::PipeEndpoint, readable::Bool)
@@ -376,7 +377,7 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
     close_err && close_stdio(err)
 end
 
-function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
+function spawn(cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3]);
     pp.exitcb = exitcb
@@ -385,21 +386,21 @@ function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callba
         pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                               in, out, err)
     end
-    if isa(pc, ProcessChain)
-        push!(pc.processes, pp)
+    if !isnull(chain)
+        push!(get(chain).processes, pp)
     end
     pp
 end
 
-function spawn(pc::ProcessChainOrNot, cmds::AndCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
-    if pc == false
-        pc = ProcessChain(stdios)
+function spawn(cmds::AndCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+    if isnull(chain)
+        chain = Nullable(ProcessChain(stdios))
     end
     setup_stdio(stdios) do in, out, err
-        spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
-        spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
+        spawn(cmds.a, (in,out,err), exitcb, closecb, chain=chain)
+        spawn(cmds.b, (in,out,err), exitcb, closecb, chain=chain)
     end
-    pc
+    get(chain)
 end
 
 # INTERNAL
@@ -425,12 +426,14 @@ spawn_opts_inherit(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=f
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), args...) =
     (tuple(in,out,err,args...),false,false)
 
-spawn(pc::ProcessChainOrNot, cmds::AbstractCmd, args...) = spawn(pc, cmds, spawn_opts_swallow(args...)...)
-spawn(cmds::AbstractCmd, args...) = spawn(false, cmds, spawn_opts_swallow(args...)...)
+spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
+    spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
+spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
+    spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
 function eachline(cmd::AbstractCmd, stdin)
     out = PipeEndpoint()
-    processes = spawn(false, cmd, (stdin,out,STDERR))
+    processes = spawn(cmd, (stdin,out,STDERR))
     # implicitly close after reading lines, since we opened
     return EachLine(out, ()->close(out))
 end
@@ -451,19 +454,19 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::AsyncStream=De
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
     end
-    processes = spawn(false, cmds, (in,out,STDERR))
+    processes = spawn(cmds, (in,out,STDERR))
     return processes
 end
 
 function open(f::Function, cmds::AbstractCmd, args...)
-    io, P = open(cmds, args...)
+    P = open(cmds, args...)
     ret = try
-        f(io)
+        f(P)
     catch
         kill(P)
         rethrow()
     finally
-        close(io)
+        close(P)
     end
     success(P) || pipeline_error(P)
     return ret
@@ -476,9 +479,9 @@ function readandwrite(cmds::AbstractCmd)
 end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
-    pc = open(cmd, "r", stdin)
-    bytes = readbytes(pc.out)
-    !success(pc) && pipeline_error(pc)
+    procs = open(cmd, "r", stdin)
+    bytes = readbytes(procs.out)
+    !success(procs) && pipeline_error(procs)
     return bytes
 end
 
