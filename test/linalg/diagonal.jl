@@ -140,7 +140,15 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test issym(D3)
         @test !ishermitian(D3)
     end
+
+    U, s, V = svd(D)
+    @test (U*Diagonal(s))*V' ≈ D
+    @test svdvals(D) == s
+    @test svdfact(D)[:V] == V
 end
+
+D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
+@test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
 
 #isposdef
 @test !isposdef(Diagonal(-1.0 * rand(n)))
