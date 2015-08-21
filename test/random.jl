@@ -205,11 +205,17 @@ srand(seed)
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
 
-import Base.Random: uuid4, UUID
+import Base.Random: uuid1, uuid4, UUID, uuid_version
 
 # UUID
-a = uuid4()
-@test a == UUID(string(a)) == UUID(utf16(string(a))) == UUID(utf32(string(a)))
+u1 = uuid1()
+u4 = uuid4()
+@test uuid_version(u1) == 1
+@test uuid_version(u4) == 4
+@test u1 == UUID(string(u1)) == UUID(utf16(string(u1))) == UUID(utf32(string(u1)))
+@test u4 == UUID(string(u4)) == UUID(utf16(string(u4))) == UUID(utf32(string(u4)))
+@test u1 == UUID(UInt128(u1))
+@test u4 == UUID(UInt128(u4))
 @test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
