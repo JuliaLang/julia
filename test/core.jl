@@ -1345,7 +1345,7 @@ end
 
 # issue #4518
 f4518(x, y::Union{Int32,Int64}) = 0
-f4518(x::ASCIIString, y::Union{Int32,Int64}) = 1
+f4518(x::ByteString, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
 # issue #4581

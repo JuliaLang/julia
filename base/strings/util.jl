@@ -233,5 +233,6 @@ function hex2bytes(s::ASCIIString)
     end
     return arr
 end
+hex2bytes(s::AbstractString) = hex2bytes(ascii(s))
 
 bytes2hex{T<:UInt8}(arr::Vector{T}) = join([hex(i,2) for i in arr])

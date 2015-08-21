@@ -19,7 +19,7 @@ let str = UTF8String(b"this is a test\xed\x80")
     @test_throws BoundsError getindex(str, 2:17)
     @test_throws UnicodeError getindex(str, 16:17)
     @test string(Char(0x110000)) == "\ufffd"
-    sa = SubString{ASCIIString}("This is a silly test", 1, 14)
+    sa = SubString{ASCIIString}(ascii("This is a silly test"), 1, 14)
     s8 = convert(SubString{UTF8String}, sa)
     @test typeof(s8) == SubString{UTF8String}
     @test s8 == "This is a sill"

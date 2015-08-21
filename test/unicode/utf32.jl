@@ -210,7 +210,7 @@ end
 @test reverse(utf32("abcd \uff\u7ff\u7fff\U7ffff")) == utf32("\U7ffff\u7fff\u7ff\uff dcba")
 
 # Test pointer() functions
-let str = "this "
+let str = ascii("this ")
     u8  = utf8(str)
     u16 = utf16(str)
     u32 = utf32(str)
