@@ -1491,34 +1491,29 @@ function pfor(f, N::Int)
     [@spawn f(first(c), last(c)) for c in splitrange(N, nworkers())]
 end
 
-function make_preduce_body(reducer, var, body, ran)
-    localize_vars(
+function make_preduce_body(reducer, var, body, R)
     quote
         function (lo::Int, hi::Int)
-            R = $(esc(ran))
-            $(esc(var)) = R[lo]
+            $(esc(var)) = ($R)[lo]
             ac = $(esc(body))
             if lo != hi
-                for $(esc(var)) in R[(lo+1):hi]
+                for $(esc(var)) in ($R)[(lo+1):hi]
                     ac = ($(esc(reducer)))(ac, $(esc(body)))
                 end
             end
             ac
         end
     end
-                  )
 end
 
-function make_pfor_body(var, body, ran)
-    localize_vars(
+function make_pfor_body(var, body, R)
     quote
         function (lo::Int, hi::Int)
-            for $(esc(var)) in ($(esc(ran)))[lo:hi]
+            for $(esc(var)) in ($R)[lo:hi]
                 $(esc(body))
             end
         end
     end
-                  )
 end
 
 macro parallel(args...)
@@ -1537,16 +1532,20 @@ macro parallel(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
+    localize_vars(
     if na==1
         quote
-            pfor($(make_pfor_body(var, body, r)), length($(esc(r))))
+            therange = $(esc(r))
+            pfor($(make_pfor_body(var, body, :therange)), length(therange))
         end
     else
         quote
+            therange = $(esc(r))
             preduce($(esc(reducer)),
-                    $(make_preduce_body(reducer, var, body, r)), length($(esc(r))))
+                    $(make_preduce_body(reducer, var, body, :therange)), length(therange))
         end
     end
+                  )
 end
 
 
