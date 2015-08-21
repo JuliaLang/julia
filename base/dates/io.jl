@@ -99,7 +99,7 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
         last_offset = m.offset + width
     end
 
-    tran = last_offset > endof(f) ? r"$" : f[last_offset:end]
+    tran = last_offset > endof(f) ? r"(?=\s|$)" : f[last_offset:end]
     if !isempty(params)
         slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
         push!(slots,slot)
@@ -137,7 +137,7 @@ end
 getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
 
 function parse(x::AbstractString,df::DateFormat)
-    x = strip(replace(x, r"#.*$", ""))
+    x = strip(x)
     startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
     if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
