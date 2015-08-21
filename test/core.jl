@@ -673,7 +673,7 @@ end
 @test names(Module(:anonymous, false), true, true) == [:anonymous]
 
 # exception from __init__()
-let t =
+let didthrow =
     try
         include_string(
             """
@@ -687,7 +687,7 @@ let t =
         @test isa(ex.error, InitError)
         true
     end
-    @test t
+    @test didthrow
 end
 
 # issue #7307
