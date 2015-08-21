@@ -9,7 +9,11 @@ immutable VersionNumber
     prerelease::Tuple{Vararg{Union{Int,ASCIIString}}}
     build::Tuple{Vararg{Union{Int,ASCIIString}}}
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Tuple{Vararg{Union{Int,ASCIIString}}}, bld::Tuple{Vararg{Union{Int,ASCIIString}}})
+    function VersionNumber(
+        major::Int, minor::Int, patch::Int,
+        pre::Tuple{Vararg{Union{Int,ASCIIString}}},
+        bld::Tuple{Vararg{Union{Int,ASCIIString}}}
+    )
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -36,9 +40,15 @@ immutable VersionNumber
         new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, (), ())
-VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, (), ())
-VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, (), ())
+VersionNumber(
+    major::Integer, minor::Integer = 0, patch::Integer = 0,
+    pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
+    bld::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
+) = VersionNumber(
+    Int(major), Int(minor), Int(patch),
+    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), pre),
+    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), bld),
+)
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
