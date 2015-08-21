@@ -59,6 +59,28 @@ try
     end
     println(STDERR, "\nNOTE: The following 'LoadError: __precompile__(false)' indicates normal operation")
     @test_throws ErrorException Base.compilecache("Baz") # from __precompile__(false)
+
+    # Issue #12720
+    FooBar_file = joinpath(dir, "FooBar.jl")
+    open(FooBar_file, "w") do f
+        print(f, """
+              __precompile__(true)
+              module FooBar
+              end
+              """)
+    end
+    Base.compilecache("FooBar")
+    sleep(2)
+    open(FooBar_file, "w") do f
+        print(f, """
+              __precompile__(true)
+              module FooBar
+              error("break me")
+              end
+              """)
+    end
+    println(STDERR, "\nNOTE: The following 'LoadError: break me' indicates normal operation")
+    @test_throws ErrorException require(:FooBar)
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)

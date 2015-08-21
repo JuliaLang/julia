@@ -290,6 +290,7 @@ end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
+    isfile(output) && rm(output)
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
@@ -402,11 +403,12 @@ function stale_cachefile(cachefile::AbstractString)
 end
 
 function recompile_stale(mod, cachefile)
-    cachestat = stat(cachefile)
-    if iswritable(cachestat) && stale_cachefile(cachefile)
+    if stale_cachefile(cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
         path = find_in_path(string(mod))
         path === nothing && error("module $mod not found")
-        create_expr_cache(path, cachefile)
+        if !success(create_expr_cache(path, cachefile))
+            error("Failed to precompile $mod to $cachefile")
+        end
     end
 end
