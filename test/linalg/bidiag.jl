@@ -160,6 +160,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         debug && println("Inverse")
         @test_approx_eq inv(T)*Tfull eye(elty,n)
     end
+
+    @test Matrix{Complex{Float64}}(BD) == BD
+
 end
 
 # Issue 10742 and similar
