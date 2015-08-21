@@ -506,3 +506,11 @@ let t = @task 42
     schedule(t, ErrorException(""), error=true)
     @test_throws ErrorException wait(t)
 end
+
+# issue #8207
+let A = Any[]
+    @parallel (+) for i in (push!(A,1); 1:2)
+        i
+    end
+    @test length(A) == 1
+end
