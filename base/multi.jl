@@ -1032,7 +1032,6 @@ end
 # The master process uses this to connect to the worker and subsequently
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
-    io.line_buffered = true
     while true
         conninfo = readline(io)
         bind_addr, port = parse_connection_info(conninfo)
@@ -1270,8 +1269,8 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = cell(np)
 
     for i in 1:np
-        io, pobj = open(detach(cmd), "r")
-        io_objs[i] = io
+        pobj = open(detach(cmd), "r")
+        io_objs[i] = pobj.out
     end
 
     for (i,io) in enumerate(io_objs)

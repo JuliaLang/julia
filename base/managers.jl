@@ -106,10 +106,10 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
 
     # launch
-    io, pobj = open(detach(cmd), "r")
+    pobj = open(detach(cmd), "r")
     wconfig = WorkerConfig()
 
-    wconfig.io = io
+    wconfig.io = pobj.out
     wconfig.host = host
     wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
@@ -188,11 +188,11 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exeflags = params[:exeflags]
 
     for i in 1:manager.np
-        io, pobj = open(detach(
+        pobj = open(detach(
             setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
-        wconfig.io = io
+        wconfig.io = pobj.out
         push!(launched, wconfig)
     end
 
