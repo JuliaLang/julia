@@ -329,7 +329,7 @@ end
 compilecache(mod::Symbol) = compilecache(string(mod))
 function compilecache(name::ByteString)
     myid() == 1 || error("can only precompile from node 1")
-    path = find_in_path(name)
+    path = find_in_path(name, nothing)
     path === nothing && throw(ArgumentError("$name not found in path"))
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
@@ -375,13 +375,16 @@ function cache_dependencies(cachefile::AbstractString)
     end
 end
 
-function stale_cachefile(cachefile::AbstractString)
+function stale_cachefile(modpath, cachefile)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
             return true # invalid cache file
         end
         modules, files = cache_dependencies(io)
+        if files[1][1] != modpath
+            return true # cache file was compiled from a different path
+        end
         for (f,ftime) in files
             if mtime(f) != ftime
                 return true
@@ -403,10 +406,13 @@ function stale_cachefile(cachefile::AbstractString)
 end
 
 function recompile_stale(mod, cachefile)
-    if stale_cachefile(cachefile)
+    path = find_in_path(string(mod), nothing)
+    if path === nothing
+        rm(cachefile)
+        error("module $mod not found in current path; removed orphaned cache file $cachefile")
+    end
+    if stale_cachefile(path, cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
-        path = find_in_path(string(mod))
-        path === nothing && error("module $mod not found")
         if !success(create_expr_cache(path, cachefile))
             error("Failed to precompile $mod to $cachefile")
         end

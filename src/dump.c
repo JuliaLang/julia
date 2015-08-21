@@ -1015,43 +1015,39 @@ void jl_serialize_dependency_list(ios_t *s)
     static jl_array_t *deps = NULL;
     if (!deps)
         deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_require_dependencies"));
-    if (deps) {
-        // sort!(deps) so that we can easily eliminate duplicates
-        static jl_value_t *sort_func = NULL;
-        if (!sort_func)
-            sort_func = jl_get_global(jl_base_module, jl_symbol("sort!"));
-        jl_apply((jl_function_t*)sort_func, (jl_value_t**)&deps, 1);
 
-        size_t l = jl_array_len(deps);
-        jl_value_t *prev = NULL;
+    // unique(deps) to eliminate duplicates while preserving order:
+    // we preserve order so that the topmost included .jl file comes first
+    static jl_value_t *unique_func = NULL;
+    if (!unique_func)
+        unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
+    jl_array_t *udeps = deps && unique_func ? (jl_array_t *) jl_apply((jl_function_t*)unique_func, (jl_value_t**)&deps, 1) : NULL;
+
+    if (udeps) {
+        JL_GC_PUSH(&udeps);
+        size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
-            jl_value_t *dep = jl_fieldref(jl_cellref(deps, i), 0);
+            jl_value_t *dep = jl_fieldref(jl_cellref(udeps, i), 0);
             size_t slen = jl_string_len(dep);
-            if (!prev || memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
-                total_size += 4 + slen + 8;
-            }
-            prev = dep;
+            total_size += 4 + slen + 8;
         }
         total_size += 4;
     }
     // write the total size so that we can quickly seek past all of the
     // dependencies if we don't need them
     write_uint64(s, total_size);
-    if (deps) {
-        size_t l = jl_array_len(deps);
-        jl_value_t *prev = NULL;
+    if (udeps) {
+        size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
-            jl_value_t *deptuple = jl_cellref(deps, i);
+            jl_value_t *deptuple = jl_cellref(udeps, i);
             jl_value_t *dep = jl_fieldref(deptuple, 0);
             size_t slen = jl_string_len(dep);
-            if (!prev || memcmp(jl_string_data(dep), jl_string_data(prev), slen)) {
-                write_int32(s, slen);
-                ios_write(s, jl_string_data(dep), slen);
-                write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
-            }
-            prev = dep;
+            write_int32(s, slen);
+            ios_write(s, jl_string_data(dep), slen);
+            write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
         }
         write_int32(s, 0); // terminator, for ease of reading
+        JL_GC_POP();
     }
 }
 
