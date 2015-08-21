@@ -93,7 +93,7 @@ function show(io::IO, M::Bidiagonal)
     println(io, summary(M), ":")
     print(io, " diag:")
     print_matrix(io, (M.dv)')
-    print(io, M.isupper?"\n super:":"\n  sub:")
+    print(io, M.isupper?"\n super:":"\n sub:")
     print_matrix(io, (M.ev)')
 end
 
