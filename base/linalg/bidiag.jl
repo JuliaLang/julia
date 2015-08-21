@@ -42,7 +42,20 @@ end
 
 #Converting from Bidiagonal to dense Matrix
 full{T}(M::Bidiagonal{T}) = convert(Matrix{T}, M)
-convert{T}(::Type{Matrix{T}}, A::Bidiagonal{T})=diagm(A.dv) + diagm(A.ev, A.isupper?1:-1)
+function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
+    n = size(A, 1)
+    B = zeros(T, n, n)
+    for i = 1:n - 1
+        B[i,i] = A.dv[i]
+        if A.isupper
+            B[i, i + 1] = A.ev[i]
+        else
+            B[i + 1, i] = A.ev[i]
+        end
+    end
+    B[n,n] = A.dv[n]
+    return B
+end
 convert{T}(::Type{Matrix}, A::Bidiagonal{T}) = convert(Matrix{T}, A)
 promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
 
