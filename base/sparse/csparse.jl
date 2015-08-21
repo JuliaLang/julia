@@ -269,7 +269,7 @@ function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vect
     end
     if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
-    nz = zero(Ti)
+    nz = one(Ti)
     for k in 1:n
         Cp[k] = nz
         j = q[k]
@@ -354,7 +354,6 @@ immutable TrilFun <: Func{4} end
 call(::TrilFun, i,j,x,other) = i>=j - other
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
-droptol(A::SparseMatrixCSC) = droptol!(copy(A))
 dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)
 dropzeros(A::SparseMatrixCSC) = dropzeros!(copy(A))
 
