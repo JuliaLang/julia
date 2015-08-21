@@ -176,6 +176,10 @@ gg = "Jan-1996-15"
 f = "uuu-yyyy-dd"
 @test Dates.DateTime(gg,f) == dt
 @test Dates.format(dt,f) == gg
+hh = "1996#1#15"
+f = "yyyy#m#d"
+@test Dates.DateTime(hh,f) == dt
+@test Dates.format(dt,f) == hh
 
 # test prefix.
 s = "/1996/1/15"
