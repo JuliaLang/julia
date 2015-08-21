@@ -2,28 +2,35 @@
 
 abstract AbstractCmd
 
-type Cmd <: AbstractCmd
+immutable Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
     env::Union{Array{ByteString},Void}
     dir::UTF8String
-    Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
+    Cmd(exec::Vector{ByteString}) =
+        new(exec, false, false, nothing, "")
+    Cmd(cmd::Cmd, ignorestatus, detach, env, dir) =
+        new(cmd.exec, ignorestatus, detach, env,
+            dir === cmd.dir ? dir : cstr(dir))
+    Cmd(cmd::Cmd; ignorestatus=cmd.ignorestatus, detach=cmd.detach, env=cmd.env, dir=cmd.dir) =
+        new(cmd.exec, ignorestatus, detach, env,
+            dir === cmd.dir ? dir : cstr(dir))
 end
 
-type OrCmds <: AbstractCmd
+immutable OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     OrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-type ErrOrCmds <: AbstractCmd
+immutable ErrOrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     ErrOrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-type AndCmds <: AbstractCmd
+immutable AndCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
@@ -101,7 +108,7 @@ uvtype(x::RawFD) = UV_RAW_FD
 
 typealias Redirectable Union{AsyncStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
 
-type CmdRedirect <: AbstractCmd
+immutable CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
     handle::Redirectable
     stream_no::Int
@@ -123,9 +130,10 @@ function show(io::IO, cr::CmdRedirect)
 end
 
 
-ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
-ignorestatus(cmd::Union{OrCmds,AndCmds}) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
-detach(cmd::Cmd) = (cmd.detach=true; cmd)
+ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
+ignorestatus(cmd::Union{OrCmds,AndCmds}) =
+    typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
+detach(cmd::Cmd) = Cmd(cmd, detach=true)
 
 # like bytestring(s), but throw an error if s contains NUL, since
 # libuv requires NUL-terminated strings
@@ -136,10 +144,21 @@ function cstr(s)
     return bytestring(s)
 end
 
-setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[cstr(x) for x in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
-setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") = (cmd.env = ByteString[cstr(k*"="*string(v)) for (k,v) in env]; setenv(cmd, dir=dir); cmd)
-setenv(cmd::Cmd; dir="") = (cmd.dir = cstr(dir); cmd)
+function setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="")
+    byteenv = ByteString[cstr(x) for x in env]
+    return Cmd(cmd; env = byteenv, dir = dir)
+end
+function setenv(cmd::Cmd, env::Associative; dir="")
+    byteenv = ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]
+    return Cmd(cmd; env = byteenv, dir = dir)
+end
+function setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="")
+    byteenv = ByteString[cstr(k*"="*string(v)) for (k,v) in env]
+    return Cmd(cmd; env = byteenv, dir = dir)
+end
+function setenv(cmd::Cmd; dir="")
+    return Cmd(cmd; dir = dir)
+end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
@@ -209,7 +228,7 @@ type Process <: AbstractPipe
     end
 end
 
-type ProcessChain <: AbstractPipe
+immutable ProcessChain <: AbstractPipe
     processes::Vector{Process}
     in::Redirectable
     out::Redirectable
