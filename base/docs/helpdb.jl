@@ -2,6 +2,8 @@
 
 # Base.LinAlg.BLAS
 
+import .Docs: keywords
+
 doc"""
     ger!(alpha, x, y, A)
 
@@ -9537,12 +9539,20 @@ Returns an iterator over substrings of `s` that correspond to the extended graph
 """
 graphemes
 
-doc"""
+keywords[symbol("@__FILE__")] = doc"""
+
     @__FILE__() -> AbstractString
 
-`@__FILE__` expands to a string with the absolute path and file name of the script being run. Returns `nothing` if run from a REPL or an empty string if evaluated by `julia -e <expr>`.
+`@__FILE__` expands to a string with the absolute path and file name of the script being run.
+Returns `"none"` if run from a REPL or command-line context.
 """
-:@__FILE__
+
+keywords[symbol("@__LINE__")] = doc"""
+
+    @__LINE__() -> Int
+
+`@__LINE__` expands to the line number of the call-site.
+"""
 
 doc"""
     charwidth(c)
