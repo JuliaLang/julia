@@ -70,7 +70,7 @@ function lstrip(s::AbstractString, chars::Chars=_default_delims)
         end
         i = j
     end
-    ""
+    s[end+1:end]
 end
 
 function rstrip(s::AbstractString, chars::Chars=_default_delims)
@@ -83,7 +83,7 @@ function rstrip(s::AbstractString, chars::Chars=_default_delims)
         end
         i = j
     end
-    ""
+    s[1:0]
 end
 
 strip(s::AbstractString) = lstrip(rstrip(s))

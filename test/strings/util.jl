@@ -11,8 +11,29 @@
 @test rpad("foo", 6, "  ") == "foo   "
 
 # string manipulation
+@test strip("") == ""
+@test strip(" ") == ""
+@test strip("  ") == ""
+@test strip("   ") == ""
 @test strip("\t  hi   \n") == "hi"
 @test strip("foobarfoo", ['f', 'o']) == "bar"
+
+for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
+	fs = f(s)
+	for T = (ASCIIString, UTF8String, UTF16String, UTF32String)
+		t = convert(T,s)
+		ft = f(t)
+		@test s == t
+		@test fs == ft
+		@test typeof(ft) == typeof(t[1:end])
+
+		b = convert(SubString{T}, t)
+		fb = f(b)
+		@test s == b
+		@test fs == fb
+		@test typeof(fb) == SubString{T}
+	end
+end
 
 # split
 @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])
