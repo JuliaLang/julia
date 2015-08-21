@@ -621,7 +621,7 @@ end
 # timer with repeated callback
 function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     t = Timer(timeout, repeat)
-    @schedule begin
+    waiter = @task begin
         while isopen(t)
             success = try
                 wait(t)
@@ -632,6 +632,10 @@ function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
             success && cb(t)
         end
     end
+    # must start the task right away so that it can wait for the Timer before
+    # we re-enter the event loop. this avoids a race condition. see issue #12719
+    enq_work(current_task())
+    yieldto(waiter)
     t
 end
 
