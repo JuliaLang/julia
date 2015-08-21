@@ -173,7 +173,7 @@ type CompoundPeriod <: AbstractTime
             p = Period[]
             n = 0
         end
-        # canonicalize Periods by pushing "overflow" into the a coarser period.
+        # canonicalize Periods by pushing "overflow" into a coarser period.
         if n > 0
             pc = sizehint!(Period[], n)
             P = typeof(p[n])
@@ -210,8 +210,8 @@ type CompoundPeriod <: AbstractTime
             while i > 0
                 j = i
 
-                # Determine sign of the largest period which can be converted to via
-                # coarserperiod.
+                # Determine sign of the largest period in this group which
+                # can be converted into via coarserperiod.
                 last = Union{}
                 current = typeof(p[i])
                 while i > 0 && current != last
@@ -222,7 +222,8 @@ type CompoundPeriod <: AbstractTime
                 end
                 s = sign(value(p[i + 1]))
 
-                # Adjust all the periods based upon the largest period sign.
+                # Adjust all the periods in the group based upon the
+                # largest period sign.
                 P = typeof(p[j])
                 v = 0
                 while j > i
