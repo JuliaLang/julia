@@ -41,7 +41,7 @@ type UV_cpu_info_t
     cpu_times!irq::UInt64
 end
 type CPUinfo
-    model::ASCIIString
+    model::UTF8String
     speed::Int32
     cpu_times!user::UInt64
     cpu_times!nice::UInt64

@@ -238,28 +238,21 @@ let str = ascii("this ")
     @test unsafe_load(p16,1) == 0x0068
     @test typeof(p32) == Ptr{UInt32}
     @test unsafe_load(p32,1) == 'h'
-    sa  = SubString{ASCIIString}(str, 3, 5)
     s8  = SubString{UTF8String}(u8,   3, 5)
     s16 = SubString{UTF16String}(u16, 3, 5)
     s32 = SubString{UTF32String}(u32, 3, 5)
-    pa  = pointer(sa)
     p8  = pointer(s8)
     p16 = pointer(s16)
     p32 = pointer(s32)
-    @test typeof(pa) == Ptr{UInt8}
-    @test unsafe_load(pa,1) == 0x69
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x69
     @test typeof(p16) == Ptr{UInt16}
     @test unsafe_load(p16,1) == 0x0069
     @test typeof(p32) == Ptr{UInt32}
     @test unsafe_load(p32,1) == 'i'
-    pa  = pointer(sa, 2)
     p8  = pointer(s8,  2)
     p16 = pointer(s16, 2)
     p32 = pointer(s32, 2)
-    @test typeof(pa) == Ptr{UInt8}
-    @test unsafe_load(pa,1) == 0x73
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x73
     @test typeof(p16) == Ptr{UInt16}

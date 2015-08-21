@@ -196,11 +196,6 @@ function encode_to_utf16(dat, len)
     UTF16String(buf)
 end
 
-function convert(::Type{UTF16String}, str::ASCIIString)
-    dat = str.data
-    @inbounds return fast_utf_copy(UTF16String, UInt16, length(dat), dat, true)
-end
-
 convert(::Type{Vector{UInt16}}, str::UTF16String) = str.data
 convert(::Type{Array{UInt16}},  str::UTF16String) = str.data
 

@@ -289,7 +289,7 @@ function get_type_call(expr::Expr)
     (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
     return return_type, true
 end
-# Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (ASCIIString,true)
+# Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (UTF8String,true)
 function get_type(sym::Expr, fn)
     sym=expand(sym)
     val, found = get_value(sym, fn)

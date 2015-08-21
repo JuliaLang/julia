@@ -2,8 +2,8 @@
 
 using LRUExample
 
-TestLRU = LRUExample.UnboundedLRU{ASCIIString, ASCIIString}()
-TestBLRU = LRUExample.BoundedLRU{ASCIIString, ASCIIString}(1000)
+TestLRU = LRUExample.UnboundedLRU{UTF8String, UTF8String}()
+TestBLRU = LRUExample.BoundedLRU{UTF8String, UTF8String}(1000)
 
 get_str(i) = ascii(vcat(map(x->[x>>4; x&0x0F], reinterpret(UInt8, [Int32(i)]))...))
 

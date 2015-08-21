@@ -102,7 +102,7 @@ function available(pkg::AbstractString)
 end
 
 function installed()
-    pkgs = Dict{ASCIIString,VersionNumber}()
+    pkgs = Dict{UTF8String,VersionNumber}()
     for (pkg,(ver,fix)) in Read.installed()
         pkgs[pkg] = ver
     end
@@ -438,7 +438,7 @@ function resolve(
     # prefetch phase isolates network activity, nothing to roll back
     missing = []
     for (pkg,(ver1,ver2)) in changes
-        vers = ASCIIString[]
+        vers = UTF8String[]
         ver1 !== nothing && push!(vers,LibGit2.head(pkg))
         ver2 !== nothing && push!(vers,Read.sha1(pkg,ver2))
         append!(missing,

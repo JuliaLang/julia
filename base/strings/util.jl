@@ -241,5 +241,5 @@ function bytes2hex(a::AbstractArray{UInt8})
         b[i += 1] = hex_chars[1 + x >> 4]
         b[i += 1] = hex_chars[1 + x & 0xf]
     end
-    return ASCIIString(b)
+    return UTF8String(b)
 end

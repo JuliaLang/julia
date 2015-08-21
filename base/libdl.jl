@@ -97,7 +97,7 @@ On success, the return value will be one of the names (potentially prefixed by o
 paths in locations). This string can be assigned to a `global const` and used as the library
 name in future `ccall`'s. On failure, it returns the empty string.
 """
-function find_library(libnames, extrapaths=ASCIIString[])
+function find_library(libnames, extrapaths=UTF8String[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
@@ -115,7 +115,7 @@ function find_library(libnames, extrapaths=ASCIIString[])
     end
     return ""
 end
-find_library(libname::Union{Symbol,AbstractString}, extrapaths=ASCIIString[]) =
+find_library(libname::Union{Symbol,AbstractString}, extrapaths=UTF8String[]) =
     find_library([string(libname)], extrapaths)
 
 function dlpath(handle::Ptr{Void})

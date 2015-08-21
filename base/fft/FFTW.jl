@@ -54,7 +54,7 @@ const RODFT01 = 8
 const RODFT10 = 9
 const RODFT11 = 10
 
-let k2s = Dict{Int,ASCIIString}(R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT", REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10", REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01", RODFT10 => "RODFT10", RODFT11 => "RODFT11")
+let k2s = Dict(R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT", REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10", REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01", RODFT10 => "RODFT10", RODFT11 => "RODFT11")
     global kind2string
     kind2string(k::Integer) = k2s[Int(k)]
 end

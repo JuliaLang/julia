@@ -511,7 +511,7 @@ end
 #   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
 #   | - An Filesystem.File object to redirect the output to
-#   \ - An ASCIIString specifying a filename to be opened
+#   \ - A string specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
     (stdios,exitcb,closecb)

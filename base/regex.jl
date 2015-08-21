@@ -173,7 +173,6 @@ function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::In
 end
 
 _utf8(str) = utf8(str)
-_utf8(str::SubString{ASCIIString}) = convert(SubString{UTF8String}, str)
 match{T<:ByteString}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
     match(re, _utf8(str), idx, add_opts)
 

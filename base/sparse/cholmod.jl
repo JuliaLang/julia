@@ -602,7 +602,7 @@ function copy{Tv<:VRealTypes}(A::Sparse{Tv}, stype::Integer, mode::Integer)
 end
 
 ### cholmod_check.h ###
-function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::ASCIIString)
+function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::UTF8String)
     cm = common()
     set_print_level(cm, 3)
     @isok ccall((@cholmod_name("print_sparse", SuiteSparse_long),:libcholmod), Cint,
@@ -610,7 +610,7 @@ function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::ASCIIString)
                  get(A.p), name, cm)
     nothing
 end
-function print_factor{Tv<:VTypes}(F::Factor{Tv}, name::ASCIIString)
+function print_factor{Tv<:VTypes}(F::Factor{Tv}, name::UTF8String)
     cm = common()
     set_print_level(cm, 3)
     @isok ccall((@cholmod_name("print_factor", SuiteSparse_long),:libcholmod), Cint,
