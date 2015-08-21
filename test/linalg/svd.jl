@@ -46,5 +46,5 @@ debug && println("Generalized svd")
     α = eltya == Int ? -1 : rand(eltya)
     β = svdfact(α)
     @test β[:S] == [abs(α)]
-    @test svdvals(α) == [abs(α)]
+    @test svdvals(α) == abs(α)
 end
