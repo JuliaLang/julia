@@ -51,6 +51,7 @@ function svdvals{T}(A::AbstractMatrix{T})
     svdvals!(copy_oftype(A, S))
 end
 svdvals(x::Number) = abs(x)
+svdvals{T, Tr}(S::SVD{T, Tr}) = (S[:S])::Vector{Tr}
 
 # SVD least squares
 function A_ldiv_B!{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
