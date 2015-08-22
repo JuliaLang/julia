@@ -435,7 +435,7 @@ rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + one(k), k + (k == 0))*k + k - one(k))::T
 
 # maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
-maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - one(k))::Uint64; end
+maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - one(k))::UInt64; end
 
 abstract RangeGenerator
 
@@ -1186,7 +1186,7 @@ by RFC 4122. Note that the Node ID is randomly generated (does not identify the 
 according to section 4.5 of the RFC.
 """
 function uuid1(rng::AbstractRNG=GLOBAL_RNG)
-    u = rand(rng, Uint128)
+    u = rand(rng, UInt128)
 
     # mask off clock sequence and node
     u &= 0x00000000000000003fffffffffffffff
@@ -1196,9 +1196,9 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
 
     # 0x01b21dd213814000 is the number of 100 nanosecond intervals
     # between the UUID epoch and Unix epoch
-    timestamp = round(Uint64, time() * 1e7) + 0x01b21dd213814000
-    ts_low = timestamp & typemax(Uint32)
-    ts_mid = (timestamp >> 32) & typemax(Uint16)
+    timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
+    ts_low = timestamp & typemax(UInt32)
+    ts_mid = (timestamp >> 32) & typemax(UInt16)
     ts_hi = (timestamp >> 48) & 0x0fff
 
     u |= UInt128(ts_low) << 96
