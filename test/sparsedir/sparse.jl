@@ -1078,7 +1078,11 @@ Ar = sprandn(20,20,.5)
 @test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
-@test_throws DimensionMismatch cond(spzeros(3,2))
+let Arect = spzeros(10, 6)
+    @test_throws DimensionMismatch cond(Arect, 1)
+    @test_throws ArgumentError cond(Arect,2)
+    @test_throws DimensionMismatch cond(Arect, Inf)
+end
 
 # test sparse matrix normestinv
 Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
