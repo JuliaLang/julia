@@ -490,6 +490,7 @@ end
 
 # cond
 function cond(A::SparseMatrixCSC, p::Real=2)
+    chksquare(A)
     if p == 1
         normA = norm(A, 1)
         normAinv = normestinv(A)
