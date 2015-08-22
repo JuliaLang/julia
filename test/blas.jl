@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.LinAlg
+import Base.LinAlg, Base.LinAlg.BlasReal, Base.LinAlg.BlasComplex
 
 srand(100)
 # syr2k! and her2k!
@@ -86,6 +86,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
             @test_throws BoundsError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
             @test_throws BoundsError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
+            @test_approx_eq BLAS.axpy!(α,copy(x1),1:n,copy(x2),1:n) x2 + α*x1
         else
             z1 = convert(Vector{elty}, complex(randn(n), randn(n)))
             z2 = convert(Vector{elty}, complex(randn(n), randn(n)))
@@ -95,6 +96,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), 1:div(n, 2), copy(z2), 1:(div(n, 2) + 1))
             @test_throws BoundsError BLAS.axpy!(α, copy(z1), 0:div(n,2), copy(z2), 1:(div(n, 2) + 1))
             @test_throws BoundsError BLAS.axpy!(α, copy(z1), 1:div(n,2), copy(z2), 0:(div(n, 2) - 1))
+            @test_approx_eq BLAS.axpy!(α,copy(z1),1:n,copy(z2),1:n) z2 + α*z1
         end
 
         # trsv
@@ -134,6 +136,75 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test_throws DimensionMismatch BLAS.copy!(x2, 1:n, x1, 1:(n - 1))
         @test_throws BoundsError BLAS.copy!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
         @test_throws BoundsError BLAS.copy!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
+
+        # symv and hemv
+
+        x = rand(elty,n)
+        A = rand(elty,n,n)
+        Aherm = A + A'
+        Asymm = A + A.'
+
+        @test_approx_eq BLAS.symv('U',Asymm,x) Asymm*x
+        @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),ones(elty,n+1))
+        @test_throws DimensionMismatch BLAS.symv('U',ones(elty,n,n+1),x)
+        if elty <: BlasComplex
+            @test_approx_eq BLAS.hemv('U',Aherm,x) Aherm*x
+            @test_throws DimensionMismatch BLAS.hemv('U',ones(elty,n,n+1),x)
+            @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),ones(elty,n+1))
+        end
+
+        # trmv
+        A = triu(rand(elty,n,n))
+        x = rand(elty,n)
+        @test_approx_eq BLAS.trmv('U','N','N',A,x) A*x
+
+        # symm error throwing
+        @test_throws DimensionMismatch BLAS.symm('L','U',ones(elty,n,n-1),rand(elty,n,n))
+        @test_throws DimensionMismatch BLAS.symm('R','U',ones(elty,n-1,n),rand(elty,n,n))
+        @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+        if elty <: BlasComplex
+            @test_throws DimensionMismatch BLAS.hemm('L','U',ones(elty,n,n-1),rand(elty,n,n))
+            @test_throws DimensionMismatch BLAS.hemm('R','U',ones(elty,n-1,n),rand(elty,n,n))
+            @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+        end
+
+        #trmm error throwing
+        @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n+1,n))
+        @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(rand(elty,n,n)),ones(elty,n,n+1))
+
+        #trsm
+        A = triu(rand(elty,n,n))
+        B = rand(elty,(n,n))
+        @test_approx_eq BLAS.trsm('L','U','N','N',one(elty),A,B) A\B
+
+        #gbmv - will work for SymTridiagonal,Tridiagonal,Bidiagonal!
+        TD  = Tridiagonal(rand(elty,n-1),rand(elty,n),rand(elty,n-1))
+        x   = rand(elty,n)
+        #put TD into the BLAS format!
+        fTD = zeros(elty,3,n)
+        fTD[1,2:n] = TD.du
+        fTD[2,:] = TD.d
+        fTD[3,1:n-1] = TD.dl
+        @test_approx_eq BLAS.gbmv('N',n,1,1,fTD,x) TD*x
+
+        #sbmv - will work for SymTridiagonal only!
+        if elty <: BlasReal
+            ST  = SymTridiagonal(rand(elty,n),rand(elty,n-1))
+            x   = rand(elty,n)
+            #put TD into the BLAS format!
+            fST = zeros(elty,2,n)
+            fST[1,2:n] = ST.ev
+            fST[2,:] = ST.dv
+            @test_approx_eq BLAS.sbmv('U',1,fST,x) ST*x
+        else
+            dv = real(rand(elty,n))
+            ev = rand(elty,n-1)
+            bH = zeros(elty,2,n)
+            bH[1,2:n] = ev
+            bH[2,:] = dv
+            fullH = diagm(dv) + diagm(conj(ev),-1) + diagm(ev,1)
+            @test_approx_eq BLAS.hbmv('U',1,bH,x) fullH*x
+        end
     end
 
     # gemv
