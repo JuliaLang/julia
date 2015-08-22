@@ -76,7 +76,7 @@ for op in (:.+, :.-)
         ($op_){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = ($op)(x,y)
         ($op_){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
 
-	# TimeType, StridedArray{GeneralPeriod}
+        # TimeType, StridedArray{GeneralPeriod}
         ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) =
             reshape(T[($op_)(i,y) for i in x], size(x))
         ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
