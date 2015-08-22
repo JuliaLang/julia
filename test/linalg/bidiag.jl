@@ -176,3 +176,10 @@ let A = Bidiagonal([1,2,3], [0,0], true)
     @test istril(A)
     @test isdiag(A)
 end
+
+#test promote_rule
+A = Bidiagonal(ones(Float32,10),ones(Float32,9),true)
+B = rand(Float64,10,10)
+C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
+@test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
+@test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))

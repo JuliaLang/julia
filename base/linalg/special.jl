@@ -70,6 +70,10 @@ function convert(::Type{SymTridiagonal}, A::Tridiagonal)
     SymTridiagonal(A.d, A.dl)
 end
 
+function convert(::Type{Tridiagonal}, A::SymTridiagonal)
+    Tridiagonal(copy(A.ev), A.dv, A.ev)
+end
+
 function convert(::Type{Diagonal}, A::AbstractTriangular)
     if full(A) != diagm(diag(A))
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
