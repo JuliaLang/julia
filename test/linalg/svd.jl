@@ -29,6 +29,7 @@ debug && println("\ntype of a: ", eltya, "\n")
 
 debug && println("singular value decomposition")
     usv = svdfact(a)
+    @test usv[:S] === svdvals(usv)
     @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
     @test_approx_eq full(usv) a
     @test_approx_eq usv[:Vt]' usv[:V]
