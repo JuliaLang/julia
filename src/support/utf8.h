@@ -45,9 +45,6 @@ size_t u8_seqlen(const char *s);
 /* returns the # of bytes needed to encode a certain character */
 size_t u8_charlen(uint32_t ch);
 
-/* computes the # of bytes needed to encode a WC string as UTF-8 */
-size_t u8_codingsize(uint32_t *wcstr, size_t n);
-
 char read_escape_control_char(char c);
 
 /* assuming src points to the character after a backslash, read an
@@ -59,9 +56,6 @@ size_t u8_read_escape_sequence(const char *src, size_t ssz, uint32_t *dest);
    buf, where buf is "sz" bytes. returns the number of characters output.
    sz must be at least 3. */
 int u8_escape_wchar(char *buf, size_t sz, uint32_t ch);
-
-/* convert a string "src" containing escape sequences to UTF-8 */
-size_t u8_unescape(char *buf, size_t sz, const char *src);
 
 /* convert UTF-8 "src" to escape sequences.
 
@@ -93,8 +87,6 @@ char *u8_memrchr(const char *s, uint32_t ch, size_t sz);
 
 /* number of columns occupied by a string */
 DLLEXPORT size_t u8_strwidth(const char *s);
-
-int u8_is_locale_utf8(const char *locale);
 
 /* printf where the format string and arguments may be in UTF-8.
    you can avoid this function and just use ordinary printf() if the current

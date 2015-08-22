@@ -78,18 +78,6 @@ size_t u8_charlen(uint32_t ch)
     return 0;
 }
 
-size_t u8_codingsize(uint32_t *wcstr, size_t n)
-{
-    size_t i, c=0;
-
-    for(i=0; i < n; i++) {
-        size_t cl = u8_charlen(wcstr[i]);
-        if (cl == 0) cl = 3;  // invalid: encoded as replacement char
-        c += cl;
-    }
-    return c;
-}
-
 /* conversions without error checking
    only works for valid UTF-8, i.e. no 5- or 6-byte sequences
    srcsz = source size in bytes
@@ -380,36 +368,6 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, uint32_t *dest)
     return i;
 }
 
-/* convert a string with literal \uxxxx or \Uxxxxxxxx characters to UTF-8
-   example: u8_unescape(mybuf, 256, "hello\\u220e")
-   note the double backslash is needed if called on a C string literal */
-size_t u8_unescape(char *buf, size_t sz, const char *src)
-{
-    size_t c=0, amt;
-    uint32_t ch = 0;
-    char temp[4];
-
-    while (*src && c < sz) {
-        if (*src == '\\') {
-            src++;
-            amt = u8_read_escape_sequence(src, 1000, &ch);
-        }
-        else {
-            ch = (uint32_t)*src;
-            amt = 1;
-        }
-        src += amt;
-        amt = u8_wc_toutf8(temp, ch);
-        if (amt > sz-c)
-            break;
-        memcpy(&buf[c], temp, amt);
-        c += amt;
-    }
-    if (c < sz)
-        buf[c] = '\0';
-    return c;
-}
-
 static inline int buf_put2c(char *buf, const char *src)
 {
     buf[0] = src[0];
@@ -537,27 +495,6 @@ char *u8_memrchr(const char *s, uint32_t ch, size_t sz)
             break;
     }
     return NULL;
-}
-
-int u8_is_locale_utf8(const char *locale)
-{
-    if (locale == NULL) return 0;
-
-    /* this code based on libutf8 */
-    const char *cp = locale;
-
-    for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++) {
-        if (*cp == '.') {
-            const char *encoding = ++cp;
-            for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++)
-                ;
-            if ((cp-encoding == 5 && !strncmp(encoding, "UTF-8", 5))
-                || (cp-encoding == 4 && !strncmp(encoding, "utf8", 4)))
-                return 1; /* it's UTF-8 */
-            break;
-        }
-    }
-    return 0;
 }
 
 size_t u8_vprintf(const char *fmt, va_list ap)
