@@ -1024,7 +1024,7 @@ void jl_serialize_dependency_list(ios_t *s)
     jl_array_t *udeps = deps && unique_func ? (jl_array_t *) jl_apply((jl_function_t*)unique_func, (jl_value_t**)&deps, 1) : NULL;
 
     if (udeps) {
-        JL_GC_PUSH(&udeps);
+        JL_GC_PUSH1(&udeps);
         size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
             jl_value_t *dep = jl_fieldref(jl_cellref(udeps, i), 0);
