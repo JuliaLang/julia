@@ -686,7 +686,11 @@ function abstract_call_gf(f, fargs, argtype, e)
     end
     for (m::SimpleVector) in x
         local linfo
-        linfo = func_for_method(m[3],argtype,m[2])
+        linfo = try
+            func_for_method(m[3],argtype,m[2])
+        catch
+            NF
+        end
         if linfo === NF
             rettype = Any
             break
@@ -748,7 +752,11 @@ function invoke_tfunc(f, types, argtype)
     end
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       argtype, meth.sig, meth.tvars)::SimpleVector
-    linfo = func_for_method(meth, types, env)
+    linfo = try
+        func_for_method(meth, types, env)
+    catch
+        NF
+    end
     if linfo === NF
         return Any
     end
@@ -2165,7 +2173,11 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     meth = meth[1]::SimpleVector
 
     local linfo
-    linfo = func_for_method(meth[3],atype,meth[2])
+    linfo = try
+        func_for_method(meth[3],atype,meth[2])
+    catch
+        NF
+    end
     if linfo === NF
         return NF
     end
