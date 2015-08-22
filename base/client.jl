@@ -19,11 +19,23 @@ const text_colors = AnyDict(
 )
 
 have_color = false
+default_color_warn = :red
+default_color_info = :blue
 @unix_only default_color_answer = text_colors[:bold]
 @unix_only default_color_input = text_colors[:bold]
 @windows_only default_color_answer = text_colors[:normal]
 @windows_only default_color_input = text_colors[:normal]
 color_normal = text_colors[:normal]
+
+function warn_color()
+    c = symbol(get(ENV, "JULIA_WARN_COLOR", ""))
+    haskey(text_colors, c) ? c : default_color_warn
+end
+
+function info_color()
+    c = symbol(get(ENV, "JULIA_INFO_COLOR", ""))
+    haskey(text_colors, c) ? c : default_color_info
+end
 
 function answer_color()
     c = symbol(get(ENV, "JULIA_ANSWER_COLOR", ""))
