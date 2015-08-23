@@ -35,3 +35,5 @@ for str in (b"xyz\xc1", b"xyz\xd0", b"xyz\xe0", b"xyz\xed\x80", b"xyz\xf0", b"xy
     @test_throws UnicodeError reverse(UTF8String(str))
 end
 
+## Specifically check UTF-8 string whose lead byte is same as a surrogate
+@test convert(UTF8String,b"\xed\x9f\xbf") == "\ud7ff"
