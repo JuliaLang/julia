@@ -88,6 +88,15 @@ try
         # Lead followed by non-continuation character > 0xbf
         @test_throws UnicodeError Base.checkstring(UInt8[byt,0x80,0x80,0xc0])
     end
+
+    # Long encoding of 0x01
+    @test_throws UnicodeError utf8(b"\xf0\x80\x80\x80")
+    # Test ends of long encoded surrogates
+    @test_throws UnicodeError utf8(b"\xf0\x8d\xa0\x80")
+    @test_throws UnicodeError utf8(b"\xf0\x8d\xbf\xbf")
+    @test_throws UnicodeError Base.checkstring(b"\xf0\x80\x80\x80")
+    @test Base.checkstring(b"\xc0\x81"; accept_long_char=true) == (1,0x1,0,0,0)
+    @test Base.checkstring(b"\xf0\x80\x80\x80"; accept_long_char=true) == (1,0x1,0,0,0)
 catch exp;
     println("Error testing checkstring: $byt, $exp")
     throw(exp)
@@ -105,6 +114,9 @@ end
 
 # Characters > 0x10ffff
 @test_throws UnicodeError Base.checkstring(UInt32[0x110000])
+
+# Test starting and different position
+@test Base.checkstring(UInt32[0x110000, 0x1f596], 2) == (1,0x10,1,0,0)
 
 # Test valid sequences
 for (seq, res) in (
