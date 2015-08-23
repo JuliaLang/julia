@@ -21,7 +21,7 @@ Alternatively, you may prefer the features of a more full-function IDE, such as 
 # Binary distribution
 
 Julia runs on Windows XP-SP2 and later (including Windows Vista, Windows 7, and Windows 8).
-Both the 32-bit and 64-bit versions are supported.
+Both the 32- and 64-bit versions are supported.
 The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
 The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
 
@@ -45,9 +45,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 # Source distribution
 
 ## Supported build platforms
-- Windows 10: supported (32 and 64 bits)
-- Windows 8: supported (32 and 64 bits)
-- Windows 7: supported (32 and 64 bits)
+- Windows 10: supported (32- and 64-bits)
+- Windows 8: supported (32- and 64-bits)
+- Windows 7: supported (32- and 64-bits)
 - Windows Vista: not officially supported (but probably works anyways)
 - Windows XP: not supported (but may work anyways, if you can get around the lack of junction points)
 
@@ -98,15 +98,15 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
   2. Run the following script to download the correct versions of the MinGW-w64 compilers
      ```
-    contrib/windows/get_toolchain.sh 32  # for 32 bit Julia
+    contrib/windows/get_toolchain.sh 32  # for 32-bit Julia
     # or
-    contrib/windows/get_toolchain.sh 64  # for 64 bit Julia
+    contrib/windows/get_toolchain.sh 64  # for 64-bit Julia
 ```
      Then follow the printed instructions by running either
      ```
-    export PATH=$PWD/usr/i686-w64-mingw32/sys-root/mingw/bin:$PATH  # for 32 bit Julia
+    export PATH=$PWD/usr/i686-w64-mingw32/sys-root/mingw/bin:$PATH  # for 32-bit Julia
     # or
-    export PATH=$PWD/usr/x86_64-w64-mingw32/sys-root/mingw/bin:$PATH  # for 64 bit Julia
+    export PATH=$PWD/usr/x86_64-w64-mingw32/sys-root/mingw/bin:$PATH  # for 64-bit Julia
 ```
      to add the downloaded MinGW-w64 compilers to your path (temporarily, only needed during the shell session when you build Julia).
 
@@ -132,7 +132,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using versions of the MinGW-w64 compilers available through Cygwin's package manager.
 
-1. Download and run Cygwin setup for [32 bit](http://cygwin.com/setup-x86.exe) or [64 bit](http://cygwin.com/setup-x86_64.exe). Note that you can compile either 32 or 64 bit Julia from either 32 or 64 bit Cygwin. 64 bit Cygwin has a slightly smaller but often more up-to-date selection of packages.
+1. Download and run Cygwin setup for [32-bit](http://cygwin.com/setup-x86.exe) or [64-bit](http://cygwin.com/setup-x86_64.exe). Note that you can compile either 32- or 64-bit Julia from either 32- or 64-bit Cygwin. 64-bit Cygwin has a slightly smaller but often more up-to-date selection of packages.
 
 2. Select installation location and download mirror.
 
@@ -146,8 +146,8 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
   7. `m4` (under `Interpreters` category)
   8. `cmake` (under `Devel` category)
   9. `p7zip` (under `Archive` category)
-  10. `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` (for 32 bit Julia, under `Devel` category)
-  11. `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` (for 64 bit Julia, under `Devel` category)
+  10. `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` (for 32-bit Julia, under `Devel` category)
+  11. `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` (for-64 bit Julia, under `Devel` category)
 
 4. At the "Resolving Dependencies" step, be sure to leave "Select required packages (RECOMMENDED)" enabled.
 
@@ -164,11 +164,11 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
 
   2. Set the `XC_HOST` variable in `Make.user` to indicate MinGW-w64 cross compilation
 
-     For 32 bit Julia
+     For 32-bit Julia
      ```
     echo 'XC_HOST = i686-w64-mingw32' > Make.user
 ```
-     For 64 bit Julia
+     For 64-bit Julia
      ```
     echo 'XC_HOST = x86_64-w64-mingw32' > Make.user
 ```
@@ -193,9 +193,9 @@ For maximum compatibility with packages that use [WinRPM.jl](https://github.com/
 # Vagrantfile for MinGW-w64 cross-compilation of Julia
 
 $script = <<SCRIPT
-# Change the following to i686-w64-mingw32 for 32 bit Julia:
+# Change the following to i686-w64-mingw32 for 32-bit Julia:
 export XC_HOST=x86_64-w64-mingw32
-# Change the following to 32 for 32 bit Julia:
+# Change the following to 32 for 32-bit Julia:
 export BITS=64
 zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_13.1/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
@@ -280,7 +280,7 @@ Then run the build:
 1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
 3. `make`
-4. `make win-extras` (Necessary before running `make binary-dist`p)
+4. `make win-extras` (necessary before running `make binary-dist`p)
 5. `make binary-dist`
 6. move the julia-*.exe installer to the target machine
 
@@ -311,7 +311,7 @@ Compiling using one of the options above creates a basic Julia build, but not so
 ### GDB not showing the right backtrace
 
 - When attaching to the julia process, GDB may not be attaching to the right thread. Use `info threads` command to show all the threads and `thread <threadno>` to switch threads.
-- Be sure to use a 32 bit version of GDB to debug a 32 bit build of Julia, or a 64 bit version of GDB to debug a 64 bit build of Julia.
+- Be sure to use a 32-bit version of GDB to debug a 32-bit build of Julia, or a 64-bit version of GDB to debug a 64-bit build of Julia.
 
 ### Build process is slow/eats memory/hangs my computer
 
