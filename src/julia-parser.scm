@@ -852,7 +852,7 @@
         (error (string "unexpected " t)))
     ;; TODO: ? should probably not be listed here except for the syntax hack in osutils.jl
     (cond ((and (operator? t) (not (memq t '(: |'| ?))) (not (syntactic-unary-op? t))
-		(not (invalid-identifier-name? t)))
+                (not (invalid-identifier-name? t)))
            (let* ((op  (take-token s))
                   (nch (peek-char (ts:port s))))
              (if (and (or (eq? op '-) (eq? op '+))
@@ -870,19 +870,14 @@
                  (let ((next (peek-token s)))
                    (cond ((or (closing-token? next) (newline? next) (eq? next '=))
                           op)  ; return operator by itself, as in (+)
-                         ((or (eqv? next #\{)  ;; this case is +{T}(x::T) = ...
-			      (and (not (memq op unary-ops))
-				   (eqv? next #\( )))
+                         ((or (eqv? next #\{)   ;; +{T}(x::T) or +(x)
+                              (eqv? next #\( ))
                           (ts:put-back! s op)
                           (parse-factor s))
-			 ((not (memq op unary-ops))
-			  (error (string "\"" op "\" is not a unary operator")))
+                         ((not (memq op unary-ops))
+                          (error (string "\"" op "\" is not a unary operator")))
                          (else
-                          (let ((arg (parse-unary s)))
-                            (if (and (pair? arg)
-                                     (eq? (car arg) 'tuple))
-                                (list* 'call op (cdr arg))
-                                (list  'call op arg)))))))))
+                          (list 'call op (parse-unary s))))))))
           (else
            (parse-juxtapose (parse-factor s) s)))))
 
