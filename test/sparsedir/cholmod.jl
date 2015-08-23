@@ -226,7 +226,7 @@ end
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
-puint = convert(Ptr{Uint32}, p)
+puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
@@ -234,7 +234,7 @@ unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Pt
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
-puint = convert(Ptr{Uint32}, p)
+puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
@@ -242,7 +242,7 @@ unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) 
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
-puint = convert(Ptr{Uint32}, p)
+puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 3)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
@@ -250,7 +250,7 @@ unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) 
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
-puint = convert(Ptr{Uint32}, p)
+puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
@@ -258,7 +258,7 @@ unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(P
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
-puint = convert(Ptr{Uint32}, p)
+puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
