@@ -95,6 +95,15 @@ t(::Int, ::Any)
 "t-3"
 t{S <: Integer}(::S)
 
+"FieldDocs"
+type FieldDocs
+    "one"
+    one
+    doc"two"
+    two
+    three
+end
+
 end
 
 import Base.Docs: meta
@@ -156,6 +165,11 @@ end
 @test @doc(DocsTest.t(::AbstractString)) == doc"t-1"
 @test @doc(DocsTest.t(::Int, ::Any)) == doc"t-2"
 @test @doc(DocsTest.t{S <: Integer}(::S)) == doc"t-3"
+
+let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
+    @test haskey(fields, :one) && fields[:one] == doc"one"
+    @test haskey(fields, :two) && fields[:two] == doc"two"
+end
 
 # issue 11993
 # Check if we are documenting the expansion of the macro
