@@ -44,8 +44,11 @@ debug && println("Generalized svd")
     @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a_svd
     @test_approx_eq usv[:Vt]' usv[:V]
     @test_throws KeyError usv[:Z]
+    @test_throws KeyError gsvd[:Z]
+    @test_approx_eq gsvd[:vals] svdvals(a,a_svd)
     α = eltya == Int ? -1 : rand(eltya)
     β = svdfact(α)
     @test β[:S] == [abs(α)]
     @test svdvals(α) == abs(α)
+
 end
