@@ -290,7 +290,3 @@ parse("""
 # issue #12626
 @test parse("a .÷ 1") == Expr(:call, :.÷, :a, 1)
 @test parse("a .÷= 1") == Expr(:.÷=, :a, 1)
-
-# issue #12755
-@test string(parse(string(:((+)((1,2)))))) == "+((1,2))"
-@test string(parse(string(:((~)((1,2)))))) == "~((1,2))"
