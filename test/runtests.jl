@@ -128,6 +128,26 @@ end
 @test size(bitrand(MersenneTwister(), (3, 4))) == (3, 4)
 @test rand(Bool) in [false, true]
 
+rng = MersenneTwister()
+srand()
+srand(rng, UInt32[0,0])
+srand(rng)
+for Tr in (Int8,UInt8,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64)
+    for T in (Tr, Complex{Tr})
+        @test isa(rand(rng, T), T)
+        let x = rand(rng, T, 3,4)
+            @test isa(x, Array{T,2})
+            @test size(x) == (3,4)
+            rand!(rng, x)
+        end
+    end
+end
+srand(rng, 0)
+let x = rand(rng, Int64, 3,4)
+    srand(rng, 0)
+    @test x == rand(rng, Int64, (3,4))
+end
+
 module CartesianTest
     using Base.Cartesian, Compat
     @ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
