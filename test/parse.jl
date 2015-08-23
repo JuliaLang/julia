@@ -290,3 +290,6 @@ parse("""
 # issue #12626
 @test parse("a .÷ 1") == Expr(:call, :.÷, :a, 1)
 @test parse("a .÷= 1") == Expr(:.÷=, :a, 1)
+
+# issue #12771
+@test -(3)^2 == -9
