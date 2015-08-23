@@ -379,10 +379,11 @@ type Dict{K,V} <: Associative{K,V}
     ndel::Int
     count::Int
     dirty::Bool
+    idxfloor::Int  # an index <= the indexes of all used slots
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false, 1)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -405,7 +406,7 @@ type Dict{K,V} <: Associative{K,V}
             rehash!(d)
         end
         @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count)
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.dirty, d.idxfloor)
     end
 end
 Dict() = Dict{Any,Any}()
@@ -479,6 +480,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     sz = length(olds)
     newsz = _tablesz(newsz)
     h.dirty = true
+    h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
@@ -546,6 +548,7 @@ function empty!{K,V}(h::Dict{K,V})
     h.ndel = 0
     h.count = 0
     h.dirty = true
+    h.idxfloor = 1
     return h
 end
 
@@ -618,6 +621,9 @@ function _setindex!(h::Dict, v, key, index)
     h.vals[index] = v
     h.count += 1
     h.dirty = true
+    if index < h.idxfloor
+        h.idxfloor = index
+    end
 
     sz = length(h.keys)
     # Rehash now if necessary
@@ -632,7 +638,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     if !isequal(key,key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    v = convert(V,  v0)
+    v = convert(V, v0)
 
     index = ht_keyindex2(h, key)
 
@@ -770,7 +776,11 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
-start(t::Dict) = skip_deleted(t, 1)
+function start(t::Dict)
+    i = skip_deleted(t, t.idxfloor)
+    t.idxfloor = i
+    return i
+end
 done(t::Dict, i) = i > length(t.vals)
 next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
