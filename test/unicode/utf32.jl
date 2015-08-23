@@ -267,3 +267,5 @@ let str = ascii("this ")
     @test typeof(p32) == Ptr{UInt32}
     @test unsafe_load(p32,1) == 's'
 end
+
+@test isvalid(Char['f','o','o','b','a','r'])
