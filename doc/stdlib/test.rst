@@ -16,6 +16,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
    Run the Julia unit tests listed in ``tests``\ , which can be either a string or an array of strings, using ``numcores`` processors. (not exported)
@@ -138,6 +139,7 @@ Macros
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @test(ex)
 
    Test the expression ``ex`` and calls the current handler to handle the result.
@@ -146,6 +148,7 @@ Macros
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @test_throws(extype, ex)
 
    Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
@@ -154,6 +157,7 @@ Macros
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @test_approx_eq(a, b)
 
    Test two floating point numbers ``a`` and ``b`` for equality taking in account small numerical errors.
@@ -162,6 +166,7 @@ Macros
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @test_approx_eq_eps(a, b, tol)
 
    Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
@@ -173,6 +178,7 @@ Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.

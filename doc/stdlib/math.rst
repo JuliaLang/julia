@@ -13,11 +13,13 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        -(x)
 
    Unary minus operator.
 
    .. code-block:: julia
+
        -(x, y)
 
    Subtraction operator.
@@ -27,6 +29,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        +(x, y...)
 
    Addition operator. ``x+y+z+...`` calls this function with all arguments, i.e. ``+(x, y, z, ...)``\ .
@@ -36,11 +39,13 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        -(x)
 
    Unary minus operator.
 
    .. code-block:: julia
+
        -(x, y)
 
    Subtraction operator.
@@ -76,6 +81,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        /(x, y)
 
    Right division operator: multiplication of ``x`` by the inverse of ``y`` on the right. Gives floating-point results for integer arguments.
@@ -112,6 +118,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .+(x, y)
 
    Element-wise addition operator.
@@ -121,6 +128,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .-(x, y)
 
    Element-wise subtraction operator.
@@ -130,6 +138,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .*(x, y)
 
    Element-wise multiplication operator.
@@ -139,6 +148,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ./(x, y)
 
    Element-wise right division operator.
@@ -153,6 +163,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .^(x, y)
 
    Element-wise exponentiation operator.
@@ -161,6 +172,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fma(x, y, z)
 
    Computes ``x*y+z`` without rounding the intermediate result ``x*y``\ . On some systems this is significantly more expensive than ``x*y+z``\ . ``fma`` is used to improve accuracy in certain algorithms. See ``muladd``\ .
@@ -169,6 +181,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        muladd(x, y, z)
 
    Combined multiply-add, computes ``x*y+z`` in an efficient manner. This may on some systems be equivalent to ``x*y+z``\ , or to ``fma(x,y,z)``\ . ``muladd`` is used to improve performance. See ``fma``\ .
@@ -177,6 +190,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        div(x, y)
        ÷(x, y)
 
@@ -186,6 +200,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fld(x, y)
 
    Largest integer less than or equal to ``x/y``\ .
@@ -194,6 +209,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cld(x, y)
 
    Smallest integer larger than or equal to ``x/y``\ .
@@ -202,6 +218,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mod(x, y)
 
    Modulus after division, returning in the range [0,``y``\ ), if ``y`` is positive, or (``y``\ ,0] if ``y`` is negative.
@@ -210,6 +227,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mod2pi(x)
 
    Modulus after division by 2pi, returning in the range [0,2pi).
@@ -220,6 +238,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rem(x, y)
        %(x, y)
 
@@ -229,6 +248,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        divrem(x, y)
 
    The quotient and remainder from Euclidean division. Equivalent to ``(x÷y, x%y)``\ .
@@ -237,6 +257,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fldmod(x, y)
 
    The floored quotient and modulus after division. Equivalent to ``(fld(x,y), mod(x,y))``\ .
@@ -245,6 +266,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mod1(x,m)
 
    Modulus after division, returning in the range (0,m]
@@ -253,6 +275,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rem1(x,m)
 
    Remainder after division, returning in the range (0,m]
@@ -262,6 +285,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        //(num, den)
 
    Divide two integers or rational numbers, giving a ``Rational`` result.
@@ -270,6 +294,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rationalize([Type=Int,] x; tol=eps(x))
 
    Approximate floating point number ``x`` as a Rational number with components of the given integer type. The result will differ from ``x`` by no more than ``tol``\ .
@@ -278,6 +303,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        num(x)
 
    Numerator of the rational representation of ``x``
@@ -286,6 +312,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        den(x)
 
    Denominator of the rational representation of ``x``
@@ -295,6 +322,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        <<(x, n)
 
    Left bit shift operator.
@@ -304,6 +332,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        >>(x, n)
 
    Right bit shift operator, preserving the sign of ``x``\ .
@@ -313,6 +342,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        >>>(x, n)
 
    Unsigned right bit shift operator.
@@ -329,6 +359,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        colon(start, [step], stop)
 
    Called by ``:`` syntax for constructing ranges.
@@ -337,6 +368,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        range(start, [step], length)
 
    Construct a range by length, given a starting value and optional step (defaults to 1).
@@ -346,6 +378,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ==(x, y)
 
    Generic equality operator, giving a single ``Bool`` result. Falls back to ``===``\ . Should be implemented for all types with a notion of equality, based on the abstract value that an instance represents. For example, all numeric types are compared by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring encoding.
@@ -361,6 +394,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        !=(x, y)
        ≠(x,y)
 
@@ -371,6 +405,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        is(x, y) -> Bool
        ===(x,y) -> Bool
        ≡(x,y) -> Bool
@@ -382,6 +417,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        !==(x, y)
        ≢(x,y)
 
@@ -392,6 +428,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        <(x, y)
 
    Less-than comparison operator. New numeric types should implement this function for two arguments of the new type. Because of the behavior of floating-point NaN values, ``<`` implements a partial order. Types with a canonical partial order should implement ``<``\ , and types with a canonical total order should implement ``isless``\ .
@@ -401,6 +438,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        <=(x, y)
        ≤(x,y)
 
@@ -411,6 +449,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        >(x, y)
 
    Greater-than comparison operator. Generally, new types should implement ``<`` instead of this function, and rely on the fallback definition ``>(x,y) = y<x``\ .
@@ -420,6 +459,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        >=(x, y)
        ≥(x,y)
 
@@ -430,6 +470,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .==(x, y)
 
    Element-wise equality comparison operator.
@@ -439,6 +480,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .!=(x, y)
        .≠(x,y)
 
@@ -449,6 +491,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .<(x, y)
 
    Element-wise less-than comparison operator.
@@ -458,6 +501,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .<=(x, y)
        .≤(x,y)
 
@@ -468,6 +512,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .>(x, y)
 
    Element-wise greater-than comparison operator.
@@ -477,6 +522,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        .>=(x, y)
        .≥(x,y)
 
@@ -486,6 +532,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cmp(x,y)
 
    Return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``\ , respectively. Uses the total order implemented by ``isless``\ . For floating-point numbers, uses ``<`` but throws an error for unordered arguments.
@@ -495,6 +542,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ~(x)
 
    Bitwise not
@@ -504,6 +552,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        &(x, y)
 
    Bitwise and
@@ -513,6 +562,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        |(x, y)
 
    Bitwise or
@@ -522,6 +572,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        \$(x, y)
 
    Bitwise exclusive or
@@ -531,6 +582,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        !(x)
 
    Boolean not
@@ -734,6 +786,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0)
 
    Inexact equality comparison: ``true`` if ``norm(x-y) <= atol + rtol*max(norm(x), norm(y))``\ . The default ``atol`` is zero and the default ``rtol`` depends on the types of ``x`` and ``y``\ .
@@ -748,6 +801,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sin(x)
 
    Compute sine of ``x``\ , where ``x`` is in radians
@@ -756,6 +810,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cos(x)
 
    Compute cosine of ``x``\ , where ``x`` is in radians
@@ -764,6 +819,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tan(x)
 
    Compute tangent of ``x``\ , where ``x`` is in radians
@@ -772,6 +828,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sind(x)
 
    Compute sine of ``x``\ , where ``x`` is in degrees
@@ -780,6 +837,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cosd(x)
 
    Compute cosine of ``x``\ , where ``x`` is in degrees
@@ -788,6 +846,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tand(x)
 
    Compute tangent of ``x``\ , where ``x`` is in degrees
@@ -814,6 +873,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sinh(x)
 
    Compute hyperbolic sine of ``x``
@@ -822,6 +882,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cosh(x)
 
    Compute hyperbolic cosine of ``x``
@@ -830,6 +891,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tanh(x)
 
    Compute hyperbolic tangent of ``x``
@@ -838,6 +900,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asin(x)
 
    Compute the inverse sine of ``x``\ , where the output is in radians
@@ -846,6 +909,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acos(x)
 
    Compute the inverse cosine of ``x``\ , where the output is in radians
@@ -854,6 +918,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        atan(x)
 
    Compute the inverse tangent of ``x``\ , where the output is in radians
@@ -862,6 +927,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        atan2(y, x)
 
    Compute the inverse tangent of ``y/x``\ , using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
@@ -870,6 +936,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asind(x)
 
    Compute the inverse sine of ``x``\ , where the output is in degrees
@@ -878,6 +945,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acosd(x)
 
    Compute the inverse cosine of ``x``\ , where the output is in degrees
@@ -886,6 +954,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        atand(x)
 
    Compute the inverse tangent of ``x``\ , where the output is in degrees
@@ -894,6 +963,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sec(x)
 
    Compute the secant of ``x``\ , where ``x`` is in radians
@@ -902,6 +972,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        csc(x)
 
    Compute the cosecant of ``x``\ , where ``x`` is in radians
@@ -910,6 +981,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cot(x)
 
    Compute the cotangent of ``x``\ , where ``x`` is in radians
@@ -918,6 +990,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        secd(x)
 
    Compute the secant of ``x``\ , where ``x`` is in degrees
@@ -926,6 +999,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cscd(x)
 
    Compute the cosecant of ``x``\ , where ``x`` is in degrees
@@ -934,6 +1008,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cotd(x)
 
    Compute the cotangent of ``x``\ , where ``x`` is in degrees
@@ -942,6 +1017,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asec(x)
 
    Compute the inverse secant of ``x``\ , where the output is in radians
@@ -950,6 +1026,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acsc(x)
 
    Compute the inverse cosecant of ``x``\ , where the output is in radians
@@ -958,6 +1035,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acot(x)
 
    Compute the inverse cotangent of ``x``\ , where the output is in radians
@@ -966,6 +1044,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asecd(x)
 
    Compute the inverse secant of ``x``\ , where the output is in degrees
@@ -974,6 +1053,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acscd(x)
 
    Compute the inverse cosecant of ``x``\ , where the output is in degrees
@@ -982,6 +1062,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acotd(x)
 
    Compute the inverse cotangent of ``x``\ , where the output is in degrees
@@ -990,6 +1071,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sech(x)
 
    Compute the hyperbolic secant of ``x``
@@ -998,6 +1080,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        csch(x)
 
    Compute the hyperbolic cosecant of ``x``
@@ -1006,6 +1089,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        coth(x)
 
    Compute the hyperbolic cotangent of ``x``
@@ -1014,6 +1098,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asinh(x)
 
    Compute the inverse hyperbolic sine of ``x``
@@ -1022,6 +1107,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acosh(x)
 
    Compute the inverse hyperbolic cosine of ``x``
@@ -1030,6 +1116,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        atanh(x)
 
    Compute the inverse hyperbolic tangent of ``x``
@@ -1038,6 +1125,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asech(x)
 
    Compute the inverse hyperbolic secant of ``x``
@@ -1046,6 +1134,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acsch(x)
 
    Compute the inverse hyperbolic cosecant of ``x``
@@ -1054,6 +1143,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        acoth(x)
 
    Compute the inverse hyperbolic cotangent of ``x``
@@ -1081,6 +1171,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        deg2rad(x)
 
    Convert ``x`` from degrees to radians
@@ -1089,6 +1180,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rad2deg(x)
 
    Convert ``x`` from radians to degrees
@@ -1106,6 +1198,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        log(x)
 
    Compute the natural logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
@@ -1113,6 +1206,7 @@ Mathematical Functions
    There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
 
    .. code-block:: julia
+
        log(b,x)
 
    Compute the base ``b`` logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments.
@@ -1121,6 +1215,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        log(x)
 
    Compute the natural logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
@@ -1128,6 +1223,7 @@ Mathematical Functions
    There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
 
    .. code-block:: julia
+
        log(b,x)
 
    Compute the base ``b`` logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments.
@@ -1136,6 +1232,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        log2(x)
 
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
@@ -1144,6 +1241,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        log10(x)
 
    Compute the logarithm of ``x`` to base 10. Throws ``DomainError`` for negative ``Real`` arguments.
@@ -1152,6 +1250,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        log1p(x)
 
    Accurate natural logarithm of ``1+x``\ . Throws ``DomainError`` for ``Real`` arguments less than -1.
@@ -1208,6 +1307,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        modf(x)
 
    Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.
@@ -1418,6 +1518,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        unsafe_trunc(T, x)
 
    ``unsafe_trunc(T, x)`` returns the nearest integral value of type ``T`` whose absolute value is less than or equal to ``x``\ . If the value is not representable by ``T``\ , an arbitrary value will be returned.
@@ -1426,6 +1527,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        signif(x, digits, [base])
 
    Rounds (in the sense of ``round``\ ) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``\ , and ``signif(357.913, 4, 2)`` is ``352.0``\ .
@@ -1434,6 +1536,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        min(x, y, ...)
 
    Return the minimum of the arguments. Operates elementwise over arrays.
@@ -1442,6 +1545,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        max(x, y, ...)
 
    Return the maximum of the arguments. Operates elementwise over arrays.
@@ -1460,6 +1564,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        clamp(x, lo, hi)
 
    Return x if ``lo <= x <= hi``\ . If ``x < lo``\ , return ``lo``\ . If ``x > hi``\ , return ``hi``\ . Arguments are promoted to a common type. Operates elementwise over ``x`` if it is an array.
@@ -1468,6 +1573,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        abs(x)
 
    Absolute value of ``x``
@@ -1476,6 +1582,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        abs2(x)
 
    Squared absolute value of ``x``
@@ -1484,6 +1591,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        copysign(x, y)
 
    Return ``x`` such that it has the same sign as ``y``
@@ -1500,6 +1608,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        signbit(x)
 
    Returns ``true`` if the value of the sign of ``x`` is negative, otherwise ``false``\ .
@@ -1508,6 +1617,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        flipsign(x, y)
 
    Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``\ .
@@ -1525,6 +1635,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isqrt(n)
 
    Integer square root: the largest integer ``m`` such that ``m*m <= n``\ .
@@ -1615,6 +1726,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        real(z)
 
    Return the real part of the complex number ``z``
@@ -1623,6 +1735,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        imag(z)
 
    Return the imaginary part of the complex number ``z``
@@ -1631,6 +1744,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        reim(z)
 
    Return both the real and imaginary parts of the complex number ``z``
@@ -1639,6 +1753,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        conj(z)
 
    Compute the complex conjugate of a complex number ``z``
@@ -1647,6 +1762,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        angle(z)
 
    Compute the phase angle in radians of a complex number ``z``
@@ -1664,6 +1780,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        binomial(n,k)
 
    Number of ways to choose ``k`` out of ``n`` items
@@ -1728,6 +1845,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gcd(x,y)
 
    Greatest common (positive) divisor (or zero if x and y are both zero).
@@ -1736,6 +1854,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        lcm(x,y)
 
    Least common (non-negative) multiple.
@@ -1767,6 +1886,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ispow2(n) -> Bool
 
    Test whether ``n`` is a power of two
@@ -1775,6 +1895,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nextpow2(n)
 
    The smallest power of two not less than ``n``\ . Returns 0 for ``n==0``\ , and returns ``-nextpow2(-n)`` for negative arguments.
@@ -1783,6 +1904,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        prevpow2(n)
 
    The largest power of two not greater than ``n``\ . Returns 0 for ``n==0``\ , and returns ``-prevpow2(-n)`` for negative arguments.
@@ -1791,6 +1913,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nextpow(a, x)
 
    The smallest ``a^n`` not less than ``x``\ , where ``n`` is a non-negative integer. ``a`` must be greater than 1, and ``x`` must be greater than 0.
@@ -1799,6 +1922,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        prevpow(a, x)
 
    The largest ``a^n`` not greater than ``x``\ , where ``n`` is a non-negative integer. ``a`` must be greater than 1, and ``x`` must not be less than 1.
@@ -1843,6 +1967,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gamma(x)
 
    Compute the gamma function of ``x``
@@ -1862,6 +1987,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        lfact(x)
 
    Compute the logarithmic factorial of ``x``
@@ -1870,6 +1996,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        digamma(x)
 
    Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``\ )
@@ -1878,6 +2005,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        invdigamma(x)
 
    Compute the inverse digamma function of ``x``\ .
@@ -1886,6 +2014,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trigamma(x)
 
    Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``\ )
@@ -1894,6 +2023,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        polygamma(m, x)
 
    Compute the polygamma function of order ``m`` of argument ``x`` (the ``(m+1)th`` derivative of the logarithm of ``gamma(x)``\ )
@@ -2073,6 +2203,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        besselh(nu, k, x)
 
    Bessel function of the third kind of order ``nu`` (Hankel function). ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``\ , respectively.
@@ -2176,6 +2307,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ndigits(n, b)
 
    Compute the number of digits in number ``n`` written in base ``b``\ .
@@ -2184,6 +2316,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        widemul(x, y)
 
    Multiply ``x`` and ``y``\ , giving the result as a larger type.
@@ -2208,6 +2341,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mean(v[, region])
 
    Compute the mean of whole array ``v``\ , or optionally along the dimensions in ``region``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
@@ -2216,6 +2350,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mean!(r, v)
 
    Compute the mean of ``v`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
@@ -2224,6 +2359,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        std(v[, region])
 
    Compute the sample standard deviation of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
@@ -2232,6 +2368,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        stdm(v, m)
 
    Compute the sample standard deviation of a vector ``v`` with known mean ``m``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2240,6 +2377,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        var(v[, region])
 
    Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
@@ -2248,6 +2386,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        varm(v, m)
 
    Compute the sample variance of a vector ``v`` with known mean ``m``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2256,21 +2395,25 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        middle(x)
 
    Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
 
    .. code-block:: julia
+
        middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
 
    .. code-block:: julia
+
        middle(range)
 
    Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
 
    .. code-block:: julia
+
        middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
@@ -2279,21 +2422,25 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        middle(x)
 
    Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
 
    .. code-block:: julia
+
        middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
 
    .. code-block:: julia
+
        middle(range)
 
    Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
 
    .. code-block:: julia
+
        middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
@@ -2302,21 +2449,25 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        middle(x)
 
    Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
 
    .. code-block:: julia
+
        middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
 
    .. code-block:: julia
+
        middle(range)
 
    Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
 
    .. code-block:: julia
+
        middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
@@ -2325,21 +2476,25 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        middle(x)
 
    Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
 
    .. code-block:: julia
+
        middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
 
    .. code-block:: julia
+
        middle(range)
 
    Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
 
    .. code-block:: julia
+
        middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
@@ -2348,6 +2503,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        median(v[, region])
 
    Compute the median of whole array ``v``\ , or optionally along the dimensions in ``region``\ . ``NaN`` is returned if the data contains any ``NaN`` values. For applications requiring the handling of missing data, the ``DataArrays`` package is recommended.
@@ -2356,6 +2512,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        median!(v)
 
    Like ``median``\ , but may overwrite the input vector.
@@ -2364,11 +2521,13 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hist(v[, n]) -> e, counts
 
    Compute the histogram of ``v``\ , optionally using approximately ``n`` bins. The return values are a range ``e``\ , which correspond to the edges of the bins, and ``counts`` containing the number of elements of ``v`` in each bin. Note: Julia does not ignore ``NaN`` values in the computation.
 
    .. code-block:: julia
+
        hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for the bins. The result will be a vector of length ``length(e) - 1``\ , such that the element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2377,11 +2536,13 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hist(v[, n]) -> e, counts
 
    Compute the histogram of ``v``\ , optionally using approximately ``n`` bins. The return values are a range ``e``\ , which correspond to the edges of the bins, and ``counts`` containing the number of elements of ``v`` in each bin. Note: Julia does not ignore ``NaN`` values in the computation.
 
    .. code-block:: julia
+
        hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for the bins. The result will be a vector of length ``length(e) - 1``\ , such that the element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2390,6 +2551,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hist!(counts, v, e) -> e, counts
 
    Compute the histogram of ``v``\ , using a vector/range ``e`` as the edges for the bins. This function writes the resultant counts to a pre-allocated array ``counts``\ .
@@ -2398,6 +2560,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
    Compute a "2d histogram" of a set of N points specified by N-by-2 matrix ``M``\ . Arguments ``e1`` and ``e2`` are bins for each dimension, specified either as integer bin counts or vectors of bin edges. The result is a tuple of ``edge1`` (the bin edges used in the first dimension), ``edge2`` (the bin edges used in the second dimension), and ``counts``\ , a histogram matrix of size ``(length(edge1)-1, length(edge2)-1)``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2406,6 +2569,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
 
    Compute a "2d histogram" with respect to the bins delimited by the edges given in ``e1`` and ``e2``\ . This function writes the results to a pre-allocated array ``counts``\ .
@@ -2414,6 +2578,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        histrange(v, n)
 
    Compute *nice* bin ranges for the edges of a histogram of ``v``\ , using approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5 multiplied by a power of 10. Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2422,6 +2587,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        midpoints(e)
 
    Compute the midpoints of the bins with edges ``e``\ . The result is a vector/range of length ``length(e) - 1``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2430,11 +2596,13 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        quantile(v, p)
 
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
    .. code-block:: julia
+
        quantile(v, p)
 
    Compute the quantile of a vector ``v`` at the probability ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2443,11 +2611,13 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        quantile(v, p)
 
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
    .. code-block:: julia
+
        quantile(v, p)
 
    Compute the quantile of a vector ``v`` at the probability ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2456,6 +2626,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        quantile!(v, p)
 
    Like ``quantile``\ , but overwrites the input vector.
@@ -2464,6 +2635,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
 
    Compute the Pearson covariance between the vector(s) in ``v1`` and ``v2``\ . Here, ``v1`` and ``v2`` can be either vectors or matrices.
@@ -2482,6 +2654,7 @@ Statistics
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cor(v1[, v2][, vardim=1, mean=nothing])
 
    Compute the Pearson correlation between the vector(s) in ``v1`` and ``v2``\ .
@@ -2536,6 +2709,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ifft(A [, dims])
 
    Multidimensional inverse FFT.
@@ -2845,11 +3019,13 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fftshift(x)
 
    Swap the first and second halves of each dimension of ``x``\ .
 
    .. code-block:: julia
+
        fftshift(x,dim)
 
    Swap the first and second halves of the given dimension of array ``x``\ .
@@ -2858,11 +3034,13 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fftshift(x)
 
    Swap the first and second halves of each dimension of ``x``\ .
 
    .. code-block:: julia
+
        fftshift(x,dim)
 
    Swap the first and second halves of the given dimension of array ``x``\ .
@@ -2871,6 +3049,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ifftshift(x, [dim])
 
    Undoes the effect of ``fftshift``\ .
@@ -2879,6 +3058,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        filt(b, a, x, [si])
 
    Apply filter described by vectors ``a`` and ``b`` to vector ``x``\ , with an optional initial filter state vector ``si`` (defaults to zeros).
@@ -2897,6 +3077,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        deconv(b,a)
 
    Construct vector ``c`` such that ``b = conv(a,c) + r``\ . Equivalent to polynomial division.
@@ -2905,6 +3086,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        conv(u,v)
 
    Convolution of two vectors. Uses FFT algorithm.
@@ -2913,11 +3095,13 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        conv2(u,v,A)
 
    2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm
 
    .. code-block:: julia
+
        conv2(B,A)
 
    2-D convolution of the matrix ``B`` with the matrix ``A``\ . Uses 2-D FFT algorithm
@@ -2926,11 +3110,13 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        conv2(u,v,A)
 
    2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm
 
    .. code-block:: julia
+
        conv2(B,A)
 
    2-D convolution of the matrix ``B`` with the matrix ``A``\ . Uses 2-D FFT algorithm
@@ -2939,6 +3125,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        xcorr(u,v)
 
    Compute the cross-correlation of two vectors.
@@ -3017,6 +3204,7 @@ some built-in integration support in Julia.
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
 
    Numerically integrate the function ``f(x)`` from ``a`` to ``b``\ , and optionally over additional intervals ``b`` to ``c`` and so on. Keyword options include a relative error tolerance ``reltol`` (defaults to ``sqrt(eps)`` in the precision of the endpoints), an absolute error tolerance ``abstol`` (defaults to 0), a maximum number of function evaluations ``maxevals`` (defaults to ``10^7``\ ), and the ``order`` of the integration rule (defaults to 7).

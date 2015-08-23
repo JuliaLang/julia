@@ -121,6 +121,7 @@ Sorting Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via the ``alg`` keyword (see Sorting Algorithms_ for available algorithms). The ``by`` keyword lets you provide a function that will be applied to each element before comparison; the ``lt`` keyword allows providing a custom "less than" function; use ``rev=true`` to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both ``by`` and ``lt`` are specified, the ``lt`` function is applied to the result of the ``by`` function; ``rev=true`` reverses whatever ordering specified via the ``by`` and ``lt`` keywords.
@@ -129,11 +130,13 @@ Sorting Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
    .. code-block:: julia
+
        sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array ``A`` along the given dimension.
@@ -142,11 +145,13 @@ Sorting Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
    .. code-block:: julia
+
        sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array ``A`` along the given dimension.
@@ -184,6 +189,7 @@ Sorting Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix ``A`` lexicographically.
@@ -192,6 +198,7 @@ Sorting Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the columns of matrix ``A`` lexicographically.
@@ -203,6 +210,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Test whether a vector is in sorted order. The ``by``\ , ``lt`` and ``rev`` keywords modify what order is considered to be sorted just as they do for ``sort``\ .
@@ -211,6 +219,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Returns the range of indices of ``a`` which compare as equal to ``x`` according to the order specified by the ``by``\ , ``lt`` and ``rev`` keywords, assuming that ``a`` is already sorted in that order. Returns an empty range located at the insertion point if ``a`` does not contain values equal to ``x``\ .
@@ -219,6 +228,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Returns the index of the first value in ``a`` greater than or equal to ``x``\ , according to the specified order. Returns ``length(a)+1`` if ``x`` is greater than all values in ``a``\ .
@@ -227,6 +237,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Returns the index of the last value in ``a`` less than or equal to ``x``\ , according to the specified order. Returns ``0`` if ``x`` is less than all values in ``a``\ .
@@ -235,6 +246,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Partially sort the vector ``v`` in place, according to the order specified by ``by``\ , ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if ``k`` is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If ``k`` is a single index, that value is returned; if ``k`` is a range, an array of values at those indices is returned. Note that ``select!`` does not fully sort the input array.
@@ -243,6 +255,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of ``select!`` which copies ``v`` before partially sorting it, thereby returning the same thing as ``select!`` but leaving ``v`` unmodified.
@@ -251,6 +264,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Return a partial permutation of the the vector ``v``\ , according to the order specified by ``by``\ , ``lt`` and ``rev``\ , so that ``v[output]`` returns the first ``k`` (or range of adjacent values if ``k`` is a range) values of a fully sorted version of ``v``\ . If ``k`` is a single index (Integer), an array of the first ``k`` indices is returned; if ``k`` is a range, an array of those indices is returned. Note that the handling of integer values for ``k`` is different from ``select`` in that it returns a vector of ``k`` elements instead of just the ``k`` th element. Also note that this is equivalent to, but more efficient than, calling ``sortperm(...)[k]``
@@ -259,6 +273,7 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
    Like ``selectperm``\ , but accepts a preallocated index vector ``ix``\ . If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(ix)``\ .
