@@ -210,6 +210,7 @@ function logdet{T<:Complex,S}(A::LU{T,S})
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
+inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
 
 cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
 cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
