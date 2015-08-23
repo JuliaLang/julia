@@ -55,7 +55,7 @@ function find_all_in_cache_path(mod::Symbol)
 end
 
 function _include_from_serialized(content::Vector{UInt8})
-    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{Uint8},Int), content, sizeof(content))
+    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8},Int), content, sizeof(content))
 end
 
 # returns an array of modules loaded, or nothing if failed
@@ -81,7 +81,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
         end
     elseif node == myid()
         myid() == 1 && recompile_stale(mod, path_to_try)
-        restored = ccall(:jl_restore_incremental, Any, (Ptr{Uint8},), path_to_try)
+        restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
     else
         content = remotecall_fetch(node, open, readbytes, path_to_try)
         restored = _include_from_serialized(content)

@@ -136,8 +136,8 @@ free_memory() = ccall(:uv_get_free_memory, UInt64, ())
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
 function get_process_title()
-    buf = zeros(Uint8, 512)
-    err = ccall(:uv_get_process_title, Cint, (Ptr{Uint8}, Cint), buf, 512)
+    buf = zeros(UInt8, 512)
+    err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     uv_error("get_process_title", err)
     return bytestring(pointer(buf))
 end
