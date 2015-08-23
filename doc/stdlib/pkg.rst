@@ -13,7 +13,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    .. code-block:: julia
        dir() -> AbstractString
 
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v\$(VERSION.major).\$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
+   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
    .. code-block:: julia
        dir(names...) -> AbstractString
@@ -26,7 +26,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    .. code-block:: julia
        dir() -> AbstractString
 
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v\$(VERSION.major).\$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
+   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
    .. code-block:: julia
        dir(names...) -> AbstractString
@@ -37,7 +37,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
-       init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
+       init(meta = DEFAULT_META, branch = META_BRANCH)
 
    Initialize ``Pkg.dir()`` as a package directory. This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value. As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which are typically not provided. Explicit (non-default) arguments can be used to support a custom METADATA setup.
 
@@ -173,7 +173,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    .. code-block:: julia
        checkout(pkg, [branch="master"])
 
-   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
+   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``\ .
 
 .. function:: pin(pkg)
 
@@ -243,7 +243,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    .. code-block:: julia
        generate(pkg,license)
 
-   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``\ , ``"BSD"`` or ``"ASL"``\ . If you want to make a package with a different license, you can edit it afterwards. Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``\ , ``README.md``\ , ``REQUIRE``\ , the julia entrypoint ``\$pkg/src/\$pkg.jl``\ , and Travis and AppVeyor CI configuration files ``.travis.yml`` and ``appveyor.yml``\ .
+   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``\ , ``"BSD"`` or ``"ASL"``\ . If you want to make a package with a different license, you can edit it afterwards. Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``\ , ``README.md``\ , ``REQUIRE``\ , the julia entrypoint ``$pkg/src/$pkg.jl``\ , and Travis and AppVeyor CI configuration files ``.travis.yml`` and ``appveyor.yml``\ .
 
 .. function:: register(pkg, [url])
 
@@ -294,4 +294,12 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
        test(pkgs...)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
+
+.. function:: dependents("pkg")
+
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+       Pkg.dependents("PackageName")
+
+   Find the direct dependents of the given package, i.e. all packages which include ``MyPackage`` in their ``REQUIRE`` file.
 
