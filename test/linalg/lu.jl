@@ -3,6 +3,7 @@
 debug = false
 
 using Base.Test
+import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
 
@@ -32,6 +33,11 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) : convert(Tridiagonal{eltya}, eltya <: Complex ? Tridiagonal(complex(dlreal, dlimg), complex(dreal, dimg), complex(dureal, duimg)) : Tridiagonal(dlreal, dreal, dureal))
     ε = εa = eps(abs(float(one(eltya))))
 
+    if eltya <: BlasFloat
+        num = rand(eltya)
+        @test lu(num) == (one(eltya),num,1)
+        @test_approx_eq full(lufact(num)) eltya[num]
+    end
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex(creal, cimg) : creal)
@@ -41,7 +47,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 debug && println("(Automatic) Square LU decomposition")
         κ     = cond(a,1)
         lua   = factorize(a)
+        @test_throws KeyError lua[:Z]
         l,u,p = lua[:L], lua[:U], lua[:p]
+        ll,ul,pl = lu(a)
+        @test_approx_eq ll * ul a[pl,:]
         @test_approx_eq l*u a[p,:]
         @test_approx_eq (l*u)[invperm(p),:] a
         @test_approx_eq a * inv(lua) eye(n)
@@ -50,15 +59,21 @@ debug && println("(Automatic) Square LU decomposition")
         @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
         @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
         @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
+        @test_approx_eq full(lua) a
         if eltya <: Real && eltyb <: Real
             @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
             @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
         end
-        @test_approx_eq full(lua) a
+        if eltya <: BlasFloat && eltyb <: BlasFloat
+            e = rand(eltyb,n,n)
+            @test norm(e/lua - e/a,1) < ε*κ*n^2
+        end
 
 debug && println("Tridiagonal LU")
         κd    = cond(full(d),1)
         lud   = lufact(d)
+        @test lufact(lud) == lud
+        @test_throws KeyError lud[:Z]
         @test_approx_eq lud[:L]*lud[:U] lud[:P]*full(d)
         @test_approx_eq lud[:L]*lud[:U] full(d)[lud[:p],:]
         @test_approx_eq full(lud) d
@@ -71,6 +86,23 @@ debug && println("Tridiagonal LU")
         end
         f = zeros(eltyb, n+1)
         @test_throws DimensionMismatch lud\f
+        @test_throws DimensionMismatch lud.'\f
+        @test_throws DimensionMismatch lud'\f
+
+        if eltya <: BlasFloat && eltyb <: BlasFloat
+            e = rand(eltyb,n,n)
+            @test norm(e/lud - e/d,1) < ε*κ*n^2
+            @test norm((lud.'\e') - full(d.')\e',1) < ε*κd*n^2
+            #test singular
+            du = rand(eltya,n-1)
+            dl = rand(eltya,n-1)
+            dd = rand(eltya,n)
+            dd[1] = zero(eltya)
+            du[1] = zero(eltya)
+            dl[1] = zero(eltya)
+            zT = Tridiagonal(dl,dd,du)
+            @test lufact(zT).info == 1
+        end
 
 debug && println("Thin LU")
         lua   = @inferred lufact(a[:,1:n1])
