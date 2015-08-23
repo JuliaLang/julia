@@ -545,6 +545,8 @@ Run the function `f` using the `handler` as the handler.
 """
 Test.with_handler
 
+
+if USE_GPL_LIBS
 # Base.FFTW
 
 doc"""
@@ -612,6 +614,289 @@ correspond to :func:`r2r` and :func:`r2r!`, respectively.
 ```
 """
 FFTW.plan_r2r
+
+doc"""
+```rst
+::
+
+           plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
+backwards transform :func:`bfft`.
+```
+"""
+plan_bfft
+
+doc"""
+```rst
+::
+
+           plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Same as :func:`plan_bfft`, but operates in-place on ``A``.
+```
+"""
+plan_bfft!
+
+doc"""
+```rst
+::
+
+           plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
+except for :func:`irfft` and :func:`brfft`, respectively.  The first
+three arguments have the same meaning as for :func:`irfft`.
+```
+"""
+plan_irfft
+
+doc"""
+```rst
+::
+
+           dct(A [, dims])
+
+Performs a multidimensional type-II discrete cosine transform (DCT)
+of the array ``A``, using the unitary normalization of the DCT.
+The optional ``dims`` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along.  Most efficient if the size of ``A`` along the transformed
+dimensions is a product of small primes; see :func:`nextprod`.  See
+also :func:`plan_dct` for even greater efficiency.
+```
+"""
+dct
+
+doc"""
+```rst
+::
+
+           dct!(A [, dims])
+
+Same as :func:`dct!`, except that it operates in-place
+on ``A``, which must be an array of real or complex floating-point
+values.
+```
+"""
+dct!
+
+
+doc"""
+```rst
+::
+
+           idct(A [, dims])
+
+Computes the multidimensional inverse discrete cosine transform (DCT)
+of the array ``A`` (technically, a type-III DCT with the unitary
+normalization).
+The optional ``dims`` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along.  Most efficient if the size of ``A`` along the transformed
+dimensions is a product of small primes; see :func:`nextprod`.  See
+also :func:`plan_idct` for even greater efficiency.
+```
+"""
+idct
+
+doc"""
+```rst
+::
+
+           idct!(A [, dims])
+
+Same as :func:`idct!`, but operates in-place on ``A``.
+```
+"""
+idct!
+
+doc"""
+```rst
+::
+
+           fft(A [, dims])
+
+Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
+argument specifies an iterable subset of dimensions (e.g. an integer,
+range, tuple, or array) to transform along.  Most efficient if the
+size of ``A`` along the transformed dimensions is a product of small
+primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
+greater efficiency.
+
+A one-dimensional FFT computes the one-dimensional discrete Fourier
+transform (DFT) as defined by
+
+.. math::
+
+   \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
+   \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
+   A[n].
+
+A multidimensional FFT simply performs this operation along each transformed
+dimension of ``A``.
+
+Higher performance is usually possible with multi-threading. Use
+`FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
+processors.
+```
+"""
+fft
+
+doc"""
+```rst
+::
+
+           plan_dct(A [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized discrete cosine transform (DCT), similar to
+:func:`plan_fft` except producing a function that computes :func:`dct`.
+The first two arguments have the same meaning as for :func:`dct`.
+```
+"""
+plan_dct
+
+doc"""
+```rst
+::
+
+           plan_dct!(A [, dims [, flags [, timelimit]]])
+
+Same as :func:`plan_dct`, but operates in-place on ``A``.
+```
+"""
+plan_dct!
+
+doc"""
+```rst
+::
+
+           plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
+except for :func:`rfft` instead of :func:`fft`.  The first two
+arguments, and the size of the transformed result, are the same as
+for :func:`rfft`.
+```
+"""
+plan_rfft
+
+doc"""
+```rst
+::
+
+           plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
+matching the shape and type of ``A``.  (The first two arguments have
+the same meaning as for :func:`fft`.)  Returns an object ``P`` which
+represents the linear operator computed by the FFT, and which contains
+all of the information needed to compute ``fft(A, dims)`` quickly.
+
+To apply ``P`` to an array ``A``, use ``P * A``; in general, the
+syntax for applying plans is much like that of matrices.  (A plan
+can only be applied to arrays of the same size as the ``A`` for
+which the plan was created.)  You can also apply a plan with a
+preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
+A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
+apply the inverse plan with ``P \ Â`` (the inverse plan is cached
+and reused for subsequent calls to ``inv`` or ``\``), and apply the
+inverse plan to a pre-allocated output array ``A`` with
+``A_ldiv_B!(A, P, Â)``.
+
+The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
+to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
+will instead spend several seconds (or more) benchmarking different
+possible FFT algorithms and picking the fastest one; see the FFTW manual
+for more information on planner flags.  The optional ``timelimit`` argument
+specifies a rough upper bound on the allowed planning time, in seconds.
+Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A``
+to be overwritten with zeros during plan creation.
+
+:func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan
+that operates in-place on its argument (which must be an array of
+complex floating-point numbers).  :func:`plan_ifft` and so on
+are similar but produce plans that perform the equivalent of
+the inverse transforms :func:`ifft` and so on.
+```
+"""
+plan_fft
+
+doc"""
+```rst
+::
+
+           plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Same as :func:`plan_fft`, but operates in-place on ``A``.
+```
+"""
+plan_fft!
+
+doc"""
+```rst
+::
+
+           plan_idct(A [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+:func:`plan_fft` except producing a function that computes :func:`idct`.
+The first two arguments have the same meaning as for :func:`idct`.
+```
+"""
+plan_idct
+
+doc"""
+```rst
+::
+
+           plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
+:func:`ifft`.
+```
+"""
+plan_ifft
+
+doc"""
+```rst
+::
+
+           plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input unnormalized transform, similar to
+:func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
+The first two arguments and the size of the transformed result, are
+the same as for :func:`brfft`.
+```
+"""
+plan_brfft
+
+doc"""
+```rst
+::
+
+           plan_idct!(A [, dims [, flags [, timelimit]]])
+
+Same as :func:`plan_idct`, but operates in-place on ``A``.
+```
+"""
+plan_idct!
+
+doc"""
+```rst
+::
+
+           plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Same as :func:`plan_ifft`, but operates in-place on ``A``.
+```
+"""
+plan_ifft!
+
+
+end # USE_GPL_LIBS
+
 
 # Base.Profile
 
@@ -959,17 +1244,6 @@ Compute a type that contains the intersection of `T` and `S`. Usually this will 
 typeintersect
 
 doc"""
-```rst
-::
-
-           plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_bfft`, but operates in-place on ``A``.
-```
-"""
-plan_bfft!
-
-doc"""
     pointer(array [, index])
 
 Get the native address of an array or string element. Be careful to ensure that a julia reference to `a` exists as long as this pointer will be used. This function is "unsafe" like `unsafe_convert`.
@@ -992,18 +1266,6 @@ Test whether a floating point number is not a number (NaN)
 """
 isnan
 
-doc"""
-```rst
-::
-
-           plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
-except for :func:`irfft` and :func:`brfft`, respectively.  The first
-three arguments have the same meaning as for :func:`irfft`.
-```
-"""
-plan_irfft
 
 doc"""
 ```rst
@@ -3880,23 +4142,6 @@ doc"""
 ```rst
 ::
 
-           dct(A [, dims])
-
-Performs a multidimensional type-II discrete cosine transform (DCT)
-of the array ``A``, using the unitary normalization of the DCT.
-The optional ``dims`` argument specifies an iterable subset of
-dimensions (e.g. an integer, range, tuple, or array) to transform
-along.  Most efficient if the size of ``A`` along the transformed
-dimensions is a product of small primes; see :func:`nextprod`.  See
-also :func:`plan_dct` for even greater efficiency.
-```
-"""
-dct
-
-doc"""
-```rst
-::
-
            append!(collection, collection2) -> collection.
 
 Add the elements of ``collection2`` to the end of ``collection``.
@@ -5468,23 +5713,6 @@ Like uperm but gets the permissions of the group owning the file
 """
 gperm
 
-doc"""
-```rst
-::
-
-           idct(A [, dims])
-
-Computes the multidimensional inverse discrete cosine transform (DCT)
-of the array ``A`` (technically, a type-III DCT with the unitary
-normalization).
-The optional ``dims`` argument specifies an iterable subset of
-dimensions (e.g. an integer, range, tuple, or array) to transform
-along.  Most efficient if the size of ``A`` along the transformed
-dimensions is a product of small primes; see :func:`nextprod`.  See
-also :func:`plan_idct` for even greater efficiency.
-```
-"""
-idct
 
 doc"""
     nb_available(stream)
@@ -5727,37 +5955,6 @@ Convert an arbitrarily long hexadecimal string to its binary representation. Ret
 """
 hex2bytes
 
-doc"""
-```rst
-::
-
-           fft(A [, dims])
-
-Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
-argument specifies an iterable subset of dimensions (e.g. an integer,
-range, tuple, or array) to transform along.  Most efficient if the
-size of ``A`` along the transformed dimensions is a product of small
-primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
-greater efficiency.
-
-A one-dimensional FFT computes the one-dimensional discrete Fourier
-transform (DFT) as defined by
-
-.. math::
-
-   \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
-   \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
-   A[n].
-
-A multidimensional FFT simply performs this operation along each transformed
-dimension of ``A``.
-
-Higher performance is usually possible with multi-threading. Use
-`FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
-processors.
-```
-"""
-fft
 
 doc"""
     isdir(path) -> Bool
@@ -6120,18 +6317,6 @@ Tests whether a character is alphanumeric, or whether this is true for all eleme
 """
 isalnum
 
-doc"""
-```rst
-::
-
-           dct!(A [, dims])
-
-Same as :func:`dct!`, except that it operates in-place
-on ``A``, which must be an array of real or complex floating-point
-values.
-```
-"""
-dct!
 
 doc"""
     @sprintf("%Fmt", args...)
@@ -6593,16 +6778,6 @@ Create a tuple of length `n`, computing each element as `f(i)`, where `i` is the
 """
 ntuple
 
-doc"""
-```rst
-::
-
-           idct!(A [, dims])
-
-Same as :func:`idct!`, but operates in-place on ``A``.
-```
-"""
-idct!
 
 doc"""
 ```rst
@@ -7021,17 +7196,6 @@ Create an IOBuffer, which may optionally operate on a pre-existing array. If the
 IOBuffer
 
 doc"""
-```rst
-::
-
-           plan_dct!(A [, dims [, flags [, timelimit]]])
-
-Same as :func:`plan_dct`, but operates in-place on ``A``.
-```
-"""
-plan_dct!
-
-doc"""
     findmax(itr) -> (x, index)
 
 Returns the maximum element and its index.
@@ -7214,20 +7378,6 @@ Read a value of the given type from a stream, in canonical binary representation
 Read a series of values of the given type from a stream, in canonical binary representation. `dims` is either a tuple or a series of integer arguments specifying the size of `Array` to return.
 """
 read
-
-doc"""
-```rst
-::
-
-           plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
-except for :func:`rfft` instead of :func:`fft`.  The first two
-arguments, and the size of the transformed result, are the same as
-for :func:`rfft`.
-```
-"""
-plan_rfft
 
 doc"""
     @timev
@@ -8945,46 +9095,6 @@ A type assertion failure, or calling an intrinsic function with an incorrect arg
 """
 TypeError
 
-doc"""
-```rst
-::
-
-           plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
-matching the shape and type of ``A``.  (The first two arguments have
-the same meaning as for :func:`fft`.)  Returns an object ``P`` which
-represents the linear operator computed by the FFT, and which contains
-all of the information needed to compute ``fft(A, dims)`` quickly.
-
-To apply ``P`` to an array ``A``, use ``P * A``; in general, the
-syntax for applying plans is much like that of matrices.  (A plan
-can only be applied to arrays of the same size as the ``A`` for
-which the plan was created.)  You can also apply a plan with a
-preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
-A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
-apply the inverse plan with ``P \ Â`` (the inverse plan is cached
-and reused for subsequent calls to ``inv`` or ``\``), and apply the
-inverse plan to a pre-allocated output array ``A`` with
-``A_ldiv_B!(A, P, Â)``.
-
-The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
-to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
-will instead spend several seconds (or more) benchmarking different
-possible FFT algorithms and picking the fastest one; see the FFTW manual
-for more information on planner flags.  The optional ``timelimit`` argument
-specifies a rough upper bound on the allowed planning time, in seconds.
-Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A``
-to be overwritten with zeros during plan creation.
-
-:func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan
-that operates in-place on its argument (which must be an array of
-complex floating-point numbers).  :func:`plan_ifft` and so on
-are similar but produce plans that perform the equivalent of
-the inverse transforms :func:`ifft` and so on.
-```
-"""
-plan_fft
 
 doc"""
 ```rst
@@ -9187,17 +9297,6 @@ Get the vector of processes that have mapped the shared array
 """
 procs
 
-doc"""
-```rst
-::
-
-           plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
-backwards transform :func:`bfft`.
-```
-"""
-plan_bfft
 
 doc"""
     mod(x, y)
@@ -10185,19 +10284,6 @@ Create an ASCII string from the address of a C (0-terminated) string encoded in 
 ascii
 
 doc"""
-```rst
-::
-
-           plan_idct(A [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
-:func:`plan_fft` except producing a function that computes :func:`idct`.
-The first two arguments have the same meaning as for :func:`idct`.
-```
-"""
-plan_idct
-
-doc"""
     maxabs(itr)
 
 Compute the maximum absolute value of a collection of values.
@@ -10311,16 +10397,6 @@ Create a `RandomDevice` RNG object. Two such objects will always generate differ
 """
 RandomDevice
 
-doc"""
-```rst
-::
-
-           plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but operates in-place on ``A``.
-```
-"""
-plan_fft!
 
 doc"""
     fma(x, y, z)
@@ -10951,17 +11027,6 @@ Determine whether predicate `p` returns true for any elements of `itr`.
 """
 any
 
-doc"""
-```rst
-::
-
-           plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
-:func:`ifft`.
-```
-"""
-plan_ifft
 
 doc"""
 ```rst
@@ -11251,20 +11316,6 @@ k]``.)
 eigfact
 
 doc"""
-```rst
-::
-
-           plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input unnormalized transform, similar to
-:func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
-The first two arguments and the size of the transformed result, are
-the same as for :func:`brfft`.
-```
-"""
-plan_brfft
-
-doc"""
     rowvals(A)
 
 Return a vector of the row indices of `A`, and any modifications to the returned vector will mutate `A` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See `nonzeros(A)` and `nzrange(A, col)`.
@@ -11507,18 +11558,6 @@ Return x if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`.
 """
 clamp
 
-doc"""
-```rst
-::
-
-           plan_dct(A [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized discrete cosine transform (DCT), similar to
-:func:`plan_fft` except producing a function that computes :func:`dct`.
-The first two arguments have the same meaning as for :func:`dct`.
-```
-"""
-plan_dct
 
 doc"""
     cscd(x)
@@ -11840,17 +11879,6 @@ doc"""
 ```rst
 ::
 
-           plan_idct!(A [, dims [, flags [, timelimit]]])
-
-Same as :func:`plan_idct`, but operates in-place on ``A``.
-```
-"""
-plan_idct!
-
-doc"""
-```rst
-::
-
            randperm([rng,] n)
 
 Construct a random permutation of length ``n``. The optional ``rng`` argument
@@ -11865,17 +11893,6 @@ doc"""
 Seek a stream to its end.
 """
 seekend
-
-doc"""
-```rst
-::
-
-           plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_ifft`, but operates in-place on ``A``.
-```
-"""
-plan_ifft!
 
 doc"""
     DivideError()
