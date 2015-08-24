@@ -314,9 +314,9 @@ Libdl.dlsym_e
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           dlopen_e(libfile::AbstractString [, flags::Integer])
+    dlopen_e(libfile::AbstractString [, flags::Integer])
 
 Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 ```
@@ -422,9 +422,9 @@ Libc.flush_cstdio
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           msync(ptr, len, [flags])
+    msync(ptr, len, [flags])
 
 Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
 
@@ -437,9 +437,9 @@ Libc.msync
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           PriorityQueue(K, V, [ord])
+    PriorityQueue(K, V, [ord])
 
 Construct a new :obj:`PriorityQueue`, with keys of type ``K`` and values/priorites of
 type ``V``. If an order is not given, the priority queue is min-ordered using
@@ -471,9 +471,9 @@ Collections.peek
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           heapify!(v, [ord])
+    heapify!(v, [ord])
 
 In-place :func:`heapify`.
 ```
@@ -549,9 +549,9 @@ Test.with_handler
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           r2r(A, kind [, dims])
+    r2r(A, kind [, dims])
 
 Performs a multidimensional real-input/real-output (r2r) transform
 of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -579,9 +579,9 @@ FFTW.r2r
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           r2r!(A, kind [, dims])
+    r2r!(A, kind [, dims])
 
 Same as :func:`r2r`, but operates in-place on ``A``, which must be
 an array of real or complex floating-point numbers.
@@ -591,9 +591,9 @@ FFTW.r2r!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+    plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
 
 Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 ```
@@ -602,9 +602,9 @@ FFTW.plan_r2r!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+    plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
 Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
 except that the transforms (and the first three arguments)
@@ -617,9 +617,9 @@ FFTW.plan_r2r
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
 
 Prints profiling results to ``io`` (by default, ``STDOUT``). If you
 do not supply a ``data`` vector, the internal buffer of accumulated
@@ -629,9 +629,9 @@ shown. ``combine==true`` merges instruction pointers that
 correspond to the same line of code.  ``cols`` controls the width
 of the display.
 
-::
+.. code-block: julia
 
-           print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+    print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
 Prints profiling results to ``io``. This variant is used to examine
 results exported by a previous call to :func:`retrieve`.
@@ -650,9 +650,9 @@ Profile.init
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           clear_malloc_data()
+    clear_malloc_data()
 
 Clears any stored memory allocation data when running julia with
 ``--track-allocation``.  Execute the command(s) you want to test
@@ -665,9 +665,9 @@ Profile.clear_malloc_data
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
 Given a previous profiling run, determine who called a particular
 function. Supplying the filename (and optionally, range of line
@@ -683,9 +683,9 @@ Profile.callers
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           fetch() -> data
+    fetch() -> data
 
 Returns a reference to the internal buffer of backtraces. Note that
 subsequent operations, like :func:`clear`, can affect
@@ -876,9 +876,9 @@ schedule
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           step(r)
+    step(r)
 
 Get the step size of a :obj:`Range` object.
 ```
@@ -942,9 +942,9 @@ indmin
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           powermod(x, p, m)
+    powermod(x, p, m)
 
 Compute :math:`x^p \pmod m`
 ```
@@ -960,9 +960,9 @@ typeintersect
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Same as :func:`plan_bfft`, but operates in-place on ``A``.
 ```
@@ -994,9 +994,9 @@ isnan
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
 except for :func:`irfft` and :func:`brfft`, respectively.  The first
@@ -1007,9 +1007,9 @@ plan_irfft
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           println(x)
+    println(x)
 
 Print (using :func:`print`) ``x`` followed by a newline.
 ```
@@ -1018,9 +1018,9 @@ println
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselj(nu, x)
+    besselj(nu, x)
 
 Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
 ```
@@ -1029,9 +1029,9 @@ besselj
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @code_lowered
+    @code_lowered
 
 Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 ```
@@ -1047,9 +1047,9 @@ Base.(:(//))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_mul_B(...)
+    At_mul_B(...)
 
 Matrix operator A\ :sup:`T` B
 ```
@@ -1067,9 +1067,9 @@ methods
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
+    pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
 Transform collections ``lsts`` by applying ``f`` to each element in parallel.
 (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.)
@@ -1140,9 +1140,9 @@ fieldtype
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hypot(x, y)
+    hypot(x, y)
 
 Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
 ```
@@ -1151,9 +1151,9 @@ hypot
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airybi(x)
+    airybi(x)
 
 Airy function :math:`\operatorname{Bi}(x)`.
 ```
@@ -1183,9 +1183,9 @@ minabs!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           prevprod([k_1,k_2,...], n)
+    prevprod([k_1,k_2,...], n)
 
 Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 ```
@@ -1194,9 +1194,9 @@ prevprod
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @evalpoly(z, c...)
+    @evalpoly(z, c...)
 
 Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
 coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
@@ -1209,9 +1209,9 @@ complex ``z``, a more efficient Goertzel-like algorithm.
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eigfact!(A, [B])
+    eigfact!(A, [B])
 
 Same as :func:`eigfact`, but saves space by overwriting the input ``A`` (and
 ``B``), instead of creating a copy.
@@ -1228,9 +1228,9 @@ cosh
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ipermutedims(A, perm)
+    ipermutedims(A, perm)
 
 Like :func:`permutedims`, except the inverse of the given permutation is applied.
 ```
@@ -1346,16 +1346,16 @@ RemoteRef
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           foldl(op, v0, itr)
+    foldl(op, v0, itr)
 
 Like :func:`reduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
 
-::
+.. code-block: julia
 
-           foldl(op, itr)
+    foldl(op, itr)
 
 Like ``foldl(op, v0, itr)``, but using the first element of ``itr``
 as ``v0``. In general, this cannot be used with empty collections
@@ -1366,9 +1366,9 @@ foldl
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airybiprime(x)
+    airybiprime(x)
 
 Airy function derivative :math:`\operatorname{Bi}'(x)`.
 ```
@@ -1377,9 +1377,9 @@ airybiprime
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_rdiv_B(a,b)
+    Ac_rdiv_B(a,b)
 
 Matrix operator A\ :sup:`H` / B
 ```
@@ -1388,9 +1388,9 @@ Ac_rdiv_B
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           set_rounding(T, mode)
+    set_rounding(T, mode)
 
 Set the rounding mode of floating point type ``T``, controlling the
 rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
@@ -1419,17 +1419,17 @@ promote_type
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ind2sub(dims, index) -> subscripts
+    ind2sub(dims, index) -> subscripts
 
 Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
 
 **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
 
-::
+.. code-block: julia
 
-           ind2sub(a, index) -> subscripts
+    ind2sub(a, index) -> subscripts
 
 Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
 ```
@@ -1515,16 +1515,16 @@ Subtraction operator.
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           mapfoldr(f, op, v0, itr)
+    mapfoldr(f, op, v0, itr)
 
 Like :func:`mapreduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
 
-::
+.. code-block: julia
 
-           mapfoldr(f, op, itr)
+    mapfoldr(f, op, itr)
 
 Like ``mapfoldr(f, op, v0, itr)``, but using the first element of
 ``itr`` as ``v0``. In general, this cannot be used with empty
@@ -1563,9 +1563,9 @@ launch
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @code_typed
+    @code_typed
 
 Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
 ```
@@ -1581,21 +1581,21 @@ invdigamma
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           getindex(type[, elements...])
+    getindex(type[, elements...])
 
 Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
-::
+.. code-block: julia
 
-           getindex(A, inds...)
+    getindex(A, inds...)
 
 Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
-::
+.. code-block: julia
 
-           getindex(collection, key...)
+    getindex(collection, key...)
 
 Retrieve the value(s) stored at the given key or index within a collection.
 The syntax ``a[i,j,...]`` is converted by the compiler to
@@ -1617,9 +1617,9 @@ cconvert
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           |>(x, f)
+    |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
 
@@ -1682,9 +1682,9 @@ deconv
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           insert!(collection, index, item)
+    insert!(collection, index, item)
 
 Insert an ``item`` into ``collection`` at the given ``index``.
 ``index`` is the index of ``item`` in the resulting ``collection``.
@@ -1809,9 +1809,9 @@ code_typed
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hankelh1x(nu, x)
+    hankelh1x(nu, x)
 
 Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
 ```
@@ -1848,9 +1848,9 @@ chop
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Float32(x [, mode::RoundingMode])
+    Float32(x [, mode::RoundingMode])
 
 Create a Float32 from ``x``. If ``x`` is not exactly representable then
 ``mode`` determines how ``x`` is rounded.
@@ -1877,9 +1877,9 @@ readuntil
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           isimmutable(v)
+    isimmutable(v)
 
 True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
 Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
@@ -1910,9 +1910,9 @@ rol
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
            Mmap.mmap(type::Type{Array{T,N}}, dims)
 
 Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
@@ -1954,9 +1954,9 @@ creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with str
 
 A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
-::
+.. code-block: julia
 
-           Mmap.mmap(io, BitArray, [dims, offset])
+    Mmap.mmap(io, BitArray, [dims, offset])
 
 Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`, but the byte representation is different.
 
@@ -1969,9 +1969,9 @@ Mmap.mmap
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airyprime(x)
+    airyprime(x)
 
 Airy function derivative :math:`\operatorname{Ai}'(x)`.
 ```
@@ -1980,9 +1980,9 @@ airyprime
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bessely0(x)
+    bessely0(x)
 
 Bessel function of the second kind of order 0, :math:`Y_0(x)`.
 ```
@@ -2030,9 +2030,9 @@ base64decode
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselkx(nu, x)
+    besselkx(nu, x)
 
 Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 ```
@@ -2073,9 +2073,9 @@ sizeof
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ===(x, y)
+    ===(x, y)
            ≡(x,y)
 
 See the :func:`is` operator
@@ -2124,9 +2124,9 @@ stride
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           last(coll)
+    last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time.
 This is accomplished by calling :func:`endof` to get the last index.
@@ -2151,9 +2151,9 @@ istril
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           lgamma(x)
+    lgamma(x)
 
 Compute the logarithm of the absolute value of :func:`gamma` for
 :obj:`Real` ``x``, while for :obj:`Complex` ``x`` it computes the
@@ -2171,9 +2171,9 @@ bin
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cis(z)
+    cis(z)
 
 Return :math:`\exp(iz)`.
 ```
@@ -2223,9 +2223,9 @@ permutations
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ceil([T,] x, [digits, [base]])
+    ceil([T,] x, [digits, [base]])
 
 ``ceil(x)`` returns the nearest integral value of the same type as ``x``
 that is greater than or equal to ``x``.
@@ -2279,15 +2279,15 @@ srand
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+    schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
 See :func:`schurfact`
 
-::
+.. code-block: julia
 
-           schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+    schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
 See :func:`schurfact`
 ```
@@ -2357,9 +2357,9 @@ isfinite
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           push!(collection, items...) -> collection
+    push!(collection, items...) -> collection
 
 Insert one or more ``items`` at the end of ``collection``.
 
@@ -2405,9 +2405,9 @@ permutedims
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           shuffle!([rng,] v)
+    shuffle!([rng,] v)
 
 In-place version of :func:`shuffle`.
 ```
@@ -2437,9 +2437,9 @@ Wrap an expression in a Task and add it to the scheduler's queue.
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bessely(nu, x)
+    bessely(nu, x)
 
 Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
 ```
@@ -2501,9 +2501,9 @@ expand
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           peakflops(n; parallel=false)
+    peakflops(n; parallel=false)
 
 ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
 
@@ -2578,9 +2578,9 @@ redisplay
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_mul_Bc(...)
+    A_mul_Bc(...)
 
 Matrix operator A B\ :sup:`H`
 ```
@@ -2690,9 +2690,9 @@ consume
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hankelh2x(nu, x)
+    hankelh2x(nu, x)
 
 Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
 ```
@@ -2726,9 +2726,9 @@ watch_file
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_rdiv_Bt(a,b)
+    At_rdiv_Bt(a,b)
 
 Matrix operator A\ :sup:`T` / B\ :sup:`T`
 ```
@@ -2744,9 +2744,9 @@ isinteractive
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_mul_Bt(...)
+    At_mul_Bt(...)
 
 Matrix operator A\ :sup:`T` B\ :sup:`T`
 ```
@@ -2762,15 +2762,15 @@ sum!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           close(stream)
+    close(stream)
 
 Close an I/O stream. Performs a ``flush`` first.
 
-::
+.. code-block: julia
 
-           close(Channel)
+    close(Channel)
 
  Closes a channel. An exception is thrown by:
 
@@ -2783,9 +2783,9 @@ close
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cospi(x)
+    cospi(x)
 
 Compute :math:`\cos(\pi x)` more accurately than ``cos(pi*x)``, especially for large ``x``.
 ```
@@ -2834,9 +2834,9 @@ print_shortest
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           merge(collection, others...)
+    merge(collection, others...)
 
 Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.
 
@@ -2904,9 +2904,9 @@ isconst
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           open(command, mode::AbstractString="r", stdio=DevNull)
+    open(command, mode::AbstractString="r", stdio=DevNull)
 
 Start running ``command`` asynchronously, and return a tuple
 ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
@@ -2916,24 +2916,24 @@ specifies the process's standard input stream.  If ``mode`` is
 and ``stdio`` optionally specifies the process's standard output
 stream.
 
-::
+.. code-block: julia
 
-           open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+    open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
 Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
 on the resulting read or write stream, then closes the stream
 and waits for the process to complete.  Returns the value returned
 by ``f``.
 
-::
+.. code-block: julia
 
-           open(file_name, [read, write, create, truncate, append]) -> IOStream
+    open(file_name, [read, write, create, truncate, append]) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-::
+.. code-block: julia
 
-           open(file_name, [mode]) -> IOStream
+    open(file_name, [mode]) -> IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -2946,9 +2946,9 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
  a+   read, write, create, append
 ==== =================================
 
-::
+.. code-block: julia
 
-           open(f::function, args...)
+    open(f::function, args...)
 
 Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
@@ -2984,9 +2984,9 @@ Base.(:(>>))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           fieldoffsets(type)
+    fieldoffsets(type)
 
 The byte offset of each field of a type relative to the data start. For example, we could use it
 in the following manner to summarize information about a struct type:
@@ -3015,9 +3015,9 @@ fieldoffsets
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           fft!(A [, dims])
+    fft!(A [, dims])
 
 Same as :func:`fft`, but operates in-place on ``A``,
 which must be an array of complex floating-point numbers.
@@ -3074,9 +3074,9 @@ quantile
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besseli(nu, x)
+    besseli(nu, x)
 
 Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
 ```
@@ -3155,9 +3155,9 @@ speye
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           count_ones(x::Integer) -> Integer
+    count_ones(x::Integer) -> Integer
 
 Number of ones in the binary representation of ``x``.
 
@@ -3200,9 +3200,9 @@ truncate
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           stat(file)
+    stat(file)
 
 Returns a structure whose fields contain information about the file. The fields of the structure are:
 
@@ -3226,9 +3226,9 @@ stat
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           exp10(x)
+    exp10(x)
 
 Compute :math:`10^x`
 ```
@@ -3244,9 +3244,9 @@ Bitwise and
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselyx(nu, x)
+    besselyx(nu, x)
 
 Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 ```
@@ -3273,9 +3273,9 @@ PipeBuffer
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+    eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively. If ``B`` is
@@ -3325,9 +3325,9 @@ eigs
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+    sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Return a permutation vector of indices of ``v`` that puts it in sorted order.
 Specify ``alg`` to choose a particular sorting algorithm (see `Sorting Algorithms`_).
@@ -3388,9 +3388,9 @@ lpad
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           mapreduce(f, op, v0, itr)
+    mapreduce(f, op, v0, itr)
 
 Apply function ``f`` to each element in ``itr``, and then reduce
 the result using the binary function ``op``. ``v0`` must be a
@@ -3414,9 +3414,9 @@ Additionally, some implementations may reuse the return value of
 Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
 left or right associativity and invocation of ``f`` for every value.
 
-::
+.. code-block: julia
 
-           mapreduce(f, op, itr)
+    mapreduce(f, op, itr)
 
 Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
 with empty collections (see ``reduce(op, itr)``).
@@ -3440,27 +3440,27 @@ accept
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ordschur(Q, T, select) -> Schur
+    ordschur(Q, T, select) -> Schur
 
 Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
 
-::
+.. code-block: julia
 
-           ordschur(S, select) -> Schur
+    ordschur(S, select) -> Schur
 
 Reorders the Schur factorization ``S`` of type ``Schur``.
 
-::
+.. code-block: julia
 
-           ordschur(S, T, Q, Z, select) -> GeneralizedSchur
+    ordschur(S, T, Q, Z, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
 
-::
+.. code-block: julia
 
-           ordschur(GS, select) -> GeneralizedSchur
+    ordschur(GS, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
 ```
@@ -3537,9 +3537,9 @@ Mmap.Anonymous
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_rdiv_Bc(...)
+    A_rdiv_Bc(...)
 
 Matrix operator A / B\ :sup:`H`
 ```
@@ -3559,9 +3559,9 @@ sparse
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           round([T,] x, [digits, [base]], [r::RoundingMode])
+    round([T,] x, [digits, [base]], [r::RoundingMode])
 
 ``round(x)`` rounds ``x`` to an integer value according to the default
 rounding mode (see :func:`get_rounding`), returning a value of the same type as
@@ -3591,9 +3591,9 @@ using a base other than 10.
 
    .. doctest::
 
-::
+.. code-block: julia
 
-           round(z, RoundingModeReal, RoundingModeImaginary)
+    round(z, RoundingModeReal, RoundingModeImaginary)
 
 Returns the nearest integral value of the same type as the complex-valued
 ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
@@ -3681,9 +3681,9 @@ mv
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erfi(x)
+    erfi(x)
 
 Compute the imaginary error function of ``x``,
 defined by :math:`-i \operatorname{erf}(ix)`.
@@ -3693,9 +3693,9 @@ erfi
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           floor([T,] x, [digits, [base]])
+    floor([T,] x, [digits, [base]])
 
 ``floor(x)`` returns the nearest integral value of the same type as ``x``
 that is less than or equal to ``x``.
@@ -3742,9 +3742,9 @@ reverse
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
 In-place version of :func:`reverse`.
 ```
@@ -3814,9 +3814,9 @@ UndefRefError
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bessely1(x)
+    bessely1(x)
 
 Bessel function of the second kind of order 1, :math:`Y_1(x)`.
 ```
@@ -3825,9 +3825,9 @@ bessely1
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cumprod(A, [dim])
+    cumprod(A, [dim])
 
 Cumulative product along a dimension ``dim`` (defaults to 1).
 See also :func:`cumprod!` to use a preallocated output array,
@@ -3839,9 +3839,9 @@ cumprod
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besseljx(nu, x)
+    besseljx(nu, x)
 
 Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 ```
@@ -3878,9 +3878,9 @@ remotecall_wait
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           dct(A [, dims])
+    dct(A [, dims])
 
 Performs a multidimensional type-II discrete cosine transform (DCT)
 of the array ``A``, using the unitary normalization of the DCT.
@@ -3895,9 +3895,9 @@ dct
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           append!(collection, collection2) -> collection.
+    append!(collection, collection2) -> collection.
 
 Add the elements of ``collection2`` to the end of ``collection``.
 
@@ -3955,9 +3955,9 @@ skip
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bfft(A [, dims])
+    bfft(A [, dims])
 
 Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
 transform, which must be divided by the product of the sizes of the
@@ -4104,9 +4104,9 @@ string
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erfc(x)
+    erfc(x)
 
 Compute the complementary error function of ``x``,
 defined by :math:`1 - \operatorname{erf}(x)`.
@@ -4161,9 +4161,9 @@ hvcat
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselj1(x)
+    besselj1(x)
 
 Bessel function of the first kind of order 1, :math:`J_1(x)`.
 ```
@@ -4172,9 +4172,9 @@ besselj1
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sinpi(x)
+    sinpi(x)
 
 Compute :math:`\sin(\pi x)` more accurately than ``sin(pi*x)``, especially for large ``x``.
 ```
@@ -4242,9 +4242,9 @@ flipsign
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           lbeta(x, y)
+    lbeta(x, y)
 
 Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`.
 ```
@@ -4253,9 +4253,9 @@ lbeta
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           randstring([rng,] len=8)
+    randstring([rng,] len=8)
 
 Create a random ASCII string of length ``len``, consisting of upper- and
 lower-case letters and the digits 0-9. The optional ``rng`` argument
@@ -4266,9 +4266,9 @@ randstring
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Float64(x [, mode::RoundingMode])
+    Float64(x [, mode::RoundingMode])
 
 Create a Float64 from ``x``. If ``x`` is not exactly representable then
 ``mode`` determines how ``x`` is rounded.
@@ -4295,22 +4295,22 @@ function_name
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           addprocs(n::Integer; exeflags=``) -> List of process identifiers
+    addprocs(n::Integer; exeflags=``) -> List of process identifiers
 
 Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
 This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 
-::
+.. code-block: julia
 
-           addprocs() -> List of process identifiers
+    addprocs() -> List of process identifiers
 
  Equivalent to ``addprocs(CPU_CORES)``
 
-::
+.. code-block: julia
 
-           addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
+    addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
 
 Add processes on remote machines via SSH.
 Requires julia to be installed in the same location on each node, or to be available via a shared file system.
@@ -4348,9 +4348,9 @@ the worker treats it a fatal situation and terminates. This timeout can be contr
 variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
 the number of seconds a newly launched worker waits for connection establishment.
 
-::
+.. code-block: julia
 
-           addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
+    addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
 Launches worker processes via the specified cluster manager.
 
@@ -4373,9 +4373,9 @@ mkpath
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           lufact(A [,pivot=Val{true}]) -> F
+    lufact(A [,pivot=Val{true}]) -> F
 
 Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
@@ -4418,9 +4418,9 @@ lufact
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselix(nu, x)
+    besselix(nu, x)
 
 Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
 ```
@@ -4444,16 +4444,16 @@ lstat
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           mapfoldl(f, op, v0, itr)
+    mapfoldl(f, op, v0, itr)
 
 Like :func:`mapreduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
 
-::
+.. code-block: julia
 
-           mapfoldl(f, op, itr)
+    mapfoldl(f, op, itr)
 
 Like ``mapfoldl(f, op, v0, itr)``, but using the first element of
 ``itr`` as ``v0``. In general, this cannot be used with empty
@@ -4478,9 +4478,9 @@ takebuf_string
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           pipe(from, to, ...)
+    pipe(from, to, ...)
 
 Create a pipeline from a data source to a destination. The source and destination can
 be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
@@ -4494,9 +4494,9 @@ concise way to specify multi-stage pipelines.
   * ``run(pipe(`ls`, "out.txt"))``
   * ``run(pipe("out.txt", `grep xyz`))``
 
-::
+.. code-block: julia
 
-           pipe(command; stdin, stdout, stderr, append=false)
+    pipe(command; stdin, stdout, stderr, append=false)
 
 Redirect I/O to or from the given ``command``. Keyword arguments specify which of
 the command's streams should be redirected. ``append`` controls whether file output
@@ -4622,9 +4622,9 @@ unlock
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           BigFloat(x)
+    BigFloat(x)
 
 Create an arbitrary precision floating point number. ``x`` may be
 an ``Integer``, a ``Float64`` or a ``BigInt``. The
@@ -4690,9 +4690,9 @@ log
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           trunc([T,] x, [digits, [base]])
+    trunc([T,] x, [digits, [base]])
 
 ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
 value is less than or equal to ``x``.
@@ -4741,9 +4741,9 @@ warn
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erfinv(x)
+    erfinv(x)
 
 Compute the inverse error function of a real ``x``,
 defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
@@ -4810,9 +4810,9 @@ instances
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselj0(x)
+    besselj0(x)
 
 Bessel function of the first kind of order 0, :math:`J_0(x)`.
 ```
@@ -4821,9 +4821,9 @@ besselj0
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erfcinv(x)
+    erfcinv(x)
 
 Compute the inverse error complementary function of a real ``x``,
 defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
@@ -4881,9 +4881,9 @@ filesize
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sinc(x)
+    sinc(x)
 
 Compute :math:`\sin(\pi x) / (\pi x)` if :math:`x \neq 0`, and :math:`1` if :math:`x = 0`.
 ```
@@ -4940,9 +4940,9 @@ rationalize
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           splice!(collection, index, [replacement]) -> item
+    splice!(collection, index, [replacement]) -> item
 
 Remove the item at the given index, and return the removed item. Subsequent items
 are shifted down to fill the resulting gap. If specified, replacement values from
@@ -4988,9 +4988,9 @@ an ordered collection will be spliced in place of the removed item.
 To insert ``replacement`` before an index ``n`` without removing any items, use
 ``splice!(collection, n:n-1, replacement)``.
 
-::
+.. code-block: julia
 
-           splice!(collection, range, [replacement]) -> items
+    splice!(collection, range, [replacement]) -> items
 
 Remove items in the specified index range, and return a collection containing the
 removed items. Subsequent items are shifted down to fill the resulting gap.
@@ -5021,9 +5021,9 @@ splice!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           endof(collection) -> Integer
+    endof(collection) -> Integer
 
 Returns the last index of the collection.
 
@@ -5063,9 +5063,9 @@ next
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           irfft(A, d [, dims])
+    irfft(A, d [, dims])
 
 Inverse of :func:`rfft`: for a complex array ``A``, gives the
 corresponding real array whose FFT yields ``A`` in the first half.
@@ -5090,9 +5090,9 @@ nnz
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           unshift!(collection, items...) -> collection
+    unshift!(collection, items...) -> collection
 
 Insert one or more ``items`` at the beginning of ``collection``.
 
@@ -5119,9 +5119,9 @@ log2
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           SymTridiagonal(d, du)
+    SymTridiagonal(d, du)
 
 Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`.
 ```
@@ -5230,9 +5230,9 @@ OutOfMemoryError
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           zip(iters...)
+    zip(iters...)
 
 For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
@@ -5329,9 +5329,9 @@ take!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ifft!(A [, dims])
+    ifft!(A [, dims])
 
 Same as :func:`ifft`, but operates in-place on ``A``.
 ```
@@ -5358,9 +5358,9 @@ kill
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           logm(A)
+    logm(A)
 
 If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a warning is printed and whenever possible a nonprincipal matrix function is returned.
 
@@ -5458,9 +5458,9 @@ gperm
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           idct(A [, dims])
+    idct(A [, dims])
 
 Computes the multidimensional inverse discrete cosine transform (DCT)
 of the array ``A`` (technically, a type-III DCT with the unitary
@@ -5490,9 +5490,9 @@ finalize
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           rand([rng], [S], [dims...])
+    rand([rng], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
 
@@ -5551,9 +5551,9 @@ disable_sigint
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           svdfact!(A, [thin=true]) -> SVD
+    svdfact!(A, [thin=true]) -> SVD
 
 ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 ```
@@ -5562,9 +5562,9 @@ svdfact!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cartesianmap(f, dims)
+    cartesianmap(f, dims)
 
 Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
 integers in the ranges ``1:m``, ``1:n``, etc.
@@ -5656,9 +5656,9 @@ touch
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bkfact!(A) -> BunchKaufman
+    bkfact!(A) -> BunchKaufman
 
 ``bkfact!`` is the same as :func:`bkfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
 ```
@@ -5667,15 +5667,15 @@ bkfact!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ^(x, y)
+    ^(x, y)
 
 Exponentiation operator.
 
-::
+.. code-block: julia
 
-           ^(s, n)
+    ^(s, n)
 
 Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
@@ -5717,9 +5717,9 @@ hex2bytes
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           fft(A [, dims])
+    fft(A [, dims])
 
 Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
 argument specifies an iterable subset of dimensions (e.g. an integer,
@@ -5777,9 +5777,9 @@ Bitwise not
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hankelh1(nu, x)
+    hankelh1(nu, x)
 
 Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
 ```
@@ -5788,9 +5788,9 @@ hankelh1
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hessfact(A)
+    hessfact(A)
 
 Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``. When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`full`.
 ```
@@ -5799,9 +5799,9 @@ hessfact
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           gcdx(x,y)
+    gcdx(x,y)
 
 Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
 
@@ -5885,9 +5885,9 @@ success
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+    sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
 Like ``sortperm``, but accepts a preallocated index vector ``ix``.  If ``initialized`` is ``false``
 (the default), ix is initialized to contain the values ``1:length(v)``.
@@ -5899,9 +5899,9 @@ sortperm!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           isodd(x::Integer) -> Bool
+    isodd(x::Integer) -> Bool
 
 Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
@@ -5918,9 +5918,9 @@ isodd
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           normalize_string(s, normalform::Symbol)
+    normalize_string(s, normalform::Symbol)
 
 Normalize the string ``s`` according to one of the four "normal
 forms" of the Unicode standard: ``normalform`` can be ``:NFC``,
@@ -5983,9 +5983,9 @@ is
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           mark(s)
+    mark(s)
 
 Add a mark at the current position of stream ``s``.  Returns the marked position.
 
@@ -6012,9 +6012,9 @@ bswap
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
+    manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
 
  Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
  with appropriate ``op`` values:
@@ -6031,9 +6031,9 @@ manage
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           resize!(collection, n) -> collection
+    resize!(collection, n) -> collection
 
 Resize ``collection`` to contain ``n`` elements.
 If ``n`` is smaller than the current collection length, the first ``n``
@@ -6080,9 +6080,9 @@ IPv4
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer) -> Integer
 
 Number of zeros trailing the binary representation of ``x``.
 
@@ -6110,9 +6110,9 @@ isalnum
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           dct!(A [, dims])
+    dct!(A [, dims])
 
 Same as :func:`dct!`, except that it operates in-place
 on ``A``, which must be an array of real or complex floating-point
@@ -6169,16 +6169,16 @@ methodswith
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           foldr(op, v0, itr)
+    foldr(op, v0, itr)
 
 Like :func:`reduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
 
-::
+.. code-block: julia
 
-           foldr(op, itr)
+    foldr(op, itr)
 
 Like ``foldr(op, v0, itr)``, but using the last element of ``itr``
 as ``v0``. In general, this cannot be used with empty collections
@@ -6320,9 +6320,9 @@ names
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           quit()
+    quit()
 
 Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
 ```
@@ -6373,9 +6373,9 @@ module_parent
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airyaiprime(x)
+    airyaiprime(x)
 
 Airy function derivative :math:`\operatorname{Ai}'(x)`.
 ```
@@ -6391,9 +6391,9 @@ besselh
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           prepend!(collection, items) -> collection
+    prepend!(collection, items) -> collection
 
 Insert the elements of ``items`` to the beginning of ``collection``.
 
@@ -6417,9 +6417,9 @@ sum_kbn
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           beta(x, y)
+    beta(x, y)
 
 Euler integral of the first kind :math:`\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)`.
 ```
@@ -6478,27 +6478,27 @@ sin
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ordschur!(Q, T, select) -> Schur
+    ordschur!(Q, T, select) -> Schur
 
 Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
 
-::
+.. code-block: julia
 
-           ordschur!(S, select) -> Schur
+    ordschur!(S, select) -> Schur
 
 Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
 
-::
+.. code-block: julia
 
-           ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+    ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
 
-::
+.. code-block: julia
 
-           ordschur!(GS, select) -> GeneralizedSchur
+    ordschur!(GS, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
 ```
@@ -6514,9 +6514,9 @@ whos
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Base.compilecache(module::Symbol)
+    Base.compilecache(module::Symbol)
 
 Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 ```
@@ -6561,9 +6561,9 @@ values
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_mul_B!(Y, A, B) -> Y
+    A_mul_B!(Y, A, B) -> Y
 
 
 Calculates the matrix-matrix or matrix-vector product *A B* and stores the
@@ -6590,9 +6590,9 @@ ntuple
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           idct!(A [, dims])
+    idct!(A [, dims])
 
 Same as :func:`idct!`, but operates in-place on ``A``.
 ```
@@ -6601,9 +6601,9 @@ idct!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_rdiv_Bc(a,b)
+    Ac_rdiv_Bc(a,b)
 
 Matrix operator A\ :sup:`H` / B\ :sup:`H`
 ```
@@ -6679,9 +6679,9 @@ precompile
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           toc()
+    toc()
 
 Print and return the time elapsed since the last :func:`tic`.
 ```
@@ -6750,9 +6750,9 @@ lcfirst
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @code_native
+    @code_native
 
 Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
 ```
@@ -6761,9 +6761,9 @@ Evaluates the arguments to the function call, determines their types, and calls 
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           flipbits!(B::BitArray{N}) -> BitArray{N}
+    flipbits!(B::BitArray{N}) -> BitArray{N}
 
 Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
 ```
@@ -6779,9 +6779,9 @@ readlink
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @code_warntype
+    @code_warntype
 
 Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
 ```
@@ -6804,9 +6804,9 @@ redirect_stdin
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           minmax(x, y)
+    minmax(x, y)
 
 Return ``(min(x,y), max(x,y))``.
 See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``
@@ -6834,9 +6834,9 @@ isreadonly
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           get_rounding(T)
+    get_rounding(T)
 
 Get the current floating point rounding mode for type ``T``, controlling
 the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
@@ -6850,9 +6850,9 @@ get_rounding
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           code_llvm(f, types)
+    code_llvm(f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
 
@@ -6863,9 +6863,9 @@ code_llvm
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Bidiagonal(dv, ev, isupper)
+    Bidiagonal(dv, ev, isupper)
 
 Constructs an upper (``isupper=true``) or lower (``isupper=false``) bidiagonal matrix
 using the given diagonal (``dv``) and off-diagonal (``ev``) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
@@ -6900,9 +6900,9 @@ unique
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sub(A, inds...)
+    sub(A, inds...)
 
 Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 ```
@@ -6911,9 +6911,9 @@ sub
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
+    cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
 ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy. ``cholfact!`` can also reuse the symbolic factorization from a different matrix ``F`` with the same structure when used as: ``cholfact!(F::CholmodFactor, A)``.
 ```
@@ -6943,29 +6943,29 @@ cot
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           get(x)
+    get(x)
 
 Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
 value if it is present; otherwise, throws a ``NullException``.
 
-::
+.. code-block: julia
 
-           get(x, y)
+    get(x, y)
 
 Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
 the value if it is present; otherwise, returns ``convert(T, y)``.
 
-::
+.. code-block: julia
 
-           get(collection, key, default)
+    get(collection, key, default)
 
 Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
-::
+.. code-block: julia
 
-           get(f::Function, collection, key)
+    get(f::Function, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
 
@@ -6987,9 +6987,9 @@ Base.(:(.!=))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           lufact!(A) -> LU
+    lufact!(A) -> LU
 
 ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 ```
@@ -7017,9 +7017,9 @@ IOBuffer
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_dct!(A [, dims [, flags [, timelimit]]])
+    plan_dct!(A [, dims [, flags [, timelimit]]])
 
 Same as :func:`plan_dct`, but operates in-place on ``A``.
 ```
@@ -7064,9 +7064,9 @@ prevpow2
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           code_warntype(f, types)
+    code_warntype(f, types)
 
 Displays lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See :ref:`man-code-warntype` for more information.
 ```
@@ -7147,9 +7147,9 @@ atanh
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           deleteat!(collection, index)
+    deleteat!(collection, index)
 
 Remove the item at the given ``index`` and return the modified ``collection``.
 Subsequent items are shifted to fill the resulting gap.
@@ -7164,9 +7164,9 @@ Subsequent items are shifted to fill the resulting gap.
    2
    1
 
-::
+.. code-block: julia
 
-           deleteat!(collection, itr)
+    deleteat!(collection, itr)
 
 Remove the items at the indices given by ``itr``, and return the modified ``collection``.
 Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
@@ -7190,9 +7190,9 @@ deleteat!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           schurfact!(A)
+    schurfact!(A)
 
 Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
 ```
@@ -7212,9 +7212,9 @@ read
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
 except for :func:`rfft` instead of :func:`fft`.  The first two
@@ -7240,9 +7240,9 @@ isopen
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           shift!(collection) -> item
+    shift!(collection) -> item
 
 Remove the first ``item`` from ``collection``.
 
@@ -7336,9 +7336,9 @@ symdiff
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bfft!(A [, dims])
+    bfft!(A [, dims])
 
 Same as :func:`bfft`, but operates in-place on ``A``.
 ```
@@ -7354,9 +7354,9 @@ histrange
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eta(x)
+    eta(x)
 
 Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
 ```
@@ -7386,9 +7386,9 @@ dec
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           wait([x])
+    wait([x])
 
 Block the current task until some event occurs, depending on the type
 of the argument:
@@ -7418,9 +7418,9 @@ wait
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           shuffle([rng,] v)
+    shuffle([rng,] v)
 
 Return a randomly permuted copy of ``v``. The optional ``rng`` argument
 specifies a random number generator, see :ref:`Random Numbers
@@ -7431,9 +7431,9 @@ shuffle
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Dict([itr])
+    Dict([itr])
 
 ``Dict{K,V}()`` constructs a hash table with keys of type ``K`` and values of type ``V``.
 
@@ -7461,9 +7461,9 @@ Dict
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sqrt(x)
+    sqrt(x)
 
 Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
 ```
@@ -7479,9 +7479,9 @@ atexit
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           besselk(nu, x)
+    besselk(nu, x)
 
 Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
 ```
@@ -7497,9 +7497,9 @@ readchomp
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           pinv(M[, tol])
+    pinv(M[, tol])
 
 Computes the Moore-Penrose pseudoinverse.
 
@@ -7601,9 +7601,9 @@ Base.(:(!==))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer) -> Integer
 
 Number of ones trailing the binary representation of ``x``.
 
@@ -7645,9 +7645,9 @@ copy
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           isempty(collection) -> Bool
+    isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
 
@@ -7706,9 +7706,9 @@ normpath
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           unmark(s)
+    unmark(s)
 
 Remove a mark from stream ``s``.
 Returns ``true`` if the stream was marked, ``false`` otherwise.
@@ -7727,9 +7727,9 @@ module_name
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           reset(s)
+    reset(s)
 
 Reset a stream ``s`` to a previously marked position, and remove the mark.
 Returns the previously marked position.
@@ -7839,21 +7839,21 @@ typemax
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           all(itr) -> Bool
+    all(itr) -> Bool
 
 Test whether all elements of a boolean collection are true.
 
-::
+.. code-block: julia
 
-           all(A, dims)
+    all(A, dims)
 
 Test whether all values along the given dimensions of an array are true.
 
-::
+.. code-block: julia
 
-           all(p, itr) -> Bool
+    all(p, itr) -> Bool
 
 Determine whether predicate ``p`` returns true for all elements of ``itr``.
 
@@ -7899,13 +7899,13 @@ Base.ccall
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           scale!(A, b)
+    scale!(A, b)
 
-::
+.. code-block: julia
 
-           scale!(b, A)
+    scale!(b, A)
 
 Scale an array ``A`` by a scalar ``b``, similar to :func:`scale` but
 overwriting ``A`` in-place.
@@ -7935,9 +7935,9 @@ issym
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
+    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
 
 ``svds`` computes largest singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations.
 Uses :func:`eigs` underneath.
@@ -7966,9 +7966,9 @@ acosh
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           IntSet([itr])
+    IntSet([itr])
 
 Construct a sorted set of the integers generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only non-negative integers can be stored. If the set will be sparse (for example holding a single very large integer), use :obj:`Set` instead.
 ```
@@ -8071,9 +8071,9 @@ process_running
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           BigInt(x)
+    BigInt(x)
 
 Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
 that can be converted to an ``Int``).  The usual mathematical operators are
@@ -8101,9 +8101,9 @@ isdirpath
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           in(item, collection) -> Bool
+    in(item, collection) -> Bool
            ∈(item,collection) -> Bool
            ∋(collection,item) -> Bool
            ∉(item,collection) -> Bool
@@ -8163,9 +8163,9 @@ nfields
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           toq()
+    toq()
 
 Return, but do not print, the time elapsed since the last :func:`tic`.
 ```
@@ -8201,9 +8201,9 @@ join
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           linreg(x, y) -> [a; b]
+    linreg(x, y) -> [a; b]
 
 Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
 
@@ -8216,9 +8216,9 @@ Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest li
    plot(x, y, "o") # Plot (x,y) points
    plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
 
-::
+.. code-block: julia
 
-           linreg(x, y, w)
+    linreg(x, y, w)
 
 Weighted least-squares linear regression.
 ```
@@ -8241,9 +8241,9 @@ isless
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           expm1(x)
+    expm1(x)
 
 Accurately compute :math:`e^x-1`
 ```
@@ -8266,9 +8266,9 @@ setdiff
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airyai(x)
+    airyai(x)
 
 Airy function :math:`\operatorname{Ai}(x)`.
 ```
@@ -8295,9 +8295,9 @@ less
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sqrtm(A)
+    sqrtm(A)
 
 If ``A`` has no negative real eigenvalues, compute the principal matrix square root of ``A``, that is the unique matrix :math:`X` with eigenvalues having positive real part such that :math:`X^2 = A`. Otherwise, a nonprincipal square root is returned.
 
@@ -8328,9 +8328,9 @@ unsafe_store!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           expm(A)
+    expm(A)
 
 Compute the matrix exponential of ``A``, defined by
 
@@ -8349,9 +8349,9 @@ expm
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hessfact!(A)
+    hessfact!(A)
 
 ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input A, instead of creating a copy.
 ```
@@ -8381,9 +8381,9 @@ current_module
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erfcx(x)
+    erfcx(x)
 
 Compute the scaled complementary error function of ``x``,
 defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
@@ -8479,9 +8479,9 @@ EnvHash
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type) -> Bool
 
 Determine whether the given generic function has a method matching the given :obj:`Tuple` of argument types.
 
@@ -8579,9 +8579,9 @@ homedir
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer) -> Integer
 
 Number of zeros in the binary representation of ``x``.
 
@@ -8651,9 +8651,9 @@ object_id
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           norm(A, [p])
+    norm(A, [p])
 
 Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defaulting to the ``p=2``-norm.
 
@@ -8666,9 +8666,9 @@ norm
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           print_unescaped(io, s::AbstractString)
+    print_unescaped(io, s::AbstractString)
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 ```
@@ -8698,9 +8698,9 @@ cat
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           factorial(n)
+    factorial(n)
 
 Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
 is computed as an integer (promoted to at least 64 bits).  Note
@@ -8709,9 +8709,9 @@ that this may overflow if ``n`` is not small, but you can use
 precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
 equivalent to :func:`gamma(n+1) <gamma>`.
 
-::
+.. code-block: julia
 
-           factorial(n,k)
+    factorial(n,k)
 
 Compute ``factorial(n)/factorial(k)``
 ```
@@ -8727,9 +8727,9 @@ bitrand
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           randcycle([rng,] n)
+    randcycle([rng,] n)
 
 Construct a random cyclic permutation of length ``n``. The optional ``rng``
 argument specifies a random number generator, see :ref:`Random Numbers
@@ -8740,9 +8740,9 @@ randcycle
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer) -> Integer
 
 Number of zeros leading the binary representation of ``x``.
 
@@ -8756,9 +8756,9 @@ leading_zeros
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           hankelh2(nu, x)
+    hankelh2(nu, x)
 
 Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
 ```
@@ -8844,9 +8844,9 @@ finalizer
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           nextprod([k_1,k_2,...], n)
+    nextprod([k_1,k_2,...], n)
 
 Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 ```
@@ -8889,9 +8889,9 @@ lyap
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           condskeel(M, [x, p])
+    condskeel(M, [x, p])
 
 .. math::
    \kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
@@ -8941,9 +8941,9 @@ TypeError
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
 matching the shape and type of ``A``.  (The first two arguments have
@@ -8982,9 +8982,9 @@ plan_fft
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_rdiv_Bt(a,b)
+    A_rdiv_Bt(a,b)
 
 Matrix operator A / B\ :sup:`T`
 ```
@@ -9021,9 +9021,9 @@ cosd
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           brfft(A, d [, dims])
+    brfft(A, d [, dims])
 
 Similar to :func:`irfft` but computes an unnormalized inverse transform
 (similar to :func:`bfft`), which must be divided by the product
@@ -9060,9 +9060,9 @@ operm
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cumsum(A, [dim])
+    cumsum(A, [dim])
 
 Cumulative sum along a dimension ``dim`` (defaults to 1).
 See also :func:`cumsum!` to use a preallocated output array,
@@ -9116,23 +9116,23 @@ countlines
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           *(A, B)
+    *(A, B)
 :noindex:
 
 Matrix multiplication
 
-::
+.. code-block: julia
 
-           *(x, y...)
+    *(x, y...)
 
 Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
 ``*(x, y, z, ...)``.
 
-::
+.. code-block: julia
 
-           *(s, t)
+    *(s, t)
 
 Concatenate strings. The ``*`` operator is an alias to this function.
 
@@ -9143,9 +9143,9 @@ Base.(:(*))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           complement!(s)
+    complement!(s)
 
 Mutates :obj:`IntSet` ``s`` into its set-complement.
 ```
@@ -9154,9 +9154,9 @@ complement!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           slice(A, inds...)
+    slice(A, inds...)
 
 Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 ```
@@ -9183,9 +9183,9 @@ procs
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
 backwards transform :func:`bfft`.
@@ -9216,9 +9216,9 @@ qr
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           invmod(x,m)
+    invmod(x,m)
 
 Take the inverse of ``x`` modulo ``m``: ``y`` such that :math:`xy = 1 \pmod m`
 ```
@@ -9234,9 +9234,9 @@ TextDisplay
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           factor(n) -> Dict
+    factor(n) -> Dict
 
 Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
@@ -9259,9 +9259,9 @@ ismatch
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           exp(x)
+    exp(x)
 
 Compute :math:`e^x`
 ```
@@ -9303,9 +9303,9 @@ getpid
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cbrt(x)
+    cbrt(x)
 
 Return :math:`x^{1/3}`.  The prefix operator ``∛`` is equivalent to ``cbrt``.
 ```
@@ -9314,9 +9314,9 @@ cbrt
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Tridiagonal(dl, d, du)
+    Tridiagonal(dl, d, du)
 
 Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
 ```
@@ -9402,9 +9402,9 @@ listen
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer) -> Integer
 
 Number of ones leading the binary representation of ``x``.
 
@@ -9439,9 +9439,9 @@ sprandn
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ismarked(s)
+    ismarked(s)
 
 Returns true if stream ``s`` is marked.
 
@@ -9452,9 +9452,9 @@ ismarked
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           first(coll)
+    first(coll)
 
 Get the first element of an iterable collection. Returns the start point of a :obj:`Range`
 even if it is empty.
@@ -9485,9 +9485,9 @@ Given `@linux? a : b`, do `a` on Linux and `b` elsewhere. See documentation for 
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           complement(s)
+    complement(s)
 
 Returns the set-complement of :obj:`IntSet` ``s``.
 ```
@@ -9622,9 +9622,9 @@ endswith
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airy(k,x)
+    airy(k,x)
 
 kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
 ```
@@ -9662,9 +9662,9 @@ rand!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           bkfact(A) -> BunchKaufman
+    bkfact(A) -> BunchKaufman
 
 Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``, ``\``, ``inv``, ``issym``, ``ishermitian``.
 ```
@@ -9718,9 +9718,9 @@ issubnormal
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_ldiv_B(...)
+    Ac_ldiv_B(...)
 
 Matrix operator A\ :sup:`H` \\ B
 ```
@@ -9767,9 +9767,9 @@ recvfrom
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @code_llvm
+    @code_llvm
 
 Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
 ```
@@ -9880,9 +9880,9 @@ sumabs2
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           uperm(file)
+    uperm(file)
 
 Gets the permissions of the owner of the file as a bitfield of
 
@@ -9927,9 +9927,9 @@ vecdot
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           isprime(x::Integer) -> Bool
+    isprime(x::Integer) -> Bool
 
 Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
@@ -9938,9 +9938,9 @@ Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 	julia> isprime(3)
 	true
 
-::
+.. code-block: julia
 
-           isprime(x::BigInt, [reps = 25]) -> Bool
+    isprime(x::BigInt, [reps = 25]) -> Bool
 
 Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
 ``false`` if ``x`` is not prime with high probability. The false positive
@@ -9978,9 +9978,9 @@ nprocs
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_mul_B(...)
+    Ac_mul_B(...)
 
 Matrix operator A\ :sup:`H` B
 ```
@@ -9989,9 +9989,9 @@ Ac_mul_B
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           qrfact!(A [,pivot=Val{false}])
+    qrfact!(A [,pivot=Val{false}])
 
 ``qrfact!`` is the same as :func:`qrfact` when A is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
 ```
@@ -10000,9 +10000,9 @@ qrfact!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_rdiv_B(a,b)
+    At_rdiv_B(a,b)
 
 Matrix operator A\ :sup:`T` / B
 ```
@@ -10113,9 +10113,9 @@ catch_backtrace
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           airyx(k,x)
+    airyx(k,x)
 
 scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
 ```
@@ -10153,9 +10153,9 @@ Condition
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           filt!(out, b, a, x, [si])
+    filt!(out, b, a, x, [si])
 
 Same as :func:`filt` but writes the result into the ``out`` argument,
 which may alias the input ``x`` to modify it in-place.
@@ -10180,9 +10180,9 @@ ascii
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_idct(A [, dims [, flags [, timelimit]]])
+    plan_idct(A [, dims [, flags [, timelimit]]])
 
 Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
 :func:`plan_fft` except producing a function that computes :func:`idct`.
@@ -10211,9 +10211,9 @@ done
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           convert(T, x)
+    convert(T, x)
 
 Convert ``x`` to a value of type ``T``.
 
@@ -10252,9 +10252,9 @@ convert
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_ldiv_Bt(a,b)
+    A_ldiv_Bt(a,b)
 
 Matrix operator A \\ B\ :sup:`T`
 ```
@@ -10263,9 +10263,9 @@ A_ldiv_Bt
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           applicable(f, args...) -> Bool
+    applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -10307,9 +10307,9 @@ RandomDevice
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Same as :func:`plan_fft`, but operates in-place on ``A``.
 ```
@@ -10325,9 +10325,9 @@ fma
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eigvals(A,[irange,][vl,][vu])
+    eigvals(A,[irange,][vl,][vu])
 
 Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
 :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
@@ -10346,9 +10346,9 @@ eigvals
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_ldiv_Bc(a,b)
+    A_ldiv_Bc(a,b)
 
 Matrix operator A \\ B\ :sup:`H`
 ```
@@ -10357,9 +10357,9 @@ A_ldiv_Bc
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           escape_string(str::AbstractString) -> AbstractString
+    escape_string(str::AbstractString) -> AbstractString
 
 General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
 ```
@@ -10368,9 +10368,9 @@ escape_string
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           significand(x)
+    significand(x)
 
 Extract the significand(s) (a.k.a. mantissa), in binary representation, of
 a floating-point number or array. If ``x`` is a non-zero finite number,
@@ -10432,9 +10432,9 @@ set_bigfloat_precision
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           isbits(T)
+    isbits(T)
 
 True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
@@ -10488,9 +10488,9 @@ findnext
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           fetch(x)
+    fetch(x)
 
 Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
 
@@ -10511,9 +10511,9 @@ angle
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           tic()
+    tic()
 
 Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
 ```
@@ -10561,9 +10561,9 @@ broadcast
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
+    eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
 Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
 (The ``k``\ th eigenvector can be obtained from the slice ``M[:, k]``.)
@@ -10584,9 +10584,9 @@ ntoh
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           qrfact(A [,pivot=Val{false}]) -> F
+    qrfact(A [,pivot=Val{false}]) -> F
 
 Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
@@ -10643,9 +10643,9 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
    SIAM J Sci Stat Comput 10 (1989), 53-57.
    `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 
-::
+.. code-block: julia
 
-           qrfact(A) -> SPQR.Factorization
+    qrfact(A) -> SPQR.Factorization
 
 Compute the QR factorization of a sparse matrix ``A``. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 ```
@@ -10668,9 +10668,9 @@ identity
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           iseven(x::Integer) -> Bool
+    iseven(x::Integer) -> Bool
 
 Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
@@ -10726,21 +10726,21 @@ ipermute!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           full(S)
+    full(S)
 
 Convert a sparse matrix ``S`` into a dense matrix.
 
-::
+.. code-block: julia
 
-           full(F)
+    full(F)
 
 Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
-::
+.. code-block: julia
 
-           full(QRCompactWYQ[, thin=true]) -> Matrix
+    full(QRCompactWYQ[, thin=true]) -> Matrix
 
 Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ``
 object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
@@ -10756,9 +10756,9 @@ full
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           map(f, c...) -> collection
+    map(f, c...) -> collection
 
 Transform collection ``c`` by applying ``f`` to each element.
 For multiple collection arguments, apply ``f`` elementwise.
@@ -10835,18 +10835,18 @@ rol!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           issubset(a, b)
+    issubset(a, b)
            ⊆(A,S) -> Bool
            ⊈(A,S) -> Bool
            ⊊(A,S) -> Bool
 
 Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
 
-::
+.. code-block: julia
 
-           issubset(A, S) -> Bool
+    issubset(A, S) -> Bool
            ⊆(A,S) -> Bool
 
 True if A is a subset of or equal to S.
@@ -10863,15 +10863,15 @@ istriu
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           map!(function, collection)
+    map!(function, collection)
 
 In-place version of :func:`map`.
 
-::
+.. code-block: julia
 
-           map!(function, destination, collection...)
+    map!(function, destination, collection...)
 
 Like :func:`map`, but stores the result in ``destination`` rather than a
 new collection. ``destination`` must be at least as large as the first
@@ -10882,9 +10882,9 @@ map!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           unescape_string(s::AbstractString) -> AbstractString
+    unescape_string(s::AbstractString) -> AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 ```
@@ -10947,9 +10947,9 @@ any
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
 :func:`ifft`.
@@ -10959,9 +10959,9 @@ plan_ifft
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           cosc(x)
+    cosc(x)
 
 Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
 if :math:`x = 0`. This is the derivative of ``sinc(x)``.
@@ -10978,9 +10978,9 @@ getkey
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_ldiv_Bt(...)
+    At_ldiv_Bt(...)
 
 Matrix operator A\ :sup:`T` \\ B\ :sup:`T`
 ```
@@ -10989,9 +10989,9 @@ At_ldiv_Bt
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_mul_Bc(...)
+    Ac_mul_Bc(...)
 
 Matrix operator A\ :sup:`H` B\ :sup:`H`
 ```
@@ -11025,15 +11025,15 @@ symbol
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           zeta(s)
+    zeta(s)
 
 Riemann zeta function :math:`\zeta(s)`.
 
-::
+.. code-block: julia
 
-           zeta(s, z)
+    zeta(s, z)
 
 Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
 the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
@@ -11043,9 +11043,9 @@ zeta
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sprand([rng,] m,n,p [,rfn])
+    sprand([rng,] m,n,p [,rfn])
 
 Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 ```
@@ -11054,9 +11054,9 @@ sprand
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           A_mul_Bt(...)
+    A_mul_Bt(...)
 
 Matrix operator A B\ :sup:`T`
 ```
@@ -11089,9 +11089,9 @@ isvalid
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           esc(e::ANY)
+    esc(e::ANY)
 
 Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
 section of the Metaprogramming chapter of the manual for more details and examples.
@@ -11131,9 +11131,9 @@ combinations
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           frexp(val)
+    frexp(val)
 
 Return ``(x,exp)`` such that ``x`` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and val = :math:`x \times 2^{exp}`.
@@ -11206,9 +11206,9 @@ unsigned
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
 Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
 factorization object ``F`` which contains the eigenvalues in ``F[:values]``
@@ -11230,9 +11230,9 @@ permutes the matrix to become closer to upper triangular, and ``scale=true``
 scales the matrix by its diagonal elements to make rows and columns more
 equal in norm. The default is ``true`` for both options.
 
-::
+.. code-block: julia
 
-           eigfact(A, B) -> GeneralizedEigen
+    eigfact(A, B) -> GeneralizedEigen
 
 Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
 returning a ``GeneralizedEigen`` factorization object ``F`` which contains
@@ -11246,9 +11246,9 @@ eigfact
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized real-input unnormalized transform, similar to
 :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
@@ -11352,9 +11352,9 @@ randn!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           ldexp(x, n)
+    ldexp(x, n)
 
 Compute :math:`x \times 2^n`
 ```
@@ -11402,9 +11402,9 @@ islower
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           nthperm!(v, k)
+    nthperm!(v, k)
 
 In-place version of :func:`nthperm`.
 ```
@@ -11429,9 +11429,9 @@ readbytes
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
 Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
 details on the ``balance`` keyword argument.
@@ -11449,9 +11449,9 @@ details on the ``balance`` keyword argument.
 factorization to a tuple; where possible, using :func:`eigfact` is
 recommended.
 
-::
+.. code-block: julia
 
-           eig(A, B) -> D, V
+    eig(A, B) -> D, V
 
 Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
 
@@ -11464,9 +11464,9 @@ eig
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           exp2(x)
+    exp2(x)
 
 Compute :math:`2^x`
 ```
@@ -11503,9 +11503,9 @@ clamp
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_dct(A [, dims [, flags [, timelimit]]])
+    plan_dct(A [, dims [, flags [, timelimit]]])
 
 Pre-plan an optimized discrete cosine transform (DCT), similar to
 :func:`plan_fft` except producing a function that computes :func:`dct`.
@@ -11607,9 +11607,9 @@ union!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           At_ldiv_B(...)
+    At_ldiv_B(...)
 
 Matrix operator A\ :sup:`T` \\ B
 ```
@@ -11644,9 +11644,9 @@ deepcopy
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           widen(type | x)
+    widen(type | x)
 
 If the argument is a type, return a "larger" type (for numeric types, this will be
 a type with at least as much range and precision as the argument, and usually more).
@@ -11681,9 +11681,9 @@ eval
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Set([itr])
+    Set([itr])
 
 Construct a :obj:`Set` of the values generated by the given iterable object, or an empty set.
 Should be used instead of :obj:`IntSet` for sparse integer sets, or for sets of arbitrary objects.
@@ -11693,9 +11693,9 @@ Set
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           erf(x)
+    erf(x)
 
 Compute the error function of ``x``, defined by
 :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
@@ -11727,9 +11727,9 @@ splitdir
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           sign(x)
+    sign(x)
 Return zero if ``x==0`` and :math:`x/|x|` otherwise (i.e., ±1 for real ``x``).
 ```
 """
@@ -11786,15 +11786,15 @@ splitdrive
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           pop!(collection, key[, default])
+    pop!(collection, key[, default])
 
 Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 
-::
+.. code-block: julia
 
-           pop!(collection) -> item
+    pop!(collection) -> item
 
 Remove the last item in ``collection`` and return it.
 
@@ -11832,9 +11832,9 @@ filter
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_idct!(A [, dims [, flags [, timelimit]]])
+    plan_idct!(A [, dims [, flags [, timelimit]]])
 
 Same as :func:`plan_idct`, but operates in-place on ``A``.
 ```
@@ -11843,9 +11843,9 @@ plan_idct!
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           randperm([rng,] n)
+    randperm([rng,] n)
 
 Construct a random permutation of length ``n``. The optional ``rng`` argument
 specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
@@ -11862,9 +11862,9 @@ seekend
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+    plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Same as :func:`plan_ifft`, but operates in-place on ``A``.
 ```
@@ -11894,9 +11894,9 @@ ror
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           Ac_ldiv_Bc(...)
+    Ac_ldiv_Bc(...)
 
 Matrix operator A\ :sup:`H` \\ B\ :sup:`H`
 ```
@@ -11905,9 +11905,9 @@ Ac_ldiv_Bc
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           rfft(A [, dims])
+    rfft(A [, dims])
 
 Multidimensional FFT of a real array A, exploiting the fact that
 the transform has conjugate symmetry in order to save roughly half
@@ -11925,9 +11925,9 @@ rfft
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           @enum EnumName EnumValue1[=x] EnumValue2[=y]
+    @enum EnumName EnumValue1[=x] EnumValue2[=y]
 
 Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``, respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
 
@@ -11974,9 +11974,9 @@ chomp
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           enumerate(iter)
+    enumerate(iter)
 
 An iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
 
@@ -12004,9 +12004,9 @@ Base.(:(>=))
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           dawson(x)
+    dawson(x)
 
 Compute the Dawson function (scaled imaginary error function) of ``x``,
 defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
@@ -12067,23 +12067,23 @@ Dates.dayabbr
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+    DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
 Construct a DateTime type by parts. Arguments must be convertible to
 ``Int64``.
 
-::
+.. code-block: julia
 
-           DateTime(periods::Period...) -> DateTime
+    DateTime(periods::Period...) -> DateTime
 
 Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
 DateTime parts not provided will default to the value of ``Dates.default(period)``.
 
-::
+.. code-block: julia
 
-           DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
  Create a DateTime through the adjuster API. The starting point will be constructed from the
  provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
@@ -12092,16 +12092,16 @@ DateTime parts not provided will default to the value of ``Dates.default(period)
  the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
  is never satisfied).
 
-::
+.. code-block: julia
 
-           DateTime(dt::Date) -> DateTime
+    DateTime(dt::Date) -> DateTime
 
  Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
  parts of the new ``DateTime`` are assumed to be zero.
 
-::
+.. code-block: julia
 
-           DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+    DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
 Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
 the ``format`` string. The following codes can be used for constructing format strings:
@@ -12127,9 +12127,9 @@ All characters not listed above are treated as delimiters between date and time 
 So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
 like "y-m-dTH:M:S.s".
 
-::
+.. code-block: julia
 
-           DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
 Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 ```
@@ -12225,9 +12225,9 @@ Dates.firstdayofquarter
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           julian2datetime(julian_days) -> DateTime
+    julian2datetime(julian_days) -> DateTime
 
 Takes the number of Julian calendar days since epoch
 ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
@@ -12269,9 +12269,9 @@ Dates.daysinyear
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           trunc(dt::TimeType, ::Type{Period}) -> TimeType
+    trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
  Truncates the value of ``dt`` according to the provided ``Period`` type.
  E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
@@ -12344,9 +12344,9 @@ Dates.default
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           unix2datetime(x) -> DateTime
+    unix2datetime(x) -> DateTime
 
 Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
 and converts to the corresponding DateTime.
@@ -12371,9 +12371,9 @@ Dates.firstdayofyear
 
 doc"""
 ```rst
-::
+.. code-block: julia
 
-           rata2datetime(days) -> DateTime
+    rata2datetime(days) -> DateTime
 
 Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
 and returns the corresponding DateTime.
