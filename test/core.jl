@@ -3259,3 +3259,6 @@ code_typed(A12612.f2, Tuple{})
 @test_throws ArgumentError gensym("x"^10_000_000)
 @test symbol("x") === symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
+
+# meta nodes for optional positional arguments
+@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[1].args[3]).args[3].args[1].args[1] === :inline
