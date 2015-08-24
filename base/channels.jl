@@ -102,6 +102,11 @@ end
 
 eltype{T}(::Type{Channel{T}}) = T
 
+"""
+The maximal number of elements the channel can store.
+"""
+capacity(c::Channel) = c.sz_max
+
 function n_avail(c::Channel)
     if c.put_pos >= c.take_pos
         return c.put_pos - c.take_pos
@@ -110,7 +115,7 @@ function n_avail(c::Channel)
     end
 end
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, "$(typeof(c))(capacity:$(capacity(c)), sz_curr:$(n_avail(c)))")
 
 start{T}(c::Channel{T}) = Ref{Nullable{T}}()
 function done(c::Channel, state::Ref)
