@@ -730,7 +730,7 @@ export RopeString
 
 function complement!(s::IntSet)
     depwarn("complement IntSets are deprecated", :complement!);
-    for n = 1:length(s.bits)
+    for n in eachindex(s.bits)
         s.bits[n] = ~s.bits[n]
     end
     s.fill1s = !s.fill1s

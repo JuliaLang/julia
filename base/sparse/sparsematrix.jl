@@ -564,7 +564,7 @@ for op in (:-, :log1p, :expm1)
             B = similar(A)
             nzvalB = B.nzval
             nzvalA = A.nzval
-            @simd for i=1:length(nzvalB)
+            @simd for i in eachindex(nzvalB)
                 @inbounds nzvalB[i] = ($op)(nzvalA[i])
             end
             return B
@@ -585,7 +585,7 @@ for op in (:abs, :abs2)
             B = similar(A)
             nzvalB = B.nzval
             nzvalA = A.nzval
-            @simd for i=1:length(nzvalB)
+            @simd for i in eachindex(nzvalB)
                 @inbounds nzvalB[i] = ($op)(nzvalA[i])
             end
             return B
@@ -595,7 +595,7 @@ end
 
 function conj!(A::SparseMatrixCSC)
     nzvalA = A.nzval
-    @simd for i=1:length(nzvalA)
+    @simd for i in eachindex(nzvalA)
         @inbounds nzvalA[i] = conj(nzvalA[i])
     end
     return A
@@ -2714,7 +2714,7 @@ end
 function rot180(A::SparseMatrixCSC)
     I,J,V = findnz(A)
     m,n = size(A)
-    for i=1:length(I)
+    for i in eachindex(I)
         I[i] = m - I[i] + 1
         J[i] = n - J[i] + 1
     end
@@ -2725,7 +2725,7 @@ function rotr90(A::SparseMatrixCSC)
     I,J,V = findnz(A)
     m,n = size(A)
     #old col inds are new row inds
-    for i=1:length(I)
+    for i in eachindex(I)
         I[i] = m - I[i] + 1
     end
     return sparse(J, I, V, n, m)
@@ -2735,7 +2735,7 @@ function rotl90(A::SparseMatrixCSC)
     I,J,V = findnz(A)
     m,n = size(A)
     #old row inds are new col inds
-    for i=1:length(J)
+    for i in eachindex(J)
         J[i] = n - J[i] + 1
     end
     return sparse(J, I, V, n, m)

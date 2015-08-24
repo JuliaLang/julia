@@ -151,7 +151,7 @@ function length_checked_equal(args...)
     n
 end
 
-map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
+map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
     if isa(f,DataType)
@@ -219,16 +219,17 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (i > v.length)
 isempty(v::SimpleVector) = (v.length == 0)
+eachindex(v::SimpleVector) = 1:length(v)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
-    for i = 1:length(v1)
+    for i in eachindex(v1)
         v1[i] == v2[i] || return false
     end
     return true
 end
 
-map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
+map(f, v::SimpleVector) = Any[ f(v[i]) for i in eachindex(v) ]
 
 getindex(v::SimpleVector, I::AbstractArray) = svec(Any[ v[i] for i in I ]...)
 

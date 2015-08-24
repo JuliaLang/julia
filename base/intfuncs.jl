@@ -318,7 +318,7 @@ end
 
 function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    for i = 1:length(a)
+    for i in eachindex(a)
         a[i] = rem(n, base)
         n = div(n, base)
     end

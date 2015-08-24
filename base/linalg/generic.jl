@@ -16,7 +16,7 @@ scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 function generic_scale!(X::AbstractArray, s::Number)
-    for i = 1:length(X)
+    for i in eachindex(X)
         @inbounds X[i] *= s
     end
     X
@@ -26,7 +26,7 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
-    for i = 1:length(X)
+    for i in eachindex(X)
         @inbounds C[i] = X[i]*s
     end
     C
@@ -450,7 +450,7 @@ function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArr
     elseif length(rx) != length(ry)
         throw(ArgumentError("rx has length $(length(rx)), but ry has length $(length(ry))"))
     end
-    for i = 1:length(rx)
+    for i in eachindex(rx)
         @inbounds y[ry[i]] += alpha * x[rx[i]]
     end
     y

@@ -33,7 +33,7 @@ function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
     else
         ptrs = Array(P, length(a)+1)
         roots = Array(Any, length(a))
-        for i = 1:length(a)
+        for i in eachindex(a)
             root = cconvert(P, a[i])
             ptrs[i] = unsafe_convert(P, root)::P
             roots[i] = root
@@ -163,7 +163,7 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 # T[x...] constructs Array{T,1}
 function getindex(T::Type, vals...)
     a = Array(T,length(vals))
-    @inbounds for i = 1:length(vals)
+    @inbounds for i in eachindex(vals)
         a[i] = vals[i]
     end
     return a
@@ -171,7 +171,7 @@ end
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
-    @inbounds for i = 1:length(vals)
+    @inbounds for i in eachindex(vals)
         a[i] = vals[i]
     end
     return a
@@ -680,7 +680,7 @@ function hcat{T}(V::Vector{T}...)
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    [ V[j][i]::T for i in eachindex(V[1]), j in eachindex(V) ]
 end
 
 
@@ -750,7 +750,7 @@ function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
-    for i = 1:length(A)
+    for i in eachindex(A)
         if testf(A[i])
             push!(tmpI, i)
         end
@@ -764,7 +764,7 @@ function find(A::StridedArray)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     count = 1
-    for i=1:length(A)
+    for i in eachindex(A)
         if A[i] != 0
             I[count] = i
             count += 1
@@ -860,7 +860,7 @@ function findin(a, b::UnitRange)
     ind = Array(Int, 0)
     f = first(b)
     l = last(b)
-    for i = 1:length(a)
+    for i in eachindex(a)
         if f <= a[i] <= l
             push!(ind, i)
         end
@@ -871,7 +871,7 @@ end
 function findin(a, b)
     ind = Array(Int, 0)
     bset = Set(b)
-    @inbounds for i = 1:length(a)
+    @inbounds for i in eachindex(a)
         a[i] in bset && push!(ind, i)
     end
     ind
@@ -907,7 +907,7 @@ filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
 function filter!(f, a::Vector)
     insrt = 1
-    for curr = 1:length(a)
+    for curr in eachindex(a)
         if f(a[curr])
             a[insrt] = a[curr]
             insrt += 1
@@ -919,7 +919,7 @@ end
 
 function filter(f, a::Vector)
     r = Array(eltype(a), 0)
-    for i = 1:length(a)
+    for i in eachindex(a)
         if f(a[i])
             push!(r, a[i])
         end
@@ -934,7 +934,7 @@ function intersect(v1, vs...)
     ret = Array(eltype(v1),0)
     for v_elem in v1
         inall = true
-        for i = 1:length(vs)
+        for i in eachindex(vs)
             if !in(v_elem, vs[i])
                 inall=false; break
             end

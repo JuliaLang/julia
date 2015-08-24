@@ -191,7 +191,7 @@ function levsort(search, candidates)
     scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
     candidates = candidates[sortperm(scores)]
     i = 0
-    for i = 1:length(candidates)
+    for i in eachindex(candidates)
         levenshtein(search, candidates[i]) > 3 && break
     end
     return candidates[1:i]
@@ -230,7 +230,7 @@ printmatches(args...; cols = Base.tty_size()[2]) = printmatches(STDOUT, args...,
 function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = Base.tty_size()[2])
     i = 0
     total = 0
-    for i = 1:length(ss)
+    for i in eachindex(ss)
         total += length(ss[i])
         total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
     end

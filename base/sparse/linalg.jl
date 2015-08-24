@@ -6,14 +6,14 @@ import Base.LinAlg: chksquare
 
 # Convert from 1-based to 0-based indices
 function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] -= one(T) end
+    for i in eachindex(A) A[i] -= one(T) end
     A
 end
 decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] += one(T) end
+    for i in eachindex(A) A[i] += one(T) end
     A
 end
 increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
@@ -477,7 +477,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
-            for i=1:length(A.nzval)
+            for i in eachindex(A.nzval)
                 rowSum[A.rowval[i]] += abs(A.nzval[i])
             end
             return convert(Tnorm, maximum(rowSum))
@@ -526,13 +526,13 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     S = zeros(T <: Real ? Int : Ti, n, t)
 
     function _rand_pm1!(v)
-      for i = 1:length(v)
+      for i in eachindex(v)
           v[i] = rand()<0.5?1:-1
       end
     end
 
     function _any_abs_eq(v,n::Int)
-        for i = 1:length(v)
+        for i in eachindex(v)
             if abs(v[i])==n
                 return true
             end

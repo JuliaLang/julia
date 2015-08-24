@@ -19,7 +19,7 @@ _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 function squeeze(A::AbstractArray, dims::Dims)
-    for i in 1:length(dims)
+    for i in eachindex(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
         size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
@@ -144,7 +144,7 @@ function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     B = similar(A)
     C = similar(A)
 
-    for i = 1:length(A)
+    for i in eachindex(A)
         if div(i-1, axis_stride) % axis_size == 0
             B[i] = A[i]
             C[i] = zero(T)
@@ -167,7 +167,7 @@ end
 
 function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
-    for i = 1:length(perm)
+    for i in eachindex(perm)
         iperm[perm[i]] = i
     end
     return permutedims(A,iperm)

@@ -417,7 +417,7 @@ function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
                                  order::Ordering=Forward,
                                  initialized::Bool=false)
     if !initialized
-        @inbounds for i = 1:length(ix)
+        @inbounds for i in eachindex(ix)
             ix[i] = i
         end
     end

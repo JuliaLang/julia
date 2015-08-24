@@ -64,7 +64,7 @@ for (op,Ty,Tz) in ((:.*,Real,:P),
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
-            for i = 1:length(X)
+            for i in eachindex(X)
                 @inbounds Z[i] = ($op_)(X[i],y)
             end
             return Z
@@ -206,7 +206,7 @@ for op in (:.+, :.-)
     @eval begin
         function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
             Z = similar(X, CompoundPeriod)
-            for i = 1:length(X)
+            for i in eachindex(X)
                 @inbounds Z[i] = ($op_)(X[i],y)
             end
             return Z
@@ -258,7 +258,7 @@ end
 
 # FixedPeriod conversions and promotion rules
 const fixedperiod_conversions = [(Week,7),(Day,24),(Hour,60),(Minute,60),(Second,1000),(Millisecond,1)]
-for i = 1:length(fixedperiod_conversions)
+for i in eachindex(fixedperiod_conversions)
     (T,n) = fixedperiod_conversions[i]
     N = 1
     for j = i-1:-1:1 # less-precise periods

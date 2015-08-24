@@ -171,17 +171,17 @@ format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format
 # vectorized
 DateTime{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(y,DateFormat(format,locale))
 function DateTime{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[DateTime(parse(y[i],df)...) for i in 1:length(y)], size(y))
+    return reshape(DateTime[DateTime(parse(y[i],df)...) for i in eachindex(y)], size(y))
 end
 Date{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(y,DateFormat(format,locale))
 function Date{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(y[i],df)...) for i in 1:length(y)], size(y))
+    return reshape(Date[Date(parse(y[i],df)...) for i in eachindex(y)], size(y))
 end
 
 format{T<:TimeType}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(y,DateFormat(format,locale))
 function format(y::AbstractArray{Date},df::DateFormat=ISODateFormat)
-    return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
+    return reshape([Dates.format(y[i],df) for i in eachindex(y)], size(y))
 end
 function format(y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
-    return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
+    return reshape([Dates.format(y[i],df) for i in eachindex(y)], size(y))
 end

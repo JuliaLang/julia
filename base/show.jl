@@ -1004,7 +1004,7 @@ function print_matrix_row(io::IO,
     X::AbstractVecOrMat, A::Vector,
     i::Integer, cols::AbstractVector, sep::AbstractString
 )
-    for k = 1:length(A)
+    for k in eachindex(A)
         j = cols[k]
         if isassigned(X,i,j)
             x = X[i,j]
@@ -1024,7 +1024,7 @@ end
 function print_matrix_vdots(io::IO,
     vdots::AbstractString, A::Vector, sep::AbstractString, M::Integer, m::Integer
 )
-    for k = 1:length(A)
+    for k in eachindex(A)
         w = A[k][1] + A[k][2]
         if k % M == m
             l = repeat(" ", max(0, A[k][1]-length(vdots)))

@@ -366,7 +366,7 @@ function process_backtrace(process_func::Function, top_function::Symbol, t, set)
     lastfile = ""; lastline = -11; lastname = symbol("#")
     local fname, file, line
     count = 0
-    for i = 1:length(t)
+    for i in eachindex(t)
         lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, true)
         if lkup === nothing
             continue

@@ -830,10 +830,10 @@ end
 function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
     o = allocate_sparse(A.m, A.n, length(A.nzval), true, true, stype, Tv)
     s = unsafe_load(o.p)
-    for i = 1:length(A.colptr)
+    for i in eachindex(A.colptr)
         unsafe_store!(s.p, A.colptr[i] - 1, i)
     end
-    for i = 1:length(A.rowval)
+    for i in eachindex(A.rowval)
         unsafe_store!(s.i, A.rowval[i] - 1, i)
     end
     unsafe_copy!(s.x, pointer(A.nzval), length(A.nzval))
@@ -987,7 +987,7 @@ function sparse(F::Factor)
     p = get_perm(F)
     if p != [1:s.n;]
         pinv = Array(Int, length(p))
-        for k = 1:length(p)
+        for k in eachindex(p)
             pinv[p[k]] = k
         end
         A = A[pinv,pinv]
@@ -1115,7 +1115,7 @@ function getLd!(S::SparseMatrixCSC)
     d = Array(eltype(S), size(S, 1))
     fill!(d, 0)
     col = 1
-    for k = 1:length(S.nzval)
+    for k in eachindex(S.nzval)
         while k >= S.colptr[col+1]
             col += 1
         end

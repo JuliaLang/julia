@@ -441,7 +441,7 @@ function fix_kinds(region, kinds)
     else
         kinds = Int32[kinds...]
     end
-    for i = 1:length(kinds)
+    for i in eachindex(kinds)
         if kinds[i] < 0 || kinds[i] > 10
             throw(ArgumentError("invalid transform kind"))
         end

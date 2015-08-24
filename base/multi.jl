@@ -116,7 +116,7 @@ type WorkerConfig
 
     function WorkerConfig()
         wc = new()
-        for n in 1:length(WorkerConfig.types)
+        for n in eachindex(WorkerConfig.types)
             T = eltype(fieldtype(WorkerConfig, n))
             setfield!(wc, n, Nullable{T}())
         end

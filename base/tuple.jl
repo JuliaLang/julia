@@ -15,6 +15,7 @@ getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
+eachindex(t::Tuple) = 1:length(t)
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
@@ -75,7 +76,7 @@ function isequal(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
-    for i = 1:length(t1)
+    for i in eachindex(t1)
         if !isequal(t1[i], t2[i])
             return false
         end
@@ -87,7 +88,7 @@ function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end
-    for i = 1:length(t1)
+    for i in eachindex(t1)
         if !(t1[i] == t2[i])
             return false
         end

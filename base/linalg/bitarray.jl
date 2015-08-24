@@ -187,7 +187,7 @@ function findmax(a::BitArray)
     m, mi = false, 1
     ti = 1
     ac = a.chunks
-    for i=1:length(ac)
+    for i in eachindex(ac)
         @inbounds k = trailing_zeros(ac[i])
         ti += k
         k==64 || return (true, ti)

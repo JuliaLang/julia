@@ -294,7 +294,7 @@ end
 full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A = zeros(T, size(M))
-    for i = 1:length(M.d)
+    for i in eachindex(M.d)
         A[i,i] = M.d[i]
     end
     for i = 1:length(M.d)-1

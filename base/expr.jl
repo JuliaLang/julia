@@ -136,7 +136,7 @@ function popmeta!(body::Expr, sym::Symbol)
         return false, []
     end
     metaargs = metaex.args
-    for i = 1:length(metaargs)
+    for i in eachindex(metaargs)
         if isa(metaargs[i], Symbol) && (metaargs[i]::Symbol) == sym
             deleteat!(metaargs, i)
             return true, []

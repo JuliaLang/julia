@@ -336,21 +336,21 @@ A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = solve(lu, b, UMFPACK_A
 function A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     r = solve(lu, [convert(Tlu,real(be)) for be in b], UMFPACK_A)
     i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
+    Tb[r[k]+im*i[k] for k in eachindex(r)]
 end
 
 Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_At)
 function Ac_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_At)
     i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
+    Tb[r[k]+im*i[k] for k in eachindex(r)]
 end
 
 At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_Aat)
 function At_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_Aat)
     i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
+    Tb[r[k]+im*i[k] for k in eachindex(r)]
 end
 
 function getindex(lu::UmfpackLU, d::Symbol)

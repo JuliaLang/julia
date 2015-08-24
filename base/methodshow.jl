@@ -35,7 +35,7 @@ function arg_decl_parts(m::Method)
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
+    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i in eachindex(m.sig.parameters)]
     return tv, decls, li.file, li.line
 end
 

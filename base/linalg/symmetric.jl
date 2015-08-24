@@ -168,7 +168,7 @@ eigvals!{T<:BlasComplex,S<:StridedMatrix}(A::Hermitian{T,S}, B::Hermitian{T,S}) 
 
 function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
     vals = eigvals!(A)
-    for i = 1:length(vals)
+    for i in eachindex(vals)
         vals[i] = abs(vals[i])
     end
     return sort!(vals, rev = true)

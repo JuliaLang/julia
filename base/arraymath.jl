@@ -398,7 +398,7 @@ function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offset
     return B
 end
 function ccopy!(B, A)
-    for i = 1:length(A)
+    for i in eachindex(A)
         B[i] = ctranspose(A[i])
     end
 end
@@ -480,7 +480,7 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
 
         B = similar(A)
 
-        for i = 1:length(A)
+        for i in eachindex(A)
             if div(i-1, axis_stride) % axis_size == 0
                B[i] = A[i]
             else
