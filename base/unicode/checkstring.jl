@@ -19,7 +19,9 @@ const UTF_SURROGATE = 32        ##< surrogate pairs present
 
 ## Get a UTF-8 continuation byte, give error if invalid, return updated character value
 @inline function get_continuation(ch::UInt32, byt::UInt8, pos)
-    !is_valid_continuation(byt) && throw(UnicodeError(UTF_ERR_CONT, pos, byt))
+    if !is_valid_continuation(byt)
+        throw(UnicodeError(UTF_ERR_CONT, pos, byt))
+    end
     (ch << 6) | (byt & 0x3f)
 end
 
