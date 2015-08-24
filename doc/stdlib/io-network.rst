@@ -182,21 +182,25 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IOBuffer() -> IOBuffer
 
    Create an in-memory I/O stream.
 
    .. code-block:: julia
+
        IOBuffer(size::Int)
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
    .. code-block:: julia
+
        IOBuffer(string)
 
    Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
+
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -205,21 +209,25 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IOBuffer() -> IOBuffer
 
    Create an in-memory I/O stream.
 
    .. code-block:: julia
+
        IOBuffer(size::Int)
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
    .. code-block:: julia
+
        IOBuffer(string)
 
    Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
+
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -228,21 +236,25 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IOBuffer() -> IOBuffer
 
    Create an in-memory I/O stream.
 
    .. code-block:: julia
+
        IOBuffer(size::Int)
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
    .. code-block:: julia
+
        IOBuffer(string)
 
    Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
+
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -251,21 +263,25 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IOBuffer() -> IOBuffer
 
    Create an in-memory I/O stream.
 
    .. code-block:: julia
+
        IOBuffer(size::Int)
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
    .. code-block:: julia
+
        IOBuffer(string)
 
    Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
+
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -274,6 +290,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        takebuf_array(b::IOBuffer)
 
    Obtain the contents of an ``IOBuffer`` as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.
@@ -282,6 +299,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        takebuf_string(b::IOBuffer)
 
    Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.
@@ -290,6 +308,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
@@ -298,6 +317,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        flush(stream)
 
    Commit all currently buffered writes to the given stream.
@@ -325,6 +345,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        write(stream, x)
 
    Write the canonical binary representation of a value to the given stream.
@@ -333,11 +354,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary representation.
 
    .. code-block:: julia
+
        read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
@@ -346,11 +369,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary representation.
 
    .. code-block:: julia
+
        read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
@@ -359,6 +384,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        read!(stream, array::Array)
 
    Read binary data from a stream, filling in the argument ``array``\ .
@@ -367,6 +393,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
 
    Read at most ``nb`` bytes from the stream into ``b``\ , returning the number of bytes read (increasing the size of ``b`` as needed).
@@ -377,6 +404,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readbytes(stream, nb=typemax(Int); all=true)
 
    Read at most ``nb`` bytes from the stream, returning a ``Vector{UInt8}`` of the bytes read.
@@ -387,6 +415,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        position(s)
 
    Get the current position of a stream.
@@ -395,6 +424,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        seek(s, pos)
 
    Seek a stream to the given position.
@@ -403,6 +433,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        seekstart(s)
 
    Seek a stream to its beginning.
@@ -411,6 +442,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        seekend(s)
 
    Seek a stream to its end.
@@ -419,6 +451,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        skip(s, offset)
 
    Seek a stream relative to the current position.
@@ -474,6 +507,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        eof(stream) -> Bool
 
    Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``\ . Therefore it is always safe to read one byte after seeing ``eof`` return ``false``\ . ``eof`` will return ``false`` as long as buffered data is still available, even if the remote end of a connection is closed.
@@ -482,6 +516,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isreadonly(stream) -> Bool
 
    Determine whether a stream is read-only.
@@ -490,6 +525,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isopen(object) -> Bool
 
    Determine whether an object - such as a stream, timer, or mmap – is not yet closed. Once an object is closed, it will never produce a new event. However, a closed stream may still have data to read in its buffer, use ``eof`` to check for the ability to read data. Use ``poll_fd`` to be notified when a stream might be writable or readable.
@@ -498,6 +534,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        serialize(stream, value)
 
    Write an arbitrary value to a stream in an opaque format, such that it can be read back by ``deserialize``\ . The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image.
@@ -506,6 +543,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        deserialize(stream)
 
    Read a value written by ``serialize``\ .
@@ -514,6 +552,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        print_escaped(io, str::AbstractString, esc::AbstractString)
 
    General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
@@ -531,6 +570,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        print_joined(io, items, delim, [last])
 
    Print elements of ``items`` to ``io`` with ``delim`` between them. If ``last`` is specified, it is used as the final delimiter instead of ``delim``\ .
@@ -539,6 +579,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        print_shortest(io, x)
 
    Print the shortest possible representation, with the minimum number of consecutive non-zero digits, of number ``x``\ , ensuring that it would parse to the exact same number.
@@ -547,6 +588,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        fd(stream)
 
    Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous ``File``\ 's and ``IOStream``\ 's not to any of the asynchronous streams.
@@ -555,11 +597,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        redirect_stdout()
 
    Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
 
    .. code-block:: julia
+
        redirect_stdout(stream)
 
    Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
@@ -568,11 +612,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        redirect_stdout()
 
    Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
 
    .. code-block:: julia
+
        redirect_stdout(stream)
 
    Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
@@ -581,6 +627,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        redirect_stderr([stream])
 
    Like redirect_stdout, but for STDERR
@@ -589,6 +636,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        redirect_stdin([stream])
 
    Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read from STDIN, may be written to wr.
@@ -597,6 +645,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readchomp(x)
 
    Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
@@ -605,6 +654,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        truncate(file,n)
 
    Resize the file or buffer given by the first argument to exactly ``n`` bytes, filling previously unallocated space with '\\0' if the file or buffer is grown
@@ -613,6 +663,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        skipchars(stream, predicate; linecomment::Char)
 
    Advance the stream until before the first character for which ``predicate`` returns false. For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
@@ -621,6 +672,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        countlines(io,[eol::Char])
 
    Read ``io`` until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.
@@ -629,11 +681,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        PipeBuffer()
 
    An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
 
    .. code-block:: julia
+
        PipeBuffer(data::Vector{UInt8},[maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
@@ -642,11 +696,13 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        PipeBuffer()
 
    An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
 
    .. code-block:: julia
+
        PipeBuffer(data::Vector{UInt8},[maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
@@ -655,6 +711,7 @@ General I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readavailable(stream)
 
    Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``\ .
@@ -666,6 +723,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        show(x)
 
    Write an informative text representation of a value to the current output stream. New types should overload ``show(io, x)`` where the first argument is a stream. The representation used by ``show`` generally includes Julia-specific formatting and type information.
@@ -674,6 +732,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        showcompact(x)
 
    Show a more compact representation of a value. This is used for printing array elements. If a new type has a different compact representation, it should overload ``showcompact(io, x)`` where the first argument is a stream.
@@ -682,6 +741,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        showall(x)
 
    Similar to ``show``\ , except shows all elements of arrays.
@@ -690,6 +750,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        summary(x)
 
    Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ . For arrays, returns strings like "2x2 Float64 Array".
@@ -698,6 +759,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        print(x)
 
    Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``\ . The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
@@ -715,6 +777,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        print_with_color(color::Symbol, [io], strings...)
 
    Print strings in a color specified as a symbol, for example ``:red`` or ``:blue``\ .
@@ -723,6 +786,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        info(msg)
 
    Display an informational message.
@@ -731,6 +795,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        warn(msg)
 
    Display a warning.
@@ -739,6 +804,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @printf([io::IOStream], "%Fmt", args...)
 
    Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
@@ -747,6 +813,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        @sprintf("%Fmt", args...)
 
    Return ``@printf`` formatted output as string. julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
@@ -757,6 +824,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sprint(f::Function, args...)
 
    Call the given function with an I/O stream and the supplied extra arguments. Everything written to this I/O stream is returned as a string.
@@ -765,6 +833,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        showerror(io, e)
 
    Show a descriptive representation of an exception object.
@@ -773,6 +842,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dump(x)
 
    Show all user-visible structure of a value.
@@ -781,6 +851,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        xdump(x)
 
    Show all structure of a value, including all fields of objects.
@@ -789,11 +860,13 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
 
    .. code-block:: julia
+
        readall(filename::AbstractString)
 
    Open ``filename``\ , read the entire contents as a string, then close the file. Equivalent to ``open(readall, filename)``\ .
@@ -802,11 +875,13 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
 
    .. code-block:: julia
+
        readall(filename::AbstractString)
 
    Open ``filename``\ , read the entire contents as a string, then close the file. Equivalent to ``open(readall, filename)``\ .
@@ -815,6 +890,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readline(stream=STDIN)
 
    Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given ``stream`` (defaults to ``STDIN``\ ),
@@ -823,6 +899,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readuntil(stream, delim)
 
    Read a string, up to and including the given delimiter byte.
@@ -831,6 +908,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readlines(stream)
 
    Read all lines as an array.
@@ -839,6 +917,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
@@ -847,6 +926,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -869,6 +949,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -891,6 +972,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -913,6 +995,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -935,6 +1018,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -957,6 +1041,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
@@ -979,6 +1064,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        writedlm(f, A, delim='\\t')
 
    Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
@@ -989,6 +1075,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        readcsv(source, [T::Type]; options...)
 
    Equivalent to ``readdlm`` with ``delim`` set to comma.
@@ -997,6 +1084,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        writecsv(filename, A)
 
    Equivalent to ``writedlm`` with ``delim`` set to comma.
@@ -1005,6 +1093,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        Base64EncodePipe(ostream)
 
    Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64Pipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
@@ -1013,6 +1102,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        Base64DecodePipe(istream)
 
    Returns a new read-only I/O stream, which decodes base64-encoded data read from ``istream``\ .
@@ -1021,6 +1111,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        base64encode(writefunc, args...)
        base64encode(args...)
 
@@ -1030,6 +1121,7 @@ Text I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        base64decode(string)
 
    Decodes the base64-encoded ``string`` and returns a ``Vector{UInt8}`` of the decoded bytes.
@@ -1059,6 +1151,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        display(x)
        display(d::Display, x)
        display(mime, x)
@@ -1072,6 +1165,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        redisplay(x)
        redisplay(d::Display, x)
        redisplay(mime, x)
@@ -1083,6 +1177,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        displayable(mime) -> Bool
        displayable(d::Display, mime) -> Bool
 
@@ -1092,6 +1187,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        writemime(stream, mime, x)
 
    The ``display`` functions ultimately call ``writemime`` in order to write an object ``x`` as a given ``mime`` type to a given I/O ``stream`` (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type ``T``\ , it is only necessary to define a new ``writemime`` method for ``T``\ , via: ``writemime(stream, ::MIME"mime", x::T) = ...``\ , where ``mime`` is a MIME-type string and the function body calls ``write`` (or similar) to write that representation of ``x`` to ``stream``\ . (Note that the ``MIME""`` notation only supports literal strings; to construct ``MIME`` types in a more flexible manner use ``MIME{symbol("")}``\ .)
@@ -1104,6 +1200,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        mimewritable(mime, x)
 
    Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding ``writemime`` function for ``typeof(x)``\ .)
@@ -1112,6 +1209,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        reprmime(mime, x)
 
    Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istext(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
@@ -1122,6 +1220,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        stringmime(mime, x)
 
    Returns an ``AbstractString`` containing the representation of ``x`` in the requested ``mime`` type. This is similar to ``reprmime`` except that binary data is base64-encoded as an ASCII string.
@@ -1156,6 +1255,7 @@ stack with:
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        pushdisplay(d::Display)
 
    Pushes a new display ``d`` on top of the global display-backend stack. Calling ``display(x)`` or ``display(mime, x)`` will display ``x`` on the topmost compatible backend in the stack (i.e., the topmost backend that does not throw a ``MethodError``\ ).
@@ -1164,6 +1264,7 @@ stack with:
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        popdisplay()
 
    popdisplay(d::Display)
@@ -1174,6 +1275,7 @@ stack with:
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        TextDisplay(stream)
 
    Returns a ``TextDisplay <: Display``\ , which can display any object as the text/plain MIME type (only), writing the text representation to the given I/O stream. (The text representation is the same as the way an object is printed in the Julia REPL.)
@@ -1182,6 +1284,7 @@ stack with:
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        istext(m::MIME)
 
    Determine whether a MIME type is text data.
@@ -1193,6 +1296,7 @@ Memory-mapped I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        Mmap.Anonymous(name, readonly, create)
 
    Create an ``IO``\ -like object for creating zeroed-out mmapped-memory that is not tied to a file for use in ``Mmap.mmap``\ . Used by ``SharedArray`` for creating shared memory arrays.
@@ -1315,6 +1419,7 @@ Memory-mapped I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        Mmap.sync!(array)
 
    Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version.
@@ -1326,16 +1431,19 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        connect([host],port) -> TcpSocket
 
    Connect to the host ``host`` on port ``port``
 
    .. code-block:: julia
+
        connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at ``path``
 
    .. code-block:: julia
+
        connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
@@ -1344,16 +1452,19 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        connect([host],port) -> TcpSocket
 
    Connect to the host ``host`` on port ``port``
 
    .. code-block:: julia
+
        connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at ``path``
 
    .. code-block:: julia
+
        connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
@@ -1362,11 +1473,13 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        listen([addr,]port) -> TcpServer
 
    Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
    .. code-block:: julia
+
        listen(path) -> PipeServer
 
    Listens on/Creates a Named Pipe/Domain Socket
@@ -1375,11 +1488,13 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        listen([addr,]port) -> TcpServer
 
    Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
    .. code-block:: julia
+
        listen(path) -> PipeServer
 
    Listens on/Creates a Named Pipe/Domain Socket
@@ -1388,6 +1503,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        getaddrinfo(host)
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
@@ -1396,6 +1512,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        parseip(addr)
 
    Parse a string specifying an IPv4 or IPv6 ip address.
@@ -1404,6 +1521,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IPv4(host::Integer) -> IPv4
 
    Returns IPv4 object from ip address formatted as Integer
@@ -1412,6 +1530,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        IPv6(host::Integer) -> IPv6
 
    Returns IPv6 object from ip address formatted as Integer
@@ -1420,6 +1539,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nb_available(stream)
 
    Returns the number of bytes available for reading before a read from this stream or buffer will block.
@@ -1428,6 +1548,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        accept(server[,client])
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
@@ -1436,6 +1557,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        listenany(port_hint) -> (UInt16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
@@ -1444,6 +1566,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 
    Monitor a file descriptor ``fd`` for changes in the read or write availability, and with a timeout given by ``timeout_s`` seconds.
@@ -1456,6 +1579,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
    Monitor a file for changes by polling every ``interval_s`` seconds until a change occurs or ``timeout_s`` seconds have elapsed. The ``interval_s`` should be a long period; the default is 5.007 seconds.
@@ -1468,6 +1592,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        watch_file(path, timeout_s::Real)
 
    Watch file or directory ``s`` for changes until a change occurs or ``timeout_s`` seconds have elapsed.
@@ -1480,6 +1605,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
    Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices.
@@ -1488,6 +1614,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
    Send ``msg`` over ``socket`` to ``host:port``\ .
@@ -1496,6 +1623,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        recv(socket::UDPSocket)
 
    Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
@@ -1504,6 +1632,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        recvfrom(socket::UDPSocket) -> (address, data)
 
    Read a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.
@@ -1512,6 +1641,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
 
    Set UDP socket options. ``multicast_loop``\ : loopback for multicast packets (default: true). ``multicast_ttl``\ : TTL for multicast packets. ``enable_broadcast``\ : flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). ``ttl``\ : Time-to-live of packets sent on the socket.
@@ -1520,6 +1650,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ntoh(x)
 
    Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
@@ -1528,6 +1659,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hton(x)
 
    Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
@@ -1536,6 +1668,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ltoh(x)
 
    Converts the endianness of a value from Little-endian to that used by the Host.
@@ -1544,6 +1677,7 @@ Network I/O
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        htol(x)
 
    Converts the endianness of a value from that used by the Host to Little-endian.

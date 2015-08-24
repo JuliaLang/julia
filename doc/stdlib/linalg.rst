@@ -49,6 +49,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dot(x, y)
        ⋅(x,y)
 
@@ -58,6 +59,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        vecdot(x, y)
 
    For any iterable containers ``x`` and ``y`` (including arrays of any dimension) of numbers (or any element type for which ``dot`` is defined), compute the Euclidean dot product (the sum of ``dot(x[i],y[i])``\ ) as if they were vectors.
@@ -66,6 +68,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cross(x, y)
        ×(x,y)
 
@@ -75,6 +78,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        factorize(A)
 
    Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\b; y=A\C``\ .
@@ -111,6 +115,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        lu(A) -> L, U, p
 
    Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ .
@@ -171,6 +176,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        chol(A, [LU]) -> F
 
    Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``\ . If ``LU`` is ``Val{:U}`` (Upper), ``F`` is of type ``UpperTriangular`` and ``A = F'*F``\ . If ``LU`` is ``Val{:L}`` (Lower), ``F`` is of type ``LowerTriangular`` and ``A = F*F'``\ . ``LU`` defaults to ``Val{:U}``\ .
@@ -179,11 +185,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``\ . ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``\ . The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . For ``CholeskyPivoted`` there is also defined a ``rank``\ . If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
    .. code-block:: julia
+
        cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
@@ -196,11 +204,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``\ . ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``\ . The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . For ``CholeskyPivoted`` there is also defined a ``rank``\ . If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
    .. code-block:: julia
+
        cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
@@ -222,11 +232,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ldltfact(A) -> LDLtFactorization
 
    Compute a factorization of a positive definite matrix ``A`` such that ``A=L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector with non-negative elements.
 
    .. code-block:: julia
+
        ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``\ . A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
@@ -239,11 +251,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ldltfact(A) -> LDLtFactorization
 
    Compute a factorization of a positive definite matrix ``A`` such that ``A=L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector with non-negative elements.
 
    .. code-block:: julia
+
        ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``\ . A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
@@ -256,6 +270,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``\ . Also see ``qrfact``\ . The default is to compute a thin factorization. Note that ``R`` is not extended with zeros when the full ``Q`` is requested.
@@ -542,6 +557,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        eigmax(A)
 
    Returns the largest eigenvalue of ``A``\ .
@@ -550,6 +566,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        eigmin(A)
 
    Returns the smallest eigenvalue of ``A``\ .
@@ -676,11 +693,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        schurfact(A) -> Schur
 
    Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
 
    .. code-block:: julia
+
        schurfact(A, B) -> GeneralizedSchur
 
    Computes the Generalized Schur (or QZ) factorization of the matrices ``A`` and ``B``\ . The (quasi) triangular Schur factors can be obtained from the ``Schur`` object ``F`` with ``F[:S]`` and ``F[:T]``\ , the left unitary/orthogonal Schur vectors can be obtained with ``F[:left]`` or ``F[:Q]`` and the right unitary/orthogonal Schur vectors can be obtained with ``F[:right]`` or ``F[:Z]`` such that ``A=F[:left]*F[:S]*F[:right]'`` and ``B=F[:left]*F[:T]*F[:right]'``\ . The generalized eigenvalues of ``A`` and ``B`` can be obtained with ``F[:alpha]./F[:beta]``\ .
@@ -821,11 +840,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        schurfact(A) -> Schur
 
    Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
 
    .. code-block:: julia
+
        schurfact(A, B) -> GeneralizedSchur
 
    Computes the Generalized Schur (or QZ) factorization of the matrices ``A`` and ``B``\ . The (quasi) triangular Schur factors can be obtained from the ``Schur`` object ``F`` with ``F[:S]`` and ``F[:T]``\ , the left unitary/orthogonal Schur vectors can be obtained with ``F[:left]`` or ``F[:Q]`` and the right unitary/orthogonal Schur vectors can be obtained with ``F[:right]`` or ``F[:Z]`` such that ``A=F[:left]*F[:S]*F[:right]'`` and ``B=F[:left]*F[:T]*F[:right]'``\ . The generalized eigenvalues of ``A`` and ``B`` can be obtained with ``F[:alpha]./F[:beta]``\ .
@@ -957,11 +978,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svdfact(A, [thin=true]) -> SVD
 
    Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ . The default is to produce a thin decomposition.
 
    .. code-block:: julia
+
        svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of ``A`` and ``B``\ , returning a ``GeneralizedSVD`` Factorization object ``F``\ , such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``\ .
@@ -979,11 +1002,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svd(A, [thin=true]) -> U, S, V
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
    .. code-block:: julia
+
        svd(A, B) -> U, V, Q, D1, D2, R0
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
@@ -992,11 +1017,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svdvals(A)
 
    Returns the singular values of ``A``\ .
 
    .. code-block:: julia
+
        svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
@@ -1005,6 +1032,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svdvals!(A)
 
    Returns the singular values of ``A``\ , while saving space by overwriting the input.
@@ -1013,11 +1041,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svdfact(A, [thin=true]) -> SVD
 
    Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ . The default is to produce a thin decomposition.
 
    .. code-block:: julia
+
        svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of ``A`` and ``B``\ , returning a ``GeneralizedSVD`` Factorization object ``F``\ , such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``\ .
@@ -1026,11 +1056,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svd(A, [thin=true]) -> U, S, V
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
    .. code-block:: julia
+
        svd(A, B) -> U, V, Q, D1, D2, R0
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
@@ -1039,11 +1071,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        svdvals(A)
 
    Returns the singular values of ``A``\ .
 
    .. code-block:: julia
+
        svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
@@ -1052,11 +1086,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        triu(M)
 
    Upper triangle of a matrix.
 
    .. code-block:: julia
+
        triu(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -1065,11 +1101,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        triu(M)
 
    Upper triangle of a matrix.
 
    .. code-block:: julia
+
        triu(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -1078,11 +1116,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        triu!(M)
 
    Upper triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
+
        triu!(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -1091,11 +1131,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        triu!(M)
 
    Upper triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
+
        triu!(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -1104,11 +1146,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tril(M)
 
    Lower triangle of a matrix.
 
    .. code-block:: julia
+
        tril(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -1117,11 +1161,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tril(M)
 
    Lower triangle of a matrix.
 
    .. code-block:: julia
+
        tril(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -1130,11 +1176,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tril!(M)
 
    Lower triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
+
        tril!(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -1143,11 +1191,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tril!(M)
 
    Lower triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
+
        tril!(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -1156,6 +1206,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        diagind(M[, k])
 
    A ``Range`` giving the indices of the ``k``\ th diagonal of the matrix ``M``\ .
@@ -1164,6 +1215,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        diag(M[, k])
 
    The ``k``\ th diagonal of a matrix, as a vector. Use ``diagm`` to construct a diagonal matrix.
@@ -1172,6 +1224,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        diagm(v[, k])
 
    Construct a diagonal matrix and place ``v`` on the ``k``\ th diagonal.
@@ -1180,6 +1233,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        scale(A, b)
 
        scale(b, A)
@@ -1194,6 +1248,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        scale(A, b)
 
        scale(b, A)
@@ -1276,6 +1331,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rank(M)
 
    Compute the rank of a matrix.
@@ -1297,6 +1353,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        vecnorm(A, [p])
 
    For any iterable container ``A`` (including arrays of any dimension) of numbers (or any element type for which ``norm`` is defined), compute the ``p``\ -norm (defaulting to ``p=2``\ ) as if ``A`` were a vector of the corresponding length.
@@ -1307,6 +1364,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        cond(M, [p])
 
    Condition number of the matrix ``M``\ , computed using the operator ``p``\ -norm. Valid values for ``p`` are ``1``\ , ``2`` (default), or ``Inf``\ .
@@ -1330,6 +1388,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trace(M)
 
    Matrix trace
@@ -1338,6 +1397,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        det(M)
 
    Matrix determinant
@@ -1346,6 +1406,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        logdet(M)
 
    Log of matrix determinant. Equivalent to ``log(det(M))``\ , but may provide increased accuracy and/or speed.
@@ -1354,6 +1415,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        logabsdet(M)
 
    Log of absolute value of determinant of real matrix. Equivalent to ``(log(abs(det(M))), sign(det(M)))``\ , but may provide increased accuracy and/or speed.
@@ -1362,6 +1424,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        inv(M)
 
    Matrix inverse
@@ -1406,6 +1469,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nullspace(M)
 
    Basis for nullspace of ``M``\ .
@@ -1414,6 +1478,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        repmat(A, n, m)
 
    Construct a matrix by repeating the given matrix ``n`` times in dimension 1 and ``m`` times in dimension 2.
@@ -1422,6 +1487,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        repeat(A, inner = Int[], outer = Int[])
 
    Construct an array by repeating the entries of ``A``\ . The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A`` should be repeated.
@@ -1430,6 +1496,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        kron(A, B)
 
    Kronecker tensor product of two vectors or two matrices.
@@ -1438,6 +1505,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        blkdiag(A...)
 
    Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
@@ -1549,6 +1617,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        lyap(A, C)
 
    Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``\ , where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other.
@@ -1557,6 +1626,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sylvester(A, B, C)
 
    Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``\ , where ``A``\ , ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
@@ -1565,6 +1635,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -1573,6 +1644,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isposdef(A) -> Bool
 
    Test whether a matrix is positive definite.
@@ -1581,6 +1653,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isposdef!(A) -> Bool
 
    Test whether a matrix is positive definite, overwriting ``A`` in the processes.
@@ -1589,6 +1662,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        istril(A) -> Bool
 
    Test whether a matrix is lower triangular.
@@ -1597,6 +1671,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        istriu(A) -> Bool
 
    Test whether a matrix is upper triangular.
@@ -1605,6 +1680,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isdiag(A) -> Bool
 
    Test whether a matrix is diagonal.
@@ -1613,6 +1689,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ishermitian(A) -> Bool
 
    Test whether a matrix is Hermitian.
@@ -1621,6 +1698,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        transpose(A)
 
    The transposition operator (``.'``\ ).
@@ -1629,6 +1707,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        transpose!(dest,src)
 
    Transpose array ``src`` and store the result in the preallocated array ``dest``\ , which should have a size corresponding to ``(size(src,2),size(src,1))``\ . No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
@@ -1637,6 +1716,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ctranspose(A)
 
    The conjugate transposition operator (``'``\ ).
@@ -1645,6 +1725,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ctranspose!(dest,src)
 
    Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``\ , which should have a size corresponding to ``(size(src,2),size(src,1))``\ . No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
@@ -1750,6 +1831,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of ``n`` elements of array ``X`` with stride ``incx`` and ``n`` elements of array ``Y`` with stride ``incy``\ .
@@ -1758,6 +1840,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dotu(n, X, incx, Y, incy)
 
    Dot function for two complex vectors.
@@ -1766,6 +1849,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dotc(n, X, incx, U, incy)
 
    Dot function for two complex vectors conjugating the first vector.
@@ -1774,6 +1858,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        blascopy!(n, X, incx, Y, incy)
 
    Copy ``n`` elements of array ``X`` with stride ``incx`` to array ``Y`` with stride ``incy``\ . Returns ``Y``\ .
@@ -1782,6 +1867,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nrm2(n, X, incx)
 
    2-norm of a vector consisting of ``n`` elements of array ``X`` with stride ``incx``\ .
@@ -1790,6 +1876,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        asum(n, X, incx)
 
    sum of the absolute values of the first ``n`` elements of array ``X`` with stride ``incx``\ .
@@ -1798,6 +1885,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        axpy!(a, X, Y)
 
    Overwrite ``Y`` with ``a*X + Y``\ . Returns ``Y``\ .
@@ -1806,6 +1894,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        scal!(n, a, X, incx)
 
    Overwrite ``X`` with ``a*X``\ . Returns ``X``\ .
@@ -1814,6 +1903,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        scal(n, a, X, incx)
 
    Returns ``a*X``\ .
@@ -1822,6 +1912,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        ger!(alpha, x, y, A)
 
    Rank-1 update of the matrix ``A`` with vectors ``x`` and ``y`` as ``alpha*x*y' + A``\ .
@@ -1830,6 +1921,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        syr!(uplo, alpha, x, A)
 
    Rank-1 update of the symmetric matrix ``A`` with vector ``x`` as ``alpha*x*x.' + A``\ . When ``uplo`` is 'U' the upper triangle of ``A`` is updated ('L' for lower triangle). Returns ``A``\ .
@@ -1838,6 +1930,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix ``C`` as ``alpha*A*A.' + beta*C`` or ``alpha*A.'*A + beta*C`` according to whether ``trans`` is 'N' or 'T'. When ``uplo`` is 'U' the upper triangle of ``C`` is updated ('L' for lower triangle). Returns ``C``\ .
@@ -1846,6 +1939,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according to ``uplo`` ('U' or 'L'), of ``alpha*A*A.'`` or ``alpha*A.'*A``\ , according to ``trans`` ('N' or 'T').
@@ -1854,6 +1948,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        her!(uplo, alpha, x, A)
 
    Methods for complex arrays only. Rank-1 update of the Hermitian matrix ``A`` with vector ``x`` as ``alpha*x*x' + A``\ . When ``uplo`` is 'U' the upper triangle of ``A`` is updated ('L' for lower triangle). Returns ``A``\ .
@@ -1862,6 +1957,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only. Rank-k update of the Hermitian matrix ``C`` as ``alpha*A*A' + beta*C`` or ``alpha*A'*A + beta*C`` according to whether ``trans`` is 'N' or 'T'. When ``uplo`` is 'U' the upper triangle of ``C`` is updated ('L' for lower triangle). Returns ``C``\ .
@@ -1870,6 +1966,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only. Returns either the upper triangle or the lower triangle, according to ``uplo`` ('U' or 'L'), of ``alpha*A*A'`` or ``alpha*A'*A``\ , according to ``trans`` ('N' or 'T').
@@ -1878,6 +1975,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector ``y`` as ``alpha*A*x + beta*y`` or ``alpha*A'*x + beta*y`` according to ``trans`` ('N' or 'T'). The matrix ``A`` is a general band matrix of dimension ``m`` by ``size(A,2)`` with ``kl`` sub-diagonals and ``ku`` super-diagonals. Returns the updated ``y``\ .
@@ -1886,6 +1984,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns ``alpha*A*x`` or ``alpha*A'*x`` according to ``trans`` ('N' or 'T'). The matrix ``A`` is a general band matrix of dimension ``m`` by ``size(A,2)`` with ``kl`` sub-diagonals and ``ku`` super-diagonals.
@@ -1894,6 +1993,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector ``y`` as ``alpha*A*x + beta*y`` where ``A`` is a a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ . The storage layout for ``A`` is described the reference BLAS module, level-2 BLAS at <http://www.netlib.org/lapack/explore-html/>.
@@ -1904,11 +2004,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sbmv(uplo, k, alpha, A, x)
 
    Returns ``alpha*A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
 
    .. code-block:: julia
+
        sbmv(uplo, k, A, x)
 
    Returns ``A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
@@ -1917,11 +2019,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        sbmv(uplo, k, alpha, A, x)
 
    Returns ``alpha*A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
 
    .. code-block:: julia
+
        sbmv(uplo, k, A, x)
 
    Returns ``A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
@@ -1930,6 +2034,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update ``C`` as ``alpha*A*B + beta*C`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ . Returns the updated ``C``\ .
@@ -1938,11 +2043,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
 
    .. code-block:: julia
+
        gemm(tA, tB, A, B)
 
    Returns ``A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -1951,11 +2058,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
 
    .. code-block:: julia
+
        gemm(tA, tB, A, B)
 
    Returns ``A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -1964,6 +2073,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemv!(tA, alpha, A, x, beta, y)
 
    Update the vector ``y`` as ``alpha*A*x + beta*y`` or ``alpha*A'x + beta*y`` according to ``tA`` (transpose ``A``\ ). Returns the updated ``y``\ .
@@ -1972,11 +2082,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemv(tA, alpha, A, x)
 
    Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA`` (transpose ``A``\ ).
 
    .. code-block:: julia
+
        gemv(tA, A, x)
 
    Returns ``A*x`` or ``A'x`` according to ``tA`` (transpose ``A``\ ).
@@ -1985,11 +2097,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        gemv(tA, alpha, A, x)
 
    Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA`` (transpose ``A``\ ).
 
    .. code-block:: julia
+
        gemv(tA, A, x)
 
    Returns ``A*x`` or ``A'x`` according to ``tA`` (transpose ``A``\ ).
@@ -1998,6 +2112,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symm!(side, ul, alpha, A, B, beta, C)
 
    Update ``C`` as ``alpha*A*B + beta*C`` or ``alpha*B*A + beta*C`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used. Returns the updated ``C``\ .
@@ -2006,16 +2121,19 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symm(side, ul, alpha, A, B)
 
    Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(side, ul, A, B)
 
    Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -2024,16 +2142,19 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symm(side, ul, alpha, A, B)
 
    Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(side, ul, A, B)
 
    Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -2042,16 +2163,19 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symm(side, ul, alpha, A, B)
 
    Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(side, ul, A, B)
 
    Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -2060,6 +2184,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symv!(ul, alpha, A, x, beta, y)
 
    Update the vector ``y`` as ``alpha*A*x + beta*y``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used. Returns the updated ``y``\ .
@@ -2068,11 +2193,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symv(ul, alpha, A, x)
 
    Returns ``alpha*A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symv(ul, A, x)
 
    Returns ``A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
@@ -2081,11 +2208,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        symv(ul, alpha, A, x)
 
    Returns ``alpha*A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
+
        symv(ul, A, x)
 
    Returns ``A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
@@ -2094,6 +2223,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trmm!(side, ul, tA, dA, alpha, A, B)
 
    Update ``B`` as ``alpha*A*B`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
@@ -2102,6 +2232,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trmm(side, ul, tA, dA, alpha, A, B)
 
    Returns ``alpha*A*B`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
@@ -2110,6 +2241,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trsm!(side, ul, tA, dA, alpha, A, B)
 
    Overwrite ``B`` with the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (A on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
@@ -2118,6 +2250,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trsm(side, ul, tA, dA, alpha, A, B)
 
    Returns the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (A on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
@@ -2126,6 +2259,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trmv!(side, ul, tA, dA, alpha, A, b)
 
    Update ``b`` as ``alpha*A*b`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``b``\ .
@@ -2134,6 +2268,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trmv(side, ul, tA, dA, alpha, A, b)
 
    Returns ``alpha*A*b`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
@@ -2142,6 +2277,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trsv!(ul, tA, dA, A, b)
 
    Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two variants determined by ``tA`` (transpose ``A``\ ) and ``ul`` (triangle of ``A`` used). ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``b``\ .
@@ -2150,6 +2286,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        trsv(ul, tA, dA, A, b)
 
    Returns the solution to ``A*x = b`` or one of the other two variants determined by ``tA`` (transpose ``A``\ ) and ``ul`` (triangle of ``A`` is used.) ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
@@ -2158,6 +2295,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        blas_set_num_threads(n)
 
    Set the number of threads the BLAS library should use.

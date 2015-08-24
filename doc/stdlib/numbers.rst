@@ -16,6 +16,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bin(n, [pad])
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
@@ -24,6 +25,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hex(n, [pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
@@ -32,6 +34,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        dec(n, [pad])
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
@@ -40,6 +43,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        oct(n, [pad])
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
@@ -48,6 +52,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        base(base, n, [pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``UInt8`` array of character values to use as digit symbols.
@@ -56,6 +61,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        digits(n, [base], [pad])
 
    Returns an array of the digits of ``n`` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``\ .
@@ -64,6 +70,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        digits!(array, n, [base])
 
    Fills an array of the digits of ``n`` in the given base. More significant digits are at higher indexes. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.
@@ -72,6 +79,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bits(n)
 
    A string giving the literal bit representation of a number.
@@ -80,16 +88,19 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        parse(str, start; greedy=true, raise=true)
 
    Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
 
    .. code-block:: julia
+
        parse(str; raise=true)
 
    Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
    .. code-block:: julia
+
        parse(type, str, [base])
 
    Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
@@ -98,6 +109,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        tryparse(type, str, [base])
 
    Like ``parse``\ , but returns a ``Nullable`` of the requested type. The result will be null if the string does not contain a valid number.
@@ -106,6 +118,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        big(x)
 
    Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``\ ). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
@@ -114,6 +127,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        signed(x)
 
    Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
@@ -122,6 +136,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        unsigned(x) -> Unsigned
 
    Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
@@ -130,6 +145,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        float(x)
 
    Convert a number, array, or string to a ``AbstractFloat`` data type. For numeric data, the smallest suitable ``AbstractFloat`` type is used. Converts strings to ``Float64``\ .
@@ -158,6 +174,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        exponent(x) -> Int
 
    Get the exponent of a normalized floating-point number.
@@ -166,6 +183,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        complex(r, [i])
 
    Convert real numbers or arrays to complex. ``i`` defaults to zero.
@@ -174,6 +192,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bswap(n)
 
    Byte-swap an integer
@@ -182,6 +201,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        num2hex(f)
 
    Get a hexadecimal string of the binary representation of a floating point number
@@ -190,6 +210,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hex2num(str)
 
    Convert a hexadecimal string to the floating point number it represents
@@ -198,6 +219,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        hex2bytes(s::ASCIIString)
 
    Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
@@ -206,6 +228,7 @@ Data Formats
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bytes2hex(bin_arr::Array{UInt8, 1})
 
    Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
@@ -217,6 +240,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        one(x)
 
    Get the multiplicative identity element for the type of x (x can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
@@ -225,6 +249,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        zero(x)
 
    Get the additive identity element for the type of x (x can also specify the type itself).
@@ -285,6 +310,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        issubnormal(f) -> Bool
 
    Test whether a floating point number is subnormal
@@ -293,6 +319,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isfinite(f) -> Bool
 
    Test whether a number is finite
@@ -301,6 +328,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isinf(f) -> Bool
 
    Test whether a number is infinite
@@ -309,6 +337,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isnan(f) -> Bool
 
    Test whether a floating point number is not a number (NaN)
@@ -317,6 +346,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        inf(f)
 
    Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
@@ -325,6 +355,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nan(f)
 
    Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
@@ -333,6 +364,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        nextfloat(f)
 
    Get the next floating point number in lexicographic order
@@ -341,6 +373,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        prevfloat(f) -> AbstractFloat
 
    Get the previous floating point number in lexicographic order
@@ -349,6 +382,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isinteger(x) -> Bool
 
    Test whether ``x`` or all its elements are numerically equal to some integer
@@ -357,6 +391,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        isreal(x) -> Bool
 
    Test whether ``x`` or all its elements are numerically equal to some real number
@@ -473,11 +508,13 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        with_rounding(f::Function, T, mode)
 
    Change the rounding mode of floating point type ``T`` for the duration of ``f``\ . It is logically equivalent to:
 
    .. code-block:: julia
+
        old = get_rounding(T)
        set_rounding(T, mode)
        f()
@@ -489,6 +526,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        get_zero_subnormals() -> Bool
 
    Returns ``false`` if operations on subnormal floating-point values ("denormals") obey rules for IEEE arithmetic, and ``true`` if they might be converted to zeros.
@@ -497,6 +535,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        set_zero_subnormals(yes::Bool) -> Bool
 
    If ``yes`` is ``false``\ , subsequent floating-point operations follow rules for IEEE arithmetic on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but not required) to convert subnormal inputs or outputs to zero. Returns ``true`` unless ``yes==true`` but the hardware does not support zeroing of subnormal numbers.
@@ -650,6 +689,7 @@ Integers
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        primes([lo,] hi)
 
    Returns a collection of the prime numbers (from ``lo``\ , if specified) up to ``hi``\ .
@@ -658,6 +698,7 @@ Integers
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        primesmask([lo,] hi)
 
    Returns a prime sieve, as a ``BitArray``\ , of the positive integers (from ``lo``\ , if specified) up to ``hi``\ . Useful when working with either primes or composite numbers.
@@ -704,6 +745,7 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        precision(num::AbstractFloat)
 
    Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
@@ -712,6 +754,7 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        get_bigfloat_precision()
 
    Get the precision (in bits) currently used for BigFloat arithmetic.
@@ -720,6 +763,7 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        set_bigfloat_precision(x::Int64)
 
    Set the precision (in bits) to be used to BigFloat arithmetic.
@@ -728,11 +772,13 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        with_bigfloat_precision(f::Function,precision::Integer)
 
    Change the BigFloat arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
 
    .. code-block:: julia
+
        old = get_bigfloat_precision()
        set_bigfloat_precision(precision)
        f()
@@ -761,6 +807,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        srand([rng], [seed])
 
    Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For ``MersenneTwister``\ , the ``seed`` may be a non-negative integer, a vector of ``UInt32`` integers or a filename, in which case the seed is read from a file. ``RandomDevice`` does not support seeding.
@@ -769,6 +816,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        MersenneTwister([seed])
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
@@ -777,6 +825,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        RandomDevice()
 
    Create a ``RandomDevice`` RNG object. Two such objects will always generate different streams of random numbers.
@@ -800,6 +849,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        rand!([rng], A, [coll])
 
    Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``\ . This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
@@ -808,6 +858,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        bitrand([rng], [dims...])
 
    Generate a ``BitArray`` of random boolean values.
@@ -816,6 +867,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        randn([rng], [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
@@ -824,6 +876,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        randn!([rng], A::Array{Float64,N})
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
@@ -832,6 +885,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        randexp([rng], [dims...])
 
    Generate a random number according to the exponential distribution with scale 1. Optionally generate an array of such random numbers.
@@ -840,6 +894,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        randexp!([rng], A::Array{Float64,N})
 
    Fill the array A with random numbers following the exponential distribution (with scale 1).
@@ -848,6 +903,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
    .. code-block:: julia
+
        randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}
 
    Create an array of the size ``jumps`` of initialized ``MersenneTwister`` RNG objects where the first RNG object given as a parameter and following ``MersenneTwister`` RNGs in the array initialized such that a state of the RNG object in the array would be moved forward (without generating numbers) from a previous RNG object array element on a particular number of steps encoded by the jump polynomial ``jumppoly``\ .
