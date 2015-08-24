@@ -142,7 +142,7 @@ function permute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-permute!(a, p::AbstractVector) = permute!!(a, copy(p))
+permute!(a, p::AbstractVector) = permute!!(a, copy!(similar(p), p))
 
 function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
@@ -167,7 +167,7 @@ function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copy(p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copy!(similar(p), p))
 
 immutable Combinations{T}
     a::T
