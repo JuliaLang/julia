@@ -665,11 +665,18 @@
         ;; return primary function
         ,name))))
 
+(define (take-while f xs)
+  (cond ((null? xs) '())
+        ((f (car xs)) (cons (car xs) (take-while f (cdr xs))))
+        (else '())))
+
 (define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl . kw)
-  (let ((lno  (if (and (pair? body) (pair? (cdr body))
-                       (pair? (cadr body)) (eq? (caadr body) 'line))
-                  (list (cadr body))
-                  '())))
+  ;; prologue includes line number node and eventual meta nodes
+  (let ((prologue (if (pair? body)
+                       (take-while (lambda (e)
+                                     (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'meta))))
+                                   (cdr body))
+                       '())))
   `(block
     ,@(map (lambda (n)
              (let* ((passed (append req (list-head opt n)))
@@ -695,11 +702,11 @@
                               vals)
                          ;; then add only one next argument
                          `(block
-                           ,@lno
+                           ,@prologue
                            (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
                          ;; otherwise add all
                          `(block
-                           ,@lno
+                           ,@prologue
                            (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
                (method-def-expr name sp (append kw passed) body #f)))
            (iota (length opt)))
