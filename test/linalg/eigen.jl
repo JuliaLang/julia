@@ -29,6 +29,8 @@ debug && println("non-symmetric eigen decomposition")
     f = eigfact(a)
     @test_approx_eq det(a) det(f)
     @test_approx_eq inv(a) inv(f)
+    @test eigvals(f) === f[:values]
+    @test eigvecs(f) === f[:vectors]
 
     num_fact = eigfact(one(eltya))
     @test num_fact.values[1] == one(eltya)
@@ -47,6 +49,8 @@ debug && println("symmetric generalized eigenproblem")
     @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
     @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
     @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
+    @test eigvals(f) === f[:values]
+    @test eigvecs(f) === f[:vectors]
     @test_throws KeyError f[:Z]
 
 debug && println("Non-symmetric generalized eigenproblem")
