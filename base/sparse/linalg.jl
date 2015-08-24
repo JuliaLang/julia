@@ -525,22 +525,30 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
 
     S = zeros(T <: Real ? Int : Ti, n, t)
 
+    function _rand_pm1!(v)
+      for i = 1:length(v)
+          v[i] = rand()<0.5?1:-1
+      end
+    end
+
+    function _any_abs_eq(v,n::Int)
+        for i = 1:length(v)
+            if abs(v[i])==n
+                return true
+            end
+        end
+        return false
+    end
+
     # Generate the block matrix
     X = Array(Ti, n, t)
     X[1:n,1] = 1
     for j = 2:t
-        repeated = true
-        while repeated
-            for i = 1:n
-                X[i,j] = rand()>=0.5?1:-1
-            end
-            repeated = false
+        while true
+            _rand_pm1!(slice(X,1:n,j))
             yaux = X[1:n,j]' * X[1:n,1:j-1]
-            for i = 1:j-1
-                if abs(yaux[i]) == n
-                    repeated = true
-                    break
-                end
+            if !_any_abs_eq(yaux,n)
+                break
             end
         end
     end
@@ -583,33 +591,24 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
         if T <: Real
             # Check wether cols of S are parallel to cols of S or S_old
             for j = 1:t
-                done = false
-                while ~done
+                while true
                     repeated = false
                     if j > 1
                         saux = S[1:n,j]' * S[1:n,1:j-1]
-                        for i = 1:j-1
-                            if abs(saux[i]) == n
-                                repeated = true
-                                break
-                            end
+                        if _any_abs_eq(saux,n)
+                            repeated = true
                         end
                     end
-                    if ~repeated
+                    if !repeated
                         saux2 = S[1:n,j]' * S_old[1:n,1:t]
-                        for i = 1:t
-                            if abs(saux2[i]) == n
-                                repeated = true
-                                break
-                            end
+                        if _any_abs_eq(saux2,n)
+                            repeated = true
                         end
                     end
                     if repeated
-                        for i = 1:n
-                            S[i,j] = rand()>=0.5?1:-1
-                        end
+                        _rand_pm1!(slice(S,1:n,j))
                     else
-                        done = true
+                        break
                     end
                 end
             end
@@ -647,7 +646,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
                         break
                     end
                 end
-                if ~found
+                if !found
                     addcounter = addcounter - 1
                     for i = 1:current_element - 1
                         X[i,t-addcounter] = 0
