@@ -103,7 +103,7 @@ end
 ## generic functions of complex numbers ##
 
 conj(z::Complex) = Complex(real(z),-imag(z))
-abs(z::Complex)  = hypot(real(z), imag(z))
+@inline abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 inv{T<:Integer}(z::Complex{T}) = inv(float(z))

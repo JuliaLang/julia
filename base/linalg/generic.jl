@@ -179,7 +179,7 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = ifelse(p == 0, convert(typeof(abs(zero(x))), x == zero(x) ? 0 : 1), abs(x))
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
@@ -233,8 +233,7 @@ function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     end
 end
 
-norm(x::Number, p::Real=2) =
-    p == 0 ? convert(typeof(real(x)), ifelse(x != 0, 1, 0)) : abs(x)
+@inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 function vecdot(x::AbstractVector, y::AbstractVector)
     lx = length(x)
