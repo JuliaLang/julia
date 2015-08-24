@@ -30,25 +30,31 @@ debug && println("\ntype of a: ", eltya, "\n")
 debug && println("singular value decomposition")
     usv = svdfact(a)
     @test usv[:S] === svdvals(usv)
-    @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
-    @test_approx_eq full(usv) a
-    @test_approx_eq usv[:Vt]' usv[:V]
+    @test usv[:U]*scale(usv[:S],usv[:Vt]) ≈ a
+    @test full(usv) ≈ a
+    @test usv[:Vt]' ≈ usv[:V]
     @test_throws KeyError usv[:Z]
     b = rand(eltya,n)
-    @test_approx_eq usv\b a\b
+    @test usv\b ≈ a\b
 
 debug && println("Generalized svd")
     a_svd = a[1:n1, :]
     gsvd = svdfact(a,a_svd)
-    @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
-    @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a_svd
-    @test_approx_eq usv[:Vt]' usv[:V]
+    @test gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' ≈ a
+    @test gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' ≈ a_svd
+    @test usv[:Vt]' ≈ usv[:V]
     @test_throws KeyError usv[:Z]
     @test_throws KeyError gsvd[:Z]
-    @test_approx_eq gsvd[:vals] svdvals(a,a_svd)
+    @test gsvd[:vals] ≈ svdvals(a,a_svd)
     α = eltya == Int ? -1 : rand(eltya)
     β = svdfact(α)
     @test β[:S] == [abs(α)]
     @test svdvals(α) == abs(α)
-
+    u,v,q,d1,d2,r0 = svd(a,a_svd)
+    @test u ≈ gsvd[:U]
+    @test v ≈ gsvd[:V]
+    @test d1 ≈ gsvd[:D1]
+    @test d2 ≈ gsvd[:D2]
+    @test q ≈ gsvd[:Q]
+    @test gsvd[:a].^2 + gsvd[:b].^2 ≈ ones(eltya,length(gsvd[:a]))
 end
