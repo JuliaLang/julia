@@ -101,11 +101,10 @@ big(x::Irrational) = convert(BigFloat,x)
 
 ## specific irriational mathematical constants
 
-@irrational π        3.14159265358979323846  pi
-@irrational e        2.71828182845904523536  exp(big(1))
-@irrational γ        0.57721566490153286061  euler
-@irrational catalan  0.91596559417721901505  catalan
-@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
+@irrational π  3.14159265358979323846  pi
+@irrational e  2.71828182845904523536  exp(big(1))
+@irrational γ  0.57721566490153286061  euler
+@irrational φ  1.61803398874989484820  (1+sqrt(big(5)))/2
 
 # aliases
 const pi = π

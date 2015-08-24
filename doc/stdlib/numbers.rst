@@ -181,10 +181,6 @@ General Number Functions and Constants
 
    The constant e
 
-.. data:: catalan
-
-   Catalan's constant
-
 .. data:: γ
           eulergamma
 

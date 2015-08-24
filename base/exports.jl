@@ -203,7 +203,6 @@ export
     π, pi,
     e, eu,
     γ, eulergamma,
-    catalan,
     φ, golden,
     I,
 

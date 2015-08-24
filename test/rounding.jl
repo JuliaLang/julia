@@ -110,7 +110,7 @@ end
 for T in [Float32,Float64]
     for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
               prevfloat(big(1.0)),nextfloat(big(0.0)),prevfloat(big(0.0)),
-              pi,e,eulergamma,catalan,golden,
+              pi,e,eulergamma,golden,
               typemax(Int64),typemax(UInt64),typemax(Int128),typemax(UInt128),0xa2f30f6001bb2ec6]
         pn = T(v,RoundNearest)
         @test pn == convert(T,BigFloat(v))
