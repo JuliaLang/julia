@@ -79,7 +79,14 @@ function rm(pkg::AbstractString)
     Write.remove(pkg)
 end
 
-available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
+function available()
+    all_avail = Read.available()
+    avail = AbstractString[]
+    for (pkg, vers) in all_avail
+        any(x->Types.satisfies("julia", VERSION, x[2].requires), vers) && push!(avail, pkg)
+    end
+    sort!(avail, by=lowercase)
+end
 
 function available(pkg::AbstractString)
     avail = Read.available(pkg)
