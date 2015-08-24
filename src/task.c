@@ -208,6 +208,7 @@ static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     else
         t->state = done_sym;
     t->result = resultval;
+    jl_gc_wb(t, t->result);
     // TODO: early free of t->stkbuf
 #ifdef COPY_STACKS
     t->stkbuf = NULL;
@@ -784,6 +785,7 @@ void NORETURN throw_internal(jl_value_t *e)
             jl_exit(1);
         }
         jl_current_task->exception = e;
+        jl_gc_wb(jl_current_task, e);
         finish_task(jl_current_task, e);
         assert(0);
     }
