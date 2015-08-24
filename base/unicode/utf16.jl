@@ -267,8 +267,6 @@ function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
     UTF16String(d)
 end
 
-convert(::Type{UTF16String}, str::UTF16String)    = str
-
 utf16(x) = convert(UTF16String, x)
 utf16(p::Ptr{UInt16}, len::Integer) = utf16(pointer_to_array(p, len))
 utf16(p::Ptr{Int16}, len::Integer) = utf16(convert(Ptr{UInt16}, p), len)
