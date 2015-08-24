@@ -482,10 +482,12 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         }
         else {
             tag = 5; // anything else (needs uid assigned later)
-            // also flag this in the backref table as special
-            uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, dt);
-            assert(*bp != (uptrint_t)HT_NOTFOUND);
-            *bp |= 1; assert(((uptrint_t)HT_NOTFOUND)|1);
+            if (!internal) {
+                // also flag this in the backref table as special
+                uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, dt);
+                assert(*bp != (uptrint_t)HT_NOTFOUND);
+                *bp |= 1; assert(((uptrint_t)HT_NOTFOUND)|1);
+            }
         }
     }
     else if (dt == jl_int32_type)
@@ -2065,18 +2067,30 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
 {
     assert(dt->uid == -1);
     jl_svec_t *tt = dt->parameters;
-    size_t i, l = jl_svec_len(tt);
-    for (i = 0; i < l; i++) {
-        jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-        if (jl_is_datatype(p) && p->uid == -1) {
-            jl_datatype_t *cachep = jl_recache_type(p, start);
-            if (p != cachep)
-                jl_svecset(tt, i, cachep);
-        }
+    jl_value_t *v = dt->instance; // the instance before unique'ing
+    jl_datatype_t *t; // the type after unique'ing
+    size_t l = jl_svec_len(tt);
+    if (l == 0) { // jl_cache_type doesn't work if length(parameters) == 0
+        dt->uid = jl_assign_type_uid();
+        t = dt;
     }
-    dt->uid = 0;
-    jl_value_t *v = dt->instance;
-    jl_datatype_t *t = (jl_datatype_t*)jl_cache_type_(dt);
+    else {
+        // recache all type parameters, then type type itself
+        size_t i;
+        for (i = 0; i < l; i++) {
+            jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
+            if (jl_is_datatype(p) && p->uid == -1) {
+                jl_datatype_t *cachep = jl_recache_type(p, start);
+                if (p != cachep)
+                    jl_svecset(tt, i, cachep);
+            }
+        }
+        dt->uid = 0;
+        t = (jl_datatype_t*)jl_cache_type_(dt);
+    }
+    assert(t->uid != 0);
+    // delete / replace any other usages of this type in the backref list
+    // with the newly constructed object
     size_t j = start;
     while (j < flagref_list.len) {
         jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
