@@ -371,14 +371,17 @@ function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     if mA != length(C)
         throw(DimensionMismatch("result C has length $(length(C)), needs length $mA"))
     end
-    z = zero(R)
 
     Astride = size(A, 1)
 
     if tA == 'T'  # fastest case
         for k = 1:mA
             aoffs = (k-1)*Astride
-            s = z
+            if mB == 0
+                s = zero(R)
+            else
+                s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+            end
             for i = 1:nA
                 s += A[aoffs+i].'B[i]
             end
@@ -387,19 +390,29 @@ function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     elseif tA == 'C'
         for k = 1:mA
             aoffs = (k-1)*Astride
-            s = z
+            if mB == 0
+                s = zero(R)
+            else
+                s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+            end
             for i = 1:nA
-                s += A[aoffs+i]'B[i]
+                s += A[aoffs + i]'B[i]
             end
             C[k] = s
         end
     else # tA == 'N'
-        fill!(C, z)
+        for i = 1:mA
+            if mB == 0
+                C[i] = zero(R)
+            else
+                C[i] = zero(A[i]*B[1] + A[i]*B[1])
+            end
+        end
         for k = 1:mB
             aoffs = (k-1)*Astride
             b = B[k]
             for i = 1:mA
-                C[i] += A[aoffs+i] * b
+                C[i] += A[aoffs + i] * b
             end
         end
     end
@@ -490,27 +503,40 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         end
     else
         # Multiplication for non-plain-data uses the naive algorithm
+
         if tA == 'N'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[1, j]
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[i, 1]*B[1, j] + A[i, 1]*B[1, j])
+                    end
+                    for k = 1:nA
                         Ctmp += A[i, k]*B[k, j]
                     end
                     C[i,j] = Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[j, 1].'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[i, 1]*B[j, 1] + A[i, 1]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[i, k]*B[j, k].'
                     end
                     C[i,j] = Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[j, 1]'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[i, 1]*B[j, 1] + A[i, 1]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[i, k]*B[j, k]'
                     end
                     C[i,j] = Ctmp
@@ -519,24 +545,36 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         elseif tA == 'T'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[1, j]
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[1, j] + A[1, i]*B[1, j])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i].'B[k, j]
                     end
                     C[i,j] = Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[j, 1].'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i].'B[j, k].'
                     end
                     C[i,j] = Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[j, 1]'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i].'B[j, k]'
                     end
                     C[i,j] = Ctmp
@@ -545,24 +583,36 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         else
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[1, j]
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[1, j] + A[1, i]*B[1, j])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i]'B[k, j]
                     end
                     C[i,j] = Ctmp
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[j, 1].'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i]'B[j, k].'
                     end
                     C[i,j] = Ctmp
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[j, 1]'
-                    for k = 2:nA
+                    if length(A) == 0 || length(B) == 0
+                        Ctmp = zero(R)
+                    else
+                        Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
+                    end
+                    for k = 1:nA
                         Ctmp += A[k, i]'B[j, k]'
                     end
                     C[i,j] = Ctmp
