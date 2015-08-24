@@ -58,7 +58,7 @@ immutable InputAreaState
 end
 
 type PromptState <: ModeState
-    terminal::TextTerminal
+    terminal
     p::Prompt
     input_buffer::IOBuffer
     ias::InputAreaState
@@ -190,8 +190,7 @@ prompt_string(s::PromptState) = s.p.prompt
 prompt_string(s::AbstractString) = s
 
 refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
-refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = s.ias =
-    refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     cols = width(terminal)
@@ -502,9 +501,11 @@ end
 
 function edit_insert(buf::IOBuffer, c)
     if eof(buf)
-        write(buf, c)
+        return write(buf, c)
     else
-        splice_buffer!(buf, position(buf):position(buf)-1, string(c))
+        s = string(c)
+        splice_buffer!(buf, position(buf):position(buf)-1, s)
+        return sizeof(s)
     end
 end
 
@@ -1070,6 +1071,10 @@ function show(io::IO, s::PrefixSearchState)
      isdefined(s,:mi) ? s.mi : "no MI")
 end
 
+refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
+    s::Union{PromptState,PrefixSearchState}) = s.ias =
+    refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+
 input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
@@ -1292,7 +1297,8 @@ Base.isempty(s::PromptState) = s.input_buffer.size == 0
 on_enter(s::PromptState) = s.p.on_enter(s)
 
 move_input_start(s) = (seek(buffer(s), 0))
-move_input_end(s) = (seekend(buffer(s)))
+move_input_end(buf::IOBuffer) = seekend(buf)
+move_input_end(s) = move_input_end(buffer(s))
 function move_line_start(s::MIState)
     buf = buffer(s)
     curpos = position(buf)
@@ -1304,15 +1310,15 @@ function move_line_start(s::MIState)
     end
 end
 function move_line_end(s::MIState)
-    buf = buffer(s)
+    s.key_repeats > 0 ?
+        move_input_end(s) :
+        move_line_end(buffer(s))
+end
+function move_line_end(buf::IOBuffer)
     eof(buf) && return
-    if s.key_repeats > 0
-        move_input_end(s)
-        return
-    end
-    pos = search(buffer(s).data, '\n', position(buf)+1)
+    pos = search(buf.data, '\n', position(buf)+1)
     if pos == 0
-        move_input_end(s)
+        move_input_end(buf)
         return
     end
     seek(buf, pos-1)
@@ -1508,22 +1514,24 @@ function setup_prefix_keymap(hp, parent_prompt)
     (p, pkeymap)
 end
 
-function deactivate(p::TextInterface, s::ModeState, termbuf)
+function deactivate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
     clear_input_area(termbuf, s)
     s
 end
 
-function activate(p::TextInterface, s::ModeState, termbuf)
+function activate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
     s.ias = InputAreaState(0, 0)
     refresh_line(s, termbuf)
 end
 
-function activate(p::TextInterface, s::MIState, termbuf)
+function activate(p::TextInterface, s::MIState, termbuf, term::TextTerminal)
     @assert p == s.current_mode
-    activate(p, s.mode_state[s.current_mode], termbuf)
+    activate(p, s.mode_state[s.current_mode], termbuf, term)
 end
-activate(m::ModalInterface, s::MIState, termbuf) = activate(s.current_mode, s, termbuf)
+activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
+    activate(s.current_mode, s, termbuf, term)
 
+commit_changes(t::UnixTerminal, termbuf) = write(t, takebuf_array(termbuf.out_stream))
 function transition(f::Function, s::MIState, mode)
     if mode == :abort
         s.aborted = true
@@ -1537,11 +1545,12 @@ function transition(f::Function, s::MIState, mode)
         s.mode_state[mode] = init_state(terminal(s), mode)
     end
     termbuf = TerminalBuffer(IOBuffer())
-    s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf)
+    t = terminal(s)
+    s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf, t)
     s.current_mode = mode
     f()
-    activate(mode, s.mode_state[mode], termbuf)
-    write(terminal(s), takebuf_array(termbuf.out_stream))
+    activate(mode, s.mode_state[mode], termbuf, t)
+    commit_changes(t, termbuf)
 end
 transition(s::MIState, mode) = transition((args...)->nothing, s, mode)
 
@@ -1616,7 +1625,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     raw!(term, true)
     enable_bracketed_paste(term)
     try
-        activate(prompt, s, term)
+        activate(prompt, s, term, term)
         while true
             map = keymap(s, prompt)
             fcn = match_input(map, s)
