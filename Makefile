@@ -345,6 +345,7 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	-rm -f $(DESTDIR)$(datarootdir)/julia/test/libccalltest.so
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
