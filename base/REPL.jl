@@ -611,13 +611,13 @@ function send_to_backend(ast, req, rep)
     val, bt = take!(rep)
 end
 
-function respond(f, repl, main)
+function respond(f, repl, main; pass_empty = false)
     (s,buf,ok)->begin
         if !ok
             return transition(s, :abort)
         end
         line = takebuf_string(buf)
-        if !isempty(line)
+        if !isempty(line) || pass_empty
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
