@@ -460,6 +460,20 @@ for elty in (Float32, Float64, Complex64, Complex128)
     for c in ('V', 'N')
         A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
         T,Q,d = schur(A)
+        Base.LinAlg.LAPACK.trsen!('N',c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)
+        @test d[1] ≈ T[2,2]
+        @test d[2] ≈ T[1,1]
+        if (c == 'V')
+            @test  Q * T * Q' ≈ A
+        end
+    end
+end
+
+#trexc and trsen
+for elty in (Float32, Float64, Complex64, Complex128)
+    for c in ('V', 'N')
+        A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+        T,Q,d = schur(A)
         Base.LinAlg.LAPACK.trexc!(c,LinAlg.BlasInt(1),LinAlg.BlasInt(2),T,Q)
         @test d[1] ≈ T[2,2]
         @test d[2] ≈ T[1,1]
