@@ -174,6 +174,26 @@ let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
     @test  args_morespecific(t2, t1)
 end
 
+# issue #11840
+f11840(::Type) = "Type"
+f11840(::DataType) = "DataType"
+@test f11840(Type) == "DataType"
+@test f11840(AbstractVector) == "Type"
+
+g11840(::DataType) = 1
+g11840(::Type) = 2
+@test g11840(Vector.body) == 1
+@test g11840(Vector) == 2
+@test g11840(Vector.body) == 1
+
+h11840(::DataType) = '1'
+h11840(::Type) = '2'
+h11840(::TypeConstructor) = '3'
+@test h11840(Vector) == '3'
+@test h11840(Vector.body) == '1'
+@test h11840(Vector) == '3'
+
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,AbstractString) === Any
