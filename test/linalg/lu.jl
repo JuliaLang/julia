@@ -114,6 +114,14 @@ debug && println("Fat LU")
     end
 end
 
+# test conversion routine
+a = Tridiagonal(rand(9),rand(10),rand(9))
+fa = full(a)
+falu = lufact(fa)
+alu = lufact(a)
+falu = convert(typeof(falu),alu)
+@test full(alu) == fa
+
 # Test rational matrices
 ## Integrate in general tests when more linear algebra is implemented in julia
 a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
