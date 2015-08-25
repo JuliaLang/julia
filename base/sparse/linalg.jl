@@ -491,14 +491,12 @@ end
 # cond
 function cond(A::SparseMatrixCSC, p::Real=2)
     if p == 1
-        chksquare(A)
-        normA = norm(A, 1)
         normAinv = normestinv(A)
+        normA = norm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        chksquare(A)
-        normA = norm(A, Inf)
         normAinv = normestinv(A')
+        normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
@@ -510,7 +508,7 @@ end
 function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
-    n = max(size(A)...)
+    n = chksquare(A)
     F = factorize(A)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
@@ -526,13 +524,13 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     S = zeros(T <: Real ? Int : Ti, n, t)
 
     function _rand_pm1!(v)
-      for i = 1:length(v)
-          v[i] = rand()<0.5?1:-1
-      end
+        for i in eachindex(v)
+            v[i] = rand()<0.5?1:-1
+        end
     end
 
     function _any_abs_eq(v,n::Int)
-        for i = 1:length(v)
+        for i in eachindex(v)
             if abs(v[i])==n
                 return true
             end
