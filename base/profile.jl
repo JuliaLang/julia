@@ -257,7 +257,7 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         wfunc = floor(Integer,3*ntext/5)
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
-    for i = 1:length(n)
+    for i in eachindex(n)
         li = lilist[i]
         println(io, lpad(string(n[i]), wcounts, " "), " ", rpad(truncto(li.file, wfile), wfile, " "), " ", rpad(truncto(li.func, wfunc), wfunc, " "), " ", lpad(string(li.line), wline, " "))
     end
@@ -301,7 +301,7 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
         nindent -= ndigits(nextra)+2
         showextra = true
     end
-    for i = 1:length(lilist)
+    for i in eachindex(lilist)
         li = lilist[i]
         if li != UNKNOWN
             base = " "^nindent
@@ -343,7 +343,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     if combine
         # Combine based on the line information
         d = Dict{LineInfo,Vector{Int}}()
-        for i = 1:length(bt)
+        for i in eachindex(bt)
             ip = bt[i][level+1]
             key = lidict[ip]
             indx = Base.ht_keyindex(d, key)
@@ -368,7 +368,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     else
         # Combine based on the instruction pointer
         d = Dict{T,Vector{Int}}()
-        for i = 1:length(bt)
+        for i in eachindex(bt)
             key = bt[i][level+1]
             indx = Base.ht_keyindex(d, key)
             if indx == -1
@@ -401,7 +401,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     strs = tree_format(lilist, n, level, cols)
     # Recurse to the next level
     len = Int[length(x) for x in bt]
-    for i = 1:length(lilist)
+    for i in eachindex(lilist)
         if !isempty(strs[i])
             println(io, strs[i])
         end
@@ -465,7 +465,7 @@ end
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{LineInfo})
     comb = Array(ByteString, length(lilist))
-    for i = 1:length(lilist)
+    for i in eachindex(lilist)
         li = lilist[i]
         if li != UNKNOWN
             comb[i] = @sprintf("%s:%s:%06d", li.file, li.func, li.line)

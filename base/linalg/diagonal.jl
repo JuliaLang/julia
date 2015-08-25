@@ -99,7 +99,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
-    for i=1:length(D.diag)
+    for i in eachindex(D.diag)
         d = D.diag[i]
         if d == zero(T)
             throw(SingularException(i))
@@ -112,7 +112,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
-    for i=1:length(D.diag)
+    for i in eachindex(D.diag)
         d = D.diag[i]
         if d == zero(T)
             throw(SingularException(i))
@@ -165,7 +165,7 @@ end
 
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag)
-    for i = 1:length(D.diag)
+    for i in eachindex(D.diag)
         if D.diag[i] == zero(T)
             throw(SingularException(i))
         end
@@ -176,7 +176,7 @@ end
 
 function pinv{T}(D::Diagonal{T})
     Di = similar(D.diag)
-    for i = 1:length(D.diag)
+    for i in eachindex(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
@@ -184,7 +184,7 @@ end
 function pinv{T}(D::Diagonal{T}, tol::Real)
     Di = similar(D.diag)
     if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
-    for i = 1:length(D.diag)
+    for i in eachindex(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])
         else
@@ -207,9 +207,9 @@ function svd{T<:Number}(D::Diagonal{T})
     S   = abs(D.diag)
     piv = sortperm(S, rev = true)
     U   = full(Diagonal(D.diag ./ S))
-    Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
+    Up  = hcat([U[:,i] for i in eachindex(D.diag)][piv]...)
     V   = eye(D)
-    Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
+    Vp  = hcat([V[:,i] for i in eachindex(D.diag)][piv]...)
     return (Up, S[piv], Vp)
 end
 function svdfact(D::Diagonal)

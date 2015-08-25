@@ -268,13 +268,13 @@ function A_mul_B!(G::Givens, R::Rotation)
     return R
 end
 function A_mul_B!(R::Rotation, A::AbstractMatrix)
-    @inbounds for i = 1:length(R.rotations)
+    @inbounds for i in eachindex(R.rotations)
         A_mul_B!(R.rotations[i], A)
     end
     return A
 end
 function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
-    @inbounds for i = 1:length(R.rotations)
+    @inbounds for i in eachindex(R.rotations)
         A_mul_Bc!(A, R.rotations[i])
     end
     return A

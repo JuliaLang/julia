@@ -65,7 +65,7 @@ slice_unsafe(A::AbstractArray, J) = _slice_unsafe(A, to_indexes(J...))
     N = 0
     sizeexprs = Array(Any, 0)
     Jp = J.parameters
-    for Jindex = 1:length(Jp)
+    for Jindex in eachindex(Jp)
         j = Jp[Jindex]
         if !(j <: Real)
             N += 1
@@ -101,7 +101,7 @@ sub_unsafe(A::AbstractArray, J) = _sub_unsafe(A, to_indexes(J...))
     while N > 0 && Jp[N] <: Real
         N -= 1
     end
-    for Jindex = 1:length(Jp)
+    for Jindex in eachindex(Jp)
         j = Jp[Jindex]
         if Jindex <= N
             push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :A, :J))
@@ -150,7 +150,7 @@ end
     LD, die_next_vector, jprev, isLDdone = 0, false, Void, false  # for linear indexing inference
     Jindex = 0
     IVp = IV.parameters
-    for IVindex = 1:length(IVp)
+    for IVindex in eachindex(IVp)
         iv = IVp[IVindex]
         if iv <: Real
             push!(indexexprs, :(V.indexes[$IVindex]))
@@ -233,7 +233,7 @@ end
     preexprs = Array(Any, 0)
     LD, die_next_vector, jprev, isLDdone = 0, false, Void, false
     Jindex = 0
-    for IVindex = 1:length(IVp)
+    for IVindex in eachindex(IVp)
         iv = IVp[IVindex]
         if iv <: Real
             push!(indexexprs, :(V.indexes[$IVindex]))
@@ -361,7 +361,7 @@ in(::Int, ::Colon) = true
     strideexprs[1] = 1
     i = 1
     Vdim = 1
-    for i = 1:length(Ip)
+    for i in eachindex(Ip)
         if Ip[i] != Int
             strideexprs[Vdim+1] = copy(strideexprs[Vdim])
             strideexprs[Vdim] = :(step(V.indexes[$i])*$(strideexprs[Vdim]))
@@ -420,7 +420,7 @@ first_index(V::SubArray) = first_index(V.parent, V.indexes)
 function first_index(P::AbstractArray, indexes::Tuple)
     f = 1
     s = 1
-    for i = 1:length(indexes)
+    for i in eachindex(indexes)
         f += (first(indexes[i])-1)*s
         s *= size(P, i)
     end
@@ -500,7 +500,7 @@ pointer(V::SubArray, i::Int) = pointer(V, ind2sub(size(V), i))
 function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
     index = first_index(V)
     strds = strides(V)
-    for d = 1:length(is)
+    for d in eachindex(is)
         index += (is[d]-1)*strds[d]
     end
     return pointer(V.parent, index)

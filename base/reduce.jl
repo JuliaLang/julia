@@ -397,7 +397,7 @@ end
 
 function count(pred, a::AbstractArray)
     n = 0
-    for i = 1:length(a)
+    for i in eachindex(a)
         @inbounds if pred(a[i])
             n += 1
         end

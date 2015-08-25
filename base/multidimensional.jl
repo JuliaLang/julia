@@ -34,6 +34,7 @@ length{N}(::Type{CartesianIndex{N}})=N
 
 # indexing
 getindex(index::CartesianIndex, i::Integer) = index.I[i]
+eachindex(index::CartesianIndex) = 1:length(index)
 
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)
@@ -80,7 +81,7 @@ end
     startargs = fill(1, K)
     stopargs = Array(Expr, K)
     for i = 1:K
-        Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]
+        Bargs = [:(size(B[$j],$i)) for j in eachindex(B)]
         stopargs[i] = :(max(size(A,$i),$(Bargs...)))
     end
     meta = Expr(:meta, :inline)
@@ -351,7 +352,7 @@ function cartindex_exprs(indexes, syms)
     exprs = Any[]
     for (i,ind) in enumerate(indexes)
         if ind <: CartesianIndex
-            for j = 1:length(ind)
+            for j in 1:length(ind)
                 push!(exprs, :($syms[$i][$j]))
             end
         else
@@ -777,7 +778,7 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
             length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
             isperm(perm) || throw(ArgumentError("input is not a permutation"))
             dimsP = size(P)
-            for i = 1:length(perm)
+            for i in eachindex(perm)
                 dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
             end
 

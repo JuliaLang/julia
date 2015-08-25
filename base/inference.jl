@@ -292,7 +292,7 @@ const getfield_tfunc = function (A, s0, name)
             end
         end
         snames = s.name.names
-        for i=1:length(snames)
+        for i in eachindex(snames)
             if is(snames[i],fld)
                 R = s.types[i]
                 if length(s.parameters) == 0
@@ -1201,7 +1201,7 @@ stupdate(state::Tuple{}, changes::VarTable, vars) = copy(changes)
 stupdate(state::Tuple{}, changes::StateUpdate, vars) = stupdate(ObjectIdDict(), changes, vars)
 
 function stupdate(state::ObjectIdDict, changes::Union{StateUpdate,VarTable}, vars)
-    for i = 1:length(vars)
+    for i in eachindex(vars)
         v = vars[i]
         newtype = changes[v]
         oldtype = get(state::ObjectIdDict,v,NF)
@@ -1245,7 +1245,7 @@ genlabel(sv) = LabelNode(sv.label_counter += 1)
 
 function find_gensym_uses(body)
     uses = IntSet[]
-    for line = 1:length(body)
+    for line in eachindex(body)
         find_gensym_uses(body[line], uses, line)
     end
     return uses
@@ -1448,7 +1448,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     n = length(body)
 
     labels = zeros(Int, label_counter(body)+1)
-    for i=1:length(body)
+    for i in eachindex(body)
         b = body[i]
         if isa(b,LabelNode)
             labels[b.label+1] = i
@@ -1530,7 +1530,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     end
 
     gensym_uses = find_gensym_uses(body)
-    gensym_init = Any[ NF for i = 1:length(gensym_uses) ]
+    gensym_init = Any[ NF for i in eachindex(gensym_uses) ]
     gensym_types = copy(gensym_init)
 
     sv = StaticVarInfo(sparams, cenv, vars, gensym_types, vinflist, length(labels), ObjectIdDict())
@@ -1695,7 +1695,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
         frame.result = curtype
         @goto typeinf_top
     end
-    for i = 1:length(gensym_types)
+    for i in eachindex(gensym_types)
         if gensym_types[i] === NF
             gensym_types[i] = Union{}
         end
@@ -1833,7 +1833,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
     end
     closures = []
     body = ast.args[3].args::Array{Any,1}
-    for i=1:length(body)
+    for i in eachindex(body)
         st_i = states[i]
         if st_i !== ()
             # st_i === ()  =>  unreached statement  (see issue #7836)
@@ -1914,7 +1914,7 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
         end
         e.args[2] = sym_replace(e.args[2], from1, from2, to1, to2)
     elseif e.head !== :line
-        for i=1:length(e.args)
+        for i in eachindex(e.args)
             e.args[i] = sym_replace(e.args[i], from1, from2, to1, to2)
         end
     end
@@ -1922,12 +1922,12 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
 end
 
 function _sym_repl(s::Union{Symbol,GenSym}, from1, from2, to1, to2, deflt)
-    for i=1:length(from1)
+    for i in eachindex(from1)
         if is(from1[i],s)
             return to1[i]
         end
     end
-    for i=1:length(from2)
+    for i in eachindex(from2)
         if is(from2[i],s)
             return to2[i]
         end
@@ -2216,7 +2216,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     sp = meth[2]::SimpleVector
     sp = svec(sp..., linfo.sparams...)
     spvals = Any[ sp[i] for i in 2:2:length(sp) ]
-    for i=1:length(spvals)
+    for i in eachindex(spvals)
         si = spvals[i]
         if isa(si, TypeVar)
             return NF
@@ -2540,7 +2540,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
 
     # make labels / goto statements unique
     newlabels = zeros(Int,label_counter(body.args)+1)
-    for i = 1:length(body.args)
+    for i in eachindex(body.args)
         a = body.args[i]
         if isa(a,LabelNode)
             a = a::LabelNode
@@ -2549,7 +2549,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             body.args[i] = newlabel
         end
     end
-    for i = 1:length(body.args)
+    for i in eachindex(body.args)
         a = body.args[i]
         if isa(a,GotoNode)
             a = a::GotoNode
@@ -2641,7 +2641,7 @@ function gensym_increment(body::Expr, incr)
     if body.head === :line
         return body
     end
-    for i in 1:length(body.args)
+    for i in eachindex(body.args)
         body.args[i] = gensym_increment(body.args[i], incr)
     end
     return body
@@ -2684,7 +2684,7 @@ function inlining_pass(e::Expr, sv, ast)
                 eargs[i] = res[1]
                 if isa(res[2],Array)
                     sts = res[2]::Array{Any,1}
-                    for j = 1:length(sts)
+                    for j in eachindex(sts)
                         insert!(eargs, i, sts[j])
                         i += 1
                     end
@@ -2833,7 +2833,7 @@ function inlining_pass(e::Expr, sv, ast)
                 elseif (t<:Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
                     tp = t.parameters
-                    newargs[i-3] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]
+                    newargs[i-3] = Any[ mk_getfield(aarg,j,tp[j]) for j in eachindex(tp) ]
                 else
                     # not all args expandable
                     return (e,stmts)
@@ -3016,7 +3016,7 @@ function find_sa_vars(ast)
     av2 = ObjectIdDict()
     vinfos = ast.args[2][1]::Array{Any,1}
     args = ast.args[1]
-    for i = 1:length(body)
+    for i in eachindex(body)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
@@ -3084,7 +3084,7 @@ end
 
 # replace getfield(tuple(exprs...), i) with exprs[i]
 function getfield_elim_pass(e::Expr, sv)
-    for i = 1:length(e.args)
+    for i in eachindex(e.args)
         ei = e.args[i]
         if isa(ei,Expr)
             getfield_elim_pass(ei, sv)

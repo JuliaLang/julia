@@ -10,7 +10,7 @@ typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
 ## Basic functions ##
 
 vect() = Array(Any, 0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+vect{T}(X::T...) = T[ X[i] for i in eachindex(X) ]
 
 const _oldstyle_array_vcat_ = true
 
@@ -44,7 +44,7 @@ if _oldstyle_array_vcat_
 else
     function vect(X...)
         T = promote_typeof(X...)
-        #T[ X[i] for i=1:length(X) ]
+        #T[ X[i] for i in eachindex(X) ]
         # TODO: this is currently much faster. should figure out why. not clear.
         copy!(Array(T,length(X)), X)
     end
@@ -703,8 +703,8 @@ hcat() = Array(Any, 0)
 ## cat: special cases
 hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
 hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
-vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
-vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
+vcat{T}(X::T...)         = T[ X[i] for i in eachindex(X) ]
+vcat{T<:Number}(X::T...) = T[ X[i] for i in eachindex(X) ]
 
 function vcat(X::Number...)
     T = promote_typeof(X...)
@@ -723,7 +723,7 @@ function vcat{T}(V::AbstractVector{T}...)
     end
     a = similar(full(V[1]), n)
     pos = 1
-    for k=1:length(V)
+    for k in eachindex(V)
         Vk = V[k]
         p1 = pos+length(Vk)-1
         a[pos:p1] = Vk
@@ -800,12 +800,12 @@ function cat_t(catdims, typeC::Type, X...)
     ndimsC = max(maximum(ndimsX), maximum(catdims))
     catsizes = zeros(Int,(nargs,length(catdims)))
     dims2cat = zeros(Int,ndimsC)
-    for k = 1:length(catdims)
+    for k in eachindex(catdims)
         dims2cat[catdims[k]]=k
     end
 
     dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
-    for k = 1:length(catdims)
+    for k in eachindex(catdims)
         catsizes[1,k] = dimsC[catdims[k]]
     end
     for i = 2:nargs
@@ -832,7 +832,7 @@ function cat_t(catdims, typeC::Type, X...)
         cat_one = [ dims2cat[d] == 0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]]))
                    for d=1:ndimsC ]
         C[cat_one...] = X[i]
-        for k = 1:length(catdims)
+        for k in eachindex(catdims)
             offsets[k] += catsizes[i,k]
         end
     end
@@ -1291,7 +1291,7 @@ end
 ## 1 argument
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
-    for i = 1:length(A)
+    for i in eachindex(A)
         dest[i] = f(A[i])
     end
     return dest
@@ -1328,7 +1328,7 @@ end
 
 ## 2 argument
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
-    for i = 1:length(A)
+    for i in eachindex(A)
         dest[i] = f(A[i], B[i])
     end
     return dest

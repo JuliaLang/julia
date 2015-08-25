@@ -123,7 +123,7 @@ end
 function serialize(s::SerializationState, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
-    for i = 1:length(v)
+    for i in eachindex(v)
         serialize(s.io, v[i])
     end
 end
@@ -180,7 +180,7 @@ function serialize(s::SerializationState, a::Array)
     if isbits(elty)
         serialize_array_data(s.io, a)
     else
-        for i = 1:length(a)
+        for i in eachindex(a)
             if isdefined(a, i)
                 serialize(s, a[i])
             else
@@ -595,7 +595,7 @@ function deserialize_array(s::SerializationState)
     end
     A = Array(elty, dims)
     deserialize_cycle(s, A)
-    for i = 1:length(A)
+    for i in eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
             A[i] = handle_deserialize(s, tag)

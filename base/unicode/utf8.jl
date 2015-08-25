@@ -41,7 +41,7 @@ end
 function length(s::UTF8String)
     d = s.data
     cnum = 0
-    for i = 1:length(d)
+    for i in eachindex(d)
         @inbounds cnum += !is_valid_continuation(d[i])
     end
     cnum

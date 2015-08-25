@@ -81,10 +81,10 @@ end
 
 macro test(ex)
     if typeof(ex) == Expr && ex.head == :comparison
-        syms = [gensym() for i = 1:length(ex.args)]
+        syms = [gensym() for i in eachindex(ex.args)]
         func_block = Expr(:block)
         # insert assignment into a block
-        func_block.args = [:($(syms[i]) = $(esc(ex.args[i]))) for i = 1:length(ex.args)]
+        func_block.args = [:($(syms[i]) = $(esc(ex.args[i]))) for i in eachindex(ex.args)]
         # finish the block with a return
         push!(func_block.args, Expr(:return, :(Expr(:comparison, $(syms...)), $(Expr(:comparison, syms...)))))
         :(do_test(()->($func_block), $(Expr(:quote,ex))))
@@ -124,7 +124,7 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
               "\n  ", bstr, " (length $(length(vb))) = ", vb)
     end
     diff = real(zero(eltype(va)))
-    for i = 1:length(va)
+    for i in eachindex(va)
         xa = va[i]; xb = vb[i]
         if isfinite(xa) && isfinite(xb)
             diff = max(diff, abs(xa-xb))

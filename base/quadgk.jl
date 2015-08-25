@@ -169,10 +169,10 @@ end
 # all the integration-segment endpoints
 function quadgk(f, a, b, c...; kws...)
     T = promote_type(typeof(float(a)), typeof(b))
-    for i in 1:length(c)
+    for i in eachindex(c)
         T = promote_type(T, typeof(c[i]))
     end
-    cT = T[ c[i] for i in 1:length(c) ]
+    cT = T[ c[i] for i in eachindex(c) ]
     quadgk(f, convert(T, a), convert(T, b), cT...; kws...)
 end
 

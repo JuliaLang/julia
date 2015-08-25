@@ -63,7 +63,7 @@ end
 
 function uppercase(s::ASCIIString)
     d = s.data
-    for i = 1:length(d)
+    for i in eachindex(d)
         if 'a' <= Char(d[i]) <= 'z'
             td = copy(d)
             for j = i:length(td)
@@ -78,7 +78,7 @@ function uppercase(s::ASCIIString)
 end
 function lowercase(s::ASCIIString)
     d = s.data
-    for i = 1:length(d)
+    for i in eachindex(d)
         if 'A' <= Char(d[i]) <= 'Z'
             td = copy(d)
             for j = i:length(td)

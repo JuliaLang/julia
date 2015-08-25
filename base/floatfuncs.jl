@@ -69,7 +69,7 @@ round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(
 for f in (:trunc,:floor,:ceil,:round)
     @eval begin
         function ($f){T,R}(::Type{T}, x::AbstractArray{R,1})
-            [ ($f)(T, x[i])::T for i = 1:length(x) ]
+            [ ($f)(T, x[i])::T for i in eachindex(x) ]
         end
         function ($f){T,R}(::Type{T}, x::AbstractArray{R,2})
             [ ($f)(T, x[i,j])::T for i = 1:size(x,1), j = 1:size(x,2) ]
@@ -78,7 +78,7 @@ for f in (:trunc,:floor,:ceil,:round)
             reshape([ ($f)(T, x[i])::T for i in eachindex(x) ], size(x))
         end
         function ($f){R}(x::AbstractArray{R,1}, digits::Integer, base::Integer=10)
-            [ ($f)(x[i], digits, base) for i = 1:length(x) ]
+            [ ($f)(x[i], digits, base) for i in eachindex(x) ]
         end
         function ($f){R}(x::AbstractArray{R,2}, digits::Integer, base::Integer=10)
             [ ($f)(x[i,j], digits, base) for i = 1:size(x,1), j = 1:size(x,2) ]
@@ -90,7 +90,7 @@ for f in (:trunc,:floor,:ceil,:round)
 end
 
 function round{R}(x::AbstractArray{R,1}, r::RoundingMode)
-    [ round(x[i], r) for i = 1:length(x) ]
+    [ round(x[i], r) for i in eachindex(x) ]
 end
 function round{R}(x::AbstractArray{R,2}, r::RoundingMode)
     [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
@@ -100,7 +100,7 @@ function round(x::AbstractArray, r::RoundingMode)
 end
 
 function round{T,R}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
-    [ round(T, x[i], r)::T for i = 1:length(x) ]
+    [ round(T, x[i], r)::T for i in eachindex(x) ]
 end
 function round{T,R}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
     [ round(T, x[i,j], r)::T for i = 1:size(x,1), j = 1:size(x,2) ]

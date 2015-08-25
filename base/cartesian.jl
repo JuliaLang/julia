@@ -208,7 +208,7 @@ function lreplace!(ex::Expr, r::LReplace)
             return ex
         end
     end
-    for i in 1:length(ex.args)
+    for i in eachindex(ex.args)
         ex.args[i] = lreplace!(ex.args[i], r)
     end
     ex
@@ -255,7 +255,7 @@ exprresolve_conditional(arg) = false, false
 
 exprresolve(arg) = arg
 function exprresolve(ex::Expr)
-    for i = 1:length(ex.args)
+    for i in eachindex(ex.args)
         ex.args[i] = exprresolve(ex.args[i])
     end
     # Handle simple arithmetic

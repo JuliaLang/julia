@@ -295,7 +295,7 @@ convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
 function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
     Bc = B.chunks
-    @inbounds for i = 1:length(A)
+    @inbounds for i in eachindex(A)
         A[i] = unsafe_bitgetindex(Bc, i)
     end
     return A
@@ -386,11 +386,11 @@ function unsafe_setindex!(B::BitArray, x, I::BitArray)
     Ic = I.chunks
     length(Bc) == length(Ic) || throw_boundserror(B, I)
     @inbounds if y
-        for i = 1:length(Bc)
+        for i in eachindex(Bc)
             Bc[i] |= Ic[i]
         end
     else
-        for i = 1:length(Bc)
+        for i in eachindex(Bc)
             Bc[i] &= ~Ic[i]
         end
     end
@@ -817,7 +817,7 @@ function (~)(B::BitArray)
     Bc = B.chunks
     if !isempty(Bc)
         Cc = C.chunks
-        for i = 1:length(Bc)
+        for i in eachindex(Bc)
             Cc[i] = ~Bc[i]
         end
         Cc[end] &= _msk_end(B)
@@ -828,7 +828,7 @@ end
 function flipbits!(B::BitArray)
     Bc = B.chunks
     @inbounds if !isempty(Bc)
-        for i = 1:length(Bc)
+        for i in eachindex(Bc)
             Bc[i] = ~Bc[i]
         end
         Bc[end] &= _msk_end(B)
@@ -901,7 +901,7 @@ function div(x::Number, B::BitArray)
     all(B) || throw(DivideError())
     pt = promote_array_type(IDivFun(), typeof(x), Bool)
     y = div(x, true)
-    reshape(pt[ y for i = 1:length(B) ], size(B))
+    reshape(pt[ y for i in eachindex(B) ], size(B))
 end
 
 function mod(A::BitArray, B::BitArray)
@@ -922,7 +922,7 @@ function mod(x::Number, B::BitArray)
     all(B) || throw(DivideError())
     pt = promote_array_type(ModFun(), typeof(x), Bool)
     y = mod(x, true)
-    reshape(pt[ y for i = 1:length(B) ], size(B))
+    reshape(pt[ y for i in eachindex(B) ], size(B))
 end
 
 for (f,F) in ((:div, IDivFun()),
@@ -930,7 +930,7 @@ for (f,F) in ((:div, IDivFun()),
     @eval begin
         function ($f)(B::BitArray, x::Number)
             F = Array(promote_array_type($F, typeof(x), Bool), size(B))
-            for i = 1:length(F)
+            for i in eachindex(F)
                 F[i] = ($f)(B[i], x)
             end
             return F
@@ -961,7 +961,7 @@ for f in (:&, :|, :$)
             Ac = A.chunks
             Bc = B.chunks
             (isempty(Ac) || isempty(Bc)) && return F
-            for i = 1:length(Fc)
+            for i in eachindex(Fc)
                 Fc[i] = ($f)(Ac[i], Bc[i])
             end
             Fc[end] &= _msk_end(F)
@@ -983,7 +983,7 @@ end
 function (.^)(x::Number, B::BitArray)
     z = x ^ false
     u = x ^ true
-    reshape([ B[i] ? u : z for i = 1:length(B) ], size(B))
+    reshape([ B[i] ? u : z for i in eachindex(B) ], size(B))
 end
 function (.^)(B::BitArray, x::Integer)
     if x == 0
@@ -1022,7 +1022,7 @@ function (.^){T<:Number}(B::BitArray, x::T)
             t = typeof(u)
         end
         F = Array(t, size(B))
-        for i = 1:length(B)
+        for i in eachindex(B)
             if B[i]
                 if uerr === nothing
                     F[i] = u
@@ -1271,7 +1271,7 @@ end
 function countnz(B::BitArray)
     n = 0
     Bc = B.chunks
-    @inbounds for i = 1:length(Bc)
+    @inbounds for i in eachindex(Bc)
         n += count_ones(Bc[i])
     end
     return n
@@ -1503,7 +1503,7 @@ function any(B::BitArray)
     length(B) == 0 && return false
     Bc = B.chunks
     @inbounds begin
-        for i = 1:length(Bc)
+        for i in eachindex(Bc)
             Bc[i] == 0 || return true
         end
     end
@@ -1669,7 +1669,7 @@ function hcat(B::BitVector...)
         end
     end
     M = BitArray(height, length(B))
-    for j = 1:length(B)
+    for j in eachindex(B)
         copy_chunks!(M.chunks, (height*(j-1))+1, B[j].chunks, 1, height)
     end
     return M

@@ -220,7 +220,7 @@ function promote_shape(a::Dims, b::Dims)
     if length(a) < length(b)
         return promote_shape(b, a)
     end
-    for i=1:length(b)
+    for i in eachindex(b)
         if a[i] != b[i]
             throw(DimensionMismatch("dimensions must match"))
         end
@@ -371,7 +371,7 @@ end
 macro vectorize_1arg(S,f)
     S = esc(S); f = esc(f); T = esc(:T)
     quote
-        ($f){$T<:$S}(x::AbstractArray{$T,1}) = [ ($f)(x[i]) for i=1:length(x) ]
+        ($f){$T<:$S}(x::AbstractArray{$T,1}) = [ ($f)(x[i]) for i in eachindex(x) ]
         ($f){$T<:$S}(x::AbstractArray{$T,2}) =
             [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         ($f){$T<:$S}(x::AbstractArray{$T}) =

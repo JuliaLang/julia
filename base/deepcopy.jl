@@ -60,7 +60,7 @@ function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     end
     dest = similar(x)
     stackdict[x] = dest
-    for i=1:length(x)
+    for i in eachindex(x)
         if isdefined(x,i)
             arrayset(dest, deepcopy_internal(x[i], stackdict), i)
         end

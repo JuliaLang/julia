@@ -111,7 +111,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     RpT = cumsum(Wj[1:(ncol+1)])
 
     # Transpose
-    @simd for i=1:length(RpT); @inbounds Wj[i] = RpT[i]; end
+    @simd for i in eachindex(RpT); @inbounds Wj[i] = RpT[i]; end
     @inbounds for j = 1:nrow
         p1 = Rp[j]
         p2 = p1 + Rnz[j] - 1

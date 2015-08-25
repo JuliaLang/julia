@@ -55,7 +55,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         # Wait till all the workers have mapped the segment
-        for i in 1:length(refs)
+        for i in eachindex(refs)
             wait(refs[i])
         end
 
@@ -138,7 +138,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     end
 
     # Wait till all the workers have mapped the segment
-    for i in 1:length(refs)
+    for i in eachindex(refs)
         wait(refs[i])
     end
 
