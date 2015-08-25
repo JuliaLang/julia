@@ -231,10 +231,10 @@ sleep(1)
 import Base.zzzInvalidIdentifier
 """
 try
-    in = open(`$exename -f`, "w")
+    (in,p) = open(`$exename -f`, "w")
     write(in,cmd)
     close(in)
-    wait(in)
+    wait(p)
 catch
     error("IOStream redirect failed. Child stderr was \n$(readall(fname))\n")
 end
