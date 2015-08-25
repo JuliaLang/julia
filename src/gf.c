@@ -1499,16 +1499,16 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
 
 static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, jl_svec_t *tvars)
 {
+    assert(sig);
     func->linfo->specTypes = sig;
-    if (sig)
-        jl_gc_wb(func->linfo, sig);
+    jl_gc_wb(func->linfo, sig);
     if (tvars != jl_emptysvec) {
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
         // it constructs closures for new "specializations".
         all_p2c((jl_value_t*)func->linfo, tvars);
     }
-    jl_trampoline_compile_function(func, 1, sig ? sig : jl_anytuple_type);
+    jl_trampoline_compile_function(func, 1, sig);
 }
 
 void jl_compile_all_defs(jl_function_t *gf)
@@ -1576,7 +1576,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
                     li->unspecialized = func;
                     jl_gc_wb(li, func);
                 }
-                precompile_unspecialized(func, NULL, jl_emptysvec);
+                precompile_unspecialized(func, li->specTypes ? li->specTypes : jl_anytuple_type, jl_emptysvec);
             }
         }
     }
