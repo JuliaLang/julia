@@ -49,6 +49,8 @@
 @test_throws BoundsError next((5,6,7), 0)
 @test_throws BoundsError next((), 1)
 
+@test (5,6,7)[eachindex((5,6,7))] === (5,6,7)
+@test isempty(eachindex(()))
 
 
 ## eltype ##

@@ -1167,10 +1167,20 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
 end
 
 function whos(m::Module, pattern::Regex)
+    ptr_cache = Set()
     for v in sort(names(m))
         s = string(v)
         if isdefined(m,v) && ismatch(pattern, s)
-            println(rpad(s, 30), summary(eval(m,v)))
+            tsz = ""
+            # totalsizeof might throw, whenever sizeof would throw
+            try
+                bytes = totalsizeof(getfield(m, v), ptr_cache)
+                bytes, mb = prettyprint_getunits(bytes, length(_mem_units), 1024)
+                tsz = string(lpad(bytes, 10), " ", rpad(_mem_units[mb], 6))
+            catch
+                tsz = "undefined"
+            end
+            println(rpad(s, 30), rpad(tsz, 17), summary(eval(m,v)))
         end
     end
 end

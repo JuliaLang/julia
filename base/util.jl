@@ -202,6 +202,44 @@ macro allocated(ex)
     end
 end
 
+# The sum of bytes that the given type references, including
+# itself. The pointer cache (ptr_cache) can be provided. Pointers
+# that are found in the cache do not count towards the sum. The
+# cache must be a ``Set`` like object.
+function totalsizeof(x, ptr_cache = Set())
+    if in(pointer_from_objref(x), ptr_cache)
+        return 0
+    end
+    push!(ptr_cache, pointer_from_objref(x))
+
+    if isa(x, DataType) || isa(x, Symbol)
+        return 0
+    end
+
+    sz = sizeof(x)
+
+    for fn in fieldnames(x)
+        if isdefined(x, fn)
+            el = getfield(x, fn)
+            if !isbits(typeof(el))
+                sz += totalsizeof(el, ptr_cache)
+            end
+        end
+    end
+
+    if isa(x, AbstractArray) || isa(x, Tuple)
+        for idx in eachindex(x)
+            if isdefined(x, idx)
+                el = x[idx]
+                if !isbits(typeof(el))
+                    sz += totalsizeof(el, ptr_cache)
+                end
+            end
+        end
+    end
+    return sz
+end
+
 # print nothing, return value, elapsed time, bytes allocated & gc time
 macro timed(ex)
     quote

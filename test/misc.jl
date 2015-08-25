@@ -156,3 +156,30 @@ v11801, t11801 = @timed sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
 @test names(current_module(), true) == names_before_timing
+
+# totalsizeof
+@test Base.totalsizeof(Nothing) == 0
+@test Base.totalsizeof(10) == sizeof(10)
+@test Base.totalsizeof(:mysymbol) >= 0
+@test Base.totalsizeof(Int) >= 0
+@test Base.totalsizeof(Base) >= 0
+@test Base.totalsizeof("123") >= 3
+@test Base.totalsizeof(sizeof) > 0
+@test Base.totalsizeof(rand) > 0
+@test Base.totalsizeof((1, 2, 3, 4)) >= 4*sizeof(Int)
+@test Base.totalsizeof((1.0, 2.0, 3.0, 4.0)) >= 4*sizeof(typeof(1.0))
+@test Base.totalsizeof(Dict{Any, Any}("test1"=>2, "test2"=>3)) >= (8 + 2*sizeof(Int))
+@test Base.totalsizeof(Dict{String, Int}("test1"=>2, "test2"=>3)) >= (8 + 2*sizeof(Int))
+@test Base.totalsizeof([1 2 3]) >= sizeof([1 2 3])
+let
+    x = [1, 2, 3, 4]
+    y = (x, x, x, x, x, x)
+    ptr_cache = Set()
+    @test Base.totalsizeof(y, ptr_cache) < (Base.totalsizeof(x) * length(y))
+end
+let
+    x = "some-string"
+    y = (x, x, x, x, x, x)
+    ptr_cache = Set()
+    @test Base.totalsizeof(y, ptr_cache) < (Base.totalsizeof(x) * length(y))
+end
