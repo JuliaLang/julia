@@ -420,16 +420,20 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
         s = string(v)
         if isdefined(m, v) && ismatch(pattern, s)
             value = getfield(m, v)
-            bytes = summarysize(value, true)
             @printf head "%30s " s
-            if bytes < 10_000
-                @printf(head, "%6d bytes  ", bytes)
-            else
-                @printf(head, "%6d KB     ", bytes ÷ (1024))
+            try
+                bytes = summarysize(value, true)
+                if bytes < 10_000
+                    @printf(head, "%6d bytes  ", bytes)
+                else
+                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                end
+                print(head, summary(value))
+                print(head, " : ")
+                show(head, value)
+            catch e
+                print(head, "#=ERROR: unable to show value=#")
             end
-            print(head, summary(value))
-            print(head, " : ")
-            show(head, value)
 
             newline = search(head, UInt8('\n')) - 1
             if newline < 0
