@@ -1094,6 +1094,7 @@ Ari = ceil(Int64,100*Ar)
 @test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
 @test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
 @test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
+@test_throws DimensionMismatch Base.SparseMatrix.normestinv(sprand(3,5,.9))
 
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
