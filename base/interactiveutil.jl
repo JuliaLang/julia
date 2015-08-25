@@ -486,7 +486,9 @@ end
 function summarysize(obj::Task, recurse::Bool)
     size::Int = sizeof(obj)
     if recurse
-        size += summarysize(obj.code, true)::Int
+        if isdefined(obj, :code)
+            size += summarysize(obj.code, true)::Int
+        end
         size += summarysize(obj.storage, true)::Int
 
         size += summarysize(obj.backtrace, false)::Int
