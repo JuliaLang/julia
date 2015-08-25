@@ -57,7 +57,7 @@ for structuring and organizing programs.
   implicitly passed to the method via the ``this`` keyword, rather then as an
   explicit method argument. When the current ``this`` object is the receiver of a
   method call, it can be omitted altogether, writing just ``meth(arg1,arg2)``,
-  with this implied as the receiving object.
+  with ``this`` implied as the receiving object.
 
 
 Defining Methods
