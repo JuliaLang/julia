@@ -119,3 +119,5 @@ for elty in [Float32,Float64,Complex64,Complex128]
     @test ishermitian(one(elty))
     @test det(a) == a
 end
+
+@test qr(big([0 1; 0 0]))[2] == [0 1; 0 0]
