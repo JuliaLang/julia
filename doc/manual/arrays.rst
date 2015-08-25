@@ -520,7 +520,7 @@ expecting this memory layout.  Subtypes should provide a method
 :func:`stride(A,k) <stride>` that returns the "stride" of dimension ``k``:
 increasing the index of dimension ``k`` by ``1`` should increase the
 index ``i`` of :func:`getindex(A,i) <getindex>` by :func:`stride(A,k) <stride>`.  If a
-pointer conversion method :func:`convert(Ptr{T}, A) <convert>` is provided, the
+pointer conversion method :func:`Base.unsafe_convert(Ptr{T}, A) <unsafe_convert>` is provided, the
 memory layout should correspond in the same way to these strides.
 
 The :obj:`Array` type is a specific instance of :obj:`DenseArray`
