@@ -9,6 +9,7 @@ getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
+eachindex(t::Tuple) = 1:length(t)
 
 ## iterating ##
 

@@ -3259,3 +3259,5 @@ code_typed(A12612.f2, Tuple{})
 @test_throws ArgumentError gensym("x"^10_000_000)
 @test symbol("x") === symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
+
+@test DataType.types[eachindex(DataType.types)] == DataType.types
