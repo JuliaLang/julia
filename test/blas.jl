@@ -99,6 +99,22 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_approx_eq BLAS.axpy!(α,copy(z1),1:n,copy(z2),1:n) z2 + α*z1
         end
 
+        # nrm2, iamax, and asum for StridedVectors
+        a = rand(elty,n)
+        b = slice(a,2:2:n,1)
+        @test BLAS.nrm2(b) ≈ norm(b)
+        if elty <: Real
+            @test BLAS.asum(b) ≈ sum(abs(b))
+            @test BLAS.iamax(b) ≈ indmax(abs(b))
+        else
+            @test BLAS.asum(b) ≈ sum(abs(real(b))) + sum(abs(imag(b)))
+            @test BLAS.iamax(b) == indmax(map(x -> abs(real(x)) + abs(imag(x)), b))
+        end
+
+        # scal
+        α = rand(elty)
+        @test BLAS.scal(n,α,a,1) ≈ scale(α,a)
+
         # trsv
         A = triu(rand(elty,n,n))
         x = rand(elty,n)
@@ -161,11 +177,11 @@ for elty in [Float32, Float64, Complex64, Complex128]
         # symm error throwing
         @test_throws DimensionMismatch BLAS.symm('L','U',ones(elty,n,n-1),rand(elty,n,n))
         @test_throws DimensionMismatch BLAS.symm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-        @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+        @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
         if elty <: BlasComplex
             @test_throws DimensionMismatch BLAS.hemm('L','U',ones(elty,n,n-1),rand(elty,n,n))
             @test_throws DimensionMismatch BLAS.hemm('R','U',ones(elty,n-1,n),rand(elty,n,n))
-            @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n,n-1))
+            @test_throws DimensionMismatch BLAS.hemm!('L','U',one(elty),Aherm,ones(elty,n,n),one(elty),rand(elty,n-1,n))
         end
 
         #trmm error throwing
