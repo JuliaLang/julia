@@ -64,6 +64,7 @@ let a=[1.0:n;]
    @test full(convert(Bidiagonal, A)) == full(A)
    A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
    @test full(convert(Bidiagonal, A)) == full(A)
+   @test_throws ArgumentError convert(SymTridiagonal,A)
 
    A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
@@ -102,4 +103,17 @@ let a=[1.0:n;]
        @test_approx_eq full(B - convert(Spectype,A)) full(B - A)
        @test_approx_eq full(convert(Spectype,A) - B) full(A - B)
    end
+end
+
+#Triangular Types and QR
+for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base.LinAlg.UnitLowerTriangular]
+    a = rand(n,n)
+    atri = typ(a)
+    b = rand(n,n)
+    qrb = qrfact(b,Val{true})
+    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    qrb = qrfact(b,Val{false})
+    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
 end
