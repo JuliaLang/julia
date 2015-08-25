@@ -161,11 +161,10 @@ v11801, t11801 = @timed sin(1)
 
 import Base.summarysize
 @test summarysize(Core, true) > summarysize(Core.Inference, true) > summarysize(Core, false) == summarysize(Core.Inference, false) == Core.sizeof(Core)
-@test summarysize(Main, true) > 10_000*summarysize(Main, false) > 10_000*sizeof(Int)
+@test summarysize(Base, true) > 10_000*summarysize(Base, false) > 10_000*sizeof(Int)
 @test 0 == summarysize(Int, true) == summarysize(Int, false) == summarysize(DataType, true) == summarysize(Ptr, true) == summarysize(Any, true)
 @test sprint(whos, Main, r"^$") == ""
 let v = sprint(whos, Main)
-    @test contains(v, " KB     Module : Main")
     @test contains(v, " KB     Module : Base")
     @test contains(v, " KB     Module : Core")
     @test contains(v, "  0 bytes  DataType : NoMethodHasThisType")
