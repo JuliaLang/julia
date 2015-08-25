@@ -1166,18 +1166,6 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
     cartesianmap(print_slice, tail)
 end
 
-function whos(m::Module, pattern::Regex)
-    for v in sort(names(m))
-        s = string(v)
-        if isdefined(m,v) && ismatch(pattern, s)
-            println(rpad(s, 30), summary(eval(m,v)))
-        end
-    end
-end
-whos() = whos(r"")
-whos(m::Module) = whos(m, r"")
-whos(pat::Regex) = whos(current_module(), pat)
-
 # global flag for limiting output
 # TODO: this should be replaced with a better mechanism. currently it is only
 # for internal use in showing arrays.
