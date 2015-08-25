@@ -3022,8 +3022,12 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
         if (!bp && !vi.hasGCRoot && vi.used && !vi.isArgument &&
                 !is_stable_expr(r, ctx)) {
-            vi.hasGCRoot = true; // this has been discovered to need a gc root
-            vi.memvalue = bp = emit_local_slot(ctx->gc.argSpaceSize++, ctx);
+            Instruction *newroot = cast<Instruction>(emit_local_slot(ctx->gc.argSpaceSize++, ctx));
+            newroot->removeFromParent(); // move it to the gc frame basic block so it can be reused as needed
+            newroot->insertAfter(ctx->gc.last_gcframe_inst);
+            vi.memvalue = bp = newroot;
+            vi.hasGCRoot = true; // this has been discovered to need a gc root, add it now
+            //TODO: move this logic after the emit_expr
         }
         Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, vi.used, ctx);
 
@@ -3503,7 +3507,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     }
     BasicBlock::iterator bbi(gc->gcframe);
     AllocaInst *newgcframe = gc->gcframe;
-    builder.SetInsertPoint(++gc->last_gcframe_inst); // set insert *before* point
+    builder.SetInsertPoint(++gc->last_gcframe_inst); // set insert *before* point, e.g. after the gcframe
     // Allocate the real GC frame
     // n_frames++;
     newgcframe->setOperand(0, ConstantInt::get(T_int32, 2 + gc->argSpaceSize + gc->maxDepth)); // fix up the size of the gc frame
@@ -4547,6 +4551,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 // are always unspecialized we don't
                 assert(false);
             }
+        }
+        else {
+            assert(vi.memvalue == NULL);
         }
     }
 
