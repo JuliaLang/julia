@@ -2522,3 +2522,6 @@ end
 # issue #12536
 @test Rational{Int16}(1,2) === Rational(Int16(1),Int16(2))
 @test Rational{Int16}(500000,1000000) === Rational(Int16(1),Int16(2))
+
+@test collect(1.7) == [1.7]
+@test collect(eachindex(1.7)) == [1]

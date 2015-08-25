@@ -135,3 +135,5 @@ foo(x, y, z) = x + y + z
 
 @test @inferred(ntuple(Base.Abs2Fun(), Val{2})) == (1, 4)
 @test @inferred(ntuple(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
+
+@test eachindex((7,1,4)) == 1:3

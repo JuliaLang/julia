@@ -18,6 +18,7 @@ getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
 unsafe_getindex(x::Real, i::Real) = x
 first(x::Number) = x
 last(x::Number) = x
+eachindex(x::Number) = 1
 
 divrem(x,y) = (div(x,y),rem(x,y))
 fldmod(x,y) = (fld(x,y),mod(x,y))
