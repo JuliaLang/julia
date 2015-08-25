@@ -21,8 +21,11 @@ let A1 = randn(4,4) + im*randn(4,4)
 end
 
 let A1 = randn(4,4)
+    A3 = A1 * A1'
     A4 = A1 + A1.'
     @test expm(A4) ≈ expm(Symmetric(A4))
+    @test logm(A3) ≈ logm(Symmetric(A3))
+    @test logm(A3) ≈ logm(Hermitian(A3))
 end
 
 let n=10
@@ -156,6 +159,12 @@ let n=10
                 @test Hermitian(convert(Matrix{typ},asym)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(asym))
             end
         end
+
+        #unsafe_getindex
+        if eltya <: Real
+            @test Symmetric(asym)[1:2,1:2] == asym[1:2,1:2]
+        end
+        @test Hermitian(asym)[1:2,1:2] == asym[1:2,1:2]
     end
 end
 
