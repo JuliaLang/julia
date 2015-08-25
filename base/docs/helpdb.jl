@@ -6506,13 +6506,6 @@ Reorders the Generalized Schur factorization of a Generalized Schur object by ov
 ordschur!
 
 doc"""
-    whos([Module,] [pattern::Regex])
-
-Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
-"""
-whos
-
-doc"""
 ```rst
 ::
 

@@ -412,6 +412,14 @@ end
 
 # testing
 
+
+doc"""
+    whos([io,] [Module,] [pattern::Regex])
+
+Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
+
+The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
+"""
 function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
     maxline = tty_size()[2]
     line = zeros(UInt8, maxline)
@@ -457,15 +465,17 @@ end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
 whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 
-# summarysize is an estimate of the size of the object
-# as if all iterables were allocated inline
-# in general, this forms a conservative lower bound
-# on the memory "controlled" by the object
-# if recurse is true, then simply reachable memory
-# should also be included, otherwise, only
-# directly used memory should be included
-# you should never ignore recurse in cases where recursion is possible
+"""
+    summarysize(obj, recurse) => Int
 
+summarysize is an estimate of the size of the object
+as if all iterables were allocated inline
+in general, this forms a conservative lower bound
+n the memory "controlled" by the object
+if recurse is true, then simply reachable memory
+should also be included, otherwise, only
+directly used memory should be included
+you should never ignore recurse in cases where recursion is possible"""
 summarysize(obj::ANY, recurse::Bool) = try convert(Int, sizeof(obj)); catch; Core.sizeof(obj); end
 
 # these three cases override the exception that would be thrown by Core.sizeof
