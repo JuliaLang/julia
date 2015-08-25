@@ -29,103 +29,115 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
-stdin_write, stdout_read, stderr_read, repl = fake_repl()
+inc = gensym("inc")
+b = gensym("b")
+c = gensym("c")
+Core.eval(Main, :(let stdin_write, stdout_read, stdout_read, repl, repltask, sendrepl, origpwd, tempdir
+    global $b, $c, $inc
+    stdin_write, stdout_read, stderr_read, repl = $fake_repl()
 
-repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.history_file = false
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.history_file = false
 
-repltask = @async begin
-    Base.REPL.run_repl(repl)
-end
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
 
-sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+    function sendrepl(cmd)
+        inc = "symbol(\"$($(string(inc)))\")"
+        b = "symbol(\"$($(string(b)))\")"
+        c = "symbol(\"$($(string(c)))\")"
+        cmd = "let r; Main.($inc) || wait(Main.($b)); r = $cmd; notify(Main.($c)); r; end\r"
+        write(stdin_write,cmd)
+    end
 
-inc = false
-b = Condition()
-c = Condition()
-sendrepl("\"Hello REPL\"")
-inc=true
-begin
-    notify(b)
-    wait(c)
-end
-# Latex completions
-write(stdin_write, "\x32\\alpha\t")
-readuntil(stdout_read, "α")
-# Bracketed paste in search mode
-write(stdin_write, "\e[200~paste here ;)\e[201~")
-# Abort search (^C)
-write(stdin_write, '\x03')
-# Test basic completion in main mode
-write(stdin_write, "Base.REP\t")
-readuntil(stdout_read, "Base.REPL")
-write(stdin_write, '\x03')
-write(stdin_write, "\\alpha\t")
-readuntil(stdout_read,"α")
-write(stdin_write, '\x03')
-# Test cd feature in shell mode.  We limit to 40 characters when
-# calling readuntil() to suppress the warning it (currently) gives for
-# long strings.
-origpwd = pwd()
-tmpdir = mktempdir()
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd $(escape_string(tmpdir))\n")
-readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == realpath(tmpdir)
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd -\n")
-readuntil(stdout_read, origpwd[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == origpwd
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd\n")
-readuntil(stdout_read, homedir()[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == homedir()
-rm(tmpdir)
-cd(origpwd)
+    $inc = false
+    $b = Condition()
+    $c = Condition()
+    sendrepl("\"Hello REPL\"")
+    $inc=true
+    begin
+        notify($b)
+        wait($c)
+    end
+    # Latex completions
+    write(stdin_write, "\x32\\alpha\t")
+    readuntil(stdout_read, "α")
+    # Bracketed paste in search mode
+    write(stdin_write, "\e[200~paste here ;)\e[201~")
+    # Abort search (^C)
+    write(stdin_write, '\x03')
+    # Test basic completion in main mode
+    write(stdin_write, "Base.REP\t")
+    readuntil(stdout_read, "Base.REPL")
+    write(stdin_write, '\x03')
+    write(stdin_write, "\\alpha\t")
+    readuntil(stdout_read,"α")
+    write(stdin_write, '\x03')
+    # Test cd feature in shell mode.  We limit to 40 characters when
+    # calling readuntil() to suppress the warning it (currently) gives for
+    # long strings.
+    origpwd = pwd()
+    tmpdir = mktempdir()
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd $(escape_string(tmpdir))\n")
+    readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+    readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == realpath(tmpdir)
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd -\n")
+    readuntil(stdout_read, origpwd[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == origpwd
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd\n")
+    readuntil(stdout_read, homedir()[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == homedir()
+    rm(tmpdir)
+    cd(origpwd)
 
-# Test that accepting a REPL result immediately shows up, not
-# just on the next keystroke
-write(stdin_write, "1+1\n") # populate history with a trivial input
-readline(stdout_read)
-write(stdin_write, "\e[A\n")
-t = Timer(10) do t
-    isopen(t) || return
-    error("Stuck waiting for the repl to write `1+1`")
-end
-# yield make sure this got processed
-readuntil(stdout_read, "1+1")
-close(t)
+    # Test that accepting a REPL result immediately shows up, not
+    # just on the next keystroke
+    write(stdin_write, "1+1\n") # populate history with a trivial input
+    readline(stdout_read)
+    write(stdin_write, "\e[A\n")
+    t = Timer(10) do t
+        isopen(t) || return
+        error("Stuck waiting for the repl to write `1+1`")
+    end
+    # yield make sure this got processed
+    readuntil(stdout_read, "1+1")
+    close(t)
 
-# Issue #10222
-# Test ignoring insert key in standard and prefix search modes
-write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-@test search(readline(stdout_read), "[2h") == 0:-1
-readline(stdout_read)
-write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-@test search(readline(stdout_read), "[2~") == 0:-1
-readline(stdout_read)
-write(stdin_write, "1+1\n") # populate history with a trivial input
-readline(stdout_read)
-write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
-readline(stdout_read)
-readline(stdout_read)
-write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
-readline(stdout_read)
-readline(stdout_read)
+    # Issue #10222
+    # Test ignoring insert key in standard and prefix search modes
+    write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
+    Base.Test.@test search(readline(stdout_read), "[2h") == 0:-1
+    readline(stdout_read)
+    write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
+    Base.Test.@test search(readline(stdout_read), "[2~") == 0:-1
+    readline(stdout_read)
+    write(stdin_write, "1+1\n") # populate history with a trivial input
+    readline(stdout_read)
+    write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
+    readline(stdout_read)
+    readline(stdout_read)
 
-# Close REPL ^D
-write(stdin_write, '\x04')
-wait(repltask)
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
+end))
 end
 
 function buffercontents(buf::IOBuffer)

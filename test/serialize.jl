@@ -91,10 +91,9 @@ end
 
 # Module
 create_serialization_stream() do s # user-defined module
-    mod = b"SomeModule"
-    modstring = bytestring(mod)
-    eval(parse("module $(modstring); end"))
-    modtype = eval(parse("$(modstring)"))
+    mod = gensym(:SomeModule)
+    Core.eval(Main, :(module $mod end))
+    modtype = Core.eval(Main, mod)
     serialize(s, modtype)
     seek(s, 0)
     @test deserialize(s) === modtype
@@ -113,63 +112,63 @@ create_serialization_stream() do s # standard types
 end
 
 create_serialization_stream() do s # user-defined type
-    usertype = "SerializeSomeType"
-    eval(parse("abstract $(usertype)"))
-    utype = eval(parse("$(usertype)"))
+    usertype = gensym(:SerializeSomeType)
+    Core.eval(Main, :(abstract $usertype))
+    utype = Core.eval(Main, usertype)
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
-    usertype = "SerializeSomeType1"
-    eval(parse("type $(usertype); end"))
-    utype = eval(parse("$(usertype)"))
+    usertype = gensym(:SerializeSomeType1)
+    Core.eval(Main, :(type $usertype end))
+    utype = Core.eval(Main, usertype)
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
-    usertype = "SerializeSomeType2"
-    eval(parse("abstract $(usertype){T}"))
-    utype = eval(parse("$(usertype)"))
+    usertype = gensym(:SerializeSomeType2)
+    Core.eval(Main, :(abstract $(usertype){T}))
+    utype = Core.eval(Main, usertype)
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
 end
 
 create_serialization_stream() do s # immutable type with 1 field
-    usertype = "SerializeSomeType3"
-    eval(parse("immutable $(usertype){T}; a::T; end"))
-    utype = eval(parse("$(usertype)"))
+    usertype = gensym(:SerializeSomeType3)
+    Core.eval(Main, quote; immutable $(usertype){T}; a::T; end; end)
+    utype = Core.eval(Main, usertype)
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) === utype
 end
 
 create_serialization_stream() do s # immutable type with 2 field
-    usertype = "SerializeSomeType4"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; end"))
-    utval = eval(parse("$(usertype)(1,2)"))
+    usertype = gensym(:SerializeSomeType4)
+    Core.eval(Main, :(immutable $(usertype){T}; a::T; b::T; end))
+    utval = Core.eval(Main, :($usertype(1,2)))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
 create_serialization_stream() do s # immutable type with 3 field
-    usertype = "SerializeSomeType5"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3)"))
+    usertype = gensym(:SerializeSomeType5)
+    Core.eval(Main, :(immutable $(usertype){T}; a::T; b::T; c::T; end))
+    utval = Core.eval(Main, :($(usertype)(1,2,3)))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
 create_serialization_stream() do s # immutable type with 4 field
-    usertype = "SerializeSomeType6"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; d::T; end"))
-    utval = eval(parse("$(usertype)(1,2,3,4)"))
+    usertype = gensym(:SerializeSomeType6)
+    Core.eval(Main, :(immutable $(usertype){T}; a::T; b::T; c::T; d::T; end))
+    utval = Core.eval(Main, :($(usertype)(1,2,3,4)))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
@@ -189,9 +188,13 @@ create_serialization_stream() do s
 end
 
 # Array
-type TA1
-    v::UInt8
-end
+TA1sym = gensym(:TA1)
+TA1 = Core.eval(Main, quote
+    type $TA1sym
+        v::UInt8
+    end
+    $TA1sym
+end)
 create_serialization_stream() do s # small 1d array
     arr1 = fill(0x01, 10)    # small 1d array
     serialize(s, arr1)
@@ -231,8 +234,12 @@ create_serialization_stream() do s # slices
 end
 
 # Function
-serialize_test_function() = 1
-serialize_test_function2 = ()->1
+serialize_test_function = Core.eval(Main, quote
+    $(gensym(:serialize_test_function))() = 1
+end)
+serialize_test_function2 = Core.eval(Main, quote
+    $(gensym(:serialize_test_function2)) = ()->1
+end)
 create_serialization_stream() do s # Base generic function
     serialize(s, sin)
     serialize(s, typeof)
@@ -249,6 +256,7 @@ end
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
+    f.code.module = Main # avoid capturing __anon__ in the serializer state
     t = Task(f)
     yieldto(t)
     serialize(s, t)
@@ -261,7 +269,9 @@ create_serialization_stream() do s # user-defined type array
 end
 
 create_serialization_stream() do s # user-defined type array
-    t = Task(()->error("Test"))
+    f = ()->error("Test")
+    f.code.module = Main # avoid capturing __anon__ in the serializer state
+    t = Task(f)
     @test_throws ErrorException yieldto(t)
     serialize(s, t)
     seek(s, 0)

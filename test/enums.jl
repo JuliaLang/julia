@@ -159,10 +159,11 @@ end
 @test DEBUG < CRITICAL
 
 # serialization
+Core.eval(Main, :(@enum Fruit apple orange kiwi))
 let b = IOBuffer()
-    serialize(b, apple)
+    serialize(b, Main.apple)
     seekstart(b)
-    @test deserialize(b) === apple
+    @test deserialize(b) === Main.apple
 end
 
 end # module

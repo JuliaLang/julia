@@ -274,19 +274,19 @@ function serialize(s::SerializationState, f::Function)
         name = f.env
     end
     if isa(name,Symbol)
-        if isdefined(Base,name) && is(f,getfield(Base,name))
+        if isdefined(Base, name) && is(f, getfield(Base, name))
             write(s.io, UInt8(0))
             serialize(s, name)
             return
         end
         mod = ()
-        if isa(f.env,Symbol)
+        if isa(f.env, Symbol)
             mod = Core
-        elseif !is(f.env.defs, ())
-            mod = f.env.defs.func.code.module
+        elseif isdefined(f.env, :module)
+            mod = f.env.module
         end
         if mod !== ()
-            if isdefined(mod,name) && is(f,getfield(mod,name))
+            if isdefined(mod, name) && is(f, getfield(mod, name))
                 # toplevel named func
                 write(s.io, UInt8(2))
                 serialize(s, mod)

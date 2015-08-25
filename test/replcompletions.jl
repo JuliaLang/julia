@@ -34,6 +34,7 @@ module CompletionFoo
 
     array = [1, 1]
 end
+Core.eval(Main, :(CompletionFoo = $(CompletionFoo)))
 
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory

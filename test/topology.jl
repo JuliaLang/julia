@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-include("testdefs.jl")
+using Base.Test
 addprocs(4; topology="master_slave")
 @test_throws RemoteException remotecall_fetch(2, ()->remotecall_fetch(3,myid))
 

@@ -323,10 +323,10 @@ end
 
 function methodswith(t::Type, showparents::Bool=false)
     meths = Method[]
-    mainmod = current_module()
+    mainmod = Main
     # find modules in Main
     for nm in names(mainmod)
-        if isdefined(mainmod,nm)
+        if isdefined(mainmod, nm)
             mod = getfield(mainmod, nm)
             if isa(mod, Module)
                 append!(meths, methodswith(t, mod, showparents))

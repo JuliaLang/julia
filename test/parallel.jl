@@ -1,18 +1,35 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # NOTE: worker processes cannot add more workers, only the client process can.
-using Base.Test
-
 if nworkers() < 3
     remotecall_fetch(1, () -> addprocs(3 - nworkers()))
 end
+
+modname = gensym(:anon)
+function init_modname_on(p)
+    modexpr = (modname) -> (Core.eval(Main, :(module $modname end)); nothing)
+    modexpr.code.module = Main
+    remotecall_fetch(p, modexpr, modname)
+end
+@sync for p in procs()
+    if p != myid()
+        @async init_modname_on(p)
+    end
+end
+
+Core.eval(Main, :(module $modname # needs a real path for serialize/deserialize (not __anon__)
+init_modname_on = $init_modname_on
+
+using Base.Test
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
 @test fetch(@spawnat id_other myid()) == id_other
-@test @fetchfrom id_other begin myid() end == id_other
-@fetch begin myid() end
+let id_other = id_other
+@test @fetchfrom(id_other, begin myid() end == id_other)
+end
+@test 0 != @fetch(begin myid() end)::Int
 
 rr=RemoteRef()
 @test typeof(rr) == RemoteRef{Channel{Any}}
@@ -277,8 +294,8 @@ ntasks = 10
 rr_list = [Channel() for x in 1:ntasks]
 a=ones(2*10^5);
 for rr in rr_list
-    @async let rr=rr
-        try
+    let rr=rr
+        @async try
             for i in 1:10
                 @test a == remotecall_fetch(id_other, (x)->x, a)
                 yield()
@@ -394,6 +411,9 @@ if DoFullTest
     # pmap tests
     # needs at least 4 processors dedicated to the below tests
     ppids = remotecall_fetch(1, ()->addprocs(4))
+    @sync for p in ppids
+        @async init_modname_on(p)
+    end
     s = "abcdefghijklmnopqrstuvwxyz";
     ups = uppercase(s);
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
@@ -492,6 +512,15 @@ if DoFullTest
 end
 end
 
+# issue #8207
+let A = Any[]
+    @parallel (+) for i in (push!(A,1); 1:2)
+        i
+    end
+    @test length(A) == 1
+end
+end)) # module, eval
+
 # issue #7727
 let A = [], B = []
     t = @task produce(11)
@@ -507,10 +536,3 @@ let t = @task 42
     @test_throws ErrorException wait(t)
 end
 
-# issue #8207
-let A = Any[]
-    @parallel (+) for i in (push!(A,1); 1:2)
-        i
-    end
-    @test length(A) == 1
-end
