@@ -537,6 +537,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
         if (set_to_any || isstaged) {
         }
+        else if (jl_is_type_type(elt) && jl_is_typector(jl_tparam0(elt)) &&
+                decl_i == (jl_value_t*)jl_typector_type) {
+            // TypeConstructors are problematic because they can be alternate
+            // representations of any type. If we matched this method because
+            // it matched the leaf type TypeConstructor, then don't
+            // cache something different since that doesn't necessarily actually apply
+            jl_svecset(newparams, i, jl_typector_type);
+        }
+        else if (jl_is_type_type(elt) && decl_i == (jl_value_t*)jl_datatype_type) {
+            // similarly, if we matched Type{T<:Any}::DataType,
+            // then we don't want to cache it that way
+            // since lookup will think we matched ::Type{T}
+            // and that is quite a different thing
+            jl_svecset(newparams, i, jl_datatype_type);
+            need_guard_entries = 1; // DataType has a UID so its precedence in the cache may be too high
+        }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
                  // give up on specializing static parameters for Type{Type{Type{...}}}
                  (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) ||
@@ -567,14 +583,6 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             }
             need_guard_entries = 1;
             assert(jl_svecref(newparams,i) != (jl_value_t*)jl_bottom_type);
-        }
-        else if (jl_is_type_type(elt) && jl_is_typector(jl_tparam0(elt)) &&
-                decl_i == (jl_value_t*)jl_typector_type) {
-              // TypeConstructors are problematic because they can be alternate
-              // representations of any type. If we matched this method because
-              // it matched the leaf type TypeConstructor, then don't
-              // cache something different since that doesn't necessarily actually apply
-              jl_svecset(newparams, i, jl_typector_type);
         }
         else if (jl_is_type_type(elt) && very_general_type(decl_i) &&
                  !jl_has_typevars(decl_i)) {
