@@ -86,7 +86,7 @@ end
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
+    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== x.name.primary
         print(io, '{')
         n = length(x.parameters)
         for i = 1:n

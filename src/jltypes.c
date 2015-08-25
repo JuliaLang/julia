@@ -7,6 +7,7 @@
   . builtin type definitions
 */
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #ifdef _OS_WINDOWS_
@@ -1689,7 +1690,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     jl_datatype_t *stprimary = NULL;
     if (jl_is_typector(tc)) {
         tp = ((jl_typector_t*)tc)->parameters;
-        tname = "alias";
+        tname = "typealias";
     }
     else {
         assert(jl_is_datatype(tc));
@@ -1700,10 +1701,9 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
         if (!valid_type_param(pi)) {
-            jl_type_error_rt("apply_type", tname,
-                             jl_subtype(pi, (jl_value_t*)jl_number_type, 1) ?
-                             (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
-                             pi);
+            char pstr[32];
+            snprintf(pstr, sizeof(pstr), "parameter %d", (int)i+1);
+            jl_type_error_rt(tname, pstr, tc, pi);
         }
     }
     if (tc == (jl_value_t*)jl_ntuple_type && (n == 1 || n == 2)) {
@@ -1712,7 +1712,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
             if (!jl_get_size(params[0], &nt)) {
                 // Only allow Int or TypeVar as the first parameter to
                 // NTuple. issue #9233
-                jl_type_error_rt("apply_type", "first parameter of NTuple",
+                jl_type_error_rt("NTuple{T, N} expression", "first parameter of NTuple",
                                  (jl_value_t*)jl_long_type, params[0]);
             }
             return jl_tupletype_fill(nt, (n==2) ? params[1] :
