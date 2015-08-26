@@ -507,13 +507,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_is_expr(thk->ast));
-        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
-        if (!ewc) {
-            if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
-                // interpreter doesn't handle closure environment
-                ewc = 1;
-            }
-        }
+        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module) ||
+            // interpreter doesn't handle closure environment
+            jl_lam_vars_captured((jl_expr_t*)thk->ast);
     }
     else {
         if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {

@@ -2683,7 +2683,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         if (!jl_is_gf(call_func)) {
             just_emit_error("\"call\" is not a generic function", ctx);
             r2 = UndefValue::get(jl_pvalue_llvmt);
-        } else {
+        }
+        else {
 #ifdef LLVM37
             r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
                                     {literal_pointer_val(call_func),

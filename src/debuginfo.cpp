@@ -455,7 +455,8 @@ char *jl_demangle(const char *name)
 }
 
 JuliaJITEventListener *jl_jit_events;
-void RegisterJuliaJITEventListener() {
+void RegisterJuliaJITEventListener()
+{
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
@@ -486,7 +487,8 @@ void lookup_pointer(DIContext *context, char **name, size_t *line,
     if (demangle) {
         free(*name);
         *name = jl_demangle(info.getFunctionName());
-    } else {
+    }
+    else {
         jl_copy_str(name, info.getFunctionName());
     }
     *line = info.getLine();
@@ -841,7 +843,8 @@ void jl_getFunctionInfo(char **name, size_t *line, char **filename,
             // subprogram.
             if (debugscope.getName().data() != NULL) {
                 jl_copy_str(name, debugscope.getName().data());
-            } else {
+            }
+            else {
                 char *oldname = *name;
                 *name = jl_demangle(*name);
                 free(oldname);
@@ -934,58 +937,58 @@ extern "C" void __deregister_frame(void*);
 static void (*libc_register_frame)(void*)   = NULL;
 static void (*libc_deregister_frame)(void*) = NULL;
 
-static const char *processFDE(const char *Entry, bool isDeregister) {
-  const char *P = Entry;
-  uint32_t Length = *((const uint32_t *)P);
-  P += 4;
-  uint32_t Offset = *((const uint32_t *)P);
-  if (Offset != 0) {
-    if (isDeregister) {
-      if (!libc_deregister_frame) {
-        libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
-      }
-      assert(libc_deregister_frame);
-      libc_deregister_frame(const_cast<char *>(Entry));
-      __deregister_frame(const_cast<char *>(Entry));
+static const char *processFDE(const char *Entry, bool isDeregister)
+{
+    const char *P = Entry;
+    uint32_t Length = *((const uint32_t *)P);
+    P += 4;
+    uint32_t Offset = *((const uint32_t *)P);
+    if (Offset != 0) {
+        if (isDeregister) {
+            if (!libc_deregister_frame) {
+                libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
+            }
+            assert(libc_deregister_frame);
+            libc_deregister_frame(const_cast<char *>(Entry));
+            __deregister_frame(const_cast<char *>(Entry));
+        }
+        else {
+            if (!libc_register_frame) {
+                libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
+            }
+            assert(libc_register_frame);
+            libc_register_frame(const_cast<char *>(Entry));
+            __register_frame(const_cast<char *>(Entry));
+        }
     }
-    else {
-      if (!libc_register_frame) {
-        libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
-      }
-      assert(libc_register_frame);
-      libc_register_frame(const_cast<char *>(Entry));
-      __register_frame(const_cast<char *>(Entry));
-    }
-  }
-  return P + Length;
+    return P + Length;
 }
 
 // This implementation handles frame registration for local targets.
 // Memory managers for remote targets should re-implement this function
 // and use the LoadAddr parameter.
-void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
-                                           uint64_t LoadAddr,
-                                           size_t Size) {
-  // On OS X OS X __register_frame takes a single FDE as an argument.
-  // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
-  const char *P = (const char *)Addr;
-  const char *End = P + Size;
-  do  {
-    P = processFDE(P, false);
-  } while(P != End);
+void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size)
+{
+    // On OS X OS X __register_frame takes a single FDE as an argument.
+    // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
+    const char *P = (const char *)Addr;
+    const char *End = P + Size;
+    do  {
+        P = processFDE(P, false);
+    } while(P != End);
 }
 
-void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
-                                           uint64_t LoadAddr,
-                                           size_t Size) {
-  const char *P = (const char *)Addr;
-  const char *End = P + Size;
-  do  {
-    P = processFDE(P, true);
-  } while(P != End);
+void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size)
+{
+    const char *P = (const char *)Addr;
+    const char *End = P + Size;
+    do  {
+        P = processFDE(P, true);
+    } while(P != End);
 }
 
-RTDyldMemoryManager* createRTDyldMemoryManagerOSX() {
+RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
+{
     return new RTDyldMemoryManagerOSX();
 }
 
@@ -1011,75 +1014,86 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 // for unwind information (see NotifyFunctionEmitted)
 class JITMemoryManagerWin : public JITMemoryManager {
 private:
-  JITMemoryManager *JMM;
+    JITMemoryManager *JMM;
 public:
-  JITMemoryManagerWin() : JITMemoryManager() {
-      JMM = JITMemoryManager::CreateDefaultMemManager();
-  }
-  virtual void setMemoryWritable() { return JMM->setMemoryWritable(); }
-  virtual void setMemoryExecutable() { return JMM->setMemoryExecutable(); }
-  virtual void setPoisonMemory(bool poison) { return JMM->setPoisonMemory(poison); }
-  virtual void AllocateGOT() { JMM->AllocateGOT(); HasGOT = true; }
-  virtual uint8_t *getGOTBase() const { return JMM->getGOTBase(); }
-  virtual uint8_t *startFunctionBody(const Function *F,
-                                     uintptr_t &ActualSize) {
-      if (ActualSize == 0)
-          ActualSize += 64;
-      ActualSize += 48;
-      uint8_t *mem = JMM->startFunctionBody(F,ActualSize);
-      ActualSize -= 48;
-      return mem;
-  }
-  virtual uint8_t *allocateStub(const GlobalValue* F, unsigned StubSize,
-                                unsigned Alignment)  { return JMM->allocateStub(F,StubSize,Alignment); }
-  virtual void endFunctionBody(const Function *F, uint8_t *FunctionStart,
-                               uint8_t *FunctionEnd) {
-      FunctionEnd[0] = 0;
-      JMM->endFunctionBody(F,FunctionStart,FunctionEnd+48);
-  }
-  virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) { return JMM->allocateSpace(Size,Alignment); }
-  virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) { return JMM->allocateGlobal(Size,Alignment); }
-  virtual void deallocateFunctionBody(void *Body) { return JMM->deallocateFunctionBody(Body); }
-  virtual uint8_t *startExceptionTable(const Function* F,
-                                       uintptr_t &ActualSize) { return JMM->startExceptionTable(F,ActualSize); }
-  virtual void endExceptionTable(const Function *F, uint8_t *TableStart,
-                                 uint8_t *TableEnd, uint8_t *FrameRegister) { return JMM->endExceptionTable(F,TableStart,TableEnd,FrameRegister); }
-  virtual void deallocateExceptionTable(void *ET) { return JMM->deallocateExceptionTable(ET); }
-  virtual bool CheckInvariants(std::string &str) { return JMM->CheckInvariants(str); }
-  virtual size_t GetDefaultCodeSlabSize() { return JMM->GetDefaultCodeSlabSize(); }
-  virtual size_t GetDefaultDataSlabSize() { return JMM->GetDefaultDataSlabSize(); }
-  virtual size_t GetDefaultStubSlabSize() { return JMM->GetDefaultStubSlabSize(); }
-  virtual unsigned GetNumCodeSlabs() { return JMM->GetNumCodeSlabs(); }
-  virtual unsigned GetNumDataSlabs() { return JMM->GetNumDataSlabs(); }
-  virtual unsigned GetNumStubSlabs() { return JMM->GetNumStubSlabs(); }
+    JITMemoryManagerWin() : JITMemoryManager()
+    {
+        JMM = JITMemoryManager::CreateDefaultMemManager();
+    }
+    virtual void setMemoryWritable() { return JMM->setMemoryWritable(); }
+    virtual void setMemoryExecutable() { return JMM->setMemoryExecutable(); }
+    virtual void setPoisonMemory(bool poison) { return JMM->setPoisonMemory(poison); }
+    virtual void AllocateGOT() { JMM->AllocateGOT(); HasGOT = true; }
+    virtual uint8_t *getGOTBase() const { return JMM->getGOTBase(); }
+    virtual uint8_t *startFunctionBody(const Function *F, uintptr_t &ActualSize)
+    {
+        if (ActualSize == 0)
+            ActualSize += 64;
+        ActualSize += 48;
+        uint8_t *mem = JMM->startFunctionBody(F,ActualSize);
+        ActualSize -= 48;
+        return mem;
+    }
+    virtual uint8_t *allocateStub(const GlobalValue* F, unsigned StubSize, unsigned Alignment)
+    {
+        return JMM->allocateStub(F,StubSize,Alignment);
+    }
+    virtual void endFunctionBody(const Function *F, uint8_t *FunctionStart, uint8_t *FunctionEnd)
+    {
+        FunctionEnd[0] = 0;
+        JMM->endFunctionBody(F,FunctionStart,FunctionEnd+48);
+    }
+    virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) { return JMM->allocateSpace(Size,Alignment); }
+    virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) { return JMM->allocateGlobal(Size,Alignment); }
+    virtual void deallocateFunctionBody(void *Body) { return JMM->deallocateFunctionBody(Body); }
+    virtual uint8_t *startExceptionTable(const Function* F,
+                                         uintptr_t &ActualSize) { return JMM->startExceptionTable(F,ActualSize); }
+    virtual void endExceptionTable(const Function *F, uint8_t *TableStart,
+                                   uint8_t *TableEnd, uint8_t *FrameRegister) { return JMM->endExceptionTable(F,TableStart,TableEnd,FrameRegister); }
+    virtual void deallocateExceptionTable(void *ET) { return JMM->deallocateExceptionTable(ET); }
+    virtual bool CheckInvariants(std::string &str) { return JMM->CheckInvariants(str); }
+    virtual size_t GetDefaultCodeSlabSize() { return JMM->GetDefaultCodeSlabSize(); }
+    virtual size_t GetDefaultDataSlabSize() { return JMM->GetDefaultDataSlabSize(); }
+    virtual size_t GetDefaultStubSlabSize() { return JMM->GetDefaultStubSlabSize(); }
+    virtual unsigned GetNumCodeSlabs() { return JMM->GetNumCodeSlabs(); }
+    virtual unsigned GetNumDataSlabs() { return JMM->GetNumDataSlabs(); }
+    virtual unsigned GetNumStubSlabs() { return JMM->GetNumStubSlabs(); }
 
 #ifdef LLVM35
-  virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID, llvm::StringRef SectionName) {
-    uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID, SectionName);
-    mem[Size] = 0;
-    return mem;
-  }
-  virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) {
-    return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly);
-  }
+    virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+                                         unsigned SectionID, llvm::StringRef SectionName)
+    {
+        uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID, SectionName);
+        mem[Size] = 0;
+        return mem;
+    }
+    virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                                         unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly)
+    {
+        return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly);
+    }
 #else
-  virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID) {
-    uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID);
-    mem[Size] = 0;
-    return mem;
-  }
-  virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,IsReadOnly); }
+    virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID)
+    {
+        uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID);
+        mem[Size] = 0;
+        return mem;
+    }
+    virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                                         unsigned SectionID, bool IsReadOnly)
+    {
+        return JMM->allocateDataSection(Size,Alignment,SectionID,IsReadOnly);
+    }
 #endif
-  virtual void *getPointerToNamedFunction(const std::string &Name,
-                                          bool AbortOnFailure = true) { return JMM->getPointerToNamedFunction(Name,AbortOnFailure); }
-  virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
-  virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
+    virtual void *getPointerToNamedFunction(const std::string &Name, bool AbortOnFailure = true)
+    {
+        return JMM->getPointerToNamedFunction(Name,AbortOnFailure);
+    }
+    virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
+    virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
-JITMemoryManager* createJITMemoryManagerWin() {
+JITMemoryManager* createJITMemoryManagerWin()
+{
     return new JITMemoryManagerWin();
 }
 #else
