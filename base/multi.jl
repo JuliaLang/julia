@@ -1531,20 +1531,13 @@ macro parallel(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
-    localize_vars(
     if na==1
-        quote
-            therange = $(esc(r))
-            pfor($(make_pfor_body(var, body, :therange)), length(therange))
-        end
+        thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
     else
-        quote
-            therange = $(esc(r))
-            preduce($(esc(reducer)),
-                    $(make_preduce_body(reducer, var, body, :therange)), length(therange))
-        end
+        thecall = :(preduce($(esc(reducer)),
+                            $(make_preduce_body(reducer, var, body, :therange)), length(therange)))
     end
-                  )
+    localize_vars(quote therange = $(esc(r)); $thecall; end)
 end
 
 

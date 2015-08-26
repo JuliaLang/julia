@@ -471,7 +471,8 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 // subnormal_flags should be declared atomic.
 static volatile int32_t subnormal_flags = 1;
 
-static int32_t get_subnormal_flags() {
+static int32_t get_subnormal_flags()
+{
     uint32_t f = subnormal_flags;
     if (f & 1) {
         // CPU capabilities not yet inspected.
@@ -483,7 +484,8 @@ static int32_t get_subnormal_flags() {
             if (info[3] & (1 << 26)) {
                 // SSE2 supports both FZ and DAZ
                 f = 0x00008040;
-            } else if (info[3] & (1 << 25)) {
+            }
+            else if (info[3] & (1 << 25)) {
                 // SSE supports only the FZ flag
                 f = 0x00008000;
             }
@@ -512,7 +514,8 @@ DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
             state &= ~flags;
         _mm_setcsr(state);
         return 0;
-    } else {
+    }
+    else {
         // Report a failure only if user is trying to enable FTZ/DAZ.
         return isZero;
     }

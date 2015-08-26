@@ -98,7 +98,6 @@ DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = data;
 DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
 DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     if (loop) {
@@ -674,7 +673,6 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 }
 
 #endif
-
 
 DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
 {
