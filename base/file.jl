@@ -65,7 +65,7 @@ mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be a
 
 function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)
-        @windows_only if !iswritable(path); chmod(path, 0o777); end
+        @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
         FS.unlink(path)
     else
         if recursive
