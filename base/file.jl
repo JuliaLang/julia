@@ -139,8 +139,7 @@ function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
 end
 
 function touch(path::AbstractString)
-    f = Filesystem.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
-    @assert f.handle >= 0
+    f = Filesystem.open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
         t = time()
         futime(f,t,t)
