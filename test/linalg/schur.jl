@@ -43,6 +43,10 @@ debug && println("Reorder Schur")
     sum(select) != 0 && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
     @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
     @test_throws KeyError f[:A]
+    Snew = Base.LinAlg.Schur(copy(S.T),copy(S.Z),copy(S.values))
+    SchurNew = ordschur!(Snew,select)
+    @test O[:vectors] ≈ SchurNew[:vectors]
+    @test O[:Schur] ≈ SchurNew[:Schur]
 
 debug && println("Generalized Schur")
     a1_sf = a[1:n1, 1:n1]
@@ -67,4 +71,18 @@ debug && println("Reorder Generalized Schur")
     @test_approx_eq S[:Q]*S[:T]*S[:Z]' a2_sf
     # Make sure that we have sorted it correctly
     @test_approx_eq NS[:values][find(select)] S[:values][1:m]
+
+    Snew = Base.LinAlg.GeneralizedSchur(copy(NS.S),copy(NS.T),copy(NS.alpha),copy(NS.beta),copy(NS.Q),copy(NS.Z))
+    SchurNew = ordschur!(Snew,select)
+    @test S[:Q] ≈ SchurNew[:Q]
+    @test S[:S] ≈ SchurNew[:S]
+    @test S[:T] ≈ SchurNew[:T]
+    @test S[:Z] ≈ SchurNew[:Z]
+    @test S[:alpha] ≈ SchurNew[:alpha]
+    @test S[:beta] ≈ SchurNew[:beta]
+    sS,sT,sQ,sZ = schur(a1_sf,a2_sf)
+    @test NS[:Q] ≈ sQ
+    @test NS[:T] ≈ sT
+    @test NS[:S] ≈ sS
+    @test NS[:Z] ≈ sZ
 end
