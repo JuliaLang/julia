@@ -78,9 +78,7 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig
             }
         }
         jl_value_t *a = types[i];
-        if (jl_is_datatype(a) && jl_is_datatype(decl) &&
-                 ((jl_datatype_t*)decl)->name == jl_type_type->name &&
-                 ((jl_datatype_t*)a   )->name == jl_type_type->name) {
+        if (jl_is_type_type(a) && jl_is_type_type(decl)) {
             jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
@@ -88,8 +86,18 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig
                 // analogous to the situation with tuples.
             }
             else {
-                if (!jl_types_equal(jl_tparam0(a), tp0))
-                    return 0;
+                jl_value_t *a0 = jl_tparam0(a);
+                if (jl_is_typector(a0)) {
+                    // in the case where a is exactly a
+                    // Type{::TypeConstructor}, tp0 must be exactly
+                    // Type{TypeConstructor}
+                    if (tp0 != (jl_value_t*)jl_typector_type)
+                        return 0;
+                }
+                else {
+                    if (!jl_types_equal(a0, tp0))
+                        return 0;
+                }
             }
         }
         else if (decl == (jl_value_t*)jl_any_type) {
@@ -133,6 +141,13 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tupletype_t *sig,
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
+            }
+            else if (jl_is_typector(a)) {
+                // in the case where a is exactly a
+                // TypeConstructor, tp0 must be exactly
+                // Type{TypeConstructor}
+                if (tp0 != (jl_value_t*)jl_typector_type)
+                    return 0;
             }
             else {
                 if (a!=tp0 && !jl_types_equal(a,tp0))
@@ -521,6 +536,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             }
         }
         if (set_to_any || isstaged) {
+        }
+        else if (jl_is_type_type(elt) && jl_is_typector(jl_tparam0(elt)) &&
+                decl_i == (jl_value_t*)jl_typector_type) {
+            // TypeConstructors are problematic because they can be alternate
+            // representations of any type. If we matched this method because
+            // it matched the leaf type TypeConstructor, then don't
+            // cache something different since that doesn't necessarily actually apply
+            jl_svecset(newparams, i, jl_typector_type);
+        }
+        else if (jl_is_type_type(elt) && decl_i == (jl_value_t*)jl_datatype_type) {
+            // similarly, if we matched Type{T<:Any}::DataType,
+            // then we don't want to cache it that way
+            // since lookup will think we matched ::Type{T}
+            // and that is quite a different thing
+            jl_svecset(newparams, i, jl_datatype_type);
+            need_guard_entries = 1; // DataType has a UID so its precedence in the cache may be too high
         }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
                  // give up on specializing static parameters for Type{Type{Type{...}}}
