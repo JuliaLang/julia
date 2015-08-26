@@ -183,7 +183,7 @@ m = Mmap.mmap(file,Vector{UInt8},2,6)
 @test m[1] == "W".data[1]
 @test m[2] == "o".data[1]
 @test_throws BoundsError m[3]
-finalize(m); gc()
+finalize(m); m = nothing; gc()
 
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
@@ -242,6 +242,7 @@ A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(FileOffset,(2+150*m)*sizeof(Int)
 @test A[:, 151:end] == A4
 close(s)
 finalize(A2); finalize(A3); finalize(A4)
+A2 = A3 = A4 = nothing
 gc()
 rm(fname)
 
