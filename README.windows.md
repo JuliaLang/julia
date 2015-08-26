@@ -45,9 +45,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 # Source distribution
 
 ## Supported build platforms
-- Windows 10: supported (32- and 64-bits)
-- Windows 8: supported (32- and 64-bits)
-- Windows 7: supported (32- and 64-bits)
+- Windows 10: supported (32- and 64-bit)
+- Windows 8: supported (32- and 64-bit)
+- Windows 7: supported (32- and 64-bit)
 - Windows Vista: not officially supported (but probably works anyways)
 - Windows XP: not supported (but may work anyways, if you can get around the lack of junction points)
 
