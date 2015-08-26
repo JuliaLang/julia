@@ -57,20 +57,21 @@ end
 
 abstract DayOfWeekSlot
 
-# Slot rules allowed for where ismatch(r"^[a-zA-Z]$",c)
-slotrule(::Type{Val{'y'}}) = Year
-slotrule(::Type{Val{'m'}}) = Month
-slotrule(::Type{Val{'u'}}) = Month
-slotrule(::Type{Val{'U'}}) = Month
-slotrule(::Type{Val{'e'}}) = DayOfWeekSlot
-slotrule(::Type{Val{'E'}}) = DayOfWeekSlot
-slotrule(::Type{Val{'d'}}) = Day
-slotrule(::Type{Val{'H'}}) = Hour
-slotrule(::Type{Val{'M'}}) = Minute
-slotrule(::Type{Val{'S'}}) = Second
-slotrule(::Type{Val{'s'}}) = Millisecond
-slotrule{c}(::Type{Val{c}}) = Union{}
-
+# Slot rules translate letters into types. Note that
+# list of rules can be extended.
+const SLOT_RULE = Dict{Char,Type}(
+    'y' => Year,
+    'm' => Month,
+    'u' => Month,
+    'U' => Month,
+    'e' => DayOfWeekSlot,
+    'E' => DayOfWeekSlot,
+    'd' => Day,
+    'H' => Hour,
+    'M' => Minute,
+    'S' => Second,
+    's' => Millisecond,
+)
 duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
 function DateFormat(f::AbstractString,locale::AbstractString="english")
@@ -78,12 +79,11 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
     prefix = ""
     params = ()
     last_offset = 1
-    for m in eachmatch(r"([a-zA-Z])\1*", f)
-        letter = f[m.offset]
-        typ = slotrule(Val{letter})
 
-        # False positive. Match will be included in transition.
-        is(typ, Union{}) && continue
+    letters = join(keys(SLOT_RULE), "")
+    for m in eachmatch(Regex("([\\Q$letters\\E])\\1*"), f)
+        letter = f[m.offset]
+        typ = SLOT_RULE[letter]
 
         width = length(m.match)
         tran = f[last_offset:m.offset-1]
