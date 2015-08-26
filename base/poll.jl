@@ -1,6 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# TODO: move file into Filesystem module
+# filesystem operations
+
+export
+    watch_file,
+    poll_fd,
+    poll_file,
+    FileMonitor,
+    PollingFileWatcher,
+    FDWatcher
+
+import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
+    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
+    associate_julia_struct, disassociate_julia_struct
+@windows_only import Base.WindowsRawSocket
 
 # libuv file watching event flags
 const UV_RENAME = 1
@@ -33,7 +46,6 @@ FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
                                   (flags & UV_WRITABLE) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fdtimeout() = FDEvent(false, false, true)
-
 
 type FileMonitor
     handle::Ptr{Void}
@@ -188,7 +200,7 @@ end
 function _uv_hook_close(uv::PollingFileWatcher)
     uv.handle = C_NULL
     uv.active = false
-    notify(uv.notify, (Filesystem.StatStruct(), Filesystem.StatStruct()))
+    notify(uv.notify, (StatStruct(), StatStruct()))
     nothing
 end
 
@@ -197,6 +209,12 @@ function _uv_hook_close(uv::FileMonitor)
     uv.active = false
     notify(uv.notify, ("", FileEvent()))
     nothing
+end
+
+function __init__()
+    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, (Ptr{Void}, Cint, Cint))
+    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}))
+    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, (Ptr{Void}, Ptr{Int8}, Int32, Int32))
 end
 
 function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
@@ -225,8 +243,8 @@ function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
     if status != 0
         notify_error(t.notify, UVError("PollingFileWatcher", status))
     else
-        prev_stat = Filesystem.StatStruct(convert(Ptr{UInt8}, prev))
-        curr_stat = Filesystem.StatStruct(convert(Ptr{UInt8}, curr))
+        prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
+        curr_stat = StatStruct(convert(Ptr{UInt8}, curr))
         notify(t.notify, (prev_stat, curr_stat))
     end
     nothing
@@ -394,7 +412,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             wait(wt)
             if result === :timeout
-                return (Filesystem.StatStruct(), Filesystem.StatStruct())
+                return (StatStruct(), StatStruct())
             end
             return result
         else
