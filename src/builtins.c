@@ -958,6 +958,27 @@ extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m);
 
+static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
+{
+    int i;
+    for(i=0; i < jl_array_len(e->args); i++) {
+        jl_value_t *ei = jl_exprarg(e,i);
+        if (jl_is_lambda_info(ei)) {
+            jl_lambda_info_t *li = (jl_lambda_info_t*)ei;
+            if (!jl_is_expr(li->ast)) {
+                li->ast = jl_uncompress_ast(li, li->ast);
+                jl_gc_wb(li, li->ast);
+            }
+            jl_expr_t *a = (jl_expr_t*)li->ast;
+            if (jl_lam_capt(a)->length > 0 && jl_eval_with_compiler_p(a, jl_lam_body(a), 1, m))
+                return 1;
+        }
+        if (jl_is_expr(ei) && jl_eval_inner_with_compiler((jl_expr_t*)ei, m))
+            return 1;
+    }
+    return 0;
+}
+
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig)
 {
     assert(sig);
@@ -973,7 +994,12 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
             }
             assert(jl_is_expr(f->linfo->ast));
             if (always_infer ||
-                jl_eval_with_compiler_p((jl_expr_t*)f->linfo->ast, jl_lam_body((jl_expr_t*)f->linfo->ast), 1, f->linfo->module)) {
+                jl_eval_with_compiler_p((jl_expr_t*)f->linfo->ast, jl_lam_body((jl_expr_t*)f->linfo->ast), 1, f->linfo->module) ||
+                // if this function doesn't need to be compiled, but contains inner
+                // functions that do and that capture variables, we need to run
+                // inference on the whole thing to propagate types into the inner
+                // functions. caused issue #12794
+                jl_eval_inner_with_compiler(jl_lam_body((jl_expr_t*)f->linfo->ast), f->linfo->module)) {
                 jl_type_infer(f->linfo, sig, f->linfo);
             }
         }
