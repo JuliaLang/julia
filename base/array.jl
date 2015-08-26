@@ -981,3 +981,18 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+# Lightweight wrapper type for values(::Array)
+immutable ArrayIterator{T,N}
+    array::Array{T,N}
+end
+start(ai::ArrayIterator) = start(ai.array)
+next(ai::ArrayIterator,k) = next(ai.array,k)
+done(ai::ArrayIterator,k) = done(ai.array,k)
+
+length(v::ArrayIterator) = length(v.array)
+isempty(v::ArrayIterator) = isempty(v.array)
+eltype{T,N}(::Type{ArrayIterator{T,N}}) = T
+
+keys(x::Array) = CartesianRange(size(x))
+values(x::Array) = ArrayIterator(x)

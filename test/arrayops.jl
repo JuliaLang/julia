@@ -1239,3 +1239,16 @@ module RetTypeDecl
     @test @inferred(m.*[m,m]) == [m2,m2]
     @test @inferred([m,m].*m) == [m2,m2]
 end
+
+# keys(::Array) and values(::Array)
+A = rand(4,2,3)
+@test length(keys(A)) == length(values(A)) == 4 * 2 * 3
+@test eltype(typeof(keys(A))) === Base.IteratorsMD.CartesianIndex{3}
+@test eltype(typeof(values(A))) === Float64
+
+seen = falses(size(A))
+for (index,(I,v)) in enumerate(zip(keys(A),values(A)))
+    @test A[I] === A[index] === v
+    seen[I] = true
+end
+@test all(seen)
