@@ -63,6 +63,27 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq C D
 end
 
+#gbtrf and gbtrs
+for elty in (Float32, Float64, Complex64, Complex128)
+    d = rand(elty,6)
+    dl = rand(elty,5)
+    du = rand(elty,5)
+    dl2 = rand(elty,4)
+    AB = zeros(elty,6,6)
+    AB[6,1:4] = dl2
+    AB[5,1:5] = dl
+    AB[4,:] = d
+    AB[3,2:6] = du
+    AB,ipiv = LAPACK.gbtrf!(2,1,6,AB)
+    C = rand(elty,6,6)
+    D = copy(C)
+    D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
+    A = diagm(dl2,-2) + diagm(dl,-1) + diagm(d) + diagm(du,1)
+    @test A\C ≈ D
+    @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
+    @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
+end
+
 #geqp3, geqrt, error handling!
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
@@ -135,13 +156,13 @@ end
 
 #gebal/gebak
 for elty in (Float32, Float64, Complex64, Complex128)
-    A = rand(elty,10,10)
+    A = rand(elty,10,10) * Diagonal(exp10(linspace(-10,10,10)))
     B = copy(A)
-    ilo, ihi, scale = LAPACK.gebal!('B',B)
+    ilo, ihi, scale = LAPACK.gebal!('S',B)
     Bvs = eigvecs(B)
     Avs = eigvecs(A)
-    Bvs = LAPACK.gebak!('B','R',ilo,ihi,scale,Bvs)
-    @test_approx_eq Bvs Avs
+    Bvs = LAPACK.gebak!('S','R',ilo,ihi,scale,Bvs)
+    @test norm(diff(Avs ./ Bvs)) < 100 * eps(abs(float(one(elty))))
 end
 
 #gels
