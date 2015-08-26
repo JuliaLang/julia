@@ -1307,11 +1307,11 @@ function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::
     else
         error("Unknown mode")
     end
-    io, pobj = open(pipeline(detach(setenv(cmd, dir=dir)); stderr=STDERR), "r")
+    io = open(detach(setenv(cmd, dir=dir)))
 
     wconfig = WorkerConfig()
-    wconfig.process = pobj
-    wconfig.io = io
+    wconfig.process = io
+    wconfig.io = io.out
     push!(launched, wconfig)
     notify(c)
 end

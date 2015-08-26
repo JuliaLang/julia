@@ -242,26 +242,26 @@ let fname = tempname()
     function thrash(handle::Ptr{Void})
         # Kill the memory, but write a nice low value in the libuv type field to
         # trigger the right code path
-        ccall(:memset,Ptr{Void},(Ptr{Void},Cint,Csize_t),handle,0xee,3*sizeof(Ptr{Void}))
-        unsafe_store!(convert(Ptr{Cint},handle+2*sizeof(Ptr{Void})),15)
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), handle, 0xee, 3 * sizeof(Ptr{Void}))
+        unsafe_store!(convert(Ptr{Cint}, handle + 2 * sizeof(Ptr{Void})), 15)
         nothing
     end
     OLD_STDERR = STDERR
-    redirect_stderr(open("$(escape_string(fname))","w"))
+    redirect_stderr(open("$(escape_string(fname))", "w"))
     # Usually this would be done by GC. Do it manually, to make the failure
     # case more reliable.
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close,Void,(Ptr{Void},Ptr{Void}),oldhandle,cfunction(thrash,Void,(Ptr{Void},)))
+    ccall(:uv_close, Void, (Ptr{Void}, Ptr{Void}), oldhandle, cfunction(thrash, Void, (Ptr{Void},)))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
     try
-        (in,p) = open(pipeline(`$exename --startup-file=no`, stderr=STDERR), "w")
-        write(in,cmd)
-        close(in)
-        wait(p)
+        io = open(pipeline(`$exename --startup-file=no`, stderr=STDERR), "w")
+        write(io, cmd)
+        close(io)
+        wait(io)
     catch
         error("IOStream redirect failed. Child stderr was \n$(readstring(fname))\n")
     finally
