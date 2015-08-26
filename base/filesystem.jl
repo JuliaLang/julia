@@ -42,6 +42,7 @@ import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
             write, read, read!, readbytes, isopen, show,
             check_open, _sizeof_uv_fs, uv_error, UVError
 
+include("path.jl")
 include("stat.jl")
 include("file.jl")
 include("poll.jl")
