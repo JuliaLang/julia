@@ -91,10 +91,10 @@ macro evalpoly(z, p...)
       end)
 end
 
-rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
-deg2rad(z::Real) = oftype(z, 0.017453292519943295*z)
-rad2deg(z::Integer) = rad2deg(float(z))
-deg2rad(z::Integer) = deg2rad(float(z))
+rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
+deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
+rad2deg(z::Real) = rad2deg(float(z))
+deg2rad(z::Real) = deg2rad(float(z))
 @vectorize_1arg Real rad2deg
 @vectorize_1arg Real deg2rad
 
