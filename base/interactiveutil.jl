@@ -530,7 +530,7 @@ function summarysize(obj::Tuple, recurse::Bool)
     if recurse
         for val in obj
             if val !== obj && !isbits(val)
-                size += summarysize(val, recurse)::Int
+                size += summarysize(val, false)::Int
             end
         end
     end
@@ -589,9 +589,11 @@ summarysize(obj::Set, recurse::Bool) =
 
 function summarysize(obj::Function, recurse::Bool)
     size::Int = sizeof(obj)
-    size += summarysize(obj.env, recurse)::Int
+    if recurse
+        size += summarysize(obj.env, true)::Int
+    end
     if isdefined(obj, :code)
-        size += summarysize(obj.code, recurse)::Int
+        size += summarysize(obj.code, true)::Int
     end
     return size
 end
