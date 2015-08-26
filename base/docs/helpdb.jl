@@ -7482,7 +7482,8 @@ sqrt
 doc"""
     atexit(f)
 
-Register a zero-argument function to be called at exit.
+Register a zero-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before object finalizers.
 """
 atexit
 
