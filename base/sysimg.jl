@@ -118,9 +118,8 @@ include("lock.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")
-include("stat.jl")
 include("filesystem.jl")
-importall .FS
+importall .Filesystem
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# TODO: move file into Filesystem module
+
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
@@ -186,7 +188,7 @@ end
 function _uv_hook_close(uv::PollingFileWatcher)
     uv.handle = C_NULL
     uv.active = false
-    notify(uv.notify, (StatStruct(), StatStruct()))
+    notify(uv.notify, (Filesystem.StatStruct(), Filesystem.StatStruct()))
     nothing
 end
 
@@ -223,8 +225,8 @@ function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
     if status != 0
         notify_error(t.notify, UVError("PollingFileWatcher", status))
     else
-        prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
-        curr_stat = StatStruct(convert(Ptr{UInt8}, curr))
+        prev_stat = Filesystem.StatStruct(convert(Ptr{UInt8}, prev))
+        curr_stat = Filesystem.StatStruct(convert(Ptr{UInt8}, curr))
         notify(t.notify, (prev_stat, curr_stat))
     end
     nothing
@@ -392,7 +394,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             wait(wt)
             if result === :timeout
-                return (StatStruct(), StatStruct())
+                return (Filesystem.StatStruct(), Filesystem.StatStruct())
             end
             return result
         else
