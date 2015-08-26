@@ -73,7 +73,22 @@ Another macro is provided to check if the given expression throws an exception o
    in do_test_throws at test.jl:55
 
 
-As floating point comparisons can be imprecise, two additional macros exist taking in account small numerical errors::
+As floating-point values can be imprecise, you can perform approximate
+equality checks using either ``@test a ≈ b`` (where ``≈``, typed via
+tab completion of ``\approx``, is the ``isapprox`` function) or use
+the macros ``@test_approx_eq`` macro (which differs from ``isapprox``
+in that it treats NaN values as equal and has a smaller default
+tolerance) or ``@test_approx_eq_eps`` (which takes an extra argument
+indicating the relative tolerance)::
+
+  julia> @test 1 ≈ 0.999999999
+
+  julia> @test 1 ≈ 0.999999
+  ERROR: test failed: 1 isapprox 0.999999
+   in expression: 1 ≈ 0.999999
+   in error at error.jl:21
+   in default_handler at test.jl:30
+   in do_test at test.jl:53
 
   julia> @test_approx_eq 1. 0.999999999
   ERROR: assertion failed: |1.0 - 0.999999999| < 2.220446049250313e-12

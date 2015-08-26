@@ -457,75 +457,47 @@ function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArr
 end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
-function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
-    m, n = size(A)
-    if !(1 <= row <= m) || !(1 <= col <= n)
-        throw(BoundsError(A, (row, col)))
-    end
+@inline function reflector!(x::AbstractVector)
+    n = length(x)
     @inbounds begin
-        ξ1 = A[row,col]
+        ξ1 = x[1]
         normu = abs2(ξ1)
-        for i = row+1:m
-            normu += abs2(A[i,col])
+        for i = 2:n
+            normu += abs2(x[i])
+        end
+        if normu == zero(normu)
+            return zero(ξ1/normu)
         end
         normu = sqrt(normu)
-        ν = copysign(normu,real(ξ1))
-        A[row,col] += ν
+        ν = copysign(normu, real(ξ1))
         ξ1 += ν
-        A[row,col] = -ν
-        for i = row+1:m
-            A[i,col] /= ξ1
+        x[1] = -ν
+        for i = 2:n
+            x[i] /= ξ1
         end
     end
     ξ1/ν
 end
 
-function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix) # apply reflector from left
     m, n = size(A)
-    if !(1 <= row <= m) || !(1 <= col <= n)
-        throw(BoundsError(A, (row, col)))
-    elseif row > col
-        throw(ArgumentError("row ($row) cannot be larger than col ($col)"))
+    if length(x) != m
+        throw(DimensionMismatch("reflector must have same length as first dimension of matrix"))
     end
     @inbounds begin
-        ξ1 = A[row,col]
-        normu = abs2(ξ1)
-        for i = col+1:n
-            normu += abs2(A[row,i])
-        end
-        normu = sqrt(normu)
-        ν = copysign(normu,real(ξ1))
-        A[row,col] += ν
-        ξ1 += ν
-        A[row,col] = -ν
-        for i = col+1:n
-            A[row,i] /= ξ1
+        for j = 1:n
+            vAj = A[1, j]
+            for i = 2:m
+                vAj += x[i]'*A[i, j]
+            end
+            vAj = τ'*vAj
+            A[1, j] -= vAj
+            for i = 2:m
+                A[i, j] -= x[i]*vAj
+            end
         end
     end
-    conj(ξ1/ν)
-end
-
-function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
-    m, n = size(A)
-    if !(1 <= row <= m)
-        throw(BoundsError(A, row))
-    end
-    @inbounds begin
-        ξ1 = A[row,row]
-        normu = abs2(A[row,row])
-        for i = m+1:n
-            normu += abs2(A[row,i])
-        end
-        normu = sqrt(normu)
-        ν = copysign(normu,real(ξ1))
-        A[row,row] += ν
-        ξ1 += ν
-        A[row,row] = -ν
-        for i = m+1:n
-            A[row,i] /= ξ1
-        end
-    end
-    conj(ξ1/ν)
+    return A
 end
 
 function det{T}(A::AbstractMatrix{T})
