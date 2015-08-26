@@ -363,7 +363,7 @@ end
 
 @windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Cwstring,Cwstring,Cint,Ptr{Void}),C_NULL,url,filename,0,0)
+                (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
