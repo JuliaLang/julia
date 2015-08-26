@@ -1,5 +1,21 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+export
+    abspath,
+    basename,
+    dirname,
+    expanduser,
+    homedir,
+    isabspath,
+    isdirpath,
+    joinpath,
+    normpath,
+    realpath,
+    relpath,
+    splitdir,
+    splitdrive,
+    splitext
+
 @unix_only begin
     const path_separator    = "/"
     const path_separator_re = r"/+"
