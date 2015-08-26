@@ -99,7 +99,11 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
 end
 
 function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
-    paths = @fetchfrom node find_all_in_cache_path(mod)
+    if node == myid()
+        paths = find_all_in_cache_path(mod)
+    else
+        paths = @fetchfrom node find_all_in_cache_path(mod)
+    end
     sort!(paths, by=mtime, rev=true) # try newest cachefiles first
     for path_to_try in paths
         restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
