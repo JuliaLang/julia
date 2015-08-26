@@ -136,57 +136,63 @@ end
     Expr(:block, Expr(:meta, :inline), ex)
 end
 
-_checkbounds(sz, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
-_checkbounds(sz, i::Real) = 1 <= i <= sz
-_checkbounds(sz, ::Colon) = true
-_checkbounds(sz, r::Range) = (@_inline_meta; isempty(r) || (_checkbounds(sz, minimum(r)) && _checkbounds(sz,maximum(r))))
-_checkbounds(sz, I::AbstractVector{Bool}) = length(I) == sz
-function _checkbounds(sz, I::AbstractArray)
+checkbounds(::Type{Bool}, sz::Integer, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
+checkbounds(::Type{Bool}, sz::Integer, i::Real) = 1 <= i <= sz
+checkbounds(::Type{Bool}, sz::Integer, ::Colon) = true
+function checkbounds(::Type{Bool}, sz::Integer, r::Range)
+    @_inline_meta
+    isempty(r) || (checkbounds(Bool, sz, minimum(r)) && checkbounds(Bool, sz, maximum(r)))
+end
+checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray{Bool}) = length(I) == sz
+function checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray)
     @_inline_meta
     b = true
     for i in I
-        b &= _checkbounds(sz, i)
+        b &= checkbounds(Bool, sz, i)
     end
     b
 end
 # Prevent allocation of a GC frame by hiding the BoundsError in a noinline function
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
-checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
-checkbounds(A::AbstractArray, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
-checkbounds(A::AbstractArray, I::Union{Real,AbstractArray,Colon}) = (@_inline_meta; _checkbounds(length(A), I) || throw_boundserror(A, I))
-function checkbounds(A::AbstractMatrix, I::Union{Real,AbstractArray,Colon}, J::Union{Real,AbstractArray,Colon})
+# Don't define index types on checkbounds to make extending easier
+checkbounds(A::AbstractArray, I...) = (@_inline_meta; _internal_checkbounds(A, I...))
+# The internal function is named _internal_checkbounds since there had been a
+# _checkbounds previously that meant something different.
+_internal_checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
+_internal_checkbounds(A::AbstractArray, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
+_internal_checkbounds(A::AbstractArray, I) = (@_inline_meta; checkbounds(Bool, length(A), I) || throw_boundserror(A, I))
+function _internal_checkbounds(A::AbstractMatrix, I, J)
     @_inline_meta
-    (_checkbounds(size(A,1), I) && _checkbounds(size(A,2), J)) ||
+    (checkbounds(Bool, size(A,1), I) && checkbounds(Bool, size(A,2), J)) ||
         throw_boundserror(A, (I, J))
 end
-function checkbounds(A::AbstractArray, I::Union{Real,AbstractArray,Colon}, J::Union{Real,AbstractArray,Colon})
+function _internal_checkbounds(A::AbstractArray, I, J)
     @_inline_meta
-    (_checkbounds(size(A,1), I) && _checkbounds(trailingsize(A,Val{2}), J)) ||
+    (checkbounds(Bool, size(A,1), I) && checkbounds(Bool, trailingsize(A,Val{2}), J)) ||
         throw_boundserror(A, (I, J))
 end
-@generated function checkbounds(A::AbstractArray, I::Union{Real,AbstractArray,Colon}...)
+@generated function _internal_checkbounds(A::AbstractArray, I...)
     meta = Expr(:meta, :inline)
     N = length(I)
     Isplat = [:(I[$d]) for d=1:N]
     error = :(throw_boundserror(A, tuple($(Isplat...))))
-    args = Expr[:(_checkbounds(size(A,$dim), I[$dim]) || $error) for dim in 1:N-1]
-    push!(args, :(_checkbounds(trailingsize(A,Val{$N}), I[$N]) || $error))
+    args = Expr[:(checkbounds(Bool, size(A,$dim), I[$dim]) || $error) for dim in 1:N-1]
+    push!(args, :(checkbounds(Bool, trailingsize(A,Val{$N}), I[$N]) || $error))
     Expr(:block, meta, args...)
 end
 
 ## Bounds-checking without errors ##
-in_bounds(l::Int, i::Integer) = 1 <= i <= l
-function in_bounds(sz::Dims, I::Int...)
+function checkbounds(::Type{Bool}, sz::Dims, I...)
     n = length(I)
     for dim = 1:(n-1)
-        1 <= I[dim] <= sz[dim] || return false
+        checkbounds(Bool, sz[dim], I[dim]) || return false
     end
     s = sz[n]
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    1 <= I[n] <= s
+    checkbounds(Bool, s, I[n])
 end
 
 ## Constructors ##
@@ -665,9 +671,9 @@ end
 
 typealias RangeVecIntList{A<:AbstractVector{Int}} Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
 
-get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
+get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, length(A), i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
-get(A::AbstractArray, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
+get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, size(A), I...) ? A[I...] : default
 
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union{Range, AbstractVector{Int}}, default::T)
     ind = findin(I, 1:length(A))
