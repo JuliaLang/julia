@@ -156,3 +156,20 @@ v11801, t11801 = @timed sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
 @test names(current_module(), true) == names_before_timing
+
+# interactive utilities
+
+import Base.summarysize
+@test summarysize(Core, true) > summarysize(Core.Inference, true) > summarysize(Core, false) == summarysize(Core.Inference, false) == Core.sizeof(Core)
+@test summarysize(Base, true) > 10_000*summarysize(Base, false) > 10_000*sizeof(Int)
+@test 0 == summarysize(Int, true) == summarysize(Int, false) == summarysize(DataType, true) == summarysize(Ptr, true) == summarysize(Any, true)
+@test sprint(whos, Main, r"^$") == ""
+let v = sprint(whos, Main)
+    @test contains(v, " KB     Module : Base")
+    @test contains(v, " KB     Module : Core")
+    @test contains(v, "  0 bytes  DataType : NoMethodHasThisType")
+    @test contains(v, "\u2026\n")
+    @test match(r".\u2026$"m, v) !== nothing
+    @test match(r"\u2026."m, v) === nothing
+    @test !contains(v, "Core.Inference")
+end

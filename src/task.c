@@ -932,13 +932,13 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->current_module = jl_current_module;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
-    jl_current_task->consumers = NULL;
+    jl_current_task->consumers = jl_nothing;
     jl_current_task->state = runnable_sym;
     jl_current_task->start = NULL;
-    jl_current_task->result = NULL;
-    jl_current_task->donenotify = NULL;
-    jl_current_task->exception = NULL;
-    jl_current_task->backtrace = NULL;
+    jl_current_task->result = jl_nothing;
+    jl_current_task->donenotify = jl_nothing;
+    jl_current_task->exception = jl_nothing;
+    jl_current_task->backtrace = jl_nothing;
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
 
