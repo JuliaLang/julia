@@ -359,10 +359,8 @@ Library improvements
     * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
 
     * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
-    
-  * Pipe, Process, and Cmd simplications ([#12739])
 
-    * `pipe` has been renamed to `pipeline`
+  * Pipe, Process, and Cmd simplications ([#12739])
 
     * `Process` now inherits from `IO`
 
@@ -473,7 +471,7 @@ Deprecated or removed
   * `null` is renamed to `nullspace` ([#9714]).
 
   * The operators `|>`, `.>`, `>>`, and `.>>` as used for process I/O redirection
-    are replaced with the `pipe` function ([#5349]).
+    are replaced with the ~~`pipe`~~ `pipeline` function ([#5349], [#12739]).
 
   * `flipud(A)` and `fliplr(A)` have been deprecated in favor of `flipdim(A, 1)` and
     `flipdim(A, 2)`, respectively ([#10446]).
