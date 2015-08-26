@@ -419,13 +419,11 @@ convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
 function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
     if M.dl == M.du
-        return SymTridiagonal(M.d, M.dl)
+        return SymTridiagonal(convert(Vector{T},M.d), convert(Vector{T},M.dl))
     else
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
 end
-
-convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     nA = size(A,1)
