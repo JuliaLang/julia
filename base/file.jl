@@ -66,7 +66,7 @@ mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be a
 function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)
         @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
-        FS.unlink(path)
+        Filesystem.unlink(path)
     else
         if recursive
             for p in readdir(path)
@@ -116,7 +116,7 @@ function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bo
             cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
                                                  follow_symlinks=follow_symlinks)
         else
-            FS.sendfile(srcname, joinpath(dst, name))
+            Filesystem.sendfile(srcname, joinpath(dst, name))
         end
     end
 end
@@ -129,23 +129,23 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
     elseif isdir(src)
         cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
     else
-        FS.sendfile(src, dst)
+        Filesystem.sendfile(src, dst)
     end
 end
 
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
-    FS.rename(src, dst)
+    Filesystem.rename(src, dst)
 end
 
 function touch(path::AbstractString)
-    f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    f = Filesystem.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
     @assert f.handle >= 0
     try
         t = time()
         futime(f,t,t)
     finally
-        FS.close(f)
+        Filesystem.close(f)
     end
 end
 

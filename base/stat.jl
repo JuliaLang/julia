@@ -1,5 +1,30 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# filesystem operations
+
+export
+    ctime,
+    filemode,
+    filesize,
+    gperm,
+    isblockdev,
+    ischardev,
+    isdir,
+    isfifo,
+    isfile,
+    islink,
+    ismount,
+    ispath,
+    issetgid,
+    issetuid,
+    issocket,
+    issticky,
+    lstat,
+    mtime,
+    operm,
+    stat,
+    uperm
+
 immutable StatStruct
     device  :: UInt
     inode   :: UInt

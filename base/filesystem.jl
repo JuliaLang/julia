@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## UV based file operations ##
+## File Operations (Libuv-based) ##
 
-module FS
+module Filesystem
 
 const S_IRUSR = 0o400
 const S_IWUSR = 0o200
@@ -45,8 +45,9 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
-            _sizeof_uv_fs, uv_error
+            _sizeof_uv_fs, uv_error, show
 
+include("stat.jl")
 include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 abstract AbstractFile <: IO
