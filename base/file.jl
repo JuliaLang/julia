@@ -1,5 +1,30 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Operations with the file system (paths) ##
+
+export
+    cd,
+    chmod,
+    cp,
+    cptree,
+    mkdir,
+    mkpath,
+    mktemp,
+    mktempdir,
+    mv,
+    pwd,
+    rename,
+    readlink,
+    readdir,
+    rm,
+    samefile,
+    sendfile,
+    symlink,
+    tempdir,
+    tempname,
+    touch,
+    walkdir
+
 # get and set current directory
 
 function pwd()
@@ -66,7 +91,7 @@ mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be a
 function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)
         @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
-        Filesystem.unlink(path)
+        unlink(path)
     else
         if recursive
             for p in readdir(path)
@@ -116,7 +141,7 @@ function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bo
             cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
                                                  follow_symlinks=follow_symlinks)
         else
-            Filesystem.sendfile(srcname, joinpath(dst, name))
+            sendfile(srcname, joinpath(dst, name))
         end
     end
 end
@@ -129,22 +154,22 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
     elseif isdir(src)
         cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
     else
-        Filesystem.sendfile(src, dst)
+        sendfile(src, dst)
     end
 end
 
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
-    Filesystem.rename(src, dst)
+    rename(src, dst)
 end
 
 function touch(path::AbstractString)
-    f = Filesystem.open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
         t = time()
         futime(f,t,t)
     finally
-        Filesystem.close(f)
+        close(f)
     end
 end
 
@@ -202,7 +227,7 @@ function tempname(temppath::AbstractString,uunique::UInt32)
 end
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))
-    return (filename, open(filename,"r+"))
+    return (filename, Base.open(filename, "r+"))
 end
 function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
@@ -329,3 +354,83 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     Task(_it)
 end
 
+function unlink(p::AbstractString)
+    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
+    uv_error("unlink", err)
+    nothing
+end
+
+# For move command
+function rename(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
+    # on error, default to cp && rm
+    if err < 0
+        # remove_destination: is already done in the mv function
+        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        rm(src; recursive=true)
+    end
+    nothing
+end
+
+function sendfile(src::AbstractString, dst::AbstractString)
+    local src_open = false,
+          dst_open = false,
+          src_file,
+          dst_file
+    try
+        src_file = open(src, JL_O_RDONLY)
+        src_open = true
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
+             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
+        dst_open = true
+
+        bytes = filesize(stat(src_file))
+        sendfile(dst_file, src_file, Int64(0), Int(bytes))
+    finally
+        if src_open && isopen(src_file)
+            close(src_file)
+        end
+        if dst_open && isopen(dst_file)
+            close(dst_file)
+        end
+    end
+end
+
+@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
+function symlink(p::AbstractString, np::AbstractString)
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
+        error("Windows XP does not support soft symlinks")
+    end
+    flags = 0
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    @windows_only if err < 0
+        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    end
+    uv_error("symlink",err)
+end
+
+function readlink(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_readlink, Int32,
+            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+            eventloop(), req, path, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+            uv_error("readlink", ret)
+            assert(false)
+        end
+        tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+        return tgt
+    finally
+        Libc.free(req)
+    end
+end
+
+function chmod(p::AbstractString, mode::Integer)
+    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), p, mode)
+    uv_error("chmod",err)
+    nothing
+end

@@ -19,15 +19,9 @@ const S_IRWXO = 0o007
 
 export File,
        # open,
-       # close,
-       write,
-       unlink,
-       rename,
-       sendfile,
-       symlink,
-       readlink,
-       chmod,
        futime,
+       unlink,
+       write,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -44,10 +38,13 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
-            check_open, _sizeof_uv_fs, uv_error, show
+import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
+            write, read, read!, readbytes, isopen, show,
+            check_open, _sizeof_uv_fs, uv_error, UVError
 
 include("stat.jl")
+include("file.jl")
+include("poll.jl")
 include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
@@ -196,88 +193,5 @@ end
 
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
-
-# Operations with the file system (paths) ##
-
-function unlink(p::AbstractString)
-    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
-    uv_error("unlink", err)
-    nothing
-end
-
-# For move command
-function rename(src::AbstractString, dst::AbstractString)
-    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-    # on error, default to cp && rm
-    if err < 0
-        # remove_destination: is already done in the mv function
-        cp(src, dst; remove_destination=false, follow_symlinks=false)
-        rm(src; recursive=true)
-    end
-    nothing
-end
-
-function sendfile(src::AbstractString, dst::AbstractString)
-    local src_open = false,
-          dst_open = false,
-          src_file,
-          dst_file
-    try
-        src_file = open(src, JL_O_RDONLY)
-        src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
-             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
-        dst_open = true
-
-        bytes = filesize(stat(src_file))
-        sendfile(dst_file, src_file, Int64(0), Int(bytes))
-    finally
-        if src_open && isopen(src_file)
-            close(src_file)
-        end
-        if dst_open && isopen(dst_file)
-            close(dst_file)
-        end
-    end
-end
-
-@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
-function symlink(p::AbstractString, np::AbstractString)
-    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
-        error("Windows XP does not support soft symlinks")
-    end
-    flags = 0
-    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
-    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @windows_only if err < 0
-        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
-    end
-    uv_error("symlink",err)
-end
-
-function readlink(path::AbstractString)
-    req = Libc.malloc(_sizeof_uv_fs)
-    try
-        ret = ccall(:uv_fs_readlink, Int32,
-            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
-            eventloop(), req, path, C_NULL)
-        if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
-            uv_error("readlink", ret)
-            assert(false)
-        end
-        tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
-        return tgt
-    finally
-        Libc.free(req)
-    end
-end
-
-function chmod(p::AbstractString, mode::Integer)
-    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), p, mode)
-    uv_error("chmod",err)
-    nothing
-end
 
 end

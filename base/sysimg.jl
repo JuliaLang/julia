@@ -125,7 +125,6 @@ include("multimedia.jl")
 importall .Multimedia
 include("grisu.jl")
 import .Grisu.print_shortest
-include("file.jl")
 include("methodshow.jl")
 
 # core math functions
@@ -207,9 +206,6 @@ include("managers.jl")
 
 # code loading
 include("loading.jl")
-
-# Polling (requires multi.jl)
-include("poll.jl")
 
 # memory-mapped and shared arrays
 include("mmap.jl")
