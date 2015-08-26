@@ -238,9 +238,9 @@ function test_in_bounds(::Type{TestAbstractArray})
     dims = tuple(rand(2:5, n)...)
     len = prod(dims)
     for i in 1:len
-        @test Base.in_bounds(dims, i) == true
+        @test checkbounds(Bool, dims, i) == true
     end
-    @test Base.in_bounds(dims, len + 1) == false
+    @test checkbounds(Bool, dims, len + 1) == false
 end
 
 type UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
