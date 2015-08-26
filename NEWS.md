@@ -359,6 +359,16 @@ Library improvements
     * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
 
     * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
+    
+  * Pipe, Process, and Cmd simplications ([#12739])
+
+    * `pipe` has been renamed to `pipeline`
+
+    * `Process` now inherits from `IO`
+
+    * Create an uninitialized unnamed pipe by calling `Pipe()`. Initialize it by calling `link_pipe` or by passing it to `spawn`.
+
+    * the `Cmd` objects are now immutable
 
   * Other improvements
 
@@ -1595,3 +1605,4 @@ Too numerous to mention.
 [#12472]: https://github.com/JuliaLang/julia/issues/12472
 [#12491]: https://github.com/JuliaLang/julia/issues/12491
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
+[#12739]: https://github.com/JuliaLang/julia/issues/12739
