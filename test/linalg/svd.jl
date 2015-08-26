@@ -37,6 +37,13 @@ debug && println("singular value decomposition")
     b = rand(eltya,n)
     @test usv\b ≈ a\b
 
+    if eltya <: BlasFloat
+        svdz = svdfact!(ones(eltya,0,0))
+        @test svdz[:U] ≈ eye(eltya,0,0)
+        @test svdz[:S] ≈ real(zeros(eltya,0))
+        @test svdz[:Vt] ≈ eye(eltya,0,0)
+    end
+
 debug && println("Generalized svd")
     a_svd = a[1:n1, :]
     gsvd = svdfact(a,a_svd)
@@ -57,4 +64,11 @@ debug && println("Generalized svd")
     @test d2 ≈ gsvd[:D2]
     @test q ≈ gsvd[:Q]
     @test gsvd[:a].^2 + gsvd[:b].^2 ≈ ones(eltya,length(gsvd[:a]))
+
+    #testing the other layout for D1 & D2
+    b = rand(eltya,n,2*n)
+    c = rand(eltya,n,2*n)
+    gsvd = svdfact(b,c)
+    @test gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' ≈ b
+    @test gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' ≈ c
 end
