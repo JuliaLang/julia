@@ -119,7 +119,7 @@ include("show.jl")
 include("stream.jl")
 include("socket.jl")
 include("stat.jl")
-include("fs.jl")
+include("filesystem.jl")
 importall .FS
 include("process.jl")
 include("multimedia.jl")
