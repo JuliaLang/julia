@@ -80,11 +80,9 @@ end
 # examine all symbols in module and store those that are types
 function store_all_from(m::Module)
     for expr = names(m,true)
-        try
-            t = eval(m,expr)
+        if isdefined(m,expr)
+            t = getfield(m, expr)
             isa(t, Type) && store_type(string(expr), t)
-        #catch ex
-        #    println("Error adding ", string(expr), m, " (", ex, ")")
         end
     end
 end
