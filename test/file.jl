@@ -46,12 +46,12 @@ end
 @test !isdir(file)
 @test isfile(file)
 @test !islink(file)
-@test isreadable(file)
-@test iswritable(file)
+@test filemode(file) & 0o444 > 0 # readable
+@test filemode(file) & 0o222 > 0 # writable
 chmod(file, filemode(file) & 0o7555)
-@test !iswritable(file)
+@test filemode(file) & 0o222 == 0
 chmod(file, filemode(file) | 0o222)
-@test !isexecutable(file)
+@test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
@@ -840,7 +840,7 @@ close(f)
 test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
 # issue #10994: pathnames cannot contain embedded NUL chars
-for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isexecutable, isfifo, isfile, islink, ispath, isreadable, issetgid, issetuid, issocket, issticky, iswritable, realpath, watch_file, poll_file)
+for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid, issetuid, issocket, issticky, realpath, watch_file, poll_file)
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
