@@ -3427,7 +3427,7 @@ So far only the second case can actually occur.
          (case (car e)
            ((jlgensym) e)
            ((escape) (cadr e))
-           ((using import importall export) (map unescape e))
+           ((using import importall export meta) (map unescape e))
            ((macrocall)
         (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
             `(macrocall ,.(map (lambda (x)
