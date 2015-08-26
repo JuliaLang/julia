@@ -781,6 +781,8 @@ function precise_container_types(args, types, vtypes, sv)
             end
         elseif ti<:Tuple && (i==n || !isvatuple(ti))
             result[i] = ti.parameters
+        elseif ti<:AbstractArray && i==n
+            result[i] = Any[Vararg{eltype(ti)}]
         else
             return nothing
         end
@@ -801,28 +803,6 @@ function abstract_apply(af, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
             at = vcat(at[1:MAX_TUPLETYPE_LEN-1], Any[Vararg{tail}])
         end
         return abstract_call(af, (), at, vtypes, sv, ())
-    end
-    if is(af,tuple) && length(aargtypes)==1
-        # tuple(xs...)
-        aat = aargtypes[1]
-        if aat <: AbstractArray
-            # tuple(array...)
-            # TODO: > 1 array of the same type
-            tn = AbstractArray.name
-            while isa(aat, DataType)
-                if is(aat.name, tn)
-                    et = aat.parameters[1]
-                    if !isa(et,TypeVar)
-                        return Tuple{Vararg{et}}
-                    end
-                end
-                if is(aat, Any)
-                    break
-                end
-                aat = aat.super
-            end
-        end
-        return Tuple
     end
     is(af,kwcall) && return Any
     # apply known function with unknown args => f(Any...)
