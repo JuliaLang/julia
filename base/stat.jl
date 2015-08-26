@@ -116,8 +116,10 @@ islink(path...) = islink(lstat(path...))
 # samefile can be used for files and directories: #11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
 function samefile(a::AbstractString, b::AbstractString)
-    if ispath(a) && ispath(b)
-        samefile(stat(a),stat(b))
+    infoa = stat(a)
+    infob = stat(b)
+    if ispath(infoa) && ispath(infob)
+        samefile(infoa, infob)
     else
         return false
     end
