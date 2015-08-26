@@ -45,187 +45,116 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
-            _sizeof_uv_fs, uv_error, show
+            check_open, _sizeof_uv_fs, uv_error, show
 
 include("stat.jl")
 include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
+## Operations with File (fd) objects ##
+
 abstract AbstractFile <: IO
 
 type File <: AbstractFile
-    path::AbstractString
     open::Bool
-    handle::Int32
-    File(path::AbstractString) = new(path,false,-1)
-    File(fd::RawFD) = new("",true,fd.fd)
+    handle::RawFD
+    File(fd::RawFD) = new(true, fd)
 end
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
-uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
+uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
-_uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
-
-function open(f::File,flags::Integer,mode::Integer=0)
+function open(path::AbstractString, flags::Integer, mode::Integer=0) # FS.open, not Base.open
     req = Libc.malloc(_sizeof_uv_fs)
-    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Cstring,Int32,Int32,Ptr{Void}),
-                eventloop(), req, f.path, flags,mode, C_NULL)
-    f.handle = _uv_fs_result(req)
-    ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
-    Libc.free(req)
-    uv_error("open",ret)
-    f.open = true
-    f
+    local handle
+    try
+        ret = ccall(:uv_fs_open, Int32,
+                    (Ptr{Void}, Ptr{Void}, Cstring, Int32, Int32, Ptr{Void}),
+                    eventloop(), req, path, flags, mode, C_NULL)
+        handle = ccall(:jl_uv_fs_result, Int32, (Ptr{Void},), req)
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
+        uv_error("open", ret)
+    finally # conversion to Cstring could cause an exception
+        Libc.free(req)
+    end
+    return File(RawFD(handle))
 end
-open(f::AbstractString,flags,mode) = open(File(f),flags,mode)
-open(f::AbstractString,flags) = open(f,flags,0)
+
+isopen(f::File) = f.open
+function check_open(f::File)
+    if !isopen(f)
+        throw(ArgumentError("file is closed"))
+    end
+end
 
 function close(f::File)
-    if !f.open
-        throw(ArgumentError("file \"$(f.path)\" is already closed"))
-    end
+    check_open(f)
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
-    uv_error("close",err)
-    f.handle = -1
+    uv_error("close", err)
+    f.handle = RawFD(-1)
     f.open = false
-    f
+    return f
 end
 
-function unlink(p::AbstractString)
-    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
-    uv_error("unlink",err)
-end
-function unlink(f::File)
-    if isempty(f.path)
-      throw(ArgumentError("no path associated with this file"))
-    end
-    if f.open
-        close(f)
-    end
-    unlink(f.path)
-    f
-end
-
-# For move command
-function rename(src::AbstractString, dst::AbstractString)
-    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-    # on error, default to cp && rm
-    if err < 0
-        # remove_destination: is already done in the mv function
-        cp(src, dst; remove_destination=false, follow_symlinks=false)
-        rm(src; recursive=true)
-    end
-end
-
-# For copy command
-function sendfile(src::AbstractString, dst::AbstractString)
-    src_file = File(src)
-    dst_file = File(dst)
-    try
-        open(src_file, JL_O_RDONLY)
-        if !src_file.open
-            throw(ArgumentError("source file \"$(src.path)\" is not open"))
-        end
-
-        open(dst_file, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
-             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
-        if !dst_file.open
-            throw(ArgumentError("destination file \"$(dst.path)\" is not open"))
-        end
-
-        src_stat = stat(src_file)
-        err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
-                    fd(src_file), fd(dst_file), 0, src_stat.size)
-        uv_error("sendfile", err)
-    finally
-        if src_file.open
-            close(src_file)
-        end
-        if dst_file.open
-            close(dst_file)
-        end
-    end
-end
-
-@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
-function symlink(p::AbstractString, np::AbstractString)
-    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
-        error("Windows XP does not support soft symlinks")
-    end
-    flags = 0
-    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
-    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @windows_only if err < 0
-        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
-    end
-    uv_error("symlink",err)
-end
-
-function readlink(path::AbstractString)
-    req = Libc.malloc(_sizeof_uv_fs)
-    ret = ccall(:uv_fs_readlink, Int32,
-        (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
-        eventloop(), req, path, C_NULL)
-    uv_error("readlink", ret)
-    tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
-    ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
-    Libc.free(req)
-    tgt
-end
-
-function chmod(p::AbstractString, mode::Integer)
-    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), p, mode)
-    uv_error("chmod",err)
+# sendfile is the most efficient way to copy a file (or any file descriptor)
+function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
+    check_open(dst)
+    check_open(src)
+    err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
+                src.handle, dst.handle, src_offset, bytes)
+    uv_error("sendfile", err)
+    nothing
 end
 
 function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
-    if !f.open
-        throw(ArgumentError("file \"$(f.path)\" is not open"))
-    end
+    check_open(f)
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{UInt8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
-    uv_error("write",err)
-    len
+    uv_error("write", err)
+    return len
 end
 
-write(f::File, c::UInt8) = write(f,[c])
+write(f::File, c::UInt8) = write(f, UInt8[c])
 
 function write{T}(f::File, a::Array{T})
     if isbits(T)
-        write(f,pointer(a),length(a)*sizeof(eltype(a)))
+        write(f, pointer(a), sizeof(a))
     else
         invoke(write, Tuple{IO, Array}, f, a)
     end
 end
 
 function truncate(f::File, n::Integer)
-    req = Base.Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_ftruncate,Int32,(Ptr{Void},Ptr{Void},Int32,Int64,Ptr{Void}),
-                eventloop(),req,f.handle,n,C_NULL)
+    check_open(f)
+    req = Libc.malloc(_sizeof_uv_fs)
+    err = ccall(:uv_fs_ftruncate, Int32,
+                (Ptr{Void}, Ptr{Void}, Int32, Int64, Ptr{Void}),
+                eventloop(), req, f.handle, n, C_NULL)
     Libc.free(req)
     uv_error("ftruncate", err)
-    f
+    return f
 end
 
 function futime(f::File, atime::Float64, mtime::Float64)
-    req = Base.Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_futime,Int32,(Ptr{Void},Ptr{Void},Int32,Float64,Float64,Ptr{Void}),
-                eventloop(),req,f.handle,atime,mtime,C_NULL)
+    check_open(f)
+    req = Libc.malloc(_sizeof_uv_fs)
+    err = ccall(:uv_fs_futime, Int32,
+                (Ptr{Void}, Ptr{Void}, Int32, Float64, Float64, Ptr{Void}),
+                eventloop(), req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)
     uv_error("futime", err)
-    f
+    return f
 end
 
 function read(f::File, ::Type{UInt8})
-    if !f.open
-        throw(ArgumentError("file \"$(f.path)\" is not open"))
-    end
+    check_open(f)
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)
-    return ret%UInt8
+    return ret % UInt8
 end
 
 function read!(f::File, a::Vector{UInt8}, nel=length(a))
+    check_open(f)
     if nel < 0 || nel > length(a)
         throw(BoundsError())
     end
@@ -251,7 +180,7 @@ readbytes(io::File, nb) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 function readbytes(f::File)
     a = Array(UInt8, nb_available(f))
     read!(f,a)
-    a
+    return a
 end
 
 const SEEK_SET = Int32(0)
@@ -259,12 +188,96 @@ const SEEK_CUR = Int32(1)
 const SEEK_END = Int32(2)
 
 function position(f::File)
-    ret = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
+    check_open(f)
+    ret = ccall(:jl_lseek, Coff_t, (Int32, Coff_t, Int32), f.handle, 0, SEEK_CUR)
     systemerror("lseek", ret == -1)
-    ret
+    return ret
 end
 
-fd(f::File) = RawFD(f.handle)
-stat(f::File) = stat(fd(f))
+fd(f::File) = f.handle
+stat(f::File) = stat(f.handle)
+
+# Operations with the file system (paths) ##
+
+function unlink(p::AbstractString)
+    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
+    uv_error("unlink", err)
+    nothing
+end
+
+# For move command
+function rename(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
+    # on error, default to cp && rm
+    if err < 0
+        # remove_destination: is already done in the mv function
+        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        rm(src; recursive=true)
+    end
+    nothing
+end
+
+function sendfile(src::AbstractString, dst::AbstractString)
+    local src_open = false,
+          dst_open = false,
+          src_file,
+          dst_file
+    try
+        src_file = open(src, JL_O_RDONLY)
+        src_open = true
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
+             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
+        dst_open = true
+
+        bytes = filesize(stat(src_file))
+        sendfile(dst_file, src_file, Int64(0), Int(bytes))
+    finally
+        if src_open && isopen(src_file)
+            close(src_file)
+        end
+        if dst_open && isopen(dst_file)
+            close(dst_file)
+        end
+    end
+end
+
+@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
+function symlink(p::AbstractString, np::AbstractString)
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
+        error("Windows XP does not support soft symlinks")
+    end
+    flags = 0
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    @windows_only if err < 0
+        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    end
+    uv_error("symlink",err)
+end
+
+function readlink(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_readlink, Int32,
+            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+            eventloop(), req, path, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+            uv_error("readlink", ret)
+            assert(false)
+        end
+        tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+        return tgt
+    finally
+        Libc.free(req)
+    end
+end
+
+function chmod(p::AbstractString, mode::Integer)
+    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), p, mode)
+    uv_error("chmod",err)
+    nothing
+end
 
 end
