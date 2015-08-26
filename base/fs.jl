@@ -59,13 +59,6 @@ type File <: AbstractFile
     File(fd::RawFD) = new("",true,fd.fd)
 end
 
-type AsyncFile <: AbstractFile
-    path::AbstractString
-    open::Bool
-end
-
-isopen(f::Union{File,AsyncFile}) = f.open
-
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
 uvtype(::File) = Base.UV_RAW_FD
