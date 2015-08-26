@@ -66,9 +66,7 @@ type FileMonitor
     end
 end
 
-abstract UVPollingWatcher
-
-type PollingFileWatcher <: UVPollingWatcher
+type PollingFileWatcher
     handle::Ptr{Void}
     file::ByteString
     interval::UInt32
@@ -164,7 +162,7 @@ type _FDWatcher
         end
     end
 end
-type FDWatcher <: UVPollingWatcher
+type FDWatcher
     watcher::_FDWatcher
     readable::Bool
     writable::Bool
