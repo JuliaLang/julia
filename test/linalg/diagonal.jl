@@ -40,19 +40,20 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
         b = rand(elty,n,n)
         b = sparse(b)
-        @test_approx_eq A_ldiv_B!(D,copy(b)) full(D)\full(b)
+        @test A_ldiv_B!(D,copy(b)) ≈ full(D)\full(b)
         @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),copy(b))
-        b = [elty[one(elty)] for i in 1:n]
-        c = A_ldiv_B!(D,copy(b))
-        e = full(D)\b
+        b = sub(rand(elty,n),collect(1:n))
+        b2 = copy(b)
+        c = A_ldiv_B!(D,b)
+        d = full(D)\b2
         for i in 1:n
-            @test_approx_eq c[i] e[i]
+            @test c[i] ≈ d[i]
         end
         @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),b)
         b = rand(elty,n+1,n+1)
         b = sparse(b)
         @test_throws DimensionMismatch A_ldiv_B!(D,copy(b))
-        b = [elty[one(elty)] for i in 1:n+1]
+        b = sub(rand(elty,n+1),collect(1:n+1))
         @test_throws DimensionMismatch A_ldiv_B!(D,b)
     end
 
@@ -68,6 +69,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         for func in (expm,)
             @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
         end
+        @test_approx_eq_eps logm(abs(D)) logm(abs(DM)) n^3*eps(relty)
     end
     if elty <: BlasComplex
         for func in (logdet, sqrtm)
@@ -80,24 +82,24 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     D2 = Diagonal(d)
     DM2= diagm(d)
     for op in (+, -, *)
-        @test_approx_eq full(op(D, D2)) op(DM, DM2)
+        @test full(op(D, D2)) ≈ op(DM, DM2)
     end
     # binary ops with plain numbers
     a = rand()
-    @test_approx_eq full(a*D) a*DM
-    @test_approx_eq full(D*a) DM*a
-    @test_approx_eq full(D/a) DM/a
+    @test full(a*D) ≈ a*DM
+    @test full(D*a) ≈ DM*a
+    @test full(D/a) ≈ DM/a
     if relty <: BlasFloat
         b = rand(elty,n,n)
         b = sparse(b)
-        @test_approx_eq A_mul_B!(copy(D), copy(b)) full(D)*full(b)
-        @test_approx_eq At_mul_B!(copy(D), copy(b)) full(D).'*full(b)
-        @test_approx_eq Ac_mul_B!(copy(D), copy(b)) full(D)'*full(b)
+        @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
+        @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
+        @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
     end
 
     #division of two Diagonals
-    @test_approx_eq D/D2 Diagonal(D.diag./D2.diag)
-    @test_approx_eq D\D2 Diagonal(D2.diag./D.diag)
+    @test D/D2 ≈ Diagonal(D.diag./D2.diag)
+    @test D\D2 ≈ Diagonal(D2.diag./D.diag)
     # test triu/tril
     @test istriu(D)
     @test istril(D)
@@ -115,30 +117,30 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     debug && println("Eigensystem")
     eigD = eigfact(D)
-    @test_approx_eq Diagonal(eigD[:values]) D
+    @test Diagonal(eigD[:values]) ≈ D
     @test eigD[:vectors] == eye(D)
 
     debug && println("ldiv")
     v = rand(n + 1)
     @test_throws DimensionMismatch D\v
     v = rand(n)
-    @test_approx_eq D\v DM\v
+    @test D\v ≈ DM\v
     V = rand(n + 1, n)
     @test_throws DimensionMismatch D\V
     V = rand(n, n)
-    @test_approx_eq D\V DM\V
+    @test D\V ≈ DM\V
 
     debug && println("conj and transpose")
     @test transpose(D) == D
     if elty <: BlasComplex
-        @test_approx_eq full(conj(D)) conj(DM)
+        @test full(conj(D)) ≈ conj(DM)
         @test ctranspose(D) == conj(D)
     end
 
     #logdet
     if relty <: Real
         ld=convert(Vector{relty},rand(n))
-        @test_approx_eq logdet(Diagonal(ld)) logdet(diagm(ld))
+        @test logdet(Diagonal(ld)) ≈ logdet(diagm(ld))
     end
 
     #similar
@@ -205,6 +207,6 @@ end
 
 # inv
 let d = randn(n), D = Diagonal(d)
-    @test_approx_eq inv(D) inv(full(D))
+    @test inv(D) ≈ inv(full(D))
 end
 @test_throws SingularException inv(Diagonal(zeros(n)))
