@@ -98,7 +98,7 @@ function parse1(s::AbstractString, k::Integer)
     while c in "#0- + '"
         c, k = next_or_die(s,k)
     end
-    flags = ascii(s[j:k-2])
+    flags = utf8(s[j:k-2])
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
@@ -135,7 +135,7 @@ end
 
 ### printf formatter generation ###
 
-function special_handler(flags::ASCIIString, width::Int)
+function special_handler(flags::UTF8String, width::Int)
     @gensym x
     blk = Expr(:block)
     pad = '-' in flags ? rpad : lpad
@@ -240,7 +240,7 @@ function print_exp_a(out, exp::Integer)
 end
 
 
-function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_d(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print integer:
     #  [dDiu]: print decimal digits
     #  [o]:    print octal digits
@@ -321,7 +321,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_f(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print to fixed trailing precision
     #  [fF]: the only choice
     #
@@ -383,7 +383,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char, inside_g::Bool=false)
+function gen_e(flags::UTF8String, width::Int, precision::Int, c::Char, inside_g::Bool=false)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
     #  [E]: use 'E' to introduce exponent
@@ -495,7 +495,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char, inside_g
     :(($x)::Real), ex
 end
 
-function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_a(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print float in hexadecimal format
     #  [a]: lowercase hex float, e.g. -0x1.cfp-2
     #  [A]: uppercase hex float, e.g. -0X1.CFP-2
@@ -603,7 +603,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_c(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print a character:
     #  [cC]: both the same for us (Unicode)
     #
@@ -624,7 +624,7 @@ function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Integer), blk
 end
 
-function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_s(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
@@ -659,7 +659,7 @@ end
 
 # TODO: faster pointer printing.
 
-function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_p(flags::UTF8String, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
     #
@@ -679,7 +679,7 @@ function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
-function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_g(flags::UTF8String, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,length(DIGITS)-1)
@@ -768,17 +768,17 @@ macro handle_zero(ex)
     end
 end
 
-decode_oct(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_oct(d))
-decode_0ct(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_0ct(d))
-decode_dec(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_dec(d))
-decode_hex(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_hex(d))
-decode_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
-fix_dec(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
-ini_dec(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
-ini_hex(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_hex(d, ndigits))
-ini_HEX(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_HEX(d, ndigits))
-ini_hex(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_hex(d))
-ini_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_HEX(d))
+decode_oct(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, decode_oct(d))
+decode_0ct(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, decode_0ct(d))
+decode_dec(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, decode_dec(d))
+decode_hex(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, decode_hex(d))
+decode_HEX(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
+fix_dec(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
+ini_dec(out, d, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
+ini_hex(out, d, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, ini_hex(d, ndigits))
+ini_HEX(out, d, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, ini_HEX(d, ndigits))
+ini_hex(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, ini_hex(d))
+ini_HEX(out, d, flags::UTF8String, width::Int, precision::Int, c::Char) = (true, ini_HEX(d))
 
 
 # fallbacks for Real types without explicit decode_* implementation
@@ -1060,13 +1060,13 @@ end
 
 
 #BigFloat
-fix_dec(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_dec(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_hex(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_HEX(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_hex(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_HEX(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char)
+fix_dec(out, d::BigFloat, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_dec(out, d::BigFloat, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_hex(out, d::BigFloat, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_HEX(out, d::BigFloat, ndigits::Int, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_hex(out, d::BigFloat, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_HEX(out, d::BigFloat, flags::UTF8String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+function bigfloat_printf(out, d, flags::UTF8String, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)

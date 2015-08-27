@@ -26,7 +26,7 @@ function init_sysinfo()
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
     global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global const cpu_name = ccall(:jl_get_cpu_name, Any, ())::ByteString
+    global const cpu_name = ccall(:jl_get_cpu_name, Any, ())::UTF8String
 end
 
 type UV_cpu_info_t
@@ -39,7 +39,7 @@ type UV_cpu_info_t
     cpu_times!irq::UInt64
 end
 type CPUinfo
-    model::ASCIIString
+    model::UTF8String
     speed::Int32
     cpu_times!user::UInt64
     cpu_times!nice::UInt64

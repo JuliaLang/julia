@@ -97,7 +97,7 @@ function available(pkg::AbstractString)
 end
 
 function installed()
-    pkgs = Dict{ASCIIString,VersionNumber}()
+    pkgs = Dict{UTF8String,VersionNumber}()
     for (pkg,(ver,fix)) in Read.installed()
         pkgs[pkg] = ver
     end
@@ -347,7 +347,7 @@ function publish(branch::AbstractString)
     ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     ahead_local == 0 && error("There are no METADATA changes to publish")
 
-    tags = Dict{ByteString,Vector{ASCIIString}}()
+    tags = Dict{UTF8String,Vector{UTF8String}}()
     Git.run(`update-index -q --really-refresh`, dir="METADATA")
     cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
@@ -362,7 +362,7 @@ function publish(branch::AbstractString)
         end
         any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
             ver == convert(VersionNumber,tag) || return false
-            haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
+            haskey(tags,pkg) || (tags[pkg] = UTF8String[])
             push!(tags[pkg], tag)
             return true
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
@@ -372,8 +372,8 @@ function publish(branch::AbstractString)
     check_metadata(Set(keys(tags)))
     @sync for pkg in sort!(collect(keys(tags)))
         @async begin
-            forced = ASCIIString[]
-            unforced = ASCIIString[]
+            forced = UTF8String[]
+            unforced = UTF8String[]
             for tag in tags[pkg]
                 ver = convert(VersionNumber,tag)
                 push!(isrewritable(ver) ? forced : unforced, tag)
@@ -428,7 +428,7 @@ function resolve(
     # prefetch phase isolates network activity, nothing to roll back
     missing = []
     for (pkg,(ver1,ver2)) in changes
-        vers = ASCIIString[]
+        vers = UTF8String[]
         ver1 !== nothing && push!(vers,Git.head(dir=pkg))
         ver2 !== nothing && push!(vers,Read.sha1(pkg,ver2))
         append!(missing,
@@ -618,7 +618,7 @@ function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=
     end
 end
 
-function check_metadata(pkgs::Set{ByteString} = Set{ByteString}())
+function check_metadata{T<:ByteString}(pkgs::Set{T} = Set{UTF8String}())
     avail = Read.available()
     deps, conflicts = Query.dependencies(avail)
 

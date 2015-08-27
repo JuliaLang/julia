@@ -212,7 +212,7 @@ replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
 
 # hex <-> bytes conversion
 
-function hex2bytes(s::ASCIIString)
+function hex2bytes(s::ByteString)
     len = length(s)
     iseven(len) || throw(ArgumentError("string length must be even: length($(repr(s))) == $len"))
     arr = zeros(UInt8, div(len,2))
@@ -233,6 +233,6 @@ function hex2bytes(s::ASCIIString)
     end
     return arr
 end
-hex2bytes(s::AbstractString) = hex2bytes(ascii(s))
+hex2bytes(s::AbstractString) = hex2bytes(utf8(s))
 
 bytes2hex{T<:UInt8}(arr::Vector{T}) = join([hex(i,2) for i in arr])

@@ -15,13 +15,13 @@ bytestring(s::Vector{UInt8}) = bytestring(pointer(s),length(s))
 
 function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
-    ccall(:jl_cstr_to_string, Any, (Ptr{UInt8},), p)::ByteString
+    ccall(:jl_cstr_to_string, Any, (Ptr{UInt8},), p)::UTF8String
 end
 bytestring(s::Cstring) = bytestring(convert(Ptr{UInt8}, s))
 
 function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}},len::Integer)
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
-    ccall(:jl_pchar_to_string, Any, (Ptr{UInt8},Int), p, len)::ByteString
+    ccall(:jl_pchar_to_string, Any, (Ptr{UInt8},Int), p, len)::UTF8String
 end
 
 convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data

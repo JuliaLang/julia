@@ -243,7 +243,7 @@ function readdir(path::AbstractString)
     # The list of dir entries is returned as a contiguous sequence of null-terminated
     # strings, the first of which is pointed to by ptr in uv_readdir_req.
     # The following lines extracts those strings into dirent
-    entries = ByteString[]
+    entries = UTF8String[]
     offset = 0
 
     for i = 1:file_count

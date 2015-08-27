@@ -3,12 +3,12 @@
 abstract AbstractCmd
 
 immutable Cmd <: AbstractCmd
-    exec::Vector{ByteString}
+    exec::Vector{UTF8String}
     ignorestatus::Bool
     detach::Bool
-    env::Union{Array{ByteString},Void}
+    env::Union{Vector{UTF8String},Void}
     dir::UTF8String
-    Cmd(exec::Vector{ByteString}) =
+    Cmd(exec::Vector{UTF8String}) =
         new(exec, false, false, nothing, "")
     Cmd(cmd::Cmd, ignorestatus, detach, env, dir) =
         new(cmd.exec, ignorestatus, detach, env,
@@ -152,15 +152,15 @@ function cstr(s)
 end
 
 function setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="")
-    byteenv = ByteString[cstr(x) for x in env]
+    byteenv = UTF8String[cstr(x) for x in env]
     return Cmd(cmd; env = byteenv, dir = dir)
 end
 function setenv(cmd::Cmd, env::Associative; dir="")
-    byteenv = ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]
+    byteenv = UTF8String[cstr(string(k)*"="*string(v)) for (k,v) in env]
     return Cmd(cmd; env = byteenv, dir = dir)
 end
 function setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="")
-    byteenv = ByteString[cstr(k*"="*string(v)) for (k,v) in env]
+    byteenv = UTF8String[cstr(k*"="*string(v)) for (k,v) in env]
     return Cmd(cmd; env = byteenv, dir = dir)
 end
 function setenv(cmd::Cmd; dir="")
@@ -441,7 +441,7 @@ end
 #   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
 #   | - An FS.File object to redirect the output to
-#   \ - An ASCIIString specifying a filename to be opened
+#   \ - A string specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
     (stdios,exitcb,closecb)
@@ -614,26 +614,26 @@ end
 
 ## implementation of `cmd` syntax ##
 
-arg_gen()          = ByteString[]
-arg_gen(x::AbstractString) = ByteString[cstr(x)]
-arg_gen(cmd::Cmd)  = cmd.exec
+arg_gen() = UTF8String[]
+arg_gen(x::AbstractString) = UTF8String[cstr(x)]
+arg_gen(cmd::Cmd) = cmd.exec
 
 function arg_gen(head)
     if applicable(start, head)
-        vals = ByteString[]
+        vals = UTF8String[]
         for x in head
             push!(vals, cstr(string(x)))
         end
         return vals
     else
-        return ByteString[cstr(string(head))]
+        return UTF8String[cstr(string(head))]
     end
 end
 
 function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
-    vals = ByteString[]
+    vals = UTF8String[]
     for h = head, t = tail
         push!(vals, cstr(bytestring(h, t)))
     end
@@ -641,7 +641,7 @@ function arg_gen(head, tail...)
 end
 
 function cmd_gen(parsed)
-    args = ByteString[]
+    args = UTF8String[]
     for arg in parsed
         append!(args, arg_gen(arg...))
     end

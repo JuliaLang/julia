@@ -318,8 +318,8 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-const LOAD_PATH = ByteString[]
-const LOAD_CACHE_PATH = ByteString[]
+const LOAD_PATH = UTF8String[]
+const LOAD_CACHE_PATH = UTF8String[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")

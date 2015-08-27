@@ -120,7 +120,7 @@ end
 const package_locks = Dict{Symbol,Condition}()
 
 # used to optionally track dependencies when requiring a module:
-const _require_dependencies = Tuple{ByteString,Float64}[]
+const _require_dependencies = Tuple{UTF8String,Float64}[]
 const _track_dependencies = [false]
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
@@ -391,7 +391,7 @@ isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_deserialize_verify_header, Ci
 
 function cache_dependencies(f::IO)
     modules = Tuple{Symbol,UInt64}[]
-    files = Tuple{ByteString,Float64}[]
+    files = Tuple{UTF8String,Float64}[]
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break

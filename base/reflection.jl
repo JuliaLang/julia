@@ -212,10 +212,10 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     end
 
     if (native)
-        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},Cint), llvmf, 0)::ByteString
+        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void}, Cint), llvmf, 0)::UTF8String
     else
         str = ccall(:jl_dump_function_ir, Any,
-                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)::ByteString
+                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)::UTF8String
     end
 
     return str

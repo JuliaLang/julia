@@ -6,7 +6,7 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
     dlpath, find_library, dlext, dllist
 
-const DL_LOAD_PATH = ByteString[]
+const DL_LOAD_PATH = UTF8String[]
 @osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
 @osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
 
@@ -49,7 +49,7 @@ function dlclose(p::Ptr)
     end
 end
 
-function find_library(libnames::Vector, extrapaths::Vector=ASCIIString[])
+function find_library(libnames::Vector, extrapaths::Vector=UTF8String[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)

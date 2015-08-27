@@ -54,7 +54,7 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
     a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
               (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+    ccall(:jl_array_to_string, Any, (Any,), a)::UTF8String
 end
 pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
     pointer_to_string(p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)

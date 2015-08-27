@@ -11,7 +11,7 @@ using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+function resolve{T<:ByteString}(reqs::Requires, deps::Dict{T,Dict{VersionNumber,Available}})
 
     # init interface structures
     interface = Interface(reqs, deps)
@@ -49,13 +49,13 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString} = Set{ByteString}())
+function sanity_check{T<:ByteString}(deps::Dict{T,Dict{VersionNumber,Available}}, pkgs::Set{T} = Set{T}())
 
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
     deps, eq_classes = Query.prune_versions(deps)
 
-    ndeps = Dict{ByteString,Dict{VersionNumber,Int}}()
+    ndeps = Dict{UTF8String,Dict{VersionNumber,Int}}()
 
     for (p,depsp) in deps
         ndeps[p] = ndepsp = Dict{VersionNumber,Int}()
@@ -64,7 +64,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
         end
     end
 
-    vers = Array(Tuple{ByteString,VersionNumber,VersionNumber}, 0)
+    vers = Array(Tuple{UTF8String,VersionNumber,VersionNumber}, 0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
         nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
@@ -74,11 +74,11 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
 
     nv = length(vers)
 
-    svdict = (Tuple{ByteString,VersionNumber}=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
+    svdict = (Tuple{UTF8String,VersionNumber}=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
 
     checked = falses(nv)
 
-    problematic = Array(Tuple{ByteString,VersionNumber,ByteString},0)
+    problematic = Array(Tuple{UTF8String,VersionNumber,UTF8String},0)
     i = 1
     psl = 0
     for (p,vn,nvn) in vers
@@ -90,7 +90,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
             continue
         end
 
-        sub_reqs = Dict{ByteString,VersionSet}(p=>VersionSet([vn, nvn]))
+        sub_reqs = Dict{UTF8String,VersionSet}(p=>VersionSet([vn, nvn]))
         sub_deps = Query.filter_dependencies(sub_reqs, deps)
         interface = Interface(sub_reqs, sub_deps)
 

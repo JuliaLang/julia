@@ -8,7 +8,7 @@ const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 type Regex
-    pattern::ByteString
+    pattern::UTF8String
     compile_options::UInt32
     match_options::UInt32
     regex::Ptr{Void}
