@@ -236,9 +236,14 @@ include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")
 
 function __init__()
-    Base.check_blas()
-    if Base.blas_vendor() == :mkl
-        ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+    try
+        Base.check_blas()
+        if Base.blas_vendor() == :mkl
+            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+        end
+    catch ex
+        Base.showerror_nostdio(ex,
+            "WARNING: Error during initialization of module LinAlg")
     end
 end
 

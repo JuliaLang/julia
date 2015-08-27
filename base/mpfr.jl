@@ -30,9 +30,14 @@ import Base.GMP: ClongMax, CulongMax, CdoubleMax
 import Base.Math.lgamma_r
 
 function __init__()
-    # set exponent to full range by default
-    set_emin!(get_emin_min())
-    set_emax!(get_emax_max())
+    try
+        # set exponent to full range by default
+        set_emin!(get_emin_min())
+        set_emax!(get_emax_max())
+    catch ex
+        Base.showerror_nostdio(ex,
+            "WARNING: Error during initialization of module MPFR")
+    end
 end
 
 const ROUNDING_MODE = Cint[0]
