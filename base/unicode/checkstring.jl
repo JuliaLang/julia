@@ -31,22 +31,27 @@ Validates and calculates number of characters in a UTF-8,UTF-16 or UTF-32 encode
 Warning: this function does not check the bounds of the start or end positions
 Use `checkstring` to make sure the bounds are checked
 
-### Input Arguments:
+Input Arguments:
+
 * `dat`    UTF-8 (`Vector{UInt8}`), UTF-16 (`Vector{UInt16}`) or UTF-32 (`Vector{UInt32}`, `AbstractString`) encoded string
 
-### Optional Input Arguments:
+Optional Input Arguments:
+
 * `pos`    start position (defaults to `start(dat)`)
 * `endpos` end position   (defaults to `endof(dat)`)
 
-### Keyword Arguments:
+Keyword Arguments:
+
 * `accept_long_null`  = `true`  # Modified UTF-8 (`\\0` represented as `b\"\\xc0\\x80\"`)
 * `accept_surrogates` = `true`  # `CESU-8`
 * `accept_long_char`  = `false` # Accept arbitrary long encodings
 
-### Returns:
+Returns:
+
 * (total characters, flags, 4-byte, 3-byte, 2-byte)
 
-### Throws:
+Throws:
+
 * `UnicodeError`
 """
 function unsafe_checkstring end
@@ -199,22 +204,27 @@ Validates and calculates number of characters in a UTF-8,UTF-16 or UTF-32 encode
 This function checks the bounds of the start and end positions
 Use `unsafe_checkstring` to avoid that overhead if the bounds have already been checked
 
-### Input Arguments:
+Input Arguments:
+
 * `dat`    UTF-8 (`Vector{UInt8}`), UTF-16 (`Vector{UInt16}`) or UTF-32 (`Vector{UInt32}`, `AbstractString`) encoded string
 
-### Optional Input Arguments:
+Optional Input Arguments:
+
 * `startpos` start position (defaults to `start(dat)`)
 * `endpos`   end position   (defaults to `endof(dat)`)
 
-### Keyword Arguments:
+Keyword Arguments:
+
 * `accept_long_null`  = `true`  # Modified UTF-8 (`\\0` represented as `b\"\\xc0\\x80\"`)
 * `accept_surrogates` = `true`  # `CESU-8`
 * `accept_long_char`  = `false` # Accept arbitrary long encodings
 
-### Returns:
+Returns:
+
 * (total characters, flags, 4-byte, 3-byte, 2-byte)
 
-### Throws:
+Throws:
+
 * `UnicodeError`
 """
 function checkstring end

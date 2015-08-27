@@ -605,126 +605,90 @@ All Objects
    Converts a ``UTF32String`` to ``UTF16String``
 
    Returns:
-   --------
 
-
-     *   ``::UTF16String``
+     *   ``UTF16String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a ``UTF16String`` to ``UTF32String``
 
    Returns:
-   --------
 
-
-     *   ``::UTF32String``
+     *   ``UTF32String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a ``UTF8String`` to a ``UTF32String``
 
    Returns:
-   --------
-
 
      *   ``::UTF32String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a ``UTF32String`` to a ``UTF8String``
 
    Returns:
-   --------
-
 
      *   ``UTF8String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts an ``AbstractString`` to a ``UTF32String``
 
    Returns:
-   --------
-
 
      *   ``UTF32String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a ``UTF16String`` to a ``UTF8String``
 
    Returns:
-   --------
-
 
      *   ``UTF8String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a ``UTF8String`` to a ``UTF16String``
 
    Returns:
-   --------
-
 
      *   ``UTF16String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts an ``AbstractString`` to a ``UTF16String``
 
    Returns:
-   --------
-
 
      *   ``UTF16String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
    Converts a UTF-8 encoded vector of ``UInt8`` to a ``UTF8String``
 
    Returns:
-   --------
-
 
      *   ``UTF8String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 

@@ -104,10 +104,12 @@ end
 """
 Converts an `AbstractString` to a `UTF16String`
 
-### Returns:
+Returns:
+
 *   `UTF16String`
 
-### Throws:
+Throws:
+
 *   `UnicodeError`
 """
 function convert(::Type{UTF16String}, str::AbstractString)
@@ -131,10 +133,12 @@ end
 """
 Converts a `UTF8String` to a `UTF16String`
 
-### Returns:
+Returns:
+
 *   `UTF16String`
 
-### Throws:
+Throws:
+
 *   `UnicodeError`
 """
 function convert(::Type{UTF16String}, str::UTF8String)
@@ -177,10 +181,12 @@ end
 """
 Converts a `UTF16String` to a `UTF8String`
 
-### Returns:
+Returns:
+
 *   `UTF8String`
 
-### Throws:
+Throws:
+
 *   `UnicodeError`
 """
 function convert(::Type{UTF8String}, str::UTF16String)
@@ -197,12 +203,14 @@ end
 """
 Converts an already validated UTF-32 encoded vector of `UInt32` to a `UTF16String`
 
-### Input Arguments:
-*   `dat::Vector{UInt32}` UTF-32 encoded data
-*   `len`                 length of output in 16-bit words
+Input Arguments:
 
-### Returns:
-*   `::UTF16String`
+*   `dat` `Vector{UInt32}` of UTF-32 encoded data
+*   `len` length of output in 16-bit words
+
+Returns:
+
+*   `UTF16String`
 """
 function encode_to_utf16(dat, len)
     buf = Vector{UInt16}(len)
