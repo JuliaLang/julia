@@ -346,7 +346,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         char *p = *stack_p;
         size_t osize;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
-        if (!tag || gc_marked(tag) || osize <= sizeof_jl_taggedvalue_t)
+        if (osize <= sizeof_jl_taggedvalue_t || !tag || gc_marked(tag))
             continue;
         gcpage_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
