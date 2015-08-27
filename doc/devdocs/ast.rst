@@ -5,6 +5,7 @@ Julia ASTs
 .. currentmodule:: Base
 
 
+
 Julia has two AST representations. First there is a surface syntax AST returned
 by the parser (e.g. the :func:`parse` function), and manipulated by macros.
 It is a structured representation of code as it is written,
@@ -232,7 +233,7 @@ head ``call``.
 However some operators are special forms (not necessarily function calls),
 and in those cases the operator itself is the expression head.
 In julia-parser.scm these are referred to as "syntactic operators".
-Some operators (+ and *) use N-ary parsing; chained calls are parsed as
+Some operators (``+`` and ``*``) use N-ary parsing; chained calls are parsed as
 a single N-argument call.
 Finally, chains of comparisons have their own special expression structure.
 
