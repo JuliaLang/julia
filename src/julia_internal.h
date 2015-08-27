@@ -178,7 +178,7 @@ DLLEXPORT void attach_exception_port(void);
 #endif
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlined_file, size_t *inlined_line,
+                        char **inlinedat_file, size_t *inlinedat_line,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL

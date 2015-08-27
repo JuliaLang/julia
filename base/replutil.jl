@@ -339,15 +339,16 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
 end
 
-function show_trace_entry(io, fname, file, line, inlinedfile, inlinedline, n)
-    print(io, "\n")
-    print(io, " in ", fname)
-
-    if (inlinedfile != symbol(""))
-        print(io, " at ", inlinedfile, ":", inlinedline)
-        print(io, " \n    [ thrown by inlined function defined at ]\n    ")
+function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n)
+    # if we have inlining information, we print the `file`:`line` first,
+    # then show the inlining info, because the inlining location
+    # corresponds to `fname`.
+    if (inlinedat_file != symbol(""))
+        # align the location text
+        print(io, "\n")
+        print(io, " [inlined code] from ")
     else
-        print(io, " at ")
+        print(io, " in ", fname, " at ")
     end
 
     print(io, file)
@@ -362,6 +363,11 @@ function show_trace_entry(io, fname, file, line, inlinedfile, inlinedline, n)
 
     if n > 1
         print(io, " (repeats ", n, " times)")
+    end
+
+    if (inlinedat_file != symbol(""))
+        print(io, "\n in ", fname, " at ")
+        print(io, inlinedat_file, ":", inlinedat_line, "\n")
     end
 end
 
@@ -378,8 +384,8 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
 end
 
 function show_backtrace(io::IO, top_function::Symbol, t, set)
-    process_entry(lastname, lastfile, lastline, last_inlinedfile, last_inlinedline, n) =
-        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedfile, last_inlinedline, n)
+    process_entry(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n) =
+        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
     process_backtrace(process_entry, top_function, t, set)
 end
 
@@ -387,7 +393,7 @@ end
 function process_backtrace(process_func::Function, top_function::Symbol, t, set)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#");
-    last_inlinedfile = ""; last_inlinedline = -1
+    last_inlinedat_file = ""; last_inlinedat_line = -1
     local fname, file, line
     count = 0
     for i = 1:length(t)
@@ -395,7 +401,7 @@ function process_backtrace(process_func::Function, top_function::Symbol, t, set)
         if lkup === nothing
             continue
         end
-        fname, file, line, inlinedfile, inlinedline, fromC = lkup
+        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
 
         if fromC; continue; end
         if i == 1 && fname == :error; continue; end
@@ -405,16 +411,16 @@ function process_backtrace(process_func::Function, top_function::Symbol, t, set)
 
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
-                process_func(lastname, lastfile, lastline, last_inlinedfile, last_inlinedline, n)
+                process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
             end
             n = 1
             lastfile = file; lastline = line; lastname = fname;
-            last_inlinedfile = inlinedfile; last_inlinedline = inlinedline;
+            last_inlinedat_file = inlinedat_file; last_inlinedat_line = inlinedat_line;
         else
             n += 1
         end
     end
     if n > 1 || lastline != -11
-        process_func(lastname, lastfile, lastline, last_inlinedfile, last_inlinedline, n)
+        process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
     end
 end

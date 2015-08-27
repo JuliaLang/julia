@@ -470,13 +470,13 @@ size_t bt_size = 0;
 // Always Set *func_name and *file_name to malloc'd pointers (non-NULL)
 static int frame_info_from_ip(char **func_name,
                               char **file_name, size_t *line_num,
-                              char **inlined_file, size_t *inlined_line,
+                              char **inlinedat_file, size_t *inlinedat_line,
                               size_t ip, int skipC, int skipInline)
 {
     static const char *name_unknown = "???";
     int fromC = 0;
 
-    jl_getFunctionInfo(func_name, file_name, line_num, inlined_file, inlined_line, ip, &fromC,
+    jl_getFunctionInfo(func_name, file_name, line_num, inlinedat_file, inlinedat_line, ip, &fromC,
                        skipC, skipInline);
     if (!*func_name) {
         *func_name = strdup(name_unknown);
@@ -710,22 +710,22 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     char *func_name;
     size_t line_num;
     char *file_name;
-    size_t inlined_line;
-    char *inlined_file;
+    size_t inlinedat_line;
+    char *inlinedat_file;
     int fromC = frame_info_from_ip(&func_name, &file_name, &line_num,
-                                   &inlined_file, &inlined_line, (size_t)ip, skipC, 0);
+                                   &inlinedat_file, &inlinedat_line, (size_t)ip, skipC, 0);
     jl_value_t *r = (jl_value_t*)jl_alloc_svec(7);
     JL_GC_PUSH1(&r);
     jl_svecset(r, 0, jl_symbol(func_name));
     jl_svecset(r, 1, jl_symbol(file_name));
     jl_svecset(r, 2, jl_box_long(line_num));
-    jl_svecset(r, 3, jl_symbol(inlined_file ? inlined_file : ""));
-    jl_svecset(r, 4, jl_box_long(inlined_file ? inlined_line : -1));
+    jl_svecset(r, 3, jl_symbol(inlinedat_file ? inlinedat_file : ""));
+    jl_svecset(r, 4, jl_box_long(inlinedat_file ? inlinedat_line : -1));
     jl_svecset(r, 5, jl_box_bool(fromC));
     jl_svecset(r, 6, jl_box_long((intptr_t)ip));
     free(func_name);
     free(file_name);
-    free(inlined_file);
+    free(inlinedat_file);
     JL_GC_POP();
     return r;
 }
@@ -751,9 +751,9 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     char *func_name;
     size_t line_num;
     char *file_name;
-    size_t inlined_line;
-    char *inlined_file;
-    frame_info_from_ip(&func_name, &file_name, &line_num, &inlined_file, &inlined_line, ip,
+    size_t inlinedat_line;
+    char *inlinedat_file;
+    frame_info_from_ip(&func_name, &file_name, &line_num, &inlinedat_file, &inlinedat_line, ip,
                       /* skipC */ 0, /* skipInline */ 1);
     if (line_num == ip) {
         jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
@@ -767,7 +767,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     }
     free(func_name);
     free(file_name);
-    free(inlined_file);
+    free(inlinedat_file);
 }
 
 DLLEXPORT void jlbacktrace()
