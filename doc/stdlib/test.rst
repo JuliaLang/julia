@@ -12,6 +12,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
 .. currentmodule:: Base
 
+
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
    .. Docstring generated from Julia source

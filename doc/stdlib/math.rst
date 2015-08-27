@@ -1,5 +1,6 @@
 .. currentmodule:: Base
 
+
 *************
  Mathematics
 *************
@@ -61,7 +62,6 @@ Mathematical Operators
    ::
 
               *(A, B)
-   :noindex:
 
    Matrix multiplication
 
@@ -78,7 +78,6 @@ Mathematical Operators
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
-   .. doctest::
 
 .. _/:
 .. function:: /(x, y)
@@ -3408,6 +3407,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 The following functions are defined within the ``Base.FFTW`` module.
 
 .. currentmodule:: Base.FFTW
+
 
 .. function:: r2r(A, kind [, dims])
 

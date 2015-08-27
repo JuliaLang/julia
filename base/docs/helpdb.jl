@@ -4308,9 +4308,9 @@ This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4
 
            addprocs() -> List of process identifiers
 
- Equivalent to ``addprocs(CPU_CORES)``
+Equivalent to ``addprocs(CPU_CORES)``
 
- Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 ::
@@ -4359,12 +4359,10 @@ the number of seconds a newly launched worker waits for connection establishment
 
 Launches worker processes via the specified cluster manager.
 
-For example Beowulf clusters are  supported via a custom cluster manager implemented
-in  package ``ClusterManagers``.
+For example Beowulf clusters are  supported via a custom cluster manager implemented in package ``ClusterManagers``.
 
 The number of seconds a newly launched worker waits for connection establishment from the master can be
-specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when
-using TCP/IP as transport.
+specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 ```
 """
 addprocs
@@ -9107,7 +9105,6 @@ doc"""
 ::
 
            *(A, B)
-:noindex:
 
 Matrix multiplication
 
@@ -9124,7 +9121,6 @@ Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i
 
 Concatenate strings. The ``*`` operator is an alias to this function.
 
-.. doctest::
 ```
 """
 Base.(:(*))

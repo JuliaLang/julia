@@ -2,6 +2,7 @@
 
 .. currentmodule:: Base
 
+
 **************************************************
  Mathematical Operations and Elementary Functions
 **************************************************

@@ -1,5 +1,6 @@
 .. currentmodule:: Base
 
+
 *********
  Strings
 *********
@@ -49,7 +50,6 @@
    ::
 
               *(A, B)
-   :noindex:
 
    Matrix multiplication
 
@@ -66,7 +66,6 @@
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
-   .. doctest::
 
 	   julia> "Hello " * "world"
 	   "Hello world"
