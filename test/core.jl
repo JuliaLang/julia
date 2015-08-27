@@ -692,12 +692,22 @@ end
 @test names(Module(:anonymous, false), true, true) == [:anonymous]
 
 # exception from __init__()
-@test_throws InitError include_string(
-    """
-    module TestInitError
-        __init__() = error()
+let didthrow =
+    try
+        include_string(
+            """
+            module TestInitError
+                __init__() = error()
+            end
+            """)
+        false
+    catch ex
+        @test isa(ex, LoadError)
+        @test isa(ex.error, InitError)
+        true
     end
-    """)
+    @test didthrow
+end
 
 # issue #7307
 function test7307(a, ret)
