@@ -59,7 +59,7 @@ function translate(file)
                 doccing = true
                 println(io, l)
                 println(io)
-                println(io, "   .. Docstring generated from Julia source")
+                println(io, "   .. Docstring generated from Julia source\n")
                 for l in split(torst(doc), "\n")
                     ismatch(r"^\s*$", l) ? println(io) : println(io, "   ", l)
                 end
