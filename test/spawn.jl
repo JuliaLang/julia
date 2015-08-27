@@ -248,6 +248,46 @@ let bad = "bad\0name"
     @test_throws ArgumentError run(setenv(`echo hello`, "good"=>bad))
 end
 
+let out = Pipe()
+    @test_throws ArgumentError write(out, "not open error")
+    open(`cat -n`, "w", out) do in1
+        open(`cat -n`, "w", out) do in2
+            write(in1, 'h')
+            write(in2, UInt8['w'])
+            println(in1, "ello")
+            write(in2, "orld\n")
+        end
+    end
+    show(out, out)
+    @test isreadable(out)
+    @test iswritable(out)
+    close(out.in)
+    @test_throws ArgumentError write(out, "now closed error")
+    @test isreadable(out)
+    @test !iswritable(out)
+    @test isopen(out)
+    @test endswith(readuntil(out, '1'), '1')
+    @test read(out, UInt8) == '\n'
+    c = UInt8[0]
+    @test c == read!(out, c)
+    @test nb_availble(out) == 0
+    wait_readnb(out, 1)
+    @test nb_availble(out) > 0
+    ln1 = readline(out)
+    ln2 = readline(out)
+    desc = readall(out)
+    @test !isreadable(out)
+    @test !iswritable(out)
+    @test !isopen(out)
+    @test nb_availble(out) == 0
+    @test c == ['w']
+    @test lstrip(ln2) == "1\thello\n"
+    @test ln1 == "orld\n"
+    @test isempty(readbytes(out))
+    @test eof(out)
+    @test desc == "Pipe(open => open, 0 bytes waiting)"
+end
+
 # issue #8529
 let fname = tempname()
     open(fname, "w") do f
