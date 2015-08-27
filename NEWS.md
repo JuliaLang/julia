@@ -33,18 +33,23 @@ New language features
     run `Base.compilecache(modulename)`. The resulting precompiled `.ji` file is saved in
     `~/.julia/lib/v0.4` ([#8745]).
 
-      * See manual section on `Module initialization and precompilation` (under `Modules`) for details and errata.  In particular, to be safely precompilable a module may need an `__init__` function to separate code that must be executed at runtime rather than precompile-time.  Modules that are *not* precompilable should call `__precompile__(false)`.
+      * See manual section on `Module initialization and precompilation` (under `Modules`) for
+        details and errata.  In particular, to be safely precompilable a module may need an
+        `__init__` function to separate code that must be executed at runtime rather than precompile
+        time.  Modules that are *not* precompilable should call `__precompile__(false)`.
 
       * The precompiled `.ji` file includes a list of dependencies (modules and files that
         were imported/included at precompile-time), and the module is automatically recompiled
         upon `import` when any of its dependencies have changed.  Explicit dependencies
         on other files can be declared with `include_dependency(path)` ([#12458]).
 
-      * New option `--output-incremental={yes|no}` added to invoke the equivalent of `Base.compilecache` from the command line.
+      * New option `--output-incremental={yes|no}` added to invoke the equivalent of `Base.compilecache`
+        from the command line.
 
   * The syntax `new{parameters...}(...)` can be used in constructors to specify parameters for
     the type to be constructed ([#8135]).
-  * The `++` operator is now parsed, out of discussions about string concatenation, but no default meaning has been defined yet ([#11030], [#11686]).
+
+  * `++` is now parsed as an infix operator, but does not yet have a default definition ([#11030], [#11686]).
 
   * Support for inter-task communication using `Channels` ([#12264]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#channels for details.
@@ -97,8 +102,8 @@ Language changes
     `unsafe_convert`. You can still `convert` between pointer types,
     and between pointers and `Int` or `UInt`.
 
-  * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
-    ([#3737], [#2488], [#8599]).
+  * Using `[x,y]` to concatenate arrays is deprecated, and in the future will
+    construct a vector of `x` and `y` instead ([#3737], [#2488], [#8599]).
 
   * Unsigned `BigInt` literal syntax has been removed ([#11105]).
     Unsigned literals larger than `UInt128` now throw a syntax error.
@@ -177,6 +182,9 @@ Command line option changes
 
   * New option --handle-signals={yes|no} to disable Julia's signal handlers.
 
+  * The `--depwarn={yes|no|error}` option enables/disables syntax and method deprecation warnings,
+    or turns them into errors ([#9294]).
+
 Compiler improvements
 ---------------------
 
@@ -187,8 +195,6 @@ Compiler improvements
   * Loads from heap-allocated immutables are hoisted out of loops in more cases ([#8867]).
 
   * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
-
-  * A `--depwarn={yes|no}` command line flag enables/disables syntax and method deprecation warnings ([#9294]).
 
 Library improvements
 --------------------
@@ -272,7 +278,7 @@ Library improvements
     * AbstractArrays that do not extend `similar` now return an `Array` by
       default ([#10525]).
 
-  * Data-structure processing
+  * Data structures
 
     * New `sortperm!` function for pre-allocated index arrays ([#8792]).
 
@@ -360,13 +366,8 @@ Library improvements
 
     * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
 
-  * Pipe, Process, and Cmd simplications ([#12739])
-
-    * `Process` now inherits from `IO`
-
-    * Create an uninitialized unnamed pipe by calling `Pipe()`. Initialize it by calling `link_pipe` or by passing it to `spawn`.
-
-    * the `Cmd` objects are now immutable
+  * `Pipe()` creates a bidirectional I/O object that can be passed to `spawn` or `pipeline`
+    for redirecting process streams ([#12739]).
 
   * Other improvements
 
@@ -443,7 +444,7 @@ Deprecated or removed
   * The `Graphics` module has been removed from `Base` and is now a
     standalone package ([#10150], [#9862]).
 
-  * Woodbury special matrix type has been removed from LinAlg ([#10024]).
+  * The `Woodbury` special matrix type has been removed from LinAlg ([#10024]).
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
@@ -471,7 +472,7 @@ Deprecated or removed
   * `null` is renamed to `nullspace` ([#9714]).
 
   * The operators `|>`, `.>`, `>>`, and `.>>` as used for process I/O redirection
-    are replaced with the ~~`pipe`~~ `pipeline` function ([#5349], [#12739]).
+    are replaced with the `pipeline` function ([#5349], [#12739]).
 
   * `flipud(A)` and `fliplr(A)` have been deprecated in favor of `flipdim(A, 1)` and
     `flipdim(A, 2)`, respectively ([#10446]).
