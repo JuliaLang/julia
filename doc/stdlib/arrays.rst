@@ -1530,14 +1530,10 @@ Combinatorics
    Reverses a UTF-8 encoded string
 
    Returns:
-   --------
-
 
      *   ``UTF8String``
 
    Throws:
-   -------
-
 
      *   ``UnicodeError``
 
