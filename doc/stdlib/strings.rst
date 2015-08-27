@@ -1,6 +1,7 @@
 .. currentmodule:: Base
 
 
+
 *********
  Strings
 *********

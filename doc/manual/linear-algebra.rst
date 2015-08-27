@@ -1,6 +1,7 @@
 .. currentmodule:: Base
 
 
+
 ****************
  Linear algebra
 ****************

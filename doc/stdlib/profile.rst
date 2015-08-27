@@ -1,6 +1,7 @@
 .. module:: Profile
 
 
+
 .. _stdlib-profiling:
 
 ***********
@@ -8,6 +9,7 @@
 ***********
 
 .. currentmodule:: Base
+
 
 
 .. function:: @profile
@@ -21,6 +23,7 @@
    ``@profile <expression>`` runs your expression while taking periodic backtraces. These are appended to an internal buffer of backtraces.
 
 .. currentmodule:: Base.Profile
+
 The methods in :mod:`Base.Profile` are not exported and need to be called e.g. as ``Profile.print()``.
 
 .. function:: clear()

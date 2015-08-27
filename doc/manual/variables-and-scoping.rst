@@ -3,6 +3,7 @@
 .. currentmodule:: Base
 
 
+
 ********************
  Scope of Variables
 ********************
