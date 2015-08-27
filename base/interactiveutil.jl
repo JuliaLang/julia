@@ -430,7 +430,7 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value, true)
+                bytes = summarysize(value)
                 if bytes < 10_000
                     @printf(head, "%6d bytes  ", bytes)
                 else
@@ -465,31 +465,39 @@ end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
 whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 
-"""
-    summarysize(obj, recurse) => Int
+#################################################################################
 
-summarysize is an estimate of the size of the object
-as if all iterables were allocated inline
-in general, this forms a conservative lower bound
-n the memory "controlled" by the object
-if recurse is true, then simply reachable memory
-should also be included, otherwise, only
-directly used memory should be included
-you should never ignore recurse in cases where recursion is possible"""
-summarysize(obj::ANY, recurse::Bool) = try convert(Int, sizeof(obj)); catch; Core.sizeof(obj); end
+summarysize(obj; exclude = Union{Module,Function}) = summarysize(obj, ObjectIdDict(), exclude)
 
-# these three cases override the exception that would be thrown by Core.sizeof
-summarysize(obj::Symbol, recurse::Bool) = 0
-summarysize(obj::DataType, recurse::Bool) = 0
-function summarysize(obj::Module, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for binding in names(obj, true)
-            if isdefined(obj, binding)
-                value = getfield(obj, binding)
-                if (value !== obj) # skip the self-recursive definition
-                    recurseok = !isa(value, Module) || module_parent(value) === obj
-                    size += summarysize(value, recurseok)::Int # recurse on anything that isn't a module
+# these cases override the exception that would be thrown by Core.sizeof
+summarysize(obj::Symbol, seen, excl) = 0
+summarysize(obj::DataType, seen, excl) = 0
+
+function summarysize(obj::ANY, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = Core.sizeof(obj)
+    ft = typeof(obj).types
+    for i in 1:nfields(obj)
+        if !isbits(ft[i]) && isdefined(obj,i)
+            val = obj.(i)
+            if !isa(val,excl)
+                size += summarysize(val, seen, excl)
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Array, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size = Core.sizeof(obj)
+    if !isbits(eltype(obj))
+        for i in 1:length(obj)
+            if isdefined(obj, i)
+                val = obj[i]
+                if !isa(val, excl)
+                    size += summarysize(val, seen, excl)
                 end
             end
         end
@@ -497,172 +505,44 @@ function summarysize(obj::Module, recurse::Bool)
     return size
 end
 
-function summarysize(obj::Task, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        if isdefined(obj, :code)
-            size += summarysize(obj.code, true)::Int
+function summarysize(obj::SimpleVector, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = Core.sizeof(obj)
+    for i in 1:length(obj)
+        val = obj[i]
+        if !isa(val, excl)
+            size += summarysize(val, seen, excl)
         end
-        size += summarysize(obj.storage, true)::Int
-
-        size += summarysize(obj.backtrace, false)::Int
-        size += summarysize(obj.donenotify, false)::Int
-        size += summarysize(obj.exception, false)::Int
-        size += summarysize(obj.result, false)::Int
     end
     return size
 end
 
-function summarysize(obj::SimpleVector, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for val in obj
-            if val !== obj
-                size += summarysize(val, false)::Int
+function summarysize(obj::Module, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    for binding in names(obj, true)
+        if isdefined(obj, binding)
+            value = getfield(obj, binding)
+            if !isa(value, Module) || module_parent(value) === obj
+                size += summarysize(value, seen, excl)::Int
             end
         end
     end
     return size
 end
 
-function summarysize(obj::Tuple, recurse::Bool)
+function summarysize(obj::Task, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
     size::Int = sizeof(obj)
-    if recurse
-        for val in obj
-            if val !== obj && !isbits(val)
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Array, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        for i in 1:length(obj)
-            if isdefined(obj, i) && (val = obj[i]) !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::AbstractArray, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        for val in obj
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Associative, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for (key, val) in obj
-            if key !== obj
-                size += summarysize(key, false)::Int
-            end
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Dict, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.keys, recurse)::Int
-    size += summarysize(obj.vals, recurse)::Int
-    size += summarysize(obj.slots, recurse)::Int
-    return size
-end
-
-summarysize(obj::Set, recurse::Bool) =
-    sizeof(obj) + summarysize(obj.dict, recurse)
-
-function summarysize(obj::Function, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        size += summarysize(obj.env, true)::Int
-    end
     if isdefined(obj, :code)
-        size += summarysize(obj.code, true)::Int
+        size += summarysize(obj.code, seen, excl)::Int
     end
-    return size
-end
-
-function summarysize(obj::MethodTable, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.defs, recurse)::Int
-    size += summarysize(obj.cache, recurse)::Int
-    size += summarysize(obj.cache_arg1, recurse)::Int
-    size += summarysize(obj.cache_targ, recurse)::Int
-    if isdefined(obj, :kwsorter)
-        size += summarysize(obj.kwsorter, recurse)::Int
-    end
-    return size
-end
-
-function summarysize(obj::Method, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.func, recurse)::Int
-    size += summarysize(obj.next, recurse)::Int
-    return size
-end
-
-function summarysize(obj::LambdaStaticData, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.ast, true)::Int # always include the AST
-    size += summarysize(obj.sparams, true)::Int
-    if isdefined(obj, :roots)
-        size += summarysize(obj.roots, recurse)::Int
-    end
-    if isdefined(obj, :capt)
-        size += summarysize(obj.capt, false)::Int
-    end
-    return size
-end
-
-function summarysize(obj::Expr, recurse::Bool)
-    size::Int = sizeof(obj) + sizeof(obj.args)
-    if recurse
-        for arg in obj.args
-            size += summarysize(arg, isa(arg, Expr))::Int
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Box, recurse::Bool)
-    size::Int = sizeof(obj)
-    # ignore the recurse parameter for Box,
-    # even though it could in theory recurse
-    # since it is an internal construct
-    # used by codegen with very limited usage
-    if isdefined(obj, :contents)
-        if obj.contents !== obj
-            size += summarysize(obj.contents, false)::Int
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Ref, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        try
-            val = obj[]
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
+    size += summarysize(obj.storage, seen, excl)::Int
+    size += summarysize(obj.backtrace, seen, excl)::Int
+    size += summarysize(obj.donenotify, seen, excl)::Int
+    size += summarysize(obj.exception, seen, excl)::Int
+    size += summarysize(obj.result, seen, excl)::Int
+    # TODO: add stack size
     return size
 end
