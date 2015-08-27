@@ -1244,6 +1244,7 @@ end
 A = rand(4,2,3)
 @test length(keys(A)) == length(values(A)) == 4 * 2 * 3
 @test eltype(typeof(keys(A))) === Base.IteratorsMD.CartesianIndex{3}
+@test values(A) === A
 @test eltype(typeof(values(A))) === Float64
 
 seen = falses(size(A))
