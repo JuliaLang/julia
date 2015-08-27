@@ -761,6 +761,23 @@ let
     @test issorted(as[1,:])
     @test issorted(as[2,:])
     @test issorted(as[3,:])
+
+    local b = rand(21,21,2)
+
+    bs = sort(b, 1)
+    for i in 1:21
+        @test issorted(bs[:,i,1])
+        @test issorted(bs[:,i,2])
+    end
+
+    bs = sort(b, 2)
+    for i in 1:21
+        @test issorted(bs[i,:,1])
+        @test issorted(bs[i,:,2])
+    end
+
+    bs = sort(b, 3)
+    @test all(bs[:,:,1] .<= bs[:,:,2])
 end
 
 # fill
