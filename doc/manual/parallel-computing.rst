@@ -2,6 +2,7 @@
 
 .. currentmodule:: Base
 
+
 ********************
  Parallel Computing
 ********************
@@ -878,8 +879,8 @@ implementation simply executes an ``exit()`` call on the specified remote worker
 Specifying network topology (Experimental)
 -------------------------------------------
 
-Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers must
-be connected to each other:
+Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers must be connected to each other:
+
     - ``:all_to_all`` : is the default, where all workers are connected to each other.
 
     - ``:master_slave`` : only the driver process, i.e. pid 1 has connections to the workers.

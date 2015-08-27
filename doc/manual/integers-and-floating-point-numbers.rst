@@ -2,6 +2,7 @@
 
 .. currentmodule:: Base
 
+
 *************************************
  Integers and Floating-Point Numbers
 *************************************

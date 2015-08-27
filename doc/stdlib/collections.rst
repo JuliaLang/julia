@@ -1,5 +1,6 @@
 .. currentmodule:: Base
 
+
 *********************************
  Collections and Data Structures
 *********************************
@@ -2464,6 +2465,7 @@ Fully implemented by:
 - :obj:`BitVector` (a.k.a. 1-dimensional :obj:`BitArray`)
 
 .. module:: Base.Collections
+
 
 PriorityQueue
 -------------

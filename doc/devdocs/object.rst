@@ -2,6 +2,7 @@
 
 .. currentmodule:: Base
 
+
 ******************************
 Memory layout of Julia Objects
 ******************************
