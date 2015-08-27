@@ -3298,7 +3298,7 @@ So far only the second case can actually occur.
 	    (let ((e (car stmts)))
 	      (cond ((and (pair? e) (eq? (car e) 'newvar))
 		     (let ((vinf (var-info-for (cadr e) vi)))
-		       (if (not (vinfo:capt vinf))
+		       (if (and vinf (not (vinfo:capt vinf)))
 			   (put! vars (cadr e) #t))))
 		    ((and (pair? e) (eq? (car e) '=))
 		     (if (has? vars (cadr e))
