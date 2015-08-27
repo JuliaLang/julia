@@ -50,6 +50,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -119,6 +120,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(periods::Period...) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -188,6 +190,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -257,6 +260,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(dt::Date) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -326,6 +330,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -395,6 +400,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Dates.DateFormat(format::AbstractString) -> DateFormat
@@ -404,6 +410,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
@@ -473,6 +480,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(y, [m, d]) -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -512,6 +520,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(period::Period...) -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -551,6 +560,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -590,6 +600,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::DateTime) -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -629,6 +640,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -668,6 +680,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Date(y, [m, d]) -> Date
@@ -707,6 +720,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: now() -> DateTime
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        now() -> DateTime
@@ -722,6 +736,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: now(::Type{UTC}) -> DateTime
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        now() -> DateTime
@@ -737,6 +752,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: eps(::DateTime) -> Millisecond
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eps(::DateTime) -> Millisecond
@@ -750,6 +766,7 @@ Accessor Functions
 .. function:: year(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        year(dt::TimeType) -> Int64
@@ -766,6 +783,7 @@ Accessor Functions
 .. function:: Year(dt::TimeType) -> Year
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Year(dt::TimeType) -> Year
@@ -795,6 +813,7 @@ Accessor Functions
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        yearmonth(dt::TimeType) -> (Int64, Int64)
@@ -804,6 +823,7 @@ Accessor Functions
 .. function:: monthday(dt::TimeType) -> (Int64, Int64)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        monthday(dt::TimeType) -> (Int64, Int64)
@@ -813,6 +833,7 @@ Accessor Functions
 .. function:: yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
@@ -825,6 +846,7 @@ Query Functions
 .. function:: dayname(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayname(dt::TimeType; locale="english") -> AbstractString
@@ -834,6 +856,7 @@ Query Functions
 .. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayabbr(dt::TimeType; locale="english") -> AbstractString
@@ -843,6 +866,7 @@ Query Functions
 .. function:: dayofweek(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayofweek(dt::TimeType) -> Int64
@@ -852,6 +876,7 @@ Query Functions
 .. function:: dayofweekofmonth(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayofweekofmonth(dt::TimeType) -> Int
@@ -861,6 +886,7 @@ Query Functions
 .. function:: daysofweekinmonth(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        daysofweekinmonth(dt::TimeType) -> Int
@@ -870,6 +896,7 @@ Query Functions
 .. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        monthname(dt::TimeType; locale="english") -> AbstractString
@@ -879,6 +906,7 @@ Query Functions
 .. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        monthabbr(dt::TimeType; locale="english") -> AbstractString
@@ -888,6 +916,7 @@ Query Functions
 .. function:: daysinmonth(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        daysinmonth(dt::TimeType) -> Int
@@ -897,6 +926,7 @@ Query Functions
 .. function:: isleapyear(dt::TimeType) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isleapyear(dt::TimeType) -> Bool
@@ -906,6 +936,7 @@ Query Functions
 .. function:: dayofyear(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayofyear(dt::TimeType) -> Int
@@ -915,6 +946,7 @@ Query Functions
 .. function:: daysinyear(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        daysinyear(dt::TimeType) -> Int
@@ -924,6 +956,7 @@ Query Functions
 .. function:: quarterofyear(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        quarterofyear(dt::TimeType) -> Int
@@ -933,6 +966,7 @@ Query Functions
 .. function:: dayofquarter(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dayofquarter(dt::TimeType) -> Int
@@ -945,6 +979,7 @@ Adjuster Functions
 .. function:: trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
    .. Docstring generated from Julia source
+
    ::
 
               trunc(dt::TimeType, ::Type{Period}) -> TimeType
@@ -955,6 +990,7 @@ Adjuster Functions
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        firstdayofweek(dt::TimeType) -> TimeType
@@ -964,6 +1000,7 @@ Adjuster Functions
 .. function:: lastdayofweek(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lastdayofweek(dt::TimeType) -> TimeType
@@ -973,6 +1010,7 @@ Adjuster Functions
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        firstdayofmonth(dt::TimeType) -> TimeType
@@ -982,6 +1020,7 @@ Adjuster Functions
 .. function:: lastdayofmonth(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lastdayofmonth(dt::TimeType) -> TimeType
@@ -991,6 +1030,7 @@ Adjuster Functions
 .. function:: firstdayofyear(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        firstdayofyear(dt::TimeType) -> TimeType
@@ -1000,6 +1040,7 @@ Adjuster Functions
 .. function:: lastdayofyear(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lastdayofyear(dt::TimeType) -> TimeType
@@ -1009,6 +1050,7 @@ Adjuster Functions
 .. function:: firstdayofquarter(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        firstdayofquarter(dt::TimeType) -> TimeType
@@ -1018,6 +1060,7 @@ Adjuster Functions
 .. function:: lastdayofquarter(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lastdayofquarter(dt::TimeType) -> TimeType
@@ -1027,6 +1070,7 @@ Adjuster Functions
 .. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
@@ -1042,6 +1086,7 @@ Adjuster Functions
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
@@ -1057,6 +1102,7 @@ Adjuster Functions
 .. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
@@ -1066,6 +1112,7 @@ Adjuster Functions
 .. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
@@ -1075,6 +1122,7 @@ Adjuster Functions
 .. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
@@ -1090,6 +1138,7 @@ Adjuster Functions
 .. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
@@ -1105,6 +1154,7 @@ Adjuster Functions
 .. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
@@ -1117,6 +1167,7 @@ Periods
 .. function:: Year(v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Year(dt::TimeType) -> Year
@@ -1146,6 +1197,7 @@ Periods
 .. function:: default(p::Period) -> Period
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        default(p::Period) -> Period
@@ -1158,6 +1210,7 @@ Conversion Functions
 .. function:: today() -> Date
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        today() -> Date
@@ -1167,6 +1220,7 @@ Conversion Functions
 .. function:: unix2datetime(x) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               unix2datetime(x) -> DateTime
@@ -1177,6 +1231,7 @@ Conversion Functions
 .. function:: datetime2unix(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        datetime2unix(dt::DateTime) -> Float64
@@ -1186,6 +1241,7 @@ Conversion Functions
 .. function:: julian2datetime(julian_days) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               julian2datetime(julian_days) -> DateTime
@@ -1196,6 +1252,7 @@ Conversion Functions
 .. function:: datetime2julian(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        datetime2julian(dt::DateTime) -> Float64
@@ -1205,6 +1262,7 @@ Conversion Functions
 .. function:: rata2datetime(days) -> DateTime
 
    .. Docstring generated from Julia source
+
    ::
 
               rata2datetime(days) -> DateTime
@@ -1215,6 +1273,7 @@ Conversion Functions
 .. function:: datetime2rata(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        datetime2rata(dt::TimeType) -> Int64

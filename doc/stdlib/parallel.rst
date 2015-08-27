@@ -10,6 +10,7 @@ Tasks
 .. function:: Task(func)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Task(func)
@@ -19,6 +20,7 @@ Tasks
 .. function:: yieldto(task, arg = nothing)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        yieldto(task, arg = nothing)
@@ -28,6 +30,7 @@ Tasks
 .. function:: current_task()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        current_task()
@@ -37,6 +40,7 @@ Tasks
 .. function:: istaskdone(task) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        istaskdone(task) -> Bool
@@ -46,6 +50,7 @@ Tasks
 .. function:: istaskstarted(task) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        istaskstarted(task) -> Bool
@@ -55,6 +60,7 @@ Tasks
 .. function:: consume(task, values...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        consume(task, values...)
@@ -64,6 +70,7 @@ Tasks
 .. function:: produce(value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        produce(value)
@@ -73,6 +80,7 @@ Tasks
 .. function:: yield()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        yield()
@@ -82,6 +90,7 @@ Tasks
 .. function:: task_local_storage(symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        task_local_storage(symbol)
@@ -103,6 +112,7 @@ Tasks
 .. function:: task_local_storage(symbol, value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        task_local_storage(symbol)
@@ -124,6 +134,7 @@ Tasks
 .. function:: task_local_storage(body, symbol, value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        task_local_storage(symbol)
@@ -145,6 +156,7 @@ Tasks
 .. function:: Condition()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Condition()
@@ -154,6 +166,7 @@ Tasks
 .. function:: notify(condition, val=nothing; all=true, error=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        notify(condition, val=nothing; all=true, error=false)
@@ -163,6 +176,7 @@ Tasks
 .. function:: schedule(t::Task, [val]; error=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        schedule(t::Task, [val]; error=false)
@@ -174,6 +188,7 @@ Tasks
 .. function:: @schedule
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @schedule
@@ -183,6 +198,7 @@ Tasks
 .. function:: @task
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @task
@@ -192,6 +208,7 @@ Tasks
 .. function:: sleep(seconds)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sleep(seconds)
@@ -201,6 +218,7 @@ Tasks
 .. function:: ReentrantLock()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ReentrantLock()
@@ -210,6 +228,7 @@ Tasks
 .. function:: lock(l::ReentrantLock)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lock(l::ReentrantLock)
@@ -219,6 +238,7 @@ Tasks
 .. function:: unlock(l::ReentrantLock)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unlock(l::ReentrantLock)
@@ -228,6 +248,7 @@ Tasks
 .. function:: Channel{T}(sz::Int)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Channel{T}(sz::Int)
@@ -245,6 +266,7 @@ General Parallel Computing Support
 .. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
 
    .. Docstring generated from Julia source
+
    ::
 
               addprocs(n::Integer; exeflags=``) -> List of process identifiers
@@ -314,6 +336,7 @@ General Parallel Computing Support
 .. function:: addprocs() -> List of process identifiers
 
    .. Docstring generated from Julia source
+
    ::
 
               addprocs(n::Integer; exeflags=``) -> List of process identifiers
@@ -383,6 +406,7 @@ General Parallel Computing Support
 .. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
 
    .. Docstring generated from Julia source
+
    ::
 
               addprocs(n::Integer; exeflags=``) -> List of process identifiers
@@ -452,6 +476,7 @@ General Parallel Computing Support
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
+
    ::
 
               addprocs(n::Integer; exeflags=``) -> List of process identifiers
@@ -521,6 +546,7 @@ General Parallel Computing Support
 .. function:: nprocs()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nprocs()
@@ -530,6 +556,7 @@ General Parallel Computing Support
 .. function:: nworkers()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nworkers()
@@ -539,6 +566,7 @@ General Parallel Computing Support
 .. function:: procs()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        procs()
@@ -554,6 +582,7 @@ General Parallel Computing Support
 .. function:: workers()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        workers()
@@ -563,6 +592,7 @@ General Parallel Computing Support
 .. function:: rmprocs(pids...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rmprocs(pids...)
@@ -572,6 +602,7 @@ General Parallel Computing Support
 .. function:: interrupt([pids...])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        interrupt([pids...])
@@ -581,6 +612,7 @@ General Parallel Computing Support
 .. function:: myid()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        myid()
@@ -590,6 +622,7 @@ General Parallel Computing Support
 .. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    .. Docstring generated from Julia source
+
    ::
 
               pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
@@ -605,6 +638,7 @@ General Parallel Computing Support
 .. function:: remotecall(id, func, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        remotecall(id, func, args...)
@@ -614,6 +648,7 @@ General Parallel Computing Support
 .. function:: wait([x])
 
    .. Docstring generated from Julia source
+
    ::
 
               wait([x])
@@ -644,6 +679,7 @@ General Parallel Computing Support
 .. function:: fetch(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               fetch(x)
@@ -658,6 +694,7 @@ General Parallel Computing Support
 .. function:: remotecall_wait(id, func, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        remotecall_wait(id, func, args...)
@@ -667,6 +704,7 @@ General Parallel Computing Support
 .. function:: remotecall_fetch(id, func, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        remotecall_fetch(id, func, args...)
@@ -676,6 +714,7 @@ General Parallel Computing Support
 .. function:: put!(RemoteRef, value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        put!(RemoteRef, value)
@@ -691,6 +730,7 @@ General Parallel Computing Support
 .. function:: put!(Channel, value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        put!(RemoteRef, value)
@@ -706,6 +746,7 @@ General Parallel Computing Support
 .. function:: take!(RemoteRef)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        take!(RemoteRef)
@@ -721,6 +762,7 @@ General Parallel Computing Support
 .. function:: take!(Channel)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        take!(RemoteRef)
@@ -736,6 +778,7 @@ General Parallel Computing Support
 .. function:: isready(r::RemoteRef)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isready(r::RemoteRef)
@@ -753,6 +796,7 @@ General Parallel Computing Support
 .. function:: close(Channel)
 
    .. Docstring generated from Julia source
+
    ::
 
               close(stream)
@@ -772,6 +816,7 @@ General Parallel Computing Support
 .. function:: RemoteRef()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        RemoteRef()
@@ -787,6 +832,7 @@ General Parallel Computing Support
 .. function:: RemoteRef(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        RemoteRef()
@@ -802,6 +848,7 @@ General Parallel Computing Support
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
@@ -811,6 +858,7 @@ General Parallel Computing Support
 .. function:: @spawn
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @spawn
@@ -820,6 +868,7 @@ General Parallel Computing Support
 .. function:: @spawnat
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @spawnat
@@ -829,6 +878,7 @@ General Parallel Computing Support
 .. function:: @fetch
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @fetch
@@ -838,6 +888,7 @@ General Parallel Computing Support
 .. function:: @fetchfrom
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @fetchfrom
@@ -847,6 +898,7 @@ General Parallel Computing Support
 .. function:: @async
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @async
@@ -856,6 +908,7 @@ General Parallel Computing Support
 .. function:: @sync
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @sync
@@ -865,6 +918,7 @@ General Parallel Computing Support
 .. function:: @parallel
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @parallel
@@ -890,6 +944,7 @@ General Parallel Computing Support
 .. function:: @everywhere
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @everywhere
@@ -902,6 +957,7 @@ Shared Arrays (Experimental, UNIX-only feature)
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
@@ -915,6 +971,7 @@ Shared Arrays (Experimental, UNIX-only feature)
 .. function:: procs(S::SharedArray)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        procs()
@@ -930,6 +987,7 @@ Shared Arrays (Experimental, UNIX-only feature)
 .. function:: sdata(S::SharedArray)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sdata(S::SharedArray)
@@ -939,6 +997,7 @@ Shared Arrays (Experimental, UNIX-only feature)
 .. function:: indexpids(S::SharedArray)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        indexpids(S::SharedArray)
@@ -955,6 +1014,7 @@ Cluster Manager Interface
 .. function:: launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
@@ -964,6 +1024,7 @@ Cluster Manager Interface
 .. function:: manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
 
    .. Docstring generated from Julia source
+
    ::
 
               manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
@@ -981,6 +1042,7 @@ Cluster Manager Interface
 .. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        kill(p::Process, signum=SIGTERM)
@@ -996,6 +1058,7 @@ Cluster Manager Interface
 .. function:: init_worker(manager::FooManager)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        init_worker(manager::FooManager)
@@ -1005,6 +1068,7 @@ Cluster Manager Interface
 .. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        connect([host],port) -> TcpSocket
@@ -1013,9 +1077,9 @@ Cluster Manager Interface
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
@@ -1026,6 +1090,7 @@ Cluster Manager Interface
 .. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)

@@ -22,6 +22,7 @@ General I/O
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    .. Docstring generated from Julia source
+
    ::
 
               open(command, mode::AbstractString="r", stdio=DevNull)
@@ -75,6 +76,7 @@ General I/O
 .. function:: open(file_name, [mode]) -> IOStream
 
    .. Docstring generated from Julia source
+
    ::
 
               open(command, mode::AbstractString="r", stdio=DevNull)
@@ -128,6 +130,7 @@ General I/O
 .. function:: open(f::function, args...)
 
    .. Docstring generated from Julia source
+
    ::
 
               open(command, mode::AbstractString="r", stdio=DevNull)
@@ -181,6 +184,7 @@ General I/O
 .. function:: IOBuffer() -> IOBuffer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IOBuffer() -> IOBuffer
@@ -208,6 +212,7 @@ General I/O
 .. function:: IOBuffer(size::Int)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IOBuffer() -> IOBuffer
@@ -235,6 +240,7 @@ General I/O
 .. function:: IOBuffer(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IOBuffer() -> IOBuffer
@@ -262,6 +268,7 @@ General I/O
 .. function:: IOBuffer([data,],[readable,writable,[maxsize]])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IOBuffer() -> IOBuffer
@@ -289,6 +296,7 @@ General I/O
 .. function:: takebuf_array(b::IOBuffer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        takebuf_array(b::IOBuffer)
@@ -298,6 +306,7 @@ General I/O
 .. function:: takebuf_string(b::IOBuffer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        takebuf_string(b::IOBuffer)
@@ -307,6 +316,7 @@ General I/O
 .. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
@@ -316,6 +326,7 @@ General I/O
 .. function:: flush(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        flush(stream)
@@ -325,6 +336,7 @@ General I/O
 .. function:: close(stream)
 
    .. Docstring generated from Julia source
+
    ::
 
               close(stream)
@@ -344,6 +356,7 @@ General I/O
 .. function:: write(stream, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        write(stream, x)
@@ -353,6 +366,7 @@ General I/O
 .. function:: read(stream, type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        read(stream, type)
@@ -368,6 +382,7 @@ General I/O
 .. function:: read(stream, type, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        read(stream, type)
@@ -383,6 +398,7 @@ General I/O
 .. function:: read!(stream, array::Array)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        read!(stream, array::Array)
@@ -392,6 +408,7 @@ General I/O
 .. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
@@ -403,6 +420,7 @@ General I/O
 .. function:: readbytes(stream, nb=typemax(Int); all=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readbytes(stream, nb=typemax(Int); all=true)
@@ -414,6 +432,7 @@ General I/O
 .. function:: position(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        position(s)
@@ -423,6 +442,7 @@ General I/O
 .. function:: seek(s, pos)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        seek(s, pos)
@@ -432,6 +452,7 @@ General I/O
 .. function:: seekstart(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        seekstart(s)
@@ -441,6 +462,7 @@ General I/O
 .. function:: seekend(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        seekend(s)
@@ -450,6 +472,7 @@ General I/O
 .. function:: skip(s, offset)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        skip(s, offset)
@@ -459,6 +482,7 @@ General I/O
 .. function:: mark(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               mark(s)
@@ -470,6 +494,7 @@ General I/O
 .. function:: unmark(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               unmark(s)
@@ -482,6 +507,7 @@ General I/O
 .. function:: reset(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               reset(s)
@@ -495,6 +521,7 @@ General I/O
 .. function:: ismarked(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               ismarked(s)
@@ -506,6 +533,7 @@ General I/O
 .. function:: eof(stream) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eof(stream) -> Bool
@@ -515,6 +543,7 @@ General I/O
 .. function:: isreadonly(stream) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isreadonly(stream) -> Bool
@@ -524,6 +553,7 @@ General I/O
 .. function:: isopen(object) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isopen(object) -> Bool
@@ -533,6 +563,7 @@ General I/O
 .. function:: serialize(stream, value)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        serialize(stream, value)
@@ -542,6 +573,7 @@ General I/O
 .. function:: deserialize(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        deserialize(stream)
@@ -551,6 +583,7 @@ General I/O
 .. function:: print_escaped(io, str::AbstractString, esc::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        print_escaped(io, str::AbstractString, esc::AbstractString)
@@ -560,6 +593,7 @@ General I/O
 .. function:: print_unescaped(io, s::AbstractString)
 
    .. Docstring generated from Julia source
+
    ::
 
               print_unescaped(io, s::AbstractString)
@@ -569,6 +603,7 @@ General I/O
 .. function:: print_joined(io, items, delim, [last])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        print_joined(io, items, delim, [last])
@@ -578,6 +613,7 @@ General I/O
 .. function:: print_shortest(io, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        print_shortest(io, x)
@@ -587,6 +623,7 @@ General I/O
 .. function:: fd(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fd(stream)
@@ -596,6 +633,7 @@ General I/O
 .. function:: redirect_stdout()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        redirect_stdout()
@@ -611,6 +649,7 @@ General I/O
 .. function:: redirect_stdout(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        redirect_stdout()
@@ -626,6 +665,7 @@ General I/O
 .. function:: redirect_stderr([stream])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        redirect_stderr([stream])
@@ -635,6 +675,7 @@ General I/O
 .. function:: redirect_stdin([stream])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        redirect_stdin([stream])
@@ -644,6 +685,7 @@ General I/O
 .. function:: readchomp(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readchomp(x)
@@ -653,6 +695,7 @@ General I/O
 .. function:: truncate(file,n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        truncate(file,n)
@@ -662,6 +705,7 @@ General I/O
 .. function:: skipchars(stream, predicate; linecomment::Char)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        skipchars(stream, predicate; linecomment::Char)
@@ -671,6 +715,7 @@ General I/O
 .. function:: countlines(io,[eol::Char])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        countlines(io,[eol::Char])
@@ -680,6 +725,7 @@ General I/O
 .. function:: PipeBuffer()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        PipeBuffer()
@@ -695,6 +741,7 @@ General I/O
 .. function:: PipeBuffer(data::Vector{UInt8},[maxsize])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        PipeBuffer()
@@ -710,6 +757,7 @@ General I/O
 .. function:: readavailable(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readavailable(stream)
@@ -722,6 +770,7 @@ Text I/O
 .. function:: show(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        show(x)
@@ -731,6 +780,7 @@ Text I/O
 .. function:: showcompact(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        showcompact(x)
@@ -740,6 +790,7 @@ Text I/O
 .. function:: showall(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        showall(x)
@@ -749,6 +800,7 @@ Text I/O
 .. function:: summary(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        summary(x)
@@ -758,6 +810,7 @@ Text I/O
 .. function:: print(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        print(x)
@@ -767,6 +820,7 @@ Text I/O
 .. function:: println(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               println(x)
@@ -776,6 +830,7 @@ Text I/O
 .. function:: print_with_color(color::Symbol, [io], strings...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        print_with_color(color::Symbol, [io], strings...)
@@ -785,6 +840,7 @@ Text I/O
 .. function:: info(msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        info(msg)
@@ -794,6 +850,7 @@ Text I/O
 .. function:: warn(msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        warn(msg)
@@ -803,6 +860,7 @@ Text I/O
 .. function:: @printf([io::IOStream], "%Fmt", args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @printf([io::IOStream], "%Fmt", args...)
@@ -812,6 +870,7 @@ Text I/O
 .. function:: @sprintf("%Fmt", args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @sprintf("%Fmt", args...)
@@ -823,6 +882,7 @@ Text I/O
 .. function:: sprint(f::Function, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sprint(f::Function, args...)
@@ -832,6 +892,7 @@ Text I/O
 .. function:: showerror(io, e)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        showerror(io, e)
@@ -841,6 +902,7 @@ Text I/O
 .. function:: dump(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dump(x)
@@ -850,6 +912,7 @@ Text I/O
 .. function:: xdump(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        xdump(x)
@@ -859,6 +922,7 @@ Text I/O
 .. function:: readall(stream::IO)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readall(stream::IO)
@@ -874,6 +938,7 @@ Text I/O
 .. function:: readall(filename::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readall(stream::IO)
@@ -889,6 +954,7 @@ Text I/O
 .. function:: readline(stream=STDIN)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readline(stream=STDIN)
@@ -898,6 +964,7 @@ Text I/O
 .. function:: readuntil(stream, delim)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readuntil(stream, delim)
@@ -907,6 +974,7 @@ Text I/O
 .. function:: readlines(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readlines(stream)
@@ -916,6 +984,7 @@ Text I/O
 .. function:: eachline(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eachline(stream)
@@ -925,6 +994,7 @@ Text I/O
 .. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -948,6 +1018,7 @@ Text I/O
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -971,6 +1042,7 @@ Text I/O
 .. function:: readdlm(source, delim::Char, T::Type; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -994,6 +1066,7 @@ Text I/O
 .. function:: readdlm(source, delim::Char; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -1017,6 +1090,7 @@ Text I/O
 .. function:: readdlm(source, T::Type; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -1040,6 +1114,7 @@ Text I/O
 .. function:: readdlm(source; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
@@ -1063,6 +1138,7 @@ Text I/O
 .. function:: writedlm(f, A, delim='\\t')
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        writedlm(f, A, delim='\\t')
@@ -1074,6 +1150,7 @@ Text I/O
 .. function:: readcsv(source, [T::Type]; options...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readcsv(source, [T::Type]; options...)
@@ -1083,6 +1160,7 @@ Text I/O
 .. function:: writecsv(filename, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        writecsv(filename, A)
@@ -1092,6 +1170,7 @@ Text I/O
 .. function:: Base64EncodePipe(ostream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Base64EncodePipe(ostream)
@@ -1101,6 +1180,7 @@ Text I/O
 .. function:: Base64DecodePipe(istream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Base64DecodePipe(istream)
@@ -1110,6 +1190,7 @@ Text I/O
 .. function:: base64encode(writefunc, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        base64encode(writefunc, args...)
@@ -1120,6 +1201,7 @@ Text I/O
 .. function:: base64decode(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        base64decode(string)
@@ -1150,6 +1232,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: display(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        display(x)
@@ -1164,6 +1247,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: redisplay(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        redisplay(x)
@@ -1176,6 +1260,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: displayable(mime) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        displayable(mime) -> Bool
@@ -1186,6 +1271,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: writemime(stream, mime, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        writemime(stream, mime, x)
@@ -1199,6 +1285,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: mimewritable(mime, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mimewritable(mime, x)
@@ -1208,6 +1295,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: reprmime(mime, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reprmime(mime, x)
@@ -1219,6 +1307,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: stringmime(mime, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        stringmime(mime, x)
@@ -1254,6 +1343,7 @@ stack with:
 .. function:: pushdisplay(d::Display)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pushdisplay(d::Display)
@@ -1263,6 +1353,7 @@ stack with:
 .. function:: popdisplay()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        popdisplay()
@@ -1274,6 +1365,7 @@ stack with:
 .. function:: TextDisplay(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        TextDisplay(stream)
@@ -1283,6 +1375,7 @@ stack with:
 .. function:: istext(m::MIME)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        istext(m::MIME)
@@ -1295,6 +1388,7 @@ Memory-mapped I/O
 .. function:: Mmap.Anonymous(name, readonly, create)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Mmap.Anonymous(name, readonly, create)
@@ -1304,6 +1398,7 @@ Memory-mapped I/O
 .. function:: Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
 
    .. Docstring generated from Julia source
+
    ::
 
               Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -1361,6 +1456,7 @@ Memory-mapped I/O
 .. function:: Mmap.mmap(io, BitArray, [dims, offset])
 
    .. Docstring generated from Julia source
+
    ::
 
               Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -1418,6 +1514,7 @@ Memory-mapped I/O
 .. function:: Mmap.sync!(array)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Mmap.sync!(array)
@@ -1430,6 +1527,7 @@ Network I/O
 .. function:: connect([host],port) -> TcpSocket
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        connect([host],port) -> TcpSocket
@@ -1438,9 +1536,9 @@ Network I/O
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
@@ -1451,6 +1549,7 @@ Network I/O
 .. function:: connect(path) -> Pipe
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        connect([host],port) -> TcpSocket
@@ -1459,9 +1558,9 @@ Network I/O
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
@@ -1472,6 +1571,7 @@ Network I/O
 .. function:: listen([addr,]port) -> TcpServer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        listen([addr,]port) -> TcpServer
@@ -1482,11 +1582,12 @@ Network I/O
 
        listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listen on a Named Pipe / Domain Socket
 
 .. function:: listen(path) -> PipeServer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        listen([addr,]port) -> TcpServer
@@ -1497,11 +1598,12 @@ Network I/O
 
        listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listen on a Named Pipe / Domain Socket
 
 .. function:: getaddrinfo(host)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        getaddrinfo(host)
@@ -1511,6 +1613,7 @@ Network I/O
 .. function:: parseip(addr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        parseip(addr)
@@ -1520,6 +1623,7 @@ Network I/O
 .. function:: IPv4(host::Integer) -> IPv4
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IPv4(host::Integer) -> IPv4
@@ -1529,6 +1633,7 @@ Network I/O
 .. function:: IPv6(host::Integer) -> IPv6
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        IPv6(host::Integer) -> IPv6
@@ -1538,6 +1643,7 @@ Network I/O
 .. function:: nb_available(stream)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nb_available(stream)
@@ -1547,6 +1653,7 @@ Network I/O
 .. function:: accept(server[,client])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        accept(server[,client])
@@ -1556,6 +1663,7 @@ Network I/O
 .. function:: listenany(port_hint) -> (UInt16,TcpServer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        listenany(port_hint) -> (UInt16,TcpServer)
@@ -1565,6 +1673,7 @@ Network I/O
 .. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        poll_fd(fd, timeout_s::Real; readable=false, writable=false)
@@ -1578,6 +1687,7 @@ Network I/O
 .. function:: poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
@@ -1591,6 +1701,7 @@ Network I/O
 .. function:: watch_file(path, timeout_s::Real)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        watch_file(path, timeout_s::Real)
@@ -1604,6 +1715,7 @@ Network I/O
 .. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
@@ -1613,6 +1725,7 @@ Network I/O
 .. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        send(socket::UDPSocket, host::IPv4, port::Integer, msg)
@@ -1622,6 +1735,7 @@ Network I/O
 .. function:: recv(socket::UDPSocket)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        recv(socket::UDPSocket)
@@ -1631,6 +1745,7 @@ Network I/O
 .. function:: recvfrom(socket::UDPSocket) -> (address, data)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        recvfrom(socket::UDPSocket) -> (address, data)
@@ -1640,6 +1755,7 @@ Network I/O
 .. function:: setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
@@ -1649,6 +1765,7 @@ Network I/O
 .. function:: ntoh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ntoh(x)
@@ -1658,6 +1775,7 @@ Network I/O
 .. function:: hton(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hton(x)
@@ -1667,6 +1785,7 @@ Network I/O
 .. function:: ltoh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ltoh(x)
@@ -1676,6 +1795,7 @@ Network I/O
 .. function:: htol(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        htol(x)

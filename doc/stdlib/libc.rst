@@ -7,6 +7,7 @@
 .. function:: malloc(size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        malloc(size::Integer) -> Ptr{Void}
@@ -16,6 +17,7 @@
 .. function:: calloc(num::Integer, size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        calloc(num::Integer, size::Integer) -> Ptr{Void}
@@ -25,6 +27,7 @@
 .. function:: realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        realloc(addr::Ptr, size::Integer) -> Ptr{Void}
@@ -36,6 +39,7 @@
 .. function:: free(addr::Ptr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        free(addr::Ptr)
@@ -45,6 +49,7 @@
 .. function:: errno([code])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        errno([code])
@@ -56,6 +61,7 @@
 .. function:: strerror(n=errno())
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strerror(n=errno())
@@ -73,6 +79,7 @@
 .. function:: time(t::TmStruct)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        time()
@@ -82,6 +89,7 @@
 .. function:: strftime([format], time)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strftime([format], time)
@@ -91,6 +99,7 @@
 .. function:: strptime([format], timestr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strptime([format], timestr)
@@ -100,6 +109,7 @@
 .. function:: TmStruct([seconds])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        TmStruct([seconds])
@@ -109,6 +119,7 @@
 .. function:: flush_cstdio()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        flush_cstdio()
@@ -118,6 +129,7 @@
 .. function:: msync(ptr, len, [flags])
 
    .. Docstring generated from Julia source
+
    ::
 
               msync(ptr, len, [flags])

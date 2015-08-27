@@ -139,6 +139,7 @@ Macro reference
 .. function:: @nloops N itersym rangeexpr bodyexpr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @nloops N itersym rangeexpr bodyexpr
@@ -172,6 +173,7 @@ Macro reference
 .. function:: @nref N A indexexpr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @nref N A indexexpr
@@ -181,6 +183,7 @@ Macro reference
 .. function:: @nexprs N expr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @nexprs N expr
@@ -190,6 +193,7 @@ Macro reference
 .. function:: @ntuple N expr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @ntuple N expr
@@ -199,6 +203,7 @@ Macro reference
 .. function:: @nall N expr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @nall N expr
@@ -208,6 +213,7 @@ Macro reference
 .. function:: @nif N conditionexpr expr
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @nif N conditionexpr expr

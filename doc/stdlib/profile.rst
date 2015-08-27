@@ -11,6 +11,7 @@
 .. function:: @profile
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @profile
@@ -23,6 +24,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: clear()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clear()
@@ -32,6 +34,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
 
    .. Docstring generated from Julia source
+
    ::
 
               print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
@@ -56,6 +59,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    .. Docstring generated from Julia source
+
    ::
 
               print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
@@ -80,6 +84,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: init(; n::Integer, delay::Float64)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        init(; n::Integer, delay::Float64)
@@ -89,6 +94,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: fetch() -> data
 
    .. Docstring generated from Julia source
+
    ::
 
               fetch() -> data
@@ -104,6 +110,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: retrieve() -> data, lidict
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        retrieve() -> data, lidict
@@ -113,6 +120,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
    .. Docstring generated from Julia source
+
    ::
 
               callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
@@ -129,6 +137,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: clear_malloc_data()
 
    .. Docstring generated from Julia source
+
    ::
 
               clear_malloc_data()

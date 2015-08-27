@@ -8,6 +8,7 @@
 .. function:: pwd() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pwd() -> AbstractString
@@ -17,6 +18,7 @@
 .. function:: cd(dir::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cd(dir::AbstractString)
@@ -32,6 +34,7 @@
 .. function:: cd(f, [dir])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cd(dir::AbstractString)
@@ -47,6 +50,7 @@
 .. function:: readdir([dir]) -> Vector{ByteString}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readdir([dir]) -> Vector{ByteString}
@@ -56,6 +60,7 @@
 .. function:: mkdir(path, [mode])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mkdir(path, [mode])
@@ -65,6 +70,7 @@
 .. function:: mkpath(path, [mode])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mkpath(path, [mode])
@@ -74,6 +80,7 @@
 .. function:: symlink(target, link)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symlink(target, link)
@@ -87,6 +94,7 @@
 .. function:: readlink(path) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readlink(path) -> AbstractString
@@ -96,6 +104,7 @@
 .. function:: chmod(path, mode)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        chmod(path, mode)
@@ -105,6 +114,7 @@
 .. function:: stat(file)
 
    .. Docstring generated from Julia source
+
    ::
 
               stat(file)
@@ -129,6 +139,7 @@
 .. function:: lstat(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lstat(file)
@@ -138,6 +149,7 @@
 .. function:: ctime(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ctime(file)
@@ -147,6 +159,7 @@
 .. function:: mtime(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mtime(file)
@@ -156,6 +169,7 @@
 .. function:: filemode(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        filemode(file)
@@ -165,6 +179,7 @@
 .. function:: filesize(path...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        filesize(path...)
@@ -174,6 +189,7 @@
 .. function:: uperm(file)
 
    .. Docstring generated from Julia source
+
    ::
 
               uperm(file)
@@ -191,6 +207,7 @@
 .. function:: gperm(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gperm(file)
@@ -200,6 +217,7 @@
 .. function:: operm(file)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        operm(file)
@@ -209,6 +227,7 @@
 .. function:: cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
@@ -220,6 +239,7 @@
 .. function:: download(url,[localfile])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        download(url,[localfile])
@@ -229,6 +249,7 @@
 .. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
@@ -238,6 +259,7 @@
 .. function:: rm(path::AbstractString; recursive=false)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rm(path::AbstractString; recursive=false)
@@ -247,6 +269,7 @@
 .. function:: touch(path::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        touch(path::AbstractString)
@@ -256,6 +279,7 @@
 .. function:: tempname()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tempname()
@@ -265,6 +289,7 @@
 .. function:: tempdir()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tempdir()
@@ -274,6 +299,7 @@
 .. function:: mktemp([parent=tempdir()])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mktemp([parent=tempdir()])
@@ -289,6 +315,7 @@
 .. function:: mktemp(f::function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mktemp([parent=tempdir()])
@@ -304,6 +331,7 @@
 .. function:: mktempdir([parent=tempdir()])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mktempdir([parent=tempdir()])
@@ -319,6 +347,7 @@
 .. function:: mktempdir(f::function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mktempdir([parent=tempdir()])
@@ -334,6 +363,7 @@
 .. function:: isblockdev(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isblockdev(path) -> Bool
@@ -343,6 +373,7 @@
 .. function:: ischardev(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ischardev(path) -> Bool
@@ -352,6 +383,7 @@
 .. function:: isdir(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isdir(path) -> Bool
@@ -361,6 +393,7 @@
 .. function:: isexecutable(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isexecutable(path) -> Bool
@@ -370,6 +403,7 @@
 .. function:: isfifo(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isfifo(path) -> Bool
@@ -379,6 +413,7 @@
 .. function:: isfile(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isfile(path) -> Bool
@@ -388,6 +423,7 @@
 .. function:: islink(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        islink(path) -> Bool
@@ -397,6 +433,7 @@
 .. function:: ismount(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ismount(path) -> Bool
@@ -406,6 +443,7 @@
 .. function:: ispath(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ispath(path) -> Bool
@@ -415,6 +453,7 @@
 .. function:: isreadable(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isreadable(path) -> Bool
@@ -424,6 +463,7 @@
 .. function:: issetgid(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issetgid(path) -> Bool
@@ -433,6 +473,7 @@
 .. function:: issetuid(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issetuid(path) -> Bool
@@ -442,6 +483,7 @@
 .. function:: issocket(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issocket(path) -> Bool
@@ -451,6 +493,7 @@
 .. function:: issticky(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issticky(path) -> Bool
@@ -460,6 +503,7 @@
 .. function:: iswritable(path) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        iswritable(path) -> Bool
@@ -469,6 +513,7 @@
 .. function:: homedir() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        homedir() -> AbstractString
@@ -478,6 +523,7 @@
 .. function:: dirname(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dirname(path::AbstractString) -> AbstractString
@@ -487,6 +533,7 @@
 .. function:: basename(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        basename(path::AbstractString) -> AbstractString
@@ -496,6 +543,7 @@
 .. function:: @__FILE__() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @__FILE__() -> AbstractString
@@ -505,6 +553,7 @@
 .. function:: isabspath(path::AbstractString) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isabspath(path::AbstractString) -> Bool
@@ -514,6 +563,7 @@
 .. function:: isdirpath(path::AbstractString) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isdirpath(path::AbstractString) -> Bool
@@ -523,6 +573,7 @@
 .. function:: joinpath(parts...) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        joinpath(parts...) -> AbstractString
@@ -532,6 +583,7 @@
 .. function:: abspath(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        abspath(path::AbstractString) -> AbstractString
@@ -541,6 +593,7 @@
 .. function:: normpath(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        normpath(path::AbstractString) -> AbstractString
@@ -550,6 +603,7 @@
 .. function:: realpath(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        realpath(path::AbstractString) -> AbstractString
@@ -559,6 +613,7 @@
 .. function:: relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
@@ -568,6 +623,7 @@
 .. function:: expanduser(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        expanduser(path::AbstractString) -> AbstractString
@@ -577,6 +633,7 @@
 .. function:: splitdir(path::AbstractString) -> (AbstractString,AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        splitdir(path::AbstractString) -> (AbstractString,AbstractString)
@@ -586,6 +643,7 @@
 .. function:: splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
@@ -595,6 +653,7 @@
 .. function:: splitext(path::AbstractString) -> (AbstractString,AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        splitext(path::AbstractString) -> (AbstractString,AbstractString)

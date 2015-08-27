@@ -16,6 +16,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: *(A, B)
 
    .. Docstring generated from Julia source
+
    ::
 
               *(A, B)
@@ -48,6 +49,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: dot(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dot(x, y)
@@ -58,6 +60,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: vecdot(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        vecdot(x, y)
@@ -67,6 +70,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cross(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cross(x, y)
@@ -77,6 +81,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: factorize(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        factorize(A)
@@ -86,6 +91,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: full(F)
 
    .. Docstring generated from Julia source
+
    ::
 
               full(S)
@@ -114,6 +120,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: lu(A) -> L, U, p
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lu(A) -> L, U, p
@@ -123,6 +130,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: lufact(A [,pivot=Val{true}]) -> F
 
    .. Docstring generated from Julia source
+
    ::
 
               lufact(A [,pivot=Val{true}]) -> F
@@ -166,6 +174,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: lufact!(A) -> LU
 
    .. Docstring generated from Julia source
+
    ::
 
               lufact!(A) -> LU
@@ -175,6 +184,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: chol(A, [LU]) -> F
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        chol(A, [LU]) -> F
@@ -184,6 +194,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
@@ -203,6 +214,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
@@ -222,6 +234,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    .. Docstring generated from Julia source
+
    ::
 
               cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
@@ -231,6 +244,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ldltfact(A) -> LDLtFactorization
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ldltfact(A) -> LDLtFactorization
@@ -250,6 +264,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ldltfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ldltfact(A) -> LDLtFactorization
@@ -269,6 +284,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
@@ -278,6 +294,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact(A [,pivot=Val{false}]) -> F
 
    .. Docstring generated from Julia source
+
    ::
 
               qrfact(A [,pivot=Val{false}]) -> F
@@ -346,6 +363,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact(A) -> SPQR.Factorization
 
    .. Docstring generated from Julia source
+
    ::
 
               qrfact(A [,pivot=Val{false}]) -> F
@@ -414,6 +432,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact!(A [,pivot=Val{false}])
 
    .. Docstring generated from Julia source
+
    ::
 
               qrfact!(A [,pivot=Val{false}])
@@ -423,6 +442,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 
    .. Docstring generated from Julia source
+
    ::
 
               full(S)
@@ -451,6 +471,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: bkfact(A) -> BunchKaufman
 
    .. Docstring generated from Julia source
+
    ::
 
               bkfact(A) -> BunchKaufman
@@ -462,6 +483,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: bkfact!(A) -> BunchKaufman
 
    .. Docstring generated from Julia source
+
    ::
 
               bkfact!(A) -> BunchKaufman
@@ -471,6 +493,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
    .. Docstring generated from Julia source
+
    ::
 
               eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
@@ -504,6 +527,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eig(A, B) -> D, V
 
    .. Docstring generated from Julia source
+
    ::
 
               eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
@@ -537,6 +561,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvals(A,[irange,][vl,][vu])
 
    .. Docstring generated from Julia source
+
    ::
 
               eigvals(A,[irange,][vl,][vu])
@@ -556,6 +581,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigmax(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eigmax(A)
@@ -565,6 +591,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigmin(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eigmin(A)
@@ -574,6 +601,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
    .. Docstring generated from Julia source
+
    ::
 
               eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
@@ -588,6 +616,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
    .. Docstring generated from Julia source
+
    ::
 
               eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
@@ -626,6 +655,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigfact(A, B) -> GeneralizedEigen
 
    .. Docstring generated from Julia source
+
    ::
 
               eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
@@ -664,6 +694,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigfact!(A, [B])
 
    .. Docstring generated from Julia source
+
    ::
 
               eigfact!(A, [B])
@@ -674,6 +705,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: hessfact(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               hessfact(A)
@@ -683,6 +715,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: hessfact!(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               hessfact!(A)
@@ -692,6 +725,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schurfact(A) -> Schur
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        schurfact(A) -> Schur
@@ -707,6 +741,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schurfact!(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               schurfact!(A)
@@ -716,6 +751,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
    .. Docstring generated from Julia source
+
    ::
 
               schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
@@ -731,6 +767,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur(Q, T, select) -> Schur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur(Q, T, select) -> Schur
@@ -758,6 +795,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(Q, T, select) -> Schur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur!(Q, T, select) -> Schur
@@ -785,6 +823,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur(S, select) -> Schur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur(Q, T, select) -> Schur
@@ -812,6 +851,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(S, select) -> Schur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur!(Q, T, select) -> Schur
@@ -839,6 +879,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schurfact(A, B) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        schurfact(A) -> Schur
@@ -854,6 +895,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
    .. Docstring generated from Julia source
+
    ::
 
               schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
@@ -869,6 +911,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur(S, T, Q, Z, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur(Q, T, select) -> Schur
@@ -896,6 +939,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur!(Q, T, select) -> Schur
@@ -923,6 +967,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur(GS, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur(Q, T, select) -> Schur
@@ -950,6 +995,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(GS, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
+
    ::
 
               ordschur!(Q, T, select) -> Schur
@@ -977,6 +1023,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svdfact(A, [thin=true]) -> SVD
@@ -992,6 +1039,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact!(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
+
    ::
 
               svdfact!(A, [thin=true]) -> SVD
@@ -1001,6 +1049,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svd(A, [thin=true]) -> U, S, V
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svd(A, [thin=true]) -> U, S, V
@@ -1016,6 +1065,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdvals(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svdvals(A)
@@ -1031,6 +1081,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdvals!(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svdvals!(A)
@@ -1040,6 +1091,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact(A, B) -> GeneralizedSVD
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svdfact(A, [thin=true]) -> SVD
@@ -1055,6 +1107,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svd(A, [thin=true]) -> U, S, V
@@ -1070,6 +1123,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdvals(A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        svdvals(A)
@@ -1085,6 +1139,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        triu(M)
@@ -1100,6 +1155,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu(M, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        triu(M)
@@ -1115,6 +1171,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu!(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        triu!(M)
@@ -1130,6 +1187,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu!(M, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        triu!(M)
@@ -1145,6 +1203,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tril(M)
@@ -1160,6 +1219,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril(M, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tril(M)
@@ -1175,6 +1235,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril!(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tril!(M)
@@ -1190,6 +1251,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril!(M, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tril!(M)
@@ -1205,6 +1267,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: diagind(M[, k])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        diagind(M[, k])
@@ -1214,6 +1277,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: diag(M[, k])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        diag(M[, k])
@@ -1223,6 +1287,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: diagm(v[, k])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        diagm(v[, k])
@@ -1232,6 +1297,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: scale(A, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        scale(A, b)
@@ -1247,6 +1313,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: scale(b, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        scale(A, b)
@@ -1262,6 +1329,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: scale!(A, b)
 
    .. Docstring generated from Julia source
+
    ::
 
               scale!(A, b)
@@ -1282,6 +1350,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: scale!(b, A)
 
    .. Docstring generated from Julia source
+
    ::
 
               scale!(A, b)
@@ -1302,6 +1371,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: Tridiagonal(dl, d, du)
 
    .. Docstring generated from Julia source
+
    ::
 
               Tridiagonal(dl, d, du)
@@ -1311,6 +1381,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: Bidiagonal(dv, ev, isupper)
 
    .. Docstring generated from Julia source
+
    ::
 
               Bidiagonal(dv, ev, isupper)
@@ -1321,6 +1392,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: SymTridiagonal(d, du)
 
    .. Docstring generated from Julia source
+
    ::
 
               SymTridiagonal(d, du)
@@ -1330,6 +1402,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: rank(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rank(M)
@@ -1339,6 +1412,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: norm(A, [p])
 
    .. Docstring generated from Julia source
+
    ::
 
               norm(A, [p])
@@ -1352,6 +1426,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: vecnorm(A, [p])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        vecnorm(A, [p])
@@ -1363,6 +1438,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cond(M, [p])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cond(M, [p])
@@ -1372,6 +1448,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: condskeel(M, [x, p])
 
    .. Docstring generated from Julia source
+
    ::
 
               condskeel(M, [x, p])
@@ -1387,6 +1464,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: trace(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trace(M)
@@ -1396,6 +1474,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: det(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        det(M)
@@ -1405,6 +1484,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logdet(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        logdet(M)
@@ -1414,6 +1494,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logabsdet(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        logabsdet(M)
@@ -1423,6 +1504,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: inv(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        inv(M)
@@ -1432,6 +1514,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: pinv(M[, tol])
 
    .. Docstring generated from Julia source
+
    ::
 
               pinv(M[, tol])
@@ -1468,6 +1551,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: nullspace(M)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nullspace(M)
@@ -1477,6 +1561,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: repmat(A, n, m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        repmat(A, n, m)
@@ -1486,6 +1571,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: repeat(A, inner = Int[], outer = Int[])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        repeat(A, inner = Int[], outer = Int[])
@@ -1495,6 +1581,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: kron(A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        kron(A, B)
@@ -1504,6 +1591,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: blkdiag(A...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        blkdiag(A...)
@@ -1513,6 +1601,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: linreg(x, y) -> [a; b]
 
    .. Docstring generated from Julia source
+
    ::
 
               linreg(x, y) -> [a; b]
@@ -1537,6 +1626,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: linreg(x, y, w)
 
    .. Docstring generated from Julia source
+
    ::
 
               linreg(x, y) -> [a; b]
@@ -1561,6 +1651,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: expm(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               expm(A)
@@ -1580,6 +1671,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logm(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               logm(A)
@@ -1601,6 +1693,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: sqrtm(A)
 
    .. Docstring generated from Julia source
+
    ::
 
               sqrtm(A)
@@ -1616,6 +1709,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: lyap(A, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lyap(A, C)
@@ -1625,6 +1719,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: sylvester(A, B, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sylvester(A, B, C)
@@ -1634,6 +1729,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: issym(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issym(A) -> Bool
@@ -1643,6 +1739,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: isposdef(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isposdef(A) -> Bool
@@ -1652,6 +1749,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: isposdef!(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isposdef!(A) -> Bool
@@ -1661,6 +1759,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: istril(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        istril(A) -> Bool
@@ -1670,6 +1769,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: istriu(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        istriu(A) -> Bool
@@ -1679,6 +1779,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: isdiag(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isdiag(A) -> Bool
@@ -1688,6 +1789,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ishermitian(A) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ishermitian(A) -> Bool
@@ -1697,6 +1799,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: transpose(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        transpose(A)
@@ -1706,6 +1809,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: transpose!(dest,src)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        transpose!(dest,src)
@@ -1715,6 +1819,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ctranspose(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ctranspose(A)
@@ -1724,6 +1829,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ctranspose!(dest,src)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ctranspose!(dest,src)
@@ -1733,6 +1839,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    .. Docstring generated from Julia source
+
    ::
 
               eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
@@ -1783,6 +1890,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
 
    .. Docstring generated from Julia source
+
    ::
 
               svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
@@ -1805,6 +1913,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: peakflops(n; parallel=false)
 
    .. Docstring generated from Julia source
+
    ::
 
               peakflops(n; parallel=false)
@@ -1830,6 +1939,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: dot(n, X, incx, Y, incy)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dot(n, X, incx, Y, incy)
@@ -1839,6 +1949,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: dotu(n, X, incx, Y, incy)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dotu(n, X, incx, Y, incy)
@@ -1848,6 +1959,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: dotc(n, X, incx, U, incy)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dotc(n, X, incx, U, incy)
@@ -1857,6 +1969,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: blascopy!(n, X, incx, Y, incy)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        blascopy!(n, X, incx, Y, incy)
@@ -1866,6 +1979,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: nrm2(n, X, incx)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nrm2(n, X, incx)
@@ -1875,6 +1989,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: asum(n, X, incx)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asum(n, X, incx)
@@ -1884,6 +1999,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: axpy!(a, X, Y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        axpy!(a, X, Y)
@@ -1893,6 +2009,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: scal!(n, a, X, incx)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        scal!(n, a, X, incx)
@@ -1902,6 +2019,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: scal(n, a, X, incx)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        scal(n, a, X, incx)
@@ -1911,6 +2029,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: ger!(alpha, x, y, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ger!(alpha, x, y, A)
@@ -1920,6 +2039,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: syr!(uplo, alpha, x, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        syr!(uplo, alpha, x, A)
@@ -1929,6 +2049,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: syrk!(uplo, trans, alpha, A, beta, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        syrk!(uplo, trans, alpha, A, beta, C)
@@ -1938,6 +2059,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: syrk(uplo, trans, alpha, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        syrk(uplo, trans, alpha, A)
@@ -1947,6 +2069,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: her!(uplo, alpha, x, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        her!(uplo, alpha, x, A)
@@ -1956,6 +2079,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: herk!(uplo, trans, alpha, A, beta, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        herk!(uplo, trans, alpha, A, beta, C)
@@ -1965,6 +2089,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: herk(uplo, trans, alpha, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        herk(uplo, trans, alpha, A)
@@ -1974,6 +2099,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
@@ -1983,6 +2109,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
@@ -1992,6 +2119,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: sbmv!(uplo, k, alpha, A, x, beta, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sbmv!(uplo, k, alpha, A, x, beta, y)
@@ -2003,6 +2131,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: sbmv(uplo, k, alpha, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sbmv(uplo, k, alpha, A, x)
@@ -2018,6 +2147,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: sbmv(uplo, k, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sbmv(uplo, k, alpha, A, x)
@@ -2033,6 +2163,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemm!(tA, tB, alpha, A, B, beta, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemm!(tA, tB, alpha, A, B, beta, C)
@@ -2042,6 +2173,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemm(tA, tB, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemm(tA, tB, alpha, A, B)
@@ -2057,6 +2189,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemm(tA, tB, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemm(tA, tB, alpha, A, B)
@@ -2072,6 +2205,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemv!(tA, alpha, A, x, beta, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemv!(tA, alpha, A, x, beta, y)
@@ -2081,6 +2215,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemv(tA, alpha, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemv(tA, alpha, A, x)
@@ -2096,6 +2231,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemv(tA, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gemv(tA, alpha, A, x)
@@ -2111,6 +2247,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symm!(side, ul, alpha, A, B, beta, C)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symm!(side, ul, alpha, A, B, beta, C)
@@ -2120,6 +2257,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symm(side, ul, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symm(side, ul, alpha, A, B)
@@ -2141,6 +2279,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symm(side, ul, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symm(side, ul, alpha, A, B)
@@ -2162,6 +2301,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symm(tA, tB, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symm(side, ul, alpha, A, B)
@@ -2183,6 +2323,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symv!(ul, alpha, A, x, beta, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symv!(ul, alpha, A, x, beta, y)
@@ -2192,6 +2333,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symv(ul, alpha, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symv(ul, alpha, A, x)
@@ -2207,6 +2349,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symv(ul, A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symv(ul, alpha, A, x)
@@ -2222,6 +2365,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trmm!(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trmm!(side, ul, tA, dA, alpha, A, B)
@@ -2231,6 +2375,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trmm(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trmm(side, ul, tA, dA, alpha, A, B)
@@ -2240,6 +2385,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trsm!(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trsm!(side, ul, tA, dA, alpha, A, B)
@@ -2249,6 +2395,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trsm(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trsm(side, ul, tA, dA, alpha, A, B)
@@ -2258,6 +2405,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trmv!(side, ul, tA, dA, alpha, A, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trmv!(side, ul, tA, dA, alpha, A, b)
@@ -2267,6 +2415,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trmv(side, ul, tA, dA, alpha, A, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trmv(side, ul, tA, dA, alpha, A, b)
@@ -2276,6 +2425,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trsv!(ul, tA, dA, A, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trsv!(ul, tA, dA, A, b)
@@ -2285,6 +2435,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: trsv(ul, tA, dA, A, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trsv(ul, tA, dA, A, b)
@@ -2294,6 +2445,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: blas_set_num_threads(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        blas_set_num_threads(n)

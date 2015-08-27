@@ -15,6 +15,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
@@ -153,6 +154,7 @@ Macros
 .. function:: @test(ex)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @test(ex)
@@ -162,6 +164,7 @@ Macros
 .. function:: @test_throws(extype, ex)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @test_throws(extype, ex)
@@ -171,6 +174,7 @@ Macros
 .. function:: @test_approx_eq(a, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @test_approx_eq(a, b)
@@ -180,6 +184,7 @@ Macros
 .. function:: @test_approx_eq_eps(a, b, tol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @test_approx_eq_eps(a, b, tol)
@@ -192,6 +197,7 @@ Functions
 .. function:: with_handler(f, handler)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        with_handler(f, handler)

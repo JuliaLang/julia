@@ -23,6 +23,7 @@ Getting Around
 .. function:: exit([code])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        exit([code])
@@ -32,6 +33,7 @@ Getting Around
 .. function:: quit()
 
    .. Docstring generated from Julia source
+
    ::
 
               quit()
@@ -41,15 +43,17 @@ Getting Around
 .. function:: atexit(f)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atexit(f)
 
-   Register a zero-argument function to be called at exit.
+   Register a zero-argument function ``f()`` to be called at process exit. ``atexit()`` hooks are called in last in first out (LIFO) order and run before object finalizers.
 
 .. function:: atreplinit(f)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atreplinit(f)
@@ -59,6 +63,7 @@ Getting Around
 .. function:: isinteractive() -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isinteractive() -> Bool
@@ -68,15 +73,19 @@ Getting Around
 .. function:: whos([Module,] [pattern::Regex])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
-       whos([Module,] [pattern::Regex])
+       whos([io,] [Module,] [pattern::Regex])
 
    Print information about exported global variables in a module, optionally restricted to those matching ``pattern``\ .
+
+   The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
 .. function:: edit(file::AbstractString, [line])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        edit(file::AbstractString, [line])
@@ -92,6 +101,7 @@ Getting Around
 .. function:: edit(function, [types])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        edit(file::AbstractString, [line])
@@ -107,6 +117,7 @@ Getting Around
 .. function:: @edit
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @edit
@@ -116,6 +127,7 @@ Getting Around
 .. function:: less(file::AbstractString, [line])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        less(file::AbstractString, [line])
@@ -131,6 +143,7 @@ Getting Around
 .. function:: less(function, [types])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        less(file::AbstractString, [line])
@@ -146,6 +159,7 @@ Getting Around
 .. function:: @less
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @less
@@ -155,6 +169,7 @@ Getting Around
 .. function:: clipboard(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clipboard(x)
@@ -170,6 +185,7 @@ Getting Around
 .. function:: clipboard() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clipboard(x)
@@ -185,6 +201,7 @@ Getting Around
 .. function:: require(module::Symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        require(module::Symbol)
@@ -198,6 +215,7 @@ Getting Around
 .. function:: compilecache(module::Symbol)
 
    .. Docstring generated from Julia source
+
    ::
 
               Base.compilecache(module::Symbol)
@@ -207,6 +225,7 @@ Getting Around
 .. function:: __precompile__(isprecompilable::Bool=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        __precompile__(isprecompilable::Bool=true)
@@ -218,6 +237,7 @@ Getting Around
 .. function:: include(path::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        include("file.jl")
@@ -227,6 +247,7 @@ Getting Around
 .. function:: include_string(code::AbstractString, [filename])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        include_string(code::AbstractString, [filename])
@@ -236,6 +257,7 @@ Getting Around
 .. function:: include_dependency(path::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        include_dependency(path::AbstractString)
@@ -247,6 +269,7 @@ Getting Around
 .. function:: which(f, types)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        which(f, types)
@@ -264,6 +287,7 @@ Getting Around
 .. function:: which(symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        which(f, types)
@@ -281,6 +305,7 @@ Getting Around
 .. function:: @which
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @which
@@ -290,6 +315,7 @@ Getting Around
 .. function:: methods(f, [types])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        methods(f, [types])
@@ -301,6 +327,7 @@ Getting Around
 .. function:: methodswith(typ[, module or function][, showparents])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        methodswith(typ[, module or function][, showparents])
@@ -312,6 +339,7 @@ Getting Around
 .. function:: @show
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @show
@@ -321,6 +349,7 @@ Getting Around
 .. function:: versioninfo([verbose::Bool])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        versioninfo([verbose::Bool])
@@ -330,6 +359,7 @@ Getting Around
 .. function:: workspace()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        workspace()
@@ -349,6 +379,7 @@ All Objects
 .. function:: is(x, y) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        is(x, y) -> Bool
@@ -360,6 +391,7 @@ All Objects
 .. function:: isa(x, type) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isa(x, type) -> Bool
@@ -369,6 +401,7 @@ All Objects
 .. function:: isequal(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isequal(x, y)
@@ -384,6 +417,7 @@ All Objects
 .. function:: isless(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isless(x, y)
@@ -393,6 +427,7 @@ All Objects
 .. function:: ifelse(condition::Bool, x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ifelse(condition::Bool, x, y)
@@ -402,6 +437,7 @@ All Objects
 .. function:: lexcmp(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lexcmp(x, y)
@@ -411,6 +447,7 @@ All Objects
 .. function:: lexless(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lexless(x, y)
@@ -420,6 +457,7 @@ All Objects
 .. function:: typeof(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        typeof(x)
@@ -429,6 +467,7 @@ All Objects
 .. function:: tuple(xs...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tuple(xs...)
@@ -438,6 +477,7 @@ All Objects
 .. function:: ntuple(f::Function, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ntuple(f::Function, n)
@@ -447,6 +487,7 @@ All Objects
 .. function:: object_id(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        object_id(x)
@@ -456,6 +497,7 @@ All Objects
 .. function:: hash(x[, h])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hash(x[, h])
@@ -467,6 +509,7 @@ All Objects
 .. function:: finalizer(x, function)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        finalizer(x, function)
@@ -476,6 +519,7 @@ All Objects
 .. function:: finalize(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        finalize(x)
@@ -485,6 +529,7 @@ All Objects
 .. function:: copy(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        copy(x)
@@ -494,6 +539,7 @@ All Objects
 .. function:: deepcopy(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        deepcopy(x)
@@ -507,6 +553,7 @@ All Objects
 .. function:: isdefined([object,] index | symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isdefined([object,] index | symbol)
@@ -516,6 +563,7 @@ All Objects
 .. function:: convert(T, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ::
@@ -683,6 +731,7 @@ All Objects
 .. function:: promote(xs...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        promote(xs...)
@@ -692,6 +741,7 @@ All Objects
 .. function:: oftype(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        oftype(x, y)
@@ -701,6 +751,7 @@ All Objects
 .. function:: widen(type | x)
 
    .. Docstring generated from Julia source
+
    ::
 
               widen(type | x)
@@ -722,6 +773,7 @@ All Objects
 .. function:: identity(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        identity(x)
@@ -734,6 +786,7 @@ Types
 .. function:: super(T::DataType)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        super(T::DataType)
@@ -743,6 +796,7 @@ Types
 .. function:: issubtype(type1, type2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issubtype(type1, type2)
@@ -752,6 +806,7 @@ Types
 .. function:: <:(T1, T2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issubtype(type1, type2)
@@ -761,6 +816,7 @@ Types
 .. function:: subtypes(T::DataType)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        subtypes(T::DataType)
@@ -770,6 +826,7 @@ Types
 .. function:: typemin(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        typemin(type)
@@ -779,6 +836,7 @@ Types
 .. function:: typemax(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        typemax(type)
@@ -788,6 +846,7 @@ Types
 .. function:: realmin(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        realmin(type)
@@ -797,6 +856,7 @@ Types
 .. function:: realmax(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        realmax(type)
@@ -806,6 +866,7 @@ Types
 .. function:: maxintfloat(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maxintfloat(type)
@@ -815,6 +876,7 @@ Types
 .. function:: sizeof(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sizeof(type)
@@ -830,6 +892,7 @@ Types
 .. function:: eps([type])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eps(::DateTime) -> Millisecond
@@ -840,6 +903,7 @@ Types
 .. function:: eps(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eps(::DateTime) -> Millisecond
@@ -850,6 +914,7 @@ Types
 .. function:: promote_type(type1, type2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        promote_type(type1, type2)
@@ -859,6 +924,7 @@ Types
 .. function:: promote_rule(type1, type2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        promote_rule(type1, type2)
@@ -868,6 +934,7 @@ Types
 .. function:: getfield(value, name::Symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        getfield(value, name::Symbol)
@@ -877,6 +944,7 @@ Types
 .. function:: setfield!(value, name::Symbol, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setfield!(value, name::Symbol, x)
@@ -886,6 +954,7 @@ Types
 .. function:: fieldoffsets(type)
 
    .. Docstring generated from Julia source
+
    ::
 
               fieldoffsets(type)
@@ -915,6 +984,7 @@ Types
 .. function:: fieldtype(type, name::Symbol | index::Int)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fieldtype(type, name::Symbol | index::Int)
@@ -924,6 +994,7 @@ Types
 .. function:: isimmutable(v)
 
    .. Docstring generated from Julia source
+
    ::
 
               isimmutable(v)
@@ -934,6 +1005,7 @@ Types
 .. function:: isbits(T)
 
    .. Docstring generated from Julia source
+
    ::
 
               isbits(T)
@@ -951,6 +1023,7 @@ Types
 .. function:: isleaftype(T)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isleaftype(T)
@@ -960,6 +1033,7 @@ Types
 .. function:: typejoin(T, S)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        typejoin(T, S)
@@ -969,6 +1043,7 @@ Types
 .. function:: typeintersect(T, S)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        typeintersect(T, S)
@@ -978,6 +1053,7 @@ Types
 .. function:: Val{c}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Val{c}
@@ -987,6 +1063,7 @@ Types
 .. function:: @enum EnumName EnumValue1[=x] EnumValue2[=y]
 
    .. Docstring generated from Julia source
+
    ::
 
               @enum EnumName EnumValue1[=x] EnumValue2[=y]
@@ -1006,6 +1083,7 @@ Types
 .. function:: instances(T::Type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        instances(T::Type)
@@ -1018,6 +1096,7 @@ Generic Functions
 .. function:: method_exists(f, Tuple type) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               method_exists(f, Tuple type) -> Bool
@@ -1032,6 +1111,7 @@ Generic Functions
 .. function:: applicable(f, args...) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               applicable(f, args...) -> Bool
@@ -1053,6 +1133,7 @@ Generic Functions
 .. function:: invoke(f, (types...), args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        invoke(f, (types...), args...)
@@ -1062,6 +1143,7 @@ Generic Functions
 .. function:: |>(x, f)
 
    .. Docstring generated from Julia source
+
    ::
 
               |>(x, f)
@@ -1076,6 +1158,7 @@ Generic Functions
 .. function:: call(x, args...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        call(x, args...)
@@ -1088,6 +1171,7 @@ Syntax
 .. function:: eval([m::Module], expr::Expr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eval([m::Module], expr::Expr)
@@ -1097,6 +1181,7 @@ Syntax
 .. function:: @eval
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @eval
@@ -1106,6 +1191,7 @@ Syntax
 .. function:: evalfile(path::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        evalfile(path::AbstractString)
@@ -1115,6 +1201,7 @@ Syntax
 .. function:: esc(e::ANY)
 
    .. Docstring generated from Julia source
+
    ::
 
               esc(e::ANY)
@@ -1125,6 +1212,7 @@ Syntax
 .. function:: gensym([tag])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gensym([tag])
@@ -1134,6 +1222,7 @@ Syntax
 .. function:: @gensym
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @gensym
@@ -1143,6 +1232,7 @@ Syntax
 .. function:: parse(str, start; greedy=true, raise=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        parse(str, start; greedy=true, raise=true)
@@ -1164,6 +1254,7 @@ Syntax
 .. function:: parse(str; raise=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        parse(str, start; greedy=true, raise=true)
@@ -1188,6 +1279,7 @@ Nullables
 .. function:: Nullable(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Nullable(x)
@@ -1197,6 +1289,7 @@ Nullables
 .. function:: get(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               get(x)
@@ -1231,6 +1324,7 @@ Nullables
 .. function:: get(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               get(x)
@@ -1265,6 +1359,7 @@ Nullables
 .. function:: isnull(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isnull(x)
@@ -1277,6 +1372,7 @@ System
 .. function:: run(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        run(command)
@@ -1286,6 +1382,7 @@ System
 .. function:: spawn(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        spawn(command)
@@ -1300,6 +1397,7 @@ System
 .. function:: success(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        success(command)
@@ -1309,6 +1407,7 @@ System
 .. function:: process_running(p::Process)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        process_running(p::Process)
@@ -1318,6 +1417,7 @@ System
 .. function:: process_exited(p::Process)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        process_exited(p::Process)
@@ -1327,6 +1427,7 @@ System
 .. function:: kill(p::Process, signum=SIGTERM)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        kill(p::Process, signum=SIGTERM)
@@ -1342,6 +1443,7 @@ System
 .. function:: open(command, mode::AbstractString="r", stdio=DevNull)
 
    .. Docstring generated from Julia source
+
    ::
 
               open(command, mode::AbstractString="r", stdio=DevNull)
@@ -1395,6 +1497,7 @@ System
 .. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    .. Docstring generated from Julia source
+
    ::
 
               open(command, mode::AbstractString="r", stdio=DevNull)
@@ -1448,6 +1551,7 @@ System
 .. function:: Sys.set_process_title(title::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Sys.set_process_title(title::AbstractString)
@@ -1457,6 +1561,7 @@ System
 .. function:: Sys.get_process_title()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Sys.get_process_title()
@@ -1466,6 +1571,7 @@ System
 .. function:: readandwrite(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        readandwrite(command)
@@ -1475,6 +1581,7 @@ System
 .. function:: ignorestatus(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ignorestatus(command)
@@ -1484,6 +1591,7 @@ System
 .. function:: detach(command)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        detach(command)
@@ -1493,6 +1601,7 @@ System
 .. function:: setenv(command, env; dir=working_dir)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setenv(command, env; dir=working_dir)
@@ -1504,6 +1613,7 @@ System
 .. function:: withenv(f::Function, kv::Pair...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        withenv(f::Function, kv::Pair...)
@@ -1513,6 +1623,7 @@ System
 .. function:: pipe(from, to, ...)
 
    .. Docstring generated from Julia source
+
    ::
 
               pipe(from, to, ...)
@@ -1548,6 +1659,7 @@ System
 .. function:: pipe(command; stdin, stdout, stderr, append=false)
 
    .. Docstring generated from Julia source
+
    ::
 
               pipe(from, to, ...)
@@ -1583,6 +1695,7 @@ System
 .. function:: gethostname() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gethostname() -> AbstractString
@@ -1592,6 +1705,7 @@ System
 .. function:: getipaddr() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        getipaddr() -> AbstractString
@@ -1601,6 +1715,7 @@ System
 .. function:: getpid() -> Int32
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        getpid() -> Int32
@@ -1610,6 +1725,7 @@ System
 .. function:: time()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        time()
@@ -1619,6 +1735,7 @@ System
 .. function:: time_ns()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        time_ns()
@@ -1628,6 +1745,7 @@ System
 .. function:: tic()
 
    .. Docstring generated from Julia source
+
    ::
 
               tic()
@@ -1637,6 +1755,7 @@ System
 .. function:: toc()
 
    .. Docstring generated from Julia source
+
    ::
 
               toc()
@@ -1646,6 +1765,7 @@ System
 .. function:: toq()
 
    .. Docstring generated from Julia source
+
    ::
 
               toq()
@@ -1655,6 +1775,7 @@ System
 .. function:: @time
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @time
@@ -1664,6 +1785,7 @@ System
 .. function:: @timev
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @timev
@@ -1673,6 +1795,7 @@ System
 .. function:: @timed
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @timed
@@ -1682,6 +1805,7 @@ System
 .. function:: @elapsed
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @elapsed
@@ -1691,6 +1815,7 @@ System
 .. function:: @allocated
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @allocated
@@ -1700,6 +1825,7 @@ System
 .. function:: EnvHash() -> EnvHash
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        EnvHash() -> EnvHash
@@ -1713,6 +1839,7 @@ System
 .. function:: @unix
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @unix
@@ -1722,6 +1849,7 @@ System
 .. function:: @osx
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @osx
@@ -1731,6 +1859,7 @@ System
 .. function:: @linux
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @linux
@@ -1740,6 +1869,7 @@ System
 .. function:: @windows
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @windows
@@ -1752,6 +1882,7 @@ Errors
 .. function:: error(message::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        error(message::AbstractString)
@@ -1761,6 +1892,7 @@ Errors
 .. function:: throw(e)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        throw(e)
@@ -1770,6 +1902,7 @@ Errors
 .. function:: rethrow([e])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rethrow([e])
@@ -1779,6 +1912,7 @@ Errors
 .. function:: backtrace()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        backtrace()
@@ -1788,6 +1922,7 @@ Errors
 .. function:: catch_backtrace()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        catch_backtrace()
@@ -1797,6 +1932,7 @@ Errors
 .. function:: assert(cond)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        assert(cond)
@@ -1806,6 +1942,7 @@ Errors
 .. function:: @assert cond [text]
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        @assert cond [text]
@@ -1815,6 +1952,7 @@ Errors
 .. function:: ArgumentError(msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ArgumentError(msg)
@@ -1824,6 +1962,7 @@ Errors
 .. function:: AssertionError([msg])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        AssertionError([msg])
@@ -1833,6 +1972,7 @@ Errors
 .. function:: BoundsError([a],[i])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        BoundsError([a],[i])
@@ -1842,6 +1982,7 @@ Errors
 .. function:: DimensionMismatch([msg])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        DimensionMismatch([msg])
@@ -1851,6 +1992,7 @@ Errors
 .. function:: DivideError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        DivideError()
@@ -1860,6 +2002,7 @@ Errors
 .. function:: DomainError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        DomainError()
@@ -1869,6 +2012,7 @@ Errors
 .. function:: EOFError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        EOFError()
@@ -1878,6 +2022,7 @@ Errors
 .. function:: ErrorException(msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ErrorException(msg)
@@ -1887,6 +2032,7 @@ Errors
 .. function:: InexactError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        InexactError()
@@ -1896,6 +2042,7 @@ Errors
 .. function:: InterruptException()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        InterruptException()
@@ -1905,6 +2052,7 @@ Errors
 .. function:: KeyError(key)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        KeyError(key)
@@ -1914,6 +2062,7 @@ Errors
 .. function:: LoadError(file::AbstractString, line::Int, error)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        LoadError(file::AbstractString, line::Int, error)
@@ -1923,6 +2072,7 @@ Errors
 .. function:: MethodError(f, args)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        MethodError(f, args)
@@ -1932,6 +2082,7 @@ Errors
 .. function:: NullException()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        NullException()
@@ -1941,6 +2092,7 @@ Errors
 .. function:: OutOfMemoryError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        OutOfMemoryError()
@@ -1950,6 +2102,7 @@ Errors
 .. function:: ReadOnlyMemoryError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ReadOnlyMemoryError()
@@ -1959,6 +2112,7 @@ Errors
 .. function:: OverflowError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        OverflowError()
@@ -1968,6 +2122,7 @@ Errors
 .. function:: ParseError(msg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ParseError(msg)
@@ -1977,6 +2132,7 @@ Errors
 .. function:: ProcessExitedException()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ProcessExitedException()
@@ -1986,6 +2142,7 @@ Errors
 .. function:: StackOverflowError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        StackOverflowError()
@@ -1995,6 +2152,7 @@ Errors
 .. function:: SystemError(prefix::AbstractString, [errnum::Int32])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        SystemError(prefix::AbstractString, [errnum::Int32])
@@ -2004,6 +2162,7 @@ Errors
 .. function:: TypeError(func::Symbol, context::AbstractString, expected::Type, got)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        TypeError(func::Symbol, context::AbstractString, expected::Type, got)
@@ -2013,6 +2172,7 @@ Errors
 .. function:: UndefRefError()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        UndefRefError()
@@ -2022,6 +2182,7 @@ Errors
 .. function:: UndefVarError(var::Symbol)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        UndefVarError(var::Symbol)
@@ -2034,6 +2195,7 @@ Events
 .. function:: Timer(callback::Function, delay, repeat=0)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Timer(callback::Function, delay, repeat=0)
@@ -2049,6 +2211,7 @@ Events
 .. function:: Timer(delay, repeat=0)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Timer(callback::Function, delay, repeat=0)
@@ -2067,6 +2230,7 @@ Reflection
 .. function:: module_name(m::Module) -> Symbol
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        module_name(m::Module) -> Symbol
@@ -2076,6 +2240,7 @@ Reflection
 .. function:: module_parent(m::Module) -> Module
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        module_parent(m::Module) -> Module
@@ -2085,6 +2250,7 @@ Reflection
 .. function:: current_module() -> Module
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        current_module() -> Module
@@ -2094,6 +2260,7 @@ Reflection
 .. function:: fullname(m::Module)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fullname(m::Module)
@@ -2103,6 +2270,7 @@ Reflection
 .. function:: names(x::Module[, all=false[, imported=false]])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        names(x::Module[, all=false[, imported=false]])
@@ -2112,6 +2280,7 @@ Reflection
 .. function:: nfields(x::DataType) -> Int
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nfields(x::DataType) -> Int
@@ -2121,6 +2290,7 @@ Reflection
 .. function:: fieldnames(x::DataType)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fieldnames(x::DataType)
@@ -2130,6 +2300,7 @@ Reflection
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isconst([m::Module], s::Symbol) -> Bool
@@ -2139,6 +2310,7 @@ Reflection
 .. function:: isgeneric(f::Function) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isgeneric(f::Function) -> Bool
@@ -2148,6 +2320,7 @@ Reflection
 .. function:: function_name(f::Function) -> Symbol
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        function_name(f::Function) -> Symbol
@@ -2157,6 +2330,7 @@ Reflection
 .. function:: function_module(f::Function, types) -> Module
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        function_module(f::Function, types) -> Module
@@ -2166,6 +2340,7 @@ Reflection
 .. function:: functionloc(f::Function, types)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        functionloc(f::Function, types)
@@ -2181,6 +2356,7 @@ Reflection
 .. function:: functionloc(m::Method)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        functionloc(f::Function, types)
@@ -2199,6 +2375,7 @@ Internals
 .. function:: gc()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gc()
@@ -2208,6 +2385,7 @@ Internals
 .. function:: gc_enable(on::Bool)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gc_enable(on::Bool)
@@ -2217,6 +2395,7 @@ Internals
 .. function:: macroexpand(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        macroexpand(x)
@@ -2226,6 +2405,7 @@ Internals
 .. function:: expand(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        expand(x)
@@ -2235,6 +2415,7 @@ Internals
 .. function:: code_lowered(f, types)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        code_lowered(f, types)
@@ -2244,6 +2425,7 @@ Internals
 .. function:: @code_lowered
 
    .. Docstring generated from Julia source
+
    ::
 
               @code_lowered
@@ -2253,6 +2435,7 @@ Internals
 .. function:: code_typed(f, types; optimize=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        code_typed(f, types; optimize=true)
@@ -2262,6 +2445,7 @@ Internals
 .. function:: @code_typed
 
    .. Docstring generated from Julia source
+
    ::
 
               @code_typed
@@ -2271,6 +2455,7 @@ Internals
 .. function:: code_warntype(f, types)
 
    .. Docstring generated from Julia source
+
    ::
 
               code_warntype(f, types)
@@ -2280,6 +2465,7 @@ Internals
 .. function:: @code_warntype
 
    .. Docstring generated from Julia source
+
    ::
 
               @code_warntype
@@ -2289,6 +2475,7 @@ Internals
 .. function:: code_llvm(f, types)
 
    .. Docstring generated from Julia source
+
    ::
 
               code_llvm(f, types)
@@ -2300,6 +2487,7 @@ Internals
 .. function:: @code_llvm
 
    .. Docstring generated from Julia source
+
    ::
 
               @code_llvm
@@ -2309,6 +2497,7 @@ Internals
 .. function:: code_native(f, types)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        code_native(f, types)
@@ -2318,6 +2507,7 @@ Internals
 .. function:: @code_native
 
    .. Docstring generated from Julia source
+
    ::
 
               @code_native
@@ -2327,6 +2517,7 @@ Internals
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        precompile(f,args::Tuple{Vararg{Any}})

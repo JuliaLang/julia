@@ -12,6 +12,7 @@ Mathematical Operators
 .. function:: -(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        -(x)
@@ -28,6 +29,7 @@ Mathematical Operators
 .. function:: +(x, y...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        +(x, y...)
@@ -38,6 +40,7 @@ Mathematical Operators
 .. function:: -(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        -(x)
@@ -54,6 +57,7 @@ Mathematical Operators
 .. function:: *(x, y...)
 
    .. Docstring generated from Julia source
+
    ::
 
               *(A, B)
@@ -80,6 +84,7 @@ Mathematical Operators
 .. function:: /(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        /(x, y)
@@ -96,6 +101,7 @@ Mathematical Operators
 .. function:: ^(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               ^(x, y)
@@ -117,6 +123,7 @@ Mathematical Operators
 .. function:: .+(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .+(x, y)
@@ -127,6 +134,7 @@ Mathematical Operators
 .. function:: .-(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .-(x, y)
@@ -137,6 +145,7 @@ Mathematical Operators
 .. function:: .*(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .*(x, y)
@@ -147,6 +156,7 @@ Mathematical Operators
 .. function:: ./(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ./(x, y)
@@ -162,6 +172,7 @@ Mathematical Operators
 .. function:: .^(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .^(x, y)
@@ -171,6 +182,7 @@ Mathematical Operators
 .. function:: fma(x, y, z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fma(x, y, z)
@@ -180,6 +192,7 @@ Mathematical Operators
 .. function:: muladd(x, y, z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        muladd(x, y, z)
@@ -189,6 +202,7 @@ Mathematical Operators
 .. function:: div(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        div(x, y)
@@ -199,6 +213,7 @@ Mathematical Operators
 .. function:: fld(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fld(x, y)
@@ -208,6 +223,7 @@ Mathematical Operators
 .. function:: cld(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cld(x, y)
@@ -217,6 +233,7 @@ Mathematical Operators
 .. function:: mod(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mod(x, y)
@@ -226,6 +243,7 @@ Mathematical Operators
 .. function:: mod2pi(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mod2pi(x)
@@ -237,6 +255,7 @@ Mathematical Operators
 .. function:: rem(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rem(x, y)
@@ -247,6 +266,7 @@ Mathematical Operators
 .. function:: divrem(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        divrem(x, y)
@@ -256,6 +276,7 @@ Mathematical Operators
 .. function:: fldmod(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fldmod(x, y)
@@ -265,6 +286,7 @@ Mathematical Operators
 .. function:: mod1(x,m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mod1(x,m)
@@ -274,6 +296,7 @@ Mathematical Operators
 .. function:: rem1(x,m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rem1(x,m)
@@ -284,6 +307,7 @@ Mathematical Operators
 .. function:: //(num, den)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        //(num, den)
@@ -293,6 +317,7 @@ Mathematical Operators
 .. function:: rationalize([Type=Int,] x; tol=eps(x))
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rationalize([Type=Int,] x; tol=eps(x))
@@ -302,6 +327,7 @@ Mathematical Operators
 .. function:: num(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        num(x)
@@ -311,6 +337,7 @@ Mathematical Operators
 .. function:: den(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        den(x)
@@ -321,6 +348,7 @@ Mathematical Operators
 .. function:: <<(x, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        <<(x, n)
@@ -331,6 +359,7 @@ Mathematical Operators
 .. function:: >>(x, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        >>(x, n)
@@ -341,6 +370,7 @@ Mathematical Operators
 .. function:: >>>(x, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        >>>(x, n)
@@ -358,6 +388,7 @@ Mathematical Operators
 .. function:: colon(start, [step], stop)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        colon(start, [step], stop)
@@ -367,6 +398,7 @@ Mathematical Operators
 .. function:: range(start, [step], length)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        range(start, [step], length)
@@ -377,6 +409,7 @@ Mathematical Operators
 .. function:: ==(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ==(x, y)
@@ -393,6 +426,7 @@ Mathematical Operators
 .. function:: !=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        !=(x, y)
@@ -404,6 +438,7 @@ Mathematical Operators
 .. function:: ===(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        is(x, y) -> Bool
@@ -416,6 +451,7 @@ Mathematical Operators
 .. function:: !==(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        !==(x, y)
@@ -427,6 +463,7 @@ Mathematical Operators
 .. function:: <(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        <(x, y)
@@ -437,6 +474,7 @@ Mathematical Operators
 .. function:: <=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        <=(x, y)
@@ -448,6 +486,7 @@ Mathematical Operators
 .. function:: >(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        >(x, y)
@@ -458,6 +497,7 @@ Mathematical Operators
 .. function:: >=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        >=(x, y)
@@ -469,6 +509,7 @@ Mathematical Operators
 .. function:: .==(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .==(x, y)
@@ -479,6 +520,7 @@ Mathematical Operators
 .. function:: .!=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .!=(x, y)
@@ -490,6 +532,7 @@ Mathematical Operators
 .. function:: .<(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .<(x, y)
@@ -500,6 +543,7 @@ Mathematical Operators
 .. function:: .<=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .<=(x, y)
@@ -511,6 +555,7 @@ Mathematical Operators
 .. function:: .>(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .>(x, y)
@@ -521,6 +566,7 @@ Mathematical Operators
 .. function:: .>=(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        .>=(x, y)
@@ -531,6 +577,7 @@ Mathematical Operators
 .. function:: cmp(x,y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cmp(x,y)
@@ -541,6 +588,7 @@ Mathematical Operators
 .. function:: ~(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ~(x)
@@ -551,6 +599,7 @@ Mathematical Operators
 .. function:: &(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        &(x, y)
@@ -561,6 +610,7 @@ Mathematical Operators
 .. function:: |(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        |(x, y)
@@ -571,6 +621,7 @@ Mathematical Operators
 .. function:: $(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        \$(x, y)
@@ -581,6 +632,7 @@ Mathematical Operators
 .. function:: !(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        !(x)
@@ -600,6 +652,7 @@ Mathematical Operators
 .. function:: A_ldiv_Bc(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_ldiv_Bc(a,b)
@@ -609,6 +662,7 @@ Mathematical Operators
 .. function:: A_ldiv_Bt(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_ldiv_Bt(a,b)
@@ -618,6 +672,7 @@ Mathematical Operators
 .. function:: A_mul_B!(Y, A, B) -> Y
 
    .. Docstring generated from Julia source
+
    ::
 
               A_mul_B!(Y, A, B) -> Y
@@ -638,6 +693,7 @@ Mathematical Operators
 .. function:: A_mul_Bc(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_mul_Bc(...)
@@ -647,6 +703,7 @@ Mathematical Operators
 .. function:: A_mul_Bt(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_mul_Bt(...)
@@ -656,6 +713,7 @@ Mathematical Operators
 .. function:: A_rdiv_Bc(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_rdiv_Bc(...)
@@ -665,6 +723,7 @@ Mathematical Operators
 .. function:: A_rdiv_Bt(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               A_rdiv_Bt(a,b)
@@ -674,6 +733,7 @@ Mathematical Operators
 .. function:: Ac_ldiv_B(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_ldiv_B(...)
@@ -683,6 +743,7 @@ Mathematical Operators
 .. function:: Ac_ldiv_Bc(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_ldiv_Bc(...)
@@ -692,6 +753,7 @@ Mathematical Operators
 .. function:: Ac_mul_B(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_mul_B(...)
@@ -701,6 +763,7 @@ Mathematical Operators
 .. function:: Ac_mul_Bc(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_mul_Bc(...)
@@ -710,6 +773,7 @@ Mathematical Operators
 .. function:: Ac_rdiv_B(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_rdiv_B(a,b)
@@ -719,6 +783,7 @@ Mathematical Operators
 .. function:: Ac_rdiv_Bc(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               Ac_rdiv_Bc(a,b)
@@ -728,6 +793,7 @@ Mathematical Operators
 .. function:: At_ldiv_B(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_ldiv_B(...)
@@ -737,6 +803,7 @@ Mathematical Operators
 .. function:: At_ldiv_Bt(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_ldiv_Bt(...)
@@ -746,6 +813,7 @@ Mathematical Operators
 .. function:: At_mul_B(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_mul_B(...)
@@ -755,6 +823,7 @@ Mathematical Operators
 .. function:: At_mul_Bt(...)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_mul_Bt(...)
@@ -764,6 +833,7 @@ Mathematical Operators
 .. function:: At_rdiv_B(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_rdiv_B(a,b)
@@ -773,6 +843,7 @@ Mathematical Operators
 .. function:: At_rdiv_Bt(a,b)
 
    .. Docstring generated from Julia source
+
    ::
 
               At_rdiv_Bt(a,b)
@@ -785,6 +856,7 @@ Mathematical Functions
 .. function:: isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0)
@@ -800,6 +872,7 @@ Mathematical Functions
 .. function:: sin(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sin(x)
@@ -809,6 +882,7 @@ Mathematical Functions
 .. function:: cos(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cos(x)
@@ -818,6 +892,7 @@ Mathematical Functions
 .. function:: tan(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tan(x)
@@ -827,6 +902,7 @@ Mathematical Functions
 .. function:: sind(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sind(x)
@@ -836,6 +912,7 @@ Mathematical Functions
 .. function:: cosd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cosd(x)
@@ -845,6 +922,7 @@ Mathematical Functions
 .. function:: tand(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tand(x)
@@ -854,6 +932,7 @@ Mathematical Functions
 .. function:: sinpi(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               sinpi(x)
@@ -863,6 +942,7 @@ Mathematical Functions
 .. function:: cospi(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               cospi(x)
@@ -872,6 +952,7 @@ Mathematical Functions
 .. function:: sinh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sinh(x)
@@ -881,6 +962,7 @@ Mathematical Functions
 .. function:: cosh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cosh(x)
@@ -890,6 +972,7 @@ Mathematical Functions
 .. function:: tanh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tanh(x)
@@ -899,6 +982,7 @@ Mathematical Functions
 .. function:: asin(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asin(x)
@@ -908,6 +992,7 @@ Mathematical Functions
 .. function:: acos(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acos(x)
@@ -917,6 +1002,7 @@ Mathematical Functions
 .. function:: atan(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atan(x)
@@ -926,6 +1012,7 @@ Mathematical Functions
 .. function:: atan2(y, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atan2(y, x)
@@ -935,6 +1022,7 @@ Mathematical Functions
 .. function:: asind(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asind(x)
@@ -944,6 +1032,7 @@ Mathematical Functions
 .. function:: acosd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acosd(x)
@@ -953,6 +1042,7 @@ Mathematical Functions
 .. function:: atand(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atand(x)
@@ -962,6 +1052,7 @@ Mathematical Functions
 .. function:: sec(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sec(x)
@@ -971,6 +1062,7 @@ Mathematical Functions
 .. function:: csc(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        csc(x)
@@ -980,6 +1072,7 @@ Mathematical Functions
 .. function:: cot(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cot(x)
@@ -989,6 +1082,7 @@ Mathematical Functions
 .. function:: secd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        secd(x)
@@ -998,6 +1092,7 @@ Mathematical Functions
 .. function:: cscd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cscd(x)
@@ -1007,6 +1102,7 @@ Mathematical Functions
 .. function:: cotd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cotd(x)
@@ -1016,6 +1112,7 @@ Mathematical Functions
 .. function:: asec(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asec(x)
@@ -1025,6 +1122,7 @@ Mathematical Functions
 .. function:: acsc(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acsc(x)
@@ -1034,6 +1132,7 @@ Mathematical Functions
 .. function:: acot(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acot(x)
@@ -1043,6 +1142,7 @@ Mathematical Functions
 .. function:: asecd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asecd(x)
@@ -1052,6 +1152,7 @@ Mathematical Functions
 .. function:: acscd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acscd(x)
@@ -1061,6 +1162,7 @@ Mathematical Functions
 .. function:: acotd(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acotd(x)
@@ -1070,6 +1172,7 @@ Mathematical Functions
 .. function:: sech(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sech(x)
@@ -1079,6 +1182,7 @@ Mathematical Functions
 .. function:: csch(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        csch(x)
@@ -1088,6 +1192,7 @@ Mathematical Functions
 .. function:: coth(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        coth(x)
@@ -1097,6 +1202,7 @@ Mathematical Functions
 .. function:: asinh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asinh(x)
@@ -1106,6 +1212,7 @@ Mathematical Functions
 .. function:: acosh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acosh(x)
@@ -1115,6 +1222,7 @@ Mathematical Functions
 .. function:: atanh(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        atanh(x)
@@ -1124,6 +1232,7 @@ Mathematical Functions
 .. function:: asech(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        asech(x)
@@ -1133,6 +1242,7 @@ Mathematical Functions
 .. function:: acsch(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acsch(x)
@@ -1142,6 +1252,7 @@ Mathematical Functions
 .. function:: acoth(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        acoth(x)
@@ -1151,6 +1262,7 @@ Mathematical Functions
 .. function:: sinc(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               sinc(x)
@@ -1160,6 +1272,7 @@ Mathematical Functions
 .. function:: cosc(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               cosc(x)
@@ -1170,6 +1283,7 @@ Mathematical Functions
 .. function:: deg2rad(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        deg2rad(x)
@@ -1179,6 +1293,7 @@ Mathematical Functions
 .. function:: rad2deg(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rad2deg(x)
@@ -1188,6 +1303,7 @@ Mathematical Functions
 .. function:: hypot(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               hypot(x, y)
@@ -1197,6 +1313,7 @@ Mathematical Functions
 .. function:: log(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        log(x)
@@ -1214,6 +1331,7 @@ Mathematical Functions
 .. function:: log(b,x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        log(x)
@@ -1231,6 +1349,7 @@ Mathematical Functions
 .. function:: log2(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        log2(x)
@@ -1240,6 +1359,7 @@ Mathematical Functions
 .. function:: log10(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        log10(x)
@@ -1249,6 +1369,7 @@ Mathematical Functions
 .. function:: log1p(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        log1p(x)
@@ -1260,6 +1381,7 @@ Mathematical Functions
 .. function:: frexp(val)
 
    .. Docstring generated from Julia source
+
    ::
 
               frexp(val)
@@ -1270,6 +1392,7 @@ Mathematical Functions
 .. function:: exp(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               exp(x)
@@ -1279,6 +1402,7 @@ Mathematical Functions
 .. function:: exp2(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               exp2(x)
@@ -1288,6 +1412,7 @@ Mathematical Functions
 .. function:: exp10(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               exp10(x)
@@ -1297,6 +1422,7 @@ Mathematical Functions
 .. function:: ldexp(x, n)
 
    .. Docstring generated from Julia source
+
    ::
 
               ldexp(x, n)
@@ -1306,6 +1432,7 @@ Mathematical Functions
 .. function:: modf(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        modf(x)
@@ -1315,6 +1442,7 @@ Mathematical Functions
 .. function:: expm1(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               expm1(x)
@@ -1324,6 +1452,7 @@ Mathematical Functions
 .. function:: round([T,] x, [digits, [base]], [r::RoundingMode])
 
    .. Docstring generated from Julia source
+
    ::
 
               round([T,] x, [digits, [base]], [r::RoundingMode])
@@ -1433,6 +1562,7 @@ Mathematical Functions
 .. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
    .. Docstring generated from Julia source
+
    ::
 
               round([T,] x, [digits, [base]], [r::RoundingMode])
@@ -1477,6 +1607,7 @@ Mathematical Functions
 .. function:: ceil([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
+
    ::
 
               ceil([T,] x, [digits, [base]])
@@ -1492,6 +1623,7 @@ Mathematical Functions
 .. function:: floor([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
+
    ::
 
               floor([T,] x, [digits, [base]])
@@ -1507,6 +1639,7 @@ Mathematical Functions
 .. function:: trunc([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
+
    ::
 
               trunc(dt::TimeType, ::Type{Period}) -> TimeType
@@ -1517,6 +1650,7 @@ Mathematical Functions
 .. function:: unsafe_trunc(T, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_trunc(T, x)
@@ -1526,6 +1660,7 @@ Mathematical Functions
 .. function:: signif(x, digits, [base])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        signif(x, digits, [base])
@@ -1535,6 +1670,7 @@ Mathematical Functions
 .. function:: min(x, y, ...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        min(x, y, ...)
@@ -1544,6 +1680,7 @@ Mathematical Functions
 .. function:: max(x, y, ...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        max(x, y, ...)
@@ -1553,6 +1690,7 @@ Mathematical Functions
 .. function:: minmax(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               minmax(x, y)
@@ -1563,6 +1701,7 @@ Mathematical Functions
 .. function:: clamp(x, lo, hi)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clamp(x, lo, hi)
@@ -1572,6 +1711,7 @@ Mathematical Functions
 .. function:: abs(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        abs(x)
@@ -1581,6 +1721,7 @@ Mathematical Functions
 .. function:: abs2(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        abs2(x)
@@ -1590,6 +1731,7 @@ Mathematical Functions
 .. function:: copysign(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        copysign(x, y)
@@ -1599,6 +1741,7 @@ Mathematical Functions
 .. function:: sign(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               sign(x)
@@ -1607,6 +1750,7 @@ Mathematical Functions
 .. function:: signbit(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        signbit(x)
@@ -1616,6 +1760,7 @@ Mathematical Functions
 .. function:: flipsign(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        flipsign(x, y)
@@ -1625,6 +1770,7 @@ Mathematical Functions
 .. function:: sqrt(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               sqrt(x)
@@ -1634,6 +1780,7 @@ Mathematical Functions
 .. function:: isqrt(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isqrt(n)
@@ -1643,6 +1790,7 @@ Mathematical Functions
 .. function:: cbrt(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               cbrt(x)
@@ -1652,6 +1800,7 @@ Mathematical Functions
 .. function:: erf(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erf(x)
@@ -1663,6 +1812,7 @@ Mathematical Functions
 .. function:: erfc(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erfc(x)
@@ -1673,6 +1823,7 @@ Mathematical Functions
 .. function:: erfcx(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erfcx(x)
@@ -1685,6 +1836,7 @@ Mathematical Functions
 .. function:: erfi(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erfi(x)
@@ -1695,6 +1847,7 @@ Mathematical Functions
 .. function:: dawson(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               dawson(x)
@@ -1705,6 +1858,7 @@ Mathematical Functions
 .. function:: erfinv(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erfinv(x)
@@ -1715,6 +1869,7 @@ Mathematical Functions
 .. function:: erfcinv(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               erfcinv(x)
@@ -1725,6 +1880,7 @@ Mathematical Functions
 .. function:: real(z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        real(z)
@@ -1734,6 +1890,7 @@ Mathematical Functions
 .. function:: imag(z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        imag(z)
@@ -1743,6 +1900,7 @@ Mathematical Functions
 .. function:: reim(z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reim(z)
@@ -1752,6 +1910,7 @@ Mathematical Functions
 .. function:: conj(z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        conj(z)
@@ -1761,6 +1920,7 @@ Mathematical Functions
 .. function:: angle(z)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        angle(z)
@@ -1770,6 +1930,7 @@ Mathematical Functions
 .. function:: cis(z)
 
    .. Docstring generated from Julia source
+
    ::
 
               cis(z)
@@ -1779,6 +1940,7 @@ Mathematical Functions
 .. function:: binomial(n,k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        binomial(n,k)
@@ -1788,6 +1950,7 @@ Mathematical Functions
 .. function:: factorial(n)
 
    .. Docstring generated from Julia source
+
    ::
 
               factorial(n)
@@ -1808,6 +1971,7 @@ Mathematical Functions
 .. function:: factorial(n,k)
 
    .. Docstring generated from Julia source
+
    ::
 
               factorial(n)
@@ -1828,6 +1992,7 @@ Mathematical Functions
 .. function:: factor(n) -> Dict
 
    .. Docstring generated from Julia source
+
    ::
 
               factor(n) -> Dict
@@ -1844,6 +2009,7 @@ Mathematical Functions
 .. function:: gcd(x,y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gcd(x,y)
@@ -1853,6 +2019,7 @@ Mathematical Functions
 .. function:: lcm(x,y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lcm(x,y)
@@ -1862,6 +2029,7 @@ Mathematical Functions
 .. function:: gcdx(x,y)
 
    .. Docstring generated from Julia source
+
    ::
 
               gcdx(x,y)
@@ -1885,6 +2053,7 @@ Mathematical Functions
 .. function:: ispow2(n) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ispow2(n) -> Bool
@@ -1894,6 +2063,7 @@ Mathematical Functions
 .. function:: nextpow2(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nextpow2(n)
@@ -1903,6 +2073,7 @@ Mathematical Functions
 .. function:: prevpow2(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prevpow2(n)
@@ -1912,6 +2083,7 @@ Mathematical Functions
 .. function:: nextpow(a, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nextpow(a, x)
@@ -1921,6 +2093,7 @@ Mathematical Functions
 .. function:: prevpow(a, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prevpow(a, x)
@@ -1930,6 +2103,7 @@ Mathematical Functions
 .. function:: nextprod([k_1,k_2,...], n)
 
    .. Docstring generated from Julia source
+
    ::
 
               nextprod([k_1,k_2,...], n)
@@ -1939,6 +2113,7 @@ Mathematical Functions
 .. function:: prevprod([k_1,k_2,...], n)
 
    .. Docstring generated from Julia source
+
    ::
 
               prevprod([k_1,k_2,...], n)
@@ -1948,6 +2123,7 @@ Mathematical Functions
 .. function:: invmod(x,m)
 
    .. Docstring generated from Julia source
+
    ::
 
               invmod(x,m)
@@ -1957,6 +2133,7 @@ Mathematical Functions
 .. function:: powermod(x, p, m)
 
    .. Docstring generated from Julia source
+
    ::
 
               powermod(x, p, m)
@@ -1966,6 +2143,7 @@ Mathematical Functions
 .. function:: gamma(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gamma(x)
@@ -1975,6 +2153,7 @@ Mathematical Functions
 .. function:: lgamma(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               lgamma(x)
@@ -1986,6 +2165,7 @@ Mathematical Functions
 .. function:: lfact(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lfact(x)
@@ -1995,6 +2175,7 @@ Mathematical Functions
 .. function:: digamma(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        digamma(x)
@@ -2004,6 +2185,7 @@ Mathematical Functions
 .. function:: invdigamma(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        invdigamma(x)
@@ -2013,6 +2195,7 @@ Mathematical Functions
 .. function:: trigamma(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trigamma(x)
@@ -2022,6 +2205,7 @@ Mathematical Functions
 .. function:: polygamma(m, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        polygamma(m, x)
@@ -2031,6 +2215,7 @@ Mathematical Functions
 .. function:: airy(k,x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airy(k,x)
@@ -2040,6 +2225,7 @@ Mathematical Functions
 .. function:: airyai(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airyai(x)
@@ -2049,6 +2235,7 @@ Mathematical Functions
 .. function:: airyprime(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airyprime(x)
@@ -2058,6 +2245,7 @@ Mathematical Functions
 .. function:: airyaiprime(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airyaiprime(x)
@@ -2067,6 +2255,7 @@ Mathematical Functions
 .. function:: airybi(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airybi(x)
@@ -2076,6 +2265,7 @@ Mathematical Functions
 .. function:: airybiprime(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airybiprime(x)
@@ -2085,6 +2275,7 @@ Mathematical Functions
 .. function:: airyx(k,x)
 
    .. Docstring generated from Julia source
+
    ::
 
               airyx(k,x)
@@ -2094,6 +2285,7 @@ Mathematical Functions
 .. function:: besselj0(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselj0(x)
@@ -2103,6 +2295,7 @@ Mathematical Functions
 .. function:: besselj1(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselj1(x)
@@ -2112,6 +2305,7 @@ Mathematical Functions
 .. function:: besselj(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselj(nu, x)
@@ -2121,6 +2315,7 @@ Mathematical Functions
 .. function:: besseljx(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besseljx(nu, x)
@@ -2130,6 +2325,7 @@ Mathematical Functions
 .. function:: bessely0(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               bessely0(x)
@@ -2139,6 +2335,7 @@ Mathematical Functions
 .. function:: bessely1(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               bessely1(x)
@@ -2148,6 +2345,7 @@ Mathematical Functions
 .. function:: bessely(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               bessely(nu, x)
@@ -2157,6 +2355,7 @@ Mathematical Functions
 .. function:: besselyx(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselyx(nu, x)
@@ -2166,6 +2365,7 @@ Mathematical Functions
 .. function:: hankelh1(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               hankelh1(nu, x)
@@ -2175,6 +2375,7 @@ Mathematical Functions
 .. function:: hankelh1x(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               hankelh1x(nu, x)
@@ -2184,6 +2385,7 @@ Mathematical Functions
 .. function:: hankelh2(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               hankelh2(nu, x)
@@ -2193,6 +2395,7 @@ Mathematical Functions
 .. function:: hankelh2x(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               hankelh2x(nu, x)
@@ -2202,6 +2405,7 @@ Mathematical Functions
 .. function:: besselh(nu, k, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        besselh(nu, k, x)
@@ -2211,6 +2415,7 @@ Mathematical Functions
 .. function:: besseli(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besseli(nu, x)
@@ -2220,6 +2425,7 @@ Mathematical Functions
 .. function:: besselix(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselix(nu, x)
@@ -2229,6 +2435,7 @@ Mathematical Functions
 .. function:: besselk(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselk(nu, x)
@@ -2238,6 +2445,7 @@ Mathematical Functions
 .. function:: besselkx(nu, x)
 
    .. Docstring generated from Julia source
+
    ::
 
               besselkx(nu, x)
@@ -2247,6 +2455,7 @@ Mathematical Functions
 .. function:: beta(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               beta(x, y)
@@ -2256,6 +2465,7 @@ Mathematical Functions
 .. function:: lbeta(x, y)
 
    .. Docstring generated from Julia source
+
    ::
 
               lbeta(x, y)
@@ -2265,6 +2475,7 @@ Mathematical Functions
 .. function:: eta(x)
 
    .. Docstring generated from Julia source
+
    ::
 
               eta(x)
@@ -2274,6 +2485,7 @@ Mathematical Functions
 .. function:: zeta(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               zeta(s)
@@ -2290,6 +2502,7 @@ Mathematical Functions
 .. function:: zeta(s, z)
 
    .. Docstring generated from Julia source
+
    ::
 
               zeta(s)
@@ -2306,6 +2519,7 @@ Mathematical Functions
 .. function:: ndigits(n, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ndigits(n, b)
@@ -2315,6 +2529,7 @@ Mathematical Functions
 .. function:: widemul(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        widemul(x, y)
@@ -2324,6 +2539,7 @@ Mathematical Functions
 .. function:: @evalpoly(z, c...)
 
    .. Docstring generated from Julia source
+
    ::
 
               @evalpoly(z, c...)
@@ -2340,6 +2556,7 @@ Statistics
 .. function:: mean(v[, region])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mean(v[, region])
@@ -2349,6 +2566,7 @@ Statistics
 .. function:: mean!(r, v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mean!(r, v)
@@ -2358,6 +2576,7 @@ Statistics
 .. function:: std(v[, region])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        std(v[, region])
@@ -2367,6 +2586,7 @@ Statistics
 .. function:: stdm(v, m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        stdm(v, m)
@@ -2376,6 +2596,7 @@ Statistics
 .. function:: var(v[, region])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        var(v[, region])
@@ -2385,6 +2606,7 @@ Statistics
 .. function:: varm(v, m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        varm(v, m)
@@ -2394,6 +2616,7 @@ Statistics
 .. function:: middle(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        middle(x)
@@ -2421,6 +2644,7 @@ Statistics
 .. function:: middle(x, y)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        middle(x)
@@ -2448,6 +2672,7 @@ Statistics
 .. function:: middle(range)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        middle(x)
@@ -2475,6 +2700,7 @@ Statistics
 .. function:: middle(array)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        middle(x)
@@ -2502,6 +2728,7 @@ Statistics
 .. function:: median(v[, region])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        median(v[, region])
@@ -2511,6 +2738,7 @@ Statistics
 .. function:: median!(v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        median!(v)
@@ -2520,6 +2748,7 @@ Statistics
 .. function:: hist(v[, n]) -> e, counts
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hist(v[, n]) -> e, counts
@@ -2535,6 +2764,7 @@ Statistics
 .. function:: hist(v, e) -> e, counts
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hist(v[, n]) -> e, counts
@@ -2550,6 +2780,7 @@ Statistics
 .. function:: hist!(counts, v, e) -> e, counts
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hist!(counts, v, e) -> e, counts
@@ -2559,6 +2790,7 @@ Statistics
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hist2d(M, e1, e2) -> (edge1, edge2, counts)
@@ -2568,6 +2800,7 @@ Statistics
 .. function:: hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
@@ -2577,6 +2810,7 @@ Statistics
 .. function:: histrange(v, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        histrange(v, n)
@@ -2586,6 +2820,7 @@ Statistics
 .. function:: midpoints(e)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        midpoints(e)
@@ -2595,6 +2830,7 @@ Statistics
 .. function:: quantile(v, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        quantile(v, p)
@@ -2610,6 +2846,7 @@ Statistics
 .. function:: quantile(v, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        quantile(v, p)
@@ -2625,6 +2862,7 @@ Statistics
 .. function:: quantile!(v, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        quantile!(v, p)
@@ -2634,6 +2872,7 @@ Statistics
 .. function:: cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
@@ -2653,6 +2892,7 @@ Statistics
 .. function:: cor(v1[, v2][, vardim=1, mean=nothing])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cor(v1[, v2][, vardim=1, mean=nothing])
@@ -2698,6 +2938,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: fft!(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               fft!(A [, dims])
@@ -2708,6 +2949,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: ifft(A [, dims])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ifft(A [, dims])
@@ -2723,6 +2965,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: ifft!(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               ifft!(A [, dims])
@@ -2732,6 +2975,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: bfft(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               bfft(A [, dims])
@@ -2749,6 +2993,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: bfft!(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               bfft!(A [, dims])
@@ -2758,6 +3003,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2797,6 +3043,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2807,6 +3054,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2817,6 +3065,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2826,6 +3075,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2835,6 +3085,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2844,6 +3095,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: rfft(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               rfft(A [, dims])
@@ -2862,6 +3114,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: irfft(A, d [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               irfft(A, d [, dims])
@@ -2880,6 +3133,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: brfft(A, d [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               brfft(A, d [, dims])
@@ -2892,6 +3146,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2904,6 +3159,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2916,6 +3172,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
@@ -2927,6 +3184,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: dct(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               dct(A [, dims])
@@ -2942,6 +3200,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: dct!(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               dct!(A [, dims])
@@ -2953,6 +3212,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: idct(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               idct(A [, dims])
@@ -2969,6 +3229,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: idct!(A [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               idct!(A [, dims])
@@ -2978,6 +3239,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_dct(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_dct(A [, dims [, flags [, timelimit]]])
@@ -2989,6 +3251,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_dct!(A [, dims [, flags [, timelimit]]])
@@ -2998,6 +3261,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_idct(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_idct(A [, dims [, flags [, timelimit]]])
@@ -3009,6 +3273,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_idct!(A [, dims [, flags [, timelimit]]])
@@ -3018,6 +3283,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: fftshift(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fftshift(x)
@@ -3033,6 +3299,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: fftshift(x,dim)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fftshift(x)
@@ -3048,6 +3315,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: ifftshift(x, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ifftshift(x, [dim])
@@ -3057,6 +3325,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: filt(b, a, x, [si])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        filt(b, a, x, [si])
@@ -3066,6 +3335,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: filt!(out, b, a, x, [si])
 
    .. Docstring generated from Julia source
+
    ::
 
               filt!(out, b, a, x, [si])
@@ -3076,6 +3346,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: deconv(b,a)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        deconv(b,a)
@@ -3085,6 +3356,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: conv(u,v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        conv(u,v)
@@ -3094,6 +3366,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: conv2(u,v,A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        conv2(u,v,A)
@@ -3109,6 +3382,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: conv2(B,A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        conv2(u,v,A)
@@ -3124,6 +3398,7 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: xcorr(u,v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        xcorr(u,v)
@@ -3137,6 +3412,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 .. function:: r2r(A, kind [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               r2r(A, kind [, dims])
@@ -3165,6 +3441,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 .. function:: r2r!(A, kind [, dims])
 
    .. Docstring generated from Julia source
+
    ::
 
               r2r!(A, kind [, dims])
@@ -3175,6 +3452,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 .. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_r2r(A, kind [, dims [, flags [, timelimit]]])
@@ -3186,6 +3464,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 .. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
+
    ::
 
               plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
@@ -3203,6 +3482,7 @@ some built-in integration support in Julia.
 .. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)

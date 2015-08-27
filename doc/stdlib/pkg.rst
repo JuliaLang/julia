@@ -10,6 +10,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: dir() -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dir() -> AbstractString
@@ -25,6 +26,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: dir(names...) -> AbstractString
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dir() -> AbstractString
@@ -40,6 +42,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
@@ -49,6 +52,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: resolve()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        resolve()
@@ -58,6 +62,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: edit()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        edit()
@@ -67,6 +72,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: add(pkg, vers...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        add(pkg, vers...)
@@ -76,6 +82,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: rm(pkg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rm(pkg)
@@ -85,6 +92,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: clone(url, [pkg])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clone(url, [pkg])
@@ -100,6 +108,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: clone(pkg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        clone(url, [pkg])
@@ -115,6 +124,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: available() -> Vector{ASCIIString}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        available() -> Vector{ASCIIString}
@@ -130,6 +140,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: available(pkg) -> Vector{VersionNumber}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        available() -> Vector{ASCIIString}
@@ -145,6 +156,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: installed() -> Dict{ASCIIString,VersionNumber}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        installed() -> Dict{ASCIIString,VersionNumber}
@@ -160,6 +172,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: installed(pkg) -> Void | VersionNumber
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        installed() -> Dict{ASCIIString,VersionNumber}
@@ -175,6 +188,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: status()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        status()
@@ -184,6 +198,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: update()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        update()
@@ -193,6 +208,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: checkout(pkg, [branch="master"])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        checkout(pkg, [branch="master"])
@@ -202,6 +218,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: pin(pkg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pin(pkg)
@@ -217,6 +234,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: pin(pkg, version)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pin(pkg)
@@ -232,6 +250,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: free(pkg)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        free(pkg)
@@ -243,6 +262,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: build()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        build()
@@ -258,6 +278,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: build(pkgs...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        build()
@@ -273,6 +294,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: generate(pkg,license)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        generate(pkg,license)
@@ -282,6 +304,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: register(pkg, [url])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        register(pkg, [url])
@@ -291,6 +314,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: tag(pkg, [ver, [commit]])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        tag(pkg, [ver, [commit]])
@@ -300,6 +324,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: publish()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        publish()
@@ -309,6 +334,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: test()
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        test()
@@ -324,6 +350,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: test(pkgs...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        test()

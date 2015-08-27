@@ -7,6 +7,7 @@
 .. function:: length(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        length(A) -> Integer
@@ -28,6 +29,7 @@
 .. function:: sizeof(s::AbstractString)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sizeof(type)
@@ -43,6 +45,7 @@
 .. function:: *(s, t)
 
    .. Docstring generated from Julia source
+
    ::
 
               *(A, B)
@@ -71,6 +74,7 @@
 .. function:: ^(s, n)
 
    .. Docstring generated from Julia source
+
    ::
 
               ^(x, y)
@@ -91,6 +95,7 @@
 .. function:: string(xs...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        string(xs...)
@@ -100,6 +105,7 @@
 .. function:: repr(x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        repr(x)
@@ -109,6 +115,7 @@
 .. function:: bytestring(::Ptr{UInt8}, [length])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bytestring(::Ptr{UInt8}, [length])
@@ -124,6 +131,7 @@
 .. function:: bytestring(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bytestring(::Ptr{UInt8}, [length])
@@ -139,6 +147,7 @@
 .. function:: ascii(::Array{UInt8,1})
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ascii(::Array{UInt8,1})
@@ -160,6 +169,7 @@
 .. function:: ascii(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ascii(::Array{UInt8,1})
@@ -181,6 +191,7 @@
 .. function:: ascii(::Ptr{UInt8}, [length])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ascii(::Array{UInt8,1})
@@ -202,6 +213,7 @@
 .. function:: utf8(::Array{UInt8,1})
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        utf8(::Array{UInt8,1})
@@ -223,6 +235,7 @@
 .. function:: utf8(::Ptr{UInt8}, [length])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        utf8(::Array{UInt8,1})
@@ -244,6 +257,7 @@
 .. function:: utf8(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        utf8(::Array{UInt8,1})
@@ -265,6 +279,7 @@
 .. function:: normalize_string(s, normalform::Symbol)
 
    .. Docstring generated from Julia source
+
    ::
 
               normalize_string(s, normalform::Symbol)
@@ -301,6 +316,7 @@
 .. function:: graphemes(s) -> iterator over substrings of s
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        graphemes(s) -> iterator over substrings of s
@@ -310,6 +326,7 @@
 .. function:: isvalid(value) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isvalid(value) -> Bool
@@ -331,6 +348,7 @@
 .. function:: isvalid(T, value) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isvalid(value) -> Bool
@@ -352,6 +370,7 @@
 .. function:: is_assigned_char(c) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        is_assigned_char(c) -> Bool
@@ -361,6 +380,7 @@
 .. function:: ismatch(r::Regex, s::AbstractString) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ismatch(r::Regex, s::AbstractString) -> Bool
@@ -370,6 +390,7 @@
 .. function:: match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -379,6 +400,7 @@
 .. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
@@ -388,6 +410,7 @@
 .. function:: matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
@@ -397,6 +420,7 @@
 .. function:: lpad(string, n, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lpad(string, n, p)
@@ -406,6 +430,7 @@
 .. function:: rpad(string, n, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rpad(string, n, p)
@@ -415,6 +440,7 @@
 .. function:: search(string, chars, [start])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        search(string, chars, [start])
@@ -428,6 +454,7 @@
 .. function:: rsearch(string, chars, [start])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rsearch(string, chars, [start])
@@ -437,6 +464,7 @@
 .. function:: searchindex(string, substring, [start])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        searchindex(string, substring, [start])
@@ -446,6 +474,7 @@
 .. function:: rsearchindex(string, substring, [start])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rsearchindex(string, substring, [start])
@@ -455,6 +484,7 @@
 .. function:: contains(haystack, needle)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        contains(haystack, needle)
@@ -464,6 +494,7 @@
 .. function:: replace(string, pat, r[, n])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        replace(string, pat, r[, n])
@@ -473,6 +504,7 @@
 .. function:: split(string, [chars]; limit=0, keep=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        split(string, [chars]; limit=0, keep=true)
@@ -482,6 +514,7 @@
 .. function:: rsplit(string, [chars]; limit=0, keep=true)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rsplit(string, [chars]; limit=0, keep=true)
@@ -491,6 +524,7 @@
 .. function:: strip(string, [chars])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strip(string, [chars])
@@ -500,6 +534,7 @@
 .. function:: lstrip(string, [chars])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lstrip(string, [chars])
@@ -509,6 +544,7 @@
 .. function:: rstrip(string, [chars])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rstrip(string, [chars])
@@ -518,6 +554,7 @@
 .. function:: startswith(string, prefix | chars)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        startswith(string, prefix | chars)
@@ -527,6 +564,7 @@
 .. function:: endswith(string, suffix | chars)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        endswith(string, suffix | chars)
@@ -536,6 +574,7 @@
 .. function:: uppercase(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        uppercase(string)
@@ -545,6 +584,7 @@
 .. function:: lowercase(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lowercase(string)
@@ -554,6 +594,7 @@
 .. function:: ucfirst(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ucfirst(string)
@@ -563,6 +604,7 @@
 .. function:: lcfirst(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        lcfirst(string)
@@ -572,6 +614,7 @@
 .. function:: join(strings, delim, [last])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        join(strings, delim, [last])
@@ -583,6 +626,7 @@
 .. function:: chop(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        chop(string)
@@ -592,6 +636,7 @@
 .. function:: chomp(string)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        chomp(string)
@@ -601,6 +646,7 @@
 .. function:: ind2chr(string, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ind2chr(string, i)
@@ -610,6 +656,7 @@
 .. function:: chr2ind(string, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        chr2ind(string, i)
@@ -619,6 +666,7 @@
 .. function:: isvalid(str, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isvalid(value) -> Bool
@@ -640,6 +688,7 @@
 .. function:: nextind(str, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nextind(str, i)
@@ -649,6 +698,7 @@
 .. function:: prevind(str, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prevind(str, i)
@@ -658,6 +708,7 @@
 .. function:: randstring([rng,] len=8)
 
    .. Docstring generated from Julia source
+
    ::
 
               randstring([rng,] len=8)
@@ -669,6 +720,7 @@
 .. function:: charwidth(c)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        charwidth(c)
@@ -678,6 +730,7 @@
 .. function:: strwidth(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strwidth(s)
@@ -687,6 +740,7 @@
 .. function:: isalnum(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isalnum(c::Union{Char,AbstractString}) -> Bool
@@ -696,6 +750,7 @@
 .. function:: isalpha(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isalpha(c::Union{Char,AbstractString}) -> Bool
@@ -705,6 +760,7 @@
 .. function:: isascii(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isascii(c::Union{Char,AbstractString}) -> Bool
@@ -714,6 +770,7 @@
 .. function:: iscntrl(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        iscntrl(c::Union{Char,AbstractString}) -> Bool
@@ -723,6 +780,7 @@
 .. function:: isdigit(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isdigit(c::Union{Char,AbstractString}) -> Bool
@@ -732,6 +790,7 @@
 .. function:: isgraph(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isgraph(c::Union{Char,AbstractString}) -> Bool
@@ -741,6 +800,7 @@
 .. function:: islower(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        islower(c::Union{Char,AbstractString}) -> Bool
@@ -750,6 +810,7 @@
 .. function:: isnumber(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isnumber(c::Union{Char,AbstractString}) -> Bool
@@ -759,6 +820,7 @@
 .. function:: isprint(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isprint(c::Union{Char,AbstractString}) -> Bool
@@ -768,6 +830,7 @@
 .. function:: ispunct(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ispunct(c::Union{Char,AbstractString}) -> Bool
@@ -777,6 +840,7 @@
 .. function:: isspace(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isspace(c::Union{Char,AbstractString}) -> Bool
@@ -786,6 +850,7 @@
 .. function:: isupper(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isupper(c::Union{Char,AbstractString}) -> Bool
@@ -795,6 +860,7 @@
 .. function:: isxdigit(c::Union{Char,AbstractString}) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isxdigit(c::Union{Char,AbstractString}) -> Bool
@@ -804,6 +870,7 @@
 .. function:: symbol(x...) -> Symbol
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symbol(x...) -> Symbol
@@ -813,6 +880,7 @@
 .. function:: escape_string(str::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    ::
 
               escape_string(str::AbstractString) -> AbstractString
@@ -822,6 +890,7 @@
 .. function:: unescape_string(s::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
+
    ::
 
               unescape_string(s::AbstractString) -> AbstractString
@@ -831,6 +900,7 @@
 .. function:: utf16(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        utf16(s)
@@ -848,6 +918,7 @@
 .. function:: utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        utf16(s)
@@ -865,6 +936,7 @@
 .. function:: utf32(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        wstring(s)
@@ -874,6 +946,7 @@
 .. function:: utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}} [, length])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        wstring(s)
@@ -883,6 +956,7 @@
 .. function:: wstring(s)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        wstring(s)
