@@ -12,6 +12,7 @@ Basic functions
 .. function:: ndims(A) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ndims(A) -> Integer
@@ -21,6 +22,7 @@ Basic functions
 .. function:: size(A, [dim...])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        size(A, [dim...])
@@ -40,6 +42,7 @@ Basic functions
 .. function:: iseltype(A,T)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        iseltype(A,T)
@@ -49,6 +52,7 @@ Basic functions
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        length(A) -> Integer
@@ -70,6 +74,7 @@ Basic functions
 .. function:: eachindex(A...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eachindex(A...)
@@ -114,6 +119,7 @@ largest range along each dimension.
 .. function:: Base.linearindexing(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Base.linearindexing(A)
@@ -129,6 +135,7 @@ largest range along each dimension.
 .. function:: countnz(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        countnz(A)
@@ -138,6 +145,7 @@ largest range along each dimension.
 .. function:: conj!(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        conj!(A)
@@ -147,6 +155,7 @@ largest range along each dimension.
 .. function:: stride(A, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        stride(A, k)
@@ -156,6 +165,7 @@ largest range along each dimension.
 .. function:: strides(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        strides(A)
@@ -165,6 +175,7 @@ largest range along each dimension.
 .. function:: ind2sub(dims, index) -> subscripts
 
    .. Docstring generated from Julia source
+
    ::
 
               ind2sub(dims, index) -> subscripts
@@ -182,6 +193,7 @@ largest range along each dimension.
 .. function:: ind2sub(a, index) -> subscripts
 
    .. Docstring generated from Julia source
+
    ::
 
               ind2sub(dims, index) -> subscripts
@@ -199,6 +211,7 @@ largest range along each dimension.
 .. function:: sub2ind(dims, i, j, k...) -> index
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sub2ind(dims, i, j, k...) -> index
@@ -211,6 +224,7 @@ Constructors
 .. function:: Array(dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        Array(dims)
@@ -220,6 +234,7 @@ Constructors
 .. function:: getindex(type[, elements...])
 
    .. Docstring generated from Julia source
+
    ::
 
               getindex(type[, elements...])
@@ -243,6 +258,7 @@ Constructors
 .. function:: cell(dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cell(dims)
@@ -252,6 +268,7 @@ Constructors
 .. function:: zeros(type, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        zeros(type, dims)
@@ -267,6 +284,7 @@ Constructors
 .. function:: zeros(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        zeros(type, dims)
@@ -282,6 +300,7 @@ Constructors
 .. function:: ones(type, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ones(type, dims)
@@ -297,6 +316,7 @@ Constructors
 .. function:: ones(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ones(type, dims)
@@ -312,6 +332,7 @@ Constructors
 .. function:: trues(dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        trues(dims)
@@ -321,6 +342,7 @@ Constructors
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        falses(dims)
@@ -330,6 +352,7 @@ Constructors
 .. function:: fill(x, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fill(x, dims)
@@ -341,6 +364,7 @@ Constructors
 .. function:: fill!(A, x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        fill!(A, x)
@@ -350,6 +374,7 @@ Constructors
 .. function:: reshape(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reshape(A, dims)
@@ -359,6 +384,7 @@ Constructors
 .. function:: similar(array, element_type, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        similar(array, element_type, dims)
@@ -368,6 +394,7 @@ Constructors
 .. function:: reinterpret(type, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reinterpret(type, A)
@@ -377,6 +404,7 @@ Constructors
 .. function:: eye(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eye(n)
@@ -398,6 +426,7 @@ Constructors
 .. function:: eye(m, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eye(n)
@@ -419,6 +448,7 @@ Constructors
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eye(n)
@@ -440,6 +470,7 @@ Constructors
 .. function:: linspace(start, stop, n=100)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        linspace(start, stop, n=100)
@@ -449,6 +480,7 @@ Constructors
 .. function:: logspace(start, stop, n=50)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        logspace(start, stop, n=50)
@@ -463,6 +495,7 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast(f, As...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast(f, As...)
@@ -472,6 +505,7 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast!(f, dest, As...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast!(f, dest, As...)
@@ -481,6 +515,7 @@ All mathematical operations and functions are supported for arrays
 .. function:: bitbroadcast(f, As...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bitbroadcast(f, As...)
@@ -490,6 +525,7 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast_function(f)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast_function(f)
@@ -499,6 +535,7 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast!_function(f)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast!_function(f)
@@ -511,6 +548,7 @@ Indexing, Assignment, and Concatenation
 .. function:: getindex(A, inds...)
 
    .. Docstring generated from Julia source
+
    ::
 
               getindex(type[, elements...])
@@ -534,6 +572,7 @@ Indexing, Assignment, and Concatenation
 .. function:: sub(A, inds...)
 
    .. Docstring generated from Julia source
+
    ::
 
               sub(A, inds...)
@@ -543,6 +582,7 @@ Indexing, Assignment, and Concatenation
 .. function:: parent(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        parent(A)
@@ -552,6 +592,7 @@ Indexing, Assignment, and Concatenation
 .. function:: parentindexes(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        parentindexes(A)
@@ -561,6 +602,7 @@ Indexing, Assignment, and Concatenation
 .. function:: slicedim(A, d, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        slicedim(A, d, i)
@@ -570,6 +612,7 @@ Indexing, Assignment, and Concatenation
 .. function:: slice(A, inds...)
 
    .. Docstring generated from Julia source
+
    ::
 
               slice(A, inds...)
@@ -579,6 +622,7 @@ Indexing, Assignment, and Concatenation
 .. function:: setindex!(A, X, inds...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setindex!(A, X, inds...)
@@ -589,11 +633,12 @@ Indexing, Assignment, and Concatenation
 
        setindex!(collection, value, key...)
 
-   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``setindex!(a, x, i, j, ...)``\ .
+   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
 
 .. function:: broadcast_getindex(A, inds...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast_getindex(A, inds...)
@@ -603,6 +648,7 @@ Indexing, Assignment, and Concatenation
 .. function:: broadcast_setindex!(A, X, inds...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        broadcast_setindex!(A, X, inds...)
@@ -612,6 +658,7 @@ Indexing, Assignment, and Concatenation
 .. function:: cat(dims, A...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cat(dims, A...)
@@ -621,6 +668,7 @@ Indexing, Assignment, and Concatenation
 .. function:: vcat(A...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        vcat(A...)
@@ -630,6 +678,7 @@ Indexing, Assignment, and Concatenation
 .. function:: hcat(A...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hcat(A...)
@@ -639,6 +688,7 @@ Indexing, Assignment, and Concatenation
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        hvcat(rows::Tuple{Vararg{Int}}, values...)
@@ -650,6 +700,7 @@ Indexing, Assignment, and Concatenation
 .. function:: flipdim(A, d)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        flipdim(A, d)
@@ -659,6 +710,7 @@ Indexing, Assignment, and Concatenation
 .. function:: circshift(A,shifts)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        circshift(A,shifts)
@@ -668,6 +720,7 @@ Indexing, Assignment, and Concatenation
 .. function:: find(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        find(A)
@@ -683,6 +736,7 @@ Indexing, Assignment, and Concatenation
 .. function:: find(f,A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        find(A)
@@ -698,6 +752,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findn(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findn(A)
@@ -707,6 +762,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findnz(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findnz(A)
@@ -716,6 +772,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findfirst(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findfirst(A)
@@ -737,6 +794,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findfirst(A,v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findfirst(A)
@@ -758,6 +816,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findfirst(predicate, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findfirst(A)
@@ -779,6 +838,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findlast(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findlast(A)
@@ -800,6 +860,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findlast(A, v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findlast(A)
@@ -821,6 +882,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findlast(predicate, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findlast(A)
@@ -842,6 +904,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findnext(A, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findnext(A, i)
@@ -863,6 +926,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findnext(predicate, A, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findnext(A, i)
@@ -884,6 +948,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findnext(A, v, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findnext(A, i)
@@ -905,6 +970,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findprev(A, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findprev(A, i)
@@ -926,6 +992,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findprev(predicate, A, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findprev(A, i)
@@ -947,6 +1014,7 @@ Indexing, Assignment, and Concatenation
 .. function:: findprev(A, v, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findprev(A, i)
@@ -968,6 +1036,7 @@ Indexing, Assignment, and Concatenation
 .. function:: permutedims(A, perm)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        permutedims(A, perm)
@@ -977,6 +1046,7 @@ Indexing, Assignment, and Concatenation
 .. function:: ipermutedims(A, perm)
 
    .. Docstring generated from Julia source
+
    ::
 
               ipermutedims(A, perm)
@@ -986,6 +1056,7 @@ Indexing, Assignment, and Concatenation
 .. function:: permutedims!(dest, src, perm)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        permutedims!(dest, src, perm)
@@ -995,6 +1066,7 @@ Indexing, Assignment, and Concatenation
 .. function:: squeeze(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        squeeze(A, dims)
@@ -1004,6 +1076,7 @@ Indexing, Assignment, and Concatenation
 .. function:: vec(Array) -> Vector
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        vec(Array) -> Vector
@@ -1013,6 +1086,7 @@ Indexing, Assignment, and Concatenation
 .. function:: promote_shape(s1, s2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        promote_shape(s1, s2)
@@ -1022,15 +1096,23 @@ Indexing, Assignment, and Concatenation
 .. function:: checkbounds(array, indexes...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        checkbounds(array, indexes...)
 
-   Throw an error if the specified indexes are not in bounds for the given array.
+   Throw an error if the specified indexes are not in bounds for the given array. Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
+
+   .. code-block:: julia
+
+       checkbounds(::Type{Bool}, dimlength::Integer, index)
+
+   Return a ``Bool`` describing if the given index is within the bounds of the given dimension length. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
 
 .. function:: randsubseq(A, p) -> Vector
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        randsubseq(A, p) -> Vector
@@ -1040,6 +1122,7 @@ Indexing, Assignment, and Concatenation
 .. function:: randsubseq!(S, A, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        randsubseq!(S, A, p)
@@ -1052,6 +1135,7 @@ Array functions
 .. function:: cumprod(A, [dim])
 
    .. Docstring generated from Julia source
+
    ::
 
               cumprod(A, [dim])
@@ -1064,6 +1148,7 @@ Array functions
 .. function:: cumprod!(B, A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cumprod!(B, A, [dim])
@@ -1073,6 +1158,7 @@ Array functions
 .. function:: cumsum(A, [dim])
 
    .. Docstring generated from Julia source
+
    ::
 
               cumsum(A, [dim])
@@ -1085,6 +1171,7 @@ Array functions
 .. function:: cumsum!(B, A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cumsum!(B, A, [dim])
@@ -1094,6 +1181,7 @@ Array functions
 .. function:: cumsum_kbn(A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cumsum_kbn(A, [dim])
@@ -1103,6 +1191,7 @@ Array functions
 .. function:: cummin(A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cummin(A, [dim])
@@ -1112,6 +1201,7 @@ Array functions
 .. function:: cummax(A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cummax(A, [dim])
@@ -1121,6 +1211,7 @@ Array functions
 .. function:: diff(A, [dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        diff(A, [dim])
@@ -1130,6 +1221,7 @@ Array functions
 .. function:: gradient(F, [h])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        gradient(F, [h])
@@ -1139,6 +1231,7 @@ Array functions
 .. function:: rot180(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rot180(A)
@@ -1154,6 +1247,7 @@ Array functions
 .. function:: rot180(A, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rot180(A)
@@ -1169,6 +1263,7 @@ Array functions
 .. function:: rotl90(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rotl90(A)
@@ -1184,6 +1279,7 @@ Array functions
 .. function:: rotl90(A, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rotl90(A)
@@ -1199,6 +1295,7 @@ Array functions
 .. function:: rotr90(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rotr90(A)
@@ -1214,6 +1311,7 @@ Array functions
 .. function:: rotr90(A, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rotr90(A)
@@ -1229,6 +1327,7 @@ Array functions
 .. function:: reducedim(f, A, dims[, initial])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reducedim(f, A, dims[, initial])
@@ -1240,6 +1339,7 @@ Array functions
 .. function:: mapreducedim(f, op, A, dims[, initial])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mapreducedim(f, op, A, dims[, initial])
@@ -1249,6 +1349,7 @@ Array functions
 .. function:: mapslices(f, A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        mapslices(f, A, dims)
@@ -1258,6 +1359,7 @@ Array functions
 .. function:: sum_kbn(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sum_kbn(A)
@@ -1267,6 +1369,7 @@ Array functions
 .. function:: cartesianmap(f, dims)
 
    .. Docstring generated from Julia source
+
    ::
 
               cartesianmap(f, dims)
@@ -1288,6 +1391,7 @@ Combinatorics
 .. function:: nthperm(v, k)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nthperm(v, k)
@@ -1303,6 +1407,7 @@ Combinatorics
 .. function:: nthperm(p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nthperm(v, k)
@@ -1318,6 +1423,7 @@ Combinatorics
 .. function:: nthperm!(v, k)
 
    .. Docstring generated from Julia source
+
    ::
 
               nthperm!(v, k)
@@ -1327,6 +1433,7 @@ Combinatorics
 .. function:: randperm([rng,] n)
 
    .. Docstring generated from Julia source
+
    ::
 
               randperm([rng,] n)
@@ -1337,6 +1444,7 @@ Combinatorics
 .. function:: invperm(v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        invperm(v)
@@ -1346,6 +1454,7 @@ Combinatorics
 .. function:: isperm(v) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isperm(v) -> Bool
@@ -1355,6 +1464,7 @@ Combinatorics
 .. function:: permute!(v, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        permute!(v, p)
@@ -1366,6 +1476,7 @@ Combinatorics
 .. function:: ipermute!(v, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ipermute!(v, p)
@@ -1375,6 +1486,7 @@ Combinatorics
 .. function:: randcycle([rng,] n)
 
    .. Docstring generated from Julia source
+
    ::
 
               randcycle([rng,] n)
@@ -1386,6 +1498,7 @@ Combinatorics
 .. function:: shuffle([rng,] v)
 
    .. Docstring generated from Julia source
+
    ::
 
               shuffle([rng,] v)
@@ -1397,6 +1510,7 @@ Combinatorics
 .. function:: shuffle!([rng,] v)
 
    .. Docstring generated from Julia source
+
    ::
 
               shuffle!([rng,] v)
@@ -1406,6 +1520,7 @@ Combinatorics
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reverse(v [, start=1 [, stop=length(v) ]] )
@@ -1429,6 +1544,7 @@ Combinatorics
 .. function:: reverseind(v, i)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reverseind(v, i)
@@ -1438,6 +1554,7 @@ Combinatorics
 .. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
    .. Docstring generated from Julia source
+
    ::
 
               reverse!(v [, start=1 [, stop=length(v) ]]) -> v
@@ -1447,6 +1564,7 @@ Combinatorics
 .. function:: combinations(array, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        combinations(array, n)
@@ -1456,6 +1574,7 @@ Combinatorics
 .. function:: permutations(array)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        permutations(array)
@@ -1465,6 +1584,7 @@ Combinatorics
 .. function:: partitions(n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        partitions(n)
@@ -1492,6 +1612,7 @@ Combinatorics
 .. function:: partitions(n, m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        partitions(n)
@@ -1519,6 +1640,7 @@ Combinatorics
 .. function:: partitions(array)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        partitions(n)
@@ -1546,6 +1668,7 @@ Combinatorics
 .. function:: partitions(array, m)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        partitions(n)
@@ -1576,6 +1699,7 @@ BitArrays
 .. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bitpack(A::AbstractArray{T,N}) -> BitArray
@@ -1585,6 +1709,7 @@ BitArrays
 .. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        bitunpack(B::BitArray{N}) -> Array{Bool,N}
@@ -1594,6 +1719,7 @@ BitArrays
 .. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
 
    .. Docstring generated from Julia source
+
    ::
 
               flipbits!(B::BitArray{N}) -> BitArray{N}
@@ -1603,6 +1729,7 @@ BitArrays
 .. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1618,6 +1745,7 @@ BitArrays
 .. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1633,6 +1761,7 @@ BitArrays
 .. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rol(B::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1642,6 +1771,7 @@ BitArrays
 .. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1657,6 +1787,7 @@ BitArrays
 .. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1672,6 +1803,7 @@ BitArrays
 .. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ror(B::BitArray{1}, i::Integer) -> BitArray{1}
@@ -1688,6 +1820,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparse(I,J,V,[m,n,combine])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sparse(I,J,V,[m,n,combine])
@@ -1703,6 +1836,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(I, V, [m, combine])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sparsevec(I, V, [m, combine])
@@ -1724,6 +1858,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(D::Dict, [m])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sparsevec(I, V, [m, combine])
@@ -1745,6 +1880,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: issparse(S)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issparse(S)
@@ -1754,6 +1890,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparse(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sparse(I,J,V,[m,n,combine])
@@ -1769,6 +1906,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sparsevec(I, V, [m, combine])
@@ -1790,6 +1928,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: full(S)
 
    .. Docstring generated from Julia source
+
    ::
 
               full(S)
@@ -1818,6 +1957,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: nnz(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nnz(A)
@@ -1827,6 +1967,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: spzeros(m,n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        spzeros(m,n)
@@ -1836,6 +1977,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: spones(S)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        spones(S)
@@ -1845,6 +1987,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: speye(type,m[,n])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        speye(type,m[,n])
@@ -1854,6 +1997,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: spdiagm(B, d[, m, n])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        spdiagm(B, d[, m, n])
@@ -1863,6 +2007,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sprand([rng,] m,n,p [,rfn])
 
    .. Docstring generated from Julia source
+
    ::
 
               sprand([rng,] m,n,p [,rfn])
@@ -1872,6 +2017,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sprandn(m,n,p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sprandn(m,n,p)
@@ -1881,6 +2027,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sprandbool(m,n,p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sprandbool(m,n,p)
@@ -1890,6 +2037,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: etree(A[, post])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        etree(A[, post])
@@ -1899,6 +2047,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: symperm(A, p)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symperm(A, p)
@@ -1908,6 +2057,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: nonzeros(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nonzeros(A)
@@ -1917,6 +2067,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: rowvals(A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rowvals(A)
@@ -1926,6 +2077,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: nzrange(A, col)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        nzrange(A, col)

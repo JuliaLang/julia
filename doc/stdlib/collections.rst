@@ -32,6 +32,7 @@ type.
 .. function:: start(iter) -> state
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        start(iter) -> state
@@ -41,6 +42,7 @@ type.
 .. function:: done(iter, state) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        done(iter, state) -> Bool
@@ -50,6 +52,7 @@ type.
 .. function:: next(iter, state) -> item, state
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        next(iter, state) -> item, state
@@ -59,6 +62,7 @@ type.
 .. function:: zip(iters...)
 
    .. Docstring generated from Julia source
+
    ::
 
               zip(iters...)
@@ -70,6 +74,7 @@ type.
 .. function:: enumerate(iter)
 
    .. Docstring generated from Julia source
+
    ::
 
               enumerate(iter)
@@ -90,6 +95,7 @@ type.
 .. function:: rest(iter, state)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        rest(iter, state)
@@ -99,6 +105,7 @@ type.
 .. function:: countfrom(start=1, step=1)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        countfrom(start=1, step=1)
@@ -108,6 +115,7 @@ type.
 .. function:: take(iter, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        take(iter, n)
@@ -117,6 +125,7 @@ type.
 .. function:: drop(iter, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        drop(iter, n)
@@ -126,6 +135,7 @@ type.
 .. function:: cycle(iter)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cycle(iter)
@@ -135,6 +145,7 @@ type.
 .. function:: repeated(x[, n::Int])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        repeated(x[, n::Int])
@@ -164,6 +175,7 @@ General Collections
 .. function:: isempty(collection) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               isempty(collection) -> Bool
@@ -181,6 +193,7 @@ General Collections
 .. function:: empty!(collection) -> collection
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        empty!(collection) -> collection
@@ -190,6 +203,7 @@ General Collections
 .. function:: length(collection) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        length(A) -> Integer
@@ -211,6 +225,7 @@ General Collections
 .. function:: endof(collection) -> Integer
 
    .. Docstring generated from Julia source
+
    ::
 
               endof(collection) -> Integer
@@ -241,6 +256,7 @@ Iterable Collections
 .. function:: in(item, collection) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               in(item, collection) -> Bool
@@ -260,6 +276,7 @@ Iterable Collections
 .. function:: eltype(type)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        eltype(type)
@@ -269,6 +286,7 @@ Iterable Collections
 .. function:: indexin(a, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        indexin(a, b)
@@ -278,6 +296,7 @@ Iterable Collections
 .. function:: findin(a, b)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findin(a, b)
@@ -287,6 +306,7 @@ Iterable Collections
 .. function:: unique(itr[, dim])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unique(itr[, dim])
@@ -296,6 +316,7 @@ Iterable Collections
 .. function:: reduce(op, v0, itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reduce(op, v0, itr)
@@ -317,6 +338,7 @@ Iterable Collections
 .. function:: reduce(op, itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reduce(op, v0, itr)
@@ -338,6 +360,7 @@ Iterable Collections
 .. function:: foldl(op, v0, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               foldl(op, v0, itr)
@@ -356,6 +379,7 @@ Iterable Collections
 .. function:: foldl(op, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               foldl(op, v0, itr)
@@ -374,6 +398,7 @@ Iterable Collections
 .. function:: foldr(op, v0, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               foldr(op, v0, itr)
@@ -392,6 +417,7 @@ Iterable Collections
 .. function:: foldr(op, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               foldr(op, v0, itr)
@@ -410,6 +436,7 @@ Iterable Collections
 .. function:: maximum(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maximum(itr)
@@ -425,6 +452,7 @@ Iterable Collections
 .. function:: maximum(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maximum(itr)
@@ -440,6 +468,7 @@ Iterable Collections
 .. function:: maximum!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maximum!(r, A)
@@ -449,6 +478,7 @@ Iterable Collections
 .. function:: minimum(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minimum(itr)
@@ -464,6 +494,7 @@ Iterable Collections
 .. function:: minimum(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minimum(itr)
@@ -479,6 +510,7 @@ Iterable Collections
 .. function:: minimum!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minimum!(r, A)
@@ -488,6 +520,7 @@ Iterable Collections
 .. function:: extrema(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        extrema(itr)
@@ -497,6 +530,7 @@ Iterable Collections
 .. function:: indmax(itr) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        indmax(itr) -> Integer
@@ -506,6 +540,7 @@ Iterable Collections
 .. function:: indmin(itr) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        indmin(itr) -> Integer
@@ -515,6 +550,7 @@ Iterable Collections
 .. function:: findmax(itr) -> (x, index)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findmax(itr) -> (x, index)
@@ -530,6 +566,7 @@ Iterable Collections
 .. function:: findmax(A, dims) -> (maxval, index)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findmax(itr) -> (x, index)
@@ -545,6 +582,7 @@ Iterable Collections
 .. function:: findmin(itr) -> (x, index)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findmin(itr) -> (x, index)
@@ -560,6 +598,7 @@ Iterable Collections
 .. function:: findmin(A, dims) -> (minval, index)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        findmin(itr) -> (x, index)
@@ -575,6 +614,7 @@ Iterable Collections
 .. function:: maxabs(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maxabs(itr)
@@ -590,6 +630,7 @@ Iterable Collections
 .. function:: maxabs(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maxabs(itr)
@@ -605,6 +646,7 @@ Iterable Collections
 .. function:: maxabs!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        maxabs!(r, A)
@@ -614,6 +656,7 @@ Iterable Collections
 .. function:: minabs(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minabs(itr)
@@ -629,6 +672,7 @@ Iterable Collections
 .. function:: minabs(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minabs(itr)
@@ -644,6 +688,7 @@ Iterable Collections
 .. function:: minabs!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        minabs!(r, A)
@@ -653,6 +698,7 @@ Iterable Collections
 .. function:: sum(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sum(itr)
@@ -674,6 +720,7 @@ Iterable Collections
 .. function:: sum(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sum(itr)
@@ -695,6 +742,7 @@ Iterable Collections
 .. function:: sum!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sum!(r, A)
@@ -704,6 +752,7 @@ Iterable Collections
 .. function:: sum(f, itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sum(itr)
@@ -725,6 +774,7 @@ Iterable Collections
 .. function:: sumabs(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs(itr)
@@ -740,6 +790,7 @@ Iterable Collections
 .. function:: sumabs(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs(itr)
@@ -755,6 +806,7 @@ Iterable Collections
 .. function:: sumabs!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs!(r, A)
@@ -764,6 +816,7 @@ Iterable Collections
 .. function:: sumabs2(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs2(itr)
@@ -779,6 +832,7 @@ Iterable Collections
 .. function:: sumabs2(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs2(itr)
@@ -794,6 +848,7 @@ Iterable Collections
 .. function:: sumabs2!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sumabs2!(r, A)
@@ -803,6 +858,7 @@ Iterable Collections
 .. function:: prod(itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prod(itr)
@@ -818,6 +874,7 @@ Iterable Collections
 .. function:: prod(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prod(itr)
@@ -833,6 +890,7 @@ Iterable Collections
 .. function:: prod!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        prod!(r, A)
@@ -842,6 +900,7 @@ Iterable Collections
 .. function:: any(itr) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        any(itr) -> Bool
@@ -863,6 +922,7 @@ Iterable Collections
 .. function:: any(A, dims)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        any(itr) -> Bool
@@ -884,6 +944,7 @@ Iterable Collections
 .. function:: any!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        any!(r, A)
@@ -893,6 +954,7 @@ Iterable Collections
 .. function:: all(itr) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               all(itr) -> Bool
@@ -919,6 +981,7 @@ Iterable Collections
 .. function:: all(A, dims)
 
    .. Docstring generated from Julia source
+
    ::
 
               all(itr) -> Bool
@@ -945,6 +1008,7 @@ Iterable Collections
 .. function:: all!(r, A)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        all!(r, A)
@@ -954,6 +1018,7 @@ Iterable Collections
 .. function:: count(p, itr) -> Integer
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        count(p, itr) -> Integer
@@ -963,6 +1028,7 @@ Iterable Collections
 .. function:: any(p, itr) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        any(itr) -> Bool
@@ -984,6 +1050,7 @@ Iterable Collections
 .. function:: all(p, itr) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               all(itr) -> Bool
@@ -1010,6 +1077,7 @@ Iterable Collections
 .. function:: map(f, c...) -> collection
 
    .. Docstring generated from Julia source
+
    ::
 
               map(f, c...) -> collection
@@ -1034,6 +1102,7 @@ Iterable Collections
 .. function:: map!(function, collection)
 
    .. Docstring generated from Julia source
+
    ::
 
               map!(function, collection)
@@ -1051,6 +1120,7 @@ Iterable Collections
 .. function:: map!(function, destination, collection...)
 
    .. Docstring generated from Julia source
+
    ::
 
               map!(function, collection)
@@ -1068,6 +1138,7 @@ Iterable Collections
 .. function:: mapreduce(f, op, v0, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapreduce(f, op, v0, itr)
@@ -1104,6 +1175,7 @@ Iterable Collections
 .. function:: mapreduce(f, op, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapreduce(f, op, v0, itr)
@@ -1140,6 +1212,7 @@ Iterable Collections
 .. function:: mapfoldl(f, op, v0, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapfoldl(f, op, v0, itr)
@@ -1158,6 +1231,7 @@ Iterable Collections
 .. function:: mapfoldl(f, op, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapfoldl(f, op, v0, itr)
@@ -1176,6 +1250,7 @@ Iterable Collections
 .. function:: mapfoldr(f, op, v0, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapfoldr(f, op, v0, itr)
@@ -1194,6 +1269,7 @@ Iterable Collections
 .. function:: mapfoldr(f, op, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               mapfoldr(f, op, v0, itr)
@@ -1212,6 +1288,7 @@ Iterable Collections
 .. function:: first(coll)
 
    .. Docstring generated from Julia source
+
    ::
 
               first(coll)
@@ -1222,6 +1299,7 @@ Iterable Collections
 .. function:: last(coll)
 
    .. Docstring generated from Julia source
+
    ::
 
               last(coll)
@@ -1233,6 +1311,7 @@ Iterable Collections
 .. function:: step(r)
 
    .. Docstring generated from Julia source
+
    ::
 
               step(r)
@@ -1242,6 +1321,7 @@ Iterable Collections
 .. function:: collect(collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        collect(collection)
@@ -1257,6 +1337,7 @@ Iterable Collections
 .. function:: collect(element_type, collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        collect(collection)
@@ -1272,6 +1353,7 @@ Iterable Collections
 .. function:: issubset(a, b)
 
    .. Docstring generated from Julia source
+
    ::
 
               issubset(a, b)
@@ -1291,6 +1373,7 @@ Iterable Collections
 .. function:: filter(function, collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        filter(function, collection)
@@ -1300,6 +1383,7 @@ Iterable Collections
 .. function:: filter!(function, collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        filter!(function, collection)
@@ -1312,6 +1396,7 @@ Indexable Collections
 .. function:: getindex(collection, key...)
 
    .. Docstring generated from Julia source
+
    ::
 
               getindex(type[, elements...])
@@ -1335,6 +1420,7 @@ Indexable Collections
 .. function:: setindex!(collection, value, key...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setindex!(A, X, inds...)
@@ -1345,7 +1431,7 @@ Indexable Collections
 
        setindex!(collection, value, key...)
 
-   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``setindex!(a, x, i, j, ...)``\ .
+   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
 
 Fully implemented by:
 
@@ -1385,6 +1471,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: Dict([itr])
 
    .. Docstring generated from Julia source
+
    ::
 
               Dict([itr])
@@ -1413,6 +1500,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: haskey(collection, key) -> Bool
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        haskey(collection, key) -> Bool
@@ -1422,6 +1510,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get(collection, key, default)
 
    .. Docstring generated from Julia source
+
    ::
 
               get(x)
@@ -1456,6 +1545,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get(f::Function, collection, key)
 
    .. Docstring generated from Julia source
+
    ::
 
               get(x)
@@ -1493,6 +1583,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get!(collection, key, default)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        get!(collection, key, default)
@@ -1515,6 +1606,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get!(f::Function, collection, key)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        get!(collection, key, default)
@@ -1540,6 +1632,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: getkey(collection, key, default)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        getkey(collection, key, default)
@@ -1549,6 +1642,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: delete!(collection, key)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        delete!(collection, key)
@@ -1558,6 +1652,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: pop!(collection, key[, default])
 
    .. Docstring generated from Julia source
+
    ::
 
               pop!(collection, key[, default])
@@ -1595,6 +1690,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: keys(collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        keys(collection)
@@ -1604,6 +1700,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: values(collection)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        values(collection)
@@ -1613,6 +1710,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: merge(collection, others...)
 
    .. Docstring generated from Julia source
+
    ::
 
               merge(collection, others...)
@@ -1646,6 +1744,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: merge!(collection, others...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        merge!(collection, others...)
@@ -1655,6 +1754,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: sizehint!(s, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sizehint!(s, n)
@@ -1681,6 +1781,7 @@ Set-Like Collections
 .. function:: Set([itr])
 
    .. Docstring generated from Julia source
+
    ::
 
               Set([itr])
@@ -1691,6 +1792,7 @@ Set-Like Collections
 .. function:: IntSet([itr])
 
    .. Docstring generated from Julia source
+
    ::
 
               IntSet([itr])
@@ -1700,6 +1802,7 @@ Set-Like Collections
 .. function:: union(s1,s2...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        union(s1,s2...)
@@ -1710,6 +1813,7 @@ Set-Like Collections
 .. function:: union!(s, iterable)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        union!(s, iterable)
@@ -1719,6 +1823,7 @@ Set-Like Collections
 .. function:: intersect(s1,s2...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        intersect(s1,s2...)
@@ -1729,6 +1834,7 @@ Set-Like Collections
 .. function:: setdiff(s1,s2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setdiff(s1,s2)
@@ -1738,6 +1844,7 @@ Set-Like Collections
 .. function:: setdiff!(s, iterable)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        setdiff!(s, iterable)
@@ -1747,6 +1854,7 @@ Set-Like Collections
 .. function:: symdiff(s1,s2...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symdiff(s1,s2...)
@@ -1756,6 +1864,7 @@ Set-Like Collections
 .. function:: symdiff!(s, n)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symdiff!(s, n)
@@ -1777,6 +1886,7 @@ Set-Like Collections
 .. function:: symdiff!(s, itr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symdiff!(s, n)
@@ -1798,6 +1908,7 @@ Set-Like Collections
 .. function:: symdiff!(s1, s2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        symdiff!(s, n)
@@ -1819,6 +1930,7 @@ Set-Like Collections
 .. function:: complement(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               complement(s)
@@ -1828,6 +1940,7 @@ Set-Like Collections
 .. function:: complement!(s)
 
    .. Docstring generated from Julia source
+
    ::
 
               complement!(s)
@@ -1837,6 +1950,7 @@ Set-Like Collections
 .. function:: intersect!(s1, s2)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        intersect!(s1, s2)
@@ -1846,6 +1960,7 @@ Set-Like Collections
 .. function:: issubset(A, S) -> Bool
 
    .. Docstring generated from Julia source
+
    ::
 
               issubset(a, b)
@@ -1877,6 +1992,7 @@ Dequeues
 .. function:: push!(collection, items...) -> collection
 
    .. Docstring generated from Julia source
+
    ::
 
               push!(collection, items...) -> collection
@@ -1902,6 +2018,7 @@ Dequeues
 .. function:: pop!(collection) -> item
 
    .. Docstring generated from Julia source
+
    ::
 
               pop!(collection, key[, default])
@@ -1939,6 +2056,7 @@ Dequeues
 .. function:: unshift!(collection, items...) -> collection
 
    .. Docstring generated from Julia source
+
    ::
 
               unshift!(collection, items...) -> collection
@@ -1959,6 +2077,7 @@ Dequeues
 .. function:: shift!(collection) -> item
 
    .. Docstring generated from Julia source
+
    ::
 
               shift!(collection) -> item
@@ -1990,6 +2109,7 @@ Dequeues
 .. function:: insert!(collection, index, item)
 
    .. Docstring generated from Julia source
+
    ::
 
               insert!(collection, index, item)
@@ -2011,6 +2131,7 @@ Dequeues
 .. function:: deleteat!(collection, index)
 
    .. Docstring generated from Julia source
+
    ::
 
               deleteat!(collection, index)
@@ -2052,6 +2173,7 @@ Dequeues
 .. function:: deleteat!(collection, itr)
 
    .. Docstring generated from Julia source
+
    ::
 
               deleteat!(collection, index)
@@ -2093,6 +2215,7 @@ Dequeues
 .. function:: splice!(collection, index, [replacement]) -> item
 
    .. Docstring generated from Julia source
+
    ::
 
               splice!(collection, index, [replacement]) -> item
@@ -2172,6 +2295,7 @@ Dequeues
 .. function:: splice!(collection, range, [replacement]) -> items
 
    .. Docstring generated from Julia source
+
    ::
 
               splice!(collection, index, [replacement]) -> item
@@ -2251,6 +2375,7 @@ Dequeues
 .. function:: resize!(collection, n) -> collection
 
    .. Docstring generated from Julia source
+
    ::
 
               resize!(collection, n) -> collection
@@ -2284,6 +2409,7 @@ Dequeues
 .. function:: append!(collection, collection2) -> collection.
 
    .. Docstring generated from Julia source
+
    ::
 
               append!(collection, collection2) -> collection.
@@ -2317,6 +2443,7 @@ Dequeues
 .. function:: prepend!(collection, items) -> collection
 
    .. Docstring generated from Julia source
+
    ::
 
               prepend!(collection, items) -> collection
@@ -2349,6 +2476,7 @@ changed efficiently.
 .. function:: PriorityQueue(K, V, [ord])
 
    .. Docstring generated from Julia source
+
    ::
 
               PriorityQueue(K, V, [ord])
@@ -2360,6 +2488,7 @@ changed efficiently.
 .. function:: enqueue!(pq, k, v)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        enqueue!(pq, k, v)
@@ -2369,6 +2498,7 @@ changed efficiently.
 .. function:: dequeue!(pq)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dequeue!(pq)
@@ -2378,6 +2508,7 @@ changed efficiently.
 .. function:: peek(pq)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        peek(pq)
@@ -2417,6 +2548,7 @@ is used, so that elements popped from the heap are given in ascending order.
 .. function:: heapify(v, [ord])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        heapify(v, [ord])
@@ -2426,6 +2558,7 @@ is used, so that elements popped from the heap are given in ascending order.
 .. function:: heapify!(v, [ord])
 
    .. Docstring generated from Julia source
+
    ::
 
               heapify!(v, [ord])
@@ -2435,6 +2568,7 @@ is used, so that elements popped from the heap are given in ascending order.
 .. function:: isheap(v, [ord])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        isheap(v, [ord])
@@ -2444,6 +2578,7 @@ is used, so that elements popped from the heap are given in ascending order.
 .. function:: heappush!(v, x, [ord])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        heappush!(v, x, [ord])
@@ -2453,6 +2588,7 @@ is used, so that elements popped from the heap are given in ascending order.
 .. function:: heappop!(v, [ord])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        heappop!(v, [ord])

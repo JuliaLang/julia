@@ -120,6 +120,7 @@ Sorting Functions
 .. function:: sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -129,6 +130,7 @@ Sorting Functions
 .. function:: sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -144,6 +146,7 @@ Sorting Functions
 .. function:: sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -159,6 +162,7 @@ Sorting Functions
 .. function:: sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    ::
 
               sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -176,6 +180,7 @@ Sorting Functions
 .. function:: sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
    .. Docstring generated from Julia source
+
    ::
 
               sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
@@ -188,6 +193,7 @@ Sorting Functions
 .. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -197,6 +203,7 @@ Sorting Functions
 .. function:: sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -209,6 +216,7 @@ Order-Related Functions
 .. function:: issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -218,6 +226,7 @@ Order-Related Functions
 .. function:: searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -227,6 +236,7 @@ Order-Related Functions
 .. function:: searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -236,6 +246,7 @@ Order-Related Functions
 .. function:: searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -245,6 +256,7 @@ Order-Related Functions
 .. function:: select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -254,6 +266,7 @@ Order-Related Functions
 .. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -263,6 +276,7 @@ Order-Related Functions
 .. function:: selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -272,6 +286,7 @@ Order-Related Functions
 .. function:: selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])

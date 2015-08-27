@@ -7,6 +7,7 @@
 .. function:: ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
@@ -20,6 +21,7 @@
 .. function:: cglobal((symbol, library) [, type=Void])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cglobal((symbol, library) [, type=Void])
@@ -29,6 +31,7 @@
 .. function:: cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
@@ -50,6 +53,7 @@
 .. function:: unsafe_convert(T,x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_convert(T,x)
@@ -65,6 +69,7 @@
 .. function:: cconvert(T,x)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        cconvert(T,x)
@@ -78,6 +83,7 @@
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_load(p::Ptr{T},i::Integer)
@@ -89,6 +95,7 @@
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_store!(p::Ptr{T},x,i::Integer)
@@ -100,6 +107,7 @@
 .. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
@@ -119,6 +127,7 @@
 .. function:: unsafe_copy!(dest::Array, do, src::Array, so, N)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
@@ -138,6 +147,7 @@
 .. function:: copy!(dest, src)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        copy!(dest, src)
@@ -153,6 +163,7 @@
 .. function:: copy!(dest, do, src, so, N)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        copy!(dest, src)
@@ -168,6 +179,7 @@
 .. function:: pointer(array [, index])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pointer(array [, index])
@@ -179,6 +191,7 @@
 .. function:: pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pointer_to_array(pointer, dims[, take_ownership::Bool])
@@ -188,6 +201,7 @@
 .. function:: pointer_from_objref(object_instance)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        pointer_from_objref(object_instance)
@@ -197,6 +211,7 @@
 .. function:: unsafe_pointer_to_objref(p::Ptr)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        unsafe_pointer_to_objref(p::Ptr)
@@ -206,6 +221,7 @@
 .. function:: disable_sigint(f::Function)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        disable_sigint(f::Function)
@@ -222,6 +238,7 @@
 .. function:: reenable_sigint(f::Function)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        reenable_sigint(f::Function)
@@ -231,6 +248,7 @@
 .. function:: systemerror(sysfunc, iftrue)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        systemerror(sysfunc, iftrue)

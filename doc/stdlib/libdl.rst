@@ -7,6 +7,7 @@
 .. function:: dlopen(libfile::AbstractString [, flags::Integer])
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dlopen(libfile::AbstractString [, flags::Integer])
@@ -18,6 +19,7 @@
 .. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
 
    .. Docstring generated from Julia source
+
    ::
 
               dlopen_e(libfile::AbstractString [, flags::Integer])
@@ -59,6 +61,7 @@
 .. function:: dlsym(handle, sym)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dlsym(handle, sym)
@@ -68,6 +71,7 @@
 .. function:: dlsym_e(handle, sym)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dlsym_e(handle, sym)
@@ -77,6 +81,7 @@
 .. function:: dlclose(handle)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        dlclose(handle)
@@ -86,6 +91,7 @@
 .. function:: find_library(names, locations)
 
    .. Docstring generated from Julia source
+
    .. code-block:: julia
 
        find_library(names, locations)
