@@ -542,3 +542,8 @@ for f in binary_math_functions
     @test f(x,[y]) == v
     @test f([x],[y]) == v
 end
+
+# #3024, #12822
+@test_throws DomainError 2 ^ -2
+@test_throws DomainError (-2)^(2.2)
+@test_throws DomainError (-2.0)^(2.2)
