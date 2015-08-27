@@ -19,6 +19,8 @@ let # syevr
         @test_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
         @test_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
         @test_approx_eq vals LAPACK.syev!('N','U',copy(Asym))
+
+        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
     end
 end
 
@@ -32,7 +34,7 @@ let # Test gglse
     end
 end
 
-let # xbdsqr
+let # bdsqr & throw for bdsdc
     n = 10
     for elty in (Float32, Float64)
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
@@ -45,6 +47,8 @@ let # xbdsqr
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
+
+        @test_throws ArgumentError LAPACK.bdsdc!('U','Z',d,e)
     end
 end
 
@@ -203,6 +207,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.gtsv!(zeros(elty,11),d,du,b)
     @test_throws DimensionMismatch LAPACK.gtsv!(dl,d,zeros(elty,11),b)
     @test_throws DimensionMismatch LAPACK.gtsv!(dl,d,du,zeros(elty,11))
+    @test LAPACK.gtsv!(elty[],elty[],elty[],elty[]) == elty[]
 end
 
 #gttrs,gttrf errors
@@ -262,15 +267,36 @@ for elty in (Float32, Float64, Complex64, Complex128)
     V = rand(elty,10,10)
     T = zeros(elty,11,10)
     @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
+
+    @test_throws DimensionMismatch LAPACK.orghr!(1, 10, C, zeros(elty,11))
 end
 
-#sytri and sytrf
+#sytri, sytrs, and sytrf
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
     A = A + A.' #symmetric!
     B = copy(A)
     B,ipiv = LAPACK.sytrf!('U',B)
     @test_approx_eq triu(inv(A)) triu(LAPACK.sytri!('U',B,ipiv))
+    @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
+end
+
+# hetrs
+for elty in (Complex64, Complex128)
+    A = rand(elty,10,10)
+    A = A + A' #hermitian!
+    B = copy(A)
+    B,ipiv = LAPACK.hetrf!('U',B)
+    @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
+end
+
+# stev, stebz, stein, stegr
+for elty in (Float32, Float64)
+    d = rand(elty,10)
+    e = rand(elty,9)
+    @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
+    @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
+    @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
 end
 
 #trtri
@@ -367,6 +393,38 @@ for elty in (Float32, Float64, Complex64, Complex128)
     D = copy(B)
     X, rcond, f, b, r = LAPACK.gesvx!(C,D)
     @test_approx_eq X A\B
+end
+
+#gees, gges error throwing
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = rand(elty,10,10)
+    B = rand(elty,11,11)
+    @test_throws DimensionMismatch LAPACK.gges!('V','V',A,B)
+end
+
+# trrfs & trevc
+for elty in (Float32, Float64, Complex64, Complex128)
+    T = triu(rand(elty,10,10))
+    S = copy(T)
+    select = zeros(Base.LinAlg.BlasInt,10)
+    select[1] = 1
+    select,Vr = LAPACK.trevc!('R','S',select,copy(T))
+    @test Vr ≈ eigvecs(S)[:,1]
+    select = zeros(Base.LinAlg.BlasInt,10)
+    select[1] = 1
+    select,Vl = LAPACK.trevc!('L','S',select,copy(T))
+    select = zeros(Base.LinAlg.BlasInt,10)
+    select[1] = 1
+    select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
+    @test Vrn ≈ eigvecs(S)[:,1]
+    @test Vln ≈ Vl
+    @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
+    @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))
+end
+
+# laic1
+for elty in (Float32, Float64, Complex64, Complex128)
+    @test_throws DimensionMismatch LAPACK.laic1!(1,rand(elty,10),real(rand(elty)),rand(elty,11),rand(elty))
 end
 
 # Test our own linear algebra functionaly against LAPACK
