@@ -7,11 +7,16 @@ isop(func) = ismatch(r"[^\w@!.]|^!$", func)
 
 ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 
-getdoc(mod, x) = try eval(parse("@doc $(ident(mod, x))")) catch e end
+function getdoc(mod, x)
+    try
+        eval(parse("@doc $(ident(mod, x))"))
+    end
+end
 
 flat_content(md) = md
 flat_content(xs::Vector) = reduce((xs, x) -> vcat(xs,flat_content(x)), [], xs)
 flat_content(md::MD) = flat_content(md.content)
+
 flatten(md::MD) = MD(flat_content(md))
 
 isrst(md) =
