@@ -62,14 +62,15 @@ New language features
 Language changes
 ----------------
 
-  * Module `__init__` methods no longer swallow thrown exceptions; they now
-    throw an `InitError` wrapping the thrown exception ([#12576]).
-
   * Tuple types are now written as `Tuple{A, B}` instead of as `(A, B)`.
     Tuples of bits types are inlined into structs and arrays, like other
     immutable types.
     `...` now does splatting inside parentheses, instead of constructing a
-    vararg tuple type ([#10380]).
+    variadic tuple type ([#10380]).
+    Variadic tuple types are written as `Tuple{Vararg{T}}`.
+
+  * Using `[x,y]` to concatenate arrays is deprecated, and in the future will
+    construct a vector of `x` and `y` instead ([#3737], [#2488], [#8599]).
 
   * Significant improvements to `ccall` and `cfunction`
 
@@ -102,8 +103,8 @@ Language changes
     `unsafe_convert`. You can still `convert` between pointer types,
     and between pointers and `Int` or `UInt`.
 
-  * Using `[x,y]` to concatenate arrays is deprecated, and in the future will
-    construct a vector of `x` and `y` instead ([#3737], [#2488], [#8599]).
+  * Module `__init__` methods no longer swallow thrown exceptions; they now
+    throw an `InitError` wrapping the thrown exception ([#12576]).
 
   * Unsigned `BigInt` literal syntax has been removed ([#11105]).
     Unsigned literals larger than `UInt128` now throw a syntax error.
