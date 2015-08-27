@@ -2,8 +2,6 @@
 
 .. currentmodule:: Base
 
-
-
 ******************
  Performance Tips
 ******************

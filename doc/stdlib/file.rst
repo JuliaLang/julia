@@ -1,7 +1,4 @@
-
 .. currentmodule:: Base
-
-
 
 ************
  Filesystem

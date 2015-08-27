@@ -1,7 +1,5 @@
 .. module:: Profile
 
-
-
 .. _stdlib-profiling:
 
 ***********
@@ -9,8 +7,6 @@
 ***********
 
 .. currentmodule:: Base
-
-
 
 .. function:: @profile
 

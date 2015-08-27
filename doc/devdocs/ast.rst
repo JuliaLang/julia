@@ -4,8 +4,6 @@ Julia ASTs
 
 .. currentmodule:: Base
 
-
-
 Julia has two AST representations. First there is a surface syntax AST returned
 by the parser (e.g. the :func:`parse` function), and manipulated by macros.
 It is a structured representation of code as it is written,
