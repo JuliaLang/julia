@@ -146,15 +146,17 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
-function hypot{T<:AbstractFloat}(x::T, y::T)
+@inline hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
+@inline function hypot{T<:AbstractFloat}(x::T, y::T)
     x = abs(x)
     y = abs(y)
     if x < y
         x, y = y, x
     end
-    if x == 0
+    if x == zero(x)
         r = y/one(x)
+    elseif x < sqrt(realmax(x))
+        return sqrt(x*x + y*y)
     else
         r = y/x
         if isnan(r)
@@ -163,19 +165,15 @@ function hypot{T<:AbstractFloat}(x::T, y::T)
             return r
         end
     end
-    x * sqrt(one(r)+r*r)
+    x*sqrt(one(r) + r*r)
 end
+@vectorize_2arg Number hypot
 
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
-
-for f in (:atan2, :hypot)
-    @eval begin
-        ($f)(y::Float64, x::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), y, x)
-        ($f)(y::Float32, x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), y, x)
-        @vectorize_2arg Number $f
-    end
-end
+atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
+atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
+@vectorize_2arg Number atan2
 
 max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
