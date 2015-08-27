@@ -119,27 +119,27 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
         else
             a = searchsortedfirst(v, x, max(lo,ilo), m, o)
             b = searchsortedlast(v, x, m, min(hi,ihi), o)
-            return a:b
+            return a : b
         end
     end
-    return lo+1:hi-1
+    return (lo + 1) : (hi - 1)
 end
 
 function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        n = max(min(round(Integer,(x-first(a))/step(a))+1,length(a)),1)
-        lt(o, x, a[n]) ? n-1 : n
+        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        lt(o, x, a[n]) ? n - 1 : n
     end
 end
 
 function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
+        lt(o, first(a), x) ? length(a) + 1 : 1
     else
-        n = max(min(round(Integer,(x-first(a))/step(a))+1,length(a)),1)
-        lt(o, a[n] ,x) ? n+1 : n
+        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        lt(o, a[n] ,x) ? n + 1 : n
     end
 end
 
@@ -147,7 +147,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        max(min(fld(floor(Integer,x)-first(a),step(a))+1,length(a)),0)
+        clamp( fld(floor(Integer, x) - first(a), step(a)) + 1, 0, length(a))
     end
 end
 
@@ -155,15 +155,15 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
-        max(min(-fld(floor(Integer,-x)+first(a),step(a))+1,length(a)+1),1)
+        clamp(-fld(floor(Integer, -x) + first(a), step(a)) + 1, 1, length(a) + 1)
     end
 end
 
 function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
     if step(a) == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
+        lt(o, first(a), x) ? length(a) + 1 : 1
     else
-        max(min(-fld(first(a)-signed(x),step(a))+1,length(a)+1),1)
+        clamp(-fld(first(a) - signed(x), step(a)) + 1, 1, length(a) + 1)
     end
 end
 
@@ -171,12 +171,12 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrderin
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        max(min(fld(signed(x)-first(a),step(a))+1,length(a)),0)
+        clamp( fld(signed(x) - first(a), step(a)) + 1, 0, length(a))
     end
 end
 
 searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
-    searchsortedfirst(a,x,o):searchsortedlast(a,x,o)
+    searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
