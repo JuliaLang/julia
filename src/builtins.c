@@ -331,7 +331,7 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type)
+        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
             jl_error("type does not have a canonical binary representation");
         if (!(dx->name->names == jl_emptysvec && dx->size > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
@@ -348,6 +348,8 @@ JL_CALLABLE(jl_f_sizeof)
     assert(!dt->abstract);
     if (dt == jl_symbol_type)
         jl_error("value does not have a canonical binary representation");
+    if (dt == jl_simplevector_type)
+        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     return jl_box_long(jl_datatype_size(dt));
 }
 
