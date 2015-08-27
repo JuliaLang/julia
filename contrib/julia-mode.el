@@ -452,13 +452,10 @@ with it. Returns nil if we're not within nested parens."
       (save-excursion
         (beginning-of-line)
         (forward-to-indentation 0)
-        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
-          (ignore-errors (+ (julia-last-open-block (- (point) julia-max-block-lookback))
-                            (if endtok (- julia-indent-offset) 0)))))
-      ;; Otherwise, use the same indentation as previous line.
-      (save-excursion (forward-line -1)
-                      (current-indentation))
-      0))
+        (let ((endtok (julia-at-keyword julia-block-end-keywords))
+              (last-open-block (julia-last-open-block (- (point) julia-max-block-lookback))))
+          (max 0 (+ (or last-open-block 0)
+                    (if endtok (- julia-indent-offset) 0)))))))
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
@@ -621,6 +618,16 @@ c"))
 (1)"
      "
 (1)"))
+
+  (ert-deftest julia--test-top-level-following-paren-indent ()
+    "`At the top level, a previous line indented due to parens should not affect indentation."
+    (julia--should-indent
+     "y1 = f(x,
+       z)
+y2 = g(x)"
+     "y1 = f(x,
+       z)
+y2 = g(x)"))
 
   (defun julia--run-tests ()
     (interactive)
