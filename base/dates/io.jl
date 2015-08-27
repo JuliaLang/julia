@@ -59,19 +59,27 @@ abstract DayOfWeekSlot
 
 # Slot rules translate letters into types. Note that
 # list of rules can be extended.
-const SLOT_RULE = Dict{Char,Type}(
-    'y' => Year,
-    'm' => Month,
-    'u' => Month,
-    'U' => Month,
-    'e' => DayOfWeekSlot,
-    'E' => DayOfWeekSlot,
-    'd' => Day,
-    'H' => Hour,
-    'M' => Minute,
-    'S' => Second,
-    's' => Millisecond,
-)
+immutable SlotRule
+    rules::Array{Type}
+end
+const SLOT_RULE = SlotRule(Array{Type}(256))
+
+getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
+setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
+keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))
+
+SLOT_RULE['y'] = Year
+SLOT_RULE['m'] = Month
+SLOT_RULE['u'] = Month
+SLOT_RULE['U'] = Month
+SLOT_RULE['e'] = DayOfWeekSlot
+SLOT_RULE['E'] = DayOfWeekSlot
+SLOT_RULE['d'] = Day
+SLOT_RULE['H'] = Hour
+SLOT_RULE['M'] = Minute
+SLOT_RULE['S'] = Second
+SLOT_RULE['s'] = Millisecond
+
 duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
 function DateFormat(f::AbstractString,locale::AbstractString="english")
