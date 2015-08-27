@@ -193,7 +193,7 @@ end
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
+    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
 
 takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
