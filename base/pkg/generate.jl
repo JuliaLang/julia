@@ -166,6 +166,7 @@ function travis(pkg::AbstractString; force::Bool=false)
         print(io, """
         # Documentation: http://docs.travis-ci.com/user/languages/julia/
         language: julia
+        sudo: false
         os:
           - linux
           - osx
