@@ -175,11 +175,7 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
 
 You can force a command to run on all processes using the :obj:`@everywhere` macro.
-Consequently, an easy way to load *and* use a package on all processes is::
-
-    @everywhere using DummyModule
-
-:obj:`@everywhere` can also be used to directly define a function on all processes::
+For example, :obj:`@everywhere` can also be used to directly define a function on all processes::
 
     julia> @everywhere id = myid()
 
@@ -207,6 +203,9 @@ The base Julia installation has in-built support for two types of clusters:
 
 Functions :func:`addprocs`, :func:`rmprocs`, :func:`workers`, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
+
+Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+(such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 Other types of clusters can be supported by writing your own custom
 :class:`ClusterManager`, as described below in the :ref:`man-clustermanagers`
