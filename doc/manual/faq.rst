@@ -2,8 +2,6 @@
 
 .. currentmodule:: Base
 
-
-
 ****************************
  Frequently Asked Questions
 ****************************

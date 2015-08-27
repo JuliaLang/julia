@@ -3332,7 +3332,7 @@ doc"""
            sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Return a permutation vector of indices of ``v`` that puts it in sorted order.
-Specify ``alg`` to choose a particular sorting algorithm (see `Sorting Algorithms`_).
+Specify ``alg`` to choose a particular sorting algorithm (see Sorting Algorithms).
 ``MergeSort`` is used by default, and since it is stable, the resulting permutation
 will be the lexicographically first one that puts the input array into sorted order –
 i.e. indices of equal elements appear in ascending order. If you choose a non-stable
@@ -5353,7 +5353,7 @@ ifft!
 doc"""
     sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Sort the vector `v` in place. `QuickSort` is used by default for numeric arrays while `MergeSort` is used for other arrays. You can specify an algorithm to use via the `alg` keyword (see Sorting Algorithms\_ for available algorithms). The `by` keyword lets you provide a function that will be applied to each element before comparison; the `lt` keyword allows providing a custom "less than" function; use `rev=true` to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both `by` and `lt` are specified, the `lt` function is applied to the result of the `by` function; `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+Sort the vector `v` in place. `QuickSort` is used by default for numeric arrays while `MergeSort` is used for other arrays. You can specify an algorithm to use via the `alg` keyword (see Sorting Algorithms for available algorithms). The `by` keyword lets you provide a function that will be applied to each element before comparison; the `lt` keyword allows providing a custom "less than" function; use `rev=true` to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both `by` and `lt` are specified, the `lt` function is applied to the result of the `by` function; `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 """
 sort!
 

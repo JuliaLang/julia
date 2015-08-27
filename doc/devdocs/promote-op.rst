@@ -1,7 +1,5 @@
 .. currentmodule:: Base
 
-
-
 .. _devdocs-promote-op:
 
 Operator-sensitive promotion

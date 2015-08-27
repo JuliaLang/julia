@@ -1,7 +1,5 @@
 .. module:: Libc
 
-
-
 ********************
  C Standard Library
 ********************

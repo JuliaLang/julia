@@ -1,7 +1,5 @@
 .. currentmodule:: Base
 
-
-
 *************
  Mathematics
 *************
@@ -3408,8 +3406,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 The following functions are defined within the ``Base.FFTW`` module.
 
 .. currentmodule:: Base.FFTW
-
-
 
 .. function:: r2r(A, kind [, dims])
 

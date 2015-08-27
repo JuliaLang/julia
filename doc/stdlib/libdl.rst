@@ -1,7 +1,5 @@
 .. module:: Libdl
 
-
-
 ****************
  Dynamic Linker
 ****************

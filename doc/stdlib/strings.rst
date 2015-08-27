@@ -1,7 +1,5 @@
 .. currentmodule:: Base
 
-
-
 *********
  Strings
 *********
