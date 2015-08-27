@@ -5,6 +5,7 @@ More about types
 .. currentmodule:: Base
 
 
+
 If you've used Julia for a while, you understand the fundamental role
 that types play.  Here we try to get under the hood, focusing
 particularly on :ref:`parametric types <man-parametric-types>`.

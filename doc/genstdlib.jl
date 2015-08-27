@@ -47,7 +47,7 @@ function translate(file)
         for l in ls
             if ismatch(r"^\.\. (current)?module::", l)
                 mod = match(r"^\.\. (current)?module:: ([\w\.]+)", l).captures[2]
-                println(io, l)
+                println(io, l, '\n')
             elseif startswith(l, ".. function::")
                 func = match(r".. function:: (@?[^\(\s\{]+)", l)
                 func == nothing && (warn("bad function $l"); continue)

@@ -10,7 +10,9 @@ Standard Functions
 .. module:: Base.LinAlg
 
 
+
 .. currentmodule:: Base
+
 
 
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://faculty.cse.tamu.edu/davis/suitesparse.html>`_.
@@ -1928,6 +1930,7 @@ BLAS Functions
 .. module:: Base.LinAlg.BLAS
 
 
+
 :mod:`Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions for
 linear algebra.  Those BLAS functions that overwrite one of the input
 arrays have names ending in ``'!'``.
@@ -1936,6 +1939,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
 
 .. currentmodule:: Base.LinAlg.BLAS
+
 
 
 .. function:: dot(n, X, incx, Y, incy)

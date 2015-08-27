@@ -1,6 +1,7 @@
 .. currentmodule:: Base
 
 
+
 *************
  Mathematics
 *************
@@ -3409,6 +3410,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 .. currentmodule:: Base.FFTW
 
 
+
 .. function:: r2r(A, kind [, dims])
 
    .. Docstring generated from Julia source
@@ -3472,6 +3474,7 @@ The following functions are defined within the ``Base.FFTW`` module.
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 
 .. currentmodule:: Base
+
 Numerical Integration
 ---------------------
 
