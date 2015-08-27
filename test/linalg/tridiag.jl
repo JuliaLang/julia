@@ -55,6 +55,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
     @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
     @test convert(SymTridiagonal,Tridiagonal(Ts)) == Ts
+    @test full(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},full(Ts))
 
     # tridiagonal linear algebra
     @test_approx_eq T*v F*v
