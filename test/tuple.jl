@@ -135,3 +135,6 @@ foo(x, y, z) = x + y + z
 
 @test @inferred(ntuple(Base.Abs2Fun(), Val{2})) == (1, 4)
 @test @inferred(ntuple(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
+
+# issue #12854
+@test_throws TypeError ntuple(identity, Val{1:2})

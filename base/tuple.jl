@@ -45,8 +45,12 @@ ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
 ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
 ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
 @generated function ntuple{N}(f, ::Type{Val{N}})
-    M = N-5
-    :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
+    if !isa(N,Int)
+        :(throw(TypeError(:ntuple, "", Int, $(QuoteNode(N)))))
+    else
+        M = N-5
+        :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
+    end
 end
 
 # 0 argument function
