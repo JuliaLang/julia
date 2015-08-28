@@ -347,11 +347,12 @@ General I/O
 
               close(Channel)
 
-    Closes a channel. An exception is thrown by:
+   Closes a channel. An exception is thrown by:
 
-    * ``put!`` on a on a closed channel.
+       - ``put!`` on a on a closed channel.
 
-    * ``take!`` and ``fetch`` on an empty, closed channel.
+       - ``take!`` and ``fetch`` on an empty, closed channel.
+
 
 .. function:: write(stream, x)
 
