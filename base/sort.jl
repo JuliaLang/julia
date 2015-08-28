@@ -199,6 +199,11 @@ immutable PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
 
+Base.first(a::PartialQuickSort{Int}) = 1
+Base.last(a::PartialQuickSort{Int}) = a.k
+Base.first(a::PartialQuickSort) = first(a.k)
+Base.last(a::PartialQuickSort) = last(a.k)
+
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
 const MergeSort     = MergeSortAlg()
@@ -338,38 +343,42 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
+## TODO: When PartialQuickSort is parameterized by an Int, this version of sort
+##       has one less comparison per loop than the version below, but enabling
+##       it causes return type inference to fail for sort/sort! (#12833)
+##
+# function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{Int},
+#                o::Ordering)
+#     @inbounds while lo < hi
+#         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+#         j = partition!(v, lo, hi, o)
+#         if j >= a.k
+#             # we don't need to sort anything bigger than j
+#             hi = j-1
+#         elseif j-lo < hi-j
+#             # recurse on the smaller chunk
+#             # this is necessary to preserve O(log(n))
+#             # stack space in the worst case (rather than O(n))
+#             lo < (j-1) && sort!(v, lo, j-1, a, o)
+#             lo = j+1
+#         else
+#             (j+1) < hi && sort!(v, j+1, hi, a, o)
+#             hi = j-1
+#         end
+#     end
+#     return v
+# end
+
+
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort,
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
-        if j >= a.k
-            # we don't need to sort anything bigger than j
-            hi = j-1
-        elseif j-lo < hi-j
-            # recurse on the smaller chunk
-            # this is necessary to preserve O(log(n))
-            # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
+
+        if j <= first(a)
             lo = j+1
-        else
-            (j+1) < hi && sort!(v, j+1, hi, a, o)
-            hi = j-1
-        end
-    end
-    return v
-end
-
-
-function sort!{T<:OrdinalRange}(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort{T},
-               o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        j = partition!(v, lo, hi, o)
-
-        if j <= first(a.k)
-            lo = j+1
-        elseif j >= last(a.k)
+        elseif j >= last(a)
             hi = j-1
         else
             if j-lo < hi-j
