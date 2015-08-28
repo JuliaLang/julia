@@ -261,14 +261,14 @@ Instead of using "\|" inside of backticks, one uses :func:`pipe`:
 
 .. doctest::
 
-    julia> run(pipe(`echo hello`, `sort`))
+    julia> run(pipeline(`echo hello`, `sort`))
     hello
 
 This pipes the output of the ``echo`` command to the ``sort`` command.
 Of course, this isn't terribly interesting since there's only one line
 to sort, but we can certainly do much more interesting things::
 
-    julia> run(pipe(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
+    julia> run(pipeline(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
     210
     211
     212
@@ -294,7 +294,7 @@ the first write to the :const:`STDOUT` descriptor they share with each other
 and the ``julia`` parent process. Julia lets you pipe the output from
 both of these processes to another program::
 
-    julia> run(pipe(`echo world` & `echo hello`, `sort`))
+    julia> run(pipeline(`echo world` & `echo hello`, `sort`))
     hello
     world
 
@@ -302,15 +302,43 @@ In terms of UNIX plumbing, what's happening here is that a single UNIX
 pipe object is created and written to by both ``echo`` processes, and
 the other end of the pipe is read from by the ``sort`` command.
 
+IO redirection can be accomplished by passing keyword arguments stdin,
+stdout, and stderr to the ``pipeline`` function::
+
+    pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
+
+Avoiding Deadlock in Pipelines
+``````````````````````````````
+
+When reading and writing to both ends of a pipeline from a single process,
+it is important to avoid forcing the kernel to buffer all of the data.
+
+For example, when reading all of the output from a command,
+call ``readall(out)``, not ``wait(process)``, since the former
+will actively consume all of the data written by the process,
+whereas the latter will attempt to store the data in the kernel's
+buffers while waiting for a reader to be connected.
+
+Another common solution is to separate the reader and writer
+of the pipeline into separate Tasks::
+
+     writer = @async writeall(process, "data")
+     reader = @async do_compute(readall(process))
+     wait(process)
+     fetch(reader)
+
+Complex Example
+```````````````
+
 The combination of a high-level programming language, a first-class
 command abstraction, and automatic setup of pipes between processes is a
 powerful one. To give some sense of the complex pipelines that can be
 created easily, here are some more sophisticated examples, with
-apologies for the excessive use of Perl one-liners:
+apologies for the excessive use of Perl one-liners::
 
     julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`;
 
-    julia> run(pipe(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))
+    julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))
     A 0
     B 1
     A 2
@@ -335,7 +363,7 @@ once, to be read by just one consumer process.)
 
 Here is an even more complex multi-stage producer-consumer example::
 
-    julia> run(pipe(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
+    julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
                prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
                prefixer("A",2) & prefixer("B",2)))
     A X 0
