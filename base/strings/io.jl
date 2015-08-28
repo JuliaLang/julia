@@ -2,8 +2,25 @@
 
 ## core text I/O ##
 
-print(io::IO, x) = show(io, x)
-print(io::IO, xs...) = for x in xs print(io, x) end
+function print(io::IO, x)
+    lock(io)
+    try
+        show(io, x)
+    finally
+        unlock(io)
+    end
+end
+
+function print(io::IO, xs...)
+    lock(io)
+    try
+        for x in xs
+            print(io, x)
+        end
+    finally
+        unlock(io)
+    end
+end
 
 println(io::IO, xs...) = print(io, xs..., '\n')
 
