@@ -299,7 +299,7 @@ Library improvements
 
     * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
-    * `copy(a::DArray)` will now make a copy of a `DArray` ([#9745])
+    * `copy(a::DArray)` will now make a copy of a `DArray` ([#9745]).
 
   * New types
 
@@ -312,7 +312,7 @@ Library improvements
 
     * New `Nullable` type for missing data ([#8152]).
 
-    * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
+    * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452]).
 
     * `linspace` now returns a `LinSpace` object which lazily computes linear interpolation of values between the start and stop values. It "lifts" endpoints which are approximately rational in the same manner as the `colon` operator.
 
@@ -358,7 +358,7 @@ Library improvements
 
     * Significantly faster `randn` ([#9126], [#9132]).
 
-    * The `randexp` and `randexp!` functions are exported ([#9144])
+    * The `randexp` and `randexp!` functions are exported ([#9144]).
 
   * File
 
@@ -524,7 +524,7 @@ Deprecated or removed
 
     * `sync_gc_total_bytes` -> `jl_gc_sync_total_bytes`
 
-  * `require(::AbstractString)` and `reload` (see news about addition of `compile`)
+  * `require(::AbstractString)` and `reload` (see news about addition of `compile`).
 
 Julia v0.3.0 Release Notes
 ==========================
