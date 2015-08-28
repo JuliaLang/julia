@@ -11722,6 +11722,7 @@ doc"""
 ::
 
            sign(x)
+
 Return zero if ``x==0`` and :math:`x/|x|` otherwise (i.e., ±1 for real ``x``).
 ```
 """
