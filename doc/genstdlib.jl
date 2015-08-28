@@ -42,25 +42,24 @@ function translate(file)
     doccing = false
     func = nothing
     mod = "Base"
-
+    modidx = -1
     open(file, "w+") do io
-        for l in ls
+        for (i,l) in enumerate(ls)
             if ismatch(r"^\.\. (current)?module::", l)
                 mod = match(r"^\.\. (current)?module:: ([\w\.]+)", l).captures[2]
+                modidx = i
                 println(io, l)
             elseif startswith(l, ".. function::")
                 func = match(r".. function:: (@?[^\(\s\{]+)", l)
                 func == nothing && (warn("bad function $l"); continue)
                 func = func.captures[1]
                 doc = getdoc(mod, func)
-
                 if doc == nothing || torst(doc) == nothing
                     info("no docs for $(ident(mod, func))")
                     println(io, l)
                     doccing = false
                     continue
                 end
-
                 doccing = true
                 println(io, l)
                 println(io)
@@ -70,6 +69,7 @@ function translate(file)
                 end
                 isrst(doc) && println(io)
             elseif doccing && (startswith(l, "   ") || ismatch(r"^\s*$", l))
+                modidx == i-1 && println(io)
             else
                 doccing = false
                 println(io, l)
