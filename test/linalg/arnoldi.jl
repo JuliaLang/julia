@@ -67,6 +67,12 @@ let
         @test_throws ArgumentError eigs(a, which=:BE)
         @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
         @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
+        if elty == Float64
+            @test_throws ArgumentError eigs(a+a.',which=:SI)
+            @test_throws ArgumentError eigs(a+a.',which=:LI)
+            @test_throws ArgumentError eigs(a,sigma=rand(Complex64))
+        end
+        @test_throws Base.LinAlg.PosDefException eigs(a,b)
     end
 end
 
