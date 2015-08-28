@@ -13,7 +13,6 @@ export
     StreamREPL
 
 import Base:
-    AsyncStream,
     Display,
     display,
     writemime,
@@ -884,7 +883,7 @@ end
 
 outstream(s::StreamREPL) = s.stream
 
-StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
@@ -892,7 +891,7 @@ input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
 
-function run_repl(stream::AsyncStream)
+function run_repl(stream::IO)
     repl =
     @async begin
         repl_channel = Channel(1)
