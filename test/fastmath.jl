@@ -181,6 +181,7 @@ for T in (Float32, Float64, BigFloat)
     @test isapprox((@fastmath chalf/third), chalf/third)
     @test isapprox((@fastmath chalf^3), chalf^3)
     @test isapprox((@fastmath cis(third)), cis(third))
+    @test isapprox((@fastmath cis(cthird)), cis(cthird))
 end
 
 # issue #10544
