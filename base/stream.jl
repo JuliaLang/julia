@@ -235,11 +235,11 @@ show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
 
 function println(io::AsyncStream, xs...)
-    lock(io.lock)
+    lock(io)
     try
         invoke(println, Tuple{IO, map(typeof,xs)...}, io, xs...)
     finally
-        unlock(io.lock)
+        unlock(io)
     end
 end
 
@@ -543,20 +543,24 @@ show(io::IO,stream::Pipe) = print(io,
     uv_status_string(stream.in), " => ",
     uv_status_string(stream.out), ", ",
     nb_available(stream), " bytes waiting)")
-isreadable(io::AbstractPipe) = isreadable(io.out)
-iswritable(io::AbstractPipe) = iswritable(io.in)
-read{T<:AbstractPipe}(io::T, args...) = read(io.out, args...)
+write(io::AbstractPipe, byte::UInt8) = write(io.in, byte)
+write(io::AbstractPipe, bytes::Vector{UInt8}) = write(io.in, bytes)
 write{T<:AbstractPipe}(io::T, args...) = write(io.in, args...)
-write{S<:AbstractPipe,T}(io::S, a::Array{T}) = write(io.in, a)
+write{S<:AbstractPipe}(io::S, a::Array) = write(io.in, a)
 buffer_or_write(io::AbstractPipe, p::Ptr, n::Integer) = buffer_or_write(io.in, p, n)
-println{T<:AbstractPipe}(io::T, args...) = println(io.in, args...)
-flush(io::AbstractPipe) = flush(io.in)
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(io.in, args...)
-read{T<:AbstractPipe}(io::AbstractPipe, args...) = read(io.out, args)
-readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(io.out, args...)
+flush(io::AbstractPipe) = flush(io.in)
+
+read(io::AbstractPipe, byte::Type{UInt8}) = read(io.out, byte)
+read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(io.out, bytes)
+read{T<:AbstractPipe}(io::T, args...) = read(io.out, args...)
 read!{T<:AbstractPipe}(io::T, args...) = read!(io.out, args...)
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(io.out, args...)
 readbytes(io::AbstractPipe) = readbytes(io.out)
 readavailable(io::AbstractPipe) = readavailable(io.out)
+
+isreadable(io::AbstractPipe) = isreadable(io.out)
+iswritable(io::AbstractPipe) = iswritable(io.in)
 isopen(io::AbstractPipe) = isopen(io.in) || isopen(io.out)
 close(io::AbstractPipe) = (close(io.in); close(io.out))
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(io.out, nb)
@@ -1167,6 +1171,8 @@ type BufferStream <: AsyncStream
     BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false, ReentrantLock())
 end
 
+lock(s::BufferStream) = lock(s.lock)
+unlock(s::BufferStream) = unlock(s.unlock)
 isopen(s::BufferStream) = s.is_open
 close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
 
