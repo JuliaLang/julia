@@ -467,13 +467,25 @@ whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 
 #################################################################################
 
-summarysize(obj; exclude = Union{Module,Function}) = summarysize(obj, ObjectIdDict(), exclude)
+summarysize(obj; exclude = Union{Module,Function,DataType,TypeName}) =
+    summarysize(obj, ObjectIdDict(), exclude)
 
-# these cases override the exception that would be thrown by Core.sizeof
 summarysize(obj::Symbol, seen, excl) = 0
-summarysize(obj::DataType, seen, excl) = 0
 
-function summarysize(obj::ANY, seen, excl)
+function summarysize(obj::DataType, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(WORD_SIZE==64,4,0)
+    size += summarysize(obj.parameters, seen, excl)
+    size += summarysize(obj.types, seen, excl)
+    return size
+end
+
+summarysize(obj::TypeName, seen, excl) = Core.sizeof(obj)
+
+summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
+# define the general case separately to make sure it is not specialized for every type
+function _summarysize(obj::ANY, seen, excl)
     key = pointer_from_objref(obj)
     haskey(seen, key) ? (return 0) : (seen[key] = true)
     size = Core.sizeof(obj)
@@ -492,6 +504,7 @@ end
 function summarysize(obj::Array, seen, excl)
     haskey(seen, obj) ? (return 0) : (seen[obj] = true)
     size = Core.sizeof(obj)
+    # TODO: add size of jl_array_t
     if !isbits(eltype(obj))
         for i in 1:length(obj)
             if isdefined(obj, i)
@@ -510,9 +523,11 @@ function summarysize(obj::SimpleVector, seen, excl)
     haskey(seen, key) ? (return 0) : (seen[key] = true)
     size = Core.sizeof(obj)
     for i in 1:length(obj)
-        val = obj[i]
-        if !isa(val, excl)
-            size += summarysize(val, seen, excl)
+        if isassigned(obj, i)
+            val = obj[i]
+            if !isa(val, excl)
+                size += summarysize(val, seen, excl)
+            end
         end
     end
     return size
@@ -534,7 +549,7 @@ end
 
 function summarysize(obj::Task, seen, excl)
     haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = sizeof(obj)
+    size::Int = Core.sizeof(obj)
     if isdefined(obj, :code)
         size += summarysize(obj.code, seen, excl)::Int
     end
@@ -543,6 +558,30 @@ function summarysize(obj::Task, seen, excl)
     size += summarysize(obj.donenotify, seen, excl)::Int
     size += summarysize(obj.exception, seen, excl)::Int
     size += summarysize(obj.result, seen, excl)::Int
-    # TODO: add stack size
+    # TODO: add stack size, and possibly traverse stack roots
+    return size
+end
+
+function summarysize(obj::MethodTable, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    size += summarysize(obj.defs, seen, excl)::Int
+    size += summarysize(obj.cache, seen, excl)::Int
+    size += summarysize(obj.cache_arg1, seen, excl)::Int
+    size += summarysize(obj.cache_targ, seen, excl)::Int
+    if isdefined(obj, :kwsorter)
+        size += summarysize(obj.kwsorter, seen, excl)::Int
+    end
+    return size
+end
+
+function summarysize(obj::Method, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    size += summarysize(obj.func, seen, excl)::Int
+    size += summarysize(obj.sig, seen, excl)::Int
+    size += summarysize(obj.tvars, seen, excl)::Int
+    size += summarysize(obj.invokes, seen, excl)::Int
+    size += summarysize(obj.next, seen, excl)::Int
     return size
 end
