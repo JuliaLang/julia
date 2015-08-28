@@ -2039,14 +2039,17 @@
            (with-space-sensitive
             (let* ((head (parse-unary-prefix s))
                    (t    (peek-token s)))
-              (if (ts:space? s)
+              (cond
+                 ((eqv? head '__LINE__) (input-port-line (ts:port s)))
+                 ((ts:space? s)
                   `(macrocall ,(macroify-name head)
-                              ,@(parse-space-separated-exprs s))
-                  (let ((call (parse-call-chain s head #t)))
-                    (if (and (pair? call) (eq? (car call) 'call))
+                              ,@(parse-space-separated-exprs s)))
+                 (else
+                   (let ((call (parse-call-chain s head #t)))
+                      (if (and (pair? call) (eq? (car call) 'call))
                         `(macrocall ,(macroify-name (cadr call)) ,@(cddr call))
                         `(macrocall ,(macroify-name call)
-                                    ,@(parse-space-separated-exprs s))))))))
+                                    ,@(parse-space-separated-exprs s)))))))))
 
           ;; command syntax
           ((eqv? t #\`)

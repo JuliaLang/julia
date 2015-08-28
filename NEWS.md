@@ -58,6 +58,7 @@ New language features
     Default continues to be of length 1 ([#12385]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
 
+  * `@__LINE__` special macro now available to reflect invocation source line number ([#12727]).
 
 Language changes
 ----------------
