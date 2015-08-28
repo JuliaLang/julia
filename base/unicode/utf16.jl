@@ -101,17 +101,6 @@ function isvalid(::Type{UTF16String}, data::AbstractArray{UInt16})
     return i > n || !is_surrogate_codeunit(data[i])
 end
 
-"""
-Converts an `AbstractString` to a `UTF16String`
-
-Returns:
-
-*   `UTF16String`
-
-Throws:
-
-*   `UnicodeError`
-"""
 function convert(::Type{UTF16String}, str::AbstractString)
     len, flags, num4byte = unsafe_checkstring(str)
     buf = Vector{UInt16}(len+num4byte+1)
@@ -130,17 +119,6 @@ function convert(::Type{UTF16String}, str::AbstractString)
     UTF16String(buf)
 end
 
-"""
-Converts a `UTF8String` to a `UTF16String`
-
-Returns:
-
-*   `UTF16String`
-
-Throws:
-
-*   `UnicodeError`
-"""
 function convert(::Type{UTF16String}, str::UTF8String)
     dat = str.data
     # handle zero length string quickly
@@ -178,17 +156,6 @@ function convert(::Type{UTF16String}, str::UTF8String)
     UTF16String(buf)
 end
 
-"""
-Converts a `UTF16String` to a `UTF8String`
-
-Returns:
-
-*   `UTF8String`
-
-Throws:
-
-*   `UnicodeError`
-"""
 function convert(::Type{UTF8String}, str::UTF16String)
     dat = str.data
     len = sizeof(dat) >>> 1
