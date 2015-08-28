@@ -935,6 +935,8 @@
                      (default-inner-ctors name field-names field-types (null? params) locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
+     (let ((dups (has-dups field-names)))
+        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
                  (if (not (symbol? v))
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
