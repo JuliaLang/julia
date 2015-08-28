@@ -3291,3 +3291,7 @@ code_typed(A12612.f2, Tuple{})
 
 # meta nodes for optional positional arguments
 @test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[1].args[3]).args[3].args[1].args[1] === :inline
+
+# issue #12826
+f12826{I<:Integer}(v::Vector{I}) = v[1]
+@test Base.return_types(f12826,Tuple{Array{TypeVar(:I, Integer),1}})[1] == Integer

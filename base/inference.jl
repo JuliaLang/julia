@@ -174,7 +174,7 @@ add_tfunc(arraylen, 1, 1, x->Int)
 #                                     a.parameters[1] : Any))
 #add_tfunc(arrayset, 3, IInf, (a,v,i...)->a)
 add_tfunc(arraysize, 2, 2, (a,d)->Int)
-add_tfunc(pointerref, 2, 2, (a,i)->(isa(a,DataType) && a<:Ptr && isa(a.parameters[1],DataType) ? a.parameters[1] : Any))
+add_tfunc(pointerref, 2, 2, (a,i)->(isa(a,DataType) && a<:Ptr && isa(a.parameters[1],Union{Type,TypeVar}) ? a.parameters[1] : Any))
 add_tfunc(pointerset, 3, 3, (a,v,i)->a)
 
 const typeof_tfunc = function (t)
@@ -487,7 +487,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
             return Bottom
         end
         a = argtypes[1]
-        return (isa(a,DataType) && a<:Array && isa(a.parameters[1],Type) ?
+        return (isa(a,DataType) && a<:Array && isa(a.parameters[1],Union{Type,TypeVar}) ?
                 a.parameters[1] : Any)
     elseif is(f,Expr)
         if length(argtypes) < 1 && !isva
