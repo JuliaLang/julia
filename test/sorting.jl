@@ -346,3 +346,6 @@ Base.isless(x :: Twain, y :: Twain) = x.a < y.a
 let x = Twain(2,3), y = Twain(2,4)
     @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
 end
+
+# issue #12833 - type stability of sort
+@test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]
