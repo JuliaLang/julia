@@ -301,33 +301,39 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
         end
         """
     io, pobj = open(detach(`$(julia_cmd())
-            --output-ji $output --output-incremental=yes
-            --startup-file=no --history-file=no
-            --eval $code_object`), "w", STDOUT)
-    serialize(io, quote
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $LOAD_PATH)
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
-    end)
-    source = source_path(nothing)
-    if source !== nothing
+                           --output-ji $output --output-incremental=yes
+                           --startup-file=no --history-file=no
+                           --eval $code_object`), "w", STDOUT)
+    try
         serialize(io, quote
-            task_local_storage()[:SOURCE_PATH] = $(source)
-        end)
+                  empty!(Base.LOAD_PATH)
+                  append!(Base.LOAD_PATH, $LOAD_PATH)
+                  empty!(Base.LOAD_CACHE_PATH)
+                  append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+                  empty!(Base.DL_LOAD_PATH)
+                  append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+                  end)
+        source = source_path(nothing)
+        if source !== nothing
+            serialize(io, quote
+                      task_local_storage()[:SOURCE_PATH] = $(source)
+                      end)
+        end
+        serialize(io, :(Base._track_dependencies[1] = true))
+        serialize(io, :(Base.include($(abspath(input)))))
+        if source !== nothing
+            serialize(io, quote
+                      delete!(task_local_storage(), :SOURCE_PATH)
+                      end)
+        end
+        close(io)
+        wait(pobj)
+        return pobj
+    catch
+        kill(pobj)
+        close(io)
+        rethrow()
     end
-    serialize(io, :(Base._track_dependencies[1] = true))
-    serialize(io, :(Base.include($(abspath(input)))))
-    if source !== nothing
-        serialize(io, quote
-            delete!(task_local_storage(), :SOURCE_PATH)
-        end)
-    end
-    close(io)
-    wait(pobj)
-    return pobj
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))
