@@ -476,8 +476,8 @@ function summarysize(obj::DataType, seen, excl)
     key = pointer_from_objref(obj)
     haskey(seen, key) ? (return 0) : (seen[key] = true)
     size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(WORD_SIZE==64,4,0)
-    size += summarysize(obj.parameters, seen, excl)
-    size += summarysize(obj.types, seen, excl)
+    size += summarysize(obj.parameters, seen, excl)::Int
+    size += summarysize(obj.types, seen, excl)::Int
     return size
 end
 
@@ -494,7 +494,7 @@ function _summarysize(obj::ANY, seen, excl)
         if !isbits(ft[i]) && isdefined(obj,i)
             val = obj.(i)
             if !isa(val,excl)
-                size += summarysize(val, seen, excl)
+                size += summarysize(val, seen, excl)::Int
             end
         end
     end
@@ -507,10 +507,10 @@ function summarysize(obj::Array, seen, excl)
     # TODO: add size of jl_array_t
     if !isbits(eltype(obj))
         for i in 1:length(obj)
-            if isdefined(obj, i)
+            if ccall(:jl_array_isassigned, Cint, (Any, UInt), obj, i-1) == 1
                 val = obj[i]
                 if !isa(val, excl)
-                    size += summarysize(val, seen, excl)
+                    size += summarysize(val, seen, excl)::Int
                 end
             end
         end
@@ -526,7 +526,7 @@ function summarysize(obj::SimpleVector, seen, excl)
         if isassigned(obj, i)
             val = obj[i]
             if !isa(val, excl)
-                size += summarysize(val, seen, excl)
+                size += summarysize(val, seen, excl)::Int
             end
         end
     end
@@ -575,13 +575,17 @@ function summarysize(obj::MethodTable, seen, excl)
     return size
 end
 
-function summarysize(obj::Method, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    size += summarysize(obj.func, seen, excl)::Int
-    size += summarysize(obj.sig, seen, excl)::Int
-    size += summarysize(obj.tvars, seen, excl)::Int
-    size += summarysize(obj.invokes, seen, excl)::Int
-    size += summarysize(obj.next, seen, excl)::Int
+function summarysize(m::Method, seen, excl)
+    size::Int = 0
+    while true
+        haskey(seen, m) ? (return size) : (seen[m] = true)
+        size += Core.sizeof(m)
+        size += summarysize(m.func, seen, excl)::Int
+        size += summarysize(m.sig, seen, excl)::Int
+        size += summarysize(m.tvars, seen, excl)::Int
+        size += summarysize(m.invokes, seen, excl)::Int
+        m.next === nothing && break
+        m = m.next::Method
+    end
     return size
 end
