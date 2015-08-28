@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 let
 debug = false
 
@@ -41,6 +43,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq ctranspose(G*eye(elty,10))*(G*eye(elty,10)) eye(elty, 10)
     K, _ = givens(zero(elty),one(elty),9,10)
     @test_approx_eq ctranspose(K*eye(elty,10))*(K*eye(elty,10)) eye(elty, 10)
+
+    # test that Givens * work for vectors
+    x = A[:,1]
+    G, r = givens(x[2], x[4], 2, 4)
+    @test (G*x)[2] ≈ r
+    @test abs((G*x)[4]) < eps(real(elty))
 
 end
 end #let
