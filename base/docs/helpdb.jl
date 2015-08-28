@@ -12072,8 +12072,7 @@ doc"""
 
            DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
-Construct a DateTime type by parts. Arguments must be convertible to
-``Int64``.
+Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
 
 ::
 
@@ -12086,19 +12085,18 @@ DateTime parts not provided will default to the value of ``Dates.default(period)
 
            DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
- Create a DateTime through the adjuster API. The starting point will be constructed from the
- provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
- adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
- will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
- the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
- is never satisfied).
+Create a DateTime through the adjuster API. The starting point will be constructed from the
+provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 
 ::
 
            DateTime(dt::Date) -> DateTime
 
- Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
- parts of the new ``DateTime`` are assumed to be zero.
+Converts a ``Date`` type to a ``DateTime``.
+The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
 
 ::
 
@@ -12125,8 +12123,7 @@ Code            Matches    Comment
 =============== ========= ===============================================================
 
 All characters not listed above are treated as delimiters between date and time slots.
-So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
-like "y-m-dTH:M:S.s".
+So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
 
 ::
 
