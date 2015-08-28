@@ -203,9 +203,6 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     A = reshape(1:N, shape)
     B = T(A)
 
-    # elsize{T}(::AbstractArray{T})
-    @test Base.elsize(B) == sizeof(T.parameters)
-
     # last(a)
     @test last(B) == B[length(B)]
 
