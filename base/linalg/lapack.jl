@@ -2262,7 +2262,9 @@ for (trcon, trevc, trrfs, elty) in
         function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
                 VL::StridedMatrix{$elty} = similar(T), VR::StridedMatrix{$elty} = similar(T))
             # Extract
-            chkside(side)
+            if side ∉ ['L','R','B']
+                throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
+            end
             n, mm = chksquare(T), size(VL, 2)
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
@@ -2391,6 +2393,9 @@ for (trcon, trevc, trrfs, elty, relty) in
 
             # Check
             chkstride1(T)
+            if side ∉ ['L','R','B']
+                throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
+            end
 
             # Allocate
             m = Array(BlasInt, 1)
