@@ -909,7 +909,6 @@ A = sparse(ones(5,5))
 @test_throws DimensionMismatch one(sprand(5,6,0.2))
 
 #istriu/istril
-
 A = sparse(triu(rand(5,5)))
 @test istriu(A)
 @test !istriu(sparse(ones(5,5)))
@@ -918,29 +917,24 @@ A = sparse(tril(rand(5,5)))
 @test !istril(sparse(ones(5,5)))
 
 # symperm
-
 srand(1234321)
 A = triu(sprand(10,10,0.2))       # symperm operates on upper triangle
 perm = randperm(10)
 @test symperm(A,perm).colptr == [1,2,3,3,3,4,5,5,7,9,10]
 
 # droptol
-
 @test Base.droptol!(A,0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
 
 #trace
-
 @test_throws DimensionMismatch trace(sparse(ones(5,6)))
 @test trace(speye(5)) == 5
 
 #diagm on a matrix
-
 @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
 @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
 @test diagm(sparse(ones(1,5))) == speye(5)
 
 # triu/tril
-
 A = sprand(5,5,0.2)
 AF = full(A)
 @test full(triu(A,1)) == triu(AF,1)
@@ -1098,3 +1092,9 @@ Ari = ceil(Int64,100*Ar)
 
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
+
+# csc_permute
+A = sprand(10,10,0.2)
+p = randperm(10)
+q = randperm(10)
+@test Base.SparseMatrix.csc_permute(A, invperm(p), q) == full(A)[p, q]
