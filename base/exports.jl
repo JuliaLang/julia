@@ -499,7 +499,6 @@ export
     broadcast_function,
     broadcast_getindex,
     broadcast_setindex!,
-    cartesianmap,
     cat,
     cell,
     checkbounds,
