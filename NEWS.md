@@ -526,6 +526,8 @@ Deprecated or removed
 
   * `require(::AbstractString)` and `reload` (see news about addition of `compile`).
 
+  * `cartesianmap` is deprecated in favor of iterating over a `CartesianRange`
+
 Julia v0.3.0 Release Notes
 ==========================
 

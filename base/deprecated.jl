@@ -32,6 +32,7 @@ macro deprecate(old,new)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
+        remove_linenums!(new)
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
         oldsym = if isa(old.args[1],Symbol)
@@ -53,6 +54,15 @@ macro deprecate(old,new)
     else
         error("invalid usage of @deprecate")
     end
+end
+
+remove_linenums!(ex) = ex
+function remove_linenums!(ex::Expr)
+    filter!(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)), ex.args)
+    for subex in ex.args
+        remove_linenums!(subex)
+    end
+    ex
 end
 
 function depwarn(msg, funcsym)
@@ -783,3 +793,5 @@ export FloatingPoint
             "use string flags instead: Regex(\"$pattern\", \"$flags\").", :Regex)
     Regex(pattern, flags)
 end
+
+@deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
