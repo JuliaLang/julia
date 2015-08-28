@@ -125,6 +125,16 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test full(-A1) == -full(A1)
 
         # Binary operations
+        B = similar(A1)
+        copy!(B,A1)
+        @test B == A1
+        B = similar(A1.')
+        copy!(B, A1.')
+        @test B == A1.'
+        @test scale(A1,0.5) == 0.5*A1
+        @test scale(A1,0.5im) == 0.5im*A1
+        @test scale(A1.',0.5) == 0.5*A1.'
+        @test scale(A1.',0.5im) == 0.5im*A1.'
         @test A1*0.5 == full(A1)*0.5
         @test 0.5*A1 == 0.5*full(A1)
         @test A1/0.5 == full(A1)/0.5
