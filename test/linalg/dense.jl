@@ -24,6 +24,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
     @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
     @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
+    @test_throws ArgumentError cond(a,3)
 end
 
 areal = randn(n,n)/2
@@ -81,6 +82,23 @@ debug && println("Matrix square root")
     @test_approx_eq asq*asq a
     asymsq = sqrtm(asym)
     @test_approx_eq asymsq*asymsq asym
+
+debug && println("Numbers")
+    α = rand(eltya)
+    A = zeros(eltya,1,1)
+    A[1,1] = α
+    @test diagm(α) == A
+    @test expm(α) == exp(α)
+
+debug && println("Powers")
+    if eltya <: FloatingPoint
+        z = zero(eltya)
+        t = convert(eltya,2)
+        r = convert(eltya,2.5)
+        @test a^z ≈ eye(a)
+        @test a^t ≈ a^2
+        @test eye(eltya,n,n)^r ≈ eye(a)
+    end
 end # for eltya
 
 # test triu/tril bounds checking
@@ -119,6 +137,11 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     @test_approx_eq norm(x, 2) sqrt(10)
     @test_approx_eq norm(x, 3) cbrt(10)
     @test_approx_eq norm(x, Inf) 1
+    if elty <: Base.LinAlg.BlasFloat
+        @test_approx_eq norm(x, 1:4) 2
+        @test_throws BoundsError norm(x,-1:4)
+        @test_throws BoundsError norm(x,1:11)
+    end
     @test_approx_eq norm(xs, -Inf) 1
     @test_approx_eq norm(xs, -1) 1/5
     @test_approx_eq norm(xs, 0) 5
