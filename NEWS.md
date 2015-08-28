@@ -182,7 +182,7 @@ Command line option changes
 
   * The `-i` option now forces the REPL to run after loading the specified script (if any) ([#11347]).
 
-  * New option --handle-signals={yes|no} to disable Julia's signal handlers.
+  * New option `--handle-signals={yes|no}` to disable Julia's signal handlers.
 
   * The `--depwarn={yes|no|error}` option enables/disables syntax and method deprecation warnings,
     or turns them into errors ([#9294]).
