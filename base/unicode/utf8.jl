@@ -247,17 +247,6 @@ convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
 convert(::Type{SubString{UTF8String}}, s::SubString{ASCIIString}) =
     SubString(utf8(s.string), s.offset+1, s.endof+s.offset)
 
-"""
-Converts a UTF-8 encoded vector of `UInt8` to a `UTF8String`
-
-Returns:
-
-*   `UTF8String`
-
-Throws:
-
-*   `UnicodeError`
-"""
 function convert(::Type{UTF8String}, dat::Vector{UInt8})
     # handle zero length string quickly
     isempty(dat) && return empty_utf8

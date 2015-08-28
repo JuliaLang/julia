@@ -564,133 +564,41 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+   ::
 
-       ::
+              convert(T, x)
 
-                  convert(T, x)
+   Convert ``x`` to a value of type ``T``.
 
-       Convert ``x`` to a value of type ``T``.
+   If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if
+   ``x`` is not representable by ``T``, for example if ``x`` is not
+   integer-valued, or is outside the range supported by ``T``.
 
-       If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if
-       ``x`` is not representable by ``T``, for example if ``x`` is not
-       integer-valued, or is outside the range supported by ``T``.
+   .. doctest::
 
-       .. doctest::
+      julia> convert(Int, 3.0)
+      3
 
-          julia> convert(Int, 3.0)
-          3
+      julia> convert(Int, 3.5)
+      ERROR: InexactError()
+       in convert at int.jl:205
 
-          julia> convert(Int, 3.5)
-          ERROR: InexactError()
-           in convert at int.jl:205
+   If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
+   the closest value to ``x`` representable by ``T``.
 
-       If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
-       the closest value to ``x`` representable by ``T``.
+   .. doctest::
 
-       .. doctest::
+      julia> x = 1/3
+      0.3333333333333333
 
-          julia> x = 1/3
-          0.3333333333333333
+      julia> convert(Float32, x)
+      0.33333334f0
 
-          julia> convert(Float32, x)
-          0.33333334f0
+      julia> convert(Rational{Int32}, x)
+      1//3
 
-          julia> convert(Rational{Int32}, x)
-          1//3
-
-          julia> convert(Rational{Int64}, x)
-          6004799503160661//18014398509481984
-
-   Converts a ``UTF32String`` to ``UTF16String``
-
-   Returns:
-
-     *   ``UTF16String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a ``UTF16String`` to ``UTF32String``
-
-   Returns:
-
-     *   ``UTF32String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a ``UTF8String`` to a ``UTF32String``
-
-   Returns:
-
-     *   ``::UTF32String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a ``UTF32String`` to a ``UTF8String``
-
-   Returns:
-
-     *   ``UTF8String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts an ``AbstractString`` to a ``UTF32String``
-
-   Returns:
-
-     *   ``UTF32String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a ``UTF16String`` to a ``UTF8String``
-
-   Returns:
-
-     *   ``UTF8String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a ``UTF8String`` to a ``UTF16String``
-
-   Returns:
-
-     *   ``UTF16String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts an ``AbstractString`` to a ``UTF16String``
-
-   Returns:
-
-     *   ``UTF16String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
-   Converts a UTF-8 encoded vector of ``UInt8`` to a ``UTF8String``
-
-   Returns:
-
-     *   ``UTF8String``
-
-   Throws:
-
-     *   ``UnicodeError``
+      julia> convert(Rational{Int64}, x)
+      6004799503160661//18014398509481984
 
 .. function:: promote(xs...)
 
