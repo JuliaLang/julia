@@ -58,14 +58,14 @@ doc"""
 
 Returns `alpha*A*x` or `alpha*A'x` according to `tA` (transpose `A`).
 """
-LinAlg.BLAS.gemv
+LinAlg.BLAS.gemv(tA, alpha, A, x)
 
 doc"""
     gemv(tA, A, x)
 
 Returns `A*x` or `A'x` according to `tA` (transpose `A`).
 """
-LinAlg.BLAS.gemv
+LinAlg.BLAS.gemv(tA, A, x)
 
 doc"""
     syr!(uplo, alpha, x, A)
@@ -135,14 +135,14 @@ doc"""
 
 Returns `alpha*A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
 """
-LinAlg.BLAS.symv
+LinAlg.BLAS.symv(ul, alpha, A, x)
 
 doc"""
     symv(ul, A, x)
 
 Returns `A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
 """
-LinAlg.BLAS.symv
+LinAlg.BLAS.symv(ul, A, x)
 
 doc"""
     dotc(n, X, incx, U, incy)
@@ -170,14 +170,14 @@ doc"""
 
 Returns `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k` super-diagonals stored in the argument `A`.
 """
-LinAlg.BLAS.sbmv
+LinAlg.BLAS.sbmv(uplo, k, alpha, A, x)
 
 doc"""
     sbmv(uplo, k, A, x)
 
 Returns `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k` super-diagonals stored in the argument `A`.
 """
-LinAlg.BLAS.sbmv
+LinAlg.BLAS.sbmv(uplo, k, A, x)
 
 doc"""
     sbmv!(uplo, k, alpha, A, x, beta, y)
@@ -6513,14 +6513,14 @@ doc"""
 
 The distance between 1.0 and the next larger representable floating-point value of `type`. Only floating-point types are sensible arguments. If `type` is omitted, then `eps(Float64)` is returned.
 """
-eps
+eps(::Any)
 
 doc"""
-    eps(x)
+    eps(x::FloatingPoint)
 
 The distance between `x` and the next larger representable floating-point value of the same type as `x`.
 """
-eps
+eps(::FloatingPoint)
 
 doc"""
     rem1(x,m)
@@ -12528,9 +12528,7 @@ Base.(:(>=))
 
 doc"""
 ```rst
-::
-
-           dawson(x)
+.. dawson(x)
 
 Compute the Dawson function (scaled imaginary error function) of ``x``,
 defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
@@ -12927,7 +12925,7 @@ doc"""
 
 Returns `Millisecond(1)` for `DateTime` values and `Day(1)` for `Date` values.
 """
-Dates.eps
+eps(::Union{Date,DateTime})
 
 doc"""
     firstdayofyear(dt::TimeType) -> TimeType
@@ -13120,7 +13118,7 @@ doc"""
 
 Register `pkg` at the git URL `url`, defaulting to the configured origin URL of the git repo `Pkg.dir(pkg)`.
 """
-Pkg.register(pkg)
+Pkg.register(pkg, url=?)
 
 doc"""
     rm(pkg)
