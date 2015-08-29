@@ -68,6 +68,10 @@
 
    Close shared library referenced by handle.
 
+.. data:: dlext
+
+   File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
+
 .. function:: find_library(names, locations)
 
    .. Docstring generated from Julia source
