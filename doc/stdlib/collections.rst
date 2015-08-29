@@ -363,13 +363,6 @@ Iterable Collections
 
    ::
 
-              foldl(op, v0, itr)
-
-   Like :func:`reduce`, but with guaranteed left associativity. ``v0``
-   will be used exactly once.
-
-   ::
-
               foldl(op, itr)
 
    Like ``foldl(op, v0, itr)``, but using the first element of ``itr``
@@ -379,13 +372,6 @@ Iterable Collections
 .. function:: foldl(op, itr)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              foldl(op, v0, itr)
-
-   Like :func:`reduce`, but with guaranteed left associativity. ``v0``
-   will be used exactly once.
 
    ::
 
@@ -401,13 +387,6 @@ Iterable Collections
 
    ::
 
-              foldr(op, v0, itr)
-
-   Like :func:`reduce`, but with guaranteed right associativity. ``v0``
-   will be used exactly once.
-
-   ::
-
               foldr(op, itr)
 
    Like ``foldr(op, v0, itr)``, but using the last element of ``itr``
@@ -417,13 +396,6 @@ Iterable Collections
 .. function:: foldr(op, itr)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              foldr(op, v0, itr)
-
-   Like :func:`reduce`, but with guaranteed right associativity. ``v0``
-   will be used exactly once.
 
    ::
 
@@ -957,18 +929,6 @@ Iterable Collections
 
    ::
 
-              all(itr) -> Bool
-
-   Test whether all elements of a boolean collection are true.
-
-   ::
-
-              all(A, dims)
-
-   Test whether all values along the given dimensions of an array are true.
-
-   ::
-
               all(p, itr) -> Bool
 
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
@@ -981,18 +941,6 @@ Iterable Collections
 .. function:: all(A, dims)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              all(itr) -> Bool
-
-   Test whether all elements of a boolean collection are true.
-
-   ::
-
-              all(A, dims)
-
-   Test whether all values along the given dimensions of an array are true.
 
    ::
 
@@ -1053,18 +1001,6 @@ Iterable Collections
 
    ::
 
-              all(itr) -> Bool
-
-   Test whether all elements of a boolean collection are true.
-
-   ::
-
-              all(A, dims)
-
-   Test whether all values along the given dimensions of an array are true.
-
-   ::
-
               all(p, itr) -> Bool
 
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
@@ -1105,12 +1041,6 @@ Iterable Collections
 
    ::
 
-              map!(function, collection)
-
-   In-place version of :func:`map`.
-
-   ::
-
               map!(function, destination, collection...)
 
    Like :func:`map`, but stores the result in ``destination`` rather than a
@@ -1120,12 +1050,6 @@ Iterable Collections
 .. function:: map!(function, destination, collection...)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              map!(function, collection)
-
-   In-place version of :func:`map`.
 
    ::
 
@@ -1141,32 +1065,6 @@ Iterable Collections
 
    ::
 
-              mapreduce(f, op, v0, itr)
-
-   Apply function ``f`` to each element in ``itr``, and then reduce
-   the result using the binary function ``op``. ``v0`` must be a
-   neutral element for ``op`` that will be returned for empty
-   collections. It is unspecified whether ``v0`` is used for non-empty
-   collections.
-
-   :func:`mapreduce` is functionally equivalent to calling ``reduce(op,
-   v0, map(f, itr))``, but will in general execute faster since no
-   intermediate collection needs to be created. See documentation for
-   :func:`reduce` and :func:`map`.
-
-   .. doctest::
-
-      julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
-      14
-
-   The associativity of the reduction is implementation-dependent.
-   Additionally, some implementations may reuse the return value of
-   ``f`` for elements that appear multiple times in ``itr``.
-   Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
-   left or right associativity and invocation of ``f`` for every value.
-
-   ::
-
               mapreduce(f, op, itr)
 
    Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
@@ -1178,32 +1076,6 @@ Iterable Collections
 
    ::
 
-              mapreduce(f, op, v0, itr)
-
-   Apply function ``f`` to each element in ``itr``, and then reduce
-   the result using the binary function ``op``. ``v0`` must be a
-   neutral element for ``op`` that will be returned for empty
-   collections. It is unspecified whether ``v0`` is used for non-empty
-   collections.
-
-   :func:`mapreduce` is functionally equivalent to calling ``reduce(op,
-   v0, map(f, itr))``, but will in general execute faster since no
-   intermediate collection needs to be created. See documentation for
-   :func:`reduce` and :func:`map`.
-
-   .. doctest::
-
-      julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
-      14
-
-   The associativity of the reduction is implementation-dependent.
-   Additionally, some implementations may reuse the return value of
-   ``f`` for elements that appear multiple times in ``itr``.
-   Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
-   left or right associativity and invocation of ``f`` for every value.
-
-   ::
-
               mapreduce(f, op, itr)
 
    Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
@@ -1212,13 +1084,6 @@ Iterable Collections
 .. function:: mapfoldl(f, op, v0, itr)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              mapfoldl(f, op, v0, itr)
-
-   Like :func:`mapreduce`, but with guaranteed left associativity. ``v0``
-   will be used exactly once.
 
    ::
 
@@ -1234,13 +1099,6 @@ Iterable Collections
 
    ::
 
-              mapfoldl(f, op, v0, itr)
-
-   Like :func:`mapreduce`, but with guaranteed left associativity. ``v0``
-   will be used exactly once.
-
-   ::
-
               mapfoldl(f, op, itr)
 
    Like ``mapfoldl(f, op, v0, itr)``, but using the first element of
@@ -1253,13 +1111,6 @@ Iterable Collections
 
    ::
 
-              mapfoldr(f, op, v0, itr)
-
-   Like :func:`mapreduce`, but with guaranteed right associativity. ``v0``
-   will be used exactly once.
-
-   ::
-
               mapfoldr(f, op, itr)
 
    Like ``mapfoldr(f, op, v0, itr)``, but using the first element of
@@ -1269,13 +1120,6 @@ Iterable Collections
 .. function:: mapfoldr(f, op, itr)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              mapfoldr(f, op, v0, itr)
-
-   Like :func:`mapreduce`, but with guaranteed right associativity. ``v0``
-   will be used exactly once.
 
    ::
 
@@ -1356,15 +1200,6 @@ Iterable Collections
 
    ::
 
-              issubset(a, b)
-              ⊆(A,S) -> Bool
-              ⊈(A,S) -> Bool
-              ⊊(A,S) -> Bool
-
-   Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
-
-   ::
-
               issubset(A, S) -> Bool
               ⊆(A,S) -> Bool
 
@@ -1396,18 +1231,6 @@ Indexable Collections
 .. function:: getindex(collection, key...)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              getindex(type[, elements...])
-
-   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
-
-   ::
-
-              getindex(A, inds...)
-
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
    ::
 
@@ -1513,26 +1336,6 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    ::
 
-              get(x)
-
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
-
-   ::
-
-              get(x, y)
-
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
-
-   ::
-
-              get(collection, key, default)
-
-   Return the value stored for the given key, or the given default value if no mapping for the key is present.
-
-   ::
-
               get(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
@@ -1545,26 +1348,6 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get(f::Function, collection, key)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              get(x)
-
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
-
-   ::
-
-              get(x, y)
-
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
-
-   ::
-
-              get(collection, key, default)
-
-   Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
    ::
 
@@ -1652,12 +1435,6 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: pop!(collection, key[, default])
 
    .. Docstring generated from Julia source
-
-   ::
-
-              pop!(collection, key[, default])
-
-   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 
    ::
 
@@ -1963,15 +1740,6 @@ Set-Like Collections
 
    ::
 
-              issubset(a, b)
-              ⊆(A,S) -> Bool
-              ⊈(A,S) -> Bool
-              ⊊(A,S) -> Bool
-
-   Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
-
-   ::
-
               issubset(A, S) -> Bool
               ⊆(A,S) -> Bool
 
@@ -2018,12 +1786,6 @@ Dequeues
 .. function:: pop!(collection) -> item
 
    .. Docstring generated from Julia source
-
-   ::
-
-              pop!(collection, key[, default])
-
-   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 
    ::
 
@@ -2134,23 +1896,6 @@ Dequeues
 
    ::
 
-              deleteat!(collection, index)
-
-   Remove the item at the given ``index`` and return the modified ``collection``.
-   Subsequent items are shifted to fill the resulting gap.
-
-   .. doctest::
-
-     julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-     5-element Array{Int64,1}:
-      6
-      4
-      3
-      2
-      1
-
-   ::
-
               deleteat!(collection, itr)
 
    Remove the items at the indices given by ``itr``, and return the modified ``collection``.
@@ -2176,23 +1921,6 @@ Dequeues
 
    ::
 
-              deleteat!(collection, index)
-
-   Remove the item at the given ``index`` and return the modified ``collection``.
-   Subsequent items are shifted to fill the resulting gap.
-
-   .. doctest::
-
-     julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-     5-element Array{Int64,1}:
-      6
-      4
-      3
-      2
-      1
-
-   ::
-
               deleteat!(collection, itr)
 
    Remove the items at the indices given by ``itr``, and return the modified ``collection``.
@@ -2215,54 +1943,6 @@ Dequeues
 .. function:: splice!(collection, index, [replacement]) -> item
 
    .. Docstring generated from Julia source
-
-   ::
-
-              splice!(collection, index, [replacement]) -> item
-
-   Remove the item at the given index, and return the removed item. Subsequent items
-   are shifted down to fill the resulting gap. If specified, replacement values from
-   an ordered collection will be spliced in place of the removed item.
-
-   .. doctest::
-
-     julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
-     2
-
-     julia> A
-     5-element Array{Int64,1}:
-      6
-      5
-      4
-      3
-      1
-
-     julia> splice!(A, 5, -1)
-     1
-
-     julia> A
-     5-element Array{Int64,1}:
-       6
-       5
-       4
-       3
-      -1
-
-     julia> splice!(A, 1, [-1, -2, -3])
-     6
-
-     julia> A
-     7-element Array{Int64,1}:
-      -1
-      -2
-      -3
-       5
-       4
-       3
-      -1
-
-   To insert ``replacement`` before an index ``n`` without removing any items, use
-   ``splice!(collection, n:n-1, replacement)``.
 
    ::
 
@@ -2295,54 +1975,6 @@ Dequeues
 .. function:: splice!(collection, range, [replacement]) -> items
 
    .. Docstring generated from Julia source
-
-   ::
-
-              splice!(collection, index, [replacement]) -> item
-
-   Remove the item at the given index, and return the removed item. Subsequent items
-   are shifted down to fill the resulting gap. If specified, replacement values from
-   an ordered collection will be spliced in place of the removed item.
-
-   .. doctest::
-
-     julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
-     2
-
-     julia> A
-     5-element Array{Int64,1}:
-      6
-      5
-      4
-      3
-      1
-
-     julia> splice!(A, 5, -1)
-     1
-
-     julia> A
-     5-element Array{Int64,1}:
-       6
-       5
-       4
-       3
-      -1
-
-     julia> splice!(A, 1, [-1, -2, -3])
-     6
-
-     julia> A
-     7-element Array{Int64,1}:
-      -1
-      -2
-      -3
-       5
-       4
-       3
-      -1
-
-   To insert ``replacement`` before an index ``n`` without removing any items, use
-   ``splice!(collection, n:n-1, replacement)``.
 
    ::
 

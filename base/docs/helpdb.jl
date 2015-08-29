@@ -630,7 +630,12 @@ backtraces will be used.  ``format`` can be ``:tree`` or
 shown. ``combine==true`` merges instruction pointers that
 correspond to the same line of code.  ``cols`` controls the width
 of the display.
+```
+"""
+Profile.print
 
+doc"""
+```rst
 ::
 
            print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
@@ -1354,7 +1359,12 @@ doc"""
 
 Like :func:`reduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
+```
+"""
+foldl
 
+doc"""
+```rst
 ::
 
            foldl(op, itr)
@@ -1428,7 +1438,12 @@ doc"""
 Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
 
 **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+```
+"""
+ind2sub
 
+doc"""
+```rst
 ::
 
            ind2sub(a, index) -> subscripts
@@ -1523,7 +1538,12 @@ doc"""
 
 Like :func:`mapreduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
+```
+"""
+mapfoldr
 
+doc"""
+```rst
 ::
 
            mapfoldr(f, op, itr)
@@ -1588,13 +1608,23 @@ doc"""
            getindex(type[, elements...])
 
 Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
+```
+"""
+getindex
 
+doc"""
+```rst
 ::
 
            getindex(A, inds...)
 
 Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
+```
+"""
+getindex
 
+doc"""
+```rst
 ::
 
            getindex(collection, key...)
@@ -1955,7 +1985,12 @@ For example, the following code::
 creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
 
 A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
+```
+"""
+Mmap.mmap
 
+doc"""
+```rst
 ::
 
            Mmap.mmap(io, BitArray, [dims, offset])
@@ -2286,7 +2321,12 @@ doc"""
            schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
 See :func:`schurfact`
+```
+"""
+schur
 
+doc"""
+```rst
 ::
 
            schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
@@ -2769,7 +2809,12 @@ doc"""
            close(stream)
 
 Close an I/O stream. Performs a ``flush`` first.
+```
+"""
+close
 
+doc"""
+```rst
 ::
 
            close(Channel)
@@ -2918,7 +2963,12 @@ specifies the process's standard input stream.  If ``mode`` is
 ``"w"``, then ``stream`` writes to the process's standard input
 and ``stdio`` optionally specifies the process's standard output
 stream.
+```
+"""
+open
 
+doc"""
+```rst
 ::
 
            open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
@@ -2927,13 +2977,23 @@ Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
 on the resulting read or write stream, then closes the stream
 and waits for the process to complete.  Returns the value returned
 by ``f``.
+```
+"""
+open
 
+doc"""
+```rst
 ::
 
            open(file_name, [read, write, create, truncate, append]) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+```
+"""
+open
 
+doc"""
+```rst
 ::
 
            open(file_name, [mode]) -> IOStream
@@ -2949,6 +3009,12 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
  a+   read, write, create, append
 ==== =================================
 
+```
+"""
+open
+
+doc"""
+```rst
 ::
 
            open(f::function, args...)
@@ -3416,7 +3482,12 @@ Additionally, some implementations may reuse the return value of
 ``f`` for elements that appear multiple times in ``itr``.
 Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
 left or right associativity and invocation of ``f`` for every value.
+```
+"""
+mapreduce
 
+doc"""
+```rst
 ::
 
            mapreduce(f, op, itr)
@@ -4454,7 +4525,12 @@ doc"""
 
 Like :func:`mapreduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
+```
+"""
+mapfoldl
 
+doc"""
+```rst
 ::
 
            mapfoldl(f, op, itr)
@@ -4498,6 +4574,12 @@ concise way to specify multi-stage pipelines.
   * ``run(pipeline(`ls`, "out.txt"))``
   * ``run(pipeline("out.txt", `grep xyz`))``
 
+```
+"""
+pipeline
+
+doc"""
+```rst
 ::
 
            pipeline(command; stdin, stdout, stderr, append=false)
@@ -4513,6 +4595,7 @@ data source.
 **Examples**:
   * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
   * ``run(pipeline(`update`, stdout="log.txt", append=true))``
+
 ```
 """
 pipeline
@@ -4991,7 +5074,12 @@ an ordered collection will be spliced in place of the removed item.
 
 To insert ``replacement`` before an index ``n`` without removing any items, use
 ``splice!(collection, n:n-1, replacement)``.
+```
+"""
+splice!
 
+doc"""
+```rst
 ::
 
            splice!(collection, range, [replacement]) -> items
@@ -5665,7 +5753,12 @@ doc"""
            ^(x, y)
 
 Exponentiation operator.
+```
+"""
+Base.(:(^))
 
+doc"""
+```rst
 ::
 
            ^(s, n)
@@ -6169,7 +6262,12 @@ doc"""
 
 Like :func:`reduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
+```
+"""
+foldr
 
+doc"""
+```rst
 ::
 
            foldr(op, itr)
@@ -6477,19 +6575,33 @@ doc"""
            ordschur!(Q, T, select) -> Schur
 
 Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
+```
+"""
+ordschur!
 
+doc"""
+```rst
 ::
 
            ordschur!(S, select) -> Schur
 
 Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
+```
+"""
+ordschur!
 
+doc"""
+```rst
 ::
 
            ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
+"""
+ordschur!
 
+doc"""
+```rst
 ::
 
            ordschur!(GS, select) -> GeneralizedSchur
@@ -6936,20 +7048,35 @@ doc"""
 
 Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
 value if it is present; otherwise, throws a ``NullException``.
+```
+"""
+get
 
+doc"""
+```rst
 ::
 
            get(x, y)
 
 Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
 the value if it is present; otherwise, returns ``convert(T, y)``.
+```
+"""
+get
 
+doc"""
+```rst
 ::
 
            get(collection, key, default)
 
 Return the value stored for the given key, or the given default value if no mapping for the key is present.
+```
+"""
+get
 
+doc"""
+```rst
 ::
 
            get(f::Function, collection, key)
@@ -7151,6 +7278,12 @@ Subsequent items are shifted to fill the resulting gap.
    2
    1
 
+```
+"""
+deleteat!
+
+doc"""
+```rst
 ::
 
            deleteat!(collection, itr)
@@ -7832,13 +7965,23 @@ doc"""
            all(itr) -> Bool
 
 Test whether all elements of a boolean collection are true.
+```
+"""
+all
 
+doc"""
+```rst
 ::
 
            all(A, dims)
 
 Test whether all values along the given dimensions of an array are true.
+```
+"""
+all
 
+doc"""
+```rst
 ::
 
            all(p, itr) -> Bool
@@ -8210,8 +8353,13 @@ Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest li
    plot(x, y, "o") # Plot (x,y) points
    plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
 
-::
+```
+"""
+linreg
 
+doc"""
+```rst
+::
            linreg(x, y, w)
 
 Weighted least-squares linear regression.
@@ -8702,7 +8850,12 @@ that this may overflow if ``n`` is not small, but you can use
 ``factorial(big(n))`` to compute the result exactly in arbitrary
 precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
 equivalent to :func:`gamma(n+1) <gamma>`.
+```
+"""
+factorial
 
+doc"""
+```rst
 ::
 
            factorial(n,k)
@@ -9115,14 +9268,24 @@ doc"""
            *(A, B)
 
 Matrix multiplication
+```
+"""
+Base.(:(*))
 
+doc"""
+```rst
 ::
 
            *(x, y...)
 
 Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
 ``*(x, y, z, ...)``.
+```
+"""
+Base.(:(*))
 
+doc"""
+```rst
 ::
 
            *(s, t)
@@ -9937,7 +10100,12 @@ Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
 	julia> isprime(3)
 	true
+```
+"""
+isprime
 
+doc"""
+```rst
 ::
 
            isprime(x::BigInt, [reps = 25]) -> Bool
@@ -10642,7 +10810,13 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
    representation for products of Householder transformations",
    SIAM J Sci Stat Comput 10 (1989), 53-57.
    `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
+```
+"""
+qrfact
 
+
+doc"""
+```rst
 ::
 
            qrfact(A) -> SPQR.Factorization
@@ -10731,13 +10905,22 @@ doc"""
            full(S)
 
 Convert a sparse matrix ``S`` into a dense matrix.
+```
+"""
+full
 
+doc"""
+```rst
 ::
 
            full(F)
 
 Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
+"""
+full
 
+doc"""
+```rst
 ::
 
            full(QRCompactWYQ[, thin=true]) -> Matrix
@@ -10843,7 +11026,12 @@ doc"""
            ⊊(A,S) -> Bool
 
 Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
+```
+"""
+issubset
 
+doc"""
+```rst
 ::
 
            issubset(A, S) -> Bool
@@ -10868,7 +11056,12 @@ doc"""
            map!(function, collection)
 
 In-place version of :func:`map`.
+```
+"""
+map!
 
+doc"""
+```rst
 ::
 
            map!(function, destination, collection...)
@@ -11030,7 +11223,12 @@ doc"""
            zeta(s)
 
 Riemann zeta function :math:`\zeta(s)`.
+```
+"""
+zeta
 
+doc"""
+```rst
 ::
 
            zeta(s, z)
@@ -11229,7 +11427,12 @@ is balanced before the eigenvector calculation. The option ``permute=true``
 permutes the matrix to become closer to upper triangular, and ``scale=true``
 scales the matrix by its diagonal elements to make rows and columns more
 equal in norm. The default is ``true`` for both options.
+```
+"""
+eigfact
 
+doc"""
+```rst
 ::
 
            eigfact(A, B) -> GeneralizedEigen
@@ -11448,7 +11651,12 @@ details on the ``balance`` keyword argument.
 ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
 factorization to a tuple; where possible, using :func:`eigfact` is
 recommended.
+```
+"""
+eig
 
+doc"""
+```rst
 ::
 
            eig(A, B) -> D, V
@@ -11792,7 +12000,12 @@ doc"""
            pop!(collection, key[, default])
 
 Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
+```
+"""
+pop!
 
+doc"""
+```rst
 ::
 
            pop!(collection) -> item
@@ -12073,14 +12286,24 @@ doc"""
            DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
 Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
+```
+"""
+Dates.DateTime
 
+doc"""
+```rst
 ::
 
            DateTime(periods::Period...) -> DateTime
 
 Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
 DateTime parts not provided will default to the value of ``Dates.default(period)``.
+```
+"""
+Dates.DateTime
 
+doc"""
+```rst
 ::
 
            DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
@@ -12090,14 +12313,24 @@ provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` re
 adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
 will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
 the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
+```
+"""
+Dates.DateTime
 
+doc"""
+```rst
 ::
 
            DateTime(dt::Date) -> DateTime
 
 Converts a ``Date`` type to a ``DateTime``.
 The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
+```
+"""
+Dates.DateTime
 
+doc"""
+```rst
 ::
 
            DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
@@ -12124,7 +12357,12 @@ Code            Matches    Comment
 
 All characters not listed above are treated as delimiters between date and time slots.
 So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
+```
+"""
+Dates.DateTime
 
+doc"""
+```rst
 ::
 
            DateTime(dt::AbstractString, df::DateFormat) -> DateTime
@@ -12271,8 +12509,8 @@ doc"""
 
            trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
- Truncates the value of ``dt`` according to the provided ``Period`` type.
- E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
+Truncates the value of ``dt`` according to the provided ``Period`` type.
+E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 ```
 """
 Dates.trunc

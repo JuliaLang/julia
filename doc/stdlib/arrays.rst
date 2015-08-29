@@ -178,14 +178,6 @@ largest range along each dimension.
 
    ::
 
-              ind2sub(dims, index) -> subscripts
-
-   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
-
-   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
-
-   ::
-
               ind2sub(a, index) -> subscripts
 
    Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
@@ -193,14 +185,6 @@ largest range along each dimension.
 .. function:: ind2sub(a, index) -> subscripts
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ind2sub(dims, index) -> subscripts
-
-   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
-
-   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
 
    ::
 
@@ -234,18 +218,6 @@ Constructors
 .. function:: getindex(type[, elements...])
 
    .. Docstring generated from Julia source
-
-   ::
-
-              getindex(type[, elements...])
-
-   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
-
-   ::
-
-              getindex(A, inds...)
-
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
    ::
 
@@ -548,18 +520,6 @@ Indexing, Assignment, and Concatenation
 .. function:: getindex(A, inds...)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              getindex(type[, elements...])
-
-   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
-
-   ::
-
-              getindex(A, inds...)
-
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
    ::
 
@@ -1924,18 +1884,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: full(S)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              full(S)
-
-   Convert a sparse matrix ``S`` into a dense matrix.
-
-   ::
-
-              full(F)
-
-   Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
    ::
 

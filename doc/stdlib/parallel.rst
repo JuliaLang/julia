@@ -803,12 +803,6 @@ General Parallel Computing Support
 
    ::
 
-              close(stream)
-
-   Close an I/O stream. Performs a ``flush`` first.
-
-   ::
-
               close(Channel)
 
    Closes a channel. An exception is thrown by:
