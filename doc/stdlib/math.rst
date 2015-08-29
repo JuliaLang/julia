@@ -2858,28 +2858,26 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
 .. function:: fft(A [, dims])
 
-   Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
-   argument specifies an iterable subset of dimensions (e.g. an integer,
-   range, tuple, or array) to transform along.  Most efficient if the
-   size of ``A`` along the transformed dimensions is a product of small
-   primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
-   greater efficiency.
+   .. Docstring generated from Julia source
 
-   A one-dimensional FFT computes the one-dimensional discrete Fourier
-   transform (DFT) as defined by
+   .. code-block:: julia
+
+       fft(A[, dims])
+
+   Performs a multidimensional FFT of the array ``A``\ .  The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see ``nextprod()``\ .  See also ``plan_fft()`` for even greater efficiency.
+
+   A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as defined by
 
    .. math::
 
-      \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
-      \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
-      A[n].
+       \operatorname{DFT}(A)[k] =
+         \sum_{n=1}^{\operatorname{length}(A)}
+         \exp\left(-i\frac{2\pi
+         (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n].
 
-   A multidimensional FFT simply performs this operation along each transformed
-   dimension of ``A``.
+   A multidimensional FFT simply performs this operation along each transformed dimension of ``A``\ .
 
-   Higher performance is usually possible with multi-threading. Use
-   `FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
-   processors.
+   Higher performance is usually possible with multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads, if you have ``np`` processors.
 
 .. function:: fft!(A [, dims])
 
