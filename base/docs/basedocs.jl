@@ -218,6 +218,14 @@ keywords[symbol(";")] = doc"""
     interfaces.
   """
 
+keywords[:(&&)]  = doc"""
+    short circuting boolean AND
+"""
+
+keywords[:(||)]  = doc"""
+    short circuting boolean OR
+"""
+
 keywords[:ccall] = doc"""
       ccall((symbol, library) or function_pointer, ReturnType,
             (ArgumentType1, ...),
