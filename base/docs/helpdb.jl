@@ -6435,6 +6435,7 @@ doc"""
 ..  ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
 
 Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
+```
 """
 ordschur!(S,T,Q,Z,select)
 
@@ -10648,6 +10649,7 @@ doc"""
 ..  full(F)
 
 Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
+```
 """
 full(F)
 

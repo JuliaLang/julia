@@ -12,8 +12,6 @@
 
    .. Docstring generated from Julia source
 
-       @profile
-
    ``@profile <expression>`` runs your expression while taking periodic backtraces. These are appended to an internal buffer of backtraces.
 
 .. currentmodule:: Base.Profile
@@ -23,8 +21,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: clear()
 
    .. Docstring generated from Julia source
-
-       clear()
 
    Clear any existing backtraces from the internal buffer.
 
@@ -57,8 +53,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-       init(; n::Integer, delay::Float64)
-
    Configure the ``delay`` between backtraces (measured in seconds), and the number ``n`` of instruction pointers that may be stored. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long list of instruction pointers. Default settings can be obtained by calling this function with no arguments, and each can be set independently using keywords or in the order ``(n, delay)``\ .
 
 .. function:: fetch() -> data
@@ -78,8 +72,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: retrieve() -> data, lidict
 
    .. Docstring generated from Julia source
-
-       retrieve() -> data, lidict
 
    "Exports" profiling results in a portable format, returning the set of all backtraces (``data``\ ) and a dictionary that maps the (session-specific) instruction pointers in ``data`` to ``LineInfo`` values that store the file name, function name, and line number. This function allows you to save profiling results for future analysis.
 
