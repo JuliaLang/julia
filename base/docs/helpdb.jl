@@ -200,21 +200,21 @@ doc"""
 
 Returns `alpha*A*B` or `alpha*B*A` according to `side`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
 """
-LinAlg.BLAS.symm
+LinAlg.BLAS.symm(side, ul, alpha, A, B)
 
 doc"""
     symm(side, ul, A, B)
 
 Returns `A*B` or `B*A` according to `side`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
 """
-LinAlg.BLAS.symm
+LinAlg.BLAS.symm(side, ul, A, B)
 
 doc"""
     symm(tA, tB, alpha, A, B)
 
 Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
 """
-LinAlg.BLAS.symm
+LinAlg.BLAS.symm(tA::Char, tB::Char, alpha, A, B)
 
 doc"""
     herk(uplo, trans, alpha, A)
@@ -263,14 +263,14 @@ doc"""
 
 Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
 """
-LinAlg.BLAS.gemm
+LinAlg.BLAS.gemm(tA, tB, alpha, A, B)
 
 doc"""
     gemm(tA, tB, A, B)
 
 Returns `A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
 """
-LinAlg.BLAS.gemm
+LinAlg.BLAS.gemm(tA, tB, A, B)
 
 doc"""
     symm!(side, ul, alpha, A, B, beta, C)
@@ -632,7 +632,7 @@ correspond to the same line of code.  ``cols`` controls the width
 of the display.
 ```
 """
-Profile.print
+Profile.print(io::IO = STDOUT, data::Vector=?)
 
 doc"""
 ```rst
@@ -644,7 +644,7 @@ Supply the vector ``data`` of backtraces and a dictionary
 ``lidict`` of line information.
 ```
 """
-Profile.print
+Profile.print(io::IO = STDOUT, data::Vector = ?, lidict::Dict = ?)
 
 doc"""
     init(; n::Integer, delay::Float64)
@@ -812,7 +812,7 @@ doc"""
 
 Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix `A` and return either a `Cholesky` if `pivot==Val{false}` or `CholeskyPivoted` if `pivot==Val{true}`. `LU` may be `:L` for using the lower part or `:U` for the upper part. The default is to use `:U`. The triangular matrix can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`. The following functions are available for `Cholesky` objects: `size`, `\`, `inv`, `det`. For `CholeskyPivoted` there is also defined a `rank`. If `pivot==Val{false}` a `PosDefException` exception is thrown in case the matrix is not positive definite. The argument `tol` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 """
-cholfact
+cholfact(A, LU=:U, pivot=Val{false})
 
 doc"""
     cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
@@ -823,7 +823,7 @@ Setting optional `shift` keyword argument computes the factorization of `A+shift
 
 The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 """
-cholfact
+cholfact(A)
 
 doc"""
     digamma(x)
@@ -892,14 +892,14 @@ Create a UTF-32 string from a byte array, array of `Char` or `UInt32`, or any ot
 
 Note that the resulting `UTF32String` data is terminated by the NUL codepoint (32-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data. This NUL is appended automatically by the `utf32(s)` conversion function. If you have a `Char` or `UInt32` array `A` that is already NUL-terminated UTF-32 data, then you can instead use `UTF32String(A)` to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
 """
-utf32
+utf32(s)
 
 doc"""
     utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}} [, length])
 
 Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If `length` is specified, the string does not have to be NUL-terminated.
 """
-utf32
+utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}}, length=?)
 
 doc"""
     takebuf_array(b::IOBuffer)
@@ -1242,21 +1242,21 @@ doc"""
 
 Look up the value of a symbol in the current task's task-local storage.
 """
-task_local_storage
+task_local_storage(symbol)
 
 doc"""
     task_local_storage(symbol, value)
 
 Assign a value to a symbol in the current task's task-local storage.
 """
-task_local_storage
+task_local_storage(symbol, value)
 
 doc"""
     task_local_storage(body, symbol, value)
 
 Call the function `body` with a modified task-local storage, in which `value` is assigned to `symbol`; the previous value of `symbol`, or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
 """
-task_local_storage
+task_local_storage(body, symbol, value)
 
 doc"""
     diff(A, [dim])
@@ -1286,28 +1286,28 @@ doc"""
 
 Generate all integer arrays that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n))`.
 """
-partitions
+partitions(n::Integer)
 
 doc"""
     partitions(n, m)
 
 Generate all arrays of `m` integers that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n,m))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n,m))`.
 """
-partitions
+partitions(n::Integer, m::Integer)
 
 doc"""
     partitions(array)
 
 Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(array))`.
 """
-partitions
+partitions(array)
 
 doc"""
     partitions(array, m)
 
 Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array,m))` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using `length(partitions(array,m))`.
 """
-partitions
+partitions(array, m::Integer)
 
 doc"""
     readlines(stream)
@@ -1328,14 +1328,14 @@ doc"""
 
 Make an uninitialized remote reference on the local machine.
 """
-RemoteRef
+RemoteRef()
 
 doc"""
     RemoteRef(n)
 
 Make an uninitialized remote reference on process `n`.
 """
-RemoteRef
+RemoteRef(::Integer)
 
 doc"""
 ```rst
@@ -1345,7 +1345,7 @@ Like :func:`reduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
 ```
 """
-foldl
+foldl(op, v0, itr)
 
 doc"""
 ```rst
@@ -1356,7 +1356,7 @@ as ``v0``. In general, this cannot be used with empty collections
 (see ``reduce(op, itr)``).
 ```
 """
-foldl
+foldl(op, itr)
 
 doc"""
 ```rst
@@ -1414,7 +1414,7 @@ Returns a tuple of subscripts into an array with dimensions ``dims``, correspond
 **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
 ```
 """
-ind2sub
+ind2sub(dims::Tuple, index::Int)
 
 doc"""
 ```rst
@@ -1423,7 +1423,7 @@ doc"""
 Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
 ```
 """
-ind2sub
+ind2sub(a, index)
 
 doc"""
     .*(x, y)
@@ -1437,14 +1437,14 @@ doc"""
 
 Performs a right rotation operation on `src` and put the result into `dest`.
 """
-ror!
+ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
 
 doc"""
     ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
 Performs a right rotation operation on B.
 """
-ror!
+ror!(B::BitArray{1}, i::Integer)
 
 doc"""
     range(start, [step], length)
@@ -1465,14 +1465,14 @@ doc"""
 
 Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 """
-edit
+edit(file::AbstractString, line=?)
 
 doc"""
     edit(function, [types])
 
 Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
 """
-edit
+edit(::Function, types=?)
 
 doc"""
     backtrace()
@@ -1502,14 +1502,14 @@ doc"""
 
 Unary minus operator.
 """
--
+-(x)
 
 doc"""
     -(x, y)
 
 Subtraction operator.
 """
--
+-(x, y)
 
 doc"""
 ```rst
@@ -1519,7 +1519,7 @@ Like :func:`mapreduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
 ```
 """
-mapfoldr
+mapfoldr(f, op, v0, itr)
 
 doc"""
 ```rst
@@ -1530,7 +1530,7 @@ Like ``mapfoldr(f, op, v0, itr)``, but using the first element of
 collections (see ``reduce(op, itr)``).
 ```
 """
-mapfoldr
+mapfoldr(f, op, itr)
 
 doc"""
     broadcast_setindex!(A, X, inds...)
@@ -1583,7 +1583,7 @@ doc"""
 Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 ```
 """
-getindex
+getindex(::Type, elements...)
 
 doc"""
 ```rst
@@ -1592,7 +1592,7 @@ doc"""
 Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 ```
 """
-getindex
+getindex(::AbstractArray, inds...)
 
 doc"""
 ```rst
@@ -1603,7 +1603,7 @@ The syntax ``a[i,j,...]`` is converted by the compiler to
 ``getindex(a, i, j, ...)``.
 ```
 """
-getindex
+getindex(collection, key...)
 
 doc"""
     cconvert(T,x)
@@ -1944,7 +1944,7 @@ creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with str
 A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 ```
 """
-Mmap.mmap
+Mmap.mmap(io, ::Type, dims, offset)
 
 doc"""
 ```rst
@@ -1957,7 +1957,7 @@ Create a ``BitArray`` whose values are linked to a file, using memory-mapping; i
 This would create a 25-by-30000 ``BitArray``, linked to the file associated with stream ``s``.
 ```
 """
-Mmap.mmap
+Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 doc"""
 ```rst
@@ -2260,7 +2260,7 @@ doc"""
 See :func:`schurfact`
 ```
 """
-schur
+schur(A)
 
 doc"""
 ```rst
@@ -2269,7 +2269,7 @@ doc"""
 See :func:`schurfact`
 ```
 """
-schur
+schur(A,B)
 
 doc"""
     isexecutable(path) -> Bool
@@ -2728,7 +2728,7 @@ doc"""
 Close an I/O stream. Performs a ``flush`` first.
 ```
 """
-close
+close(stream::IO)
 
 doc"""
 ```rst
@@ -2742,7 +2742,7 @@ Closes a channel. An exception is thrown by:
 
 ```
 """
-close
+close(::Channel)
 
 doc"""
 ```rst
@@ -2874,7 +2874,7 @@ and ``stdio`` optionally specifies the process's standard output
 stream.
 ```
 """
-open
+open(command::Cmd, mod::AbstractString="r", stdio=DevNull)
 
 doc"""
 ```rst
@@ -2886,7 +2886,7 @@ and waits for the process to complete.  Returns the value returned
 by ``f``.
 ```
 """
-open
+open(f::Function, command::Cmd, mod::AbstractString="r", stdio=DevNull)
 
 doc"""
 ```rst
@@ -2895,7 +2895,7 @@ doc"""
 Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 ```
 """
-open
+open(file_name, ::Bool, ::Bool, ::Bool, ::Bool, ::Bool)
 
 doc"""
 ```rst
@@ -2914,7 +2914,7 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
 
 ```
 """
-open
+open(file_name, mode="r")
 
 doc"""
 ```rst
@@ -2925,7 +2925,7 @@ Apply the function ``f`` to the result of ``open(args...)`` and close the result
 **Example**: ``open(readall, "file.txt")``
 ```
 """
-open
+open(f::Function, args...)
 
 doc"""
     sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -3365,7 +3365,7 @@ Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
 left or right associativity and invocation of ``f`` for every value.
 ```
 """
-mapreduce
+mapreduce(f, op, v0, itr)
 
 doc"""
 ```rst
@@ -3375,7 +3375,7 @@ Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
 with empty collections (see ``reduce(op, itr)``).
 ```
 """
-mapreduce
+mapreduce(f, op, itr)
 
 doc"""
     quantile!(v, p)
@@ -3398,7 +3398,7 @@ doc"""
 Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
 ```
 """
-ordschur
+ordschur(Q, T, select)
 
 doc"""
 ```rst
@@ -3407,7 +3407,7 @@ doc"""
 Reorders the Schur factorization ``S`` of type ``Schur``.
 ```
 """
-ordschur
+ordschur(S::Schur, select)
 
 doc"""
 ```rst
@@ -3416,7 +3416,7 @@ doc"""
 Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
 ```
 """
-ordschur
+ordschur(S, T, Q, Z)
 
 doc"""
 ```rst
@@ -3425,35 +3425,35 @@ doc"""
 Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
 ```
 """
-ordschur
+ordschur(GS::GeneralizedSchur, select)
 
 doc"""
     triu!(M)
 
 Upper triangle of a matrix, overwriting `M` in the process.
 """
-triu!
+triu!(M)
 
 doc"""
     triu!(M, k)
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in the process.
 """
-triu!
+triu!(M, k)
 
 doc"""
     readall(stream::IO)
 
 Read the entire contents of an I/O stream as a string.
 """
-readall
+readall(stream::IO)
 
 doc"""
     readall(filename::AbstractString)
 
 Open `filename`, read the entire contents as a string, then close the file. Equivalent to `open(readall, filename)`.
 """
-readall
+readall(filename::AbstractString)
 
 doc"""
     poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
@@ -3515,14 +3515,14 @@ doc"""
 
 Create a sparse matrix `S` of dimensions `m x n` such that `S[I[k], J[k]] = V[k]`. The `combine` function is used to combine duplicates. If `m` and `n` are not specified, they are set to `max(I)` and `max(J)` respectively. If the `combine` function is not supplied, duplicates are added by default.
 """
-sparse
+sparse(I, J, V, m=?, n=?, combine=?)
 
 doc"""
     sparse(A)
 
 Convert an AbstractMatrix `A` into a sparse matrix.
 """
-sparse
+sparse(A)
 
 doc"""
 ```rst
@@ -3555,7 +3555,7 @@ decimal place (or before if negative). ``round(x, digits, base)`` rounds
 using a base other than 10.
 ```
 """
-round
+round(T::Type, x)
 
 doc"""
 ```rst
@@ -3567,7 +3567,7 @@ The first :obj:`RoundingMode` is used for rounding the real components while
 the second is used for rounding the imaginary components.
 ```
 """
-round
+round(z::Real, ::Type{RoundingMode}, ::Type{RoundingMode})
 
 doc"""
     strwidth(s)
@@ -3617,14 +3617,14 @@ The associativity of the reduction is implementation dependent. This means that 
 
 Some operations accumulate error, and parallelism will also be easier if the reduction can be executed in groups. Future versions of Julia might change the algorithm. Note that the elements are not reordered if you use an ordered collection.
 """
-reduce
+reduce(op, v0, itr)
 
 doc"""
     reduce(op, itr)
 
 Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except for some special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the neutral element of `op`.
 """
-reduce
+reduce(op, itr)
 
 doc"""
     .>=(x, y)
@@ -3678,14 +3678,14 @@ doc"""
 
 Lower triangle of a matrix, overwriting `M` in the process.
 """
-tril!
+tril!(M)
 
 doc"""
     tril!(M, k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in the process.
 """
-tril!
+tril!(M, k)
 
 doc"""
     divrem(x, y)
@@ -3889,14 +3889,14 @@ doc"""
 
 Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A common use of this is to convert a boolean array to an array of indexes of the `true` elements.
 """
-find
+find(A)
 
 doc"""
     find(f,A)
 
 Return a vector of the linear indexes of `A` where `f` returns true.
 """
-find
+find(f, A)
 
 doc"""
     ctranspose(A)
@@ -4046,14 +4046,14 @@ doc"""
 
 Compute the Singular Value Decomposition (SVD) of `A` and return an `SVD` object. `U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`, `F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`. If `thin` is `true`, an economy mode decomposition is returned. The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`. The default is to produce a thin decomposition.
 """
-svdfact
+svdfact(A)
 
 doc"""
     svdfact(A, B) -> GeneralizedSVD
 
 Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` Factorization object `F`, such that `A = F[:U]*F[:D1]*F[:R0]*F[:Q]'` and `B = F[:V]*F[:D2]*F[:R0]*F[:Q]'`.
 """
-svdfact
+svdfact(A, B)
 
 doc"""
     string(xs...)
@@ -4098,21 +4098,21 @@ doc"""
 
 Create a UTF-8 string from a byte array.
 """
-utf8
+utf8(::Vector{UInt8})
 
 doc"""
     utf8(::Ptr{UInt8}, [length])
 
 Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If `length` is specified, the string does not have to be 0-terminated.
 """
-utf8
+utf8(::Ptr{UInt8}, length::Int = 1)
 
 doc"""
     utf8(s)
 
 Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 """
-utf8
+utf8(s)
 
 doc"""
     hvcat(rows::Tuple{Vararg{Int}}, values...)
@@ -4160,14 +4160,14 @@ doc"""
 
 Returns the product of all elements of a collection.
 """
-prod
+prod(itr)
 
 """
     prod(A, dims)
 
 Multiply elements of an array over the given dimensions.
 """
-prod
+prod(A, dims)
 
 doc"""
     Base.linearindexing(A)
@@ -4258,7 +4258,7 @@ Launches workers using the in-built ``LocalManager`` which only launches workers
 This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 ```
 """
-addprocs
+addprocs(n::Integer)
 
 doc"""
 ```rst
@@ -4270,7 +4270,7 @@ Note that workers do not run a `.juliarc.jl` startup script, nor do they synchro
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 ```
 """
-addprocs
+addprocs()
 
 doc"""
 ```rst
@@ -4313,7 +4313,7 @@ variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the 
 the number of seconds a newly launched worker waits for connection establishment.
 ```
 """
-addprocs
+addprocs(machines)
 
 doc"""
 ```rst
@@ -4327,7 +4327,7 @@ The number of seconds a newly launched worker waits for connection establishment
 specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 ```
 """
-addprocs
+addprocs(manager::ClusterManager)
 
 doc"""
     mkpath(path, [mode])
@@ -4411,7 +4411,7 @@ Like :func:`mapreduce`, but with guaranteed left associativity. ``v0``
 will be used exactly once.
 ```
 """
-mapfoldl
+mapfoldl(f, op, v0, itr)
 
 doc"""
 ```rst
@@ -4422,7 +4422,7 @@ Like ``mapfoldl(f, op, v0, itr)``, but using the first element of
 collections (see ``reduce(op, itr)``).
 ```
 """
-mapfoldl
+mapfoldl(f, op, itr)
 
 doc"""
     realmax(type)
@@ -4456,7 +4456,7 @@ concise way to specify multi-stage pipelines.
 
 ```
 """
-pipeline
+pipeline(from, to, rest...)
 
 doc"""
 ```rst
@@ -4476,7 +4476,7 @@ data source.
 
 ```
 """
-pipeline
+pipeline(command)
 
 doc"""
     serialize(stream, value)
@@ -4490,21 +4490,21 @@ doc"""
 
 Returns the sum of all elements in a collection.
 """
-sum
+sum(itr)
 
 doc"""
     sum(A, dims)
 
 Sum elements of an array over the given dimensions.
 """
-sum
+sum(A, dims)
 
 doc"""
     sum(f, itr)
 
 Sum the results of calling function `f` on each element of `itr`.
 """
-sum
+sum(f::Function, itr)
 
 doc"""
     typemin(type)
@@ -4539,28 +4539,28 @@ doc"""
 
 Create a temporary directory in the `parent` directory and return its path.
 """
-mktempdir
+mktempdir()
 
 doc"""
     mktempdir(f::function, [parent=tempdir()])
 
 Apply the function `f` to the result of `mktempdir(parent)` and remove the temporary directory upon completion.
 """
-mktempdir
+mktempdir(f::Function)
 
 doc"""
     tril(M)
 
 Lower triangle of a matrix.
 """
-tril
+tril(M)
 
 doc"""
     tril(M, k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 """
-tril
+tril(M,k)
 
 doc"""
     @edit
@@ -4657,14 +4657,14 @@ Compute the natural logarithm of `x`. Throws `DomainError` for negative `Real` a
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically faster and more accurate.
 """
-log
+log(x)
 
 doc"""
     log(b,x)
 
 Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
 """
-log
+log(b, x)
 
 doc"""
 ```rst
@@ -4737,14 +4737,14 @@ doc"""
 
 Rotate matrix `A` right 90 degrees.
 """
-rotr90
+rotr90(A)
 
 doc"""
     rotr90(A, k)
 
 Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a multiple of four, this is equivalent to a `copy`.
 """
-rotr90
+rotr90(A, k)
 
 doc"""
     readdir([dir]) -> Vector{ByteString}
@@ -4772,14 +4772,14 @@ doc"""
 
 Upper triangle of a matrix.
 """
-triu
+triu(M)
 
 doc"""
     triu(M, k)
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal.
 """
-triu
+triu(M, k)
 
 doc"""
     instances(T::Type)
@@ -4812,14 +4812,14 @@ doc"""
 
 Compute the minimum absolute value of a collection of values.
 """
-minabs
+minabs(itr)
 
 doc"""
     minabs(A, dims)
 
 Compute the minimum absolute values over given dimensions.
 """
-minabs
+minabs(A, dims)
 
 doc"""
     popdisplay()
@@ -4874,14 +4874,14 @@ Create a UTF-16 string from a byte array, array of `UInt16`, or any other string
 
 Note that the resulting `UTF16String` data is terminated by the NUL codepoint (16-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data. This NUL is appended automatically by the utf16(s) conversion function. If you have a `UInt16` array `A` that is already NUL-terminated valid UTF-16 data, then you can instead use UTF16String(A)\` to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
 """
-utf16
+utf16(s)
 
 doc"""
     utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
 
 Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If `length` is specified, the string does not have to be NUL-terminated.
 """
-utf16
+utf16(::Union{Ptr{UInt16},Ptr{Int16}}, length=?)
 
 doc"""
     median(v[, region])
@@ -4967,7 +4967,7 @@ To insert ``replacement`` before an index ``n`` without removing any items, use
 ``splice!(collection, n:n-1, replacement)``.
 ```
 """
-splice!
+splice!(collection, index, replacement = ?)
 
 doc"""
 ```rst
@@ -4998,7 +4998,7 @@ To insert ``replacement`` before an index ``n`` without removing any items, use
    -1
 ```
 """
-splice!
+splice!(collection, range::Range, replacement)
 
 doc"""
 ```rst
@@ -5231,14 +5231,14 @@ doc"""
 
 Rotate matrix `A` 180 degrees.
 """
-rot180
+rot180(A)
 
 doc"""
     rot180(A, k)
 
 Rotate matrix `A` 180 degrees an integer `k` number of times. If `k` is even, this is equivalent to a `copy`.
 """
-rot180
+rot180(A, k)
 
 doc"""
     .<=(x, y)
@@ -5255,7 +5255,7 @@ Throw an error if the specified indexes are not in bounds for the given array.
 Subtypes of `AbstractArray` should specialize this method if they need to
 provide custom bounds checking behaviors.
 """
-checkbounds
+checkbounds(array, indexes...)
 
 doc"""
     checkbounds(::Type{Bool}, dimlength::Integer, index)
@@ -5265,7 +5265,7 @@ dimension length. Custom types that would like to behave as indices for all
 arrays can extend this method in order to provide a specialized bounds checking
 implementation.
 """
-checkbounds
+checkbounds(::Type{Bool}, ::Integer, index)
 
 doc"""
     asec(x)
@@ -5307,14 +5307,14 @@ doc"""
 
 Fetch the value of a remote reference, removing it so that the reference is empty again.
 """
-take!
+take!(::RemoteRef)
 
 doc"""
     take!(Channel)
 
 Removes and returns a value from a `Channel`. Blocks till data is available.
 """
-take!
+take!(::Channel)
 
 doc"""
 ```rst
@@ -5337,14 +5337,14 @@ doc"""
 
 Send a signal to a process. The default is to terminate the process.
 """
-kill
+kill(p::Process, signum=SIGTERM)
 
 doc"""
     kill(manager::FooManager, pid::Int, config::WorkerConfig)
 
 Implemented by cluster managers. It is called on the master process, by `rmprocs`. It should cause the remote worker specified by `pid` to exit. `Base.kill(manager::ClusterManager.....)` executes a remote `exit()` on `pid`
 """
-kill
+kill(manager, pid::Int, config::WorkerConfig)
 
 doc"""
 ```rst
@@ -5508,14 +5508,14 @@ doc"""
 
 Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling `close` on it.
 """
-Timer
+Timer(::Function,delay,repeat=0)
 
 doc"""
     Timer(delay, repeat=0)
 
 Create a timer that wakes up tasks waiting for it (by calling `wait` on the timer object) at a specified interval. Waiting tasks are woken with an error when the timer is closed (by `close`). Use `isopen` to check whether a timer is still active.
 """
-Timer
+Timer(delay, repeat=0)
 
 doc"""
     BoundsError([a],[i])
@@ -5559,28 +5559,28 @@ Returns the method of `f` (a `Method` object) that would be called for arguments
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 """
-which
+which(f, types)
 
 doc"""
     which(symbol)
 
 Return the module in which the binding for the variable referenced by `symbol` was created.
 """
-which
+which(symbol)
 
 doc"""
     conv2(u,v,A)
 
 2-D convolution of the matrix `A` with the 2-D separable kernel generated by the vectors `u` and `v`. Uses 2-D FFT algorithm
 """
-conv2
+conv2(u, v, A)
 
 doc"""
     conv2(B,A)
 
 2-D convolution of the matrix `B` with the matrix `A`. Uses 2-D FFT algorithm
 """
-conv2
+conv2(B, A)
 
 doc"""
     broadcast_getindex(A, inds...)
@@ -5608,21 +5608,21 @@ doc"""
 
 Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If `greedy` is true (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is true (default), syntax errors other than incomplete expressions will raise an error. If `raise` is false, `parse` will return an expression that will raise an error upon evaluation.
 """
-parse
+parse(str, start)
 
 doc"""
     parse(str; raise=true)
 
 Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If `raise` is true (default), syntax errors will raise an error; otherwise, `parse` will return an expression that will raise an error upon evaluation.
 """
-parse
+parse(str)
 
 doc"""
     parse(type, str, [base])
 
 Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
 """
-parse
+parse(T::Type, str, base=Int)
 
 doc"""
     touch(path::AbstractString)
@@ -5647,7 +5647,7 @@ doc"""
 Exponentiation operator.
 ```
 """
-Base.(:(^))
+Base.(:(^))(x, y)
 
 doc"""
 ```rst
@@ -5661,7 +5661,7 @@ Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this func
 	"Test Test Test "
 ```
 """
-Base.(:(^))
+Base.(:(^))(s::String, n::Int)
 
 doc"""
     position(s)
@@ -5690,36 +5690,6 @@ doc"""
 Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
 """
 hex2bytes
-
-doc"""
-```rst
-..  fft(A [, dims])
-
-Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
-argument specifies an iterable subset of dimensions (e.g. an integer,
-range, tuple, or array) to transform along.  Most efficient if the
-size of ``A`` along the transformed dimensions is a product of small
-primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
-greater efficiency.
-
-A one-dimensional FFT computes the one-dimensional discrete Fourier
-transform (DFT) as defined by
-
-.. math::
-
-   \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
-   \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
-   A[n].
-
-A multidimensional FFT simply performs this operation along each transformed
-dimension of ``A``.
-
-Higher performance is usually possible with multi-threading. Use
-`FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
-processors.
-```
-"""
-fft
 
 doc"""
     isdir(path) -> Bool
@@ -5803,14 +5773,14 @@ doc"""
 
 Rotate matrix `A` left 90 degrees.
 """
-rotl90
+rotl90(A)
 
 doc"""
     rotl90(A, k)
 
 Rotate matrix `A` left 90 degrees an integer `k` number of times. If `k` is zero or a multiple of four, this is equivalent to a `copy`.
 """
-rotl90
+rotl90(A, k)
 
 doc"""
     info(msg)
@@ -5924,14 +5894,14 @@ doc"""
 
 Set the current working directory.
 """
-cd
+cd(dir::AbstractString)
 
 doc"""
     cd(f, [dir])
 
 Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 """
-cd
+cd(f, dir=?)
 
 doc"""
     hton(x)
@@ -5947,7 +5917,7 @@ doc"""
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called `egal`.
 """
-is
+is(x,y)
 
 doc"""
 ```rst
@@ -6133,7 +6103,7 @@ Like :func:`reduce`, but with guaranteed right associativity. ``v0``
 will be used exactly once.
 ```
 """
-foldr
+foldr(op, v0, itr)
 
 doc"""
 ```rst
@@ -6144,7 +6114,7 @@ as ``v0``. In general, this cannot be used with empty collections
 (see ``reduce(op, itr)``).
 ```
 """
-foldr
+foldr(op, itr)
 
 doc"""
     chol(A, [LU]) -> F
@@ -6210,7 +6180,7 @@ The distance between 1.0 and the next larger representable floating-point value 
 eps(::Any)
 
 doc"""
-    eps(x::FloatingPoint)
+    eps(x)
 
 The distance between `x` and the next larger representable floating-point value of the same type as `x`.
 """
@@ -6228,21 +6198,21 @@ doc"""
 
 Create a sparse matrix `S` of size `m x 1` such that `S[I[k]] = V[k]`. Duplicates are combined using the `combine` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
 """
-sparsevec
+sparsevec(I, V)
 
 doc"""
     sparsevec(D::Dict, [m])
 
 Create a sparse matrix of size `m x 1` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 """
-sparsevec
+sparsevec(D::Dict)
 
 doc"""
     sparsevec(A)
 
 Convert a dense vector `A` into a sparse matrix of size `m x 1`. In julia, sparse vectors are really just sparse matrices with one column.
 """
-sparsevec
+sparsevec(A)
 
 doc"""
     isalpha(c::Union{Char,AbstractString}) -> Bool
@@ -6391,21 +6361,21 @@ doc"""
 
 n-by-n identity matrix
 """
-eye
+eye(n::Int)
 
 doc"""
     eye(m, n)
 
 m-by-n identity matrix
 """
-eye
+eye(m, n)
 
 doc"""
     eye(A)
 
 Constructs an identity matrix of the same dimensions and type as `A`.
 """
-eye
+eye(A)
 
 doc"""
     diagind(M[, k])
@@ -6955,28 +6925,28 @@ doc"""
 
 Create an in-memory I/O stream.
 """
-IOBuffer
+IOBuffer()
 
 doc"""
     IOBuffer(size::Int)
 
 Create a fixed size IOBuffer. The buffer will not grow dynamically.
 """
-IOBuffer
+IOBuffer(size::Int)
 
 doc"""
     IOBuffer(string)
 
 Create a read-only IOBuffer on the data underlying the given string
 """
-IOBuffer
+IOBuffer(::AbstractString)
 
 doc"""
     IOBuffer([data,],[readable,writable,[maxsize]])
 
 Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 """
-IOBuffer
+IOBuffer(data=?)
 
 doc"""
 ```rst
@@ -7166,14 +7136,14 @@ doc"""
 
 Read a value of the given type from a stream, in canonical binary representation.
 """
-read(stream, type)
+read(stream, t)
 
 doc"""
     read(stream, type, dims)
 
 Read a series of values of the given type from a stream, in canonical binary representation. `dims` is either a tuple or a series of integer arguments specifying the size of `Array` to return.
 """
-read(stream, type, dims)
+read(stream, t, dims)
 
 doc"""
 ```rst
@@ -9031,6 +9001,37 @@ Base.(:(*))(::AbstractMatrix, ::AbstractMatrix)
 
 doc"""
 ```rst
+..  \\(A, B)
+
+Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor.
+
+When ``A`` is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.
+```
+"""
+Base.(:(\))(A,B)
+
+doc"""
+```rst
+..  .\\(x, y)
+
+Element-wise left division operator.
+```
+"""
+Base.(:(.\))(x,y)
+
+doc"""
+```rst
+..  \\(x, y)
+
+Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left.
+Gives floating-point results for integer arguments.
+```
+"""
+Base.(:(\))(x::Number,y::Number)
+
+
+doc"""
+```rst
 ..  *(x, y...)
 
 Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
@@ -9047,7 +9048,7 @@ Concatenate strings. The ``*`` operator is an alias to this function.
 
 ```
 """
-Base.(:(*))(s, t)
+Base.(:(*))(s::AbstractString, t::AbstractString)
 
 doc"""
 ```rst
@@ -10458,7 +10459,7 @@ doc"""
 
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at offset `do`. Returns `dest`.
 """
-copy!(dest,do,src,so,N)
+copy!(dest,d,src,so,N)
 
 doc"""
     broadcast(f, As...)
@@ -10782,7 +10783,7 @@ doc"""
 In-place version of :func:`map`.
 ```
 """
-map!(function,collection)
+map!(f,collection)
 
 doc"""
 ```rst
@@ -10793,7 +10794,7 @@ new collection. ``destination`` must be at least as large as the first
 collection.
 ```
 """
-map!(function,destination,collection...)
+map!(f,destination,collection...)
 
 doc"""
 ```rst
@@ -10924,7 +10925,7 @@ doc"""
 
 Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
 """
-zeros(type,dims)
+zeros(t,dims)
 
 doc"""
     zeros(A)
@@ -11237,13 +11238,6 @@ Convert a number, array, or string to a `AbstractFloat` data type. For numeric d
 float
 
 doc"""
-    include(path::AbstractString)
-
-Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to `include` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
-"""
-include
-
-doc"""
     include_dependency(path::AbstractString)
 
 In a module, declare that the file specified by `path` (relative or absolute) is a dependency for precompilation; that is, the module will need to be recompiled if this file changes.
@@ -11303,7 +11297,7 @@ doc"""
 
 Compute the histogram of `v`, optionally using approximately `n` bins. The return values are a range `e`, which correspond to the edges of the bins, and `counts` containing the number of elements of `v` in each bin. Note: Julia does not ignore `NaN` values in the computation.
 """
-hist(v,?)
+hist(v,n::Int=?)
 
 doc"""
     hist(v, e) -> e, counts
@@ -11962,7 +11956,7 @@ doc"""
 Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
 ```
 """
-Dates.DateTime
+Dates.DateTime(y)
 
 doc"""
 ```rst
@@ -11972,7 +11966,7 @@ Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order
 DateTime parts not provided will default to the value of ``Dates.default(period)``.
 ```
 """
-Dates.DateTime
+Dates.DateTime(periods::Dates.Period...)
 
 doc"""
 ```rst
@@ -11985,7 +11979,7 @@ will stop when ``f::Function`` returns false instead of true. ``limit`` provides
 the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 ```
 """
-Dates.DateTime
+Dates.DateTime(f::Function, y)
 
 doc"""
 ```rst
@@ -11995,7 +11989,7 @@ Converts a ``Date`` type to a ``DateTime``.
 The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
 ```
 """
-Dates.DateTime
+Dates.DateTime(dt::Date)
 
 doc"""
 ```rst
@@ -12025,7 +12019,7 @@ All characters not listed above are treated as delimiters between date and time 
 So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
 ```
 """
-Dates.DateTime
+Dates.DateTime(dt::AbstractString, format::AbstractString)
 
 doc"""
 ```rst
@@ -12034,7 +12028,7 @@ doc"""
 Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 ```
 """
-Dates.DateTime
+Dates.DateTime(dt::AbstractString, df::Dates.DateFormat)
 
 doc"""
     datetime2rata(dt::TimeType) -> Int64
@@ -12062,42 +12056,42 @@ doc"""
 
 Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
 """
-Dates.Date
+Dates.Date(y)
 
 doc"""
     Date(period::Period...) -> Date
 
 Constuct a Date type by `Period` type parts. Arguments may be in any order. Date parts not provided will default to the value of `Dates.default(period)`.
 """
-Dates.Date
+Dates.Date(period::Dates.Period...)
 
 doc"""
     Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
 Create a Date through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns true. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns false instead of true. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
 """
-Dates.Date
+Dates.Date(f::Function, y)
 
 doc"""
     Date(dt::DateTime) -> Date
 
 Converts a `DateTime` type to a `Date`. The hour, minute, second, and millisecond parts of the `DateTime` are truncated, so only the year, month and day parts are used in construction.
 """
-Dates.Date
+Dates.Date(dt::DateTime)
 
 doc"""
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
 Construct a Date type by parsing a `dt` date string following the pattern given in the `format` string. Follows the same conventions as `DateTime` above.
 """
-Dates.Date
+Dates.Date(dt::AbstractString, format::AbstractString)
 
 doc"""
     Date(dt::AbstractString, df::DateFormat) -> Date
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
-Dates.Date
+Dates.Date(dt::AbstractString, df::Dates.DateFormat)
 
 doc"""
     firstdayofmonth(dt::TimeType) -> TimeType
@@ -12597,3 +12591,22 @@ Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects
 Default jump polynomial moves forward `MersenneTwister` RNG state by 10^20 steps.
 """
 randjump
+
+doc"""
+```rst
+..  \:(start, [step], stop)
+
+Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1, and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the function ``colon``.
+The colon is also used in indexing to select whole dimensions.
+```
+"""
+colon(start, step, stop)
+
+doc"""
+```rst
+..  $(x, y)
+
+Bitwise exclusive or
+```
+"""
+Base.(:$)(x, y)

@@ -327,7 +327,7 @@ For example, this regex has all three flags enabled:
 if Base.USE_GPL_LIBS
 
 @doc doc"""
-    fft(A[, dims])
+    fft(A [, dims])
 
 Performs a multidimensional FFT of the array `A`.  The optional
 `dims` argument specifies an iterable subset of dimensions (e.g.
@@ -355,7 +355,7 @@ processors.
 end # USE_GPL_LIBS
 
 """
-    include("file.jl")
+    include(path::AbstractString)
 
 Evaluate the contents of a source file in the current context.
 During including, a task-local include path is set to the directory
@@ -366,7 +366,7 @@ function is typically used to load source interactively, or to
 combine files in packages that are broken into multiple source
 files.
 """
-include_from_node1
+include_from_node1(::AbstractString)
 
 """
 0 (zero; BrE: `/ˈzɪərəʊ/` or AmE: `/ˈziːroʊ/`) is both a number and the numerical digit used to represent that number in numerals. It fulfills a central role in mathematics as the additive identity of the integers, real numbers, and many other algebraic structures. As a digit, 0 is used as a placeholder in place value systems. Names for the number 0 in English include zero, nought or (US) naught (`/ˈnɔːt/`), nil, or — in contexts where at least one adjacent digit distinguishes it from the letter "O" — oh or o (`/ˈoʊ/`). Informal or slang terms for zero include zilch and zip. Ought and aught (/ˈɔːt/), as well as cipher, have also been used historically.

@@ -51,57 +51,72 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
 
 .. function:: DateTime(periods::Period...) -> DateTime
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  DateTime(periods::Period...) -> DateTime
 
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   DateTime parts not provided will default to the value of ``Dates.default(period)``.
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Create a DateTime through the adjuster API. The starting point will be constructed from the
+   provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+   adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
+   will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+   the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 
 .. function:: DateTime(dt::Date) -> DateTime
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  DateTime(dt::Date) -> DateTime
 
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
-
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Converts a ``Date`` type to a ``DateTime``.
+   The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
 
 .. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   the ``format`` string. The following codes can be used for constructing format strings:
 
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   =============== ========= ===============================================================
+   Code            Matches    Comment
+   --------------- --------- ---------------------------------------------------------------
+   ``y``           1996, 96  Returns year of 1996, 0096
+   ``m``           1, 01     Matches 1 or 2-digit months
+   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
+   ``U``           January   Matches full month names according to the ``locale`` keyword
+   ``d``           1, 01     Matches 1 or 2-digit days
+   ``H``           00        Matches hours
+   ``M``           00        Matches minutes
+   ``S``           00        Matches seconds
+   ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
+   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
+   =============== ========= ===============================================================
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
 
 .. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Dates.DateFormat(format::AbstractString) -> DateFormat
 
@@ -111,9 +126,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   ::
-
-              DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+   ..  DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
    Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 
@@ -121,57 +134,45 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Date(y, [m, d]) -> Date
 
-       Date(dt::AbstractString, df::DateFormat) -> Date
-
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
 
 .. function:: Date(period::Period...) -> Date
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Date(period::Period...) -> Date
 
-       Date(dt::AbstractString, df::DateFormat) -> Date
-
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
 
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
-       Date(dt::AbstractString, df::DateFormat) -> Date
-
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
 
 .. function:: Date(dt::DateTime) -> Date
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Date(dt::DateTime) -> Date
 
-       Date(dt::AbstractString, df::DateFormat) -> Date
-
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
 .. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
-       Date(dt::AbstractString, df::DateFormat) -> Date
-
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Date(dt::AbstractString, df::DateFormat) -> Date
 
@@ -181,17 +182,13 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       now() -> DateTime
 
-       now(::Type{UTC}) -> DateTime
-
-   Returns a DateTime corresponding to the user's system time as UTC/GMT.
+   Returns a DateTime corresponding to the user's system time including the system timezone locale.
 
 .. function:: now(::Type{UTC}) -> DateTime
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        now(::Type{UTC}) -> DateTime
 
@@ -200,8 +197,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: eps(::DateTime) -> Millisecond
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        eps(::DateTime) -> Millisecond
        eps(::Date) -> Day
@@ -214,8 +209,6 @@ Accessor Functions
 .. function:: year(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        year(dt::TimeType) -> Int64
        month(dt::TimeType) -> Int64
@@ -232,8 +225,6 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        Year(dt::TimeType) -> Year
        Month(dt::TimeType) -> Month
        Week(dt::TimeType) -> Week
@@ -244,8 +235,6 @@ Accessor Functions
        Millisecond(dt::TimeType) -> Millisecond
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
 
        Year(v)
        Month(v)
@@ -262,8 +251,6 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        yearmonth(dt::TimeType) -> (Int64, Int64)
 
    Simultaneously return the year and month parts of a Date or DateTime.
@@ -272,8 +259,6 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        monthday(dt::TimeType) -> (Int64, Int64)
 
    Simultaneously return the month and day parts of a Date or DateTime.
@@ -281,8 +266,6 @@ Accessor Functions
 .. function:: yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
@@ -295,8 +278,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        dayname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full day name corresponding to the day of the week of the Date or DateTime in the given ``locale``\ .
@@ -304,8 +285,6 @@ Query Functions
 .. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        dayabbr(dt::TimeType; locale="english") -> AbstractString
 
@@ -315,8 +294,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        dayofweek(dt::TimeType) -> Int64
 
    Returns the day of the week as an ``Int64`` with ``1 = Monday, 2 = Tuesday, etc.``\ .
@@ -324,8 +301,6 @@ Query Functions
 .. function:: dayofweekofmonth(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        dayofweekofmonth(dt::TimeType) -> Int
 
@@ -335,8 +310,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        daysofweekinmonth(dt::TimeType) -> Int
 
    For the day of week of ``dt``\ , returns the total number of that day of the week in ``dt``\ 's month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)`` in the adjuster function.
@@ -344,8 +317,6 @@ Query Functions
 .. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        monthname(dt::TimeType; locale="english") -> AbstractString
 
@@ -355,8 +326,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated month name of the Date or DateTime in the given ``locale``\ .
@@ -364,8 +333,6 @@ Query Functions
 .. function:: daysinmonth(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        daysinmonth(dt::TimeType) -> Int
 
@@ -375,8 +342,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isleapyear(dt::TimeType) -> Bool
 
    Returns true if the year of ``dt`` is a leap year.
@@ -384,8 +349,6 @@ Query Functions
 .. function:: dayofyear(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        dayofyear(dt::TimeType) -> Int
 
@@ -395,8 +358,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        daysinyear(dt::TimeType) -> Int
 
    Returns 366 if the year of ``dt`` is a leap year, otherwise returns 365.
@@ -405,8 +366,6 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        quarterofyear(dt::TimeType) -> Int
 
    Returns the quarter that ``dt`` resides in. Range of value is 1:4.
@@ -414,8 +373,6 @@ Query Functions
 .. function:: dayofquarter(dt::TimeType) -> Int
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        dayofquarter(dt::TimeType) -> Int
 
@@ -428,9 +385,7 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              trunc(dt::TimeType, ::Type{Period}) -> TimeType
+   ..  trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
    Truncates the value of ``dt`` according to the provided ``Period`` type.
    E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
@@ -438,8 +393,6 @@ Adjuster Functions
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        firstdayofweek(dt::TimeType) -> TimeType
 
@@ -449,8 +402,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        lastdayofweek(dt::TimeType) -> TimeType
 
    Adjusts ``dt`` to the Sunday of its week.
@@ -458,8 +409,6 @@ Adjuster Functions
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        firstdayofmonth(dt::TimeType) -> TimeType
 
@@ -469,8 +418,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        lastdayofmonth(dt::TimeType) -> TimeType
 
    Adjusts ``dt`` to the last day of its month.
@@ -478,8 +425,6 @@ Adjuster Functions
 .. function:: firstdayofyear(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        firstdayofyear(dt::TimeType) -> TimeType
 
@@ -489,8 +434,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        lastdayofyear(dt::TimeType) -> TimeType
 
    Adjusts ``dt`` to the last day of its year.
@@ -498,8 +441,6 @@ Adjuster Functions
 .. function:: firstdayofquarter(dt::TimeType) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        firstdayofquarter(dt::TimeType) -> TimeType
 
@@ -509,8 +450,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        lastdayofquarter(dt::TimeType) -> TimeType
 
    Adjusts ``dt`` to the last day of its quarter.
@@ -519,27 +458,21 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-       tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
-
-   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
+   Adjusts ``dt`` to the next day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
 
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-       toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
-
-   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
+   Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
 
 .. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
@@ -549,8 +482,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
 
    Adjusts ``dt`` to the last ``dow`` of its month. Alternatively, ``of=Year`` will adjust to the last ``dow`` of the year.
@@ -558,8 +489,6 @@ Adjuster Functions
 .. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
@@ -569,8 +498,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
@@ -578,8 +505,6 @@ Adjuster Functions
 .. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
@@ -592,8 +517,6 @@ Periods
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        Year(dt::TimeType) -> Year
        Month(dt::TimeType) -> Month
        Week(dt::TimeType) -> Week
@@ -604,8 +527,6 @@ Periods
        Millisecond(dt::TimeType) -> Millisecond
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
 
        Year(v)
        Month(v)
@@ -622,8 +543,6 @@ Periods
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        default(p::Period) -> Period
 
    Returns a sensible "default" value for the input Period by returning ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute, Second, and Millisecond.
@@ -635,8 +554,6 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        today() -> Date
 
    Returns the date portion of ``now()``\ .
@@ -645,9 +562,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              unix2datetime(x) -> DateTime
+   ..  unix2datetime(x) -> DateTime
 
    Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
    and converts to the corresponding DateTime.
@@ -655,8 +570,6 @@ Conversion Functions
 .. function:: datetime2unix(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        datetime2unix(dt::DateTime) -> Float64
 
@@ -666,9 +579,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              julian2datetime(julian_days) -> DateTime
+   ..  julian2datetime(julian_days) -> DateTime
 
    Takes the number of Julian calendar days since epoch
    ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
@@ -676,8 +587,6 @@ Conversion Functions
 .. function:: datetime2julian(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        datetime2julian(dt::DateTime) -> Float64
 
@@ -687,9 +596,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              rata2datetime(days) -> DateTime
+   ..  rata2datetime(days) -> DateTime
 
    Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
    and returns the corresponding DateTime.
@@ -697,8 +604,6 @@ Conversion Functions
 .. function:: datetime2rata(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        datetime2rata(dt::TimeType) -> Int64
 
