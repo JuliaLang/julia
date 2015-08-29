@@ -150,12 +150,6 @@
 
    .. code-block:: julia
 
-       copy!(dest, src)
-
-   Copy all elements from collection ``src`` to array ``dest``\ . Returns ``dest``\ .
-
-   .. code-block:: julia
-
        copy!(dest, do, src, so, N)
 
    Copy ``N`` elements from collection ``src`` starting at offset ``so``\ , to array ``dest`` starting at offset ``do``\ . Returns ``dest``\ .
@@ -163,12 +157,6 @@
 .. function:: copy!(dest, do, src, so, N)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       copy!(dest, src)
-
-   Copy all elements from collection ``src`` to array ``dest``\ . Returns ``dest``\ .
 
    .. code-block:: julia
 

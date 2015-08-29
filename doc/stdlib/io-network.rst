@@ -61,24 +61,6 @@ General I/O
 
    .. code-block:: julia
 
-       IOBuffer() -> IOBuffer
-
-   Create an in-memory I/O stream.
-
-   .. code-block:: julia
-
-       IOBuffer(size::Int)
-
-   Create a fixed size IOBuffer. The buffer will not grow dynamically.
-
-   .. code-block:: julia
-
-       IOBuffer(string)
-
-   Create a read-only IOBuffer on the data underlying the given string
-
-   .. code-block:: julia
-
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -86,24 +68,6 @@ General I/O
 .. function:: IOBuffer(size::Int)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       IOBuffer() -> IOBuffer
-
-   Create an in-memory I/O stream.
-
-   .. code-block:: julia
-
-       IOBuffer(size::Int)
-
-   Create a fixed size IOBuffer. The buffer will not grow dynamically.
-
-   .. code-block:: julia
-
-       IOBuffer(string)
-
-   Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
 
@@ -117,24 +81,6 @@ General I/O
 
    .. code-block:: julia
 
-       IOBuffer() -> IOBuffer
-
-   Create an in-memory I/O stream.
-
-   .. code-block:: julia
-
-       IOBuffer(size::Int)
-
-   Create a fixed size IOBuffer. The buffer will not grow dynamically.
-
-   .. code-block:: julia
-
-       IOBuffer(string)
-
-   Create a read-only IOBuffer on the data underlying the given string
-
-   .. code-block:: julia
-
        IOBuffer([data,],[readable,writable,[maxsize]])
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
@@ -142,24 +88,6 @@ General I/O
 .. function:: IOBuffer([data,],[readable,writable,[maxsize]])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       IOBuffer() -> IOBuffer
-
-   Create an in-memory I/O stream.
-
-   .. code-block:: julia
-
-       IOBuffer(size::Int)
-
-   Create a fixed size IOBuffer. The buffer will not grow dynamically.
-
-   .. code-block:: julia
-
-       IOBuffer(string)
-
-   Create a read-only IOBuffer on the data underlying the given string
 
    .. code-block:: julia
 
@@ -238,12 +166,6 @@ General I/O
 
    .. code-block:: julia
 
-       read(stream, type)
-
-   Read a value of the given type from a stream, in canonical binary representation.
-
-   .. code-block:: julia
-
        read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
@@ -251,12 +173,6 @@ General I/O
 .. function:: read(stream, type, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       read(stream, type)
-
-   Read a value of the given type from a stream, in canonical binary representation.
 
    .. code-block:: julia
 
@@ -505,12 +421,6 @@ General I/O
 
    .. code-block:: julia
 
-       redirect_stdout()
-
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
-
-   .. code-block:: julia
-
        redirect_stdout(stream)
 
    Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
@@ -518,12 +428,6 @@ General I/O
 .. function:: redirect_stdout(stream)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       redirect_stdout()
-
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
 
    .. code-block:: julia
 
@@ -794,12 +698,6 @@ Text I/O
 
    .. code-block:: julia
 
-       readall(stream::IO)
-
-   Read the entire contents of an I/O stream as a string.
-
-   .. code-block:: julia
-
        readall(filename::AbstractString)
 
    Open ``filename``\ , read the entire contents as a string, then close the file. Equivalent to ``open(readall, filename)``\ .
@@ -807,12 +705,6 @@ Text I/O
 .. function:: readall(filename::AbstractString)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       readall(stream::IO)
-
-   Read the entire contents of an I/O stream as a string.
 
    .. code-block:: julia
 
@@ -1355,12 +1247,6 @@ Network I/O
 
    .. code-block:: julia
 
-       listen([addr,]port) -> TcpServer
-
-   Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
-
-   .. code-block:: julia
-
        listen(path) -> PipeServer
 
    Create and listen on a Named Pipe / Domain Socket
@@ -1368,12 +1254,6 @@ Network I/O
 .. function:: listen(path) -> PipeServer
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       listen([addr,]port) -> TcpServer
-
-   Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
    .. code-block:: julia
 

@@ -20,12 +20,6 @@
 
    .. code-block:: julia
 
-       cd(dir::AbstractString)
-
-   Set the current working directory.
-
-   .. code-block:: julia
-
        cd(f, [dir])
 
    Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
@@ -33,12 +27,6 @@
 .. function:: cd(f, [dir])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       cd(dir::AbstractString)
-
-   Set the current working directory.
 
    .. code-block:: julia
 
@@ -301,12 +289,6 @@
 
    .. code-block:: julia
 
-       mktemp([parent=tempdir()])
-
-   Returns ``(path, io)``\ , where ``path`` is the path of a new temporary file in ``parent`` and ``io`` is an open file object for this path.
-
-   .. code-block:: julia
-
        mktemp(f::function, [parent=tempdir()])
 
    Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the temporary file upon completion.
@@ -314,12 +296,6 @@
 .. function:: mktemp(f::function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       mktemp([parent=tempdir()])
-
-   Returns ``(path, io)``\ , where ``path`` is the path of a new temporary file in ``parent`` and ``io`` is an open file object for this path.
 
    .. code-block:: julia
 
@@ -333,12 +309,6 @@
 
    .. code-block:: julia
 
-       mktempdir([parent=tempdir()])
-
-   Create a temporary directory in the ``parent`` directory and return its path.
-
-   .. code-block:: julia
-
        mktempdir(f::function, [parent=tempdir()])
 
    Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove the temporary directory upon completion.
@@ -346,12 +316,6 @@
 .. function:: mktempdir(f::function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       mktempdir([parent=tempdir()])
-
-   Create a temporary directory in the ``parent`` directory and return its path.
 
    .. code-block:: julia
 

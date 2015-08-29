@@ -170,12 +170,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
-
-   Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``\ . ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``\ . The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . For ``CholeskyPivoted`` there is also defined a ``rank``\ . If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
-
-   .. code-block:: julia
-
        cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
@@ -187,12 +181,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
-
-   Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``\ . ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``\ . The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . For ``CholeskyPivoted`` there is also defined a ``rank``\ . If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
    .. code-block:: julia
 
@@ -519,24 +507,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              ordschur(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-
-   ::
-
-              ordschur(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``.
-
-   ::
-
-              ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
-
-   ::
-
               ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
@@ -554,24 +524,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur(S, select) -> Schur
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ordschur(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-
-   ::
-
-              ordschur(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``.
-
-   ::
-
-              ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
 
    ::
 
@@ -621,24 +573,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              ordschur(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-
-   ::
-
-              ordschur(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``.
-
-   ::
-
-              ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
-
-   ::
-
               ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
@@ -659,24 +593,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              ordschur(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-
-   ::
-
-              ordschur(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``.
-
-   ::
-
-              ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
-
-   ::
-
               ordschur(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
@@ -694,12 +610,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       svdfact(A, [thin=true]) -> SVD
-
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ . The default is to produce a thin decomposition.
 
    .. code-block:: julia
 
@@ -765,12 +675,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       svdfact(A, [thin=true]) -> SVD
-
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ . The default is to produce a thin decomposition.
-
-   .. code-block:: julia
-
        svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of ``A`` and ``B``\ , returning a ``GeneralizedSVD`` Factorization object ``F``\ , such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``\ .
@@ -813,12 +717,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       triu(M)
-
-   Upper triangle of a matrix.
-
-   .. code-block:: julia
-
        triu(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -826,12 +724,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu(M, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       triu(M)
-
-   Upper triangle of a matrix.
 
    .. code-block:: julia
 
@@ -845,12 +737,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       triu!(M)
-
-   Upper triangle of a matrix, overwriting ``M`` in the process.
-
-   .. code-block:: julia
-
        triu!(M, k)
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -858,12 +744,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: triu!(M, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       triu!(M)
-
-   Upper triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
 
@@ -877,12 +757,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       tril(M)
-
-   Lower triangle of a matrix.
-
-   .. code-block:: julia
-
        tril(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
@@ -890,12 +764,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril(M, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       tril(M)
-
-   Lower triangle of a matrix.
 
    .. code-block:: julia
 
@@ -909,12 +777,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. code-block:: julia
 
-       tril!(M)
-
-   Lower triangle of a matrix, overwriting ``M`` in the process.
-
-   .. code-block:: julia
-
        tril!(M, k)
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
@@ -922,12 +784,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: tril!(M, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       tril!(M)
-
-   Lower triangle of a matrix, overwriting ``M`` in the process.
 
    .. code-block:: julia
 
@@ -1773,12 +1629,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       sbmv(uplo, k, alpha, A, x)
-
-   Returns ``alpha*A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
-
-   .. code-block:: julia
-
        sbmv(uplo, k, A, x)
 
    Returns ``A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
@@ -1786,12 +1636,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: sbmv(uplo, k, A, x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sbmv(uplo, k, alpha, A, x)
-
-   Returns ``alpha*A*x`` where ``A`` is a symmetric band matrix of order ``size(A,2)`` with ``k`` super-diagonals stored in the argument ``A``\ .
 
    .. code-block:: julia
 
@@ -1815,12 +1659,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       gemm(tA, tB, alpha, A, B)
-
-   Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
-
-   .. code-block:: julia
-
        gemm(tA, tB, A, B)
 
    Returns ``A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -1828,12 +1666,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemm(tA, tB, A, B)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       gemm(tA, tB, alpha, A, B)
-
-   Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
 
    .. code-block:: julia
 
@@ -1857,12 +1689,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       gemv(tA, alpha, A, x)
-
-   Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA`` (transpose ``A``\ ).
-
-   .. code-block:: julia
-
        gemv(tA, A, x)
 
    Returns ``A*x`` or ``A'x`` according to ``tA`` (transpose ``A``\ ).
@@ -1870,12 +1696,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: gemv(tA, A, x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       gemv(tA, alpha, A, x)
-
-   Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA`` (transpose ``A``\ ).
 
    .. code-block:: julia
 
@@ -1899,18 +1719,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       symm(side, ul, alpha, A, B)
-
-   Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
-       symm(side, ul, A, B)
-
-   Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
        symm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -1921,18 +1729,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       symm(side, ul, alpha, A, B)
-
-   Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
-       symm(side, ul, A, B)
-
-   Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
        symm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants according to ``tA`` (transpose ``A``\ ) and ``tB``\ .
@@ -1940,18 +1736,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symm(tA, tB, alpha, A, B)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       symm(side, ul, alpha, A, B)
-
-   Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
-       symm(side, ul, A, B)
-
-   Returns ``A*B`` or ``B*A`` according to ``side``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
 
@@ -1975,12 +1759,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. code-block:: julia
 
-       symv(ul, alpha, A, x)
-
-   Returns ``alpha*A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
-
-   .. code-block:: julia
-
        symv(ul, A, x)
 
    Returns ``A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
@@ -1988,12 +1766,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. function:: symv(ul, A, x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       symv(ul, alpha, A, x)
-
-   Returns ``alpha*A*x``\ . ``A`` is assumed to be symmetric. Only the ``ul`` triangle of ``A`` is used.
 
    .. code-block:: julia
 

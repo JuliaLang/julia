@@ -55,18 +55,6 @@ Basic functions
 
    .. code-block:: julia
 
-       length(A) -> Integer
-
-   Returns the number of elements in A
-
-   .. code-block:: julia
-
-       length(collection) -> Integer
-
-   For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
-
-   .. code-block:: julia
-
        length(s)
 
    The number of characters in string ``s``\ .
@@ -243,12 +231,6 @@ Constructors
 
    .. code-block:: julia
 
-       zeros(type, dims)
-
-   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
-
-   .. code-block:: julia
-
        zeros(A)
 
    Create an array of all zeros with the same element type and shape as A.
@@ -256,12 +238,6 @@ Constructors
 .. function:: zeros(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       zeros(type, dims)
-
-   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
 
    .. code-block:: julia
 
@@ -379,18 +355,6 @@ Constructors
 
    .. code-block:: julia
 
-       eye(n)
-
-   n-by-n identity matrix
-
-   .. code-block:: julia
-
-       eye(m, n)
-
-   m-by-n identity matrix
-
-   .. code-block:: julia
-
        eye(A)
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
@@ -401,18 +365,6 @@ Constructors
 
    .. code-block:: julia
 
-       eye(n)
-
-   n-by-n identity matrix
-
-   .. code-block:: julia
-
-       eye(m, n)
-
-   m-by-n identity matrix
-
-   .. code-block:: julia
-
        eye(A)
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
@@ -420,18 +372,6 @@ Constructors
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       eye(n)
-
-   n-by-n identity matrix
-
-   .. code-block:: julia
-
-       eye(m, n)
-
-   m-by-n identity matrix
 
    .. code-block:: julia
 
@@ -585,12 +525,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       setindex!(A, X, inds...)
-
-   Store values from array ``X`` within some subset of ``A`` as specified by ``inds``\ .
-
-   .. code-block:: julia
-
        setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
@@ -683,12 +617,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       find(A)
-
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements.
-
-   .. code-block:: julia
-
        find(f,A)
 
    Return a vector of the linear indexes of ``A`` where ``f`` returns true.
@@ -696,12 +624,6 @@ Indexing, Assignment, and Concatenation
 .. function:: find(f,A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       find(A)
-
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements.
 
    .. code-block:: julia
 
@@ -735,18 +657,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findfirst(A)
-
-   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findfirst(A,v)
-
-   Return the index of the first element equal to ``v`` in ``A``\ .
-
-   .. code-block:: julia
-
        findfirst(predicate, A)
 
    Return the index of the first element of ``A`` for which ``predicate`` returns true.
@@ -754,18 +664,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findfirst(A,v)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findfirst(A)
-
-   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findfirst(A,v)
-
-   Return the index of the first element equal to ``v`` in ``A``\ .
 
    .. code-block:: julia
 
@@ -779,18 +677,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findfirst(A)
-
-   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findfirst(A,v)
-
-   Return the index of the first element equal to ``v`` in ``A``\ .
-
-   .. code-block:: julia
-
        findfirst(predicate, A)
 
    Return the index of the first element of ``A`` for which ``predicate`` returns true.
@@ -798,18 +684,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findlast(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findlast(A)
-
-   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findlast(A, v)
-
-   Return the index of the last element equal to ``v`` in ``A``\ .
 
    .. code-block:: julia
 
@@ -823,18 +697,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findlast(A)
-
-   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findlast(A, v)
-
-   Return the index of the last element equal to ``v`` in ``A``\ .
-
-   .. code-block:: julia
-
        findlast(predicate, A)
 
    Return the index of the last element of ``A`` for which ``predicate`` returns true.
@@ -842,18 +704,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findlast(predicate, A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findlast(A)
-
-   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
-
-   .. code-block:: julia
-
-       findlast(A, v)
-
-   Return the index of the last element equal to ``v`` in ``A``\ .
 
    .. code-block:: julia
 
@@ -867,18 +717,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findnext(A, i)
-
-   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
-
-   .. code-block:: julia
-
-       findnext(predicate, A, i)
-
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
-
-   .. code-block:: julia
-
        findnext(A, v, i)
 
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
@@ -886,18 +724,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findnext(predicate, A, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findnext(A, i)
-
-   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
-
-   .. code-block:: julia
-
-       findnext(predicate, A, i)
-
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
    .. code-block:: julia
 
@@ -911,18 +737,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findnext(A, i)
-
-   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
-
-   .. code-block:: julia
-
-       findnext(predicate, A, i)
-
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
-
-   .. code-block:: julia
-
        findnext(A, v, i)
 
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
@@ -930,18 +744,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findprev(A, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findprev(A, i)
-
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or 0 if not found.
-
-   .. code-block:: julia
-
-       findprev(predicate, A, i)
-
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
    .. code-block:: julia
 
@@ -955,18 +757,6 @@ Indexing, Assignment, and Concatenation
 
    .. code-block:: julia
 
-       findprev(A, i)
-
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or 0 if not found.
-
-   .. code-block:: julia
-
-       findprev(predicate, A, i)
-
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
-
-   .. code-block:: julia
-
        findprev(A, v, i)
 
    Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
@@ -974,18 +764,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findprev(A, v, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findprev(A, i)
-
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or 0 if not found.
-
-   .. code-block:: julia
-
-       findprev(predicate, A, i)
-
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
    .. code-block:: julia
 
@@ -1056,12 +834,6 @@ Indexing, Assignment, and Concatenation
 .. function:: checkbounds(array, indexes...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       checkbounds(array, indexes...)
-
-   Throw an error if the specified indexes are not in bounds for the given array. Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
 
    .. code-block:: julia
 
@@ -1194,12 +966,6 @@ Array functions
 
    .. code-block:: julia
 
-       rot180(A)
-
-   Rotate matrix ``A`` 180 degrees.
-
-   .. code-block:: julia
-
        rot180(A, k)
 
    Rotate matrix ``A`` 180 degrees an integer ``k`` number of times. If ``k`` is even, this is equivalent to a ``copy``\ .
@@ -1207,12 +973,6 @@ Array functions
 .. function:: rot180(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       rot180(A)
-
-   Rotate matrix ``A`` 180 degrees.
 
    .. code-block:: julia
 
@@ -1226,12 +986,6 @@ Array functions
 
    .. code-block:: julia
 
-       rotl90(A)
-
-   Rotate matrix ``A`` left 90 degrees.
-
-   .. code-block:: julia
-
        rotl90(A, k)
 
    Rotate matrix ``A`` left 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
@@ -1239,12 +993,6 @@ Array functions
 .. function:: rotl90(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       rotl90(A)
-
-   Rotate matrix ``A`` left 90 degrees.
 
    .. code-block:: julia
 
@@ -1258,12 +1006,6 @@ Array functions
 
    .. code-block:: julia
 
-       rotr90(A)
-
-   Rotate matrix ``A`` right 90 degrees.
-
-   .. code-block:: julia
-
        rotr90(A, k)
 
    Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
@@ -1271,12 +1013,6 @@ Array functions
 .. function:: rotr90(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       rotr90(A)
-
-   Rotate matrix ``A`` right 90 degrees.
 
    .. code-block:: julia
 
@@ -1354,12 +1090,6 @@ Combinatorics
 
    .. code-block:: julia
 
-       nthperm(v, k)
-
-   Compute the kth lexicographic permutation of a vector.
-
-   .. code-block:: julia
-
        nthperm(p)
 
    Return the ``k`` that generated permutation ``p``\ . Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``\ .
@@ -1367,12 +1097,6 @@ Combinatorics
 .. function:: nthperm(p)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       nthperm(v, k)
-
-   Compute the kth lexicographic permutation of a vector.
 
    .. code-block:: julia
 
@@ -1543,24 +1267,6 @@ Combinatorics
 
    .. code-block:: julia
 
-       partitions(n)
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-   .. code-block:: julia
-
-       partitions(n, m)
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-   .. code-block:: julia
-
-       partitions(array)
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
-
-   .. code-block:: julia
-
        partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
@@ -1568,24 +1274,6 @@ Combinatorics
 .. function:: partitions(n, m)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       partitions(n)
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-   .. code-block:: julia
-
-       partitions(n, m)
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-   .. code-block:: julia
-
-       partitions(array)
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
 
    .. code-block:: julia
 
@@ -1599,24 +1287,6 @@ Combinatorics
 
    .. code-block:: julia
 
-       partitions(n)
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-   .. code-block:: julia
-
-       partitions(n, m)
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-   .. code-block:: julia
-
-       partitions(array)
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
-
-   .. code-block:: julia
-
        partitions(array, m)
 
    Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
@@ -1624,24 +1294,6 @@ Combinatorics
 .. function:: partitions(array, m)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       partitions(n)
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-   .. code-block:: julia
-
-       partitions(n, m)
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-   .. code-block:: julia
-
-       partitions(array)
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
 
    .. code-block:: julia
 
@@ -1688,12 +1340,6 @@ BitArrays
 
    .. code-block:: julia
 
-       rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
-
-   .. code-block:: julia
-
        rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a left rotation operation on B.
@@ -1701,12 +1347,6 @@ BitArrays
 .. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
 
    .. code-block:: julia
 
@@ -1730,12 +1370,6 @@ BitArrays
 
    .. code-block:: julia
 
-       ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
-
-   .. code-block:: julia
-
        ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a right rotation operation on B.
@@ -1743,12 +1377,6 @@ BitArrays
 .. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
 
    .. code-block:: julia
 
@@ -1779,12 +1407,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. code-block:: julia
 
-       sparse(I,J,V,[m,n,combine])
-
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
-
-   .. code-block:: julia
-
        sparse(A)
 
    Convert an AbstractMatrix ``A`` into a sparse matrix.
@@ -1795,18 +1417,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. code-block:: julia
 
-       sparsevec(I, V, [m, combine])
-
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
-
-   .. code-block:: julia
-
-       sparsevec(D::Dict, [m])
-
-   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
-
-   .. code-block:: julia
-
        sparsevec(A)
 
    Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``\ . In julia, sparse vectors are really just sparse matrices with one column.
@@ -1814,18 +1424,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(D::Dict, [m])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sparsevec(I, V, [m, combine])
-
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
-
-   .. code-block:: julia
-
-       sparsevec(D::Dict, [m])
-
-   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
    .. code-block:: julia
 
@@ -1849,12 +1447,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. code-block:: julia
 
-       sparse(I,J,V,[m,n,combine])
-
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
-
-   .. code-block:: julia
-
        sparse(A)
 
    Convert an AbstractMatrix ``A`` into a sparse matrix.
@@ -1862,18 +1454,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sparsevec(I, V, [m, combine])
-
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
-
-   .. code-block:: julia
-
-       sparsevec(D::Dict, [m])
-
-   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
    .. code-block:: julia
 

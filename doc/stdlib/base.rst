@@ -88,12 +88,6 @@ Getting Around
 
    .. code-block:: julia
 
-       edit(file::AbstractString, [line])
-
-   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
-
-   .. code-block:: julia
-
        edit(function, [types])
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
@@ -101,12 +95,6 @@ Getting Around
 .. function:: edit(function, [types])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       edit(file::AbstractString, [line])
-
-   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
    .. code-block:: julia
 
@@ -130,12 +118,6 @@ Getting Around
 
    .. code-block:: julia
 
-       less(file::AbstractString, [line])
-
-   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
-
-   .. code-block:: julia
-
        less(function, [types])
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
@@ -143,12 +125,6 @@ Getting Around
 .. function:: less(function, [types])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       less(file::AbstractString, [line])
-
-   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 
    .. code-block:: julia
 
@@ -172,12 +148,6 @@ Getting Around
 
    .. code-block:: julia
 
-       clipboard(x)
-
-   Send a printed form of ``x`` to the operating system clipboard ("copy").
-
-   .. code-block:: julia
-
        clipboard() -> AbstractString
 
    Return a string with the contents of the operating system clipboard ("paste").
@@ -185,12 +155,6 @@ Getting Around
 .. function:: clipboard() -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       clipboard(x)
-
-   Send a printed form of ``x`` to the operating system clipboard ("copy").
 
    .. code-block:: julia
 
@@ -272,14 +236,6 @@ Getting Around
 
    .. code-block:: julia
 
-       which(f, types)
-
-   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
-
-   If ``types`` is an abstract type, then the method that would be called by ``invoke`` is returned.
-
-   .. code-block:: julia
-
        which(symbol)
 
    Return the module in which the binding for the variable referenced by ``symbol`` was created.
@@ -287,14 +243,6 @@ Getting Around
 .. function:: which(symbol)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       which(f, types)
-
-   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
-
-   If ``types`` is an abstract type, then the method that would be called by ``invoke`` is returned.
 
    .. code-block:: julia
 
@@ -1107,18 +1055,6 @@ Syntax
 
    .. code-block:: julia
 
-       parse(str, start; greedy=true, raise=true)
-
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
-
-   .. code-block:: julia
-
-       parse(str; raise=true)
-
-   Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
-
-   .. code-block:: julia
-
        parse(type, str, [base])
 
    Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
@@ -1126,18 +1062,6 @@ Syntax
 .. function:: parse(str; raise=true)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       parse(str, start; greedy=true, raise=true)
-
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
-
-   .. code-block:: julia
-
-       parse(str; raise=true)
-
-   Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
    .. code-block:: julia
 
@@ -1259,12 +1183,6 @@ System
 .. function:: kill(p::Process, signum=SIGTERM)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       kill(p::Process, signum=SIGTERM)
-
-   Send a signal to a process. The default is to terminate the process.
 
    .. code-block:: julia
 
@@ -1946,12 +1864,6 @@ Events
 
    .. code-block:: julia
 
-       Timer(callback::Function, delay, repeat=0)
-
-   Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
-
-   .. code-block:: julia
-
        Timer(delay, repeat=0)
 
    Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval. Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
@@ -1959,12 +1871,6 @@ Events
 .. function:: Timer(delay, repeat=0)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       Timer(callback::Function, delay, repeat=0)
-
-   Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
 
    .. code-block:: julia
 
