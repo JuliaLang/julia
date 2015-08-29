@@ -364,6 +364,8 @@ Library improvements
 
     * Added function `readlink` which returns the value of a symbolic link "path" ([#10714]).
 
+    * Added function `ismount` which checks if a directory is a mount point ([#11279]).
+
     * The `cp` function now accepts keyword arguments `remove_destination` and `follow_symlinks` ([#10888]).
 
     * The `mv` function now accepts keyword argument `remove_destination` ([#11145]).
