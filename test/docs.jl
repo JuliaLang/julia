@@ -108,29 +108,33 @@ end
 
 import Base.Docs: meta
 
+function docstrings_equal(d1, d2)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    writemime(io1, MIME"text/markdown"(), d1)
+    writemime(io2, MIME"text/markdown"(), d2)
+    takebuf_string(io1) == takebuf_string(io2)
+end
+
 @test meta(DocsTest)[DocsTest] == doc"DocsTest"
 
 let f = DocsTest.f
     funcdoc = meta(DocsTest)[f]
-    order = [methods(f, sig)[1] for sig in [(Any,), (Any, Any)]]
     @test funcdoc.main == nothing
-    @test funcdoc.order == order
-    @test funcdoc.meta[order[1]] == doc"f-1"
-    @test funcdoc.meta[order[2]] == doc"f-2"
+    @test docstrings_equal(funcdoc.meta[Tuple{Any}], doc"f-1")
+    @test docstrings_equal(funcdoc.meta[Tuple{Any,Any}], doc"f-2")
 end
 
 let s = DocsTest.s
     funcdoc = meta(DocsTest)[s]
-    order = [methods(s, sig)[1] for sig in [(Any,), (Any, Any)]]
     @test funcdoc.main == nothing
-    @test funcdoc.order == order
-    @test funcdoc.meta[order[1]] == doc"s-1"
-    @test funcdoc.meta[order[2]] == doc"s-2"
+    @test docstrings_equal(funcdoc.meta[Tuple{Any,}], doc"s-1")
+    @test docstrings_equal(funcdoc.meta[Tuple{Any,Any}], doc"s-2")
 end
 
 let g = DocsTest.g
     funcdoc = meta(DocsTest)[g]
-    @test funcdoc.main == doc"g"
+    @test docstrings_equal(funcdoc.meta[Union{}], doc"g")
 end
 
 let AT = DocsTest.AT
@@ -143,16 +147,16 @@ end
 
 let T = DocsTest.T
     typedoc = meta(DocsTest)[T]
-    @test typedoc.main == doc"T"
-    @test typedoc.fields[:x] == doc"T.x"
-    @test typedoc.fields[:y] == doc"T.y"
+    @test docstrings_equal(typedoc.main, doc"T")
+    @test docstrings_equal(typedoc.fields[:x], doc"T.x")
+    @test docstrings_equal(typedoc.fields[:y], doc"T.y")
 end
 
 let IT = DocsTest.IT
     typedoc = meta(DocsTest)[IT]
-    @test typedoc.main == doc"IT"
-    @test typedoc.fields[:x] == doc"IT.x"
-    @test typedoc.fields[:y] == doc"IT.y"
+    @test docstrings_equal(typedoc.main, doc"IT")
+    @test docstrings_equal(typedoc.fields[:x], doc"IT.x")
+    @test docstrings_equal(typedoc.fields[:y], doc"IT.y")
 end
 
 @test @doc(DocsTest.TA) == doc"TA"
@@ -162,9 +166,25 @@ end
 @test @doc(DocsTest.G) == doc"G"
 @test @doc(DocsTest.K) == doc"K"
 
-@test @doc(DocsTest.t(::AbstractString)) == doc"t-1"
-@test @doc(DocsTest.t(::Int, ::Any)) == doc"t-2"
-@test @doc(DocsTest.t{S <: Integer}(::S)) == doc"t-3"
+let d1 = @doc(DocsTest.t(::AbstractString)),
+    d2 = doc"t-1"
+    @test docstrings_equal(d1,d2)
+end
+
+let d1 = @doc(DocsTest.t(::AbstractString)),
+    d2 = doc"t-1"
+    @test docstrings_equal(d1,d2)
+end
+
+let d1 = @doc(DocsTest.t(::Int, ::Any)),
+    d2 = doc"t-2"
+    @test docstrings_equal(d1,d2)
+end
+
+let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+    d2 = doc"t-3"
+    @test docstrings_equal(d1,d2)
+end
 
 let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
     @test haskey(fields, :one) && fields[:one] == doc"one"
@@ -210,9 +230,10 @@ read(x) = x
 
 end
 
-let fd = meta(I11798)[I11798.read]
-    @test fd.order[1] == which(I11798.read, Tuple{Any})
-    @test fd.meta[fd.order[1]] == doc"read"
+let fd = Base.Docs.meta(I11798)[I11798.read],
+    d1 = fd.meta[fd.order[1]],
+    d2 = doc"read"
+    @test docstrings_equal(d1,d2)
 end
 
 module I12515
@@ -225,9 +246,8 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[Base.collect]
-    @test fd.order[1].sig == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
 end
-
 
 # PR #12593
 
