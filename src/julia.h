@@ -870,6 +870,7 @@ DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
+DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);

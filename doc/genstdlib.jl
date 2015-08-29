@@ -9,8 +9,13 @@ ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 
 function getdoc(mod, x)
     try
-        eval(parse("@doc $(ident(mod, x))"))
+        mod = foldl((x,y) -> getfield(x,symbol(y)), Main, split(mod, "."))
+        return collect(values(Docs.meta(Base)[getfield(mod, symbol(x))].meta))
+    catch e
+        println(e)
+        warn("Mod $mod $x")
     end
+    []
 end
 
 flat_content(md) = md
@@ -26,7 +31,7 @@ isrst(md) =
 
 function tryrst(md)
     try
-        Markdown.rst(md)
+        return Markdown.rst(md)
     catch e
         warn("Error converting docstring:")
         display(md)
@@ -50,12 +55,24 @@ function translate(file)
                 modidx = i
                 println(io, l)
             elseif startswith(l, ".. function::")
-                func = match(r".. function:: (@?[^\(\s\{]+)", l)
+                func = match(r".. function:: (@?[^\(\s\{]+)(.*)", l)
                 func == nothing && (warn("bad function $l"); continue)
-                func = func.captures[1]
-                doc = getdoc(mod, func)
+                funcname = func.captures[1]
+                rest = func.captures[2]
+                full = funcname*rest
+                doc = nothing
+                for mdoc in getdoc(mod, funcname)
+                    trst = tryrst(mdoc)
+                    trst !== nothing || continue
+                    if contains(trst, full)
+                        if doc != nothing
+                            error("duplicate $full $found $l")
+                        end
+                        doc = mdoc
+                    end
+                end
                 if doc == nothing || torst(doc) == nothing
-                    info("no docs for $(ident(mod, func))")
+                    info("no docs for $(ident(mod, funcname))")
                     println(io, l)
                     doccing = false
                     continue
