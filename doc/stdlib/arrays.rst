@@ -13,8 +13,6 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ndims(A) -> Integer
 
    Returns the number of dimensions of A
@@ -23,13 +21,9 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        size(A, [dim...])
 
    Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
-
-   .. code-block:: julia
 
        julia> A = rand(2,3,4);
 
@@ -43,8 +37,6 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        iseltype(A,T)
 
    Tests whether A or its elements are of type T
@@ -53,25 +45,19 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       length(A) -> Integer
 
-       length(s)
-
-   The number of characters in string ``s``\ .
+   Returns the number of elements in A
 
 .. function:: eachindex(A...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        eachindex(A...)
 
    Creates an iterable object for visiting each index of an AbstractArray ``A`` in an efficient manner. For array types that have opted into fast linear indexing (like ``Array``\ ), this is simply the range ``1:length(A)``\ . For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
    Example for a sparse 2-d array:
-
-   .. code-block:: julia
 
        julia> A = sprand(2, 3, 0.5)
        2x3 sparse matrix with 4 Float64 entries:
@@ -108,23 +94,17 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        Base.linearindexing(A)
 
    ``linearindexing`` defines how an AbstractArray most efficiently accesses its elements. If ``Base.linearindexing(A)`` returns ``Base.LinearFast()``\ , this means that linear indexing with only one index is an efficient operation. If it instead returns ``Base.LinearSlow()`` (by default), this means that the array intrinsically accesses its elements with indices specified for every dimension. Since converting a linear index to multiple indexing subscripts is typically very expensive, this provides a traits-based mechanism to enable efficient generic code for all array types.
 
    An abstract array subtype ``MyArray`` that wishes to opt into fast linear indexing behaviors should define ``linearindexing`` in the type-domain:
 
-   .. code-block:: julia
-
        Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 
 .. function:: countnz(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        countnz(A)
 
@@ -134,8 +114,6 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        conj!(A)
 
    Convert an array to its complex conjugate in-place
@@ -143,8 +121,6 @@ largest range along each dimension.
 .. function:: stride(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        stride(A, k)
 
@@ -154,8 +130,6 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        strides(A)
 
    Returns a tuple of the memory strides in each dimension
@@ -164,27 +138,23 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  ind2sub(dims, index) -> subscripts
 
-              ind2sub(a, index) -> subscripts
+   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
 
-   Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
+   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
 
 .. function:: ind2sub(a, index) -> subscripts
 
    .. Docstring generated from Julia source
 
-   ::
-
-              ind2sub(a, index) -> subscripts
+   ..  ind2sub(a, index) -> subscripts
 
    Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
 
 .. function:: sub2ind(dims, i, j, k...) -> index
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        sub2ind(dims, i, j, k...) -> index
 
@@ -197,8 +167,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        Array(dims)
 
    ``Array{T}(dims)`` constructs an uninitialized dense array with element type ``T``\ . ``dims`` may be a tuple or a series of integer arguments. The syntax ``Array(T, dims)`` is also available, but deprecated.
@@ -207,19 +175,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  getindex(type[, elements...])
 
-              getindex(collection, key...)
-
-   Retrieve the value(s) stored at the given key or index within a collection.
-   The syntax ``a[i,j,...]`` is converted by the compiler to
-   ``getindex(a, i, j, ...)``.
+   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
 .. function:: cell(dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        cell(dims)
 
@@ -229,17 +191,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       zeros(type, dims)
 
-       zeros(A)
-
-   Create an array of all zeros with the same element type and shape as A.
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
 
 .. function:: zeros(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        zeros(A)
 
@@ -249,13 +207,9 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ones(type, dims)
 
    Create an array of all ones of specified type. The type defaults to Float64 if not specified.
-
-   .. code-block:: julia
 
        ones(A)
 
@@ -265,13 +219,9 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ones(type, dims)
 
    Create an array of all ones of specified type. The type defaults to Float64 if not specified.
-
-   .. code-block:: julia
 
        ones(A)
 
@@ -281,8 +231,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        trues(dims)
 
    Create a ``BitArray`` with all values set to true
@@ -291,8 +239,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        falses(dims)
 
    Create a ``BitArray`` with all values set to false
@@ -300,8 +246,6 @@ Constructors
 .. function:: fill(x, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        fill(x, dims)
 
@@ -313,8 +257,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        fill!(A, x)
 
    Fill array ``A`` with the value ``x``\ . If ``x`` is an object reference, all elements will refer to the same object. ``fill!(A, Foo())`` will return ``A`` filled with the result of evaluating ``Foo()`` once.
@@ -322,8 +264,6 @@ Constructors
 .. function:: reshape(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        reshape(A, dims)
 
@@ -333,8 +273,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments. For some special ``AbstractArray`` objects which are not real containers (like ranges), this function returns a standard ``Array`` to allow operating on elements.
@@ -342,8 +280,6 @@ Constructors
 .. function:: reinterpret(type, A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        reinterpret(type, A)
 
@@ -353,27 +289,21 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       eye(n)
 
-       eye(A)
-
-   Constructs an identity matrix of the same dimensions and type as ``A``\ .
+   n-by-n identity matrix
 
 .. function:: eye(m, n)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       eye(m, n)
 
-       eye(A)
-
-   Constructs an identity matrix of the same dimensions and type as ``A``\ .
+   m-by-n identity matrix
 
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        eye(A)
 
@@ -383,8 +313,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        linspace(start, stop, n=100)
 
    Construct a range of ``n`` linearly spaced elements from ``start`` to ``stop``\ .
@@ -392,8 +320,6 @@ Constructors
 .. function:: logspace(start, stop, n=50)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        logspace(start, stop, n=50)
 
@@ -408,8 +334,6 @@ All mathematical operations and functions are supported for arrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        broadcast(f, As...)
 
    Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
@@ -417,8 +341,6 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast!(f, dest, As...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        broadcast!(f, dest, As...)
 
@@ -428,8 +350,6 @@ All mathematical operations and functions are supported for arrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        bitbroadcast(f, As...)
 
    Like ``broadcast``\ , but allocates a ``BitArray`` to store the result, rather then an ``Array``\ .
@@ -438,8 +358,6 @@ All mathematical operations and functions are supported for arrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        broadcast_function(f)
 
    Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``\ . Most useful in the form ``const broadcast_f = broadcast_function(f)``\ .
@@ -447,8 +365,6 @@ All mathematical operations and functions are supported for arrays
 .. function:: broadcast!_function(f)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        broadcast!_function(f)
 
@@ -461,29 +377,21 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  getindex(A, inds...)
 
-              getindex(collection, key...)
-
-   Retrieve the value(s) stored at the given key or index within a collection.
-   The syntax ``a[i,j,...]`` is converted by the compiler to
-   ``getindex(a, i, j, ...)``.
+   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
 .. function:: sub(A, inds...)
 
    .. Docstring generated from Julia source
 
-   ::
-
-              sub(A, inds...)
+   ..  sub(A, inds...)
 
    Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
 .. function:: parent(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        parent(A)
 
@@ -493,8 +401,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        parentindexes(A)
 
    From an array view ``A``\ , returns the corresponding indexes in the parent
@@ -502,8 +408,6 @@ Indexing, Assignment, and Concatenation
 .. function:: slicedim(A, d, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        slicedim(A, d, i)
 
@@ -513,9 +417,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ::
-
-              slice(A, inds...)
+   ..  slice(A, inds...)
 
    Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 
@@ -523,17 +425,13 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       setindex!(A, X, inds...)
 
-       setindex!(collection, value, key...)
-
-   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
+   Store values from array ``X`` within some subset of ``A`` as specified by ``inds``\ .
 
 .. function:: broadcast_getindex(A, inds...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        broadcast_getindex(A, inds...)
 
@@ -543,8 +441,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        broadcast_setindex!(A, X, inds...)
 
    Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``\ .
@@ -552,8 +448,6 @@ Indexing, Assignment, and Concatenation
 .. function:: cat(dims, A...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        cat(dims, A...)
 
@@ -563,8 +457,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        vcat(A...)
 
    Concatenate along dimension 1
@@ -573,8 +465,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        hcat(A...)
 
    Concatenate along dimension 2
@@ -582,8 +472,6 @@ Indexing, Assignment, and Concatenation
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -595,8 +483,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        flipdim(A, d)
 
    Reverse ``A`` in dimension ``d``\ .
@@ -604,8 +490,6 @@ Indexing, Assignment, and Concatenation
 .. function:: circshift(A,shifts)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        circshift(A,shifts)
 
@@ -615,17 +499,13 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       find(A)
 
-       find(f,A)
-
-   Return a vector of the linear indexes of ``A`` where ``f`` returns true.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements.
 
 .. function:: find(f,A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        find(f,A)
 
@@ -635,8 +515,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        findn(A)
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ).
@@ -644,8 +522,6 @@ Indexing, Assignment, and Concatenation
 .. function:: findnz(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        findnz(A)
 
@@ -655,27 +531,21 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findfirst(A)
 
-       findfirst(predicate, A)
-
-   Return the index of the first element of ``A`` for which ``predicate`` returns true.
+   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
 
 .. function:: findfirst(A,v)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findfirst(A,v)
 
-       findfirst(predicate, A)
-
-   Return the index of the first element of ``A`` for which ``predicate`` returns true.
+   Return the index of the first element equal to ``v`` in ``A``\ .
 
 .. function:: findfirst(predicate, A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        findfirst(predicate, A)
 
@@ -685,27 +555,21 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findlast(A)
 
-       findlast(predicate, A)
-
-   Return the index of the last element of ``A`` for which ``predicate`` returns true.
+   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
 
 .. function:: findlast(A, v)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findlast(A, v)
 
-       findlast(predicate, A)
-
-   Return the index of the last element of ``A`` for which ``predicate`` returns true.
+   Return the index of the last element equal to ``v`` in ``A``\ .
 
 .. function:: findlast(predicate, A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        findlast(predicate, A)
 
@@ -715,27 +579,21 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findnext(A, i)
 
-       findnext(A, v, i)
-
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
 
 .. function:: findnext(predicate, A, i)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findnext(predicate, A, i)
 
-       findnext(A, v, i)
-
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
 .. function:: findnext(A, v, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        findnext(A, v, i)
 
@@ -745,27 +603,21 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findprev(A, i)
 
-       findprev(A, v, i)
-
-   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or 0 if not found.
 
 .. function:: findprev(predicate, A, i)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       findprev(predicate, A, i)
 
-       findprev(A, v, i)
-
-   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
 .. function:: findprev(A, v, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        findprev(A, v, i)
 
@@ -775,8 +627,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        permutedims(A, perm)
 
    Permute the dimensions of array ``A``\ . ``perm`` is a vector specifying a permutation of length ``ndims(A)``\ . This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A, [2,1])``\ .
@@ -785,17 +635,13 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ::
-
-              ipermutedims(A, perm)
+   ..  ipermutedims(A, perm)
 
    Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
 .. function:: permutedims!(dest, src, perm)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        permutedims!(dest, src, perm)
 
@@ -805,8 +651,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        squeeze(A, dims)
 
    Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ .
@@ -814,8 +658,6 @@ Indexing, Assignment, and Concatenation
 .. function:: vec(Array) -> Vector
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        vec(Array) -> Vector
 
@@ -825,8 +667,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        promote_shape(s1, s2)
 
    Check two array shapes for compatibility, allowing trailing singleton dimensions, and return whichever shape has more dimensions.
@@ -835,17 +675,13 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       checkbounds(array, indexes...)
 
-       checkbounds(::Type{Bool}, dimlength::Integer, index)
-
-   Return a ``Bool`` describing if the given index is within the bounds of the given dimension length. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
+   Throw an error if the specified indexes are not in bounds for the given array. Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
 
 .. function:: randsubseq(A, p) -> Vector
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        randsubseq(A, p) -> Vector
 
@@ -854,8 +690,6 @@ Indexing, Assignment, and Concatenation
 .. function:: randsubseq!(S, A, p)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        randsubseq!(S, A, p)
 
@@ -868,9 +702,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              cumprod(A, [dim])
+   ..  cumprod(A, [dim])
 
    Cumulative product along a dimension ``dim`` (defaults to 1).
    See also :func:`cumprod!` to use a preallocated output array,
@@ -881,8 +713,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cumprod!(B, A, [dim])
 
    Cumulative product of ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1.
@@ -891,9 +721,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              cumsum(A, [dim])
+   ..  cumsum(A, [dim])
 
    Cumulative sum along a dimension ``dim`` (defaults to 1).
    See also :func:`cumsum!` to use a preallocated output array,
@@ -904,8 +732,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cumsum!(B, A, [dim])
 
    Cumulative sum of ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1.
@@ -913,8 +739,6 @@ Array functions
 .. function:: cumsum_kbn(A, [dim])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        cumsum_kbn(A, [dim])
 
@@ -924,8 +748,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cummin(A, [dim])
 
    Cumulative minimum along a dimension. The dimension defaults to 1.
@@ -933,8 +755,6 @@ Array functions
 .. function:: cummax(A, [dim])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        cummax(A, [dim])
 
@@ -944,8 +764,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        diff(A, [dim])
 
    Finite difference operator of matrix or vector.
@@ -953,8 +771,6 @@ Array functions
 .. function:: gradient(F, [h])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        gradient(F, [h])
 
@@ -964,17 +780,13 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       rot180(A)
 
-       rot180(A, k)
-
-   Rotate matrix ``A`` 180 degrees an integer ``k`` number of times. If ``k`` is even, this is equivalent to a ``copy``\ .
+   Rotate matrix ``A`` 180 degrees.
 
 .. function:: rot180(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        rot180(A, k)
 
@@ -984,17 +796,13 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       rotl90(A)
 
-       rotl90(A, k)
-
-   Rotate matrix ``A`` left 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
+   Rotate matrix ``A`` left 90 degrees.
 
 .. function:: rotl90(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        rotl90(A, k)
 
@@ -1004,17 +812,13 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       rotr90(A)
 
-       rotr90(A, k)
-
-   Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
+   Rotate matrix ``A`` right 90 degrees.
 
 .. function:: rotr90(A, k)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        rotr90(A, k)
 
@@ -1023,8 +827,6 @@ Array functions
 .. function:: reducedim(f, A, dims[, initial])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        reducedim(f, A, dims[, initial])
 
@@ -1036,8 +838,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        mapreducedim(f, op, A, dims[, initial])
 
    Evaluates to the same as ``reducedim(op, map(f, A), dims, f(initial))``\ , but is generally faster because the intermediate array is avoided.
@@ -1045,8 +845,6 @@ Array functions
 .. function:: mapslices(f, A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        mapslices(f, A, dims)
 
@@ -1056,30 +854,9 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        sum_kbn(A)
 
    Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
-
-.. function:: cartesianmap(f, dims)
-
-   .. Docstring generated from Julia source
-
-   ::
-
-              cartesianmap(f, dims)
-
-   Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
-   integers in the ranges ``1:m``, ``1:n``, etc.
-
-   .. doctest::
-
-      julia> cartesianmap(println, (2,2))
-      11
-      21
-      12
-      22
 
 Combinatorics
 -------------
@@ -1088,17 +865,13 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       nthperm(v, k)
 
-       nthperm(p)
-
-   Return the ``k`` that generated permutation ``p``\ . Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``\ .
+   Compute the kth lexicographic permutation of a vector.
 
 .. function:: nthperm(p)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        nthperm(p)
 
@@ -1108,9 +881,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              nthperm!(v, k)
+   ..  nthperm!(v, k)
 
    In-place version of :func:`nthperm`.
 
@@ -1118,9 +889,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              randperm([rng,] n)
+   ..  randperm([rng,] n)
 
    Construct a random permutation of length ``n``. The optional ``rng`` argument
    specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
@@ -1128,8 +897,6 @@ Combinatorics
 .. function:: invperm(v)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        invperm(v)
 
@@ -1139,8 +906,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isperm(v) -> Bool
 
    Returns true if v is a valid permutation.
@@ -1148,8 +913,6 @@ Combinatorics
 .. function:: permute!(v, p)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        permute!(v, p)
 
@@ -1161,8 +924,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ipermute!(v, p)
 
    Like permute!, but the inverse of the given permutation is applied.
@@ -1171,9 +932,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              randcycle([rng,] n)
+   ..  randcycle([rng,] n)
 
    Construct a random cyclic permutation of length ``n``. The optional ``rng``
    argument specifies a random number generator, see :ref:`Random Numbers
@@ -1183,9 +942,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              shuffle([rng,] v)
+   ..  shuffle([rng,] v)
 
    Return a randomly permuted copy of ``v``. The optional ``rng`` argument
    specifies a random number generator, see :ref:`Random Numbers
@@ -1195,9 +952,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              shuffle!([rng,] v)
+   ..  shuffle!([rng,] v)
 
    In-place version of :func:`shuffle`.
 
@@ -1205,27 +960,13 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        reverse(v [, start=1 [, stop=length(v) ]] )
 
    Return a copy of ``v`` reversed from start to stop.
 
-   Reverses a UTF-8 encoded string
-
-   Returns:
-
-     *   ``UTF8String``
-
-   Throws:
-
-     *   ``UnicodeError``
-
 .. function:: reverseind(v, i)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        reverseind(v, i)
 
@@ -1235,17 +976,13 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ::
-
-              reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+   ..  reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
    In-place version of :func:`reverse`.
 
 .. function:: combinations(array, n)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        combinations(array, n)
 
@@ -1255,8 +992,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        permutations(array)
 
    Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use ``collect(permutations(array))`` to get an array of all permutations.
@@ -1265,37 +1000,29 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       partitions(n)
 
-       partitions(array, m)
-
-   Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
+   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
 
 .. function:: partitions(n, m)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       partitions(n, m)
 
-       partitions(array, m)
-
-   Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
+   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
 
 .. function:: partitions(array)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       partitions(array)
 
-       partitions(array, m)
-
-   Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
+   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
 
 .. function:: partitions(array, m)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        partitions(array, m)
 
@@ -1308,8 +1035,6 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        bitpack(A::AbstractArray{T,N}) -> BitArray
 
    Converts a numeric array to a packed boolean array
@@ -1317,8 +1042,6 @@ BitArrays
 .. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        bitunpack(B::BitArray{N}) -> Array{Bool,N}
 
@@ -1328,9 +1051,7 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   ::
-
-              flipbits!(B::BitArray{N}) -> BitArray{N}
+   ..  flipbits!(B::BitArray{N}) -> BitArray{N}
 
    Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
 
@@ -1338,17 +1059,13 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
-       rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a left rotation operation on B.
+   Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
 
 .. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -1358,8 +1075,6 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    Performs a left rotation operation.
@@ -1368,17 +1083,13 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
-       ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Performs a right rotation operation on B.
+   Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
 
 .. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -1387,8 +1098,6 @@ BitArrays
 .. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -1405,37 +1114,29 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       sparse(I,J,V,[m,n,combine])
 
-       sparse(A)
-
-   Convert an AbstractMatrix ``A`` into a sparse matrix.
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
 
 .. function:: sparsevec(I, V, [m, combine])
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       sparsevec(I, V, [m, combine])
 
-       sparsevec(A)
-
-   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``\ . In julia, sparse vectors are really just sparse matrices with one column.
+   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
 
 .. function:: sparsevec(D::Dict, [m])
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       sparsevec(D::Dict, [m])
 
-       sparsevec(A)
-
-   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``\ . In julia, sparse vectors are really just sparse matrices with one column.
+   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
 .. function:: issparse(S)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        issparse(S)
 
@@ -1445,8 +1146,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        sparse(A)
 
    Convert an AbstractMatrix ``A`` into a sparse matrix.
@@ -1454,8 +1153,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparsevec(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        sparsevec(A)
 
@@ -1465,24 +1162,13 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  full(S)
 
-              full(QRCompactWYQ[, thin=true]) -> Matrix
-
-   Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ``
-   object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
-
-   Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the
-   columns that span the rows of ``R`` in the QR factorization that are zero.
-   The resulting matrix is the ``Q`` in a thin QR factorization (sometimes
-   called the reduced QR factorization).  If ``false``, returns a ``Q`` that
-   spans all rows of ``R`` in its corresponding QR factorization.
+   Convert a sparse matrix ``S`` into a dense matrix.
 
 .. function:: nnz(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        nnz(A)
 
@@ -1492,8 +1178,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        spzeros(m,n)
 
    Create a sparse matrix of size ``m x n``\ . This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
@@ -1501,8 +1185,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: spones(S)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        spones(S)
 
@@ -1512,8 +1194,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        speye(type,m[,n])
 
    Create a sparse identity matrix of specified type of size ``m x m``\ . In case ``n`` is supplied, create a sparse identity matrix of size ``m x n``\ .
@@ -1521,8 +1201,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: spdiagm(B, d[, m, n])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        spdiagm(B, d[, m, n])
 
@@ -1532,17 +1210,13 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   ::
-
-              sprand([rng,] m,n,p [,rfn])
+   ..  sprand([rng,] m,n,p [,rfn])
 
    Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: sprandn(m,n,p)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        sprandn(m,n,p)
 
@@ -1552,8 +1226,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        sprandbool(m,n,p)
 
    Create a random ``m`` by ``n`` sparse boolean matrix with the specified (independent) probability ``p`` of any entry being ``true``\ .
@@ -1561,8 +1233,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: etree(A[, post])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        etree(A[, post])
 
@@ -1572,8 +1242,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        symperm(A, p)
 
    Return the symmetric permutation of A, which is ``A[p,p]``\ . A should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
@@ -1581,8 +1249,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: nonzeros(A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        nonzeros(A)
 
@@ -1592,8 +1258,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        rowvals(A)
 
    Return a vector of the row indices of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See ``nonzeros(A)`` and ``nzrange(A, col)``\ .
@@ -1602,13 +1266,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        nzrange(A, col)
 
    Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with ``nonzeros(A)`` and ``rowvals(A)``\ , this allows for convenient iterating over a sparse matrix :
-
-   .. code-block:: julia
 
        A = sparse(I,J,V)
        rows = rowvals(A)

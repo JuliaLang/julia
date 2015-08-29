@@ -8,8 +8,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        malloc(size::Integer) -> Ptr{Void}
 
    Call ``malloc`` from the C standard library.
@@ -18,8 +16,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        calloc(num::Integer, size::Integer) -> Ptr{Void}
 
    Call ``calloc`` from the C standard library.
@@ -27,8 +23,6 @@
 .. function:: realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
@@ -40,8 +34,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        free(addr::Ptr)
 
    Call ``free`` from the C standard library. Only use this on memory obtained from ``malloc``\ , not on pointers retrieved from other C libraries. ``Ptr`` objects obtained from C libraries should be freed by the free functions defined in that library, to avoid assertion failures if multiple ``libc`` libraries exist on the system.
@@ -49,8 +41,6 @@
 .. function:: errno([code])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        errno([code])
 
@@ -61,8 +51,6 @@
 .. function:: strerror(n=errno())
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        strerror(n=errno())
 
@@ -80,17 +68,13 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       time(t::TmStruct)
 
-       time()
-
-   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+   Converts a ``TmStruct`` struct to a number of seconds since the epoch.
 
 .. function:: strftime([format], time)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        strftime([format], time)
 
@@ -100,8 +84,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        strptime([format], timestr)
 
    Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
@@ -109,8 +91,6 @@
 .. function:: TmStruct([seconds])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        TmStruct([seconds])
 
@@ -120,8 +100,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        flush_cstdio()
 
    Flushes the C ``stdout`` and ``stderr`` streams (which may have been written to by external C code).
@@ -130,9 +108,7 @@
 
    .. Docstring generated from Julia source
 
-   ::
-
-              msync(ptr, len, [flags])
+   ..  msync(ptr, len, [flags])
 
    Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
 
@@ -149,11 +125,3 @@
 .. data:: MS_INVALIDATE
 
    Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. function:: mmap(len, prot, flags, fd, offset)
-
-   Low-level interface to the ``mmap`` system call. See the man page.
-
-.. function:: munmap(pointer, len)
-
-   Low-level interface for unmapping memory (see the man page). With :func:`mmap_array` you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.

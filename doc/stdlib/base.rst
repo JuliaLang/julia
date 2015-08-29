@@ -24,8 +24,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
@@ -34,17 +32,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   ::
-
-              quit()
+   ..  quit()
 
    Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        atexit(f)
 
@@ -54,8 +48,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        atreplinit(f)
 
    Register a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of ``f`` is the REPL object. This function should be called from within the ``.juliarc.jl`` initialization file.
@@ -63,8 +55,6 @@ Getting Around
 .. function:: isinteractive() -> Bool
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        isinteractive() -> Bool
 
@@ -86,17 +76,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       edit(file::AbstractString, [line])
 
-       edit(function, [types])
-
-   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
+   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
 .. function:: edit(function, [types])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        edit(function, [types])
 
@@ -106,8 +92,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @edit
 
    Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression
@@ -116,17 +100,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       less(file::AbstractString, [line])
 
-       less(function, [types])
-
-   Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
+   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 
 .. function:: less(function, [types])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        less(function, [types])
 
@@ -136,8 +116,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @less
 
    Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression
@@ -146,17 +124,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       clipboard(x)
 
-       clipboard() -> AbstractString
-
-   Return a string with the contents of the operating system clipboard ("paste").
+   Send a printed form of ``x`` to the operating system clipboard ("copy").
 
 .. function:: clipboard() -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        clipboard() -> AbstractString
 
@@ -166,8 +140,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        require(module::Symbol)
 
    This function is part of the implementation of ``using`` / ``import``\ , if a module is not already defined in ``Main``\ . It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for exmple, when interactively developing libraries).
@@ -176,21 +148,17 @@ Getting Around
 
    When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
 
-.. function:: compilecache(module::Symbol)
+.. function:: Base.compilecache(module::Symbol)
 
    .. Docstring generated from Julia source
 
-   ::
-
-              Base.compilecache(module::Symbol)
+   ..  Base.compilecache(module::Symbol)
 
    Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        __precompile__(isprecompilable::Bool=true)
 
@@ -202,17 +170,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
-       include("file.jl")
+       include(path::AbstractString)
 
    Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
 
 .. function:: include_string(code::AbstractString, [filename])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        include_string(code::AbstractString, [filename])
 
@@ -221,8 +185,6 @@ Getting Around
 .. function:: include_dependency(path::AbstractString)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        include_dependency(path::AbstractString)
 
@@ -234,17 +196,15 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       which(f, types)
 
-       which(symbol)
+   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
 
-   Return the module in which the binding for the variable referenced by ``symbol`` was created.
+   If ``types`` is an abstract type, then the method that would be called by ``invoke`` is returned.
 
 .. function:: which(symbol)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        which(symbol)
 
@@ -254,8 +214,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @which
 
    Applied to a function call, it evaluates the arguments to the specified function call, and returns the ``Method`` object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the ``which`` function.
@@ -263,8 +221,6 @@ Getting Around
 .. function:: methods(f, [types])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        methods(f, [types])
 
@@ -276,8 +232,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        methodswith(typ[, module or function][, showparents])
 
    Return an array of methods with an argument of type ``typ``\ . If optional ``showparents`` is ``true``\ , also return arguments with a parent type of ``typ``\ , excluding type ``Any``\ .
@@ -288,8 +242,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @show
 
    Show an expression and result, returning the result
@@ -298,8 +250,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        versioninfo([verbose::Bool])
 
    Print information about the version of Julia in use. If the ``verbose`` argument is true, detailed system information is shown as well.
@@ -307,8 +257,6 @@ Getting Around
 .. function:: workspace()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        workspace()
 
@@ -328,8 +276,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        is(x, y) -> Bool
        ===(x,y) -> Bool
        ≡(x,y) -> Bool
@@ -340,8 +286,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isa(x, type) -> Bool
 
    Determine whether ``x`` is of the given ``type``\ .
@@ -349,8 +293,6 @@ All Objects
 .. function:: isequal(x, y)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        isequal(x, y)
 
@@ -366,8 +308,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isless(x, y)
 
    Test whether ``x`` is less than ``y``\ , according to a canonical total order. Values that are normally unordered, such as ``NaN``\ , are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``\ . Non-numeric types with a canonical total order should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``\ .
@@ -375,8 +315,6 @@ All Objects
 .. function:: ifelse(condition::Bool, x, y)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        ifelse(condition::Bool, x, y)
 
@@ -386,8 +324,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        lexcmp(x, y)
 
    Compare ``x`` and ``y`` lexicographically and return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``\ , respectively. This function should be defined for lexicographically comparable types, and ``lexless`` will call ``lexcmp`` by default.
@@ -395,8 +331,6 @@ All Objects
 .. function:: lexless(x, y)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        lexless(x, y)
 
@@ -406,8 +340,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        typeof(x)
 
    Get the concrete type of ``x``\ .
@@ -415,8 +347,6 @@ All Objects
 .. function:: tuple(xs...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        tuple(xs...)
 
@@ -426,8 +356,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ntuple(f::Function, n)
 
    Create a tuple of length ``n``\ , computing each element as ``f(i)``\ , where ``i`` is the index of the element.
@@ -436,8 +364,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        object_id(x)
 
    Get a unique integer id for ``x``\ . ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``\ .
@@ -445,8 +371,6 @@ All Objects
 .. function:: hash(x[, h])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        hash(x[, h])
 
@@ -458,8 +382,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        finalizer(x, function)
 
    Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``\ . The behavior of this function is unpredictable if ``x`` is of a bits type.
@@ -467,8 +389,6 @@ All Objects
 .. function:: finalize(x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        finalize(x)
 
@@ -478,8 +398,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        copy(x)
 
    Create a shallow copy of ``x``\ : the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
@@ -487,8 +405,6 @@ All Objects
 .. function:: deepcopy(x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        deepcopy(x)
 
@@ -502,8 +418,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isdefined([object,] index | symbol)
 
    Tests whether an assignable location is defined. The arguments can be an array and index, a composite object and field name (as a symbol), or a module and a symbol. With a single symbol argument, tests whether a global variable with that name is defined in ``current_module()``\ .
@@ -512,9 +426,7 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   ::
-
-              convert(T, x)
+   ..  convert(T, x)
 
    Convert ``x`` to a value of type ``T``.
 
@@ -552,8 +464,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        promote(xs...)
 
    Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
@@ -561,8 +471,6 @@ All Objects
 .. function:: oftype(x, y)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        oftype(x, y)
 
@@ -572,9 +480,7 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   ::
-
-              widen(type | x)
+   ..  widen(type | x)
 
    If the argument is a type, return a "larger" type (for numeric types, this will be
    a type with at least as much range and precision as the argument, and usually more).
@@ -594,8 +500,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        identity(x)
 
    The identity function. Returns its argument.
@@ -607,8 +511,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        super(T::DataType)
 
    Return the supertype of DataType T
@@ -616,8 +518,6 @@ Types
 .. function:: issubtype(type1, type2)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        issubtype(type1, type2)
 
@@ -627,17 +527,13 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       <:(T1, T2)
 
-       issubtype(type1, type2)
-
-   True if and only if all values of ``type1`` are also of ``type2``\ . Can also be written using the ``<:`` infix operator as ``type1 <: type2``\ .
+   Subtype operator, equivalent to ``issubtype(T1,T2)``\ .
 
 .. function:: subtypes(T::DataType)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        subtypes(T::DataType)
 
@@ -647,8 +543,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -656,8 +550,6 @@ Types
 .. function:: typemax(type)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        typemax(type)
 
@@ -667,8 +559,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        realmin(type)
 
    The smallest in absolute value non-subnormal value representable by the given floating-point type
@@ -676,8 +566,6 @@ Types
 .. function:: realmax(type)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        realmax(type)
 
@@ -687,8 +575,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        maxintfloat(type)
 
    The largest integer losslessly representable by the given floating-point type
@@ -697,13 +583,9 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
-
-   .. code-block:: julia
 
        sizeof(s::AbstractString)
 
@@ -713,29 +595,21 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       eps([type])
 
-       eps(::DateTime) -> Millisecond
-       eps(::Date) -> Day
-
-   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
+   The distance between 1.0 and the next larger representable floating-point value of ``type``\ . Only floating-point types are sensible arguments. If ``type`` is omitted, then ``eps(Float64)`` is returned.
 
 .. function:: eps(x)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       eps(x)
 
-       eps(::DateTime) -> Millisecond
-       eps(::Date) -> Day
-
-   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
+   The distance between ``x`` and the next larger representable floating-point value of the same type as ``x``\ .
 
 .. function:: promote_type(type1, type2)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        promote_type(type1, type2)
 
@@ -745,8 +619,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        promote_rule(type1, type2)
 
    Specifies what type should be used by ``promote`` when given values of types ``type1`` and ``type2``\ . This function should not be called directly, but should have definitions added to it for new types as appropriate.
@@ -754,8 +626,6 @@ Types
 .. function:: getfield(value, name::Symbol)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        getfield(value, name::Symbol)
 
@@ -765,8 +635,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        setfield!(value, name::Symbol, x)
 
    Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ , and the syntax ``a.(b) = c`` calls ``setfield!(a, b, c)``\ .
@@ -775,9 +643,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   ::
-
-              fieldoffsets(type)
+   ..  fieldoffsets(type)
 
    The byte offset of each field of a type relative to the data start. For example, we could use it
    in the following manner to summarize information about a struct type:
@@ -805,8 +671,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        fieldtype(type, name::Symbol | index::Int)
 
    Determine the declared type of a field (specified by name or index) in a composite type.
@@ -815,9 +679,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   ::
-
-              isimmutable(v)
+   ..  isimmutable(v)
 
    True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
    Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
@@ -826,9 +688,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   ::
-
-              isbits(T)
+   ..  isbits(T)
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
@@ -844,8 +704,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isleaftype(T)
 
    Determine whether ``T`` is a concrete type that can have instances, meaning its only subtypes are itself and ``None`` (but ``T`` itself is not ``None``\ ).
@@ -853,8 +711,6 @@ Types
 .. function:: typejoin(T, S)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        typejoin(T, S)
 
@@ -864,8 +720,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        typeintersect(T, S)
 
    Compute a type that contains the intersection of ``T`` and ``S``\ . Usually this will be the smallest such type or one close to it.
@@ -873,8 +727,6 @@ Types
 .. function:: Val{c}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Val{c}
 
@@ -884,9 +736,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @enum EnumName EnumValue1[=x] EnumValue2[=y]
+   ..  @enum EnumName EnumValue1[=x] EnumValue2[=y]
 
    Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``, respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
 
@@ -904,8 +754,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        instances(T::Type)
 
    Return a collection of all instances of the given type, if applicable. Mostly used for enumerated types (see ``@enum``\ ).
@@ -917,9 +765,7 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              method_exists(f, Tuple type) -> Bool
+   ..  method_exists(f, Tuple type) -> Bool
 
    Determine whether the given generic function has a method matching the given :obj:`Tuple` of argument types.
 
@@ -932,9 +778,7 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              applicable(f, args...) -> Bool
+   ..  applicable(f, args...) -> Bool
 
    Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -954,8 +798,6 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        invoke(f, (types...), args...)
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
@@ -964,9 +806,7 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ::
-
-              |>(x, f)
+   ..  |>(x, f)
 
    Applies a function to the preceding argument. This allows for easy function chaining.
 
@@ -979,8 +819,6 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        call(x, args...)
 
    If ``x`` is not a ``Function``\ , then ``x(args...)`` is equivalent to ``call(x, args...)``\ . This means that function-like behavior can be added to any type by defining new ``call`` methods.
@@ -992,8 +830,6 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        eval([m::Module], expr::Expr)
 
    Evaluate an expression in the given module and return the result. Every module (except those defined with ``baremodule``\ ) has its own 1-argument definition of ``eval``\ , which evaluates expressions in that module.
@@ -1001,8 +837,6 @@ Syntax
 .. function:: @eval
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        @eval
 
@@ -1012,8 +846,6 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        evalfile(path::AbstractString)
 
    Load the file using ``include``\ , evaluate all expressions, and return the value of the last one.
@@ -1022,9 +854,7 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   ::
-
-              esc(e::ANY)
+   ..  esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
@@ -1032,8 +862,6 @@ Syntax
 .. function:: gensym([tag])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        gensym([tag])
 
@@ -1043,8 +871,6 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @gensym
 
    Generates a gensym symbol for a variable. For example, ``@gensym x y`` is transformed into ``x = gensym("x"); y = gensym("y")``\ .
@@ -1053,21 +879,17 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       parse(str, start; greedy=true, raise=true)
 
-       parse(type, str, [base])
-
-   Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
 
 .. function:: parse(str; raise=true)
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       parse(str; raise=true)
 
-       parse(type, str, [base])
-
-   Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.
+   Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
 Nullables
 ---------
@@ -1075,8 +897,6 @@ Nullables
 .. function:: Nullable(x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Nullable(x)
 
@@ -1086,37 +906,23 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  get(x)
 
-              get(f::Function, collection, key)
-
-   Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
-
-   This is intended to be called using ``do`` block syntax::
-
-     get(dict, key) do
-         # default value calculated here
+   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
+   value if it is present; otherwise, throws a ``NullException``.
 
 .. function:: get(x, y)
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  get(x, y)
 
-              get(f::Function, collection, key)
-
-   Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
-
-   This is intended to be called using ``do`` block syntax::
-
-     get(dict, key) do
-         # default value calculated here
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
+   the value if it is present; otherwise, returns ``convert(T, y)``.
 
 .. function:: isnull(x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        isnull(x)
 
@@ -1129,8 +935,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        run(command)
 
    Run a command object, constructed with backticks. Throws an error if anything goes wrong, including the process exiting with a non-zero status.
@@ -1138,8 +942,6 @@ System
 .. function:: spawn(command)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        spawn(command)
 
@@ -1154,8 +956,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0). An exception is raised if the process cannot be started.
@@ -1163,8 +963,6 @@ System
 .. function:: process_running(p::Process)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        process_running(p::Process)
 
@@ -1174,8 +972,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        process_exited(p::Process)
 
    Determine whether a process has exited.
@@ -1184,41 +980,38 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       kill(p::Process, signum=SIGTERM)
 
-       kill(manager::FooManager, pid::Int, config::WorkerConfig)
-
-   Implemented by cluster managers. It is called on the master process, by ``rmprocs``\ . It should cause the remote worker specified by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+   Send a signal to a process. The default is to terminate the process.
 
 .. function:: open(command, mode::AbstractString="r", stdio=DevNull)
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  open(command, mode::AbstractString="r", stdio=DevNull)
 
-              open(f::function, args...)
-
-   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
-
-   **Example**: ``open(readall, "file.txt")``
+   Start running ``command`` asynchronously, and return a tuple
+   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
+   reads from the process's standard output and ``stdio`` optionally
+   specifies the process's standard input stream.  If ``mode`` is
+   ``"w"``, then ``stream`` writes to the process's standard input
+   and ``stdio`` optionally specifies the process's standard output
+   stream.
 
 .. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    .. Docstring generated from Julia source
 
-   ::
+   ..  open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
-              open(f::function, args...)
-
-   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
-
-   **Example**: ``open(readall, "file.txt")``
+   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
+   on the resulting read or write stream, then closes the stream
+   and waits for the process to complete.  Returns the value returned
+   by ``f``.
 
 .. function:: Sys.set_process_title(title::AbstractString)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Sys.set_process_title(title::AbstractString)
 
@@ -1228,8 +1021,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        Sys.get_process_title()
 
    Get the process title. On some systems, will always return empty string. (not exported)
@@ -1237,8 +1028,6 @@ System
 .. function:: readandwrite(command)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        readandwrite(command)
 
@@ -1248,8 +1037,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ignorestatus(command)
 
    Mark a command object so that running it will not throw an error if the result code is non-zero.
@@ -1258,8 +1045,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        detach(command)
 
    Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
@@ -1267,8 +1052,6 @@ System
 .. function:: setenv(command, env; dir=working_dir)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        setenv(command, env; dir=working_dir)
 
@@ -1280,89 +1063,51 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        withenv(f::Function, kv::Pair...)
 
    Execute ``f()`` in an environment that is temporarily modified (not replaced as in ``setenv``\ ) by zero or more ``"var"=>val`` arguments ``kv``\ . ``withenv`` is generally used via the ``withenv(kv...) do ... end`` syntax. A value of ``nothing`` can be used to temporarily unset an environment variable (if it is set). When ``withenv`` returns, the original environment has been restored.
 
-.. function:: pipe(from, to, ...)
+.. function:: pipeline(from, to, ...)
 
    .. Docstring generated from Julia source
 
-   ::
-
-              pipe(from, to, ...)
+   ..  pipeline(from, to, ...)
 
    Create a pipeline from a data source to a destination. The source and destination can
-   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
+   be commands, I/O streams, strings, or results of other ``pipeline`` calls. At least one
    argument must be a command. Strings refer to filenames.
    When called with more than two arguments, they are chained together from left to right.
-   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
+   For example ``pipeline(a,b,c)`` is equivalent to ``pipeline(pipeline(a,b),c)``. This provides a more
    concise way to specify multi-stage pipelines.
 
    **Examples**:
-     * ``run(pipe(`ls`, `grep xyz`))``
-     * ``run(pipe(`ls`, "out.txt"))``
-     * ``run(pipe("out.txt", `grep xyz`))``
+     * ``run(pipeline(`ls`, `grep xyz`))``
+     * ``run(pipeline(`ls`, "out.txt"))``
+     * ``run(pipeline("out.txt", `grep xyz`))``
 
-   ::
 
-              pipe(command; stdin, stdout, stderr, append=false)
+.. function:: pipeline(command; stdin, stdout, stderr, append=false)
+
+   .. Docstring generated from Julia source
+
+   ..  pipeline(command; stdin, stdout, stderr, append=false)
 
    Redirect I/O to or from the given ``command``. Keyword arguments specify which of
    the command's streams should be redirected. ``append`` controls whether file output
    appends to the file.
-   This is a more general version of the 2-argument ``pipe`` function.
-   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
+   This is a more general version of the 2-argument ``pipeline`` function.
+   ``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a
    command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
    data source.
 
    **Examples**:
-     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-     * ``run(pipe(`update`, stdout="log.txt", append=true))``
+     * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+     * ``run(pipeline(`update`, stdout="log.txt", append=true))``
 
-.. function:: pipe(command; stdin, stdout, stderr, append=false)
-
-   .. Docstring generated from Julia source
-
-   ::
-
-              pipe(from, to, ...)
-
-   Create a pipeline from a data source to a destination. The source and destination can
-   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
-   argument must be a command. Strings refer to filenames.
-   When called with more than two arguments, they are chained together from left to right.
-   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
-   concise way to specify multi-stage pipelines.
-
-   **Examples**:
-     * ``run(pipe(`ls`, `grep xyz`))``
-     * ``run(pipe(`ls`, "out.txt"))``
-     * ``run(pipe("out.txt", `grep xyz`))``
-
-   ::
-
-              pipe(command; stdin, stdout, stderr, append=false)
-
-   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
-   the command's streams should be redirected. ``append`` controls whether file output
-   appends to the file.
-   This is a more general version of the 2-argument ``pipe`` function.
-   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
-   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
-   data source.
-
-   **Examples**:
-     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-     * ``run(pipe(`update`, stdout="log.txt", append=true))``
 
 .. function:: gethostname() -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        gethostname() -> AbstractString
 
@@ -1372,8 +1117,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        getipaddr() -> AbstractString
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
@@ -1381,8 +1124,6 @@ System
 .. function:: getpid() -> Int32
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        getpid() -> Int32
 
@@ -1392,8 +1133,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        time()
 
    Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
@@ -1401,8 +1140,6 @@ System
 .. function:: time_ns()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        time_ns()
 
@@ -1412,9 +1149,7 @@ System
 
    .. Docstring generated from Julia source
 
-   ::
-
-              tic()
+   ..  tic()
 
    Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
 
@@ -1422,9 +1157,7 @@ System
 
    .. Docstring generated from Julia source
 
-   ::
-
-              toc()
+   ..  toc()
 
    Print and return the time elapsed since the last :func:`tic`.
 
@@ -1432,17 +1165,13 @@ System
 
    .. Docstring generated from Julia source
 
-   ::
-
-              toq()
+   ..  toq()
 
    Return, but do not print, the time elapsed since the last :func:`tic`.
 
 .. function:: @time
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        @time
 
@@ -1452,8 +1181,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @timev
 
    This is a verbose version of the ``@time`` macro, it first prints the same information as ``@time``\ , then any non-zero memory allocation counters, and then returns the value of the expression.
@@ -1461,8 +1188,6 @@ System
 .. function:: @timed
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        @timed
 
@@ -1472,8 +1197,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @elapsed
 
    A macro to evaluate an expression, discarding the resulting value, instead returning the number of seconds it took to execute as a floating-point number.
@@ -1482,8 +1205,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @allocated
 
    A macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression. Note: the expression is evaluated inside a local function, instead of the current context, in order to eliminate the effects of compilation, however, there still may be some allocations due to JIT compilation. This also makes the results inconsistent with the ``@time`` macros, which do not try to adjust for the effects of compilation.
@@ -1491,8 +1212,6 @@ System
 .. function:: EnvHash() -> EnvHash
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        EnvHash() -> EnvHash
 
@@ -1506,8 +1225,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @unix
 
    Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
@@ -1515,8 +1232,6 @@ System
 .. function:: @osx
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        @osx
 
@@ -1526,8 +1241,6 @@ System
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @linux
 
    Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
@@ -1535,8 +1248,6 @@ System
 .. function:: @windows
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        @windows
 
@@ -1549,8 +1260,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        error(message::AbstractString)
 
    Raise an ``ErrorException`` with the given message
@@ -1558,8 +1267,6 @@ Errors
 .. function:: throw(e)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        throw(e)
 
@@ -1569,8 +1276,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        rethrow([e])
 
    Throw an object without changing the current exception backtrace. The default argument is the current exception (if called within a ``catch`` block).
@@ -1578,8 +1283,6 @@ Errors
 .. function:: backtrace()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        backtrace()
 
@@ -1589,8 +1292,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        catch_backtrace()
 
    Get the backtrace of the current exception, for use within ``catch`` blocks.
@@ -1598,8 +1299,6 @@ Errors
 .. function:: assert(cond)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        assert(cond)
 
@@ -1609,8 +1308,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        @assert cond [text]
 
    Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
@@ -1618,8 +1315,6 @@ Errors
 .. function:: ArgumentError(msg)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        ArgumentError(msg)
 
@@ -1629,8 +1324,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        AssertionError([msg])
 
    The asserted condition did not evalutate to ``true``\ .
@@ -1638,8 +1331,6 @@ Errors
 .. function:: BoundsError([a],[i])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        BoundsError([a],[i])
 
@@ -1649,8 +1340,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        DimensionMismatch([msg])
 
    The objects called do not have matching dimensionality.
@@ -1658,8 +1347,6 @@ Errors
 .. function:: DivideError()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        DivideError()
 
@@ -1669,8 +1356,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        DomainError()
 
    The arguments to a function or constructor are outside the valid domain.
@@ -1678,8 +1363,6 @@ Errors
 .. function:: EOFError()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        EOFError()
 
@@ -1689,8 +1372,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ErrorException(msg)
 
    Generic error type. The error message, in the ``.msg`` field, may provide more specific details.
@@ -1698,8 +1379,6 @@ Errors
 .. function:: InexactError()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        InexactError()
 
@@ -1709,8 +1388,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        InterruptException()
 
    The process was stopped by a terminal interrupt (CTRL+C).
@@ -1718,8 +1395,6 @@ Errors
 .. function:: KeyError(key)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        KeyError(key)
 
@@ -1729,8 +1404,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        LoadError(file::AbstractString, line::Int, error)
 
    An error occurred while ``include``\ ing, ``require``\ ing, or ``using`` a file. The error specifics should be available in the ``.error`` field.
@@ -1738,8 +1411,6 @@ Errors
 .. function:: MethodError(f, args)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        MethodError(f, args)
 
@@ -1749,8 +1420,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        NullException()
 
    An attempted access to a ``Nullable`` with no defined value.
@@ -1758,8 +1427,6 @@ Errors
 .. function:: OutOfMemoryError()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        OutOfMemoryError()
 
@@ -1769,8 +1436,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ReadOnlyMemoryError()
 
    An operation tried to write to memory that is read-only.
@@ -1778,8 +1443,6 @@ Errors
 .. function:: OverflowError()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        OverflowError()
 
@@ -1789,8 +1452,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ParseError(msg)
 
    The expression passed to the ``parse`` function could not be interpreted as a valid Julia expression.
@@ -1798,8 +1459,6 @@ Errors
 .. function:: ProcessExitedException()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        ProcessExitedException()
 
@@ -1809,8 +1468,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        StackOverflowError()
 
    The function call grew beyond the size of the call stack. This usually happens when a call recurses infinitely.
@@ -1818,8 +1475,6 @@ Errors
 .. function:: SystemError(prefix::AbstractString, [errnum::Int32])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        SystemError(prefix::AbstractString, [errnum::Int32])
 
@@ -1829,8 +1484,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        TypeError(func::Symbol, context::AbstractString, expected::Type, got)
 
    A type assertion failure, or calling an intrinsic function with an incorrect argument type.
@@ -1839,8 +1492,6 @@ Errors
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        UndefRefError()
 
    The item or field is not defined for the given object.
@@ -1848,8 +1499,6 @@ Errors
 .. function:: UndefVarError(var::Symbol)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        UndefVarError(var::Symbol)
 
@@ -1862,17 +1511,13 @@ Events
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       Timer(callback::Function, delay, repeat=0)
 
-       Timer(delay, repeat=0)
-
-   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval. Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
+   Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
 
 .. function:: Timer(delay, repeat=0)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        Timer(delay, repeat=0)
 
@@ -1885,8 +1530,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        module_name(m::Module) -> Symbol
 
    Get the name of a module as a symbol.
@@ -1894,8 +1537,6 @@ Reflection
 .. function:: module_parent(m::Module) -> Module
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        module_parent(m::Module) -> Module
 
@@ -1905,8 +1546,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        current_module() -> Module
 
    Get the *dynamically* current module, which is the module code is currently being read from. In general, this is not the same as the module containing the call to this function.
@@ -1914,8 +1553,6 @@ Reflection
 .. function:: fullname(m::Module)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        fullname(m::Module)
 
@@ -1925,8 +1562,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        names(x::Module[, all=false[, imported=false]])
 
    Get an array of the names exported by a module, with optionally more module globals according to the additional parameters.
@@ -1934,8 +1569,6 @@ Reflection
 .. function:: nfields(x::DataType) -> Int
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        nfields(x::DataType) -> Int
 
@@ -1945,8 +1578,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
@@ -1954,8 +1585,6 @@ Reflection
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        isconst([m::Module], s::Symbol) -> Bool
 
@@ -1965,8 +1594,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        isgeneric(f::Function) -> Bool
 
    Determine whether a function is generic.
@@ -1974,8 +1601,6 @@ Reflection
 .. function:: function_name(f::Function) -> Symbol
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        function_name(f::Function) -> Symbol
 
@@ -1985,8 +1610,6 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        function_module(f::Function, types) -> Module
 
    Determine the module containing a given definition of a generic function.
@@ -1995,13 +1618,9 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        functionloc(f::Function, types)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
-
-   .. code-block:: julia
 
        functionloc(m::Method)
 
@@ -2011,13 +1630,9 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        functionloc(f::Function, types)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
-
-   .. code-block:: julia
 
        functionloc(m::Method)
 
@@ -2030,8 +1645,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        gc()
 
    Perform garbage collection. This should not generally be used.
@@ -2039,8 +1652,6 @@ Internals
 .. function:: gc_enable(on::Bool)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        gc_enable(on::Bool)
 
@@ -2050,8 +1661,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        macroexpand(x)
 
    Takes the expression x and returns an equivalent expression with all macros removed (expanded).
@@ -2059,8 +1668,6 @@ Internals
 .. function:: expand(x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        expand(x)
 
@@ -2070,8 +1677,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        code_lowered(f, types)
 
    Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
@@ -2080,17 +1685,13 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @code_lowered
+   ..  @code_lowered
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 
 .. function:: code_typed(f, types; optimize=true)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        code_typed(f, types; optimize=true)
 
@@ -2100,9 +1701,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @code_typed
+   ..  @code_typed
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
 
@@ -2110,9 +1709,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              code_warntype(f, types)
+   ..  code_warntype(f, types)
 
    Displays lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See :ref:`man-code-warntype` for more information.
 
@@ -2120,9 +1717,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @code_warntype
+   ..  @code_warntype
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
 
@@ -2130,9 +1725,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              code_llvm(f, types)
+   ..  code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
 
@@ -2142,17 +1735,13 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @code_llvm
+   ..  @code_llvm
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
 
 .. function:: code_native(f, types)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        code_native(f, types)
 
@@ -2162,17 +1751,13 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ::
-
-              @code_native
+   ..  @code_native
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
 
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        precompile(f,args::Tuple{Vararg{Any}})
 

@@ -167,9 +167,7 @@ function doc(f::Function, sig::Type)
             fd = meta(mod)[f]
             results = []
             for msig in fd.order
-                if sig <: msig
-                    return fd.meta[msig]
-                elseif msig <: sig
+                if msig <: sig
                     push!(results, fd.meta[msig])
                 end
             end

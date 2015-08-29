@@ -9,8 +9,21 @@ ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 
 function getdoc(mod, x)
     try
-        mod = foldl((x,y) -> getfield(x,symbol(y)), Main, split(mod, "."))
-        return collect(values(Docs.meta(Base)[getfield(mod, symbol(x))].meta))
+        x = unescape_string(x)
+        v = if x[1] != '@'
+            eval(parse(ident(mod, x)))
+        else
+            Docs.Binding(eval(parse(mod)), symbol(x))
+        end
+        #=xs = split(x, ".")
+        mod = foldl((x,y) -> getfield(x,symbol(y)), Main, [split(mod, ".")..., xs[1:end-1]...])
+        #x = xs[end]=#
+        M = Docs.meta(Base)
+            if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
+                return collect(values(M[v].meta))
+            else
+                return Any[M[v]]
+            end
     catch e
         println(e)
         warn("Mod $mod $x")
@@ -34,7 +47,8 @@ function tryrst(md)
         return Markdown.rst(md)
     catch e
         warn("Error converting docstring:")
-        display(md)
+#        display(md)
+        println(e)
         return
     end
 end
@@ -64,15 +78,17 @@ function translate(file)
                 for mdoc in getdoc(mod, funcname)
                     trst = tryrst(mdoc)
                     trst !== nothing || continue
-                    if contains(trst, full)
+                    if contains(trst, " " * full)
                         if doc != nothing
-                            error("duplicate $full $found $l")
+                            error("duplicate $full $l")
                         end
                         doc = mdoc
+                    else
+                        #@show trst full
                     end
                 end
                 if doc == nothing || torst(doc) == nothing
-                    info("no docs for $(ident(mod, funcname))")
+                    info("no docs for $(ident(mod, funcname)) $rest")
                     println(io, l)
                     doccing = false
                     continue

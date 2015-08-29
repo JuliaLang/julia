@@ -8,8 +8,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        dlopen(libfile::AbstractString [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
@@ -20,9 +18,7 @@
 
    .. Docstring generated from Julia source
 
-   ::
-
-              dlopen_e(libfile::AbstractString [, flags::Integer])
+   ..  dlopen_e(libfile::AbstractString [, flags::Integer])
 
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
@@ -62,8 +58,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        dlsym(handle, sym)
 
    Look up a symbol from a shared library handle, return callable function pointer on success.
@@ -71,8 +65,6 @@
 .. function:: dlsym_e(handle, sym)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        dlsym_e(handle, sym)
 
@@ -82,8 +74,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        dlclose(handle)
 
    Close shared library referenced by handle.
@@ -91,8 +81,6 @@
 .. function:: find_library(names, locations)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        find_library(names, locations)
 

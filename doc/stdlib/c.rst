@@ -8,8 +8,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
    Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is an AbstractString or :Symbol.
@@ -22,8 +20,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cglobal((symbol, library) [, type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``\ . Returns a ``Ptr{Type}``\ , defaulting to ``Ptr{Void}`` if no Type argument is supplied. The values can be read or written by ``unsafe_load`` or ``unsafe_store!``\ , respectively.
@@ -32,15 +28,11 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    Generate C-callable function pointer from Julia function. Type annotation of the return value in the callback function is a must for situations where Julia cannot infer the return type automatically.
 
    For example:
-
-   .. code-block:: julia
 
        function foo()
            # body
@@ -53,8 +45,6 @@
 .. function:: unsafe_convert(T,x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        unsafe_convert(T,x)
 
@@ -70,8 +60,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        cconvert(T,x)
 
    Convert "x" to a value of type "T", typically by calling ``convert(T,x)``
@@ -84,8 +72,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        unsafe_load(p::Ptr{T},i::Integer)
 
    Load a value of type ``T`` from the address of the ith element (1-indexed) starting at ``p``\ . This is equivalent to the C expression ``p[i-1]``\ .
@@ -95,8 +81,6 @@
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        unsafe_store!(p::Ptr{T},x,i::Integer)
 
@@ -108,15 +92,11 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    Copy ``N`` elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.
 
    The ``unsafe`` prefix on this function indicates that no validation is performed on the pointers ``dest`` and ``src`` to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.
-
-   .. code-block:: julia
 
        unsafe_copy!(dest::Array, do, src::Array, so, N)
 
@@ -128,15 +108,11 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    Copy ``N`` elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.
 
    The ``unsafe`` prefix on this function indicates that no validation is performed on the pointers ``dest`` and ``src`` to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.
-
-   .. code-block:: julia
 
        unsafe_copy!(dest::Array, do, src::Array, so, N)
 
@@ -148,17 +124,13 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
+       copy!(dest, src)
 
-       copy!(dest, do, src, so, N)
-
-   Copy ``N`` elements from collection ``src`` starting at offset ``so``\ , to array ``dest`` starting at offset ``do``\ . Returns ``dest``\ .
+   Copy all elements from collection ``src`` to array ``dest``\ . Returns ``dest``\ .
 
 .. function:: copy!(dest, do, src, so, N)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        copy!(dest, do, src, so, N)
 
@@ -167,8 +139,6 @@
 .. function:: pointer(array [, index])
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        pointer(array [, index])
 
@@ -180,8 +150,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    Wrap a native pointer as a Julia Array object. The pointer element type determines the array element type. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
@@ -189,8 +157,6 @@
 .. function:: pointer_from_objref(object_instance)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        pointer_from_objref(object_instance)
 
@@ -200,8 +166,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        unsafe_pointer_to_objref(p::Ptr)
 
    Convert a ``Ptr`` to an object reference. Assumes the pointer refers to a valid heap-allocated Julia object. If this is not the case, undefined behavior results, hence this function is considered "unsafe" and should be used with care.
@@ -210,13 +174,9 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        disable_sigint(f::Function)
 
    Disable Ctrl-C handler during execution of a function, for calling external code that is not interrupt safe. Intended to be called using ``do`` block syntax as follows:
-
-   .. code-block:: julia
 
        disable_sigint() do
            # interrupt-unsafe code
@@ -227,8 +187,6 @@
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
        reenable_sigint(f::Function)
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily reverses the effect of ``disable_sigint``\ .
@@ -236,8 +194,6 @@
 .. function:: systemerror(sysfunc, iftrue)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
 
        systemerror(sysfunc, iftrue)
 
