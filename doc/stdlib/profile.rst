@@ -38,18 +38,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    ::
 
-              print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
-
-   Prints profiling results to ``io`` (by default, ``STDOUT``). If you
-   do not supply a ``data`` vector, the internal buffer of accumulated
-   backtraces will be used.  ``format`` can be ``:tree`` or
-   ``:flat``. If ``C==true``, backtraces from C and Fortran code are
-   shown. ``combine==true`` merges instruction pointers that
-   correspond to the same line of code.  ``cols`` controls the width
-   of the display.
-
-   ::
-
               print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine
@@ -60,18 +48,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    .. Docstring generated from Julia source
-
-   ::
-
-              print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
-
-   Prints profiling results to ``io`` (by default, ``STDOUT``). If you
-   do not supply a ``data`` vector, the internal buffer of accumulated
-   backtraces will be used.  ``format`` can be ``:tree`` or
-   ``:flat``. If ``C==true``, backtraces from C and Fortran code are
-   shown. ``combine==true`` merges instruction pointers that
-   correspond to the same line of code.  ``cols`` controls the width
-   of the display.
 
    ::
 

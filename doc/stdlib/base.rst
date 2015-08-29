@@ -1164,26 +1164,6 @@ Nullables
 
    ::
 
-              get(x)
-
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
-
-   ::
-
-              get(x, y)
-
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
-
-   ::
-
-              get(collection, key, default)
-
-   Return the value stored for the given key, or the given default value if no mapping for the key is present.
-
-   ::
-
               get(f::Function, collection, key)
 
    Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use :func:`get!` to also store the default value in the dictionary.
@@ -1196,26 +1176,6 @@ Nullables
 .. function:: get(x, y)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              get(x)
-
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
-
-   ::
-
-              get(x, y)
-
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
-
-   ::
-
-              get(collection, key, default)
-
-   Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
    ::
 
@@ -1318,48 +1278,6 @@ System
 
    ::
 
-              open(command, mode::AbstractString="r", stdio=DevNull)
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-   ::
-
-              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
-
-   ::
-
-              open(file_name, [read, write, create, truncate, append]) -> IOStream
-
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
-
-   ::
-
-              open(file_name, [mode]) -> IOStream
-
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
-
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
-
-   ::
-
               open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
@@ -1369,48 +1287,6 @@ System
 .. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              open(command, mode::AbstractString="r", stdio=DevNull)
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-   ::
-
-              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
-
-   ::
-
-              open(file_name, [read, write, create, truncate, append]) -> IOStream
-
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
-
-   ::
-
-              open(file_name, [mode]) -> IOStream
-
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
-
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
 
    ::
 

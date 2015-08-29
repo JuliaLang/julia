@@ -60,19 +60,6 @@ Mathematical Operators
 
    ::
 
-              *(A, B)
-
-   Matrix multiplication
-
-   ::
-
-              *(x, y...)
-
-   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-   ``*(x, y, z, ...)``.
-
-   ::
-
               *(s, t)
 
    Concatenate strings. The ``*`` operator is an alias to this function.
@@ -99,12 +86,6 @@ Mathematical Operators
 .. function:: ^(x, y)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ^(x, y)
-
-   Exponentiation operator.
 
    ::
 
@@ -1642,8 +1623,8 @@ Mathematical Functions
 
               trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
-    Truncates the value of ``dt`` according to the provided ``Period`` type.
-    E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
+   Truncates the value of ``dt`` according to the provided ``Period`` type.
+   E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 
 .. function:: unsafe_trunc(T, x)
 
@@ -1952,17 +1933,6 @@ Mathematical Functions
 
    ::
 
-              factorial(n)
-
-   Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
-   is computed as an integer (promoted to at least 64 bits).  Note
-   that this may overflow if ``n`` is not small, but you can use
-   ``factorial(big(n))`` to compute the result exactly in arbitrary
-   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
-   equivalent to :func:`gamma(n+1) <gamma>`.
-
-   ::
-
               factorial(n,k)
 
    Compute ``factorial(n)/factorial(k)``
@@ -1970,17 +1940,6 @@ Mathematical Functions
 .. function:: factorial(n,k)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              factorial(n)
-
-   Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
-   is computed as an integer (promoted to at least 64 bits).  Note
-   that this may overflow if ``n`` is not small, but you can use
-   ``factorial(big(n))`` to compute the result exactly in arbitrary
-   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
-   equivalent to :func:`gamma(n+1) <gamma>`.
 
    ::
 
@@ -2487,12 +2446,6 @@ Mathematical Functions
 
    ::
 
-              zeta(s)
-
-   Riemann zeta function :math:`\zeta(s)`.
-
-   ::
-
               zeta(s, z)
 
    Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
@@ -2501,12 +2454,6 @@ Mathematical Functions
 .. function:: zeta(s, z)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              zeta(s)
-
-   Riemann zeta function :math:`\zeta(s)`.
 
    ::
 

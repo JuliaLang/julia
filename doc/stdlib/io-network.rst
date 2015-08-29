@@ -25,48 +25,6 @@ General I/O
 
    ::
 
-              open(command, mode::AbstractString="r", stdio=DevNull)
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-   ::
-
-              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
-
-   ::
-
-              open(file_name, [read, write, create, truncate, append]) -> IOStream
-
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
-
-   ::
-
-              open(file_name, [mode]) -> IOStream
-
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
-
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
-
-   ::
-
               open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
@@ -79,48 +37,6 @@ General I/O
 
    ::
 
-              open(command, mode::AbstractString="r", stdio=DevNull)
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-   ::
-
-              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
-
-   ::
-
-              open(file_name, [read, write, create, truncate, append]) -> IOStream
-
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
-
-   ::
-
-              open(file_name, [mode]) -> IOStream
-
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
-
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
-
-   ::
-
               open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
@@ -130,48 +46,6 @@ General I/O
 .. function:: open(f::function, args...)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              open(command, mode::AbstractString="r", stdio=DevNull)
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-   ::
-
-              open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
-
-   ::
-
-              open(file_name, [read, write, create, truncate, append]) -> IOStream
-
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
-
-   ::
-
-              open(file_name, [mode]) -> IOStream
-
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
-
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
 
    ::
 
@@ -336,12 +210,6 @@ General I/O
 .. function:: close(stream)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              close(stream)
-
-   Close an I/O stream. Performs a ``flush`` first.
 
    ::
 
@@ -1402,50 +1270,6 @@ Memory-mapped I/O
 
    ::
 
-              Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-              Mmap.mmap(type::Type{Array{T,N}}, dims)
-
-   Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
-
-   The type is an ``Array{T,N}`` with a bits-type element of ``T`` and dimension ``N`` that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
-
-   ``dims`` is a tuple or single ``Integer`` specifying the size or length of the array.
-
-   The file is passed via the stream argument, either as an open ``IOStream`` or filename string.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
-
-   If no ``type`` argument is specified, the default is ``Vector{UInt8}``.
-
-   Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
-
-   The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
-
-   The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
-
-   For example, the following code::
-
-      # Create a file for mmapping
-      # (you could alternatively use mmap to do this step, too)
-      A = rand(1:20, 5, 30)
-      s = open("/tmp/mmap.bin", "w+")
-      # We'll write the dimensions of the array as the first two Ints in the file
-      write(s, size(A,1))
-      write(s, size(A,2))
-      # Now write the data
-      write(s, A)
-      close(s)
-
-      # Test by reading it back in
-      s = open("/tmp/mmap.bin")   # default is read-only
-      m = read(s, Int)
-      n = read(s, Int)
-      A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
-
-   creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
-
-   A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
-
-   ::
-
               Mmap.mmap(io, BitArray, [dims, offset])
 
    Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`, but the byte representation is different.
@@ -1457,50 +1281,6 @@ Memory-mapped I/O
 .. function:: Mmap.mmap(io, BitArray, [dims, offset])
 
    .. Docstring generated from Julia source
-
-   ::
-
-              Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-              Mmap.mmap(type::Type{Array{T,N}}, dims)
-
-   Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
-
-   The type is an ``Array{T,N}`` with a bits-type element of ``T`` and dimension ``N`` that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
-
-   ``dims`` is a tuple or single ``Integer`` specifying the size or length of the array.
-
-   The file is passed via the stream argument, either as an open ``IOStream`` or filename string.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
-
-   If no ``type`` argument is specified, the default is ``Vector{UInt8}``.
-
-   Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
-
-   The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
-
-   The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
-
-   For example, the following code::
-
-      # Create a file for mmapping
-      # (you could alternatively use mmap to do this step, too)
-      A = rand(1:20, 5, 30)
-      s = open("/tmp/mmap.bin", "w+")
-      # We'll write the dimensions of the array as the first two Ints in the file
-      write(s, size(A,1))
-      write(s, size(A,2))
-      # Now write the data
-      write(s, A)
-      close(s)
-
-      # Test by reading it back in
-      s = open("/tmp/mmap.bin")   # default is read-only
-      m = read(s, Int)
-      n = read(s, Int)
-      A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
-
-   creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
-
-   A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
    ::
 

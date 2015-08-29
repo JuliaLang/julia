@@ -19,19 +19,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              *(A, B)
-
-   Matrix multiplication
-
-   ::
-
-              *(x, y...)
-
-   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-   ``*(x, y, z, ...)``.
-
-   ::
-
               *(s, t)
 
    Concatenate strings. The ``*`` operator is an alias to this function.
@@ -89,18 +76,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: full(F)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              full(S)
-
-   Convert a sparse matrix ``S`` into a dense matrix.
-
-   ::
-
-              full(F)
-
-   Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
    ::
 
@@ -295,65 +270,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              qrfact(A [,pivot=Val{false}]) -> F
-
-   Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
-
-      ================ ================= ============== =====================================
-      Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-      ---------------- ----------------- -------------- -------------------------------------
-      ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-      ================ ================= ============== =====================================
-
-   ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
-
-   The individual components of the factorization ``F`` can be accessed by indexing:
-
-      =========== ============================================= ================== ===================== ==================
-      Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-      ----------- --------------------------------------------- ------------------ --------------------- ------------------
-      ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-      ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-      ``F[:p]``   pivot ``Vector``                                                                        ✓
-      ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-      =========== ============================================= ================== ===================== ==================
-
-   The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
-
-   Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with :func:`full` which has a named argument ``thin``.
-
-   .. note::
-
-      ``qrfact`` returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the ``Q`` and ``R`` matrices can be stored compactly rather as two separate dense matrices.
-
-      The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
-
-         .. math::
-
-            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
-
-      where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
-
-      The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
-
-         .. math::
-
-            Q = I + Y T Y^T
-
-      where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
-
-   .. [Bischof1987] C Bischof and C Van Loan, "The WY representation for products
-      of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13.
-      `doi:10.1137/0908009 <http://dx.doi.org/10.1137/0908009>`_
-   .. [Schreiber1989] R Schreiber and C Van Loan, "A storage-efficient WY
-      representation for products of Householder transformations",
-      SIAM J Sci Stat Comput 10 (1989), 53-57.
-      `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
-
-   ::
-
               qrfact(A) -> SPQR.Factorization
 
    Compute the QR factorization of a sparse matrix ``A``. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
@@ -361,65 +277,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact(A) -> SPQR.Factorization
 
    .. Docstring generated from Julia source
-
-   ::
-
-              qrfact(A [,pivot=Val{false}]) -> F
-
-   Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
-
-      ================ ================= ============== =====================================
-      Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-      ---------------- ----------------- -------------- -------------------------------------
-      ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-      ================ ================= ============== =====================================
-
-   ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
-
-   The individual components of the factorization ``F`` can be accessed by indexing:
-
-      =========== ============================================= ================== ===================== ==================
-      Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-      ----------- --------------------------------------------- ------------------ --------------------- ------------------
-      ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-      ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-      ``F[:p]``   pivot ``Vector``                                                                        ✓
-      ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-      =========== ============================================= ================== ===================== ==================
-
-   The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
-
-   Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with :func:`full` which has a named argument ``thin``.
-
-   .. note::
-
-      ``qrfact`` returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the ``Q`` and ``R`` matrices can be stored compactly rather as two separate dense matrices.
-
-      The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
-
-         .. math::
-
-            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
-
-      where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
-
-      The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
-
-         .. math::
-
-            Q = I + Y T Y^T
-
-      where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
-
-   .. [Bischof1987] C Bischof and C Van Loan, "The WY representation for products
-      of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13.
-      `doi:10.1137/0908009 <http://dx.doi.org/10.1137/0908009>`_
-   .. [Schreiber1989] R Schreiber and C Van Loan, "A storage-efficient WY
-      representation for products of Householder transformations",
-      SIAM J Sci Stat Comput 10 (1989), 53-57.
-      `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 
    ::
 
@@ -440,18 +297,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 
    .. Docstring generated from Julia source
-
-   ::
-
-              full(S)
-
-   Convert a sparse matrix ``S`` into a dense matrix.
-
-   ::
-
-              full(F)
-
-   Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
    ::
 
@@ -494,26 +339,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
-
-   Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
-   details on the ``balance`` keyword argument.
-
-   .. doctest::
-
-      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-      ([1.0,3.0,18.0],
-      3x3 Array{Float64,2}:
-       1.0  0.0  0.0
-       0.0  1.0  0.0
-       0.0  0.0  1.0)
-
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
-   factorization to a tuple; where possible, using :func:`eigfact` is
-   recommended.
-
-   ::
-
               eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
@@ -525,26 +350,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eig(A, B) -> D, V
 
    .. Docstring generated from Julia source
-
-   ::
-
-              eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
-
-   Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
-   details on the ``balance`` keyword argument.
-
-   .. doctest::
-
-      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-      ([1.0,3.0,18.0],
-      3x3 Array{Float64,2}:
-       1.0  0.0  0.0
-       0.0  1.0  0.0
-       0.0  0.0  1.0)
-
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
-   factorization to a tuple; where possible, using :func:`eigfact` is
-   recommended.
 
    ::
 
@@ -617,30 +422,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
-
-   Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
-   factorization object ``F`` which contains the eigenvalues in ``F[:values]``
-   and the eigenvectors in the columns of the matrix ``F[:vectors]``.
-   (The ``k``\ th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
-
-   The following functions are available for ``Eigen`` objects: ``inv``,
-   ``det``.
-
-   If ``A`` is :class:`Symmetric`, :class:`Hermitian` or :class:`SymTridiagonal`,
-   it is possible to calculate only a subset of the eigenvalues by specifying
-   either a :class:`UnitRange` ``irange`` covering indices of the sorted
-   eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
-   of the eigenvalues.
-
-   For general nonsymmetric matrices it is possible to specify how the matrix
-   is balanced before the eigenvector calculation. The option ``permute=true``
-   permutes the matrix to become closer to upper triangular, and ``scale=true``
-   scales the matrix by its diagonal elements to make rows and columns more
-   equal in norm. The default is ``true`` for both options.
-
-   ::
-
               eigfact(A, B) -> GeneralizedEigen
 
    Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
@@ -653,30 +434,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigfact(A, B) -> GeneralizedEigen
 
    .. Docstring generated from Julia source
-
-   ::
-
-              eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
-
-   Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
-   factorization object ``F`` which contains the eigenvalues in ``F[:values]``
-   and the eigenvectors in the columns of the matrix ``F[:vectors]``.
-   (The ``k``\ th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
-
-   The following functions are available for ``Eigen`` objects: ``inv``,
-   ``det``.
-
-   If ``A`` is :class:`Symmetric`, :class:`Hermitian` or :class:`SymTridiagonal`,
-   it is possible to calculate only a subset of the eigenvalues by specifying
-   either a :class:`UnitRange` ``irange`` covering indices of the sorted
-   eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
-   of the eigenvalues.
-
-   For general nonsymmetric matrices it is possible to specify how the matrix
-   is balanced before the eigenvector calculation. The option ``permute=true``
-   permutes the matrix to become closer to upper triangular, and ``scale=true``
-   scales the matrix by its diagonal elements to make rows and columns more
-   equal in norm. The default is ``true`` for both options.
 
    ::
 
@@ -752,12 +509,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
-
-   See :func:`schurfact`
-
-   ::
-
               schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
    See :func:`schurfact`
@@ -793,24 +544,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(Q, T, select) -> Schur
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ordschur!(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
 
    ::
 
@@ -852,24 +585,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              ordschur!(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
-
-   ::
-
               ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
@@ -893,12 +608,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
    .. Docstring generated from Julia source
-
-   ::
-
-              schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
-
-   See :func:`schurfact`
 
    ::
 
@@ -940,24 +649,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ::
 
-              ordschur!(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
-
-   ::
-
               ordschur!(GS, select) -> GeneralizedSchur
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
@@ -993,24 +684,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ordschur!(GS, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ordschur!(Q, T, select) -> Schur
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, select) -> Schur
-
-   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
-
-   ::
-
-              ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
-
-   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
 
    ::
 
@@ -1601,22 +1274,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    ::
-
-              linreg(x, y) -> [a; b]
-
-   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
-
-   **Example**::
-
-      using PyPlot;
-      x = float([1:12])
-      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-      a, b = linreg(x,y) # Linear regression
-      plot(x, y, "o") # Plot (x,y) points
-      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
-
-   ::
-
               linreg(x, y, w)
 
    Weighted least-squares linear regression.
@@ -1626,22 +1283,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    ::
-
-              linreg(x, y) -> [a; b]
-
-   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
-
-   **Example**::
-
-      using PyPlot;
-      x = float([1:12])
-      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-      a, b = linreg(x,y) # Linear regression
-      plot(x, y, "o") # Plot (x,y) points
-      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
-
-   ::
-
               linreg(x, y, w)
 
    Weighted least-squares linear regression.

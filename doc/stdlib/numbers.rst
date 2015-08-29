@@ -684,17 +684,6 @@ Integers
 
    ::
 
-              isprime(x::Integer) -> Bool
-
-   Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
-
-   .. doctest::
-
-   	julia> isprime(3)
-   	true
-
-   ::
-
               isprime(x::BigInt, [reps = 25]) -> Bool
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
@@ -710,17 +699,6 @@ Integers
 .. function:: isprime(x::BigInt, [reps = 25]) -> Bool
 
    .. Docstring generated from Julia source
-
-   ::
-
-              isprime(x::Integer) -> Bool
-
-   Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
-
-   .. doctest::
-
-   	julia> isprime(3)
-   	true
 
    ::
 

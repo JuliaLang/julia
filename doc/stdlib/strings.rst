@@ -48,19 +48,6 @@
 
    ::
 
-              *(A, B)
-
-   Matrix multiplication
-
-   ::
-
-              *(x, y...)
-
-   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-   ``*(x, y, z, ...)``.
-
-   ::
-
               *(s, t)
 
    Concatenate strings. The ``*`` operator is an alias to this function.
@@ -72,12 +59,6 @@
 .. function:: ^(s, n)
 
    .. Docstring generated from Julia source
-
-   ::
-
-              ^(x, y)
-
-   Exponentiation operator.
 
    ::
 
