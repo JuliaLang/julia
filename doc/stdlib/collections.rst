@@ -206,18 +206,6 @@ General Collections
 
    .. code-block:: julia
 
-       length(A) -> Integer
-
-   Returns the number of elements in A
-
-   .. code-block:: julia
-
-       length(collection) -> Integer
-
-   For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
-
-   .. code-block:: julia
-
        length(s)
 
    The number of characters in string ``s``\ .
@@ -319,18 +307,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       reduce(op, v0, itr)
-
-   Reduce the given collection ``ìtr`` with the given binary operator ``op``\ . ``v0`` must be a neutral element for ``op`` that will be returned for empty collections. It is unspecified whether ``v0`` is used for non-empty collections.
-
-   Reductions for certain commonly-used operators have special implementations which should be used instead: ``maximum(itr)``\ , ``minimum(itr)``\ , ``sum(itr)``\ , ``prod(itr)``\ , ``any(itr)``\ , ``all(itr)``\ .
-
-   The associativity of the reduction is implementation dependent. This means that you can't use non-associative operations like ``-`` because it is undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3`` or ``1-(2-3)``\ . Use ``foldl`` or ``foldr`` instead for guaranteed left or right associativity.
-
-   Some operations accumulate error, and parallelism will also be easier if the reduction can be executed in groups. Future versions of Julia might change the algorithm. Note that the elements are not reordered if you use an ordered collection.
-
-   .. code-block:: julia
-
        reduce(op, itr)
 
    Like ``reduce(op, v0, itr)``\ . This cannot be used with empty collections, except for some special cases (e.g. when ``op`` is one of ``+``\ , ``*``\ , ``max``\ , ``min``\ , ``&``\ , ``|``\ ) when Julia can determine the neutral element of ``op``\ .
@@ -338,18 +314,6 @@ Iterable Collections
 .. function:: reduce(op, itr)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       reduce(op, v0, itr)
-
-   Reduce the given collection ``ìtr`` with the given binary operator ``op``\ . ``v0`` must be a neutral element for ``op`` that will be returned for empty collections. It is unspecified whether ``v0`` is used for non-empty collections.
-
-   Reductions for certain commonly-used operators have special implementations which should be used instead: ``maximum(itr)``\ , ``minimum(itr)``\ , ``sum(itr)``\ , ``prod(itr)``\ , ``any(itr)``\ , ``all(itr)``\ .
-
-   The associativity of the reduction is implementation dependent. This means that you can't use non-associative operations like ``-`` because it is undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3`` or ``1-(2-3)``\ . Use ``foldl`` or ``foldr`` instead for guaranteed left or right associativity.
-
-   Some operations accumulate error, and parallelism will also be easier if the reduction can be executed in groups. Future versions of Julia might change the algorithm. Note that the elements are not reordered if you use an ordered collection.
 
    .. code-block:: julia
 
@@ -525,12 +489,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       findmax(itr) -> (x, index)
-
-   Returns the maximum element and its index.
-
-   .. code-block:: julia
-
        findmax(A, dims) -> (maxval, index)
 
    For an array input, returns the value and index of the maximum over the given dimensions.
@@ -538,12 +496,6 @@ Iterable Collections
 .. function:: findmax(A, dims) -> (maxval, index)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findmax(itr) -> (x, index)
-
-   Returns the maximum element and its index.
 
    .. code-block:: julia
 
@@ -557,12 +509,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       findmin(itr) -> (x, index)
-
-   Returns the minimum element and its index.
-
-   .. code-block:: julia
-
        findmin(A, dims) -> (minval, index)
 
    For an array input, returns the value and index of the minimum over the given dimensions.
@@ -570,12 +516,6 @@ Iterable Collections
 .. function:: findmin(A, dims) -> (minval, index)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       findmin(itr) -> (x, index)
-
-   Returns the minimum element and its index.
 
    .. code-block:: julia
 
@@ -589,12 +529,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       maxabs(itr)
-
-   Compute the maximum absolute value of a collection of values.
-
-   .. code-block:: julia
-
        maxabs(A, dims)
 
    Compute the maximum absolute values over given dimensions.
@@ -602,12 +536,6 @@ Iterable Collections
 .. function:: maxabs(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       maxabs(itr)
-
-   Compute the maximum absolute value of a collection of values.
 
    .. code-block:: julia
 
@@ -631,12 +559,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       minabs(itr)
-
-   Compute the minimum absolute value of a collection of values.
-
-   .. code-block:: julia
-
        minabs(A, dims)
 
    Compute the minimum absolute values over given dimensions.
@@ -644,12 +566,6 @@ Iterable Collections
 .. function:: minabs(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       minabs(itr)
-
-   Compute the minimum absolute value of a collection of values.
 
    .. code-block:: julia
 
@@ -673,18 +589,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       sum(itr)
-
-   Returns the sum of all elements in a collection.
-
-   .. code-block:: julia
-
-       sum(A, dims)
-
-   Sum elements of an array over the given dimensions.
-
-   .. code-block:: julia
-
        sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``\ .
@@ -692,18 +596,6 @@ Iterable Collections
 .. function:: sum(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sum(itr)
-
-   Returns the sum of all elements in a collection.
-
-   .. code-block:: julia
-
-       sum(A, dims)
-
-   Sum elements of an array over the given dimensions.
 
    .. code-block:: julia
 
@@ -724,18 +616,6 @@ Iterable Collections
 .. function:: sum(f, itr)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sum(itr)
-
-   Returns the sum of all elements in a collection.
-
-   .. code-block:: julia
-
-       sum(A, dims)
-
-   Sum elements of an array over the given dimensions.
 
    .. code-block:: julia
 
@@ -791,12 +671,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       sumabs2(itr)
-
-   Sum squared absolute values of all elements in a collection. This is equivalent to ``sum(abs2(itr))`` but faster.
-
-   .. code-block:: julia
-
        sumabs2(A, dims)
 
    Sum squared absolute values of elements of an array over the given dimensions.
@@ -804,12 +678,6 @@ Iterable Collections
 .. function:: sumabs2(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       sumabs2(itr)
-
-   Sum squared absolute values of all elements in a collection. This is equivalent to ``sum(abs2(itr))`` but faster.
 
    .. code-block:: julia
 
@@ -833,12 +701,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       prod(itr)
-
-   Returns the product of all elements of a collection.
-
-   .. code-block:: julia
-
        prod(A, dims)
 
    Multiply elements of an array over the given dimensions.
@@ -846,12 +708,6 @@ Iterable Collections
 .. function:: prod(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       prod(itr)
-
-   Returns the product of all elements of a collection.
 
    .. code-block:: julia
 
@@ -875,18 +731,6 @@ Iterable Collections
 
    .. code-block:: julia
 
-       any(itr) -> Bool
-
-   Test whether any elements of a boolean collection are true.
-
-   .. code-block:: julia
-
-       any(A, dims)
-
-   Test whether any values along the given dimensions of an array are true.
-
-   .. code-block:: julia
-
        any(p, itr) -> Bool
 
    Determine whether predicate ``p`` returns true for any elements of ``itr``\ .
@@ -894,18 +738,6 @@ Iterable Collections
 .. function:: any(A, dims)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       any(itr) -> Bool
-
-   Test whether any elements of a boolean collection are true.
-
-   .. code-block:: julia
-
-       any(A, dims)
-
-   Test whether any values along the given dimensions of an array are true.
 
    .. code-block:: julia
 
@@ -976,18 +808,6 @@ Iterable Collections
 .. function:: any(p, itr) -> Bool
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       any(itr) -> Bool
-
-   Test whether any elements of a boolean collection are true.
-
-   .. code-block:: julia
-
-       any(A, dims)
-
-   Test whether any values along the given dimensions of an array are true.
 
    .. code-block:: julia
 
@@ -1246,12 +1066,6 @@ Indexable Collections
 
    .. code-block:: julia
 
-       setindex!(A, X, inds...)
-
-   Store values from array ``X`` within some subset of ``A`` as specified by ``inds``\ .
-
-   .. code-block:: julia
-
        setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
@@ -1367,18 +1181,6 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
-       get!(collection, key, default)
-
-   Return the value stored for the given key, or if no mapping for the key is present, store ``key => default``\ , and return ``default``\ .
-
-   .. code-block:: julia
-
-       get!(f::Function, collection, key)
-
-   Return the value stored for the given key, or if no mapping for the key is present, store ``key => f()``\ , and return ``f()``\ .
-
    This is intended to be called using ``do`` block syntax:
 
    .. code-block:: julia
@@ -1389,18 +1191,6 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: get!(f::Function, collection, key)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       get!(collection, key, default)
-
-   Return the value stored for the given key, or if no mapping for the key is present, store ``key => default``\ , and return ``default``\ .
-
-   .. code-block:: julia
-
-       get!(f::Function, collection, key)
-
-   Return the value stored for the given key, or if no mapping for the key is present, store ``key => f()``\ , and return ``f()``\ .
 
    This is intended to be called using ``do`` block syntax:
 

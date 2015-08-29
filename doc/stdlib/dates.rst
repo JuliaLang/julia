@@ -123,36 +123,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. code-block:: julia
 
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
-
-   .. code-block:: julia
-
        Date(dt::AbstractString, df::DateFormat) -> Date
 
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
@@ -160,36 +130,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(period::Period...) -> Date
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
    .. code-block:: julia
 
@@ -203,36 +143,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. code-block:: julia
 
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
-
-   .. code-block:: julia
-
        Date(dt::AbstractString, df::DateFormat) -> Date
 
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
@@ -240,36 +150,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::DateTime) -> Date
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
    .. code-block:: julia
 
@@ -283,36 +163,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. code-block:: julia
 
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
-
-   .. code-block:: julia
-
        Date(dt::AbstractString, df::DateFormat) -> Date
 
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
@@ -320,36 +170,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       Date(y, [m, d]) -> Date
-
-   Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
-
-   .. code-block:: julia
-
-       Date(period::Period...) -> Date
-
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
-
-   .. code-block:: julia
-
-       Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
-
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
-
-   .. code-block:: julia
-
-       Date(dt::DateTime) -> Date
-
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
-
-   .. code-block:: julia
-
-       Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
-
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
    .. code-block:: julia
 
@@ -363,12 +183,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. code-block:: julia
 
-       now() -> DateTime
-
-   Returns a DateTime corresponding to the user's system time including the system timezone locale.
-
-   .. code-block:: julia
-
        now(::Type{UTC}) -> DateTime
 
    Returns a DateTime corresponding to the user's system time as UTC/GMT.
@@ -376,12 +190,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: now(::Type{UTC}) -> DateTime
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       now() -> DateTime
-
-   Returns a DateTime corresponding to the user's system time including the system timezone locale.
 
    .. code-block:: julia
 
@@ -713,12 +521,6 @@ Adjuster Functions
 
    .. code-block:: julia
 
-       tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
-
-   Adjusts ``dt`` to the next day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
-
-   .. code-block:: julia
-
        tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
@@ -726,12 +528,6 @@ Adjuster Functions
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
-
-   Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
 
    .. code-block:: julia
 
@@ -765,12 +561,6 @@ Adjuster Functions
 
    .. code-block:: julia
 
-       tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
-
-   Adjusts ``dt`` to the next day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
-
-   .. code-block:: julia
-
        tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
@@ -778,12 +568,6 @@ Adjuster Functions
 .. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
-
-   Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
 
    .. code-block:: julia
 

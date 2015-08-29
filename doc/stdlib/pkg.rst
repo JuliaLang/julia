@@ -13,12 +13,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       dir() -> AbstractString
-
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v\$(VERSION.major).\$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
-
-   .. code-block:: julia
-
        dir(names...) -> AbstractString
 
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path. In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``\ .
@@ -26,12 +20,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: dir(names...) -> AbstractString
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       dir() -> AbstractString
-
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v\$(VERSION.major).\$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
    .. code-block:: julia
 
@@ -95,12 +83,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       clone(url, [pkg])
-
-   Clone a package directly from the git URL ``url``\ . The package does not need to be a registered in ``Pkg.dir("METADATA")``\ . The package repo is cloned by the name ``pkg`` if provided; if not provided, ``pkg`` is determined automatically from ``url``\ .
-
-   .. code-block:: julia
-
        clone(pkg)
 
    If ``pkg`` has a URL registered in ``Pkg.dir("METADATA")``\ , clone it from that URL on the default branch. The package does not need to have any registered versions.
@@ -108,12 +90,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: clone(pkg)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       clone(url, [pkg])
-
-   Clone a package directly from the git URL ``url``\ . The package does not need to be a registered in ``Pkg.dir("METADATA")``\ . The package repo is cloned by the name ``pkg`` if provided; if not provided, ``pkg`` is determined automatically from ``url``\ .
 
    .. code-block:: julia
 
@@ -127,12 +103,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       available() -> Vector{ASCIIString}
-
-   Returns the names of available packages.
-
-   .. code-block:: julia
-
        available(pkg) -> Vector{VersionNumber}
 
    Returns the version numbers available for package ``pkg``\ .
@@ -140,12 +110,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: available(pkg) -> Vector{VersionNumber}
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       available() -> Vector{ASCIIString}
-
-   Returns the names of available packages.
 
    .. code-block:: julia
 
@@ -159,12 +123,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       installed() -> Dict{ASCIIString,VersionNumber}
-
-   Returns a dictionary mapping installed package names to the installed version number of each package.
-
-   .. code-block:: julia
-
        installed(pkg) -> Void | VersionNumber
 
    If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``\ .
@@ -172,12 +130,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: installed(pkg) -> Void | VersionNumber
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       installed() -> Dict{ASCIIString,VersionNumber}
-
-   Returns a dictionary mapping installed package names to the installed version number of each package.
 
    .. code-block:: julia
 
@@ -221,12 +173,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       pin(pkg)
-
-   Pin ``pkg`` at the current version. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
-
-   .. code-block:: julia
-
        pin(pkg, version)
 
    Pin ``pkg`` at registered version ``version``\ .
@@ -234,12 +180,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: pin(pkg, version)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       pin(pkg)
-
-   Pin ``pkg`` at the current version. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
 
    .. code-block:: julia
 
@@ -265,12 +205,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       build()
-
-   Run the build scripts for all installed packages in depth-first recursive order.
-
-   .. code-block:: julia
-
        build(pkgs...)
 
    Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order. This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
@@ -278,12 +212,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: build(pkgs...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       build()
-
-   Run the build scripts for all installed packages in depth-first recursive order.
 
    .. code-block:: julia
 
@@ -337,12 +265,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    .. code-block:: julia
 
-       test()
-
-   Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
-
-   .. code-block:: julia
-
        test(pkgs...)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
@@ -350,12 +272,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 .. function:: test(pkgs...)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       test()
-
-   Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
 
    .. code-block:: julia
 

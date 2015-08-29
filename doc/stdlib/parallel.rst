@@ -93,18 +93,6 @@ Tasks
 
    .. code-block:: julia
 
-       task_local_storage(symbol)
-
-   Look up the value of a symbol in the current task's task-local storage.
-
-   .. code-block:: julia
-
-       task_local_storage(symbol, value)
-
-   Assign a value to a symbol in the current task's task-local storage.
-
-   .. code-block:: julia
-
        task_local_storage(body, symbol, value)
 
    Call the function ``body`` with a modified task-local storage, in which ``value`` is assigned to ``symbol``\ ; the previous value of ``symbol``\ , or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
@@ -115,18 +103,6 @@ Tasks
 
    .. code-block:: julia
 
-       task_local_storage(symbol)
-
-   Look up the value of a symbol in the current task's task-local storage.
-
-   .. code-block:: julia
-
-       task_local_storage(symbol, value)
-
-   Assign a value to a symbol in the current task's task-local storage.
-
-   .. code-block:: julia
-
        task_local_storage(body, symbol, value)
 
    Call the function ``body`` with a modified task-local storage, in which ``value`` is assigned to ``symbol``\ ; the previous value of ``symbol``\ , or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
@@ -134,18 +110,6 @@ Tasks
 .. function:: task_local_storage(body, symbol, value)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       task_local_storage(symbol)
-
-   Look up the value of a symbol in the current task's task-local storage.
-
-   .. code-block:: julia
-
-       task_local_storage(symbol, value)
-
-   Assign a value to a symbol in the current task's task-local storage.
 
    .. code-block:: julia
 
@@ -269,62 +233,6 @@ General Parallel Computing Support
 
    ::
 
-              addprocs(n::Integer; exeflags=``) -> List of process identifiers
-
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
-
-   ::
-
-              addprocs() -> List of process identifiers
-
-   Equivalent to ``addprocs(CPU_CORES)``
-
-   Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
-   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
-
-   ::
-
-              addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
-
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-
-   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
-
-   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
-
-   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
-
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
-   it will launch as many workers as the number of cores on the specific host.
-
-
-   Keyword arguments:
-
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
-
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
-
-   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
-
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
-
-   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
-
-   ``exeflags`` :  additional flags passed to the worker processes.
-
-   Environment variables :
-
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
-   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
-   the number of seconds a newly launched worker waits for connection establishment.
-
-   ::
-
               addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
    Launches worker processes via the specified cluster manager.
@@ -337,62 +245,6 @@ General Parallel Computing Support
 .. function:: addprocs() -> List of process identifiers
 
    .. Docstring generated from Julia source
-
-   ::
-
-              addprocs(n::Integer; exeflags=``) -> List of process identifiers
-
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
-
-   ::
-
-              addprocs() -> List of process identifiers
-
-   Equivalent to ``addprocs(CPU_CORES)``
-
-   Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
-   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
-
-   ::
-
-              addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
-
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-
-   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
-
-   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
-
-   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
-
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
-   it will launch as many workers as the number of cores on the specific host.
-
-
-   Keyword arguments:
-
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
-
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
-
-   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
-
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
-
-   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
-
-   ``exeflags`` :  additional flags passed to the worker processes.
-
-   Environment variables :
-
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
-   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
-   the number of seconds a newly launched worker waits for connection establishment.
 
    ::
 
@@ -411,62 +263,6 @@ General Parallel Computing Support
 
    ::
 
-              addprocs(n::Integer; exeflags=``) -> List of process identifiers
-
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
-
-   ::
-
-              addprocs() -> List of process identifiers
-
-   Equivalent to ``addprocs(CPU_CORES)``
-
-   Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
-   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
-
-   ::
-
-              addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
-
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-
-   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
-
-   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
-
-   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
-
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
-   it will launch as many workers as the number of cores on the specific host.
-
-
-   Keyword arguments:
-
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
-
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
-
-   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
-
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
-
-   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
-
-   ``exeflags`` :  additional flags passed to the worker processes.
-
-   Environment variables :
-
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
-   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
-   the number of seconds a newly launched worker waits for connection establishment.
-
-   ::
-
               addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
    Launches worker processes via the specified cluster manager.
@@ -479,62 +275,6 @@ General Parallel Computing Support
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
-
-   ::
-
-              addprocs(n::Integer; exeflags=``) -> List of process identifiers
-
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
-
-   ::
-
-              addprocs() -> List of process identifiers
-
-   Equivalent to ``addprocs(CPU_CORES)``
-
-   Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
-   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
-
-   ::
-
-              addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
-
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-
-   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
-
-   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
-
-   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
-
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
-   it will launch as many workers as the number of cores on the specific host.
-
-
-   Keyword arguments:
-
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
-
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
-
-   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
-
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
-
-   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
-
-   ``exeflags`` :  additional flags passed to the worker processes.
-
-   Environment variables :
-
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
-   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
-   the number of seconds a newly launched worker waits for connection establishment.
 
    ::
 
@@ -570,12 +310,6 @@ General Parallel Computing Support
 .. function:: procs()
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       procs()
-
-   Returns a list of all process identifiers.
 
    .. code-block:: julia
 
@@ -721,12 +455,6 @@ General Parallel Computing Support
 
    .. code-block:: julia
 
-       put!(RemoteRef, value)
-
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``\ . Returns its first argument.
-
-   .. code-block:: julia
-
        put!(Channel, value)
 
    Appends an item to the channel. Blocks if the channel is full.
@@ -734,12 +462,6 @@ General Parallel Computing Support
 .. function:: put!(Channel, value)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       put!(RemoteRef, value)
-
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``\ . Returns its first argument.
 
    .. code-block:: julia
 
@@ -753,12 +475,6 @@ General Parallel Computing Support
 
    .. code-block:: julia
 
-       take!(RemoteRef)
-
-   Fetch the value of a remote reference, removing it so that the reference is empty again.
-
-   .. code-block:: julia
-
        take!(Channel)
 
    Removes and returns a value from a ``Channel``\ . Blocks till data is available.
@@ -766,12 +482,6 @@ General Parallel Computing Support
 .. function:: take!(Channel)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       take!(RemoteRef)
-
-   Fetch the value of a remote reference, removing it so that the reference is empty again.
 
    .. code-block:: julia
 
@@ -818,12 +528,6 @@ General Parallel Computing Support
 
    .. code-block:: julia
 
-       RemoteRef()
-
-   Make an uninitialized remote reference on the local machine.
-
-   .. code-block:: julia
-
        RemoteRef(n)
 
    Make an uninitialized remote reference on process ``n``\ .
@@ -831,12 +535,6 @@ General Parallel Computing Support
 .. function:: RemoteRef(n)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       RemoteRef()
-
-   Make an uninitialized remote reference on the local machine.
 
    .. code-block:: julia
 
@@ -973,12 +671,6 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    .. code-block:: julia
 
-       procs()
-
-   Returns a list of all process identifiers.
-
-   .. code-block:: julia
-
        procs(S::SharedArray)
 
    Get the vector of processes that have mapped the shared array
@@ -1038,16 +730,9 @@ Cluster Manager Interface
          interrupt signal.
        - with ``:finalize`` for cleanup purposes.
 
-
 .. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       kill(p::Process, signum=SIGTERM)
-
-   Send a signal to a process. The default is to terminate the process.
 
    .. code-block:: julia
 

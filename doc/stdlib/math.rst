@@ -15,12 +15,6 @@ Mathematical Operators
 
    .. code-block:: julia
 
-       -(x)
-
-   Unary minus operator.
-
-   .. code-block:: julia
-
        -(x, y)
 
    Subtraction operator.
@@ -40,12 +34,6 @@ Mathematical Operators
 .. function:: -(x, y)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       -(x)
-
-   Unary minus operator.
 
    .. code-block:: julia
 
@@ -1295,14 +1283,6 @@ Mathematical Functions
 
    .. code-block:: julia
 
-       log(x)
-
-   Compute the natural logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
-
-   There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
-
-   .. code-block:: julia
-
        log(b,x)
 
    Compute the base ``b`` logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments.
@@ -1310,14 +1290,6 @@ Mathematical Functions
 .. function:: log(b,x)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       log(x)
-
-   Compute the natural logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
-
-   There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
 
    .. code-block:: julia
 
@@ -1434,39 +1406,7 @@ Mathematical Functions
 
    ::
 
-              round([T,] x, [digits, [base]], [r::RoundingMode])
-
-   ``round(x)`` rounds ``x`` to an integer value according to the default
-   rounding mode (see :func:`get_rounding`), returning a value of the same type as
-   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
-   integer, with ties (fractional values of 0.5) being rounded to the even
-   integer.
-
-   .. doctest::
-
-      julia> round(1.7)
-      2.0
-
-      julia> round(1.5)
-      2.0
-
-      julia> round(2.5)
-      2.0
-
-   The optional :obj:`RoundingMode` argument will change how the number gets rounded.
-
-   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
-   :exc:`InexactError` if the value is not representable.
-
-   ``round(x, digits)`` rounds to the specified number of digits after the
-   decimal place (or before if negative). ``round(x, digits, base)`` rounds
-   using a base other than 10.
-
-      .. doctest::
-
-   ::
-
-              round(z, RoundingModeReal, RoundingModeImaginary)
+             round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex-valued
    ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
@@ -1544,39 +1484,7 @@ Mathematical Functions
 
    ::
 
-              round([T,] x, [digits, [base]], [r::RoundingMode])
-
-   ``round(x)`` rounds ``x`` to an integer value according to the default
-   rounding mode (see :func:`get_rounding`), returning a value of the same type as
-   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
-   integer, with ties (fractional values of 0.5) being rounded to the even
-   integer.
-
-   .. doctest::
-
-      julia> round(1.7)
-      2.0
-
-      julia> round(1.5)
-      2.0
-
-      julia> round(2.5)
-      2.0
-
-   The optional :obj:`RoundingMode` argument will change how the number gets rounded.
-
-   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
-   :exc:`InexactError` if the value is not representable.
-
-   ``round(x, digits)`` rounds to the specified number of digits after the
-   decimal place (or before if negative). ``round(x, digits, base)`` rounds
-   using a base other than 10.
-
-      .. doctest::
-
-   ::
-
-              round(z, RoundingModeReal, RoundingModeImaginary)
+             round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex-valued
    ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
@@ -2697,12 +2605,6 @@ Statistics
 
    .. code-block:: julia
 
-       hist(v[, n]) -> e, counts
-
-   Compute the histogram of ``v``\ , optionally using approximately ``n`` bins. The return values are a range ``e``\ , which correspond to the edges of the bins, and ``counts`` containing the number of elements of ``v`` in each bin. Note: Julia does not ignore ``NaN`` values in the computation.
-
-   .. code-block:: julia
-
        hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for the bins. The result will be a vector of length ``length(e) - 1``\ , such that the element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``\ . Note: Julia does not ignore ``NaN`` values in the computation.
@@ -2710,12 +2612,6 @@ Statistics
 .. function:: hist(v, e) -> e, counts
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       hist(v[, n]) -> e, counts
-
-   Compute the histogram of ``v``\ , optionally using approximately ``n`` bins. The return values are a range ``e``\ , which correspond to the edges of the bins, and ``counts`` containing the number of elements of ``v`` in each bin. Note: Julia does not ignore ``NaN`` values in the computation.
 
    .. code-block:: julia
 
@@ -3234,12 +3130,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. code-block:: julia
 
-       fftshift(x)
-
-   Swap the first and second halves of each dimension of ``x``\ .
-
-   .. code-block:: julia
-
        fftshift(x,dim)
 
    Swap the first and second halves of the given dimension of array ``x``\ .
@@ -3247,12 +3137,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: fftshift(x,dim)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       fftshift(x)
-
-   Swap the first and second halves of each dimension of ``x``\ .
 
    .. code-block:: julia
 
@@ -3317,12 +3201,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. code-block:: julia
 
-       conv2(u,v,A)
-
-   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm
-
-   .. code-block:: julia
-
        conv2(B,A)
 
    2-D convolution of the matrix ``B`` with the matrix ``A``\ . Uses 2-D FFT algorithm
@@ -3330,12 +3208,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 .. function:: conv2(B,A)
 
    .. Docstring generated from Julia source
-
-   .. code-block:: julia
-
-       conv2(u,v,A)
-
-   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm
 
    .. code-block:: julia
 
