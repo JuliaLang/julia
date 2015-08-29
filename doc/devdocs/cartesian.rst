@@ -140,19 +140,19 @@ Macro reference
 
    .. Docstring generated from Julia source
 
+       @nloops N itersym rangeexpr bodyexpr
+       @nloops N itersym rangeexpr preexpr bodyexpr
+       @nloops N itersym rangeexpr preexpr postexpr bodyexpr
+
    Generate ``N`` nested loops, using ``itersym`` as the prefix for the iteration variables. ``rangeexpr`` may be an anonymous-function expression, or a simple symbol ``var`` in which case the range is ``1:size(var,d)`` for dimension ``d``\ .
 
    Optionally, you can provide "pre" and "post" expressions. These get executed first and last, respectively, in the body of each loop. For example, :
-
-   .. code-block:: julia
 
        @nloops 2 i A d->j_d=min(i_d,5) begin
            s += @nref 2 A j
        end
 
    would generate :
-
-   .. code-block:: julia
 
        for i_2 = 1:size(A, 2)
            j_2 = min(i_2, 5)
@@ -168,11 +168,15 @@ Macro reference
 
    .. Docstring generated from Julia source
 
+       @nref N A indexexpr
+
    Generate expressions like ``A[i_1,i_2,...]``\ . ``indexexpr`` can either be an iteration-symbol prefix, or an anonymous-function expression.
 
 .. function:: @nexprs N expr
 
    .. Docstring generated from Julia source
+
+       @nexprs N expr
 
    Generate ``N`` expressions. ``expr`` should be an anonymous-function expression.
 
@@ -180,11 +184,15 @@ Macro reference
 
    .. Docstring generated from Julia source
 
+       @ntuple N expr
+
    Generates an ``N``\ -tuple. ``@ntuple 2 i`` would generate ``(i_1, i_2)``\ , and ``@ntuple 2 k->k+1`` would generate ``(2,3)``\ .
 
 .. function:: @nall N expr
 
    .. Docstring generated from Julia source
+
+       @nall N expr
 
    ``@nall 3 d->(i_d > 1)`` would generate the expression ``(i_1 > 1 && i_2 > 1 && i_3 > 1)``\ . This can be convenient for bounds-checking.
 
@@ -192,15 +200,14 @@ Macro reference
 
    .. Docstring generated from Julia source
 
-   Generates a sequence of ``if ... elseif ... else ... end`` statements. For example:
+       @nif N conditionexpr expr
+       @nif N conditionexpr expr elseexpr
 
-   .. code-block:: julia
+   Generates a sequence of ``if ... elseif ... else ... end`` statements. For example:
 
        @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
 
    would generate:
-
-   .. code-block:: julia
 
        if i_1 > size(A, 1)
 
