@@ -6449,7 +6449,7 @@ doc"""
 Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
 ```
 """
-ordschur!
+ordschur!(Q,T,select)
 
 doc"""
 ```rst
@@ -6458,7 +6458,7 @@ doc"""
 Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
 ```
 """
-ordschur!
+ordschur!(S,select)
 
 doc"""
 ```rst
@@ -6466,7 +6466,7 @@ doc"""
 
 Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
 """
-ordschur!
+ordschur!(S,T,Q,Z,select)
 
 doc"""
 ```rst
@@ -6475,7 +6475,7 @@ doc"""
 Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
 ```
 """
-ordschur!
+ordschur!(::LinAlg.GeneralizedSchur,select)
 
 doc"""
 ```rst
@@ -6487,18 +6487,18 @@ Creates a precompiled cache file for module (see help for ``require``) and all o
 compilecache
 
 doc"""
-    clipboard(x)
-
-Send a printed form of `x` to the operating system clipboard ("copy").
-"""
-clipboard
-
-doc"""
     clipboard() -> AbstractString
 
 Return a string with the contents of the operating system clipboard ("paste").
 """
 clipboard
+
+doc"""
+    clipboard(x)
+
+Send a printed form of `x` to the operating system clipboard ("copy").
+"""
+clipboard(x)
 
 doc"""
     code_lowered(f, types)
@@ -6512,14 +6512,14 @@ doc"""
 
 Compute the kth lexicographic permutation of a vector.
 """
-nthperm
+nthperm(v,k)
 
 doc"""
     nthperm(p)
 
 Return the `k` that generated permutation `p`. Note that `nthperm(nthperm([1:n], k)) == k` for `1 <= k <= factorial(n)`.
 """
-nthperm
+nthperm(p)
 
 doc"""
     values(collection)
@@ -6772,14 +6772,14 @@ doc"""
 
 Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io` is an open file object for this path.
 """
-mktemp
+mktemp(?)
 
 doc"""
     mktemp(f::function, [parent=tempdir()])
 
 Apply the function `f` to the result of `mktemp(parent)` and remove the temporary file upon completion.
 """
-mktemp
+mktemp(::Function, ?)
 
 doc"""
     isreadonly(stream) -> Bool
@@ -6835,14 +6835,14 @@ doc"""
 
 Swap the first and second halves of each dimension of `x`.
 """
-fftshift
+fftshift(x)
 
 doc"""
     fftshift(x,dim)
 
 Swap the first and second halves of the given dimension of array `x`.
 """
-fftshift
+fftshift(x,dim)
 
 doc"""
     unique(itr[, dim])
@@ -6898,7 +6898,7 @@ Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
 value if it is present; otherwise, throws a ``NullException``.
 ```
 """
-get
+get(x)
 
 doc"""
 ```rst
@@ -6908,7 +6908,7 @@ Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
 the value if it is present; otherwise, returns ``convert(T, y)``.
 ```
 """
-get
+get(x,y)
 
 doc"""
 ```rst
@@ -6917,7 +6917,7 @@ doc"""
 Return the value stored for the given key, or the given default value if no mapping for the key is present.
 ```
 """
-get
+get(collection,key,default)
 
 doc"""
 ```rst
@@ -6992,14 +6992,14 @@ doc"""
 
 Returns the maximum element and its index.
 """
-findmax
+findmax(itr)
 
 doc"""
     findmax(A, dims) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given dimensions.
 """
-findmax
+findmax(A,dims)
 
 doc"""
     tempname()
@@ -7126,7 +7126,7 @@ Subsequent items are shifted to fill the resulting gap.
 
 ```
 """
-deleteat!
+deleteat!(collection, index::Integer)
 
 doc"""
 ```rst
@@ -7150,7 +7150,7 @@ Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted a
    in deleteat! at array.jl:533
 ```
 """
-deleteat!
+deleteat!(collection, itr)
 
 doc"""
 ```rst
@@ -7166,14 +7166,14 @@ doc"""
 
 Read a value of the given type from a stream, in canonical binary representation.
 """
-read
+read(stream, type)
 
 doc"""
     read(stream, type, dims)
 
 Read a series of values of the given type from a stream, in canonical binary representation. `dims` is either a tuple or a series of integer arguments specifying the size of `Array` to return.
 """
-read
+read(stream, type, dims)
 
 doc"""
 ```rst
@@ -7782,7 +7782,7 @@ doc"""
 Test whether all elements of a boolean collection are true.
 ```
 """
-all
+all(itr)
 
 doc"""
 ```rst
@@ -7791,7 +7791,7 @@ doc"""
 Test whether all values along the given dimensions of an array are true.
 ```
 """
-all
+all(A::AbstractArray, dims)
 
 doc"""
 ```rst
@@ -7805,7 +7805,7 @@ Determine whether predicate ``p`` returns true for all elements of ``itr``.
 	true
 ```
 """
-all
+all(p, itr)
 
 doc"""
     bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
@@ -8150,7 +8150,7 @@ Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest li
 
 ```
 """
-linreg
+linreg(x,y)
 
 doc"""
 ```rst
@@ -8160,7 +8160,7 @@ doc"""
 Weighted least-squares linear regression.
 ```
 """
-linreg
+linreg(x,y,w)
 
 doc"""
     polygamma(m, x)
@@ -8220,14 +8220,14 @@ doc"""
 
 Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 """
-less
+less(f::AbstractString, ?)
 
 doc"""
     less(function, [types])
 
 Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 """
-less
+less(m::Method, ?)
 
 doc"""
 ```rst
@@ -8628,7 +8628,7 @@ precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
 equivalent to :func:`gamma(n+1) <gamma>`.
 ```
 """
-factorial
+factorial(n)
 
 doc"""
 ```rst
@@ -8637,7 +8637,7 @@ doc"""
 Compute ``factorial(n)/factorial(k)``
 ```
 """
-factorial
+factorial(n,k)
 
 doc"""
     bitrand([rng], [dims...])
@@ -8748,7 +8748,7 @@ doc"""
 
 True if and only if all values of `type1` are also of `type2`. Can also be written using the `<:` infix operator as `type1 <: type2`.
 """
-issubtype
+issubtype(type1, type2)
 
 doc"""
     finalizer(x, function)
@@ -8950,14 +8950,14 @@ doc"""
 
 Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with `take!`. Returns its first argument.
 """
-put!
+put!(::RemoteRef, value)
 
 doc"""
     put!(Channel, value)
 
 Appends an item to the channel. Blocks if the channel is full.
 """
-put!
+put!(::Channel, value)
 
 doc"""
     operm(file)
@@ -9027,7 +9027,7 @@ doc"""
 Matrix multiplication
 ```
 """
-Base.(:(*))
+Base.(:(*))(::AbstractMatrix, ::AbstractMatrix)
 
 doc"""
 ```rst
@@ -9037,7 +9037,7 @@ Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i
 ``*(x, y, z, ...)``.
 ```
 """
-Base.(:(*))
+Base.(:(*))(x, y...)
 
 doc"""
 ```rst
@@ -9047,7 +9047,7 @@ Concatenate strings. The ``*`` operator is an alias to this function.
 
 ```
 """
-Base.(:(*))
+Base.(:(*))(s, t)
 
 doc"""
 ```rst
@@ -9072,7 +9072,7 @@ doc"""
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """
-time
+time()
 
 doc"""
     procs()
@@ -9086,7 +9086,7 @@ doc"""
 
 Get the vector of processes that have mapped the shared array
 """
-procs
+procs(::SharedArray)
 
 doc"""
 ```rst
@@ -9223,21 +9223,21 @@ doc"""
 
 Find the previous index <= `i` of a non-zero element of `A`, or 0 if not found.
 """
-findprev
+findprev(A,i)
 
 doc"""
     findprev(predicate, A, i)
 
 Find the previous index <= `i` of an element of `A` for which `predicate` returns true, or `0` if not found.
 """
-findprev
+findprev(predicate::Function,A,i)
 
 doc"""
     findprev(A, v, i)
 
 Find the previous index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 """
-findprev
+findprev(A,v,i)
 
 doc"""
     matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
@@ -9251,14 +9251,14 @@ doc"""
 
 Return the value stored for the given key, or if no mapping for the key is present, store `key => default`, and return `default`.
 """
-get!
+get!(collection,key,default)
 
 doc"""
     get!(f::Function, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store `key => f()`, and return `f()`.
 """
-get!
+get!(f::Function,collection,key)
 
 doc"""
 This is intended to be called using `do` block syntax:
@@ -9301,14 +9301,14 @@ doc"""
 
 Listen on port on the address specified by `addr`. By default this listens on localhost only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 """
-listen
+listen(addr,port)
 
 doc"""
     listen(path) -> PipeServer
 
 Create and listen on a Named Pipe / Domain Socket
 """
-listen
+listen(path)
 
 doc"""
 ```rst
@@ -9509,14 +9509,14 @@ doc"""
 
 Returns the minimum element and its index.
 """
-findmin
+findmin(itr)
 
 doc"""
     findmin(A, dims) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given dimensions.
 """
-findmin
+findmin(A,dims)
 
 doc"""
     ismount(path) -> Bool
@@ -9553,21 +9553,21 @@ doc"""
 
 Returns the number of elements in A
 """
-length
+length(::AbstractArray)
 
 doc"""
     length(collection) -> Integer
 
 For ordered, indexable collections, the maximum index `i` for which `getindex(collection, i)` is valid. For unordered collections, the number of elements.
 """
-length
+length(collection)
 
 doc"""
     length(s)
 
 The number of characters in string `s`.
 """
-length
+length(::AbstractString)
 
 doc"""
     rand!([rng], A, [coll])
@@ -9721,14 +9721,14 @@ doc"""
 
 Return the index of the first non-zero value in `A` (determined by `A[i]!=0`).
 """
-findfirst
+findfirst(A)
 
 doc"""
     findfirst(A,v)
 
 Return the index of the first element equal to `v` in `A`.
 """
-findfirst
+findfirst(A,v)
 
 doc"""
     findfirst(predicate, A)
@@ -9788,14 +9788,14 @@ doc"""
 
 Sum squared absolute values of all elements in a collection. This is equivalent to `sum(abs2(itr))` but faster.
 """
-sumabs2
+sumabs2(itr)
 
 doc"""
     sumabs2(A, dims)
 
 Sum squared absolute values of elements of an array over the given dimensions.
 """
-sumabs2
+sumabs2(A,dims)
 
 doc"""
 ```rst
@@ -9854,7 +9854,7 @@ Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 	true
 ```
 """
-isprime
+isprime(::Integer)
 
 doc"""
 ```rst
@@ -9871,7 +9871,7 @@ cryptographic applications (Knuth, Seminumerical Algorithms).
 	true
 ```
 """
-isprime
+isprime(::BigInt, ?)
 
 doc"""
     >(x, y)
@@ -10076,21 +10076,21 @@ doc"""
 
 Create an ASCII string from a byte array.
 """
-ascii
+ascii(::Vector{UInt8})
 
 doc"""
     ascii(s)
 
 Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
 """
-ascii
+ascii(s)
 
 doc"""
     ascii(::Ptr{UInt8}, [length])
 
 Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If `length` is specified, the string does not have to be 0-terminated.
 """
-ascii
+ascii(::Ptr{UInt8},?)
 
 doc"""
 ```rst
@@ -10108,14 +10108,14 @@ doc"""
 
 Compute the maximum absolute value of a collection of values.
 """
-maxabs
+maxabs(itr)
 
 doc"""
     maxabs(A, dims)
 
 Compute the maximum absolute values over given dimensions.
 """
-maxabs
+maxabs(A,dims)
 
 doc"""
     done(iter, state) -> Bool
@@ -10351,21 +10351,21 @@ doc"""
 
 Return the index of the last non-zero value in `A` (determined by `A[i]!=0`).
 """
-findlast
+findlast(A)
 
 doc"""
     findlast(A, v)
 
 Return the index of the last element equal to `v` in `A`.
 """
-findlast
+findlast(A,v)
 
 doc"""
     findlast(predicate, A)
 
 Return the index of the last element of `A` for which `predicate` returns true.
 """
-findlast
+findlast(::Function, A)
 
 doc"""
     @elapsed
@@ -10386,14 +10386,14 @@ doc"""
 
 Find the next index >= `i` of an element of `A` for which `predicate` returns true, or `0` if not found.
 """
-findnext
+findnext(::Function,A,i)
 
 doc"""
     findnext(A, v, i)
 
 Find the next index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 """
-findnext
+findnext(A,v,i)
 
 doc"""
 ```rst
@@ -10451,14 +10451,14 @@ doc"""
 
 Copy all elements from collection `src` to array `dest`. Returns `dest`.
 """
-copy!
+copy!(dest,src)
 
 doc"""
     copy!(dest, do, src, so, N)
 
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at offset `do`. Returns `dest`.
 """
-copy!
+copy!(dest,do,src,so,N)
 
 doc"""
     broadcast(f, As...)
@@ -10548,7 +10548,7 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
    `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 ```
 """
-qrfact
+qrfact(A,?)
 
 
 doc"""
@@ -10558,7 +10558,7 @@ doc"""
 Compute the QR factorization of a sparse matrix ``A``. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 ```
 """
-qrfact
+qrfact(A)
 
 doc"""
     +(x, y...)
@@ -10596,14 +10596,14 @@ doc"""
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
 """
-setindex!
+setindex!(A::AbstractArray,X,inds...)
 
 doc"""
     setindex!(collection, value, key...)
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] = x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 """
-setindex!
+setindex!(collection,value,key...)
 
 doc"""
     signif(x, digits, [base])
@@ -10640,7 +10640,7 @@ doc"""
 Convert a sparse matrix ``S`` into a dense matrix.
 ```
 """
-full
+full(::AbstractSparseMatrix)
 
 doc"""
 ```rst
@@ -10648,7 +10648,7 @@ doc"""
 
 Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 """
-full
+full(F)
 
 doc"""
 ```rst
@@ -10664,7 +10664,7 @@ called the reduced QR factorization).  If ``false``, returns a ``Q`` that
 spans all rows of ``R`` in its corresponding QR factorization.
 ```
 """
-full
+full(::LinAlg.QRCompactWYQ, ?)
 
 doc"""
 ```rst
@@ -10737,14 +10737,14 @@ doc"""
 
 Performs a left rotation operation on `src` and put the result into `dest`.
 """
-rol!
+rol!(::BitArray,::BitArray,::Integer)
 
 doc"""
     rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
 Performs a left rotation operation on B.
 """
-rol!
+rol!(::BitArray,::Integer)
 
 doc"""
 ```rst
@@ -10756,12 +10756,12 @@ doc"""
 Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
 ```
 """
-issubset
+issubset(a,b)
 
 doc"""
 ```rst
 ..  issubset(A, S) -> Bool
-           ⊆(A,S) -> Bool
+             ⊆(A,S) -> Bool
 
 True if A is a subset of or equal to S.
 ```
@@ -10782,7 +10782,7 @@ doc"""
 In-place version of :func:`map`.
 ```
 """
-map!
+map!(function,collection)
 
 doc"""
 ```rst
@@ -10793,7 +10793,7 @@ new collection. ``destination`` must be at least as large as the first
 collection.
 ```
 """
-map!
+map!(function,destination,collection...)
 
 doc"""
 ```rst
@@ -10816,7 +10816,7 @@ doc"""
 
 Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a TcpSocket.
 """
-redirect_stdout
+redirect_stdout(stream)
 
 doc"""
     print_with_color(color::Symbol, [io], strings...)
@@ -10851,21 +10851,21 @@ doc"""
 
 Test whether any elements of a boolean collection are true.
 """
-any
+any(itr)
 
 doc"""
     any(A, dims)
 
 Test whether any values along the given dimensions of an array are true.
 """
-any
+any(::AbstractArray,dims)
 
 doc"""
     any(p, itr) -> Bool
 
 Determine whether predicate `p` returns true for any elements of `itr`.
 """
-any
+any(p,itr)
 
 doc"""
 ```rst
@@ -10924,14 +10924,14 @@ doc"""
 
 Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
 """
-zeros
+zeros(type,dims)
 
 doc"""
     zeros(A)
 
 Create an array of all zeros with the same element type and shape as A.
 """
-zeros
+zeros(A)
 
 doc"""
     symbol(x...) -> Symbol
@@ -10947,7 +10947,7 @@ doc"""
 Riemann zeta function :math:`\zeta(s)`.
 ```
 """
-zeta
+zeta(s)
 
 doc"""
 ```rst
@@ -10957,7 +10957,7 @@ Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
 the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
 ```
 """
-zeta
+zeta(s,z)
 
 doc"""
 ```rst
@@ -10991,21 +10991,21 @@ doc"""
 
 Returns true if the given value is valid for its type, which currently can be one of `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String`
 """
-isvalid
+isvalid(value)
 
 doc"""
     isvalid(T, value) -> Bool
 
 Returns true if the given value is valid for that type. Types currently can be `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String` Values for `Char` can be of type `Char` or `UInt32` Values for `ASCIIString` and `UTF8String` can be of that type, or `Vector{UInt8}` Values for `UTF16String` can be `UTF16String` or `Vector{UInt16}` Values for `UTF32String` can be `UTF32String`, `Vector{Char}` or `Vector{UInt32}`
 """
-isvalid
+isvalid(T,value)
 
 doc"""
     isvalid(str, i)
 
 Tells whether index `i` is valid for the given string
 """
-isvalid
+isvalid(::AbstractString,i)
 
 doc"""
 ```rst
@@ -11145,7 +11145,7 @@ scales the matrix by its diagonal elements to make rows and columns more
 equal in norm. The default is ``true`` for both options.
 ```
 """
-eigfact
+eigfact(A,?,?,?,?)
 
 doc"""
 ```rst
@@ -11159,7 +11159,7 @@ generalized eigenvector can be obtained from the slice ``F[:vectors][:,
 k]``.)
 ```
 """
-eigfact
+eigfact(A,B)
 
 doc"""
 ```rst
@@ -11192,14 +11192,14 @@ doc"""
 
 Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If `length` is specified, the string does not have to be 0-terminated.
 """
-bytestring
+bytestring(::Ptr{UInt8},?)
 
 doc"""
     bytestring(s)
 
 Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 """
-bytestring
+bytestring(s)
 
 doc"""
     midpoints(e)
@@ -11303,14 +11303,14 @@ doc"""
 
 Compute the histogram of `v`, optionally using approximately `n` bins. The return values are a range `e`, which correspond to the edges of the bins, and `counts` containing the number of elements of `v` in each bin. Note: Julia does not ignore `NaN` values in the computation.
 """
-hist
+hist(v,?)
 
 doc"""
     hist(v, e) -> e, counts
 
 Compute the histogram of `v` using a vector/range `e` as the edges for the bins. The result will be a vector of length `length(e) - 1`, such that the element at location `i` satisfies `sum(e[i] .< v .<= e[i+1])`. Note: Julia does not ignore `NaN` values in the computation.
 """
-hist
+hist(v,e)
 
 doc"""
     islower(c::Union{Char,AbstractString}) -> Bool
@@ -11365,7 +11365,7 @@ factorization to a tuple; where possible, using :func:`eigfact` is
 recommended.
 ```
 """
-eig
+eig(A,?,?,?)
 
 doc"""
 ```rst
@@ -11378,7 +11378,7 @@ factorization to a tuple; where possible, using :func:`eigfact` is
 recommended.
 ```
 """
-eig
+eig(A,B)
 
 doc"""
 ```rst
@@ -11696,7 +11696,7 @@ doc"""
 Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 ```
 """
-pop!
+pop!(collection,key,?)
 
 doc"""
 ```rst
@@ -11727,7 +11727,7 @@ Remove the last item in ``collection`` and return it.
    5
 ```
 """
-pop!
+pop!(collection)
 
 doc"""
     filter(function, collection)
@@ -12111,14 +12111,14 @@ doc"""
 
 Adjusts `dt` to the next day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the next `dow`, allowing for no adjustment to occur.
 """
-Dates.tonext
+Dates.tonext(::Dates.TimeType,::Int,?)
 
 doc"""
     tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns true. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns false instead of true.
 """
-Dates.tonext
+Dates.tonext(::Function,::Dates.TimeType)
 
 doc"""
     dayofyear(dt::TimeType) -> Int
@@ -12170,14 +12170,14 @@ doc"""
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous `dow`, allowing for no adjustment to occur.
 """
-Dates.toprev
+Dates.toprev(::Dates.TimeType,::Int,?)
 
 doc"""
     toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns true. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns false instead of true.
 """
-Dates.toprev
+Dates.toprev(::Function,::Dates.TimeType)
 
 doc"""
     daysinyear(dt::TimeType) -> Int
@@ -12194,7 +12194,7 @@ Truncates the value of ``dt`` according to the provided ``Period`` type.
 E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 ```
 """
-Dates.trunc
+Dates.trunc(::Dates.TimeType, ::Type{Dates.Period})
 
 doc"""
     daysinmonth(dt::TimeType) -> Int
@@ -12306,7 +12306,7 @@ doc"""
 
 Returns a DateTime corresponding to the user's system time as UTC/GMT.
 """
-Dates.now
+Dates.now(::Type{Dates.UTC})
 
 doc"""
     isleapyear(dt::TimeType) -> Bool
@@ -12503,7 +12503,7 @@ doc"""
 
 Clone a package directly from the git URL `url`. The package does not need to be a registered in `Pkg.dir("METADATA")`. The package repo is cloned by the name `pkg` if provided; if not provided, `pkg` is determined automatically from `url`.
 """
-Pkg.clone(url)
+Pkg.clone(url,?)
 
 doc"""
     clone(pkg)
