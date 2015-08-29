@@ -152,14 +152,17 @@ end
 # Determines whether method_complete should be tried. It should only be done if
 # the string endswiths ',' or '(' when disregarding whitespace_chars
 function should_method_complete(s::AbstractString)
+    method_complete = false
     for c in reverse(s)
         if c in [',', '(']
-            return true
+            method_complete = true
+            break
         elseif !(c in whitespace_chars)
-            return false
+            method_complete = false
+            break
         end
     end
-    false
+    method_complete
 end
 
 # Returns a range that includes the method name in front of the first non
@@ -219,11 +222,6 @@ get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (fn.(sym), true) : (nothing, f
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (fn.(sym.value), true) : (nothing, false)
 get_value(sym, fn) = sym, true
 
-# Takes the argument of a function call and determine the type of signature of the method.
-# If the function gets called with a val::DataType then it returns Type{val} else typeof(val)
-method_type_of_arg(val::DataType) = Type{val}
-method_type_of_arg(val) = typeof(val)
-
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
     args_ex = DataType[]
@@ -231,7 +229,7 @@ function complete_methods(ex_org::Expr)
     (!found || (found && !isgeneric(func))) && return UTF8String[]
     for ex in ex_org.args[2:end]
         val, found = get_value(ex, Main)
-        found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
+        found ? push!(args_ex, Base.typesof(val).parameters[1]) : push!(args_ex, Any)
     end
     out = UTF8String[]
     t_in = Tuple{args_ex...} # Input types
