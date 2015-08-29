@@ -265,6 +265,11 @@ Library improvements
 
     * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
 
+    * Backreferences in replacement strings in calls to `replace` with a `Regex` pattern are now supported ([#11849]).
+      Use the `s` string prefix to indicate a replacement string contains a backreference. For example, `replace("ab", r"(.)(.)", s"\2\1")` yields "ba".
+
+    * Capture groups in regular expressions can now be named using PCRE syntax, `(?P<group_name>...)`. Capture group matches can be accessed by name by indexing a `Match` object with the name of the group ([#11566]).
+
   * Array and AbstractArray improvements
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end` ([#8432]).
