@@ -15,9 +15,9 @@ function getdoc(mod, x)
         else
             Docs.Binding(eval(parse(mod)), symbol(x))
         end
-        #=xs = split(x, ".")
-        mod = foldl((x,y) -> getfield(x,symbol(y)), Main, [split(mod, ".")..., xs[1:end-1]...])
-        #x = xs[end]=#
+        if isa(v, Colon)
+            v = Base.colon
+        end
         M = Docs.meta(Base)
             if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
                 return collect(values(M[v].meta))
@@ -42,8 +42,11 @@ isrst(md) =
     isa(flatten(md).content[1], Markdown.Code) &&
     flatten(md).content[1].language == "rst"
 
-function tryrst(md)
+function tryrst(md, remove_decl)
     try
+        if remove_decl && isa(md.content[1], Markdown.Code) && md.content[1].language == ""
+            shift!(md.content)
+        end
         return Markdown.rst(md)
     catch e
         warn("Error converting docstring:")
@@ -53,7 +56,7 @@ function tryrst(md)
     end
 end
 
-torst(md) = isrst(md) ? flatten(md).content[1].code : tryrst(md)
+torst(md,remove_decl) = isrst(md) ? flatten(md).content[1].code : tryrst(md, remove_decl)
 
 function translate(file)
     @assert(isfile(file))
@@ -76,7 +79,7 @@ function translate(file)
                 full = funcname*rest
                 doc = nothing
                 for mdoc in getdoc(mod, funcname)
-                    trst = tryrst(mdoc)
+                    trst = tryrst(mdoc, false)
                     trst !== nothing || continue
                     if contains(trst, " " * full)
                         if doc != nothing
@@ -87,7 +90,7 @@ function translate(file)
                         #@show trst full
                     end
                 end
-                if doc == nothing || torst(doc) == nothing
+                if doc == nothing || torst(doc, false) == nothing
                     info("no docs for $(ident(mod, funcname)) $rest")
                     println(io, l)
                     doccing = false
@@ -97,7 +100,7 @@ function translate(file)
                 println(io, l)
                 println(io)
                 println(io, "   .. Docstring generated from Julia source\n")
-                for l in split(torst(doc), "\n")
+                for l in split(torst(doc,true), "\n")
                     ismatch(r"^\s*$", l) ? println(io) : println(io, "   ", l)
                 end
                 isrst(doc) && println(io)

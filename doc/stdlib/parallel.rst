@@ -11,15 +11,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       Task(func)
-
    Create a ``Task`` (i.e. thread, or coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
 .. function:: yieldto(task, arg = nothing)
 
    .. Docstring generated from Julia source
-
-       yieldto(task, arg = nothing)
 
    Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``arg`` is returned from the task's last call to ``yieldto``\ . This is a low-level call that only switches tasks, not considering states or scheduling in any way. Its use is discouraged.
 
@@ -27,15 +23,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       current_task()
-
    Get the currently running Task.
 
 .. function:: istaskdone(task) -> Bool
 
    .. Docstring generated from Julia source
-
-       istaskdone(task) -> Bool
 
    Tell whether a task has exited.
 
@@ -43,15 +35,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       istaskstarted(task) -> Bool
-
    Tell whether a task has started executing.
 
 .. function:: consume(task, values...)
 
    .. Docstring generated from Julia source
-
-       consume(task, values...)
 
    Receive the next value passed to ``produce`` by the specified task. Additional arguments may be passed, to be returned from the last ``produce`` call in the producer.
 
@@ -59,15 +47,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       produce(value)
-
    Send the given value to the last ``consume`` call, switching to the consumer task. If the next ``consume`` call passes any values, they are returned by ``produce``\ .
 
 .. function:: yield()
 
    .. Docstring generated from Julia source
-
-       yield()
 
    Switch to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.
 
@@ -75,15 +59,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       task_local_storage(symbol)
-
    Look up the value of a symbol in the current task's task-local storage.
 
 .. function:: task_local_storage(symbol, value)
 
    .. Docstring generated from Julia source
-
-       task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
 
@@ -91,15 +71,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       task_local_storage(body, symbol, value)
-
    Call the function ``body`` with a modified task-local storage, in which ``value`` is assigned to ``symbol``\ ; the previous value of ``symbol``\ , or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
 
 .. function:: Condition()
 
    .. Docstring generated from Julia source
-
-       Condition()
 
    Create an edge-triggered event source that tasks can wait for. Tasks that call ``wait`` on a ``Condition`` are suspended and queued. Tasks are woken up when ``notify`` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time ``notify`` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The ``Channel`` type does this, and so can be used for level-triggered events.
 
@@ -107,15 +83,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       notify(condition, val=nothing; all=true, error=false)
-
    Wake up tasks waiting for a condition, passing them ``val``\ . If ``all`` is true (the default), all waiting tasks are woken, otherwise only one is. If ``error`` is true, the passed value is raised as an exception in the woken tasks.
 
 .. function:: schedule(t::Task, [val]; error=false)
 
    .. Docstring generated from Julia source
-
-       schedule(t::Task, [val]; error=false)
 
    Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as ``wait``\ .
 
@@ -125,15 +97,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       @schedule
-
    Wrap an expression in a Task and add it to the scheduler's queue.
 
 .. function:: @task
 
    .. Docstring generated from Julia source
-
-       @task
 
    Wrap an expression in a Task without executing it, and return the Task. This only creates a task, and does not run it.
 
@@ -141,15 +109,11 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       sleep(seconds)
-
    Block the current task for a specified number of seconds. The minimum sleep time is 1 millisecond or input of ``0.001``\ .
 
 .. function:: ReentrantLock()
 
    .. Docstring generated from Julia source
-
-       ReentrantLock()
 
    Creates a reentrant lock. The same task can acquire the lock as many times as required. Each lock must be matched with an unlock.
 
@@ -157,23 +121,17 @@ Tasks
 
    .. Docstring generated from Julia source
 
-       lock(l::ReentrantLock)
-
    Associates ``l`` with the current task. If ``l`` is already locked by a different task, waits for it to become available. The same task can acquire the lock multiple times. Each "lock" must be matched by an "unlock"
 
 .. function:: unlock(l::ReentrantLock)
 
    .. Docstring generated from Julia source
 
-       unlock(l::ReentrantLock)
-
    Releases ownership of the lock by the current task. If the lock had been acquired before, it just decrements an internal counter and returns immediately.
 
 .. function:: Channel{T}(sz::Int)
 
    .. Docstring generated from Julia source
-
-       Channel{T}(sz::Int)
 
    Constructs a Channel that can hold a maximum of ``sz`` objects of type ``T``\ . ``put!`` calls on a full channel block till an object is removed with ``take!``\ .
 
@@ -264,15 +222,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       nprocs()
-
    Get the number of available processes.
 
 .. function:: nworkers()
 
    .. Docstring generated from Julia source
-
-       nworkers()
 
    Get the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
 
@@ -280,15 +234,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       procs()
-
    Returns a list of all process identifiers.
 
 .. function:: workers()
 
    .. Docstring generated from Julia source
-
-       workers()
 
    Returns a list of all worker process identifiers.
 
@@ -296,23 +246,17 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       rmprocs(pids...)
-
    Removes the specified workers.
 
 .. function:: interrupt([pids...])
 
    .. Docstring generated from Julia source
 
-       interrupt([pids...])
-
    Interrupt the current executing task on the specified workers. This is equivalent to pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
 
 .. function:: myid()
 
    .. Docstring generated from Julia source
-
-       myid()
 
    Get the id of the current process.
 
@@ -333,8 +277,6 @@ General Parallel Computing Support
 .. function:: remotecall(id, func, args...)
 
    .. Docstring generated from Julia source
-
-       remotecall(id, func, args...)
 
    Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteRef``\ .
 
@@ -384,15 +326,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       remotecall_wait(id, func, args...)
-
    Perform ``wait(remotecall(...))`` in one message.
 
 .. function:: remotecall_fetch(id, func, args...)
 
    .. Docstring generated from Julia source
-
-       remotecall_fetch(id, func, args...)
 
    Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
@@ -400,15 +338,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       put!(RemoteRef, value)
-
    Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``\ . Returns its first argument.
 
 .. function:: put!(Channel, value)
 
    .. Docstring generated from Julia source
-
-       put!(Channel, value)
 
    Appends an item to the channel. Blocks if the channel is full.
 
@@ -416,15 +350,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       take!(RemoteRef)
-
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 
 .. function:: take!(Channel)
 
    .. Docstring generated from Julia source
-
-       take!(Channel)
 
    Removes and returns a value from a ``Channel``\ . Blocks till data is available.
 
@@ -432,11 +362,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       isready(r::RemoteRef)
-
    Determine whether a ``RemoteRef`` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. It is recommended that this function only be used on a ``RemoteRef`` that is assigned once.
 
    If the argument ``RemoteRef`` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for ``r`` in a separate task instead, or to use a local ``RemoteRef`` as a proxy:
+
+   .. code-block:: julia
 
        rr = RemoteRef()
        @async put!(rr, remotecall_fetch(p, long_computation))
@@ -459,15 +389,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       RemoteRef()
-
    Make an uninitialized remote reference on the local machine.
 
 .. function:: RemoteRef(n)
 
    .. Docstring generated from Julia source
-
-       RemoteRef(n)
 
    Make an uninitialized remote reference on process ``n``\ .
 
@@ -475,15 +401,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-
    Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier. ``testcb`` is polled every ``pollint`` seconds.
 
 .. function:: @spawn
 
    .. Docstring generated from Julia source
-
-       @spawn
 
    Creates a closure around an expression and runs it on an automatically-chosen process, returning a ``RemoteRef`` to the result.
 
@@ -491,15 +413,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       @spawnat
-
    Accepts two arguments, ``p`` and an expression. A closure is created around the expression and run asynchronously on process ``p``\ . Returns a ``RemoteRef`` to the result.
 
 .. function:: @fetch
 
    .. Docstring generated from Julia source
-
-       @fetch
 
    Equivalent to ``fetch(@spawn expr)``\ .
 
@@ -507,15 +425,11 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       @fetchfrom
-
    Equivalent to ``fetch(@spawnat p expr)``\ .
 
 .. function:: @async
 
    .. Docstring generated from Julia source
-
-       @async
 
    Wraps an expression in a closure and schedules it to run on the local machine. Also adds it to the set of items that the nearest enclosing ``@sync`` waits for.
 
@@ -523,17 +437,15 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-       @sync
-
    Wait until all dynamically-enclosed uses of ``@async``\ , ``@spawn``\ , ``@spawnat`` and ``@parallel`` are complete. All exceptions thrown by enclosed async operations are collected and thrown as a ``CompositeException``\ .
 
 .. function:: @parallel
 
    .. Docstring generated from Julia source
 
-       @parallel
-
    A parallel for loop of the form :
+
+   .. code-block:: julia
 
        @parallel [reducer] for var = range
            body
@@ -543,6 +455,8 @@ General Parallel Computing Support
 
    Note that without a reducer function, @parallel executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with ``@sync``\ , like :
 
+   .. code-block:: julia
+
        @sync @parallel for var = range
            body
        end
@@ -550,8 +464,6 @@ General Parallel Computing Support
 .. function:: @everywhere
 
    .. Docstring generated from Julia source
-
-       @everywhere
 
    Execute an expression on all processes. Errors on any of the processes are collected into a CompositeException and thrown.
 
@@ -561,8 +473,6 @@ Shared Arrays (Experimental, UNIX-only feature)
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
    .. Docstring generated from Julia source
-
-       SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
    Construct a SharedArray of a bitstype ``T`` and size ``dims`` across the processes specified by ``pids`` - all of which have to be on the same host.
 
@@ -574,23 +484,17 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    .. Docstring generated from Julia source
 
-       procs(S::SharedArray)
-
    Get the vector of processes that have mapped the shared array
 
 .. function:: sdata(S::SharedArray)
 
    .. Docstring generated from Julia source
 
-       sdata(S::SharedArray)
-
    Returns the actual ``Array`` object backing ``S``
 
 .. function:: indexpids(S::SharedArray)
 
    .. Docstring generated from Julia source
-
-       indexpids(S::SharedArray)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping the SharedArray
 
@@ -604,8 +508,6 @@ Cluster Manager Interface
 .. function:: launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
 
    .. Docstring generated from Julia source
-
-       launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
 
    Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry to ``launched`` and notify ``launch_ntfy``\ . The function MUST exit once all workers, requested by ``manager`` have been launched. ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
 
@@ -629,15 +531,11 @@ Cluster Manager Interface
 
    .. Docstring generated from Julia source
 
-       kill(manager::FooManager, pid::Int, config::WorkerConfig)
-
    Implemented by cluster managers. It is called on the master process, by ``rmprocs``\ . It should cause the remote worker specified by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
 
 .. function:: init_worker(manager::FooManager)
 
    .. Docstring generated from Julia source
-
-       init_worker(manager::FooManager)
 
    Called by cluster managers implementing custom transports. It initializes a newly launched process as a worker. Command line argument ``--worker`` has the effect of initializing a process as a worker using TCP/IP sockets for transport.
 
@@ -645,13 +543,15 @@ Cluster Manager Interface
 
    .. Docstring generated from Julia source
 
-       connect([host],port) -> TcpSocket
-
    Connect to the host ``host`` on port ``port``
+
+   .. code-block:: julia
 
        connect(path) -> PipeEndpoint
 
    Connect to the Named Pipe / Domain Socket at ``path``
+
+   .. code-block:: julia
 
        connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
 
@@ -660,8 +560,6 @@ Cluster Manager Interface
 .. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
 
    .. Docstring generated from Julia source
-
-       Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
 
    Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
 
