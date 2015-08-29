@@ -52,6 +52,13 @@ function rst(io::IO, md::HorizontalRule)
     println(io, "–" ^ 5)
 end
 
+function rst(io::IO, l::LaTeX)
+    println(io, ".. math::\n")
+    for l in lines(l.formula)
+        println(io, "    ", l)
+    end
+end
+
 rst(io::IO, md) = writemime(io, "text/rst", md)
 
 # Inline elements
