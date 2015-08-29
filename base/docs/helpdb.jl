@@ -365,6 +365,13 @@ Convert a number of seconds since the epoch to broken-down format, with fields `
 Libc.TmStruct
 
 doc"""
+    dlext
+
+File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
+"""
+Libdl.dlext
+
+doc"""
     time(t::TmStruct)
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
