@@ -48,6 +48,104 @@ for T in (Float16,Float32,Float64)
     end
 end
 
+# Test math functions. We compare to BigFloat instead of hard-coding
+# values, assuming that BigFloat has an independent and independently
+# tested implementation.
+for T in (Float32, Float64)
+    x = T(1//3)
+    y = T(1//2)
+    yi = 4
+    # Test random values
+    @test_approx_eq x^y big(x)^big(y)
+    @test_approx_eq x^yi big(x)^yi
+    @test_approx_eq acos(x) acos(big(x))
+    @test_approx_eq acosh(1+x) acosh(big(1+x))
+    @test_approx_eq asin(x) asin(big(x))
+    @test_approx_eq asinh(x) asinh(big(x))
+    @test_approx_eq atan(x) atan(big(x))
+    @test_approx_eq atan2(x,y) atan2(big(x),big(y))
+    @test_approx_eq atanh(x) atanh(big(x))
+    @test_approx_eq cbrt(x) cbrt(big(x))
+    @test_approx_eq cos(x) cos(big(x))
+    @test_approx_eq cosh(x) cosh(big(x))
+    @test_approx_eq exp(x) exp(big(x))
+    @test_approx_eq exp10(x) exp10(big(x))
+    @test_approx_eq exp2(x) exp2(big(x))
+    @test_approx_eq hypot(x,y) hypot(big(x),big(y))
+    @test_approx_eq log(x) log(big(x))
+    @test_approx_eq log10(x) log10(big(x))
+    @test_approx_eq log2(x) log2(big(x))
+    @test_approx_eq sin(x) sin(big(x))
+    @test_approx_eq sinh(x) sinh(big(x))
+    @test_approx_eq sqrt(x) sqrt(big(x))
+    @test_approx_eq tan(x) tan(big(x))
+    @test_approx_eq tanh(x) tanh(big(x))
+    # Test special values
+    @test isequal(T(1//4)^T(1//2), T(1//2))
+    @test isequal(T(1//4)^2, T(1//16))
+    @test isequal(acos(T(1)), T(0))
+    @test isequal(acosh(T(1)), T(0))
+    @test_approx_eq_eps asin(T(1)) T(pi)/2 eps(T)
+    @test_approx_eq_eps atan(T(1)) T(pi)/4 eps(T)
+    @test_approx_eq_eps atan2(T(1),T(1)) T(pi)/4 eps(T)
+    @test isequal(cbrt(T(0)), T(0))
+    @test isequal(cbrt(T(1)), T(1))
+    @test isequal(cbrt(T(1000000000)), T(1000))
+    @test isequal(cos(T(0)), T(1))
+    @test_approx_eq_eps cos(T(pi)/2) T(0) eps(T)
+    @test isequal(cos(T(pi)), T(-1))
+    @test_approx_eq_eps exp(T(1)) T(e) 10*eps(T)
+    @test isequal(exp10(T(1)), T(10))
+    @test isequal(exp2(T(1)), T(2))
+    @test isequal(hypot(T(3),T(4)), T(5))
+    @test isequal(log(T(1)), T(0))
+    @test_approx_eq_eps log(T(e)) T(1) eps(T)
+    @test isequal(log10(T(1)), T(0))
+    @test isequal(log10(T(10)), T(1))
+    @test isequal(log2(T(1)), T(0))
+    @test isequal(log2(T(2)), T(1))
+    @test isequal(sin(T(0)), T(0))
+    @test isequal(sin(T(pi)/2), T(1))
+    @test_approx_eq_eps sin(T(pi)) T(0) eps(T)
+    @test isequal(sqrt(T(0)), T(0))
+    @test isequal(sqrt(T(1)), T(1))
+    @test isequal(sqrt(T(100000000)), T(10000))
+    @test isequal(tan(T(0)), T(0))
+    @test_approx_eq_eps tan(T(pi)/4) T(1) eps(T)
+    # Test inverses
+    @test_approx_eq acos(cos(x)) x
+    @test_approx_eq acosh(cosh(x)) x
+    @test_approx_eq asin(sin(x)) x
+    @test_approx_eq cbrt(x)^3 x
+    @test_approx_eq cbrt(x^3) x
+    @test_approx_eq asinh(sinh(x)) x
+    @test_approx_eq atan(tan(x)) x
+    @test_approx_eq atan2(x,y) atan(x/y)
+    @test_approx_eq atanh(tanh(x)) x
+    @test_approx_eq cos(acos(x)) x
+    @test_approx_eq cosh(acosh(1+x)) 1+x
+    @test_approx_eq exp(log(x)) x
+    @test_approx_eq exp10(log10(x)) x
+    @test_approx_eq exp2(log2(x)) x
+    @test_approx_eq log(exp(x)) x
+    @test_approx_eq log10(exp10(x)) x
+    @test_approx_eq log2(exp2(x)) x
+    @test_approx_eq sin(asin(x)) x
+    @test_approx_eq sinh(asinh(x)) x
+    @test_approx_eq sqrt(x)^2 x
+    @test_approx_eq sqrt(x^2) x
+    @test_approx_eq tan(atan(x)) x
+    @test_approx_eq tanh(atanh(x)) x
+    # Test some properties
+    @test_approx_eq cosh(x) (exp(x)+exp(-x))/2
+    @test_approx_eq cosh(x)^2-sinh(x)^2 1
+    @test_approx_eq hypot(x,y) sqrt(x^2+y^2)
+    @test_approx_eq sin(x)^2+cos(x)^2 1
+    @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
+    @test_approx_eq tan(x) sin(x)/cos(x)
+    @test_approx_eq tanh(x) sinh(x)/cosh(x)
+end
+
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
     @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
