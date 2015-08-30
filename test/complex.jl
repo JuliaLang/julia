@@ -2,6 +2,70 @@
 
 @test reim(2 + 3im) == (2, 3)
 
+# Test math functions. We compare to BigFloat instead of hard-coding
+# values, assuming that BigFloat has an independent and independently
+# tested implementation.
+for T in (Float32, Float64)
+    x = Complex{T}(1//3 + 1//4*im)
+    y = Complex{T}(1//2 + 1//5*im)
+    yi = 4
+    # Test random values
+    @test_approx_eq x^y big(x)^big(y)
+    @test_approx_eq x^yi big(x)^yi
+    @test_approx_eq abs(x) abs(big(x))
+    @test_approx_eq abs2(x) abs2(big(x))
+    @test_approx_eq acos(x) acos(big(x))
+    @test_approx_eq acosh(1+x) acosh(1+big(x))
+    @test_approx_eq angle(x) angle(big(x))
+    @test_approx_eq asin(x) asin(big(x))
+    @test_approx_eq asinh(x) asinh(big(x))
+    @test_approx_eq atan(x) atan(big(x))
+    @test_approx_eq atanh(x) atanh(big(x))
+    @test_approx_eq cis(real(x)) cis(real(big(x)))
+    @test_approx_eq cis(x) cis(big(x))
+    @test_approx_eq cos(x) cos(big(x))
+    @test_approx_eq cosh(x) cosh(big(x))
+    @test_approx_eq exp(x) exp(big(x))
+    @test_approx_eq exp10(x) exp10(big(x))
+    @test_approx_eq exp2(x) exp2(big(x))
+    @test_approx_eq log(x) log(big(x))
+    @test_approx_eq log10(x) log10(big(x))
+    @test_approx_eq log2(x) log2(big(x))
+    @test_approx_eq sin(x) sin(big(x))
+    @test_approx_eq sinh(x) sinh(big(x))
+    @test_approx_eq sqrt(x) sqrt(big(x))
+    @test_approx_eq tan(x) tan(big(x))
+    @test_approx_eq tanh(x) tanh(big(x))
+    # Test inverses
+    @test_approx_eq acos(cos(x)) x
+    @test_approx_eq acosh(cosh(x)) x
+    @test_approx_eq asin(sin(x)) x
+    @test_approx_eq asinh(sinh(x)) x
+    @test_approx_eq atan(tan(x)) x
+    @test_approx_eq atanh(tanh(x)) x
+    @test_approx_eq cos(acos(x)) x
+    @test_approx_eq cosh(acosh(1+x)) 1+x
+    @test_approx_eq exp(log(x)) x
+    @test_approx_eq exp10(log10(x)) x
+    @test_approx_eq exp2(log2(x)) x
+    @test_approx_eq log(exp(x)) x
+    @test_approx_eq log10(exp10(x)) x
+    @test_approx_eq log2(exp2(x)) x
+    @test_approx_eq sin(asin(x)) x
+    @test_approx_eq sinh(asinh(x)) x
+    @test_approx_eq sqrt(x)^2 x
+    @test_approx_eq sqrt(x^2) x
+    @test_approx_eq tan(atan(x)) x
+    @test_approx_eq tanh(atanh(x)) x
+    # Test some properties
+    @test_approx_eq cosh(x) (exp(x)+exp(-x))/2
+    @test_approx_eq cosh(x)^2-sinh(x)^2 1
+    @test_approx_eq sin(x)^2+cos(x)^2 1
+    @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
+    @test_approx_eq tan(x) sin(x)/cos(x)
+    @test_approx_eq tanh(x) sinh(x)/cosh(x)
+end
+
 # sqrt:
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))
