@@ -106,14 +106,11 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
         if length(code) == 5 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                println(io,"\n$(code[1]) will only return a complex result if called with a complex argument. ",
-                        "Try $(code[1]) (complex(x)).")
+                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1]) (complex(x)).")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring #3024
-                println(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding ",
-                        "a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
+                print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code[1] == :^ && (code[2] == symbol("promotion.jl") || code[2] == symbol("math.jl"))
-                println(io, "\nExponentiation yielding a complex result requires a complex argument. ",
-                        "\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
+                print(io, "\nExponentiation yielding a complex result requires a complex argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
             break
         end
