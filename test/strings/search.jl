@@ -13,6 +13,38 @@ end
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
 
+# I think these should give error on 4 also, and "" is not treated
+# consistently with SubString("",1,1), nor with Char[]
+for ind in (0, 5)
+    @test_throws BoundsError search("foo", SubString("",1,1), ind)
+    @test_throws BoundsError rsearch("foo", SubString("",1,1), ind)
+    @test_throws BoundsError searchindex("foo", SubString("",1,1), ind)
+    @test_throws BoundsError rsearchindex("foo", SubString("",1,1), ind)
+end
+
+# Note: the commented out tests will be enabled after fixes to make
+# sure that search/rsearch/searchindex/rsearchindex are consistent
+# no matter what type of AbstractString the second argument is
+@test_throws BoundsError search("foo", Char[], 0)
+@test_throws BoundsError search("foo", Char[], 5)
+# @test_throws BoundsError rsearch("foo", Char[], 0)
+@test_throws BoundsError rsearch("foo", Char[], 5)
+
+# @test_throws BoundsError searchindex("foo", Char[], 0)
+# @test_throws BoundsError searchindex("foo", Char[], 5)
+# @test_throws BoundsError rsearchindex("foo", Char[], 0)
+# @test_throws BoundsError rsearchindex("foo", Char[], 5)
+
+# @test_throws ErrorException in("foobar","bar")
+@test_throws BoundsError search(b"\x1\x2",0x1,0)
+@test rsearchindex(b"foo",b"o",0) == 0
+@test rsearchindex(SubString("",1,1),SubString("",1,1)) == 1
+
+@test search(b"foo",'o') == 2
+@test rsearch(b"foo",'o') == 3
+@test search(b"foó",'ó') == 3
+@test rsearch(b"foó",'ó') == 3
+
 # ascii search
 for str in [astr, GenericString(astr)]
     @test_throws BoundsError search(str, 'z', 0)
