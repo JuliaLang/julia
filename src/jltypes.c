@@ -3282,13 +3282,11 @@ void jl_init_types(void)
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_emptysvec,
-                        jl_svec(7, jl_symbol("sig"), jl_symbol("va"), jl_symbol("isstaged"),
-                                jl_symbol("tvars"), jl_symbol("func"),
-                                jl_symbol("invokes"), jl_symbol("next")),
-                        jl_svec(7, jl_type_type, jl_bool_type, jl_bool_type,
-                                jl_any_type, jl_any_type,
-                                jl_any_type, jl_any_type),
-                        0, 1, 7);
+                        jl_svec(6, jl_symbol("sig"), jl_symbol("va"), jl_symbol("isstaged"),
+                                jl_symbol("tvars"), jl_symbol("func"), jl_symbol("next")),
+                        jl_svec(6, jl_type_type, jl_bool_type, jl_bool_type,
+                                jl_any_type, jl_any_type, jl_any_type),
+                        0, 1, 6);
 
     jl_methtable_type =
         jl_new_datatype(jl_symbol("MethodTable"), jl_any_type, jl_emptysvec,

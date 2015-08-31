@@ -65,7 +65,8 @@ write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
 write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
 write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
-function write(s::IO, a::AbstractArray)
+write(s::IO, a::AbstractArray) = write_each(s, a)
+function write_each(s::IO, a::AbstractArray)
     nb = 0
     for i in eachindex(a)
         nb += write(s, a[i])

@@ -235,7 +235,8 @@ show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
 function println(io::AsyncStream, xs...)
     lock(io.lock)
     try
-        invoke(println, Tuple{IO, map(typeof,xs)...}, io, xs...)
+        for x in xs print(io, x) end
+        print(io, '\n')
     finally
         unlock(io.lock)
     end
@@ -992,7 +993,7 @@ function write{T}(s::AsyncStream, a::Array{T})
         return buffer_or_write(s, pointer(a), n);
     else
         check_open(s)
-        invoke(write, Tuple{IO, Array},s,a)
+        write_each(s,a)
     end
 end
 

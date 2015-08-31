@@ -598,11 +598,11 @@ function serialize(s::SerializationState, rr::RemoteRef)
         #println("send add $rr to $i")
         send_add_client(rr, i)
     end
-    invoke(serialize, Tuple{SerializationState, Any}, s, rr)
+    serialize_any(s, rr)
 end
 
 function deserialize(s::SerializationState, t::Type{RemoteRef})
-    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
+    rr = deserialize_any(s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())

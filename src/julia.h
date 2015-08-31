@@ -323,10 +323,6 @@ typedef struct _jl_methlist_t {
     int8_t isstaged;
     jl_svec_t *tvars;
     jl_function_t *func;
-    // cache of specializations of this method for invoke(), i.e.
-    // cases where this method was called even though it was not necessarily
-    // the most specific for the argument types.
-    struct _jl_methtable_t *invokes;
     // TODO: pointer from specialized to original method
     //jl_function_t *orig_method;
     struct _jl_methlist_t *next;
@@ -1208,8 +1204,6 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                         int cache, int inexact);
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
-jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
-                         jl_value_t **args, size_t nargs);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);

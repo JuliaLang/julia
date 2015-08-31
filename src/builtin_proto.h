@@ -33,7 +33,6 @@ JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_applicable);
-JL_CALLABLE(jl_f_invoke);
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_nfields);
 

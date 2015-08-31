@@ -272,7 +272,7 @@ function serialize(s::SerializationState, S::SharedArray)
 end
 
 function deserialize{T,N}(s::SerializationState, t::Type{SharedArray{T,N}})
-    S = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
+    S = deserialize_any(s, t)
     init_loc_flds(S)
     S
 end

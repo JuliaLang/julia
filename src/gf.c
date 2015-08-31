@@ -1201,7 +1201,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             jl_gc_wb(l, l->tvars);
             l->va = jl_is_va_tuple(type);
             l->isstaged = isstaged;
-            l->invokes = (struct _jl_methtable_t *)jl_nothing;
             l->func = method;
             jl_gc_wb(l, l->func);
             JL_SIGATOMIC_END();
@@ -1231,7 +1230,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
     newrec->va = jl_is_va_tuple(type);
     newrec->isstaged = isstaged;
     newrec->func = method;
-    newrec->invokes = (struct _jl_methtable_t*)jl_nothing;
     newrec->next = l;
     JL_SIGATOMIC_BEGIN();
     JL_GC_PUSH1(&newrec);
@@ -1692,114 +1690,6 @@ JL_CALLABLE(jl_apply_generic)
     jl_value_t *res = jl_apply(mfunc, args, nargs);
     JL_GC_POP();
     return res;
-}
-
-DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_datatype_t *types)
-{
-    assert(jl_is_gf(gf));
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    jl_methlist_t *m = mt->defs;
-    size_t typelen = jl_nparams(types);
-    jl_value_t *env = (jl_value_t*)jl_false;
-
-    while (m != (void*)jl_nothing) {
-        if (m->tvars!=jl_emptysvec) {
-            env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
-            if (env != (jl_value_t*)jl_false) break;
-        }
-        else if (jl_tuple_subtype(jl_svec_data(types->parameters), typelen, m->sig, 0)) {
-            break;
-        }
-        m = m->next;
-    }
-
-    if (m == (void*)jl_nothing)
-        return jl_nothing;
-    return (jl_value_t*)m;
-}
-
-// invoke()
-// this does method dispatch with a set of types to match other than the
-// types of the actual arguments. this means it sometimes does NOT call the
-// most specific method for the argument types, so we need different logic.
-// first we use the given types to look up a definition, then we perform
-// caching and specialization within just that definition.
-// every definition has its own private method table for this purpose.
-//
-// NOTE: assumes argument type is a subtype of the lookup type.
-jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
-                         jl_value_t **args, size_t nargs)
-{
-    assert(jl_is_gf(gf));
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    jl_methlist_t *m = (jl_methlist_t*)jl_gf_invoke_lookup(gf, types);
-    size_t i;
-
-    if ((jl_value_t*)m == jl_nothing) {
-        jl_no_method_error_bare(gf, (jl_value_t*)types);
-        // unreachable
-    }
-
-    // now we have found the matching definition.
-    // next look for or create a specialization of this definition.
-
-    jl_function_t *mfunc;
-    if (m->invokes == (void*)jl_nothing)
-        mfunc = jl_bottom_func;
-    else
-        mfunc = jl_method_table_assoc_exact(m->invokes, args, nargs);
-    if (mfunc != jl_bottom_func) {
-        if (mfunc->linfo != NULL &&
-            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
-            // if inference is running on this function, return a copy
-            // of the function to be compiled without inference and run.
-            jl_lambda_info_t *li = mfunc->linfo;
-            if (li->unspecialized == NULL) {
-                li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
-                if (mfunc->env != (jl_value_t*)jl_emptysvec)
-                    li->unspecialized->env = NULL;
-                jl_gc_wb(li, li->unspecialized);
-            }
-            return jl_apply_unspecialized(mfunc, args, nargs);
-        }
-    }
-    else {
-        jl_svec_t *tpenv=jl_emptysvec;
-        jl_tupletype_t *newsig=NULL;
-        jl_tupletype_t *tt=NULL;
-        JL_GC_PUSH3(&tpenv, &newsig, &tt);
-        tt = arg_type_tuple(args, nargs);
-        if (m->invokes == (void*)jl_nothing) {
-            m->invokes = new_method_table(mt->name, mt->module);
-            jl_gc_wb(m, m->invokes);
-            update_max_args(m->invokes, tt);
-            // this private method table has just this one definition
-            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0,(jl_value_t*)m->invokes);
-        }
-
-        newsig = m->sig;
-
-        if (m->tvars != jl_emptysvec) {
-            jl_value_t *ti =
-                lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
-            assert(ti != (jl_value_t*)jl_bottom_type);
-            (void)ti;
-            // don't bother computing this if no arguments are tuples
-            for(i=0; i < jl_nparams(tt); i++) {
-                if (jl_is_tuple_type(jl_tparam(tt,i)))
-                    break;
-            }
-            if (i < jl_nparams(tt)) {
-                newsig = (jl_tupletype_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                                   jl_svec_data(tpenv),
-                                                                   jl_svec_len(tpenv)/2);
-            }
-        }
-        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv, m->isstaged);
-        JL_GC_POP();
-    }
-
-    return jl_apply(mfunc, args, nargs);
 }
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)

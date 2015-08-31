@@ -129,7 +129,7 @@ function write{T}(s::IOStream, a::Array{T})
         Int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                   s.ios, a, length(a)*sizeof(T)))
     else
-        invoke(write, Tuple{IO, Array}, s, a)
+        write_each(s, a)
     end
 end
 
@@ -142,7 +142,7 @@ end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any, AbstractArray}, s, a)
+        return write_each(s, a)
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
@@ -178,7 +178,9 @@ function read!{T}(s::IOStream, a::Array{T})
             throw(EOFError())
         end
     else
-        invoke(read!, Tuple{IO, Array}, s, a)
+        for i in eachindex(a)
+            a[i] = read(s, T)
+        end
     end
     a
 end

@@ -5620,13 +5620,6 @@ Return a vector of indexes for each dimension giving the locations of the non-ze
 findn
 
 doc"""
-    invoke(f, (types...), args...)
-
-Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
-"""
-invoke
-
-doc"""
     parse(str, start; greedy=true, raise=true)
 
 Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If `greedy` is true (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is true (default), syntax errors other than incomplete expressions will raise an error. If `raise` is false, `parse` will return an expression that will raise an error upon evaluation.

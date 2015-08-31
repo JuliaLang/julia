@@ -1103,30 +1103,6 @@ JL_CALLABLE(jl_f_applicable)
         jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f_invoke)
-{
-    JL_NARGSV(invoke, 2);
-    JL_TYPECHK(invoke, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("invoke: not a generic function");
-    jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
-    if (jl_is_tuple(args[1])) {
-        // TODO: maybe deprecation warning, better checking
-        argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
-                                                      jl_nfields(argtypes));
-    }
-    else {
-        jl_check_type_tuple(args[1], jl_gf_name(args[0]), "invoke");
-    }
-    if (!jl_tuple_subtype(&args[2], nargs-2, (jl_datatype_t*)argtypes, 1))
-        jl_error("invoke: argument type error");
-    jl_value_t *res = jl_gf_invoke((jl_function_t*)args[0],
-                                   (jl_tupletype_t*)argtypes, &args[2], nargs-2);
-    JL_GC_POP();
-    return res;
-}
-
 // eq hash table --------------------------------------------------------------
 
 #include "table.c"
@@ -1247,7 +1223,6 @@ void jl_init_primitives(void)
     add_builtin_func("svec", jl_f_svec);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("applicable", jl_f_applicable);
-    add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isdefined", jl_f_isdefined);
 

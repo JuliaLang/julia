@@ -154,7 +154,7 @@ export
     issubtype, typeof, isa,
     # typeassert, apply_type,
     # method reflection
-    applicable, invoke, method_exists,
+    applicable, method_exists,
     # constants
     nothing, Main,
     # intrinsics module

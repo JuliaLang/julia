@@ -741,28 +741,6 @@ function abstract_call_gf(f, fargs, argtype, e)
     return rettype
 end
 
-function invoke_tfunc(f, types, argtype)
-    argtype = typeintersect(types,limit_tuple_type(argtype))
-    if is(argtype,Bottom)
-        return Bottom
-    end
-    meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
-    if is(meth, nothing)
-        return Any
-    end
-    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
-                      argtype, meth.sig, meth.tvars)::SimpleVector
-    linfo = try
-        func_for_method(meth, types, env)
-    catch
-        NF
-    end
-    if linfo === NF
-        return Any
-    end
-    return typeinf(linfo::LambdaStaticData, ti, env, linfo)[2]
-end
-
 # `types` is an array of inferred types for expressions in `args`.
 # if an expression constructs a container (e.g. `svec(x,y,z)`),
 # refine its type to an array of element types. returns an array of
@@ -840,15 +818,6 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
     end
     if isgeneric(f)
         return abstract_call_gf(f, fargs, Tuple{argtypes...}, e)
-    end
-    if is(f,invoke) && length(fargs)>1
-        af = isconstantfunc(fargs[1], sv)
-        if !is(af,false) && (af=_ieval(af);isgeneric(af))
-            sig = argtypes[2]
-            if isType(sig) && sig.parameters[1] <: Tuple
-                return invoke_tfunc(af, sig.parameters[1], Tuple{argtypes[3:end]...})
-            end
-        end
     end
     if is(f,getfield)
         val = isconstantref(e, sv)

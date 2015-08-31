@@ -88,15 +88,19 @@ function doc!(obj, data)
     meta()[obj] = data
 end
 
-"`doc(obj)`: Get the metadata associated with `obj`."
-function doc(obj)
+function get_obj_meta(obj)
     for mod in modules
         haskey(meta(mod), obj) && return meta(mod)[obj]
     end
 end
 
+"`doc(obj)`: Get the metadata associated with `obj`."
+function doc(obj)
+    get_obj_meta(obj)
+end
+
 function doc(b::Binding)
-    d = invoke(doc, Tuple{Any}, b)
+    d = get_obj_meta(b)
     d == nothing ? doc(getfield(b.mod, b.var)) : d
 end
 
@@ -267,7 +271,7 @@ doc(f, ::Method) = doc(f)
 # Modules
 
 function doc(m::Module)
-    md = invoke(doc, Tuple{Any}, m)
+    md = get_obj_meta(m)
     md === nothing || return md
     readme = Pkg.dir(string(m), "README.md")
     if isfile(readme)

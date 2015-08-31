@@ -286,23 +286,18 @@ end
 
 function which(f::ANY, t::ANY)
     t = to_tuple_type(t)
+    ms = methods(f, t)
+    isempty(ms) && error("no method found for the specified argument types")
     if isleaftype(t)
-        ms = methods(f, t)
-        isempty(ms) && error("no method found for the specified argument types")
         length(ms)!=1 && error("no unique matching method for the specified argument types")
         ms[1]
     else
-        if !isa(f,Function)
-            t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-            f = call
-        elseif !isgeneric(f)
-            throw(ArgumentError("argument is not a generic function"))
+        for m in ms
+            if t <: m.sig
+                return m
+            end
         end
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
-        if m === nothing
-            error("no method found for the specified argument types")
-        end
-        m
+        assert(false)
     end
 end
 
