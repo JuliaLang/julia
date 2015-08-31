@@ -37,6 +37,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test_throws KeyError capd[:Z]
 
     #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
+
+    #these tests were failing on 64-bit linux when inside the inner loop
+    #for eltya = Complex64 and eltyb = Int. The E[i,j] had NaN32 elements
+    #but only with srand(1234321) set before the loops.
     E = abs(apd - r'*r)
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
