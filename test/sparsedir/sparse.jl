@@ -255,10 +255,10 @@ end
 @test var(sparse(Int[])) === NaN
 
 for f in (sum, prod, minimum, maximum, var)
-    @test isequal(f(spzeros(0, 1), 1), f(Array(Int, 0, 1), 1))
-    @test isequal(f(spzeros(0, 1), 2), f(Array(Int, 0, 1), 2))
-    @test isequal(f(spzeros(0, 1), (1, 2)), f(Array(Int, 0, 1), (1, 2)))
-    @test isequal(f(spzeros(0, 1), 3), f(Array(Int, 0, 1), 3))
+    @test isequal(f(spzeros(0, 1), 1), f(Array(Float64, 0, 1), 1))
+    @test isequal(f(spzeros(0, 1), 2), f(Array(Float64, 0, 1), 2))
+    @test isequal(f(spzeros(0, 1), (1, 2)), f(Array(Float64, 0, 1), (1, 2)))
+    @test isequal(f(spzeros(0, 1), 3), f(Array(Float64, 0, 1), 3))
 end
 
 # spdiagm

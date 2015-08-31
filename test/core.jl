@@ -1310,7 +1310,7 @@ end
 @test isa(b4208(),b4208)
 
 # make sure convert_default error isn't swallowed by typeof()
-convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2)))))
+convert_default_should_fail_here() = similar([1],typeof(one(typeof(rand(2,2)))))
 @test_throws MethodError convert_default_should_fail_here()
 
 # issue #4343

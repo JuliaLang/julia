@@ -1200,6 +1200,11 @@ ctranspose!(b,a)
 a = zeros(Complex,1,5)
 ctranspose!(a,b)
 @test a == ones(Complex,1,5)
+a = fill([1,1im], 2, 2)
+@test a' == fill([1,1im]', 2, 2)
+@test a.' == fill([1,1im].', 2, 2)
+@test permutedims(a, (2,1)) == a
+@test_throws ErrorException zero(Vector{Float64})
 
 # flipdim
 a = rand(5,3)

@@ -384,6 +384,9 @@ function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_de
 end
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
+zero{A<:AbstractArray}(::Type{A}) = error(
+"it is not possible to construct zero of an AbstractArray without providing dimension
+arguments. Try calling zero on an instance of AbstractArray.")
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both LinearFast and LinearSlow arrays
