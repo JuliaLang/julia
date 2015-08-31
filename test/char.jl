@@ -1,6 +1,18 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #tests for /base/char.jl
+
+@test typemin(Char) == 0
+@test ndims(Char) == 0
+@test getindex('a', 1) == 'a'
+@test_throws BoundsError getindex('a',2)
+# This is current behavior, but it seems incorrect
+@test getindex('a',1,1,1) == 'a'
+@test_throws BoundsError getindex('a',1,1,2)
+# bswap of a Char should be removed, only the underlying codeunit (UInt32)
+# should be swapped
+@test bswap('\U10200') == '\U20100'
+
 let
 
 numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -50,15 +62,9 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
 #convert(::Type{Char}, x::Float16) = char(convert(UInt32, x))
 #convert(::Type{Char}, x::Float32) = char(convert(UInt32, x))
 #convert(::Type{Char}, x::Float64) = char(convert(UInt32, x))
-  @test convert(Char, Float16(1)) == convert(Char, Float32(1)) == convert(Char, Float64(1)) == '\x01'
-  @test convert(Char, Float16(2)) == convert(Char, Float32(2)) == convert(Char, Float64(2)) == '\x02'
-  @test convert(Char, Float16(3)) == convert(Char, Float32(3)) == convert(Char, Float64(3)) == '\x03'
-  @test convert(Char, Float16(4)) == convert(Char, Float32(4)) == convert(Char, Float64(4)) == '\x04'
-  @test convert(Char, Float16(5)) == convert(Char, Float32(5)) == convert(Char, Float64(5)) == '\x05'
-  @test convert(Char, Float16(6)) == convert(Char, Float32(6)) == convert(Char, Float64(6)) == '\x06'
-  @test convert(Char, Float16(7)) == convert(Char, Float32(7)) == convert(Char, Float64(7)) == '\x07'
-  @test convert(Char, Float16(8)) == convert(Char, Float32(8)) == convert(Char, Float64(8)) == '\x08'
-  @test convert(Char, Float16(9)) == convert(Char, Float32(9)) == convert(Char, Float64(9)) == '\x09'
+for x = 1:9
+  @test convert(Char, Float16(x)) == convert(Char, Float32(x)) == convert(Char, Float64(x)) == Char(x)
+end
 
 #size(c::Char) = ()
   for x in testarrays
