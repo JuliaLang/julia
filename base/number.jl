@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## generic operations on numbers ##
 
 isinteger(x::Integer) = true
@@ -12,13 +14,15 @@ endof(x::Number) = 1
 getindex(x::Number) = x
 getindex(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
 getindex(x::Number, I::Integer...) = all([i == 1 for i in I]) ? x : throw(BoundsError())
-getindex(x::Number, I::Real...) = getindex(x, to_index(I)...)
+getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
+unsafe_getindex(x::Real, i::Real) = x
 first(x::Number) = x
 last(x::Number) = x
 
 divrem(x,y) = (div(x,y),rem(x,y))
 fldmod(x,y) = (fld(x,y),mod(x,y))
 signbit(x::Real) = x < 0
+sign(x::Number) = x == 0? float(zero(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
 sign(x::Unsigned) = ifelse(x > 0, one(x), x)
 abs(x::Real) = ifelse(signbit(x), -x, x)

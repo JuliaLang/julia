@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
 const encodedMaxLine76 =
@@ -23,7 +24,7 @@ end
 rm(fname)
 
 # Encode to string and decode
-@test base64decode(base64encode(inputText)) == inputText
+@test utf8(base64decode(base64encode(inputText))) == inputText
 
 # Decode with max line chars = 76 and padding
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))

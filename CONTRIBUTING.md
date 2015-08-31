@@ -14,6 +14,8 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
+* Respect our [community standards](http://julialang.org/community/standards/).
+
 * Relax and have fun.
 
 ## How to file a bug report
@@ -44,6 +46,26 @@ Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl)
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
+### Writing tests
+
+There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
+
+1. Go visit https://coveralls.io/r/JuliaLang/julia.
+
+2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
+
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. http://julia.readthedocs.org/en/latest/stdlib/test/ may be helpful in explaining how the testing infrastructure works.
+
+4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
+
+5. Submit the test as a pull request.
+
+* Code for the buildbot configuration is maintained at: https://github.com/staticfloat/julia-buildbot
+* You can see the current buildbot setup at: http://buildbot.e.ip.saba.us:8010/builders
+* [Issue 9493](https://github.com/JuliaLang/julia/issues/9493) and [issue 11885](https://github.com/JuliaLang/julia/issues/11885) have more detailed discussion on code coverage.
+
+Coveralls shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Coveralls, it may still benefit from tests for edge cases.
+
 ### Improving documentation
 
 *By contributing documentation to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
@@ -60,7 +82,8 @@ Julia's documentation is stored in the `doc` directory, and like everything else
 - Search for the function you want to change
 - Make your changes
 - Exit Zen mode
-- Provide a title, and optionally a longer description of your change
+- Provide a title
+- Provide a longer description of your change with the tag `[av skip]` included at the bottom (this is used in order to prevent the AppVeyor job queue from growing too large because of documentation edits)
 - Submit your change
 
 Julia's documentation is built with [Sphinx](http://sphinx-doc.org/contents.html), which supports (and Julia's docs rely heavily on) [ReST directives](http://docutils.sourceforge.net/docs/ref/rst/directives.html). To build the documentation locally, run
@@ -103,7 +126,9 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
 
 Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome/).
 
-##### General Formatting Guidelines For Julia code contributions
+### Code Formatting Guidelines
+
+#### General Formatting Guidelines for Julia code contributions
 
  - 4 spaces per indentation level, no tabs
  - use whitespace to make the code more readable
@@ -113,7 +138,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - use upper camel case convention for modules, type names
  - use lower case with underscores for method names
 
-##### General Formatting Guidelines For C code contributions
+#### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
  - space between if and ( (if (x) ...)
@@ -123,13 +148,12 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - if one part of an if..else chain uses { } then all should
  - no whitespace at the end of a line
 
-##### Git Recommendations For Pull Requests
+### Git Recommendations For Pull Requests
 
  - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
  - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review, and Julia's history won't have any broken intermediate commits. A reasonable number of separate well-factored commits is fine, especially for larger changes.
  - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
  - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc., try running `git submodule update` first.
- - Avoid committing changes to auto-generated files such as `doc/helpdb.jl`, which is a frequent source of conflicts and can be re-generated later.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
  - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
@@ -153,11 +177,13 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <http://julialang.org/manual/>
-  - **CodeSpeed:** <http://speed.julialang.org>
-  - **Status:** <http://status.julialang.org>
+  - **Status:** <http://status.julialang.org/>
+  - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
+  - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
   - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
+  - [All Julia Publications](http://julialang.org/publications/)
 
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)

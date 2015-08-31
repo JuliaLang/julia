@@ -1,6 +1,6 @@
 .. _man-dates:
 
-.. currentmodule:: Base.Dates
+.. currentmodule:: Dates
 
 *************************************
  Date and DateTime
@@ -10,7 +10,7 @@ The :mod:`Dates` module provides two types for working with dates: :class:`Date`
 
 Both :class:`Date` and :class:`DateTime` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The :class:`DateTime` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both :class:`Date` and :class:`DateTime` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
 
-.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that :class:`Date` and :class:`DateTime` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <http://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
+.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that :class:`Date` and :class:`DateTime` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <https://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
 
 Constructors
 ------------

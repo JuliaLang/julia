@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+using Base.Order: Forward
+
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
 @test sort(['z':-1:'a';]) == ['a':'z';]
@@ -15,10 +19,14 @@ end
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
+@test selectperm([3,6,30,1,9], 3:4) == [2,5]
+@test selectperm!(collect(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test select(a, r) == [r;]
+        @test selectperm(a, r) == [r;]
         @test select(a, r, rev=true) == (11 .- [r;])
+        @test selectperm(a, r, rev=true) == (11 .- [r;])
     end
 end
 @test sum(randperm(6)) == 21
@@ -30,8 +38,8 @@ numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
 
 @test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
 @test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
-@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
-@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
+@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Forward) == 6:10
 
 for R in numTypes, T in numTypes
     @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
@@ -47,8 +55,8 @@ for R in numTypes, T in numTypes
 
     @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
     @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
-    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
-    @test searchsorted(ones(R, 15), T(1), 6, 10, Base.Order.Forward) == 6:10
+    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == 6:6
+    @test searchsorted(ones(R, 15), T(1), 6, 10, Forward) == 6:10
 end
 
 for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
@@ -80,6 +88,32 @@ end
 @test searchsorted([], 0) == 1:0
 @test searchsorted([1,2,3], 0) == 1:0
 @test searchsorted([1,2,3], 4) == 4:3
+
+# issue 8866
+@test searchsortedfirst(500:1.0:600, -1.0e20) == 1
+@test searchsortedfirst(500:1.0:600, 1.0e20) == 102
+@test searchsortedlast(500:1.0:600, -1.0e20) == 0
+@test searchsortedlast(500:1.0:600, 1.0e20) == 101
+
+# exercise the codepath in searchsorted* methods for ranges that check for zero step range
+immutable ConstantRange{T} <: Range{T}
+   val::T
+   len::Int
+end
+
+Base.length(r::ConstantRange) = r.len
+Base.getindex(r::ConstantRange, i::Int) = (1 <= i <= r.len || throw(BoundsError(r,i)); r.val)
+Base.step(r::ConstantRange) = 0
+
+r = ConstantRange(1, 5)
+
+@test searchsortedfirst(r, 1.0, Forward) == 1
+@test searchsortedfirst(r, 1, Forward) == 1
+@test searchsortedfirst(r, UInt(1), Forward) == 1
+
+@test searchsortedlast(r, 1.0, Forward) == 5
+@test searchsortedlast(r, 1, Forward) == 5
+@test searchsortedlast(r, UInt(1), Forward) == 5
 
 a = rand(1:10000, 1000)
 
@@ -147,15 +181,34 @@ for alg in [InsertionSort, MergeSort]
     @test b == c
 end
 
-b = sort(a, alg=QuickSort)
-@test issorted(b)
-b = sort(a, alg=QuickSort, rev=true)
-@test issorted(b, rev=true)
-b = sort(a, alg=QuickSort, by=x->1/x)
-@test issorted(b, by=x->1/x)
+# unstable algorithms
+for alg in [QuickSort, PartialQuickSort(length(a))]
+    b = sort(a, alg=alg)
+    @test issorted(b)
+    b = sort(a, alg=alg, rev=true)
+    @test issorted(b, rev=true)
+    b = sort(a, alg=alg, by=x->1/x)
+    @test issorted(b, by=x->1/x)
+end
+
+# test PartialQuickSort only does a partial sort
+let alg = PartialQuickSort(div(length(a), 10))
+    k = alg.k
+    b = sort(a, alg=alg)
+    c = sort(a, alg=alg, by=x->1/x)
+    d = sort(a, alg=alg, rev=true)
+    @test issorted(b[1:k])
+    @test issorted(c[1:k], by=x->1/x)
+    @test issorted(d[1:k], rev=true)
+    @test !issorted(b)
+    @test !issorted(c, by=x->1/x)
+    @test !issorted(d, rev=true)
+end
 
 @test select([3,6,30,1,9], 2, rev=true) == 9
 @test select([3,6,30,1,9], 2, by=x->1/x) == 9
+@test selectperm([3,6,30,1,9], 2, rev=true) == 5
+@test selectperm([3,6,30,1,9], 2, by=x->1/x) == 5
 
 ## more advanced sorting tests ##
 
@@ -203,7 +256,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         end
 
         # unstable algorithms
-        for alg in [QuickSort]
+        for alg in [QuickSort, PartialQuickSort(n)]
             p = sortperm(v, alg=alg, rev=rev)
             @test p == sortperm(float(v), alg=alg, rev=rev)
             @test isperm(p)
@@ -217,6 +270,7 @@ for n in [0:10; 100; 101; 1000; 1001]
     end
 
     v = randn_with_nans(n,0.1)
+    # TODO: alg = PartialQuickSort(n) fails here....
     for alg in [InsertionSort, QuickSort, MergeSort],
         rev in [false,true]
         # test float sorting with NaNs
@@ -292,3 +346,6 @@ Base.isless(x :: Twain, y :: Twain) = x.a < y.a
 let x = Twain(2,3), y = Twain(2,4)
     @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
 end
+
+# issue #12833 - type stability of sort
+@test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]

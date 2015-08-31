@@ -39,7 +39,7 @@ functions in the Julia runtime, or functions in an application linked to
 Julia.
 
 By default, Fortran compilers `generate mangled names
-<http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+<https://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
 (for example, converting function names to lowercase or uppercase,
 often appending an underscore), and so to call a Fortran function via
 ``ccall`` you must pass the mangled identifier corresponding to the rule
@@ -277,7 +277,7 @@ Syntax / Keyword                Example                         Description
 ``bitstype``                    ``Int``,                        "Bits Type" :: A type with no fields, but a size. It
                                 ``Float64``                     is stored and defined by-value.
 
-``immutable``                   ``Pair{String,String}``         "Immutable" :: A type with all fields defined to be
+``immutable``                   ``Pair{Int,Int}``               "Immutable" :: A type with all fields defined to be
                                                                 constant. It is defined by-value. And may be stored
                                                                 with a type-tag.
 
@@ -288,8 +288,8 @@ Syntax / Keyword                Example                         Description
 ``type ...; end``               ``nothing``                     "Singleton" :: a Leaf Type or Immutable with no fields.
 
 ``(...)`` or ``tuple(...)```    ``(1,2,3)``                     "Tuple" :: an immutable data-structure similar to an
-                                                                anonymous immutable type, or a constant array. Its
-                                                                storage semantics are TBD.
+                                                                anonymous immutable type, or a constant array.
+                                                                Represented as either an array or a struct.
 
 ``typealias``                   Not applicable here             Type aliases, and other similar mechanisms of
                                                                 doing type indirection, are resolved to their base
@@ -386,8 +386,8 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 | ``T*`` (where T represents an     |                 |                      | ``Ref{T}``                        |
 | appropriately defined type)       |                 |                      |                                   |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
-| ``char*``                         | ``CHARACTER*N`` |                      | ``Ptr{UInt8}``                    |
-| (or ``char[]``, e.g. a string)    |                 |                      |                                   |
+| ``char*``                         | ``CHARACTER*N`` |                      | ``Cstring`` if NUL-terminated, or |
+| (or ``char[]``, e.g. a string)    |                 |                      | ``Ptr{UInt8}`` if not             |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``char**`` (or ``*char[]``)       |                 |                      | ``Ptr{Ptr{UInt8}}``               |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
@@ -404,6 +404,12 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 |                                   |                 |                      | variadic functions of different   |
 |                                   |                 |                      | argument types are not supported) |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
+
+The ``Cstring`` type is essentially a synonym for ``Ptr{UInt8}``, except the conversion to ``Cstring`` throws an
+error if the Julia string contains any embedded NUL characters (which would cause the string to be silently
+truncated if the C routine treats NUL as the terminator).  If you are passing a ``char*`` to a C routine that
+does not assume NUL termination (e.g. because you pass an explicit string length), or if you know for certain that
+your Julia string does not contain NUL and want to skip the check, you can use ``Ptr{UInt8}`` as the argument type.
 
 **System-dependent:**
 
@@ -430,20 +436,25 @@ C name                  Standard Julia Alias    Julia Base Type
 `Remember`: when calling a Fortran function, all inputs must be passed by reference, so all type correspondences
 above should contain an additional ``Ptr{..}`` or ``Ref{..}`` wrapper around their type specification.
 
-`Warning`: For string arguments (``char*``) the Julia type should be ``Ptr{Cchar}``,
+`Warning`: For string arguments (``char*``) the Julia type should be ``Cstring`` (if NUL-terminated data is expected)
+or either ``Ptr{Cchar}`` or ``Ptr{UInt8}`` otherwise (these two pointer types have the same effect), as described above,
 not ``ASCIIString``. Similarly, for array arguments (``T[]`` or ``T*``), the Julia
 type should again be ``Ptr{T}``, not ``Vector{T}``.
 
 `Warning`: Julia's ``Char`` type is 32 bits, which is not the same as the wide
 character type (``wchar_t`` or ``wint_t``) on all platforms.
 
-`Note`: For ``wchar_t*`` arguments, the Julia type should be ``Ptr{Wchar_t}``,
+`Note`: For ``wchar_t*`` arguments, the Julia type should be ``Cwstring`` (if the C routine
+expects a NUL-terminated string) or ``Ptr{Cwchar_t}`` otherwise,
 and data can be converted to/from ordinary Julia strings by the
 ``wstring(s)`` function (equivalent to either ``utf16(s)`` or ``utf32(s)``
-depending upon the width of ``Cwchar_t``.    Note also that ASCII, UTF-8,
+depending upon the width of ``Cwchar_t``); this conversion will be called
+automatically for ``Cwstring`` arguments.    Note also that ASCII, UTF-8,
 UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
 it can be passed to C functions expecting NUL-terminated data without making
-a copy.
+a copy (but using the ``Cwstring`` type will cause an error to be thrown
+if the string itself contains NUL characters).
+
 `Note`: C functions that take an argument of the type ``char**`` can be called by using
 a ``Ptr{Ptr{UInt8}}`` type within Julia. For example,
 C functions of the form::
@@ -460,7 +471,8 @@ can be called via the following Julia code::
 Struct Type correspondences
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Composite types, aka ``struct`` in C or ``STRUCTURE`` / ``RECORD`` in Fortran),
+Composite types, aka ``struct`` in C or ``TYPE`` in Fortran90
+(or ``STRUCTURE`` / ``RECORD`` in some variants of F77),
 can be mirrored in Julia by creating a ``type`` or ``immutable``
 definition with the same field layout.
 
@@ -659,8 +671,9 @@ julia will automatically pass a C pointer to the encapsulated data::
     range = Ref{Cfloat}(0)
     ccall(:foo, Void, (Ref{Cint}, Ref{Cfloat}), width, range)
 
-This is used extensively in Julia's LAPACK interface, where an integer ``info``
-is passed to LAPACK by reference, and on return, includes the success code.
+Upon return, the contents of ``width`` and ``range`` can be retrieved
+(if they were changed by ``foo``) by ``width[]`` and ``range[]``; that is,
+they act like zero-dimensional arrays.
 
 Special Reference Syntax for ccall (deprecated):
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

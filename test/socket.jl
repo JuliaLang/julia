@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
 @test ip"192.0xFFF" == IPv4(192,0,15,255)
@@ -5,6 +7,12 @@
 @test ip"192.0xFFFFF" == IPv4(192,15,255,255)
 @test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
+
+@test UInt(IPv4(0x01020304)) == 0x01020304
+@test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
+@test Int128(IPv6("2001:1::2")) == 42540488241204005274814694018844196866
+@test_throws InexactError Int16(IPv4("1.2.3.4"))
+@test_throws InexactError Int64(IPv6("2001:1::2"))
 
 let ipv = parseip("127.0.0.1")
     @test isa(ipv, IPv4)
@@ -56,7 +64,7 @@ end
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
 @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 
-port = RemoteRef()
+port = Channel(1)
 c = Base.Condition()
 defaultport = rand(2000:4000)
 tsk = @async begin
@@ -89,6 +97,7 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
 
 # test invalid port
@@ -98,7 +107,7 @@ end
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(UInt16)+1)
 
 p, server = listenany(defaultport)
-r = RemoteRef()
+r = Channel(1)
 tsk = @async begin
     put!(r, :start)
     @test_throws Base.UVError accept(server)
@@ -153,7 +162,7 @@ begin
     close(a)
     close(b)
 end
-begin
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))

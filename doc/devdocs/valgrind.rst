@@ -33,6 +33,8 @@ It is possible to run the entire Julia test suite under Valgrind, but it does ta
 
     valgrind --smc-check=all-non-file --trace-children=yes --suppressions=$PWD/../contrib/valgrind-julia.supp ../julia runtests.jl all
 
+If you would like to see a report of "definite" memory leaks, pass the flags ``--leak-check=full --show-leak-kinds=definite`` to ``valgrind`` as well.
+
 Caveats
 -------
 

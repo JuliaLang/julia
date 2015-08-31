@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Pkg.Types
 using Base.Pkg.Query
 using Base.Pkg.Resolve

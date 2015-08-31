@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Git
 #
 # some utility functions for working with git repos
@@ -19,7 +21,7 @@ function git(d)
 end
 
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
-run(args::Cmd; dir="", out=STDOUT) = Base.run(pipe(cmd(args,dir=dir), out))
+run(args::Cmd; dir="", out=STDOUT) = Base.run(pipeline(cmd(args,dir=dir), out))
 readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
 readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 
@@ -55,6 +57,10 @@ iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
 attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
 branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
 head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
+
+function iscommit(sha1s::Vector; dir="")
+    indexin(sha1s,split(readchomp(`log --all --format=%H`, dir=dir),"\n")).!=0
+end
 
 immutable State
     head::ASCIIString
@@ -105,14 +111,14 @@ const GITHUB_REGEX =
 function set_remote_url(url::AbstractString; remote::AbstractString="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)
     m = match(GITHUB_REGEX,url)
-    m == nothing && return
+    m === nothing && return
     push = "git@github.com:$(m.captures[1]).git"
     push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
 end
 
 function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
-    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
+    m === nothing ? url : "git://github.com/$(m.captures[1]).git"
 end
 
 end # module

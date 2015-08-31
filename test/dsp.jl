@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Filter
 b = [1., 2., 3., 4.]
 x = [1., 1., 0., 1., 1., 0., 0., 0.]
@@ -69,24 +71,24 @@ if Base.fftw_vendor() != :mkl
     Xidct_2 = idct(true_Xdct_2,2)
     Xidct!_2 = copy(true_Xdct_2); idct!(Xidct!_2,2)
 
-    pXdct = plan_dct(X)(X)
-    pXdct! = float(X); plan_dct!(pXdct!)(pXdct!)
-    pXdct_1 = plan_dct(X,1)(X)
-    pXdct!_1 = float(X); plan_dct!(pXdct!_1,1)(pXdct!_1)
-    pXdct_2 = plan_dct(X,2)(X)
-    pXdct!_2 = float(X); plan_dct!(pXdct!_2,2)(pXdct!_2)
+    pXdct = plan_dct(X)*(X)
+    pXdct! = float(X); plan_dct!(pXdct!)*(pXdct!)
+    pXdct_1 = plan_dct(X,1)*(X)
+    pXdct!_1 = float(X); plan_dct!(pXdct!_1,1)*(pXdct!_1)
+    pXdct_2 = plan_dct(X,2)*(X)
+    pXdct!_2 = float(X); plan_dct!(pXdct!_2,2)*(pXdct!_2)
 
-    pXidct = plan_idct(true_Xdct)(true_Xdct)
-    pXidct! = copy(true_Xdct); plan_idct!(pXidct!)(pXidct!)
-    pXidct_1 = plan_idct(true_Xdct_1,1)(true_Xdct_1)
-    pXidct!_1 = copy(true_Xdct_1); plan_idct!(pXidct!_1,1)(pXidct!_1)
-    pXidct_2 = plan_idct(true_Xdct_2,2)(true_Xdct_2)
-    pXidct!_2 = copy(true_Xdct_2); plan_idct!(pXidct!_2,2)(pXidct!_2)
+    pXidct = plan_idct(true_Xdct)*(true_Xdct)
+    pXidct! = copy(true_Xdct); plan_idct!(pXidct!)*(pXidct!)
+    pXidct_1 = plan_idct(true_Xdct_1,1)*(true_Xdct_1)
+    pXidct!_1 = copy(true_Xdct_1); plan_idct!(pXidct!_1,1)*(pXidct!_1)
+    pXidct_2 = plan_idct(true_Xdct_2,2)*(true_Xdct_2)
+    pXidct!_2 = copy(true_Xdct_2); plan_idct!(pXidct!_2,2)*(pXidct!_2)
 
     sXdct = dct(sX)
-    psXdct = plan_dct(sX)(sX)
+    psXdct = plan_dct(sX)*(sX)
     sYdct! = copy(Y); sXdct! = slice(sYdct!,3:5,9:12); dct!(sXdct!)
-    psYdct! = copy(Y); psXdct! = slice(psYdct!,3:5,9:12); plan_dct!(psXdct!)(psXdct!)
+    psYdct! = copy(Y); psXdct! = slice(psYdct!,3:5,9:12); plan_dct!(psXdct!)*(psXdct!)
 
     for i = 1:length(X)
         @test_approx_eq Xdct[i] true_Xdct[i]

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module REPLCompletions
 
 export completions, shell_completions, bslash_completions
@@ -24,7 +26,7 @@ function complete_symbol(sym, ffunc)
 
     mod = context_module
     lookup_module = true
-    t = Union()
+    t = Union{}
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
@@ -108,10 +110,16 @@ function complete_keyword(s::ByteString)
 end
 
 function complete_path(path::AbstractString, pos)
-    if ismatch(r"^~(?:/|$)", path)
-        path = homedir() * path[2:end]
+    if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
+        # if the path is just "~", don't consider the expanded username as a prefix
+        if path == "~"
+            dir, prefix = homedir(), ""
+        else
+            dir, prefix = splitdir(homedir() * path[2:end])
+        end
+    else
+        dir, prefix = splitdir(path)
     end
-    dir, prefix = splitdir(path)
     local files
     try
         if length(dir) == 0
@@ -226,10 +234,10 @@ function complete_methods(ex_org::Expr)
         found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
     end
     out = UTF8String[]
-    t_in = tuple(args_ex...) # Input types
+    t_in = Tuple{args_ex...} # Input types
     for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(method.sig[1 : min(length(args_ex), end)], t_in) != None &&
+        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union{} &&
             push!(out,string(method))
     end
     return out
@@ -284,7 +292,9 @@ end
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = Base.incomplete_tag(parse(partial , raise=false))
+    inc_tag = Base.syntax_deprecation_warnings(false) do
+        Base.incomplete_tag(parse(partial, raise=false))
+    end
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
@@ -292,7 +302,7 @@ function completions(string, pos)
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
+           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
@@ -308,7 +318,9 @@ function completions(string, pos)
 
      if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = parse(partial[frange] * ")", raise=false)
+        ex = Base.syntax_deprecation_warnings(false) do
+            parse(partial[frange] * ")", raise=false)
+        end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false
         end
@@ -334,11 +346,23 @@ function completions(string, pos)
                 isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
-                          pname != "REQUIRE" && startswith(pname, s)
+                        pname != "REQUIRE" && startswith(pname, s)
+                        # Valid file paths are
+                        #   <Mod>.jl
+                        #   <Mod>/src/<Mod>.jl
+                        #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
                             endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
                         else
-                            push!(suggestions, pname)
+                            mod_name = if endswith(pname, ".jl")
+                                pname[1:end - 3]
+                            else
+                                pname
+                            end
+                            if isfile(joinpath(dir, pname, "src",
+                                               "$mod_name.jl"))
+                                push!(suggestions, mod_name)
+                            end
                         end
                     end
                 end
@@ -367,7 +391,7 @@ function shell_completions(string, pos)
     # Now look at the last thing we parsed
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
-    if all(map(s -> isa(s, AbstractString), args.args[end].args))
+    if all(s -> isa(s, AbstractString), args.args[end].args)
         # Treat this as a path (perhaps give a list of commands in the future as well?)
         return complete_path(join(args.args[end].args), pos)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Set tests
 
 # Construction, collect
@@ -85,7 +87,25 @@ push!(c,200)
 s = Set([1])
 @test isequal(sizehint!(s, 10), Set([1]))
 @test isequal(empty!(s), Set())
-# TODO: rehash
+
+# rehash!
+let
+    # Use a pointer type to have defined behavior for uninitialized
+    # array element
+    s = Set(["a", "b", "c"])
+    Base.rehash!(s)
+    k = s.dict.keys
+    Base.rehash!(s)
+    @test length(k) == length(s.dict.keys)
+    for i in 1:length(k)
+        if isdefined(k, i)
+            @test k[i] == s.dict.keys[i]
+        else
+            @test !isdefined(s.dict.keys, i)
+        end
+    end
+    s == Set(["a", "b", "c"])
+end
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -193,62 +213,3 @@ filter!(isodd, s)
 @test first(Set(2)) == 2
 
 # ########## end of set tests ##########
-
-## IntSet
-
-# Construction, collect
-data_in = (1,5,100)
-s = IntSet(data_in)
-data_out = collect(s)
-@test all(map(d->in(d,data_out), data_in))
-@test length(data_out) == length(data_in)
-
-# eltype, similar
-@test is(eltype(IntSet()), Int64)
-@test isequal(similar(IntSet([1,2,3])), IntSet())
-
-# show
-@test sprint(show, IntSet()) == "IntSet([])"
-@test sprint(show, IntSet([1,2,3])) == "IntSet([1, 2, 3])"
-@test contains(sprint(show, complement(IntSet())), "...,")
-
-
-s = IntSet([0,1,10,20,200,300,1000,10000,10002])
-@test last(s) == 10002
-@test first(s) == 0
-@test length(s) == 9
-@test pop!(s) == 10002
-@test length(s) == 8
-@test shift!(s) == 0
-@test length(s) == 7
-@test !in(0,s)
-@test !in(10002,s)
-@test in(10000,s)
-@test_throws ArgumentError first(IntSet())
-@test_throws ArgumentError last(IntSet())
-t = copy(s)
-sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
-@test hash(s) == hash(t)
-@test hash(complement(s)) == hash(complement(t))
-
-@test setdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3])
-@test symdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3, 5, 6])
-
-s2 = IntSet([1, 2, 3, 4])
-setdiff!(s2, IntSet([2, 4, 5, 6]))
-
-@test s2 == IntSet([1, 3])
-
-# == with last-bit set (groups.google.com/forum/#!topic/julia-users/vZNjiIEG_sY)
-s = IntSet(255)
-@test s == s
-
-# issue #7851
-@test_throws ArgumentError IntSet(-1)
-@test !(-1 in IntSet(0:10))
-
-# # issue #8570
-# This requires 2^29 bytes of storage, which is too much for a simple test
-# s = IntSet(2^32)
-# @test length(s) == 1
-# for b in s; b; end

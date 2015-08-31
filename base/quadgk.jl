@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module QuadGK
 export gauss, kronrod, quadgk
 using Base.Collections
@@ -150,13 +152,13 @@ end
 
 # Gauss-Kronrod quadrature of f from a to b to c...
 
-function quadgk{T<:FloatingPoint}(f, a::T,b::T,c::T...;
+function quadgk{T<:AbstractFloat}(f, a::T,b::T,c::T...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
 end
 
-function quadgk{T<:FloatingPoint}(f, a::Complex{T},
+function quadgk{T<:AbstractFloat}(f, a::Complex{T},
                                   b::Complex{T},c::Complex{T}...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
@@ -261,7 +263,7 @@ end
 # integrate functions on the interval (-1, 1).  i.e. dot(f(x), w)
 # approximates the integral.  Uses the method described in Trefethen &
 # Bau, Numerical Linear Algebra, to find the N-point Gaussian quadrature
-function gauss{T<:FloatingPoint}(::Type{T}, N::Integer)
+function gauss{T<:AbstractFloat}(::Type{T}, N::Integer)
     if N < 1
         throw(ArgumentError("Gauss rules require positive order"))
     end
@@ -277,7 +279,7 @@ end
 # Since the rule is symmetric only returns the n+1 points with x <= 0.
 # Also computes the embedded n-point Gauss quadrature weights gw (again
 # for x <= 0), corresponding to the points x[2:2:end].  Returns (x,w,wg).
-function kronrod{T<:FloatingPoint}(::Type{T}, n::Integer)
+function kronrod{T<:AbstractFloat}(::Type{T}, n::Integer)
     if n < 1
         throw(ArgumentError("Kronrod rules require positive order"))
     end

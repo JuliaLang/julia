@@ -64,28 +64,22 @@
 #include <llvm/Support/system_error.h>
 #endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
-#ifdef LLVM33
 #include <llvm/IR/LLVMContext.h>
-#else
-#include <llvm/LLVMContext.h>
-#endif
-#ifdef LLVM37
-#include <llvm/DebugInfo/DWARF/DIContext.h>
-#else
 #include <llvm/DebugInfo/DIContext.h>
+#ifdef LLVM37
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
-#elif defined(LLVM32)
-#include <llvm/DebugInfo.h>
 #else
-#include <llvm/Analysis/DebugInfo.h>
+#include <llvm/DebugInfo.h>
 #endif
 #ifndef LLVM37
 #define format_hex(v, d) format("%#0" #d "x", v)
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
@@ -171,8 +165,13 @@ void SymbolTable::createSymbols()
         uint64_t addr = isymb->first - ip;
         std::ostringstream name;
         name << "L" << addr;
+#ifdef LLVM37
+        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
+        symb->setVariableValue(MCConstantExpr::create(addr, Ctx));
+#else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+#endif
         isymb->second = symb;
     }
 }
@@ -205,9 +204,6 @@ const char *SymbolLookup(void *DisInfo,
     return NULL;
 }
 
-extern "C" void jl_getFunctionInfo
-  (const char **name, size_t *line, const char **filename, uintptr_t pointer,
-   int *fromC, int skipC);
 int OpInfoLookup(void *DisInfo, uint64_t PC,
                  uint64_t Offset, uint64_t Size,
                  int TagType, void *TagBuf)
@@ -231,11 +227,12 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     default: return 0;          // Cannot handle input address size
     }
     int skipC = 0;
-    const char *name;
+    char *name;
     size_t line;
-    const char *filename;
+    char *filename;
     int fromC;
     jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    free(filename);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
@@ -254,7 +251,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #else
                           const object::ObjectFile *objectfile,
 #endif
-                          formatted_raw_ostream &stream)
+#ifdef LLVM37
+                          raw_ostream &stream
+#else
+                          formatted_raw_ostream &stream
+#endif
+                          )
 {
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
@@ -321,7 +323,8 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
+                  TripleName.c_str());
         return;
     }
 
@@ -360,7 +363,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
     }
 
+#ifdef LLVM37
+    auto ustream = llvm::make_unique<formatted_raw_ostream>(stream);
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+#else
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+#endif
 #ifndef LLVM35
                                            /*useLoc*/ true,
                                            /*useCFI*/ true,
@@ -383,7 +391,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 
 #ifdef USE_MCJIT
     if (!objectfile) return;
-#ifdef LLVM36
+#ifdef LLVM37
+    DIContext *di_ctx = new DWARFContextInMemory(*objectfile);
+#elif LLVM36
     DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
 #else
     DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
@@ -506,15 +516,17 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
             switch (S) {
             case MCDisassembler::Fail:
                 if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-#else
+#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
                                         "invalid instruction encoding");
+#else
+                    stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
 #endif
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
@@ -523,7 +535,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 
             case MCDisassembler::SoftFail:
                 if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if !defined(_CPU_X86_) || !defined(_CPU_X86_64_)
                     stream << "potentially undefined instruction encoding:\n";
 #else
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),

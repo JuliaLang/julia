@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #tests for /base/char.jl
 let
 
@@ -160,3 +162,6 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
   end
 
 end #end of let block
+
+@test convert(Signed, 'A') === Int32(65)
+@test convert(Unsigned, 'A') === UInt32(65)

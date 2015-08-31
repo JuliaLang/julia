@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Read
 
 import ..Git, ..Cache, ..Reqs
@@ -17,7 +19,7 @@ function available(names=readdir("METADATA"))
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
+            haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
@@ -134,7 +136,7 @@ requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,(VersionNumber,Bool)}()
+    pkgs = Dict{ByteString,Tuple{VersionNumber,Bool}}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
@@ -167,7 +169,7 @@ end
 function issue_url(pkg::AbstractString)
     ispath(pkg,".git") || return ""
     m = match(Git.GITHUB_REGEX, url(pkg))
-    m == nothing && return ""
+    m === nothing && return ""
     return "https://github.com/" * m.captures[1] * "/issues"
 end
 

@@ -48,7 +48,7 @@ find_checksum()
         echo "WARNING: $CHECKSUM_TYPE checksum for $BASENAME not found in deps/checksums/, autogenerating..." >&2
 
         # Generate as many checksum types as we can
-        mkdir -p checksums/$BASENAME
+        mkdir -p "$DIR/checksums/$BASENAME"
         if [ ! -z "$MD5_PROG" ]; then
             echo $(eval $MD5_PROG) > "$DIR/checksums/$BASENAME/md5"
         fi

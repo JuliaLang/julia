@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @doc """
 
 `tests, net_on = choosetests(choices)` selects a set of tests to be
@@ -13,43 +15,71 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "core", "keywordargs", "numbers", "strings",
+        "linalg", "core", "keywordargs", "numbers", "printf",
+        "char", "string", "triplequote", "unicode",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
-        "intfuncs", "simdloop", "blas", "fft", "dsp", "sparse",
+        "abstractarray", "intfuncs", "simdloop", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall",
+        "operators", "path", "ccall", "parse", "loading",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
-        "priorityqueue", "file", "version", "resolve",
+        "priorityqueue", "file", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "readdlm", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
-        "base64", "parser", "threads", "serialize", "functors", "char", "misc",
-        "enums", "cmdlineargs", "i18n"
+        "threads", "base64", "serialize", "functors", "misc",
+        "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
+        "intset", "floatfuncs", "compile"
     ]
+
+    if Base.USE_GPL_LIBS
+        testnames = [testnames, "fft", "dsp"; ]
+    end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
-    @unix_only push!(testnames, "unicode")
 
     # parallel tests depend on other workers - do them last
     push!(testnames, "parallel")
 
-    tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
+    tests = []
+    skip_tests = []
 
-    if "linalg" in tests
+    for (i, t) in enumerate(choices)
+        if t == "--skip"
+            skip_tests = choices[i + 1:end]
+            break
+        else
+            push!(tests, t)
+        end
+    end
+
+    if tests == ["all"] || isempty(tests)
+        tests = testnames
+    end
+
+    linalgtests = ["linalg/triangular", "linalg/qr", "linalg/dense",
+                   "linalg/matmul", "linalg/schur", "linalg/special",
+                   "linalg/eigen", "linalg/bunchkaufman", "linalg/svd",
+                   "linalg/lapack", "linalg/tridiag", "linalg/bidiag",
+                   "linalg/diagonal", "linalg/pinv", "linalg/givens",
+                   "linalg/cholesky", "linalg/lu", "linalg/symmetric",
+                   "linalg/generic", "linalg/uniformscaling"]
+    if Base.USE_GPL_LIBS
+        push!(linalgtests, "linalg/arnoldi")
+    end
+
+    if "linalg" in skip_tests
+        filter!(x -> (x != "linalg" && !(x in linalgtests)), tests)
+    elseif "linalg" in tests
         # specifically selected case
         filter!(x -> x != "linalg", tests)
-        prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4",
-            "linalg/lapack", "linalg/triangular", "linalg/tridiag",
-            "linalg/bidiag", "linalg/diagonal",
-            "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
-            "linalg/arnoldi", "linalg/symmetric"])
-        end
+        prepend!(tests, linalgtests)
+    end
 
     net_required_for = ["socket", "parallel"]
     net_on = true
@@ -68,6 +98,8 @@ function choosetests(choices = [])
     if !net_on
         filter!(x -> !(x in net_required_for), tests)
     end
+
+    filter!(x -> !(x in skip_tests), tests)
 
     tests, net_on
 end

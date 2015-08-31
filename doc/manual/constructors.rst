@@ -6,7 +6,7 @@
  Constructors
 **************
 
-Constructors [#]_ are functions that create new objects — specifically,
+Constructors [#]_ are functions that create new objects — specifically,
 instances of :ref:`man-composite-types`. In Julia,
 type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
@@ -32,7 +32,7 @@ together is all that is ever needed to create instances. There are,
 however, cases where more functionality is required when creating
 composite objects. Sometimes invariants must be enforced, either by
 checking arguments or by transforming them. `Recursive data
-structures <http://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29>`_,
+structures <https://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29>`_,
 especially those that may be self-referential, often cannot be
 constructed cleanly without first being created in an incomplete state
 and then altered programmatically to be made whole, as a separate step
@@ -53,7 +53,7 @@ these cases and more.
 Outer Constructor Methods
 -------------------------
 
-A constructor is just like any other function in Julia in that its
+A constructor is just like any other function in Julia in that its
 overall behavior is defined by the combined behavior of its methods.
 Accordingly, you can add functionality to a constructor by simply
 defining new methods. For example, let's say you want to add a
@@ -121,7 +121,7 @@ Now ``OrderedPair`` objects can only be constructed such that
 
     julia> OrderedPair(2,1)
     ERROR: out of order
-     in OrderedPair at none:5
+     in call at none:5
 
 You can still reach in and directly change the field values to violate
 this invariant, but messing around with an object's internals uninvited is
@@ -156,7 +156,7 @@ type, if the corresponding field has a type), and passes them to
 
 This declaration has the same effect as the earlier definition of the
 ``Foo`` type without an explicit inner constructor method. The following
-two types are equivalent — one with a default constructor, the other
+two types are equivalent — one with a default constructor, the other
 with an explicit constructor::
 
     type T1
@@ -265,7 +265,7 @@ access to an uninitialized reference is an immediate error:
 .. doctest::
 
     julia> z.xx
-    ERROR: access to undefined reference
+    ERROR: UndefRefError: access to undefined reference
 
 This avoids the need to continually check for ``null`` values.
 However, not all object fields are references. Julia considers some
@@ -323,7 +323,14 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Int64, ::Float64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Int64, ::Float64)
+    This may have arisen from a call to the constructor Point{T<:Real}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+     in call at essentials.jl:57
 
     ## explicit T ##
 
@@ -332,7 +339,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
-     in Point at no file
+     in call at none:2
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -410,14 +417,22 @@ creates a point of type ``Point{Float64}``:
     Point{Float64}(1.0,2.5)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64}
 
 However, other similar calls still don't work:
 
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Float64, ::Int64)
+    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Float64, ::Int64)
+    This may have arisen from a call to the constructor Point{T<:Real}(...),
+    since type constructors fall back to convert methods.
+    Closest candidates are:
+      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
+      call{T}(::Type{T}, ::Any)
+      convert{T}(::Type{T}, !Matched::T)
+      ...
+     in call at essentials.jl:57
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -430,7 +445,7 @@ the following outer method definition to make all calls to the general
     julia> Point(x::Real, y::Real) = Point(promote(x,y)...);
 
 The ``promote`` function converts all its arguments to a common type
-— in this case :class:`Float64`. With this method definition, the ``Point``
+— in this case :class:`Float64`. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
 like :obj:`+` do, and works for all kinds of real numbers:
 
@@ -490,7 +505,7 @@ which implements Julia's :ref:`man-rational-numbers`::
         complex(real(xy)//yy, imag(xy)//yy)
     end
 
-The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
+The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
 :class:`Rational` takes one type parameter of an integer type, and is itself
 a real type. The field declarations ``num::T`` and ``den::T`` indicate
 that the data held in a ``Rational{T}`` object are a pair of integers of
@@ -504,7 +519,7 @@ non-negative denominator. This is accomplished by dividing the given
 numerator and denominator values by their greatest common divisor,
 computed using the ``gcd`` function. Since ``gcd`` returns the greatest
 common divisor of its arguments with sign matching the first argument
-(``den`` here), after this division the new value of ``den`` is
+(``den`` here), after this division the new value of ``den`` is
 guaranteed to be non-negative. Because this is the only inner
 constructor for :class:`Rational`, we can be certain that :class:`Rational`
 objects are always constructed in this normalized form.
@@ -524,7 +539,7 @@ for the :obj:`//` operator, which provides a syntax for writing rationals.
 Before these definitions, :obj:`//` is a completely undefined operator with
 only syntax and no meaning. Afterwards, it behaves just as described in
 :ref:`man-rational-numbers`
-— its entire behavior is defined in these few lines. The first and most
+— its entire behavior is defined in these few lines. The first and most
 basic definition just makes ``a//b`` construct a :class:`Rational` by
 applying the :class:`Rational` constructor to ``a`` and ``b`` when they are
 integers. When one of the operands of :obj:`//` is already a rational
@@ -540,7 +555,7 @@ whose real and imaginary parts are rationals:
     -3//5 + 4//5*im
 
     julia> typeof(ans)
-    Complex{Rational{Int64}} (constructor with 1 method)
+    Complex{Rational{Int64}}
 
     julia> ans <: Complex{Rational}
     false
@@ -550,8 +565,9 @@ Thus, although the :obj:`//` operator usually returns an instance of
 return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
-it is short, self-contained, and implements an entire basic Julia type
-in just a little over a hundred lines of code.
+it is short, self-contained, and implements an entire basic Julia type.
+
+.. _constructors-call-and-conversion:
 
 Constructors, Call, and Conversion
 ----------------------------------
@@ -586,3 +602,47 @@ to leave it as a constructor rather than a ``convert`` method.  For
 example, the ``Array(Int)`` constructor creates a zero-dimensional
 ``Array`` of the type ``Int``, but is not really a "conversion" from
 ``Int`` to an ``Array``.
+
+Outer-only constructors
+-----------------------
+
+As we have seen, a typical parametric type has inner constructors
+that are called when type parameters are known; e.g. they apply
+to ``Point{Int}`` but not to ``Point``.
+Optionally, outer constructors that determine type parameters
+automatically can be added, for example constructing a
+``Point{Int}`` from the call ``Point(1,2)``.
+Outer constructors call inner constructors to do the core
+work of making an instance.
+However, in some cases one would rather not provide inner constructors,
+so that specific type parameters cannot be requested manually.
+
+For example, say we define a type that stores a vector along with
+an accurate representation of its sum::
+
+    type SummedArray{T<:Number,S<:Number}
+        data::Vector{T}
+        sum::S
+    end
+
+The problem is that we want ``S`` to be a larger type than ``T``, so
+that we can sum many elements with less information loss.
+For example, when ``T`` is ``Int32``, we would like ``S`` to be ``Int64``.
+Therefore we want to avoid an interface that allows the user to construct
+instances of the type ``SummedArray{Int32,Int32}``.
+One way to do this is to provide only an outer constructor for ``SummedArray``.
+This can be done using explicit ``call`` overloading::
+
+    type SummedArray{T<:Number,S<:Number}
+        data::Vector{T}
+        sum::S
+
+        function call{T}(::Type{SummedArray}, a::Vector{T})
+            S = widen(T)
+            new{T,S}(a, sum(S, a))
+        end
+    end
+
+This constructor will be invoked by the syntax ``SummedArray(a)``.
+The syntax ``new{T,S}`` allows specifying parameters for the type to be
+constructed, i.e. this call will return a ``SummedArray{T,S}``.

@@ -1,12 +1,15 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+# givensAlgorithm functions are derived from LAPACK, see below
+
 abstract AbstractRotation{T}
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractMatrix{S})
+function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractMatrix{T}, R::AbstractRotation{S})
+function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
@@ -41,7 +44,7 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
+function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
     twopar = 2one(T)
@@ -113,7 +116,7 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     twopar, onepar, zeropar = 2one(T), one(T), zero(T)
     czero = zero(Complex{T})
 
@@ -156,7 +159,7 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
      # This is a rare case: F is very small.
 
         if f == 0
-            cs = zero
+            cs = zero(T)
             r = hypot(real(g), imag(g))
         # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
@@ -218,13 +221,17 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
 end
 
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
+    if i1 >= i2
+        throw(ArgumentError("second index must be larger than the first"))
+    end
     c, s, r = givensAlgorithm(f, g)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
+    if i1 >= i2
+        throw(ArgumentError("second index must be larger than the first"))
+    end
     c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
@@ -232,9 +239,11 @@ end
 getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
 
 A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
-function A_mul_B!(G::Givens, A::AbstractMatrix)
-    m, n = size(A)
-    G.i2 <= m || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+function A_mul_B!(G::Givens, A::AbstractVecOrMat)
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > m
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:n
         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
         A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
@@ -242,9 +251,11 @@ function A_mul_B!(G::Givens, A::AbstractMatrix)
     end
     return A
 end
-function A_mul_Bc!(A::AbstractMatrix, G::Givens)
-    m, n = size(A)
-    G.i2 <= n || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+function A_mul_Bc!(A::AbstractVecOrMat, G::Givens)
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > n
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:m
         tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]

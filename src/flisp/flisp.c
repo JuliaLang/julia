@@ -260,13 +260,15 @@ int fl_is_keyword_name(const char *str, size_t len)
     return len>1 && ((str[0] == ':' || str[len-1] == ':') && str[1] != '\0');
 }
 
+#define CHECK_ALIGN8(p) assert((((uptrint_t)(p))&0x7)==0 && "flisp requires malloc to return 8-aligned pointers")
+
 static symbol_t *mk_symbol(const char *str)
 {
     symbol_t *sym;
     size_t len = strlen(str);
 
     sym = (symbol_t*)malloc((sizeof(symbol_t)-sizeof(void*)+len+1+7)&-8);
-    assert(((uptrint_t)sym & 0x7) == 0); // make sure malloc aligns 8
+    CHECK_ALIGN8(sym);
     sym->left = sym->right = NULL;
     sym->flags = 0;
     if (fl_is_keyword_name(str, len)) {
@@ -375,6 +377,7 @@ static value_t mk_cons(void)
     if (n_allocd > GC_INTERVAL)
         gc(0);
     c = (cons_t*)((void**)malloc(3*sizeof(void*)) + 1);
+    CHECK_ALIGN8(c);
     ((void**)c)[-1] = tochain;
     tochain = c;
     n_allocd += sizeof(cons_t);
@@ -397,6 +400,7 @@ static value_t *alloc_words(int n)
     if (n_allocd > GC_INTERVAL)
         gc(0);
     first = (value_t*)malloc((n+1)*sizeof(value_t)) + 1;
+    CHECK_ALIGN8(first);
     first[-1] = (value_t)tochain;
     tochain = first;
     n_allocd += (n*sizeof(value_t));
@@ -1884,7 +1888,7 @@ static value_t apply_cl(uint32_t nargs)
             i = GET_INT32(ip); ip+=4;
             n = GET_INT32(ip); ip+=4;
             s = GET_INT32(ip); ip+=4;
-            nargs = process_keys(v, i, n, abs(s)-(i+n), bp, nargs, s<0);
+            nargs = process_keys(v, i, n, llabs(s)-(i+n), bp, nargs, s<0);
             NEXT_OP;
 
 #ifndef USE_COMPUTED_GOTO
@@ -2244,7 +2248,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     if (!iscons(args[1])) return NIL;
     value_t v;
     uint32_t first, last, argSP = args-Stack;
-    assert(argSP >= 0 && argSP < N_STACK);
+    assert(args >= Stack && argSP < N_STACK);
     if (nargs == 2) {
         if (SP+4 > N_STACK) grow_stack();
         PUSH(Stack[argSP]);
@@ -2352,6 +2356,7 @@ static void lisp_init(size_t initial_heapsize)
     comparehash_init();
     N_STACK = 262144;
     Stack = (value_t*)malloc(N_STACK*sizeof(value_t));
+    CHECK_ALIGN8(Stack);
 
     FL_NIL = NIL = builtin(OP_THE_EMPTY_LIST);
     FL_T = builtin(OP_BOOL_CONST_T);

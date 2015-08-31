@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Pair
 p = Pair(1,2)
 @test p == (1=>2)
@@ -118,7 +120,7 @@ let
 end
 
 @test_throws ArgumentError first(Dict())
-@test first(Dict(:f=>2)) == (:f,2)
+@test first(Dict(:f=>2)) == :f=>2
 
 # issue #1821
 let
@@ -145,7 +147,7 @@ end
 import Base.hash
 hash(x::I1438T, h::UInt) = hash(x.id, h)
 
-begin
+let
     local seq, xs, s
     seq = [26,28,29,30,31,32,33,34,35,36,-32,-35,-34,-28,37,38,39,40,-30,
            -31,41,42,43,44,-33,-36,45,46,47,48,-37,-38,49,50,51,52,-46,-50,53]
@@ -311,3 +313,34 @@ let
     @test d['f'] == 6
     @test length(d) == 6
 end
+
+# issue #10647
+let
+    a = ObjectIdDict()
+    a[1] = a
+    a[a] = 2
+    type T10647{T}; x::T; end
+    a[3] = T10647(a)
+    show(IOBuffer(), a)
+    Base.showdict(IOBuffer(), a)
+    Base.showdict(IOBuffer(), a; limit=true)
+end
+
+# Issue #7944
+let d = Dict{Int,Int}()
+    get!(d, 0) do
+        d[0] = 1
+    end
+    @test length(d) == 1
+end
+
+# iteration
+d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+@test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
+      [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+
+
+# Issue 12451
+@test_throws ArgumentError Dict(0)
+@test_throws ArgumentError Dict([1])
+@test_throws ArgumentError Dict([(1,2),0])

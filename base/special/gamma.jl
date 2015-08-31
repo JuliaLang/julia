@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = nan_dom_err(ccall((:tgammaf,libm),  Float32, (Float32,), x), x)
 gamma(x::Real) = gamma(float(x))
@@ -65,7 +67,7 @@ gamma(z::Complex) = exp(lgamma(z))
 #   const A002445 = [1,6,30,42,30,66,2730,6,510,798,330,138,2730,6,870,14322,510,6,1919190,6,13530]
 #   const bernoulli = A000367 .// A002445 # even-index Bernoulli numbers
 
-function digamma(z::Union(Float64,Complex{Float64}))
+function digamma(z::Union{Float64,Complex{Float64}})
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
     # the gamma function, and the digamma function, for complex
@@ -94,7 +96,7 @@ function digamma(z::Union(Float64,Complex{Float64}))
     ψ -= t * @evalpoly(t,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686)
 end
 
-function trigamma(z::Union(Float64,Complex{Float64}))
+function trigamma(z::Union{Float64,Complex{Float64}})
     # via the derivative of the Kölbig digamma formulation
     x = real(z)
     if x <= 0 # reflection formula
@@ -235,8 +237,8 @@ inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 # the zeta function for free and might as well export it, especially
 # since this is a common generalization of the Riemann zeta function
 # (which Julia already exports).
-function zeta(s::Union(Int,Float64,Complex{Float64}),
-              z::Union(Float64,Complex{Float64}))
+function zeta(s::Union{Int,Float64,Complex{Float64}},
+              z::Union{Float64,Complex{Float64}})
     ζ = zero(promote_type(typeof(s), typeof(z)))
 
     # like sqrt, require complex inputs to get complex outputs
@@ -311,7 +313,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     return ζ
 end
 
-function polygamma(m::Integer, z::Union(Float64,Complex{Float64}))
+function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
 
     m == 0 && return digamma(z)
     m == 1 && return trigamma(z)
@@ -350,12 +352,12 @@ f16(z::Complex) = Complex32(z)
 # Float32 version by truncating the Stirling series at a smaller cutoff.
 for (f,T) in ((:f32,Float32),(:f16,Float16))
     @eval begin
-        zeta(s::Integer, z::Union($T,Complex{$T})) = $f(zeta(Int(s), f64(z)))
-        zeta(s::Union(Float64,Complex128), z::Union($T,Complex{$T})) = zeta(s, f64(z))
-        zeta(s::Number, z::Union($T,Complex{$T})) = $f(zeta(f64(s), f64(z)))
-        polygamma(m::Integer, z::Union($T,Complex{$T})) = $f(polygamma(Int(m), f64(z)))
-        digamma(z::Union($T,Complex{$T})) = $f(digamma(f64(z)))
-        trigamma(z::Union($T,Complex{$T})) = $f(trigamma(f64(z)))
+        zeta(s::Integer, z::Union{$T,Complex{$T}}) = $f(zeta(Int(s), f64(z)))
+        zeta(s::Union{Float64,Complex128}, z::Union{$T,Complex{$T}}) = zeta(s, f64(z))
+        zeta(s::Number, z::Union{$T,Complex{$T}}) = $f(zeta(f64(s), f64(z)))
+        polygamma(m::Integer, z::Union{$T,Complex{$T}}) = $f(polygamma(Int(m), f64(z)))
+        digamma(z::Union{$T,Complex{$T}}) = $f(digamma(f64(z)))
+        trigamma(z::Union{$T,Complex{$T}}) = $f(trigamma(f64(z)))
     end
 end
 
@@ -412,7 +414,7 @@ lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 
 # Riemann zeta function; algorithm is based on specializing the Hurwitz
 # zeta function above for z==1.
-function zeta(s::Union(Float64,Complex{Float64}))
+function zeta(s::Union{Float64,Complex{Float64}})
     # blows up to ±Inf, but get correct sign of imaginary zero
     s == 1 && return NaN + zero(s) * imag(s)
 
@@ -462,7 +464,7 @@ zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
 zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
 @vectorize_1arg Number zeta
 
-function eta(z::Union(Float64,Complex{Float64}))
+function eta(z::Union{Float64,Complex{Float64}})
     δz = 1 - z
     if abs(real(δz)) + abs(imag(δz)) < 7e-3 # Taylor expand around z==1
         return 0.6931471805599453094172321214581765 *

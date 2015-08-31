@@ -14,7 +14,7 @@ BEGIN
     BLOCK "040904E4"
     BEGIN
       VALUE "CompanyName", "JuliaLang"
-      VALUE "FileDescription", "The Julia Programming Language"
+      VALUE "FileDescription", "Julia Programming Language"
       VALUE "FileVersion", JLVER_STR
       VALUE "InternalName", "julia"
       VALUE "LegalCopyright", "MIT Licensed"

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 \ do33, do33)
@@ -14,6 +16,7 @@ for Tv in (Float64, Complex128)
     for Ti in Base.SparseMatrix.UMFPACK.UMFITypes.types
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
+        @test nnz(lua) == 18
         L,U,p,q,Rs = lua[:(:)]
         @test_approx_eq scale(Rs,A)[p,q] L*U
 
@@ -30,6 +33,9 @@ for Tv in (Float64, Complex128)
         @test_approx_eq x float([1:5;])
 
         @test norm(A'*x-b,1) < eps(1e4)
+
+        # Element promotion and type inference
+        @inferred lua\ones(Int, size(A, 2))
     end
 end
 
@@ -41,6 +47,15 @@ for Ti in Base.SparseMatrix.UMFPACK.UMFITypes.types
     @test_approx_eq scale(Rs,Ac)[p,q] L*U
 end
 
+for elty in (Float64, Complex128)
+    for (m, n) in ((10,5), (5, 10))
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        F = lufact(A)
+        L, U, p, q, Rs = F[:(:)]
+        @test_approx_eq scale(Rs,A)[p,q] L*U
+    end
+end
+
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
-@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+@test_approx_eq (x*(lufact(x) \ ones(2))) ones(2)

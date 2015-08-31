@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function dottest(n, iter)
     a = rand(n)
     b = rand(n)

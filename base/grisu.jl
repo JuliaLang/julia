@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Grisu
+
+importall ..Base.Operators
 
 export print_shortest
 export DIGITS, grisu
@@ -18,7 +22,7 @@ include("grisu/bignum.jl")
 
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
-function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS,bignums=BIGNUMS)
+function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITS,bignums=BIGNUMS)
     if signbit(v)
         neg = true
         v = -v
@@ -48,14 +52,14 @@ function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS,bignums=BIGN
     return len-1, point, neg, buffer
 end
 
-_show(io::IO, x::FloatingPoint, mode, n::Int, t) =
+_show(io::IO, x::AbstractFloat, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN", "Inf")
 _show(io::IO, x::Float32, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN32", "Inf32")
 _show(io::IO, x::Float16, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN16", "Inf16")
 
-function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
+function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
     isnan(x) && return write(io, typed ? nanstr : "NaN")
     if isinf(x)
         signbit(x) && write(io,'-')
@@ -71,7 +75,9 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
         end
     end
     neg && write(io,'-')
-    if pt <= -4 || pt > 6 # .00001 to 100000.
+    exp_form = pt <= -4 || pt > 6
+    exp_form = exp_form || (pt >= len && abs(mod(x + 0.05, 10^(pt - len)) - 0.05) > 0.05) # see issue #6608
+    if exp_form # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)
         write(io, '.')
@@ -110,7 +116,7 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
     nothing
 end
 
-Base.show(io::IO, x::FloatingPoint) = _show(io, x, SHORTEST, 0, true)
+Base.show(io::IO, x::AbstractFloat) = _show(io, x, SHORTEST, 0, true)
 
 Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false)
 Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false)
@@ -128,7 +134,7 @@ Base.showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode, n::Int)
+function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return write(io, "NaN")
     x < 0 && write(io,'-')
     isinf(x) && return write(io, "Inf")
@@ -168,7 +174,7 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode, n::Int)
     nothing
 end
 
-print_shortest(io::IO, x::FloatingPoint, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
-print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
+print_shortest(io::IO, x::AbstractFloat, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
+print_shortest(io::IO, x::Union{AbstractFloat,Integer}) = print_shortest(io, float(x), false)
 
 end # module

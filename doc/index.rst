@@ -30,6 +30,7 @@
    manual/methods
    manual/constructors
    manual/conversion-and-promotion
+   manual/interfaces
    manual/modules
    manual/documentation
    manual/metaprogramming

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # wordcount.jl
 #
 # Implementation of parallelized "word-count" of a text, inspired by the
@@ -19,7 +21,7 @@
 # Takes a string. Returns a Dict with the number of times each word
 # appears in that string.
 function wordcount(text)
-    words=split(text,[' ','\n','\t','-','.',',',':',';'],false)
+    words=split(text,[' ','\n','\t','-','.',',',':',';'];keep=false)
     counts=Dict()
     for w = words
         counts[w]=get(counts,w,0)+1
@@ -43,7 +45,7 @@ end
 # and @spawns wordcount() for each chunk to run in parallel. Then fetch()s
 # results and performs wcreduce().
 function parallel_wordcount(text)
-    lines=split(text,'\n',false)
+    lines=split(text,'\n';keep=false)
     np=nprocs()
     unitsize=ceil(length(lines)/np)
     wcounts=[]

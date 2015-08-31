@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
@@ -29,7 +31,7 @@ end
 
 function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
-    editor != nothing ||
+    editor !== nothing ||
         error("set the EDITOR environment variable to an edit command")
     editor = Base.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
@@ -53,7 +55,7 @@ function add(pkg::AbstractString, vers::VersionSet)
                 outdated = :yes
             else
                 try
-                    run(pipe(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
+                    run(pipeline(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
                     outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
                         (:no) : (:yes)
                 end
@@ -77,7 +79,14 @@ function rm(pkg::AbstractString)
     Write.remove(pkg)
 end
 
-available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
+function available()
+    all_avail = Read.available()
+    avail = AbstractString[]
+    for (pkg, vers) in all_avail
+        any(x->Types.satisfies("julia", VERSION, x[2].requires), vers) && push!(avail, pkg)
+    end
+    sort!(avail, by=lowercase)
+end
 
 function available(pkg::AbstractString)
     avail = Read.available(pkg)
@@ -171,7 +180,7 @@ function clone(url_or_pkg::AbstractString)
     else
         url = url_or_pkg
         m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || error("can't determine package name from URL: $url")
+        m !== nothing || error("can't determine package name from URL: $url")
         pkg = m.captures[1]
     end
     clone(url,pkg)
@@ -201,7 +210,7 @@ function free(pkg::AbstractString)
     Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be freed – not a registered package")
-    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
     info("Freeing $pkg")
     vers = sort!(collect(keys(avail)), rev=true)
     while true
@@ -212,6 +221,30 @@ function free(pkg::AbstractString)
         end
         isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
         error("can't find any registered versions of $pkg to checkout")
+    end
+end
+
+function free(pkgs)
+    try
+        for pkg in pkgs
+            ispath(pkg,".git") || error("$pkg is not a git repo")
+            Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
+            avail = Read.available(pkg)
+            isempty(avail) && error("$pkg cannot be freed – not a registered package")
+            Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+            info("Freeing $pkg")
+            vers = sort!(collect(keys(avail)), rev=true)
+            for ver in vers
+                sha1 = avail[ver].sha1
+                Git.iscommit(sha1, dir=pkg) || continue
+                Git.run(`checkout -q $sha1`, dir=pkg)
+                break
+            end
+            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+            error("can't find any registered versions of $pkg to checkout")
+        end
+    finally
+        resolve()
     end
 end
 
@@ -230,7 +263,7 @@ function pin(pkg::AbstractString, ver::VersionNumber)
     Read.isinstalled(pkg) || error("$pkg cannot be pinned – not an installed package".tmp)
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be pinned – not a registered package".tmp)
-    haskey(avail,ver) || error("$pkg – $ver is not a registered version")
+    haskey(avail,ver) || error("$pkg – $ver is not a registered version")
     pin(pkg,avail[ver].sha1)
 end
 
@@ -246,24 +279,24 @@ function update(branch::AbstractString)
             Git.run(`checkout -q $branch`)
         end
         # TODO: handle merge conflicts
-        Base.with_env("GIT_MERGE_AUTOEDIT","no") do
+        Base.withenv("GIT_MERGE_AUTOEDIT"=>"no") do
             Git.run(`pull --rebase -q`, out=DevNull)
         end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    @sync for pkg in filter!(Read.isinstalled,collect(keys(avail)))
-        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    for pkg in filter!(Read.isinstalled,collect(keys(avail)))
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
     free = Read.free(instd)
-    @sync for (pkg,ver) in free
-        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    for (pkg,ver) in free
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
-    @sync for (pkg,ver) in fixed
+    for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        @async begin
+        begin
             if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
                 info("Updating $pkg...")
                 @recover begin
@@ -287,7 +320,7 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         Git.readchomp(`rev-parse --verify $commit`, dir=dir)
     isempty(url) && (url = Git.readchomp(`config remote.origin.url`, dir=dir))
     m = match(Git.GITHUB_REGEX, url)
-    m == nothing && error("not a GitHub repo URL, can't make a pull request: $url")
+    m === nothing && error("not a GitHub repo URL, can't make a pull request: $url")
     owner, repo = m.captures[2:3]
     user = GitHub.user()
     info("Forking $owner/$repo to $user")
@@ -320,7 +353,7 @@ function publish(branch::AbstractString)
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
         path = chomp(line)
         m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
-        m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+        m !== nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
         pkg, ver = m.captures; ver = convert(VersionNumber,ver)
         sha1 = readchomp(joinpath("METADATA",path))
         if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
@@ -417,7 +450,7 @@ function resolve(
             if ver1 === nothing
                 info("Installing $pkg v$ver2")
                 Write.install(pkg, Read.sha1(pkg,ver2))
-            elseif ver2 == nothing
+            elseif ver2 === nothing
                 info("Removing $pkg v$ver1")
                 Write.remove(pkg)
             else
@@ -429,10 +462,10 @@ function resolve(
         end
     catch
         for (pkg,(ver1,ver2)) in reverse!(changed)
-            if ver1 == nothing
+            if ver1 === nothing
                 info("Rolling back install of $pkg")
                 @recover Write.remove(pkg)
-            elseif ver2 == nothing
+            elseif ver2 === nothing
                 info("Rolling back deleted $pkg to v$ver1")
                 @recover Write.install(pkg, Read.sha1(pkg,ver1))
             else
@@ -443,7 +476,7 @@ function resolve(
         rethrow()
     end
     # re/build all updated/installed packages
-    build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
+    build(map(x->x[1], filter(x -> x[2][2] !== nothing, changes)))
 end
 
 function write_tag_metadata(pkg::AbstractString, ver::VersionNumber, commit::AbstractString, force::Bool=false)
@@ -522,12 +555,12 @@ end
 
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
-function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=false, commit::AbstractString="HEAD")
+function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=false, commit::AbstractString="HEAD")
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) &&
-        error("$pkg is dirty – commit or stash changes to tag")
+        error("$pkg is dirty – commit or stash changes to tag")
     Git.dirty(pkg, dir="METADATA") &&
-        error("METADATA/$pkg is dirty – commit or stash changes to tag")
+        error("METADATA/$pkg is dirty – commit or stash changes to tag")
     commit = Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
     if !force
@@ -693,7 +726,8 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
             try
                 color = Base.have_color? "--color=yes" : "--color=no"
                 codecov = coverage? ["--code-coverage=user", "--inline=no"] : ["--code-coverage=none"]
-                run(`$JULIA_HOME/julia --check-bounds=yes $codecov $color $test_path`)
+                julia_exe = joinpath(JULIA_HOME, Base.julia_exename())
+                run(`$julia_exe --check-bounds=yes $codecov $color $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -703,7 +737,7 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
     else
         push!(notests,pkg)
     end
-    resolve()
+    isfile(reqs_path) && resolve()
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)

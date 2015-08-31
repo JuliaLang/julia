@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Instant arithmetic
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods
@@ -64,7 +66,57 @@ end
 (+)(y::Period,x::TimeType) = x + y
 (-)(y::Period,x::TimeType) = x - y
 
-(.+){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape(T[i + y for i in x], size(x))
-(.-){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape(T[i - y for i in x], size(x))
-(.+){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .+ y
-(.-){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .- y
+for op in (:.+, :.-)
+    op_ = symbol(string(op)[2:end])
+    @eval begin
+        # GeneralPeriod, AbstractArray{TimeType}
+        ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) =
+            reshape(T[($op_)(i,y) for i in x], size(x))
+        ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
+        ($op_){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = ($op)(x,y)
+        ($op_){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
+
+        # TimeType, StridedArray{GeneralPeriod}
+        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) =
+            reshape(T[($op_)(i,y) for i in x], size(x))
+        ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
+        ($op_){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = ($op)(x,y)
+        ($op_){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
+    end
+end
+
+# TimeType, AbstractArray{TimeType}
+(.-){T<:TimeType}(x::AbstractArray{T}, y::T) = reshape(Period[i - y for i in x], size(x))
+(.-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
+(-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
+(-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
+
+# AbstractArray{TimeType}, AbstractArray{TimeType}
+(-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)
+(-){T<:TimeType}(x::Range{T}, y::Range{T}) = collect(x) - collect(y)
+
+# promotion rules
+
+for (op,F) in ((:+,  Base.AddFun),
+               (:-,  Base.SubFun),
+               (:.+, Base.DotAddFun),
+               (:.-, Base.DotSubFun))
+    @eval begin
+        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = P
+        Base.promote_op{P1<:Period,P2<:Period}(::$F, ::Type{P1}, ::Type{P2}) = CompoundPeriod
+        Base.promote_op{D<:Date}(::$F, ::Type{D}, ::Type{D}) = Day
+        Base.promote_op{D<:DateTime}(::$F, ::Type{D}, ::Type{D}) = Millisecond
+    end
+end
+
+for (op,F) in ((:/,   Base.RDivFun),
+               (:%,   Base.RemFun),
+               (:div, Base.IDivFun),
+               (:mod, Base.ModFun),
+               (:./,  Base.DotRDivFun),
+               (:.%,  Base.DotRemFun))
+    @eval begin
+        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = typeof($op(1,1))
+        Base.promote_op{P<:Period,R<:Real}(::$F, ::Type{P}, ::Type{R}) = P
+    end
+end

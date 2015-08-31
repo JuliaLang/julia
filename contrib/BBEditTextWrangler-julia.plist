@@ -106,14 +106,12 @@
               <string>@less</string>
               <string>@linux</string>
               <string>@linux_only</string>
-              <string>@mstr</string>
               <string>@non_windowsxp_only</string>
               <string>@osx</string>
               <string>@osx_only</string>
               <string>@parallel</string>
               <string>@printf</string>
               <string>@profile</string>
-              <string>@r_mstr</string>
               <string>@r_str</string>
               <string>@schedule</string>
               <string>@show</string>
@@ -191,7 +189,6 @@
               <string>any</string>
               <string>any!</string>
               <string>append!</string>
-              <string>apropos</string>
               <string>ascii</string>
               <string>asec</string>
               <string>asecd</string>
@@ -499,7 +496,6 @@
               <string>hash</string>
               <string>haskey</string>
               <string>hcat</string>
-              <string>help</string>
               <string>hessfact</string>
               <string>hessfact!</string>
               <string>hex</string>
@@ -1209,7 +1205,7 @@
               <string>LoadError</string>
               <string>LocalProcess</string>
               <string>MIME</string>
-              <string>MathConst</string>
+              <string>Irrational</string>
               <string>Matrix</string>
               <string>MersenneTwister</string>
               <string>Meta</string>

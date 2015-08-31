@@ -64,11 +64,11 @@ The following example illustrates good working style::
     f (generic function with 1 method)
 
     julia> @time f(1)
-    elapsed time: 0.008217942 seconds (93784 bytes allocated)
+    elapsed time: 0.004710563 seconds (93504 bytes allocated)
     0.5
 
     julia> @time f(10^6)
-    elapsed time: 0.063418472 seconds (32002136 bytes allocated)
+    elapsed time: 0.04123202 seconds (32002136 bytes allocated)
     2.5000025e11
 
 On the first call (``@time f(1)``), ``f`` gets compiled.  (If you've
@@ -87,10 +87,14 @@ seriously and follow the advice below.
 
 As a teaser, note that an improved version of this function allocates
 no memory (except to pass back the result back to the REPL) and has
-thirty-fold faster execution::
+an order of magnitude faster execution after the first call::
+
+    julia> @time f_improved(1)   # first call
+    elapsed time: 0.003702172 seconds (78944 bytes allocated)
+    0.5
 
     julia> @time f_improved(10^6)
-    elapsed time: 0.00253829 seconds (112 bytes allocated)
+    elapsed time: 0.004313644 seconds (112 bytes allocated)
     2.5000025e11
 
 Below you'll learn how to spot the problem with ``f`` and how to fix it.
@@ -425,7 +429,7 @@ by ``1`` input vector::
 
     julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-    julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
+    julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
     copy_cols:    0.331706323
     copy_rows:    1.799009911
     copy_col_row: 0.415630047
@@ -527,6 +531,32 @@ be harder to read. Consider::
 versus::
 
     println(file, f(a), f(b))
+
+
+Optimize network I/O during parallel execution
+----------------------------------------------
+
+When executing a remote function in parallel::
+
+    responses = cell(nworkers())
+    @sync begin
+        for (idx, pid) in enumerate(workers())
+            @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        end
+    end
+
+is faster than::
+
+    refs = cell(nworkers())
+    for (idx, pid) in enumerate(workers())
+        refs[idx] = @spawnat pid foo(args...)
+    end
+    responses = [fetch(r) for r in refs]
+
+The former results in a single network round-trip to every worker, while the
+latter results in two network calls - first by the ``@spawnat`` and the
+second due to the ``fetch`` (or even a ``wait``). The ``fetch``/``wait``
+is also being executed serially resulting in an overall poorer performance.
 
 
 Fix deprecation warnings
@@ -731,6 +761,63 @@ resulting speedup depend very much on the hardware. You can examine
 the change in generated code by using Julia's :func:`code_native`
 function.
 
+Treat Subnormal Numbers as Zeros
+--------------------------------
+
+Subnormal numbers, formerly called `denormal numbers <https://en.wikipedia.org/wiki/Denormal_number>`_,
+are useful in many contexts, but incur a performance penalty on some hardware.
+A call :func:`set_zero_subnormals(true) <set_zero_subnormals>`
+grants permission for floating-point operations to treat subnormal
+inputs or outputs as zeros, which may improve performance on some hardware.
+A call :func:`set_zero_subnormals(false) <set_zero_subnormals>`
+enforces strict IEEE behavior for subnormal numbers.
+
+Below is an example where subnormals noticeably impact performance on some hardware::
+
+    function timestep{T}( b::Vector{T}, a::Vector{T}, Δt::T )
+        @assert length(a)==length(b)
+        n = length(b)
+        b[1] = 1                            # Boundary condition
+        for i=2:n-1
+            b[i] = a[i] + (a[i-1] - T(2)*a[i] + a[i+1]) * Δt
+        end
+        b[n] = 0                            # Boundary condition
+    end
+
+    function heatflow{T}( a::Vector{T}, nstep::Integer )
+        b = similar(a)
+        for t=1:div(nstep,2)                # Assume nstep is even
+            timestep(b,a,T(0.1))
+            timestep(a,b,T(0.1))
+        end
+    end
+
+    heatflow(zeros(Float32,10),2)           # Force compilation
+    for trial=1:6
+        a = zeros(Float32,1000)
+        set_zero_subnormals(iseven(trial))  # Odd trials use strict IEEE arithmetic
+        @time heatflow(a,1000)
+    end
+
+This example generates many subnormal numbers because the values in ``a`` become
+an exponentially decreasing curve, which slowly flattens out over time.
+
+Treating subnormals as zeros should be used with caution, because doing so
+breaks some identities, such as ``x-y==0`` implies ``x==y``::
+
+    julia> x=3f-38; y=2f-38;
+
+    julia> set_zero_subnormals(false); (x-y,x==y)
+    (1.0000001f-38,false)
+
+    julia> set_zero_subnormals(true); (x-y,x==y)
+    (0.0f0,false)
+
+In some applications, an alternative to zeroing subnormal numbers is
+to inject a tiny bit of noise.  For example, instead of
+initializing ``a`` with zeros, initialize it with::
+
+     a = rand(Float32,1000) * 1.f-9
 
 .. _man-code-warntype:
 
@@ -753,7 +840,7 @@ example::
       x::Float64
       y::UNION(INT64,FLOAT64)
       _var0::Float64
-      _var3::(Int64,)
+      _var3::Tuple{Int64}
       _var4::UNION(INT64,FLOAT64)
       _var1::Float64
       _var2::Float64
@@ -785,7 +872,7 @@ the above example, such output is shown in all-caps.
 
 The top part of the output summarizes the type information for the different
 variables internal to the function. You can see that ``y``, one of the
-variables you created, is a ``Union(Int64,Float64)``, due to the
+variables you created, is a ``Union{Int64,Float64}``, due to the
 type-instability of ``pos``.  There is another variable, ``_var4``, which you
 can see also has the same type.
 
@@ -820,13 +907,13 @@ best tools to contain the "damage" from type instability.
 The following examples may help you interpret expressions marked as
 containing non-leaf types:
 
-- Function body ending in ``end::Union(T1,T2))``
+- Function body ending in ``end::Union{T1,T2})``
 
   + Interpretation: function with unstable return type
 
   + Suggestion: make the return value type-stable, even if you have to annotate it
 
-- ``f(x::T)::Union(T1,T2)``
+- ``f(x::T)::Union{T1,T2}``
 
   + Interpretation: call to a type-unstable function
 

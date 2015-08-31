@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function is_unix(os::Symbol)
     if (os==:Windows) return false;
     elseif (os==:Linux) return true;
@@ -53,16 +55,4 @@ end
 end
 @unix_only windows_version() = (0,0)
 
-WINDOWS_XP_VER = (5,1)
-
-macro windowsxp(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end
-
-macro windowsxp_only(ex)
-    @windowsxp? esc(ex) : nothing
-end
-
-macro non_windowsxp_only(ex)
-    @windowsxp? nothing : esc(ex)
-end
+WINDOWS_VISTA_VER = (6,0)

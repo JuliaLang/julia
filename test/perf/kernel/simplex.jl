@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const Basic = 1
 const AtLower = 2
 const AtUpper = 3

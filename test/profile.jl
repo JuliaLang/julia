@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function busywait(t, n_tries)
     iter = 0
     while iter < n_tries && Profile.len_data() == 0
@@ -13,11 +15,20 @@ let iobuf = IOBuffer()
     Profile.print(iobuf, format=:tree, C=true)
     str = takebuf_string(iobuf)
     @test !isempty(str)
+    truncate(iobuf, 0)
+    Profile.print(iobuf, format=:tree, maxdepth=2)
+    str = takebuf_string(iobuf)
+    @test !isempty(str)
+    truncate(iobuf, 0)
     Profile.print(iobuf, format=:flat, C=true)
     str = takebuf_string(iobuf)
     @test !isempty(str)
+    truncate(iobuf, 0)
     Profile.print(iobuf)
-    Profile.print(iobuf, format=:flat)
+    @test !isempty(takebuf_string(iobuf))
+    truncate(iobuf, 0)
+    Profile.print(iobuf, format=:flat, sortedby=:count)
+    @test !isempty(takebuf_string(iobuf))
     Profile.clear()
     @test isempty(Profile.fetch())
 end

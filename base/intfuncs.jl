@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)
@@ -11,7 +13,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
+function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -68,8 +70,8 @@ end
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
 to_power_type(x) = x
-function power_by_squaring(x, p::Integer)
-    x = to_power_type(x)
+function power_by_squaring(x_, p::Integer)
+    x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
@@ -128,13 +130,13 @@ function powermod{T}(b::Integer, p::Integer, m::T)
 end
 
 # smallest power of 2 >= x
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
 prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
-ispow2(x::Integer) = count_ones(x)==1
+ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 # smallest a^n >= x, with integer n
 function nextpow(a::Real, x::Real)
@@ -161,7 +163,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union(UInt8,UInt16,UInt32,UInt64))
+function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -300,11 +302,11 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
-bits(x::Union(Bool,Int8,UInt8))           = bin(reinterpret(UInt8,x),8)
-bits(x::Union(Int16,UInt16,Float16))      = bin(reinterpret(UInt16,x),16)
-bits(x::Union(Char,Int32,UInt32,Float32)) = bin(reinterpret(UInt32,x),32)
-bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
-bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
+bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
 function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
@@ -325,7 +327,7 @@ end
 
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
-function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
+function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards

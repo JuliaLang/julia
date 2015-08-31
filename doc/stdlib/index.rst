@@ -22,7 +22,6 @@
    punctuation
    sort
    pkg
-   collections
    test
    c
    libc

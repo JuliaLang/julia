@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
-convert(::Type{Bool}, x::Real) = (x!=0)
+convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
@@ -37,11 +39,11 @@ abs2(x::Bool) = x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
-function +{T<:FloatingPoint}(x::Bool, y::T)
+function +{T<:AbstractFloat}(x::Bool, y::T)
     ifelse(x, one(promote_type(Bool,T)) + convert(promote_type(Bool,T),y),
            convert(promote_type(Bool,T),y))
 end
-+(y::FloatingPoint, x::Bool) = x + y
++(y::AbstractFloat, x::Bool) = x + y
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),

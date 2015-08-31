@@ -1,11 +1,13 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Array{RemoteRef}
+    refs::Vector{RemoteRef}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
-    segname::AbstractString
+    segname::UTF8String
 
     # Fields below are not to be serialized
     # Local shmem map.
@@ -17,7 +19,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # the local partition into the array when viewed as a single dimensional array.
     # this can be removed when @parallel or its equivalent supports looping on
     # a subset of workers.
-    loc_subarr_1d
+    loc_subarr_1d::SubArray{T,1,Array{T,N},Tuple{UnitRange{Int}},1}
 
     SharedArray(d,p,r,sn) = new(d,p,r,sn)
 end
@@ -27,29 +29,15 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
-    if isempty(pids)
-        # only use workers on the current host
-        pids = procs(myid())
-        if length(pids) > 1
-            pids = filter(x -> x != 1, pids)
-        end
-
-        onlocalhost = true
-    else
-        if !check_same_host(pids)
-            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
-        end
-
-        onlocalhost = myid() in procs(pids[1])
-    end
+    pids, onlocalhost = shared_pids(pids)
 
     local shm_seg_name = ""
     local s
     local S = nothing
     local shmmem_create_pid
     try
-        # On OSX, the shm_seg_name length must be < 32 characters
-        shm_seg_name = string("/jl", getpid(), round(Int64,time() * 10^9))
+        # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
+        shm_seg_name = @sprintf("/jl%06u%s", getpid() % 10^6, randstring(20))
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -112,11 +100,76 @@ end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
+# Create a SharedArray from a disk file
+function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+    isabspath(filename) || throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
+    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+
+    pids, onlocalhost = shared_pids(pids)
+
+    # If not supplied, determine the appropriate mode
+    have_file = onlocalhost ? isfile(filename) : remotecall_fetch(pids[1], isfile, filename)
+    if mode == nothing
+        mode = have_file ? "r+" : "w+"
+    end
+    workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
+
+    # Ensure the file will be readable
+    mode in ("r", "r+", "w+", "a+") || throw(ArgumentError("mode must be readable, but $mode is not"))
+    init==false || mode in ("r+", "w+", "a+") || throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+    mode == "r" && !isfile(filename) && throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+
+    # Create the file if it doesn't exist, map it if it does
+    refs = Array(RemoteRef, length(pids))
+    func_mmap = mode -> open(filename, mode) do io
+        Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
+    end
+    local s
+    if onlocalhost
+        s = func_mmap(mode)
+        refs[1] = remotecall(pids[1], () -> func_mmap(workermode))
+    else
+        refs[1] = remotecall_wait(pids[1], () -> func_mmap(mode))
+    end
+
+    # Populate the rest of the workers
+    for i = 2:length(pids)
+        refs[i] = remotecall(pids[i], () -> func_mmap(workermode))
+    end
+
+    # Wait till all the workers have mapped the segment
+    for i in 1:length(refs)
+        wait(refs[i])
+    end
+
+    S = SharedArray{T,N}(dims, pids, refs, filename)
+
+    if onlocalhost
+        init_loc_flds(S)
+        # In the event that myid() is not part of pids, s will not be set
+        # in the init function above, hence setting it here if available.
+        S.s = s
+    else
+        S.pidx = 0
+    end
+
+    # if present, init function is called on each of the parts
+    if isa(init, Function)
+        @sync begin
+            for p in pids
+                @async remotecall_wait(p, init, S)
+            end
+        end
+    end
+    S
+end
+
 typealias SharedVector{T} SharedArray{T,1}
 typealias SharedMatrix{T} SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
+linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
@@ -153,6 +206,25 @@ function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     return R
 end
 
+function shared_pids(pids)
+    if isempty(pids)
+        # only use workers on the current host
+        pids = procs(myid())
+        if length(pids) > 1
+            pids = filter(x -> x != 1, pids)
+        end
+
+        onlocalhost = true
+    else
+        if !check_same_host(pids)
+            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
+        end
+
+        onlocalhost = myid() in procs(pids[1])
+    end
+    pids, onlocalhost
+end
+
 function range_1dim(S::SharedArray, pidx)
     l = length(S)
     nw = length(S.pids)
@@ -173,61 +245,44 @@ end
 
 sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T}(S::SharedArray{T})
+function init_loc_flds{T,N}(S::SharedArray{T,N})
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         S.s = fetch(S.refs[S.pidx])
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
-        S.loc_subarr_1d = Array(T, 0)
+        S.loc_subarr_1d = sub(Array(T, ntuple(d->0,N)), 1:0)
     end
 end
 
 
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
-function serialize(s, S::SharedArray)
-    serialize_type(s, typeof(S))
-    for n in SharedArray.names
+function serialize(s::SerializationState, S::SharedArray)
+    Serializer.serialize_cycle(s, S) && return
+    Serializer.serialize_type(s, typeof(S))
+    for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
-            writetag(s, UndefRefTag)
+            Serializer.writetag(s.io, Serializer.UNDEFREF_TAG)
         else
             serialize(s, getfield(S, n))
         end
     end
 end
 
-function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
-    S = invoke(deserialize, (Any, DataType), s, t)
+function deserialize{T,N}(s::SerializationState, t::Type{SharedArray{T,N}})
+    S = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     init_loc_flds(S)
     S
 end
 
 convert(::Type{Array}, S::SharedArray) = S.s
 
-# pass through getindex and setindex! - they always work on the complete array unlike DArrays
-getindex(S::SharedArray) = getindex(S.s)
+# pass through getindex and setindex! - unlike DArrays, these always work on the complete array
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
-getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-stagedfunction getindex(S::SharedArray, I::Union(Real,AbstractVector)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        getindex(S.s, $(Isplat...))
-    end
-end
 
-setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
-setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
-stagedfunction setindex!(S::SharedArray, x, I::Union(Real,AbstractVector)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        setindex!(S.s, x, $(Isplat...))
-    end
-end
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
@@ -247,7 +302,7 @@ function rand!{T}(S::SharedArray{T})
 end
 
 function randn!(S::SharedArray)
-    f = S->map!(x->randn, S.loc_subarr_1d)
+    f = S->map!(x->randn(), S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(p, f, S)
     end
@@ -261,15 +316,15 @@ end
 shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 
 # rand variant with range
-function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...)
+function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
         SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     else
         SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     end
 end
-shmem_rand(TR::Union(DataType, UnitRange), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
-shmem_rand(TR::Union(DataType, UnitRange), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
+shmem_rand(TR::Union{DataType, UnitRange}, I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
 
 shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
@@ -362,7 +417,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
         rethrow(e)
 
     finally
-        if s != nothing
+        if s !== nothing
             close(s)
         end
     end
@@ -387,11 +442,11 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    mmap_array(T, dims, s, zero(FileOffset), grow=false)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset); grow=false)
 end
 
-shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{UInt8},), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{UInt8}, Int, Int), shm_seg_name, oflags, permissions)
+shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Cstring, Int, Int), shm_seg_name, oflags, permissions)
 
 end # @unix_only
 
@@ -400,8 +455,8 @@ end # @unix_only
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
-    s = SharedMemSpec(shm_seg_name, readonly, create)
-    mmap_array(T, dims, s, zero(FileOffset))
+    s = Mmap.Anonymous(shm_seg_name, readonly, create)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset))
 end
 
 # no-op in windows

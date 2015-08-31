@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module UMFPACK
 
 export UmfpackLU
@@ -6,7 +8,7 @@ import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
 importall Base.SparseMatrix
-import Base.SparseMatrix: increment, increment!, decrement, decrement!
+import Base.SparseMatrix: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -17,37 +19,37 @@ function umferror(status::Integer)
      if status==UMFPACK_OK
          return
      elseif status==UMFPACK_WARNING_singular_matrix
-         throw(MatrixIllConditionedException("Singular matrix"))
+         throw(MatrixIllConditionedException("singular matrix"))
      elseif status==UMFPACK_WARNING_determinant_underflow
-         throw(MatrixIllConditionedException("The determinant is nonzero but underflowed"))
+         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
      elseif status==UMFPACK_WARNING_determinant_overflow
-         throw(MatrixIllConditionedException("The determinant overflowed"))
+         throw(MatrixIllConditionedException("the determinant overflowed"))
      elseif status==UMFPACK_ERROR_out_of_memory
          throw(OutOfMemoryError())
      elseif status==UMFPACK_ERROR_invalid_Numeric_object
-         throw(ArgumentError("Invalid UMFPack numeric object"))
+         throw(ArgumentError("invalid UMFPack numeric object"))
      elseif status==UMFPACK_ERROR_invalid_Symbolic_object
-         throw(ArgumentError("Invalid UMFPack symbolic object"))
+         throw(ArgumentError("invalid UMFPack symbolic object"))
      elseif status==UMFPACK_ERROR_argument_missing
-         throw(ArgumentError("A required argument to UMFPack is missing"))
+         throw(ArgumentError("a required argument to UMFPack is missing"))
      elseif status==UMFPACK_ERROR_n_nonpositive
-         throw(BoundsError("The number of rows or columns of the matrix must be greater than zero"))
+         throw(BoundsError("the number of rows or columns of the matrix must be greater than zero"))
      elseif status==UMFPACK_ERROR_invalid_matrix
-         throw(ArgumentError("Invalid matrix"))
+         throw(ArgumentError("invalid matrix"))
      elseif status==UMFPACK_ERROR_different_pattern
-         throw(ArgumentError("Pattern of the matrix changed"))
+         throw(ArgumentError("pattern of the matrix changed"))
      elseif status==UMFPACK_ERROR_invalid_system
-         throw(ArgumentError("Invalid sys argument provided to UMFPack solver"))
+         throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
      elseif status==UMFPACK_ERROR_invalid_permutation
-         throw(ArgumentError("Invalid permutation"))
+         throw(ArgumentError("invalid permutation"))
      elseif status==UMFPACK_ERROR_file_IO
-         throw(IOError())
+         throw(ErrorException("error saving / loading UMFPack decomposition"))
      elseif status==UMFPACK_ERROR_ordering_failed
-         error("The ordering method failed")
+         throw(ErrorException("the ordering method failed"))
      elseif status==UMFPACK_ERROR_internal_error
-         error("An internal error has occurred, of unknown cause")
+         throw(ErrorException("an internal error has occurred, of unknown cause"))
      else
-         error("Unknown error code: $status")
+         throw(ErrorException("unknown UMFPack error code: $status"))
      end
 end
 
@@ -58,13 +60,13 @@ end
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32, )
-    typealias UMFITypes Union(Int32)
+    typealias UMFITypes Union{Int32}
 else
     const UmfpackIndexTypes = (:Int32, :Int64)
-    typealias UMFITypes Union(Int32, Int64)
+    typealias UMFITypes Union{Int32, Int64}
 end
 
-typealias UMFVTypes Union(Float64,Complex128)
+typealias UMFVTypes Union{Float64,Complex128}
 
 ## UMFPACK
 
@@ -102,7 +104,6 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
 
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
@@ -112,6 +113,7 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
+lufact(A::SparseMatrixCSC) = lufact(float(A))
 
 function show(io::IO, f::UmfpackLU)
     println(io, "UMFPACK LU Factorization of a $(f.m)-by-$(f.n) sparse matrix")
@@ -270,8 +272,8 @@ for itype in UmfpackIndexTypes
         end
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_col + 1)
+            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+            Lp = Array($itype, n_row + 1)
             Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
             Lx = Array(Float64, lnz)
             Up = Array($itype, n_col + 1)
@@ -289,14 +291,14 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,
                         P, Q, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),Lx)),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),Ux),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
         function umf_extract(lu::UmfpackLU{Complex128,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_col + 1)
+            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+            Lp = Array($itype, n_row + 1)
             Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
             Lx = Array(Float64, lnz)
             Lz = Array(Float64, lnz)
@@ -316,11 +318,16 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),complex(Lx,Lz))),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),complex(Ux,Uz)),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex(Lx, Lz))),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end
+end
+
+function nnz(lu::UmfpackLU)
+    lnz, unz, = umf_lunz(lu)
+    return Int(lnz + unz)
 end
 
 ### Solve with Factorization

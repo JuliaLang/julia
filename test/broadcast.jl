@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function as_sub(x::AbstractVector)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = sub(y, 2:2:length(y))
@@ -108,9 +110,9 @@ m = [1:2;]'
 @test_approx_eq m./[r2;] [ratio 2ratio]
 
 @test @inferred([0,1.2].+reshape([0,-2],1,1,2)) == reshape([0 -2; 1.2 -0.8],2,1,2)
-rt = Base.return_types(.+, (Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(.+, Tuple{Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast, (Function, Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(broadcast, Tuple{Function, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast!, (Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}))
+rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}

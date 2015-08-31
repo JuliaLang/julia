@@ -1,3 +1,25 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+@test clamp(0, 1, 3) == 1
+@test clamp(1, 1, 3) == 1
+@test clamp(2, 1, 3) == 2
+@test clamp(3, 1, 3) == 3
+@test clamp(4, 1, 3) == 3
+
+@test clamp(0.0, 1, 3) == 1.0
+@test clamp(1.0, 1, 3) == 1.0
+@test clamp(2.0, 1, 3) == 2.0
+@test clamp(3.0, 1, 3) == 3.0
+@test clamp(4.0, 1, 3) == 3.0
+
+@test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+
+begin
+    x = [0.0, 1.0, 2.0, 3.0, 4.0]
+    clamp!(x, 1, 3)
+    @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+end
+
 # frexp,ldexp,significand,exponent
 for T in (Float16,Float32,Float64)
     for z in (zero(T),-zero(T))
@@ -24,6 +46,104 @@ for T in (Float16,Float32,Float64)
         @test significand(-a) == -2b
         @test exponent(-a) == n-1
     end
+end
+
+# Test math functions. We compare to BigFloat instead of hard-coding
+# values, assuming that BigFloat has an independent and independently
+# tested implementation.
+for T in (Float32, Float64)
+    x = T(1//3)
+    y = T(1//2)
+    yi = 4
+    # Test random values
+    @test_approx_eq x^y big(x)^big(y)
+    @test_approx_eq x^yi big(x)^yi
+    @test_approx_eq acos(x) acos(big(x))
+    @test_approx_eq acosh(1+x) acosh(big(1+x))
+    @test_approx_eq asin(x) asin(big(x))
+    @test_approx_eq asinh(x) asinh(big(x))
+    @test_approx_eq atan(x) atan(big(x))
+    @test_approx_eq atan2(x,y) atan2(big(x),big(y))
+    @test_approx_eq atanh(x) atanh(big(x))
+    @test_approx_eq cbrt(x) cbrt(big(x))
+    @test_approx_eq cos(x) cos(big(x))
+    @test_approx_eq cosh(x) cosh(big(x))
+    @test_approx_eq exp(x) exp(big(x))
+    @test_approx_eq exp10(x) exp10(big(x))
+    @test_approx_eq exp2(x) exp2(big(x))
+    @test_approx_eq hypot(x,y) hypot(big(x),big(y))
+    @test_approx_eq log(x) log(big(x))
+    @test_approx_eq log10(x) log10(big(x))
+    @test_approx_eq log2(x) log2(big(x))
+    @test_approx_eq sin(x) sin(big(x))
+    @test_approx_eq sinh(x) sinh(big(x))
+    @test_approx_eq sqrt(x) sqrt(big(x))
+    @test_approx_eq tan(x) tan(big(x))
+    @test_approx_eq tanh(x) tanh(big(x))
+    # Test special values
+    @test isequal(T(1//4)^T(1//2), T(1//2))
+    @test isequal(T(1//4)^2, T(1//16))
+    @test isequal(acos(T(1)), T(0))
+    @test isequal(acosh(T(1)), T(0))
+    @test_approx_eq_eps asin(T(1)) T(pi)/2 eps(T)
+    @test_approx_eq_eps atan(T(1)) T(pi)/4 eps(T)
+    @test_approx_eq_eps atan2(T(1),T(1)) T(pi)/4 eps(T)
+    @test isequal(cbrt(T(0)), T(0))
+    @test isequal(cbrt(T(1)), T(1))
+    @test isequal(cbrt(T(1000000000)), T(1000))
+    @test isequal(cos(T(0)), T(1))
+    @test_approx_eq_eps cos(T(pi)/2) T(0) eps(T)
+    @test isequal(cos(T(pi)), T(-1))
+    @test_approx_eq_eps exp(T(1)) T(e) 10*eps(T)
+    @test isequal(exp10(T(1)), T(10))
+    @test isequal(exp2(T(1)), T(2))
+    @test isequal(hypot(T(3),T(4)), T(5))
+    @test isequal(log(T(1)), T(0))
+    @test_approx_eq_eps log(T(e)) T(1) eps(T)
+    @test isequal(log10(T(1)), T(0))
+    @test isequal(log10(T(10)), T(1))
+    @test isequal(log2(T(1)), T(0))
+    @test isequal(log2(T(2)), T(1))
+    @test isequal(sin(T(0)), T(0))
+    @test isequal(sin(T(pi)/2), T(1))
+    @test_approx_eq_eps sin(T(pi)) T(0) eps(T)
+    @test isequal(sqrt(T(0)), T(0))
+    @test isequal(sqrt(T(1)), T(1))
+    @test isequal(sqrt(T(100000000)), T(10000))
+    @test isequal(tan(T(0)), T(0))
+    @test_approx_eq_eps tan(T(pi)/4) T(1) eps(T)
+    # Test inverses
+    @test_approx_eq acos(cos(x)) x
+    @test_approx_eq acosh(cosh(x)) x
+    @test_approx_eq asin(sin(x)) x
+    @test_approx_eq cbrt(x)^3 x
+    @test_approx_eq cbrt(x^3) x
+    @test_approx_eq asinh(sinh(x)) x
+    @test_approx_eq atan(tan(x)) x
+    @test_approx_eq atan2(x,y) atan(x/y)
+    @test_approx_eq atanh(tanh(x)) x
+    @test_approx_eq cos(acos(x)) x
+    @test_approx_eq cosh(acosh(1+x)) 1+x
+    @test_approx_eq exp(log(x)) x
+    @test_approx_eq exp10(log10(x)) x
+    @test_approx_eq exp2(log2(x)) x
+    @test_approx_eq log(exp(x)) x
+    @test_approx_eq log10(exp10(x)) x
+    @test_approx_eq log2(exp2(x)) x
+    @test_approx_eq sin(asin(x)) x
+    @test_approx_eq sinh(asinh(x)) x
+    @test_approx_eq sqrt(x)^2 x
+    @test_approx_eq sqrt(x^2) x
+    @test_approx_eq tan(atan(x)) x
+    @test_approx_eq tanh(atanh(x)) x
+    # Test some properties
+    @test_approx_eq cosh(x) (exp(x)+exp(-x))/2
+    @test_approx_eq cosh(x)^2-sinh(x)^2 1
+    @test_approx_eq hypot(x,y) sqrt(x^2+y^2)
+    @test_approx_eq sin(x)^2+cos(x)^2 1
+    @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
+    @test_approx_eq tan(x) sin(x)/cos(x)
+    @test_approx_eq tanh(x) sinh(x)/cosh(x)
 end
 
 for T in (Int, Float64, BigFloat)
@@ -84,7 +204,7 @@ end
 # check type stability
 for T = (Float32,Float64,BigFloat)
     for f = (sind,cosd,sinpi,cospi)
-        @test Base.return_types(f,(T,)) == [T]
+        @test Base.return_types(f,Tuple{T}) == [T]
     end
 end
 
@@ -104,30 +224,63 @@ end
 @test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
 @test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
 
-for x in logspace(-200, -0.01)
-    @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
-    @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
-    @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
-    if x > 1e-20
-        xf = Float32(x)
-        @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
-        @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
-        @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+for elty in [Float32,Float64]
+    for x in logspace(-200, -0.01)
+        @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
+        @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
+        @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
+        if x > 1e-20
+            xf = Float32(x)
+            @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
+            @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
+            @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+        end
     end
+    @test erfinv(one(elty)) == Inf
+    @test erfinv(-one(elty)) == -Inf
+    @test_throws DomainError erfinv(2.0*one(elty))
+
+    @test erfcinv(zero(elty)) == Inf
+    @test_throws DomainError erfcinv(-one(elty))
 end
 
+@test erfinv(one(Int)) == erfinv(1.0)
+@test erfcinv(one(Int)) == erfcinv(1.0)
+
 # airy
-@test_approx_eq airy(1.8) 0.0470362168668458052247
+@test_approx_eq airy(1.8) airyai(1.8)
 @test_approx_eq airyprime(1.8) -0.0685247801186109345638
+@test_approx_eq airyaiprime(1.8) airyprime(1.8)
 @test_approx_eq airybi(1.8) 2.595869356743906290060
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
+@test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
-@test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-@test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+for elty in [Complex64,Complex128]
+    @test_approx_eq airy(convert(elty,1.8)) 0.0470362168668458052247
+    z = convert(elty,z)
+    @test_approx_eq airyx(z) airyx(0,z)
+    @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
+    @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
+    @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test_throws ArgumentError airyx(5,z)
+end
+
+# bessely0, bessely1, besselj0, besselj1
+@test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
+@test_approx_eq besselj1(Float32(2.0)) besselj1(Float64(2.0))
+@test_approx_eq bessely0(Float32(2.0)) bessely0(Float64(2.0))
+@test_approx_eq bessely1(Float32(2.0)) bessely1(Float64(2.0))
+@test_approx_eq besselj0(2) besselj0(2.0)
+@test_approx_eq besselj1(2) besselj1(2.0)
+@test_approx_eq bessely0(2) bessely0(2.0)
+@test_approx_eq bessely1(2) bessely1(2.0)
+@test_approx_eq besselj0(2.0 + im) besselj(0, 2.0 + im)
+@test_approx_eq besselj1(2.0 + im) besselj(1, 2.0 + im)
+@test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
+@test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
@@ -145,12 +298,15 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(3,-3) -true_i33
 @test_approx_eq besseli(-3,-3) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
+@test_throws DomainError besseli(0.4,-1.0)
 
 # besselj
 @test besselj(0,0) == 1
 for i = 1:5
     @test besselj(i,0) == 0
     @test besselj(-i,0) == 0
+    @test besselj(-i,Float32(0)) == 0
+    @test besselj(-i,Float32(0)) == 0
 end
 
 j33 = besselj(3,3.)
@@ -171,6 +327,7 @@ j43 = besselj(4,3.)
 @test_approx_eq besselj(0.1, complex(-0.4)) 0.820421842809028916 + 0.266571215948350899im
 @test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
+@test_approx_eq besselj(1.0,3im) besselj(1,3im)
 @test_throws Base.Math.AmosException besselj(20,1000im)
 
 # besselk
@@ -188,11 +345,22 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 # bessely
 y33 = bessely(3,3.)
 @test bessely(3,3) == y33
+@test bessely(3.,3.) == y33
+@test_approx_eq bessely(3,Float32(3.)) y33
 @test_approx_eq bessely(-3,3) -y33
 @test_approx_eq y33 -0.53854161610503161800
 @test_throws DomainError bessely(3,-3)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
+@test_throws DomainError bessely(0.4,-1.0)
+@test_throws DomainError bessely(0.4,Float32(-1.0))
+@test_throws DomainError bessely(1,Float32(-1.0))
+
+#besselhx
+for elty in [Complex64,Complex128]
+    z = convert(elty, 1.0 + 1.9im)
+    @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
+end
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
@@ -216,6 +384,10 @@ end
 @test_throws Base.Math.AmosException besseljx(-1, 0)
 @test besselkx(1, 0) == Inf
 @test_throws Base.Math.AmosException besselyx(1, 0)
+@test_throws DomainError besselix(0.4,-1.0)
+@test_throws DomainError besseljx(0.4, -1.0)
+@test_throws DomainError besselkx(0.4,-1.0)
+@test_throws DomainError besselyx(0.4,-1.0)
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
@@ -231,9 +403,11 @@ if Base.Math.libm == "libopenlibm"
 else
     @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
 end
-@test_approx_eq gamma(1/2) sqrt(π)
-@test_approx_eq gamma(-1/2) -2sqrt(π)
-@test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
+for elty in (Float32, Float64)
+    @test_approx_eq gamma(convert(elty,1/2)) convert(elty,sqrt(π))
+    @test_approx_eq gamma(convert(elty,-1/2)) convert(elty,-2sqrt(π))
+    @test_approx_eq lgamma(convert(elty,-1/2)) convert(elty,log(abs(gamma(-1/2))))
+end
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
 @test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
@@ -294,6 +468,7 @@ end
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
 @test_approx_eq zeta(4) pi^4/90
+@test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
 
 # quadgk
 @test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
@@ -307,8 +482,10 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # Ensure subnormal flags functions don't segfault
-@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
+@test any(set_zero_subnormals(true) .== [false,true])
+@test any(get_zero_subnormals() .== [false,true])
+@test set_zero_subnormals(false)
+@test !get_zero_subnormals()
 
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)
@@ -351,6 +528,7 @@ end
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), zeta(2 + 1im, -1.1+0im))
 @test 1e-13 > errc(zeta(2 + 1im, -1.1), -1525.8095173321060982383023516086563741006869909580583246557 + 1719.4753293650912305811325486980742946107143330321249869576im)
+@test_approx_eq polygamma(3,5) polygamma(3,5.)
 
 @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
 @test let evalcounts=0
@@ -402,3 +580,68 @@ for elty in (Float32, Float64)
     @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
     @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
 end
+
+# log/log1p
+# if using Tang's algorithm, should be accurate to within 0.56 ulps
+X = rand(100)
+for x in X
+    for n = -5:5
+        xn = ldexp(x,n)
+
+        for T in (Float32,Float64)
+            xt = T(x)
+
+            y = Base.Math.JuliaLibm.log(xt)
+            yb = log(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            y = Base.Math.JuliaLibm.log1p(xt)
+            yb = log1p(big(xt))
+            @test abs(y-yb) <= 0.56*eps(T(yb))
+
+            if n <= 0
+                y = Base.Math.JuliaLibm.log1p(-xt)
+                yb = log1p(big(-xt))
+                @test abs(y-yb) <= 0.56*eps(T(yb))
+            end
+        end
+    end
+end
+
+for n = 0:28
+    @test log(2,2^n) == n
+end
+with_bigfloat_precision(10_000) do
+    @test log(2,big(2)^100) == 100
+    @test log(2,big(2)^200) == 200
+    @test log(2,big(2)^300) == 300
+    @test log(2,big(2)^400) == 400
+end
+
+for T in (Float32,Float64)
+    @test log(zero(T)) == -Inf
+    @test isnan(log(NaN))
+    @test_throws DomainError log(-one(T))
+    @test log1p(-one(T)) == -Inf
+    @test isnan(log1p(NaN))
+    @test_throws DomainError log1p(-2*one(T))
+end
+# test vectorization of 2-arg vectorized functions
+binary_math_functions = [
+    copysign, flipsign, log, atan2, hypot, max, min,
+    airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+    besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
+    polygamma, zeta, beta, lbeta,
+]
+for f in binary_math_functions
+    x = y = 2
+    v = [f(x,y)]
+    @test f([x],y) == v
+    @test f(x,[y]) == v
+    @test f([x],[y]) == v
+end
+
+# #3024, #12822
+@test_throws DomainError 2 ^ -2
+@test_throws DomainError (-2)^(2.2)
+@test_throws DomainError (-2.0)^(2.2)

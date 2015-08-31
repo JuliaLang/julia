@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## IOStream
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Int32, ()))
@@ -27,15 +29,16 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-isopen(s::IOStream) = Bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
+isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios)!=0
 function flush(s::IOStream)
     sigatomic_begin()
-    systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
+    bad = ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0
     sigatomic_end()
+    systemerror("flush", bad)
     s
 end
-iswritable(s::IOStream) = Bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
-isreadable(s::IOStream) = Bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
+iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
+isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)
@@ -86,7 +89,7 @@ function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff:
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Void},
-                      (Ptr{UInt8}, Ptr{UInt8}, Int32, Int32, Int32, Int32),
+                      (Ptr{UInt8}, Cstring, Int32, Int32, Int32, Int32),
                       s.ios, fname, rd, wr, cr, tr) == C_NULL)
     if ff
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
@@ -126,7 +129,7 @@ function write{T}(s::IOStream, a::Array{T})
         Int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                   s.ios, a, length(a)*sizeof(T)))
     else
-        invoke(write, (IO, Array), s, a)
+        invoke(write, Tuple{IO, Array}, s, a)
     end
 end
 
@@ -139,14 +142,15 @@ end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     if !isbits(T) || stride(a,1)!=1
-        return invoke(write, (Any, AbstractArray), s, a)
+        return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
         return write(s, pointer(a, 1), colsz)
     else
-        cartesianmap((idxs...)->write(s, pointer(a, idxs), colsz),
-                     tuple(1, size(a)[2:end]...))
+        for idxs in CartesianRange((1, size(a)[2:end]...))
+            write(s, pointer(a, idxs.I), colsz)
+        end
         return colsz*trailingsize(a,2)
     end
 end
@@ -162,6 +166,10 @@ function read(s::IOStream, ::Type{UInt8})
     b % UInt8
 end
 
+function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream, ::Type{T})
+    ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
+end
+
 function read!{T}(s::IOStream, a::Array{T})
     if isbits(T)
         nb = length(a)*sizeof(T)
@@ -170,7 +178,7 @@ function read!{T}(s::IOStream, a::Array{T})
             throw(EOFError())
         end
     else
-        invoke(read!, (IO, Array), s, a)
+        invoke(read!, Tuple{IO, Array}, s, a)
     end
     a
 end
@@ -186,7 +194,7 @@ end
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
+    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
 
 takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
@@ -212,22 +220,59 @@ function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
 
-function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b))
+function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    while !eof(s) && nr < nb
+    while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
         end
-        nr += Int(ccall(:ios_readall, UInt,
-                        (Ptr{Void}, Ptr{Void}, UInt),
+        nr += Int(ccall(:ios_readall, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                         s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
+        eof(s) && break
     end
-    if lb > olb
+    if lb > olb && lb > nr
         resize!(b, nr) # shrink to just contain input data if was resized
     end
     return nr
+end
+
+function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
+    olb = lb = length(b)
+    if nb > lb
+        resize!(b, nb)
+    end
+    nr = Int(ccall(:ios_read, UInt, (Ptr{Void}, Ptr{Void}, UInt),
+                   s.ios, pointer(b), nb))
+    if lb > olb && lb > nr
+        resize!(b, nr)
+    end
+    return nr
+end
+
+function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
+    return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
+end
+
+function readbytes(s::IOStream)
+    sz = 0
+    try # filesize is just a hint, so ignore if it fails
+        sz = filesize(s)
+        pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+        if pos > 0
+            sz -= pos
+        end
+    end
+    b = Array(UInt8, sz<=0 ? 1024 : sz)
+    nr = readbytes_all!(s, b, typemax(Int))
+    resize!(b, nr)
+end
+
+function readbytes(s::IOStream, nb::Integer; all::Bool=true)
+    b = Array(UInt8, nb)
+    nr = readbytes!(s, b, nb, all=all)
+    resize!(b, nr)
 end
 
 ## Character streams ##

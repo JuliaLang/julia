@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
@@ -5,12 +7,6 @@
 // implementations of core features.
 
 // object layout options ------------------------------------------------------
-
-#ifdef _P64
-// a risky way to save 8 bytes per tuple, by storing the length in the
-// top bits of the type tag. only possible on 64-bit.
-//#define OVERLAP_TUPLE_LEN
-#endif
 
 // if this is not defined, only individual dimension sizes are
 // stored and not total length, to save space.
@@ -20,27 +16,47 @@
 // original object
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
+// codegen options ------------------------------------------------------------
+
+// (Experimental) codegen support for thread-local storage
+// #define CODEGEN_TLS
+
+// (Experimental) Use MCJIT ELF, even where it's not the native format
+// #define FORCE_ELF
+
+// with KEEP_BODIES, we keep LLVM function bodies around for later debugging
+// #define KEEP_BODIES
 
 // GC options -----------------------------------------------------------------
-
-// only one GC is supported at this time
-#define JL_GC_MARKSWEEP
 
 // debugging options
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed. this helps tools like valgrind
 // catch invalid accesses.
-//#define MEMDEBUG
+// #define MEMDEBUG
 
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
-//#define GC_VERIFY
+#ifndef GC_VERIFY
+#ifdef GC_DEBUG_ENV
+#define GC_VERIFY
+#else
+// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// option. Keep the document here before a better build system is ready.
+// #define GC_VERIFY
+#endif
+#endif
+
+// SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
+// This is not recommended, as the memory state after such an exception should
+// be considered untrusted, but can be helpful during development
+// #define SEGV_EXCEPTION
 
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
-//#define GC_FINAL_STATS
+// #define GC_FINAL_STATS
 
 // MEMPROFILE prints pool summary statistics after every GC
 //#define MEMPROFILE
@@ -95,5 +111,19 @@
 
 // number of memory pools for lock free pool_alloc
 #define N_GC_THREADS 16
+
+// sanitizer defaults ---------------------------------------------------------
+
+// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer) || __has_feature(memory_sanitizer)
+#  define MEMDEBUG
+#  define KEEP_BODIES
+#  endif
+// Memory sanitizer also needs thread-local storage
+#  if __has_feature(memory_sanitizer)
+#  define CODEGEN_TLS
+#  endif
+#endif
 
 #endif

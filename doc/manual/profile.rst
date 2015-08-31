@@ -1,19 +1,19 @@
 .. _man-profiling:
 
-.. currentmodule:: Base.Profile
+.. currentmodule:: Base
 
 Profiling
 =========
 
-The ``Profile`` module provides tools to help developers improve the
+The :mod:`Profile` module provides tools to help developers improve the
 performance of their code. When used, it takes measurements on running
 code, and produces output that helps you understand how much time is
 spent on individual line(s).  The most common usage is to identify
 "bottlenecks" as targets for optimization.
 
-``Profile`` implements what is known as a "sampling" or `statistical
+:mod:`Profile` implements what is known as a "sampling" or `statistical
 profiler
-<http://en.wikipedia.org/wiki/Profiling_(computer_programming)>`_.  It
+<https://en.wikipedia.org/wiki/Profiling_(computer_programming)>`_.  It
 works by periodically taking a backtrace during the execution of any
 task. Each backtrace captures the currently-running function and
 line number, plus the complete chain of function calls that led to
@@ -93,15 +93,15 @@ the fourth is the line number.  Note that the specific line numbers
 may change as Julia's code changes; if you want to follow along, it's
 best to run this example yourself.
 
-In this example, we can see that the top level is ``client.jl``'s
+In this example, we can see that the top level is ``client.jl``\ 's
 ``_start`` function. This is the first Julia function that gets called
-when you launch julia.  If you examine line 373 of ``client.jl``,
-you'll see that (at the time of this writing) it calls ``run_repl``,
-mentioned on the second line. This in turn calls ``eval_user_input``.
+when you launch Julia.  If you examine line 373 of ``client.jl``,
+you'll see that (at the time of this writing) it calls :func:`run_repl`,
+mentioned on the second line. This in turn calls :func:`eval_user_input`.
 These are the functions in ``client.jl`` that interpret what you type
 at the REPL, and since we're working interactively these functions
 were invoked when we entered ``@profile myfunc()``.  The next line
-reflects actions taken in the ``@profile`` macro.
+reflects actions taken in the :obj:`@profile` macro.
 
 The first line shows that 23 backtraces were taken at line 373 of
 ``client.jl``, but it's not that this line was "expensive" on its own:
@@ -119,7 +119,7 @@ rather than putting it in a file; if we had used a file, this would
 show the file name. Line 2 of ``myfunc()`` contains the call to
 ``rand``, and there were 8 (out of 23) backtraces that occurred at
 this line. Below that, you can see a call to
-``dsfmt_gv_fill_array_close_open!`` inside ``dSFMT.jl``. You might be surprised not to see the
+:func:`dsfmt_gv_fill_array_close_open!` inside ``dSFMT.jl``. You might be surprised not to see the
 ``rand`` function listed explicitly: that's because ``rand`` is *inlined*,
 and hence doesn't appear in the backtraces.
 
@@ -155,10 +155,10 @@ more samples::
 In general, if you have ``N`` samples collected at a line, you can
 expect an uncertainty on the order of ``sqrt(N)`` (barring other
 sources of noise, like how busy the computer is with other tasks). The
-major exception to this rule is garbage-collection, which runs
-infrequently but tends to be quite expensive. (Since julia's garbage
+major exception to this rule is garbage collection, which runs
+infrequently but tends to be quite expensive. (Since Julia's garbage
 collector is written in C, such events can be detected using the
-``C=true`` output mode described below, or by using `ProfileView
+``C=true`` output mode described below, or by using `ProfileView.jl
 <https://github.com/timholy/ProfileView.jl>`_.)
 
 This illustrates the default "tree" dump; an alternative is the "flat"
@@ -199,26 +199,26 @@ useful way to view the results.
 Accumulation and clearing
 -------------------------
 
-Results from ``@profile`` accumulate in a buffer; if you run multiple
-pieces of code under ``@profile``, then ``Profile.print()`` will show
+Results from :obj:`@profile` accumulate in a buffer; if you run multiple
+pieces of code under :obj:`@profile`, then :func:`Profile.print` will show
 you the combined results. This can be very useful, but sometimes you
-want to start fresh; you can do so with ``Profile.clear()``.
+want to start fresh; you can do so with :func:`Profile.clear`.
 
 
 Options for controlling the display of profile results
 ------------------------------------------------------
 
-``Profile.print()`` has more options than we've described so far.
+:func:`Profile.print` has more options than we've described so far.
 Let's see the full declaration::
 
-    function print(io::IO = STDOUT, data = fetch(); format = :tree, C = false, combine = true, cols = tty_cols())
+    function print(io::IO = STDOUT, data = fetch(); format = :tree, C = false, combine = true, cols = tty_cols(), maxdepth = typemax(Int), sortedby = :filefuncline)
 
 Let's discuss these arguments in order:
 
 - The first argument allows you to save the results to a file, but the
   default is to print to ``STDOUT`` (the console).
 - The second argument contains the data you want to analyze; by
-  default that is obtained from ``Profile.fetch()``, which pulls out
+  default that is obtained from :func:`Profile.fetch`, which pulls out
   the backtraces from a pre-allocated buffer. For example, if you want
   to profile the profiler, you could say::
 
@@ -267,12 +267,16 @@ Let's discuss these arguments in order:
     Profile.print(s,cols = 500)
     close(s)
 
+- ``maxdepth`` can be used to limit the size of the output in
+  ``:tree`` format (it nests only up to level ``maxdepth``)
+- ``sortedby = :count`` sorts the ``:flat`` format in order of
+  increasing counts
 
 Configuration
 -------------
 
-``@profile`` just accumulates backtraces, and the analysis happens
-when you call ``Profile.print()``. For a long-running computation,
+:obj:`@profile` just accumulates backtraces, and the analysis happens
+when you call :func:`Profile.print`. For a long-running computation,
 it's entirely possible that the pre-allocated buffer for storing
 backtraces will be filled. If that happens, the backtraces stop but
 your computation continues. As a consequence, you may miss some
@@ -306,19 +310,19 @@ Memory allocation analysis
 
 One of the most common techniques to improve performance is to reduce
 memory allocation.  The total amount of allocation can be measured
-with ``@time`` and ``@allocated``, and specific lines triggering
+with :obj:`@time` and :obj:`@allocated`, and specific lines triggering
 allocation can often be inferred from profiling via the cost of
 garbage collection that these lines incur.  However, sometimes it is
 more efficient to directly measure the amount of memory allocated by
 each line of code.
 
-To measure allocation line-by-line, start julia with the
+To measure allocation line-by-line, start Julia with the
 ``--track-allocation=<setting>`` command-line option, for which you
 can choose ``none`` (the default, do not measure allocation), ``user``
-(measure memory allocation everywhere except julia's core code), or
-``all`` (measure memory allocation at each line of julia code).
+(measure memory allocation everywhere except Julia's core code), or
+``all`` (measure memory allocation at each line of Julia code).
 Allocation gets measured for each line of compiled code.  When you quit
-julia, the cumulative results are written to text files with ``.mem``
+Julia, the cumulative results are written to text files with ``.mem``
 appended after the file name, residing in the same directory as the
 source file.  Each line lists the total number of bytes allocated.
 The ``Coverage`` package contains some elementary analysis tools, for
@@ -328,9 +332,9 @@ In interpreting the results, there are a few important details.  Under
 the ``user`` setting, the first line of any function directly called
 from the REPL will exhibit allocation due to events that happen in the
 REPL code itself.  More significantly, JIT-compilation also adds to
-allocation counts, because much of julia's compiler is written in
+allocation counts, because much of Julia's compiler is written in
 Julia (and compilation usually requires memory allocation).  The
-recommended procedure it to force compilation by executing all the
-commands you want to analyze, then call ``clear_malloc_data()`` to
+recommended procedure is to force compilation by executing all the
+commands you want to analyze, then call :func:`Profile.clear_malloc_data` to
 reset all allocation counters.  Finally, execute the desired commands
-and quit julia to trigger the generation of the ``.mem`` files.
+and quit Julia to trigger the generation of the ``.mem`` files.

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Set up environment for Julia OSX binary distribution
 let
     ROOT = abspath(JULIA_HOME,"..")

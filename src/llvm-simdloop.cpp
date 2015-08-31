@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #define DEBUG_TYPE "lower_simd_loop"
 #undef DEBUG
 
@@ -6,6 +8,7 @@
 //     createLowerSimdLoopPass: construct LLVM for lowering a marked loop later.
 
 #include "llvm-version.h"
+#include "support/dtypes.h"
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
@@ -191,7 +194,7 @@ static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-Pass* createLowerSimdLoopPass() {
+DLLEXPORT Pass* createLowerSimdLoopPass() {
     return new LowerSIMDLoop();
 }
 

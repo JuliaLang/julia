@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Testing functors and specialization-by-value
 
 for op in (identity, abs, abs2, exp, log)
     @test Base.specialized_unary(op)(3) == Base.specialized_unary(x->op(x))(3) == op(3)
     @test Base.specialized_unary(op)(-5+im) == Base.specialized_unary(x->op(x))(-5+im) == op(-5+im)
 end
-for op in (+, *, &, |)
+for op in (+, -, *, /, \, div, ^, &, |)
     @test Base.specialized_binary(op)(2,10) == Base.specialized_binary((x,y)->op(x,y))(2,10) == op(2,10)
 end
 

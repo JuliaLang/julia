@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## from base/boot.jl:
 #
 # immutable ASCIIString <: DirectIndexString
@@ -8,7 +10,7 @@
 ## required core functionality ##
 
 endof(s::ASCIIString) = length(s.data)
-getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? Char(x) : '\ufffd')
+getindex(s::ASCIIString, i::Int) = (x=s.data[i]; ifelse(x < 0x80, Char(x), '\ufffd'))
 
 ## overload methods for efficiency ##
 
@@ -17,7 +19,11 @@ sizeof(s::ASCIIString) = sizeof(s.data)
 getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-search(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
+function search(s::ASCIIString, c::Char, i::Integer)
+    i == sizeof(s) + 1 && return 0
+    (i < 1 || i > sizeof(s)) && throw(BoundsError(s, i))
+    return c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
+end
 rsearch(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? rsearch(s.data,c%UInt8,i) : 0
 
 function string(c::ASCIIString...)
@@ -98,9 +104,12 @@ ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
-    is_valid_ascii(a) || throw(ArgumentError("invalid ASCII sequence"))
+    isvalid(ASCIIString,a) || throw(ArgumentError("invalid ASCII sequence"))
     return ASCIIString(a)
 end
+
+ascii(p::Ptr{UInt8}) = ASCIIString(bytestring(p))
+ascii(p::Ptr{UInt8}, len::Integer) = ascii(pointer_to_array(p, len))
 
 function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
@@ -120,4 +129,6 @@ function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIStrin
     end
     convert(ASCIIString, a)
 end
+convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::AbstractString) =
+    convert(ASCIIString, a, ascii(invalids_as))
 convert(::Type{ASCIIString}, s::AbstractString) = ascii(bytestring(s))

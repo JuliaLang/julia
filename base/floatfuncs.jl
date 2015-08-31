@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## floating-point functions ##
 
 copysign(x::Float64, y::Float64) = box(Float64,copysign_float(unbox(Float64,x),unbox(Float64,y)))
@@ -19,10 +21,10 @@ signbit(x::Float16) = signbit(reinterpret(Int16,x))
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
-maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
+maxintfloat{T<:AbstractFloat}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isinteger(x::AbstractFloat) = (trunc(x)==x)&isfinite(x)
 
 num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
 num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
@@ -30,9 +32,9 @@ num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
 function hex2num(s::AbstractString)
     if length(s) <= 8
-        return box(Float32,unbox(Int32,parse(Int32,s,16)))
+        return box(Float32,unbox(UInt32,parse(UInt32,s,16)))
     end
-    return box(Float64,unbox(Int64,parse(Int64,s,16)))
+    return box(Float64,unbox(UInt64,parse(UInt64,s,16)))
 end
 
 @vectorize_1arg Number abs
@@ -48,16 +50,16 @@ round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
 round(x::Real, ::RoundingMode{:Up}) = ceil(x)
 round(x::Real, ::RoundingMode{:Down}) = floor(x)
 # C-style round
-function round(x::FloatingPoint, ::RoundingMode{:NearestTiesAway})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::FloatingPoint, ::RoundingMode{:NearestTiesUp})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end
-round{T<:Integer}(::Type{T}, x::FloatingPoint, r::RoundingMode) = trunc(T,round(x,r))
+round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
 
 @vectorize_1arg Real trunc
 @vectorize_1arg Real floor
@@ -73,7 +75,16 @@ for f in (:trunc,:floor,:ceil,:round)
             [ ($f)(T, x[i,j])::T for i = 1:size(x,1), j = 1:size(x,2) ]
         end
         function ($f){T}(::Type{T}, x::AbstractArray)
-            reshape([ ($f)(T, x[i])::T for i = 1:length(x) ], size(x))
+            reshape([ ($f)(T, x[i])::T for i in eachindex(x) ], size(x))
+        end
+        function ($f){R}(x::AbstractArray{R,1}, digits::Integer, base::Integer=10)
+            [ ($f)(x[i], digits, base) for i = 1:length(x) ]
+        end
+        function ($f){R}(x::AbstractArray{R,2}, digits::Integer, base::Integer=10)
+            [ ($f)(x[i,j], digits, base) for i = 1:size(x,1), j = 1:size(x,2) ]
+        end
+        function ($f)(x::AbstractArray, digits::Integer, base::Integer=10)
+            reshape([ ($f)(x[i], digits, base) for i in eachindex(x) ], size(x))
         end
     end
 end
@@ -85,7 +96,7 @@ function round{R}(x::AbstractArray{R,2}, r::RoundingMode)
     [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
 end
 function round(x::AbstractArray, r::RoundingMode)
-    reshape([ round(x[i], r) for i = 1:length(x) ], size(x))
+    reshape([ round(x[i], r) for i in eachindex(x) ], size(x))
 end
 
 function round{T,R}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
@@ -95,7 +106,7 @@ function round{T,R}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
     [ round(T, x[i,j], r)::T for i = 1:size(x,1), j = 1:size(x,2) ]
 end
 function round{T}(::Type{T}, x::AbstractArray, r::RoundingMode)
-    reshape([ round(T, x[i], r)::T for i = 1:length(x) ], size(x))
+    reshape([ round(T, x[i], r)::T for i in eachindex(x) ], size(x))
 end
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
@@ -133,41 +144,36 @@ end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x, digits::Integer, base::Integer=10)
+        function ($f)(x::Real, digits::Integer, base::Integer=10)
             x = float(x)
             og = convert(eltype(x),base)^digits
-            ($f)(x * og) / og
+            r = ($f)(x * og) / og
+
+            if !isfinite(r)
+                if digits > 0
+                    return x
+                elseif x > 0
+                    return $(:ceil == f ? :(convert(eltype(x), Inf)) : :(zero(x)))
+                elseif x < 0
+                    return $(:floor == f ? :(-convert(eltype(x), Inf)) : :(-zero(x)))
+                else
+                    return x
+                end
+            end
+            return r
         end
     end
 end
 
-# isapprox: Tolerant comparison of floating point numbers
-function isapprox(x::FloatingPoint, y::FloatingPoint; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
-    (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
+# isapprox: approximate equality of numbers
+function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0)
+    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y)))
 end
 
-# promotion of non-floats
-isapprox(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
-isapprox(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
-
-# other real numbers
-isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = abs(x-y) <= atol
-
-# complex numbers
-isapprox(z::Complex, w::Complex; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
-
-# real-complex combinations
-isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
-isapprox(z::Complex, x::Real; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
+const ≈ = isapprox
+≉(x,y) = !(x ≈ y)
 
 # default tolerance arguments
-rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(eps(x), eps(y)))
-atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(eps(x), eps(y)))
-
-# promotion of non-floats
-for fun in (:rtoldefault, :atoldefault)
-    @eval begin
-        ($fun)(x::Real, y::FloatingPoint) = ($fun)(promote(x,y)...)
-        ($fun)(x::FloatingPoint, y::Real) = ($fun)(promote(x,y)...)
-    end
-end
+rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
+rtoldefault{T<:Real}(::Type{T}) = 0
+rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = rtoldefault(promote_type(real(T),real(S)))

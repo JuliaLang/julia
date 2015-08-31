@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Test
 
 export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
@@ -6,8 +8,9 @@ abstract Result
 type Success <: Result
     expr
     resultexpr
+    res
+    Success(expr, resultexpr=nothing, res=nothing) = new(expr, resultexpr, res)
 end
-Success(expr) = Success(expr, nothing)
 type Failure <: Result
     expr
     resultexpr
@@ -19,9 +22,9 @@ type Error <: Result
     backtrace
 end
 
-default_handler(r::Success) = nothing
+default_handler(r::Success) = r.res
 function default_handler(r::Failure)
-    if r.resultexpr != nothing
+    if r.resultexpr !== nothing
         error("test failed: $(r.resultexpr)\n in expression: $(r.expr)")
     else
         error("test failed in expression: $(r.expr)")
@@ -54,17 +57,17 @@ end
 function do_test_throws(body, qex, bt, extype)
     handler()(try
         body()
-        Failure(qex, "$qex did not throw $(extype == nothing ? "anything" : extype)")
+        Failure(qex, "$qex did not throw $(extype === nothing ? "anything" : extype)")
     catch err
-        if extype == nothing
+        if extype === nothing
             Base.warn("""
             @test_throws without an exception type is deprecated;
             Use `@test_throws $(typeof(err)) $(qex)` instead.
             """, bt = bt)
-            Success(qex)
+            Success(qex, nothing, err)
         else
             if isa(err, extype)
-                Success(qex)
+                Success(qex, nothing, err)
             else
                 if isa(err,Type)
                     Failure(qex, "the type $err was thrown instead of an instance of $extype")
@@ -168,29 +171,29 @@ macro inferred(ex)
     end
 end
 
-#Test approximate equality of vectors or columns of matrices modulo floating
-#point roundoff and phase (sign) differences.
+# Test approximate equality of vectors or columns of matrices modulo floating
+# point roundoff and phase (sign) differences.
 #
-#This function is design to test for equality between vectors of floating point
-#numbers when the vectors are defined only up to a global phase or sign, such as
-#normalized eigenvectors or singular vectors. The global phase is usually
-#defined consistently, but may occasionally change due to small differences in
-#floating point rounding noise or rounding modes, or through the use of
-#different conventions in different algorithms. As a result, most tests checking
-#such vectors have to detect and discard such overall phase differences.
+# This function is design to test for equality between vectors of floating point
+# numbers when the vectors are defined only up to a global phase or sign, such as
+# normalized eigenvectors or singular vectors. The global phase is usually
+# defined consistently, but may occasionally change due to small differences in
+# floating point rounding noise or rounding modes, or through the use of
+# different conventions in different algorithms. As a result, most tests checking
+# such vectors have to detect and discard such overall phase differences.
 #
-#Inputs:
-#    a, b:: StridedVecOrMat to be compared
-#    err :: Default: m^3*(eps(S)+eps(T)), where m is the number of rows
+# Inputs:
+#     a, b:: StridedVecOrMat to be compared
+#     err :: Default: m^3*(eps(S)+eps(T)), where m is the number of rows
 #
-#Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
-#nothing.
+# Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
+# nothing.
 function test_approx_eq_modphase{S<:Real,T<:Real}(
         a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, err=nothing)
 
     m, n = size(a)
     @test n==size(b, 2) && m==size(b, 1)
-    err==nothing && (err=m^3*(eps(S)+eps(T)))
+    err === nothing && (err=m^3*(eps(S)+eps(T)))
     for i=1:n
         v1, v2 = a[:, i], b[:, i]
         @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err

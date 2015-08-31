@@ -57,77 +57,6 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
-value_t fl_string_width(value_t *args, u_int32_t nargs)
-{
-    argcount("string.width", nargs, 1);
-    if (iscprim(args[0])) {
-        cprim_t *cp = (cprim_t*)ptr(args[0]);
-        if (cp_class(cp) == wchartype) {
-            int w = utf8proc_charwidth(*(uint32_t*)cp_data(cp));
-            if (w < 0)
-                return FL_F;
-            return fixnum(w);
-        }
-    }
-    char *s = tostring(args[0], "string.width");
-    return size_wrap(u8_strwidth(s));
-}
-
-value_t fl_string_reverse(value_t *args, u_int32_t nargs)
-{
-    argcount("string.reverse", nargs, 1);
-    if (!fl_isstring(args[0]))
-        type_error("string.reverse", "string", args[0]);
-    size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    value_t ns = cvalue_string(len);
-    u8_reverse((char*)cvalue_data(ns), (char*)cvalue_data(args[0]), len);
-    return ns;
-}
-
-value_t fl_string_encode(value_t *args, u_int32_t nargs)
-{
-    argcount("string.encode", nargs, 1);
-    if (iscvalue(args[0])) {
-        cvalue_t *cv = (cvalue_t*)ptr(args[0]);
-        fltype_t *t = cv_class(cv);
-        if (t->eltype == wchartype) {
-            size_t nc = cv_len(cv) / sizeof(uint32_t);
-            uint32_t *ptr = (uint32_t*)cv_data(cv);
-            size_t nbytes = u8_codingsize(ptr, nc);
-            value_t str = cvalue_string(nbytes);
-            ptr = (uint32_t*)cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
-            u8_toutf8((char*)cvalue_data(str), nbytes, ptr, nc);
-            return str;
-        }
-    }
-    type_error("string.encode", "wchar array", args[0]);
-}
-
-value_t fl_string_decode(value_t *args, u_int32_t nargs)
-{
-    int term=0;
-    if (nargs == 2) {
-        term = (args[1] != FL_F);
-    }
-    else {
-        argcount("string.decode", nargs, 1);
-    }
-    if (!fl_isstring(args[0]))
-        type_error("string.decode", "string", args[0]);
-    cvalue_t *cv = (cvalue_t*)ptr(args[0]);
-    char *ptr = (char*)cv_data(cv);
-    size_t nb = cv_len(cv);
-    size_t nc = u8_charnum(ptr, nb);
-    size_t newsz = nc*sizeof(uint32_t);
-    if (term) newsz += sizeof(uint32_t);
-    value_t wcstr = cvalue(wcstringtype, newsz);
-    ptr = (char*)cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
-    uint32_t *pwc = (uint32_t*)cvalue_data(wcstr);
-    u8_toucs(pwc, nc, ptr, nb);
-    if (term) pwc[nc] = 0;
-    return wcstr;
-}
-
 extern value_t fl_buffer(value_t *args, u_int32_t nargs);
 extern value_t stream_to_string(value_t *ps);
 
@@ -151,49 +80,6 @@ value_t fl_string(value_t *args, u_int32_t nargs)
     value_t outp = stream_to_string(&buf);
     fl_free_gc_handles(1);
     return outp;
-}
-
-value_t fl_string_split(value_t *args, u_int32_t nargs)
-{
-    argcount("string.split", nargs, 2);
-    char *s = tostring(args[0], "string.split");
-    char *delim = tostring(args[1], "string.split");
-    size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    size_t dlen = cv_len((cvalue_t*)ptr(args[1]));
-    size_t ssz, tokend=0, tokstart=0, i=0;
-    value_t first=FL_NIL, c=FL_NIL, last;
-    size_t junk;
-    fl_gc_handle(&first);
-    fl_gc_handle(&last);
-
-    do {
-        // find and allocate next token
-        tokstart = tokend = i;
-        while (i < len &&
-               !u8_memchr(delim, u8_nextmemchar(s, &i), dlen, &junk))
-            tokend = i;
-        ssz = tokend - tokstart;
-        last = c;  // save previous cons cell
-        c = fl_cons(cvalue_string(ssz), FL_NIL);
-
-        // we've done allocation; reload movable pointers
-        s = (char*)cv_data((cvalue_t*)ptr(args[0]));
-        delim = (char*)cv_data((cvalue_t*)ptr(args[1]));
-
-        if (ssz) memcpy(cv_data((cvalue_t*)ptr(car_(c))), &s[tokstart], ssz);
-
-        // link new cell
-        if (last == FL_NIL)
-            first = c;   // first time, save first cons
-        else
-            ((cons_t*)ptr(last))->cdr = c;
-
-        // note this tricky condition: if the string ends with a
-        // delimiter, we need to go around one more time to add an
-        // empty string. this happens when (i==len && tokend<i)
-    } while (i < len || (i==len && (tokend!=i)));
-    fl_free_gc_handles(2);
-    return first;
 }
 
 value_t fl_string_sub(value_t *args, u_int32_t nargs)
@@ -234,23 +120,6 @@ value_t fl_string_char(value_t *args, u_int32_t nargs)
     if (sl > len || i > len-sl)
         bounds_error("string.char", args[0], args[1]);
     return mk_wchar(u8_nextchar(s, &i));
-}
-
-value_t fl_char_upcase(value_t *args, u_int32_t nargs)
-{
-    argcount("char.upcase", nargs, 1);
-    cprim_t *cp = (cprim_t*)ptr(args[0]);
-    if (!iscprim(args[0]) || cp_class(cp) != wchartype)
-      type_error("char.upcase", "wchar", args[0]);
-    return mk_wchar(towupper(*(int32_t*)cp_data(cp)));
-}
-value_t fl_char_downcase(value_t *args, u_int32_t nargs)
-{
-    argcount("char.downcase", nargs, 1);
-    cprim_t *cp = (cprim_t*)ptr(args[0]);
-    if (!iscprim(args[0]) || cp_class(cp) != wchartype)
-      type_error("char.downcase", "wchar", args[0]);
-    return mk_wchar(towlower(*(int32_t*)cp_data(cp)));
 }
 
 static value_t mem_find_byte(char *s, char c, size_t start, size_t len)
@@ -409,20 +278,12 @@ static builtinspec_t stringfunc_info[] = {
     { "string", fl_string },
     { "string?", fl_stringp },
     { "string.count", fl_string_count },
-    { "string.width", fl_string_width },
-    { "string.split", fl_string_split },
     { "string.sub", fl_string_sub },
     { "string.find", fl_string_find },
     { "string.char", fl_string_char },
     { "string.inc", fl_string_inc },
     { "string.dec", fl_string_dec },
-    { "string.reverse", fl_string_reverse },
-    { "string.encode", fl_string_encode },
-    { "string.decode", fl_string_decode },
     { "string.isutf8", fl_string_isutf8 },
-
-    { "char.upcase", fl_char_upcase },
-    { "char.downcase", fl_char_downcase },
 
     { "number->string", fl_numbertostring },
     { "string->number", fl_stringtonumber },

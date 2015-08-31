@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # deep copying
 
 # Note: deepcopy_internal(::Any, ::ObjectIdDict) is
@@ -5,18 +7,18 @@
 
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
 
-deepcopy_internal(x::Union(Symbol,LambdaStaticData,TopNode,QuoteNode,
-                           DataType,UnionType,Task),
+deepcopy_internal(x::Union{Symbol,LambdaStaticData,TopNode,GlobalRef,
+                           DataType,Union,Task},
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
-    ntuple(length(x), i->deepcopy_internal(x[i], stackdict))
+    ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
 deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
 
 function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
-    if isa(x.env, Union(MethodTable, Symbol)) || x.env === ()
+    if isa(x.env, Union{MethodTable, Symbol}) || x.env === ()
         return x
     end
-    invoke(deepcopy_internal, (Any, ObjectIdDict), x, stackdict)
+    invoke(deepcopy_internal, Tuple{Any, ObjectIdDict}, x, stackdict)
 end
 
 function deepcopy_internal(x, stackdict::ObjectIdDict)

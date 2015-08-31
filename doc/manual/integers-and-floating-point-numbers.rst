@@ -54,9 +54,9 @@ Type             Precision Number of bits
 :class:`Float64` double_        64
 ================ ========= ==============
 
-.. _half: http://en.wikipedia.org/wiki/Half-precision_floating-point_format
-.. _single: http://en.wikipedia.org/wiki/Single_precision_floating-point_format
-.. _double: http://en.wikipedia.org/wiki/Double_precision_floating-point_format
+.. _half: https://en.wikipedia.org/wiki/Half-precision_floating-point_format
+.. _single: https://en.wikipedia.org/wiki/Single_precision_floating-point_format
+.. _double: https://en.wikipedia.org/wiki/Double_precision_floating-point_format
 
 Additionally, full support for :ref:`man-complex-and-rational-numbers` is built
 on top of these primitive numeric types. All numeric types interoperate
@@ -225,17 +225,11 @@ a wraparound behavior:
     true
 
 Thus, arithmetic with Julia integers is actually a form of `modular arithmetic
-<http://en.wikipedia.org/wiki/Modular_arithmetic>`_. This reflects the
+<https://en.wikipedia.org/wiki/Modular_arithmetic>`_. This reflects the
 characteristics of the underlying arithmetic of integers as implemented on
 modern computers. In applications where overflow is possible, explicit checking
 for wraparound produced by overflow is essential; otherwise, the ``BigInt`` type
 in :ref:`man-arbitrary-precision-arithmetic` is recommended instead.
-
-To minimize the practical impact of this overflow, integer addition,
-subtraction, multiplication, and exponentiation operands are promoted
-to ``Int`` or ``UInt`` from narrower integer types.  (However,
-divisions, remainders, and bitwise operations do not promote narrower
-types.)
 
 Division errors
 ~~~~~~~~~~~~~~~
@@ -325,12 +319,18 @@ only as a storage format. In calculations they'll be converted to ``Float32``:
     julia> 2*Float16(4.)
     8.0f0
 
+The underscore ``_`` can be used as digit separator:
+
+.. doctest::
+
+    julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
+    (10000,5.0e-9,0xdeadbeef,0xb2)
 
 Floating-point zero
 ~~~~~~~~~~~~~~~~~~~
 
 Floating-point numbers have `two zeros
-<http://en.wikipedia.org/wiki/Signed_zero>`_, positive zero and negative zero.
+<https://en.wikipedia.org/wiki/Signed_zero>`_, positive zero and negative zero.
 They are equal to each other but have different binary representations, as can
 be seen using the ``bits`` function: :
 
@@ -366,7 +366,7 @@ Special value                        Name              Description
 For further discussion of how these non-finite floating-point values are
 ordered with respect to each other and other floats, see
 :ref:`man-numeric-comparisons`. By the
-`IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_, these
+`IEEE 754 standard <https://en.wikipedia.org/wiki/IEEE_754-2008>`_, these
 floating-point values are the results of certain arithmetic operations:
 
 .. doctest::
@@ -428,7 +428,7 @@ Machine epsilon
 Most real numbers cannot be represented exactly with floating-point numbers,
 and so for many purposes it is important to know the distance between two
 adjacent representable floating-point numbers, which is often known as
-`machine epsilon <http://en.wikipedia.org/wiki/Machine_epsilon>`_.
+`machine epsilon <https://en.wikipedia.org/wiki/Machine_epsilon>`_.
 
 Julia provides :func:`eps`, which gives the distance between ``1.0``
 and the next larger representable floating-point value:
@@ -506,7 +506,7 @@ Rounding modes
 If a number doesn't have an exact floating-point representation, it must be
 rounded to an appropriate representable value, however, if wanted, the manner
 in which this rounding is done can be changed according to the rounding modes
-presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_::
+presented in the `IEEE 754 standard <https://en.wikipedia.org/wiki/IEEE_754-2008>`_::
 
 
     julia> 1.1 + 0.1
@@ -520,6 +520,12 @@ presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>
 The default mode used is always :const:`RoundNearest`, which rounds to the nearest
 representable value, with ties rounded towards the nearest value with an even
 least significant bit.
+
+.. warning:: Rounding is generally only correct for basic arithmetic functions
+	     (:func:`+`, :func:`-`, :func:`*`, :func:`/` and :func:`sqrt`) and
+	     type conversion operations. Many other functions assume the
+	     default :const:`RoundNearest` mode is set, and can give erroneous
+	     results when operating under other rounding modes.
 
 Background and References
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -540,17 +546,17 @@ computation, and also in the following references:
   to some of the issues arising from how this representation differs in
   behavior from the idealized abstraction of real numbers.
 - Also recommended is Bruce Dawson's `series of blog posts on floating-point
-  numbers <http://randomascii.wordpress.com/2012/05/20/thats-not-normalthe-performance-of-odd-floats/>`_.
+  numbers <https://randomascii.wordpress.com/2012/05/20/thats-not-normalthe-performance-of-odd-floats/>`_.
 - For an excellent, in-depth discussion of floating-point numbers and issues of
   numerical accuracy encountered when computing with them, see David Goldberg's
   paper `What Every Computer Scientist Should Know About Floating-Point
   Arithmetic
-  <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.102.244&rep=rep1&type=pdf>`_.
+  <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.22.6768&rep=rep1&type=pdf>`_.
 - For even more extensive documentation of the history of, rationale for,
   and issues with floating-point numbers, as well as discussion of many other
   topics in numerical computing, see the `collected writings
   <http://www.cs.berkeley.edu/~wkahan/>`_ of `William Kahan
-  <http://en.wikipedia.org/wiki/William_Kahan>`_, commonly known as the "Father
+  <https://en.wikipedia.org/wiki/William_Kahan>`_, commonly known as the "Father
   of Floating-Point". Of particular interest may be `An Interview with the Old
   Man of Floating-Point
   <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
@@ -565,23 +571,25 @@ Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib
 The :class:`BigInt` and :class:`BigFloat` types are available in Julia for arbitrary precision
 integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, or from :class:`AbstractString`.
-Once created, they participate in arithmetic with all other numeric types thanks to Julia's
-:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
+Constructors exist to create these types from primitive numerical types, and
+:func:`parse` can be use to construct them from :class:`AbstractString`\ s.  Once
+created, they participate in arithmetic with all other numeric types thanks to
+Julia's
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`:
 
 .. doctest::
 
     julia> BigInt(typemax(Int64)) + 1
     9223372036854775808
 
-    julia> BigInt("123456789012345678901234567890") + 1
+    julia> parse(BigInt, "123456789012345678901234567890") + 1
     123456789012345678901234567891
 
-    julia> BigFloat("1.23456789012345678901")
-    1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00 with 256 bits of precision
+    julia> parse(BigFloat, "1.23456789012345678901")
+    1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
     julia> BigFloat(2.0^66) / 3
-    2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19 with 256 bits of precision
+    2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19
 
     julia> factorial(BigInt(40))
     815915283247897734345611269596115894272000000000
@@ -607,7 +615,7 @@ However, type promotion between the primitive types above and
     -9223372036854775809
 
     julia> typeof(y)
-    BigInt (constructor with 10 methods)
+    Base.GMP.BigInt
 
 The default precision (in number of bits of the significand) and
 rounding mode of :class:`BigFloat` operations can be changed globally
@@ -621,19 +629,19 @@ block of code by :func:`with_bigfloat_precision` or
 .. doctest::
 
     julia> with_rounding(BigFloat,RoundUp) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
+    1.100000000000000000000000000000000000000000000000000000000000000000000000000003
 
     julia> with_rounding(BigFloat,RoundDown) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
+    1.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
     julia> with_bigfloat_precision(40) do
-           BigFloat(1) + BigFloat("0.1")
+           BigFloat(1) + parse(BigFloat, "0.1")
            end
-    1.1000000000004e+00 with 40 bits of precision
+    1.1000000000004
 
 
 .. _man-numeric-literal-coefficients:
@@ -690,12 +698,22 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      Union(!Matched::Any...)
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      ...
 
     julia> x(x+1)
-    ERROR: type: apply: expected Function, got Int64
+    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
+    Closest candidates are:
+      Union(!Matched::Any...)
+      BoundsError()
+      BoundsError(!Matched::Any...)
+      ...
 
-Both of these expressions are interpreted as function application: any
+Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
 parenthetical, is interpreted as a function applied to the values in
 parentheses (see :ref:`man-functions` for more about functions).
@@ -759,5 +777,5 @@ Examples:
     1
 
     julia> one(BigFloat)
-    1e+00 with 256 bits of precision
+    1.000000000000000000000000000000000000000000000000000000000000000000000000000000
 

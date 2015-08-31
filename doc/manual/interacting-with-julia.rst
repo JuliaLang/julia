@@ -57,7 +57,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 In addition to function names, complete function calls may be entered to see which method is called for the given argument(s).  Macros, types and variables can also be queried::
 
     help> string(1)
-    string(x::Union(Int16,Int128,Int8,Int32,Int64)) at string.jl:1553
+    string(x::Union{Int16,Int128,Int8,Int32,Int64}) at string.jl:1553
 
     help> @printf
     Base.@printf([io::IOStream], "%Fmt", args...)
@@ -69,7 +69,7 @@ In addition to function names, complete function calls may be entered to see whi
     help> AbstractString
     DataType   : AbstractString
       supertype: Any
-      subtypes : {DirectIndexString,GenericString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},UTF16String,UTF8String}
+      subtypes : Any[DirectIndexString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},UTF16String,UTF8String]
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 
@@ -106,6 +106,8 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 | ``^D``                 | Exit (when buffer is empty)                        |
 +------------------------+----------------------------------------------------+
 | ``^C``                 | Interrupt or cancel                                |
++------------------------+----------------------------------------------------+
+| ``^L``                 | Clear console screen                               |
 +------------------------+----------------------------------------------------+
 | Return/Enter, ``^J``   | New line, executing if it is complete              |
 +------------------------+----------------------------------------------------+
@@ -161,13 +163,11 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | ``^T``                 | Transpose the characters about the cursor          |
 +------------------------+----------------------------------------------------+
-| Delete, ``^D``         | Forward delete one character (when buffer has text)|
-+------------------------+----------------------------------------------------+
 
 Customizing keybindings
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. The ``REPL.setup_interface()`` function must be called before the REPL is initialized, by registering the operation with ``atreplinit()``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
 
     import Base: LineEdit, REPL
 
@@ -178,7 +178,11 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
     )
 
-    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+    function customize_keys(repl)
+      repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    end
+
+    atreplinit(customize_keys)
 
 Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
 

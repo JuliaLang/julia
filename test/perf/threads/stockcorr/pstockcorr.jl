@@ -1,5 +1,5 @@
 ## Test case from Issue #445
-## 
+##
 ## Added threaded implementation (2015-04-06)
 
 using Base.Threading
@@ -55,7 +55,7 @@ function runpath!(n, Wiener, CorrWiener, SA, SB, T, UpperTriangle, k11, k12, k21
     end
 end
 
-#precompile(runpath!, (Int64, Array{Float64,2}, Array{Float64,2}, Array{Float64,2}, Int64, Array{Float64, 2}, Float64, Float64, Float64, Float64)) 
+#precompile(runpath!, (Int64, Array{Float64,2}, Array{Float64,2}, Array{Float64,2}, Int64, Array{Float64, 2}, Float64, Float64, Float64, Float64))
 
 # Threaded version
 function pstockcorr(n)
@@ -100,7 +100,7 @@ function pstockcorr(n)
     # NOTE: this reduces reported GC allocation to 576 bytes (due to?)
     #runpath!(1, Wiener, CorrWiener, SimulPriceA, SimulPriceB, T, UpperTriangle, k11, k12, k21, k22, rngs)
 
-    # run 
+    # run
     @time runpath!(n, Wiener, CorrWiener, SimulPriceA, SimulPriceB, T, UpperTriangle, k11, k12, k21, k22, rngs)
 
     return (SimulPriceA, SimulPriceB)

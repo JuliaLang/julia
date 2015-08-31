@@ -1,3 +1,5 @@
+.. currentmodule:: Base
+
 .. _man-noteworthy-differences:
 
 *******************************************
@@ -44,8 +46,14 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   the syntax ``[a b; c d]`` is used to avoid confusion. In Julia v0.4, the
   concatenation syntax ``[x, [y, z]]`` is deprecated in favor of ``[x; [y, z]]``.
 - In Julia, ``a:b`` and ``a:b:c`` construct :obj:`Range` objects. To construct
-  a full vector like in MATLAB, use :func:`collect(a:b) <collect>` or
-  :func:`linspace`.
+  a full vector like in MATLAB, use :func:`collect(a:b) <collect>`. Generally,
+  there is no need to call ``collect`` though. ``Range`` will act like a normal
+  array in most cases but is more efficient because it lazily computes its
+  values. This pattern of creating specialized objects instead of full arrays
+  is used frequently, and is also seen in functions such as :func:`linspace
+  <linspace>`, or with iterators such as :func:`enumerate <enumerate>`, and
+  :func:`zip <zip>`. The special objects can mostly be used as if they were
+  normal arrays.
 - Functions in Julia return values from their last expression or the ``return``
   keyword instead of listing the names of variables to return in the function
   definition (see :ref:`man-return-keyword` for details).
@@ -99,7 +107,7 @@ and statistical programming. For users coming to Julia from R, these are some
 noteworthy differences:
 
 - Julia's single quotes enclose characters, not strings.
-- Julia can create substrings by indexing into :obj:`String`\ s.  In R, strings
+- Julia can create substrings by indexing into strings. In R, strings
   must be converted into character vectors before creating substrings.
 - In Julia, like Python but unlike R, strings can be created with triple quotes
   ``""" ... """``. This syntax is convenient for constructing strings that
@@ -157,9 +165,8 @@ noteworthy differences:
   an assignment operation: you cannot write ``diag(M) = ones(n)``.
 - Julia discourages populating the main namespace with functions. Most
   statistical functionality for Julia is found in
-  `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_
-  under the `JuliaStats organization <https://github.com/JuliaStats>`_. For
-  example:
+  `packages <http://pkg.julialang.org/>`_ under the `JuliaStats organization
+  <https://github.com/JuliaStats>`_. For example:
 
   - Functions pertaining to probability distributions are provided by the
     `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_.
@@ -183,9 +190,8 @@ noteworthy differences:
   :func:`vcat` and :func:`hvcat`, not ``c``, ``rbind`` and ``cbind`` like in R.
 - In Julia, a range like ``a:b`` is not shorthand for a vector like in R,
   but is a specialized :obj:`Range` that is used for iteration without high
-  memory overhead. To convert a range into a vector, you need to wrap the range
-  with brackets ``[a:b]``.
-- Julia's :func:`max`` and :func:`min` are the equivalent of ``pmax`` and
+  memory overhead. To convert a range into a vector, use :func:`collect(a:b) <collect>`.
+- Julia's :func:`max` and :func:`min` are the equivalent of ``pmax`` and
   ``pmin`` respectively in R, but both arguments need to have the same
   dimensions.  While :func:`maximum` and :func:`minimum` replace ``max`` and
   ``min`` in R, there are important differences.
@@ -252,3 +258,101 @@ Noteworthy differences from Python
   returns a new random number every time it is invoked without argument. On the
   other hand, the function ``g(x=[1,2]) = push!(x,3)`` returns ``[1,2,3]`` every
   time it is called as ``g()``.
+
+
+Noteworthy differences from C/C++
+----------------------------------
+
+- Julia arrays are indexed with square brackets, and can have more than one
+  dimension ``A[i,j]``.
+  This syntax is not just syntactic sugar for a reference to a pointer or address as in C/C++.
+  See the Julia documentation for the syntax for array construction (it has changed between versions).
+- In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
+- Julia arrays are assigned by reference. After ``A=B``, changing elements of
+  ``B`` will modify ``A`` as well.
+- Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row
+  major ordered by default. To get optimal performance when looping over
+  arrays, the order of the loops should be reversed in Julia relative to C/C++
+  (see relevant section of :ref:`man-performance-tips`).
+- Julia values are passed and assigned by reference. If a function modifies an
+  array, the changes will be visible in the caller.
+- In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
+  whitespace from a Julia program.
+- In Julia, literal numbers without a decimal point (such as ``42``) create signed
+  integers, of type ``Int``, but literals too large to fit in the machine word size
+  will automatically be promoted to a larger size type, such as ``Int64`` (if ``Int`` is ``Int32``),
+  ``Int128``, or the arbitrarily large ``BigInt`` type.
+  There are no numeric literal suffixes, such as ``L``, ``LL``, ``U``, ``UL``, ``ULL`` to indicate unsigned
+  and/or signed vs. unsigned.
+  Decimal literals are always signed, and hexadecimal literals (which start with ``0x`` like C/C++),
+  are unsigned.
+  Hexadecimal literals also, unlike C/C++/Java and unlike decimal literals in Julia,
+  have a type based on the *length* of the literal, including leading 0s.  For example,
+  ``0x0`` and ``0x00`` have type UInt8, ``0x000`` and ``0x0000`` have type ``UInt16``, then
+  literals with 5 to 8 hex digits have type ``UInt32``, 9 to 16 hex digits type ``UInt64`` and 17 to 32 hex digits type ``UInt128``.
+  This needs to be taken into account when defining
+  hexadecimal masks, for example ``~0xf == 0xf0`` is very different from ``~0x000f == 0xfff0``.
+  64 bit ``Float64`` and 32 bit ``Float32`` bit literals are expressed as ``1.0`` and ``1.0f0`` respectively.
+  Floating point literals are rounded (and not promoted to the ``BigFloat`` type) if they can not be exactly
+  represented.  Floating point literals are closer in behavior to C/C++.
+  Octal (prefixed with ``0o``) and binary (prefixed with ``0b``) literals are also treated as unsigned.
+- String literals can be delimited with either ``"``  or ``"""``, ``"""`` delimited literals can contain ``"``
+  characters without quoting it like ``"\""``
+  String literals can have values of other variables or expressions interpolated into them,
+  indicated by ``$variablename`` or ``$(expression)``, which evaluates the variable name or the expression in the context of the function.
+- ``//`` indicates a ``Rational`` number, and not a single-line comment (which is # in Julia)
+- ``#=`` indicates the start of a multiline comment, and ``=#`` ends it.
+- Functions in Julia return values from their last expression(s) or the ``return``
+  keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
+  ``(a, b) = myfunction()`` or ``a, b = myfunction()``, instead of having to pass pointers
+  to values as one would have to do in C/C++ (i.e. ``a = myfunction(&b)``.
+- Julia does not require the use of semicolons to end statements. The results of
+  expressions are not automatically printed (except at the interactive prompt, i.e. the REPL),
+  and lines of code do not need to end with semicolons. :func:`println` or
+  :func:`@printf` can be used to print specific output.
+  In the REPL, ``;`` can be used to suppress output.
+  ``;`` also has a different meaning within ``[ ]``, something to watch out for.
+  ``;`` can be used to separate expressions on a single line, but are not strictly necessary in many cases,
+  and are more an aid to readability.
+- In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
+  in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
+  so parenthesis may be required.
+- Julia's :obj:`^` is exponentiation (pow), not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
+- Julia has two right-shift operators, ``>>`` and ``>>>``.  ``>>>`` performs an arithmetic shift,
+  ``>>`` always performs a logical shift, unlike C/C++,
+  where the meaning of ``>>`` depends on the type of the value being shifted.
+- Julia's ``->`` creates an anonymous function, it does not access a member via a pointer.
+- Julia does not require parentheses when writing ``if`` statements or
+  ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
+  ``for (int i=1; i <= 3; i++)`` and ``if i == 1`` instead of ``if (i == 1)``.
+- Julia does not treat the numbers ``0`` and ``1`` as Booleans.
+  You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
+  booleans. Instead, you can write ``if true``, ``if Bool(1)``, or ``if 1==1``.
+- Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
+  loop blocks, like ``while``/``for``, and functions. In lieu of the one-line
+  ``if ( cond ) statement``, Julia allows statements of the form
+  ``if cond; statement; end``, ``cond && statement`` and
+  ``!cond || statement``. Assignment statements in the latter two syntaxes must
+  be explicitly wrapped in parentheses, e.g. ``cond && (x = value)``, because
+  of the operator precedence.
+- Julia has no line continuation syntax: if, at the end of a line, the input so
+  far is a complete expression, it is considered done; otherwise the input
+  continues. One way to force an expression to continue is to wrap it in
+  parentheses.
+- Julia macros operate on parsed expressions, rather than the text of the program,
+  which allows them to perform sophisticated transformations of Julia code. Macro
+  names start with the ``@`` character, and have both a function-like syntax,
+  ``@mymacro(arg1, arg2, arg3)``, and a statement-like syntax,
+  ``@mymacro arg1 arg2 arg3``. The forms are interchangable; the function-like form
+  is particularly useful if the macro appears within another expression, and is often clearest.
+  The statement-like form is often used to annotate blocks, as in the parallel ``for``
+  construct: ``@parallel for i in 1:n; #= body =#; end``. Where the end of the macro
+  construct may be unclear, use the function-like form.
+- Julia now has an enumeration type, expressed using the macro ``@enum(name, value1, value2, ...)``
+  For example: ``@enum(Fruit, Banana=1, Apple, Pear)``
+- By convention, functions that modify their arguments have a ``!`` at the end of the name,
+  for example ``push!``.
+- In C++, by default, you have static dispatch, i.e. you need to annotate a function as virtual,
+  in order to have dynamic dispatch.
+  On the other hand, in Julia every method is "virtual" (although it's more general than that
+  since methods are dispatched on every argument type, not only ``this``, using the most-specific-declaration rule).

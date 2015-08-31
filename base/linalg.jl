@@ -1,7 +1,12 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module LinAlg
 
 importall Base
-import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix, transpose!
+importall ..Base.Operators
+import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring,
+             print_matrix, transpose!, unsafe_getindex, unsafe_setindex!,
+             isapprox
 
 export
 # Modules
@@ -62,13 +67,13 @@ export
     eigvals!,
     eigvecs,
     expm,
-    sqrtm,
     eye,
     factorize,
     givens,
     gradient,
     hessfact,
     hessfact!,
+    isdiag,
     ishermitian,
     isposdef,
     isposdef!,
@@ -79,7 +84,9 @@ export
     ldltfact!,
     ldltfact,
     linreg,
+    logabsdet,
     logdet,
+    logm,
     lu,
     lufact,
     lufact!,
@@ -99,6 +106,7 @@ export
     schur,
     schurfact!,
     schurfact,
+    sqrtm,
     svd,
     svdfact!,
     svdfact,
@@ -112,6 +120,7 @@ export
     triu,
     tril!,
     triu!,
+    vecdot,
     vecnorm,
 
 # Operators
@@ -147,27 +156,25 @@ export
 # Constants
     I
 
-typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
-typealias BlasReal Union(Float64,Float32)
-typealias BlasComplex Union(Complex128,Complex64)
+typealias BlasFloat Union{Float64,Float32,Complex128,Complex64}
+typealias BlasReal Union{Float64,Float32}
+typealias BlasComplex Union{Complex128,Complex64}
 
 if USE_BLAS64
     typealias BlasInt Int64
-    blas_int(x) = Int64(x)
 else
     typealias BlasInt Int32
-    blas_int(x) = Int32(x)
 end
 
-#Check that stride of matrix/vector is 1
-function chkstride1(A::StridedVecOrMat...)
+# Check that stride of matrix/vector is 1
+function chkstride1(A...)
     for a in A
         stride(a,1)== 1 || error("matrix does not have contiguous columns")
     end
 end
 
-#Check that matrix is square
-function chksquare(A::AbstractMatrix)
+# Check that matrix is square
+function chksquare(A)
     m,n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square"))
     m
@@ -179,10 +186,10 @@ function chksquare(A...)
         size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
-    length(A)==1 ? sizes[1] : sizes
+    return sizes
 end
 
-#Check that upper/lower (for special matrices) is correctly specified
+# Check that upper/lower (for special matrices) is correctly specified
 macro chkuplo()
    :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
 
@@ -206,7 +213,12 @@ include("linalg/lapack.jl")
 include("linalg/dense.jl")
 include("linalg/tridiag.jl")
 include("linalg/triangular.jl")
+
 include("linalg/factorization.jl")
+include("linalg/qr.jl")
+include("linalg/eigen.jl")
+include("linalg/svd.jl")
+include("linalg/schur.jl")
 include("linalg/cholesky.jl")
 include("linalg/lu.jl")
 
@@ -215,7 +227,6 @@ include("linalg/symmetric.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/uniformscaling.jl")
-include("linalg/rectfullpacked.jl")
 include("linalg/givens.jl")
 include("linalg/special.jl")
 include("linalg/bitarray.jl")
@@ -225,9 +236,14 @@ include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")
 
 function __init__()
-    Base.check_blas()
-    if Base.blas_vendor() == :mkl
-        ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+    try
+        Base.check_blas()
+        if Base.blas_vendor() == :mkl
+            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+        end
+    catch ex
+        Base.showerror_nostdio(ex,
+            "WARNING: Error during initialization of module LinAlg")
     end
 end
 

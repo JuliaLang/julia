@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
@@ -35,7 +37,7 @@ end
 # in order to provide a way to export T as a given mime type.
 
 mimewritable{mime}(::MIME{mime}, x) =
-  method_exists(writemime, (IO, MIME{mime}, typeof(x)))
+  method_exists(writemime, Tuple{IO, MIME{mime}, typeof(x)})
 
 # it is convenient to accept strings instead of ::MIME
 writemime(io::IO, m::AbstractString, x) = writemime(io, MIME(m), x)
@@ -173,7 +175,7 @@ function display(m::MIME, x)
 end
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
-  method_exists(display, (D, MIME{mime}, Any))
+  method_exists(display, Tuple{D, MIME{mime}, Any})
 
 function displayable(m::MIME)
     for d in displays
@@ -198,7 +200,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union(MIME,AbstractString), x)
+function redisplay(m::Union{MIME,AbstractString}, x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], m, x) &&
             @try_display return redisplay(displays[i], m, x)
@@ -208,7 +210,7 @@ end
 
 # default redisplay is simply to call display
 redisplay(d::Display, x) = display(d, x)
-redisplay(d::Display, m::Union(MIME,AbstractString), x) = display(d, m, x)
+redisplay(d::Display, m::Union{MIME,AbstractString}, x) = display(d, m, x)
 
 ###########################################################################
 

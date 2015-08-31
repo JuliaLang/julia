@@ -1,8 +1,10 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test conversion to and from unix
 @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000,1,1))) == DateTime(2000,1,1)
 @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
 
-# Tests from here: http://en.wikipedia.org/wiki/Unix_time
+# Tests from here: https://en.wikipedia.org/wiki/Unix_time
 @test string(Dates.unix2datetime(1095379198.75)) == string("2004-09-16T23:59:58.75")
 @test string(Dates.unix2datetime(1095379199.00)) == string("2004-09-16T23:59:59")
 @test string(Dates.unix2datetime(1095379199.25)) == string("2004-09-16T23:59:59.25")

@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("sparsedir/sparse.jl")
-include("sparsedir/umfpack.jl")
-include("sparsedir/cholmod.jl")
-include("sparsedir/spqr.jl")
+if Base.USE_GPL_LIBS
+    include("sparsedir/umfpack.jl")
+    include("sparsedir/cholmod.jl")
+    include("sparsedir/spqr.jl")
+end

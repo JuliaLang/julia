@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 abstract AbstractTime
 
 abstract Period     <: AbstractTime
@@ -133,15 +135,15 @@ DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),
 Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 
 # Traits, Equality
-Base.isfinite{T<:TimeType}(::Union(Type{T},T)) = true
+Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 Base.eps(dt::DateTime) = Millisecond(1)
 Base.eps(dt::Date) = Day(1)
-Base.typemax(::Union(DateTime,Type{DateTime})) = DateTime(146138512,12,31,23,59,59)
-Base.typemin(::Union(DateTime,Type{DateTime})) = DateTime(-146138511,1,1,0,0,0)
-Base.typemax(::Union(Date,Type{Date})) = Date(252522163911149,12,31)
-Base.typemin(::Union(Date,Type{Date})) = Date(-252522163911150,1,1)
+Base.typemax(::Union{DateTime,Type{DateTime}}) = DateTime(146138512,12,31,23,59,59)
+Base.typemin(::Union{DateTime,Type{DateTime}}) = DateTime(-146138511,1,1,0,0,0)
+Base.typemax(::Union{Date,Type{Date}}) = Date(252522163911149,12,31)
+Base.typemin(::Union{Date,Type{Date}}) = Date(-252522163911150,1,1)
 # Date-DateTime promotion, isless, ==
 Base.promote_rule(::Type{Date},x::Type{DateTime}) = DateTime
 Base.isless(x::Date,y::Date) = isless(value(x),value(y))

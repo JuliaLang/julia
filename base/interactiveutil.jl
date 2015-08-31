@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # editing files
 
 function edit(file::AbstractString, line::Integer)
@@ -22,7 +24,7 @@ function edit(file::AbstractString, line::Integer)
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         f = find_source_file(file)
-        f != nothing && (file = f)
+        f !== nothing && (file = f)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(edname, "emacs") || edname == "gedit"
@@ -46,14 +48,15 @@ function edit(file::AbstractString, line::Integer)
     nothing
 end
 
-function edit( m::Method )
+function edit(m::Method)
     tv, decls, file, line = arg_decl_parts(m)
-    edit( string(file), line )
+    edit(string(file), line)
 end
 
 edit(file::AbstractString) = edit(file, 1)
-edit(f::Callable)               = edit(functionloc(f)...)
-edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
+edit(f)          = edit(functionloc(f)...)
+edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
 
@@ -63,8 +66,9 @@ function less(file::AbstractString, line::Integer)
 end
 
 less(file::AbstractString) = less(file, 1)
-less(f::Callable)               = less(functionloc(f)...)
-less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
+less(f)          = less(functionloc(f)...)
+less(f, t::ANY)  = less(functionloc(f,t)...)
+less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
@@ -83,7 +87,7 @@ end
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
-            success(pipe(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
+            success(pipeline(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
         error("no clipboard command found, please install xsel or xclip")
     end
@@ -107,6 +111,9 @@ end
 
 @windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
+        if containsnul(x)
+            throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
+        end
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = utf16(x)
@@ -158,7 +165,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(pipe(`lsb_release -ds`, stderr=DevNull)) end
+        @linux_only try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
         @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
@@ -197,30 +204,32 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
 
-function code_warntype(io::IO, f, t::(Type...))
-    global show_expr_type_emphasize
-    state = show_expr_type_emphasize::Bool
-    ct = code_typed(f, t)
-    show_expr_type_emphasize::Bool = true
-    for ast in ct
-        println(io, "Variables:")
-        vars = ast.args[2][2]
-        for v in vars
-            print(io, "  ", v[1])
-            show_expr_type(io, v[2])
+function code_warntype(io::IO, f, t::ANY)
+    task_local_storage(:TYPEEMPHASIZE, true)
+    try
+        ct = code_typed(f, t)
+        for ast in ct
+            println(io, "Variables:")
+            vars = ast.args[2][1]
+            for v in vars
+                print(io, "  ", v[1])
+                show_expr_type(io, v[2])
+                print(io, '\n')
+            end
+            print(io, "\nBody:\n  ")
+            show_unquoted(io, ast.args[3], 2)
             print(io, '\n')
         end
-        print(io, "\nBody:\n  ")
-        show_unquoted(io, ast.args[3], 2)
-        print(io, '\n')
+    finally
+        task_local_storage(:TYPEEMPHASIZE, false)
     end
-    show_expr_type_emphasize::Bool = false
     nothing
 end
-code_warntype(f, t::(Type...)) = code_warntype(STDOUT, f, t)
+code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
+typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 
+gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
@@ -229,12 +238,12 @@ function gen_call_with_extracted_types(fcn, ex0)
         return Expr(:call, fcn, esc(args[1]),
                     Expr(:call, :typesof, map(esc, args[2:end])...))
     end
-    if isa(ex0, Expr) && ex0.head == :call
-        return Expr(:call, fcn, esc(ex0.args[1]),
-                    Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
-    end
     ex = expand(ex0)
-    exret = Expr(:call, :error, "expression is not a function call")
+    if isa(ex, Expr) && ex.head == :call
+        return Expr(:call, fcn, esc(ex.args[1]),
+                    Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+    end
+    exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
@@ -286,12 +295,12 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
         return meths
     end
     d = f.env.defs
-    while !is(d,())
+    while d !== nothing
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                      x != Any && x != ANY),
-               d.sig)
+               d.sig.parameters)
             push!(meths, d)
         end
         d = d.next
@@ -303,7 +312,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
-            f = eval(m, nm)
+            f = getfield(m, nm)
             if isa(f, Function)
                 methodswith(t, f, showparents, meths)
             end
@@ -318,7 +327,7 @@ function methodswith(t::Type, showparents::Bool=false)
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
-            mod = eval(mainmod, nm)
+            mod = getfield(mainmod, nm)
             if isa(mod, Module)
                 append!(meths, methodswith(t, mod, showparents))
             end
@@ -334,7 +343,7 @@ downloadcmd = nothing
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(pipe(`which $checkcmd`, DevNull))
+            if success(pipeline(`which $checkcmd`, DevNull))
                 downloadcmd = checkcmd
                 break
             end
@@ -354,7 +363,7 @@ end
 
 @windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{UInt16},Ptr{UInt16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
+                (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
@@ -378,7 +387,6 @@ function workspace()
          Expr(:toplevel,
               :(const Base = $(Expr(:quote, b))),
               :(const LastMain = $(Expr(:quote, last)))))
-    empty!(package_list)
     empty!(package_locks)
     nothing
 end
@@ -400,4 +408,261 @@ function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(readall(buf))")
     end
+end
+
+# testing
+
+
+doc"""
+    whos([io,] [Module,] [pattern::Regex])
+
+Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
+
+The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
+"""
+function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+    maxline = tty_size()[2]
+    line = zeros(UInt8, maxline)
+    head = PipeBuffer(maxline + 1)
+    for v in sort!(names(m))
+        s = string(v)
+        if isdefined(m, v) && ismatch(pattern, s)
+            value = getfield(m, v)
+            @printf head "%30s " s
+            try
+                bytes = summarysize(value, true)
+                if bytes < 10_000
+                    @printf(head, "%6d bytes  ", bytes)
+                else
+                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                end
+                print(head, summary(value))
+                print(head, " : ")
+                show(head, value)
+            catch e
+                print(head, "#=ERROR: unable to show value=#")
+            end
+
+            newline = search(head, UInt8('\n')) - 1
+            if newline < 0
+                newline = nb_available(head)
+            end
+            if newline > maxline
+                newline = maxline - 1 # make space for ...
+            end
+            line = resize!(line, newline)
+            line = read!(head, line)
+
+            write(io, line)
+            if nb_available(head) > 0 # more to read? replace with ...
+                print(io, '\u2026') # hdots
+            end
+            println(io)
+            seekend(head) # skip the rest of the text
+        end
+    end
+end
+whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
+whos(pat::Regex) = whos(STDOUT, current_module(), pat)
+
+"""
+    summarysize(obj, recurse) => Int
+
+summarysize is an estimate of the size of the object
+as if all iterables were allocated inline
+in general, this forms a conservative lower bound
+n the memory "controlled" by the object
+if recurse is true, then simply reachable memory
+should also be included, otherwise, only
+directly used memory should be included
+you should never ignore recurse in cases where recursion is possible"""
+summarysize(obj::ANY, recurse::Bool) = try convert(Int, sizeof(obj)); catch; Core.sizeof(obj); end
+
+# these three cases override the exception that would be thrown by Core.sizeof
+summarysize(obj::Symbol, recurse::Bool) = 0
+summarysize(obj::DataType, recurse::Bool) = 0
+function summarysize(obj::Module, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        for binding in names(obj, true)
+            if isdefined(obj, binding)
+                value = getfield(obj, binding)
+                if (value !== obj) # skip the self-recursive definition
+                    recurseok = !isa(value, Module) || module_parent(value) === obj
+                    size += summarysize(value, recurseok)::Int # recurse on anything that isn't a module
+                end
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Task, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        if isdefined(obj, :code)
+            size += summarysize(obj.code, true)::Int
+        end
+        size += summarysize(obj.storage, true)::Int
+
+        size += summarysize(obj.backtrace, false)::Int
+        size += summarysize(obj.donenotify, false)::Int
+        size += summarysize(obj.exception, false)::Int
+        size += summarysize(obj.result, false)::Int
+    end
+    return size
+end
+
+function summarysize(obj::SimpleVector, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        for val in obj
+            if val !== obj
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Tuple, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        for val in obj
+            if val !== obj && !isbits(val)
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Array, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse && !isbits(eltype(obj))
+        for i in 1:length(obj)
+            if isdefined(obj, i) && (val = obj[i]) !== obj
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::AbstractArray, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse && !isbits(eltype(obj))
+        for val in obj
+            if val !== obj
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Associative, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        for (key, val) in obj
+            if key !== obj
+                size += summarysize(key, false)::Int
+            end
+            if val !== obj
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Dict, recurse::Bool)
+    size::Int = sizeof(obj)
+    size += summarysize(obj.keys, recurse)::Int
+    size += summarysize(obj.vals, recurse)::Int
+    size += summarysize(obj.slots, recurse)::Int
+    return size
+end
+
+summarysize(obj::Set, recurse::Bool) =
+    sizeof(obj) + summarysize(obj.dict, recurse)
+
+function summarysize(obj::Function, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse
+        size += summarysize(obj.env, true)::Int
+    end
+    if isdefined(obj, :code)
+        size += summarysize(obj.code, true)::Int
+    end
+    return size
+end
+
+function summarysize(obj::MethodTable, recurse::Bool)
+    size::Int = sizeof(obj)
+    size += summarysize(obj.defs, recurse)::Int
+    size += summarysize(obj.cache, recurse)::Int
+    size += summarysize(obj.cache_arg1, recurse)::Int
+    size += summarysize(obj.cache_targ, recurse)::Int
+    if isdefined(obj, :kwsorter)
+        size += summarysize(obj.kwsorter, recurse)::Int
+    end
+    return size
+end
+
+function summarysize(obj::Method, recurse::Bool)
+    size::Int = sizeof(obj)
+    size += summarysize(obj.func, recurse)::Int
+    size += summarysize(obj.next, recurse)::Int
+    return size
+end
+
+function summarysize(obj::LambdaStaticData, recurse::Bool)
+    size::Int = sizeof(obj)
+    size += summarysize(obj.ast, true)::Int # always include the AST
+    size += summarysize(obj.sparams, true)::Int
+    if isdefined(obj, :roots)
+        size += summarysize(obj.roots, recurse)::Int
+    end
+    if isdefined(obj, :capt)
+        size += summarysize(obj.capt, false)::Int
+    end
+    return size
+end
+
+function summarysize(obj::Expr, recurse::Bool)
+    size::Int = sizeof(obj) + sizeof(obj.args)
+    if recurse
+        for arg in obj.args
+            size += summarysize(arg, isa(arg, Expr))::Int
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Box, recurse::Bool)
+    size::Int = sizeof(obj)
+    # ignore the recurse parameter for Box,
+    # even though it could in theory recurse
+    # since it is an internal construct
+    # used by codegen with very limited usage
+    if isdefined(obj, :contents)
+        if obj.contents !== obj
+            size += summarysize(obj.contents, false)::Int
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Ref, recurse::Bool)
+    size::Int = sizeof(obj)
+    if recurse && !isbits(eltype(obj))
+        try
+            val = obj[]
+            if val !== obj
+                size += summarysize(val, false)::Int
+            end
+        end
+    end
+    return size
 end

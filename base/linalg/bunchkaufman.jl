@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Create an extractor that extracts the modified original matrix, e.g.
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
@@ -12,7 +14,9 @@ end
 BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric)
 
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
-    symmetric || throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
+    if !symmetric
+        throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
+    end
     LD, ipiv = LAPACK.sytrf!(char_uplo(uplo) , A)
     BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
 end
@@ -45,3 +49,7 @@ A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) = LAPACK.sytrs
 function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     (issym(B) ? LAPACK.sytrs! : LAPACK.hetrs!)(B.uplo, B.LD, B.ipiv, R)
 end
+
+## reconstruct the original matrix
+## TODO: understand the procedure described at
+## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf

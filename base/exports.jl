@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 export
 # Modules
     Collections,
@@ -11,14 +13,17 @@ export
     Test,
     Libc,
     Libdl,
+    Mmap,
     LinAlg,
     BLAS,
     LAPACK,
+    Serializer,
     SparseMatrix,
     Docs,
     Markdown,
 
 # Types
+    AbstractChannel,
     AbstractMatrix,
     AbstractSparseArray,
     AbstractSparseMatrix,
@@ -36,6 +41,7 @@ export
     BufferStream,
     CartesianIndex,
     CartesianRange,
+    Channel,
     Cmd,
     Colon,
     Complex,
@@ -64,15 +70,17 @@ export
     IO,
     IOBuffer,
     IOStream,
+    LinSpace,
     LocalProcess,
     LowerTriangular,
-    MathConst,
+    Irrational,
     Matrix,
     MergeSort,
     Nullable,
     ObjectIdDict,
     OrdinalRange,
     Pair,
+    PartialQuickSort,
     PollingFileWatcher,
     ProcessGroup,
     QuickSort,
@@ -84,7 +92,6 @@ export
     RemoteRef,
     RepString,
     RevString,
-    RopeString,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -93,6 +100,7 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    SerializationState,
     Set,
     SharedArray,
     SharedMatrix,
@@ -143,21 +151,29 @@ export
     Culonglong,
     Cushort,
     Cwchar_t,
+    Cstring,
+    Cwstring,
 
 # Exceptions
     ArgumentError,
     DimensionMismatch,
+    CapturedException,
+    CompositeException,
     EOFError,
     ErrorException,
+    InvalidStateException,
     KeyError,
     LoadError,
+    InitError,
     MethodError,
     NullException,
     ParseError,
     ProcessExitedException,
+    RemoteException,
     SystemError,
     TypeError,
     AssertionError,
+    UnicodeError,
 
 # Global constants and variables
     ARGS,
@@ -178,9 +194,11 @@ export
     Inf,
     Inf16,
     Inf32,
+    Inf64,
     NaN,
     NaN16,
     NaN32,
+    NaN64,
     im,
     π, pi,
     e, eu,
@@ -208,6 +226,7 @@ export
     .-,
     .*,
     ./,
+    .%,
     .<,
     .<=,
     .≤,
@@ -236,6 +255,7 @@ export
     \,
     ^,
     |,
+    |>,
     ~,
     :,
     ÷,
@@ -356,7 +376,6 @@ export
     invdigamma,
     invmod,
     isapprox,
-    iseltype,
     iseven,
     isfinite,
     isinf,
@@ -397,6 +416,7 @@ export
     prevpow2,
     prevprod,
     primes,
+    primesmask,
     rad2deg,
     rationalize,
     real,
@@ -436,6 +456,8 @@ export
     zero,
     √,
     ∛,
+    ≈,
+    ≉,
 
 # specfun
     airy,
@@ -446,6 +468,7 @@ export
     airyprime,
     airyx,
     besselh,
+    besselhx,
     besseli,
     besselix,
     besselj,
@@ -476,11 +499,11 @@ export
     broadcast_function,
     broadcast_getindex,
     broadcast_setindex!,
-    cartesianmap,
     cat,
     cell,
     checkbounds,
     circshift,
+    clamp!,
     colon,
     conj!,
     copy!,
@@ -517,11 +540,11 @@ export
     invperm,
     ipermute!,
     ipermutedims,
+    isassigned,
     isperm,
     issorted,
     last,
     levicivita,
-    linrange,
     linspace,
     logspace,
     mapslices,
@@ -580,6 +603,8 @@ export
     sort!,
     sort,
     sortcols,
+    selectperm,
+    selectperm!,
     sortperm,
     sortperm!,
     sortrows,
@@ -634,6 +659,7 @@ export
     givens,
     hessfact!,
     hessfact,
+    isdiag,
     ishermitian,
     isposdef!,
     isposdef,
@@ -644,7 +670,9 @@ export
     ldltfact,
     ldltfact!,
     linreg,
+    logabsdet,
     logdet,
+    logm,
     lu,
     lufact!,
     lufact,
@@ -679,6 +707,7 @@ export
     tril,
     triu!,
     triu,
+    vecdot,
     vecnorm,
     ⋅,
     ×,
@@ -727,8 +756,6 @@ export
     any!,
     any,
     collect,
-    complement!,
-    complement,
     contains,
     count,
     delete!,
@@ -814,10 +841,6 @@ export
     ind2chr,
     info,
     is_assigned_char,
-    is_valid_ascii,
-    is_valid_char,
-    is_valid_utf8,
-    is_valid_utf16,
     isalnum,
     isalpha,
     isascii,
@@ -896,6 +919,7 @@ export
     randexp,
     srand,
     bitrand,
+    randjump,
 
 # bigfloat & precision
     precision,
@@ -905,6 +929,8 @@ export
     get_rounding,
     set_rounding,
     with_rounding,
+    get_zero_subnormals,
+    set_zero_subnormals,
 
 # statistics
     cor,
@@ -1008,6 +1034,7 @@ export
     task_local_storage,
     unlock,
     yield,
+    yieldto,
 
 # time
     sleep,
@@ -1040,6 +1067,7 @@ export
     promote_rule,
     promote_type,
     subtypes,
+    instances,
     super,
     typeintersect,
     typejoin,
@@ -1054,7 +1082,6 @@ export
     symbol,
 
 # help and reflection
-    apropos,
     current_module,
     edit,
     code_typed,
@@ -1064,7 +1091,6 @@ export
     code_native,
     fullname,
     functionloc,
-    help,
     isconst,
     isgeneric,
     isinteractive,
@@ -1080,22 +1106,22 @@ export
     workspace,
 
 # loading source files
+    __precompile__,
     evalfile,
     include,
     include_string,
-    reload,
-    require,
+    include_dependency,
 
 # RTS internals
     finalizer,
     finalize,
     gc,
-    gc_disable,
     gc_enable,
     precompile,
 
 # misc
     atexit,
+    atreplinit,
     clipboard,
     exit,
     ntuple,
@@ -1131,13 +1157,11 @@ export
     listenany,
     ltoh,
     mark,
-    mmap_array,
-    mmap_bitarray,
-    msync,
     nb_available,
     ntoh,
     open,
-    pipe,
+    pipeline,
+    Pipe,
     PipeBuffer,
     poll_fd,
     poll_file,
@@ -1169,11 +1193,6 @@ export
     serialize,
     skip,
     skipchars,
-    start_reading,
-    start_timer,
-    start_watching,
-    stop_reading,
-    stop_timer,
     takebuf_array,
     takebuf_string,
     truncate,
@@ -1231,6 +1250,7 @@ export
 # shared arrays
     sdata,
     indexpids,
+    localindexes,
 
 # paths and file names
     abspath,
@@ -1243,6 +1263,7 @@ export
     joinpath,
     normpath,
     realpath,
+    relpath,
     splitdir,
     splitdrive,
     splitext,
@@ -1263,6 +1284,7 @@ export
     isfifo,
     isfile,
     islink,
+    ismount,
     ispath,
     isreadable,
     issetgid,
@@ -1279,6 +1301,7 @@ export
     mv,
     operm,
     pwd,
+    readlink,
     rm,
     stat,
     symlink,
@@ -1299,6 +1322,7 @@ export
     setenv,
     spawn,
     success,
+    withenv,
 
 # C interface
     cfunction,
@@ -1307,6 +1331,7 @@ export
     pointer,
     pointer_from_objref,
     pointer_to_array,
+    pointer_to_string,
     reenable_sigint,
     unsafe_copy!,
     unsafe_load,
@@ -1321,13 +1346,13 @@ export
     @__FILE__,
     @int128_str,
     @uint128_str,
-    @bigint_str,
-    @mstr,   # triple-quoted strings
+    @big_str,
     @cmd,    # `commands`
 
     # notation for certain types
     @b_str,  # byte vector
     @r_str,  # regex
+    @s_str,  # regex substitution string
     @v_str,  # version number
 
     # documentation
@@ -1344,6 +1369,7 @@ export
     # profiling
     @time,
     @timed,
+    @timev,
     @elapsed,
     @allocated,
     @profile,
@@ -1367,8 +1393,6 @@ export
     @unix_only,
     @osx_only,
     @linux_only,
-    @windowsxp_only,
-    @non_windowsxp_only,
 
     # tasks
     @schedule,
@@ -1385,6 +1409,7 @@ export
     @parallel,
 
     # metaprogramming utilities
+    @generated,
     @gensym,
     @eval,
     @vectorize_1arg,

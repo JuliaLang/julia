@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module PkgToMaxSumInterface
 
 using ...Types, ...Query, ..VersionWeights
@@ -300,7 +302,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             # dependency of another package
             for (p1,d) in prevdeps[p0]
                 vs = get(d, sol[p1], nothing)
-                if vs == nothing
+                if vs === nothing
                     continue
                 end
                 vn = pvers[p0][s0+1]

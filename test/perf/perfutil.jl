@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const mintrials = 5
 const mintime = 2000.0
 print_output = isempty(ARGS)
@@ -81,8 +83,8 @@ end
 
 macro timeit_init(ex,init,name,desc,group...)
     quote
-        t = zeros(ntrials)
-        for i=0:ntrials
+        t = zeros(mintrials)
+        for i=0:mintrials
             $(esc(init))
             e = 1000*(@elapsed $(esc(ex)))
             if i > 0

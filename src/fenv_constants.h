@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <fenv.h>
 const JL_FE_INEXACT = FE_INEXACT
 const JL_FE_UNDERFLOW = FE_UNDERFLOW

@@ -15,11 +15,7 @@ ifeq ($(JULIA_BINARYDIST_TARNAME),)
 	JULIA_BINARYDIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
 endif
 
-ifeq ($(JULIA_DEBUG), 1)
-default: debug
-else
-default: release
-endif
+default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
@@ -33,55 +29,49 @@ doc/_build/html:
 	@$(MAKE) -C doc html
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
-CLEAN_TARGETS += clean-$(build_docdir)
-clean-$(build_docdir):
+CLEAN_TARGETS += clean-docdir
+clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
-$(subst $(abspath $(JULIAHOME))/,,$(abspath $(build_docdir))): $(build_docdir)
-$(build_docdir):
-	@mkdir -p $@/examples
-	@cp -R examples/*.jl $@/examples/
-	@cp -R examples/clustermanager $@/examples/
+$(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) $(shell find $(JULIAHOME)/examples/clustermanager)
+	@echo Copying in usr/share/doc/julia/examples
+	@-rm -fr $(build_docdir)/examples
+	@mkdir -p $(build_docdir)/examples
+	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
+	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
+	@echo 1 > $@
 
-git-submodules:
-ifneq ($(NO_GIT), 1)
-	@-git submodule update --init
-else
-       $(warn "Submodules could not be updated because git is unavailable")
-endif
-
-julia-symlink-debug: julia-ui-debug
+julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
-	@ln -sf "$(build_bindir)/julia-debug" julia
+	@ln -sf "$(shell contrib/relative_path.sh "$(JULIAHOME)" "$(JULIA_EXECUTABLE)")" julia
 endif
 endif
 
-julia-symlink-release: julia-ui-release
-ifneq ($(OS),WINNT)
-ifndef JULIA_VAGRANT_BUILD
-	@ln -sf "$(build_bindir)/julia" julia
-endif
-endif
-
-julia-deps: git-submodules |  $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C deps
 
-julia-base: julia-deps
+julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C base
 
 julia-libccalltest:
 	@$(MAKE) $(QUIET_MAKE) -C test libccalltest
 
-julia-src-%: julia-deps
+julia-src-release julia-src-debug : julia-src-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C src libjulia-$*
 
-julia-ui-%: julia-src-%
+julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C ui julia-$*
 
-julia-sysimg-% : julia-ui-% julia-base
-	@$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)" $(build_private_libdir)/sys.$(SHLIB_EXT)
+julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-julia-debug julia-release : julia-% : julia-symlink-% julia-sysimg-% julia-libccalltest
+julia-sysimg-release : julia-inference julia-ui-release
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
+
+julia-sysimg-debug : julia-inference julia-ui-debug
+	@$(MAKE) $(QUIET_MAKE) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
+
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
 debug release : % : julia-%
 
@@ -92,11 +82,13 @@ else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
 
-release-candidate: release test
+release-candidate: release testall
+	@$(JULIA_EXECUTABLE) contrib/add_license_to_files.jl #add license headers
+	@$(JULIA_EXECUTABLE) doc/genstdlib.jl
 	@#Check documentation
-	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@$(JULIA_EXECUTABLE) doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
-	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
+	@$(JULIA_EXECUTABLE) doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
 	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
 		rm doc/UNDOCUMENTED.rst; \
 	else \
@@ -107,7 +99,6 @@ release-candidate: release test
 	@$(MAKE) -C doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
-	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -130,55 +121,81 @@ release-candidate: release test
 	@echo 5. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 8. Announce on mailing lists
-	@echo 9. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 8. Update checksums on AWS for tarball and packaged binaries
+	@echo 9. Announce on mailing lists
+	@echo 10. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
-$(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
-	@cp $< $@
-
-$(build_man1dir)/julia.1: doc/man/julia.1 | $(build_man1dir)
+$(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
+	@echo Copying in usr/share/man/man1/julia.1
 	@mkdir -p $(build_man1dir)
 	@cp $< $@
 
-$(build_sysconfdir)/julia/juliarc.jl: etc/juliarc.jl | $(build_sysconfdir)/julia
+$(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia
+	@echo Creating usr/etc/julia/juliarc.jl
 	@cp $< $@
 ifeq ($(OS), WINNT)
 	@cat ./contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
 $(build_sysconfdir)/julia/juliarc.jl: contrib/windows/juliarc.jl
 endif
 
-# use sys.ji if it exists, otherwise run two stages
-$(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
+	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
+		$$([ $(OS) = WINNT ] && echo '' -lssp))
+	@$(INSTALL_NAME_CMD)$(notdir $@) $@
+	@$(DSYMUTIL) $@
 
-.SECONDARY: $(build_private_libdir)/sys.o
-.SECONDARY: $(build_private_libdir)/sys0.o
-
-$(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
-ifneq ($(USEMSVC), 1)
-	@$(call PRINT_LINK, $(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp))
-	$(DSYMUTIL) $@
-else
-	@true
-endif
-
-$(build_private_libdir)/sys0.o: | $(build_private_libdir)
-	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
-
+CORE_SRCS := base/boot.jl base/coreimg.jl \
+		base/abstractarray.jl \
+		base/array.jl \
+		base/bool.jl \
+		base/dict.jl \
+		base/error.jl \
+		base/essentials.jl \
+		base/expr.jl \
+		base/functors.jl \
+		base/hashing.jl \
+		base/inference.jl \
+		base/int.jl \
+		base/intset.jl \
+		base/iterator.jl \
+		base/nofloat_hashing.jl \
+		base/number.jl \
+		base/operators.jl \
+		base/options.jl \
+		base/pointer.jl \
+		base/promotion.jl \
+		base/range.jl \
+		base/reduce.jl \
+		base/reflection.jl \
+		base/tuple.jl
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
-COMMA:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
+$(build_private_libdir)/inference0.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
-		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
-		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(COMMA) try `make cleanall`. ***' && false; } )
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+		coreimg.jl)
+
+$(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
+	@$(call PRINT_JULIA, cd base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+		-J $(call cygpath_w,$<) coreimg.jl)
+
+COMMA:=,
+define sysimg_builder
+$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji VERSION $$(BASE_SRCS)
+	@$$(call PRINT_JULIA, cd base && \
+	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+		-J $$(call cygpath_w,$$<) sysimg.jl \
+		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
+.SECONDARY: $(build_private_libdir)/sys$1.o
+endef
+$(eval $(call sysimg_builder,,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug,$(JULIA_EXECUTABLE_debug)))
 
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
-	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
+	@$(call PRINT_CC, $(HOSTCC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
 # public libraries, that are installed in $(prefix)/lib
@@ -223,6 +240,11 @@ endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
 JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
 endif
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_PRIVATE_LIBS += LLVM
+endif
+endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
@@ -252,17 +274,21 @@ $(eval $(call std_dll,gcc_s_seh-1))
 endif
 $(eval $(call std_dll,ssp-0))
 endif
+define stringreplace
+	$(build_bindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
+endef
 
 install: $(build_bindir)/stringreplace doc/_build/html
-	@$(MAKE) $(QUIET_MAKE) release
-	@$(MAKE) $(QUIET_MAKE) debug
+	@$(MAKE) $(QUIET_MAKE) all
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
 	$(INSTALL_M) $(build_bindir)/julia* $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(build_bindir)/*.dll $(build_bindir)/*.bat $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(build_bindir)/*.dll $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 
@@ -301,8 +327,9 @@ endif
 endif
 	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
-	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
+	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in standalone executable build script
@@ -347,9 +374,8 @@ else ifeq ($(OS), Linux)
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
-		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
-	done
+	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
+	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -358,11 +384,16 @@ endif
 distclean dist-clean:
 	rm -fr julia-*.tar.gz julia*.exe julia-*.7z julia-$(JULIA_COMMIT)
 
-binary-dist dist: distclean
+dist:
+	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
+
+binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
+ifeq ($(ISX86),1)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use binary-dist target
 	@false
+endif
 endif
 endif
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
@@ -386,17 +417,7 @@ ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
-	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
-ifeq ($(JULIA_CPU_TARGET), native)
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
-endif
-
 ifeq ($(OS), WINNT)
-ifeq ($(ARCH),x86_64)
-	# If we are running on WIN64, also delete sys.dll until we switch to llvm3.5+
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
-endif
-
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
@@ -438,15 +459,17 @@ light-source-dist: light-source-dist.tmp
 	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
 	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
+source-dist:
+	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
+
 # Make tarball with Julia code plus all dependencies
-full-source-dist source-dist: git-submodules light-source-dist.tmp
+full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
-	@$(MAKE) -C deps getall
+	@$(MAKE) -C deps getall NO_GIT=1
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
 	-ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tar.xz deps/*.tgz deps/*.zip >> full-source-dist.tmp
-	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> full-source-dist.tmp
 
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
@@ -465,8 +488,7 @@ clean: | $(CLEAN_TARGETS)
 		light-source-dist.tmp light-source-dist.tmp1 \
 		full-source-dist.tmp full-source-dist.tmp1
 	@rm -fr $(build_private_libdir)
-# Temporarily add this line to the Makefile to remove extras
-	@rm -fr $(build_datarootdir)/julia/extras
+	@rm -f $(build_prefix)/.examples
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
@@ -474,39 +496,40 @@ cleanall: clean
 ifeq ($(OS),WINNT)
 	@rm -rf $(build_prefix)/lib
 endif
-	@$(MAKE) -C deps clean-uv
+	@$(MAKE) -C deps clean-libuv
 
 distcleanall: cleanall
 	@$(MAKE) -C deps distcleanall
 	@$(MAKE) -C doc cleanall
-	rm -fr $(build_prefix)
+	rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: default debug release check-whitespace release-candidate \
-	julia-debug julia-release \
-	julia-deps julia-ui-* julia-src-* julia-symlink-* julia-base julia-sysimg-* \
-	test testall testall1 test-* clean distcleanall cleanall \
+	julia-debug julia-release julia-deps \
+	julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
+	julia-symlink julia-base julia-inference julia-sysimg-release julia-sysimg-debug \
+	test testall testall1 test clean distcleanall cleanall clean-* \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist git-submodules
+	dist full-source-dist source-dist
 
-test: check-whitespace release
-	@$(MAKE) $(QUIET_MAKE) -C test default
+test: check-whitespace $(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-testall: check-whitespace release
-	cp $(build_prefix)/lib/julia/sys.ji local.ji && $(JULIA_EXECUTABLE) -J local.ji -e 'true' && rm local.ji
-	@$(MAKE) $(QUIET_MAKE) -C test all
+testall: check-whitespace $(JULIA_BUILD_MODE)
+	cp $(build_prefix)/lib/julia/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT) local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J local.$(SHLIB_EXT) -e 'true' && rm local.$(SHLIB_EXT)
+	@$(MAKE) $(QUIET_MAKE) -C test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-testall1: check-whitespace release
-	@env JULIA_CPU_CORES=1 $(MAKE) $(QUIET_MAKE) -C test all
+testall1: check-whitespace $(JULIA_BUILD_MODE)
+	@env JULIA_CPU_CORES=1 $(MAKE) $(QUIET_MAKE) -C test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-test-%: check-whitespace release
-	@$(MAKE) $(QUIET_MAKE) -C test $*
+test-%: check-whitespace $(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 perf: release
-	@$(MAKE) $(QUIET_MAKE) -C test/perf
+	@$(MAKE) $(QUIET_MAKE) -C test/perf JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 perf-%: release
-	@$(MAKE) $(QUIET_MAKE) -C test/perf $*
+	@$(MAKE) $(QUIET_MAKE) -C test/perf $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras wine_path
@@ -522,7 +545,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1 \
-	"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libexpat1 mingw32-zlib1"
+	"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libexpat1 mingw32-zlib1" && \
+	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -530,14 +554,15 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1 \
-	"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libexpat1 mingw64-zlib1"
+	"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libexpat1 mingw64-zlib1" && \
+	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
-	$(JLDOWNLOAD) busybox.exe http://intgat.tigress.co.uk/rmy/files/busybox/busybox-w32-TIG-1778-g15efec6.exe && \
+	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-1-g9eb16cb.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \

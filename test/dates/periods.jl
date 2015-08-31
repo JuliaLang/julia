@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Period testing
 @test -Dates.Year(1) == Dates.Year(-1)
 @test Dates.Year(1) > Dates.Year(0)
@@ -135,6 +137,9 @@ y2 = Dates.Year(2)
 @test typeof(y+ms) <: Dates.CompoundPeriod
 @test y > m
 @test d < w
+@test mi < h
+@test ms < h
+@test ms < mi
 @test typemax(Dates.Year) == Dates.Year(typemax(Int64))
 @test typemax(Dates.Year) + y == Dates.Year(-9223372036854775808)
 @test typemin(Dates.Year) == Dates.Year(-9223372036854775808)
@@ -281,8 +286,69 @@ dt = Dates.DateTime(2014)
 @test 1ms - (2s + 7ms) == -((2s + 7ms) - 1ms) == (-6ms) - 2s
 emptyperiod = ((y + d) - d) - y
 @test emptyperiod == ((d + y) - y) - d == ((d + y) - d) - y
+@test emptyperiod == 2y + (m - d) + ms - ((m - d) + 2y + ms)
 @test emptyperiod == 0ms
 @test string(emptyperiod) == "empty period"
+@test string(ms + mi + d + m + y + w + h + s + 2y + m) == "3 years, 2 months, 1 week, 1 day, 1 hour, 1 minute, 1 second, 1 millisecond"
 @test 8d - s == 1w + 23h + 59mi + 59s
 @test h + 3mi == 63mi
 @test y - m == 11m
+
+@test Date(2009,2,1) - (Month(1) + Day(1)) == Date(2008,12,31)
+@test (Month(1) + Day(1)) - Date(2009,2,1) == Date(2008,12,31)
+
+pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
+cpa = [1y+1s 1m+1s 1w+1s 1d+1s; 1h+1s 1mi+1s 2m+1s 1s+1ms]
+
+@test 1y .+ pa == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
+@test (1y+1m) .+ pa == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+@test pa .+ 1y == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
+@test pa .+ (1y+1m) == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+
+@test 1y .+ cpa == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
+@test (1y+1m) .+ cpa == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+@test cpa .+ 1y == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
+@test cpa .+ (1y+1m) == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+
+@test 1y + pa == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
+@test (1y+1m) + pa == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+@test pa + 1y == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
+@test pa + (1y+1m) == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+
+@test 1y + cpa == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
+@test (1y+1m) + cpa == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+@test cpa + 1y == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
+@test cpa + (1y+1m) == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+
+@test 1y .- pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
+@test (1y+1m) .- pa == [1m 1y 1y+1m-1w 1y+1m-1d; 1y+1m-1h 1y+1m-1mi 1y+1m-1s 1y+1m-1ms]
+@test pa .- (1y+1m) == [-1m -1y -1y-1m+1w -1y-1m+1d; -1y-1m+1h -1y-1m+1mi -1y-1m+1s -1y-1m+1ms]
+@test pa .- 1y == [0y 1m-1y -1y+1w -1y+1d; -1y+1h -1y+1mi -1y+1s -1y+1ms]
+
+@test 1y .- cpa == [-1s 1y-1m-1s 1y-1w-1s 1y-1d-1s; 1y-1h-1s 1y-1mi-1s 1y-2m-1s 1y-1ms-1s]
+@test (1y+1m) .- cpa == [1m-1s 1y-1s 1y+1m-1w-1s 1y+1m-1d-1s; 1y+1m-1h-1s 1y+1m-1mi-1s 1y-1m-1s 1y+1m-1s-1ms]
+@test cpa .- 1y == [1s -1y+1m+1s -1y+1w+1s -1y+1d+1s; -1y+1h+1s -1y+1mi+1s -1y+2m+1s -1y+1ms+1s]
+@test cpa .- (1y+1m) == [-1m+1s -1y+1s -1y-1m+1w+1s -1y-1m+1d+1s; -1y-1m+1h+1s -1y-1m+1mi+1s -1y+1m+1s -1y+-1m+1s+1ms]
+
+@test 1y - pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
+@test (1y+1m) - pa == [1m 1y 1y+1m-1w 1y+1m-1d; 1y+1m-1h 1y+1m-1mi 1y+1m-1s 1y+1m-1ms]
+@test pa - (1y+1m) == [-1m -1y -1y-1m+1w -1y-1m+1d; -1y-1m+1h -1y-1m+1mi -1y-1m+1s -1y-1m+1ms]
+@test pa - 1y == [0y 1m-1y -1y+1w -1y+1d; -1y+1h -1y+1mi -1y+1s -1y+1ms]
+
+@test 1y - cpa == [-1s 1y-1m-1s 1y-1w-1s 1y-1d-1s; 1y-1h-1s 1y-1mi-1s 1y-2m-1s 1y-1ms-1s]
+@test (1y+1m) - cpa == [1m-1s 1y-1s 1y+1m-1w-1s 1y+1m-1d-1s; 1y+1m-1h-1s 1y+1m-1mi-1s 1y-1m-1s 1y+1m-1s-1ms]
+@test cpa - 1y == [1s -1y+1m+1s -1y+1w+1s -1y+1d+1s; -1y+1h+1s -1y+1mi+1s -1y+2m+1s -1y+1ms+1s]
+@test cpa - (1y+1m) == [-1m+1s -1y+1s -1y-1m+1w+1s -1y-1m+1d+1s; -1y-1m+1h+1s -1y-1m+1mi+1s -1y+1m+1s -1y+-1m+1s+1ms]
+
+@test [1y 1m; 1w 1d] + [1h 1mi; 1s 1ms] == [1y+1h 1m+1mi; 1w+1s 1d+1ms]
+@test [1y 1m; 1w 1d] - [1h 1mi; 1s 1ms] == [1y-1h 1m-1mi; 1w-1s 1d-1ms]
+@test [1y 1m; 1w 1d] - [1h 1mi; 1s 1ms] - [1y-1h 1m-1mi; 1w-1s 1d-1ms] == [emptyperiod emptyperiod; emptyperiod emptyperiod]
+
+@test [1y+1s 1m+1s; 1w+1s 1d+1s] + [1h 1mi; 1s 1ms] == [1y+1h+1s 1m+1mi+1s; 1w+2s 1d+1s+1ms]
+@test [1y+1s 1m+1s; 1w+1s 1d+1s] - [1h 1mi; 1s 1ms] == [1y-1h+1s 1m-1mi+1s; 1w 1d+1s-1ms]
+
+@test [1y 1m; 1w 1d] + [1h+1s 1mi+1s; 1m+1s 1s+1ms] == [1y+1h+1s 1m+1mi+1s; 1w+1m+1s 1d+1s+1ms]
+@test [1y 1m; 1w 1d] - [1h+1s 1mi+1s; 1m+1s 1s+1ms] == [1y-1h-1s 1m-1mi-1s; 1w-1m-1s 1d-1s-1ms]
+
+@test [1y+1s 1m+1s; 1w+1s 1d+1s] + [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [2y+1h+1s 1y+1m+1mi+1s; 1y+1w+2s 1y+1d+1s+1ms]
+@test [1y+1s 1m+1s; 1w+1s 1d+1s] - [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [1s-1h 1m+1s-1y-1mi; 1w-1y 1d+1s-1y-1ms]

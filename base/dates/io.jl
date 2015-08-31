@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # TODO: optimize this
 function Base.string(dt::DateTime)
     y,m,d = yearmonthday(days(dt))
@@ -32,123 +34,161 @@ const MONTHTOVALUE = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>english)
 const MONTHTOVALUEABBR = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>abbrenglish)
 
 # Date/DateTime Parsing
-abstract Slot{P<:AbstractTime}
+abstract Slot{T<:Any}
 
-immutable DelimitedSlot{P<:AbstractTime} <: Slot{P}
-    i::Int
-    period::Type{P}
+immutable DelimitedSlot{T<:Any} <: Slot{T}
+    parser::Type{T}
+    letter::Char
     width::Int
-    option::Int
-    locale::AbstractString
+    transition::Union{Regex,AbstractString}
 end
 
-immutable FixedWidthSlot{P<:AbstractTime} <: Slot{P}
-    i::Int
-    period::Type{P}
+immutable FixedWidthSlot{T<:Any} <: Slot{T}
+    parser::Type{T}
+    letter::Char
     width::Int
-    option::Int
-    locale::AbstractString
 end
 
 immutable DateFormat
     slots::Array{Slot,1}
-    begtran # optional transition from the start of a string to the 1st slot
-    trans #trans[i] == how to transition FROM slots[i] TO slots[i+1]
+    prefix::AbstractString # optional transition from the start of a string to the 1st slot
+    locale::AbstractString
 end
 
-immutable DayOfWeekSlot <: AbstractTime end
+abstract DayOfWeekSlot
 
-duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
+# Slot rules translate letters into types. Note that
+# list of rules can be extended.
+immutable SlotRule
+    rules::Array{Type}
+end
+const SLOT_RULE = SlotRule(Array{Type}(256))
+
+getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
+setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
+keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))
+
+SLOT_RULE['y'] = Year
+SLOT_RULE['m'] = Month
+SLOT_RULE['u'] = Month
+SLOT_RULE['U'] = Month
+SLOT_RULE['e'] = DayOfWeekSlot
+SLOT_RULE['E'] = DayOfWeekSlot
+SLOT_RULE['d'] = Day
+SLOT_RULE['H'] = Hour
+SLOT_RULE['M'] = Minute
+SLOT_RULE['S'] = Second
+SLOT_RULE['s'] = Millisecond
+
+duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
 function DateFormat(f::AbstractString,locale::AbstractString="english")
     slots = Slot[]
-    trans = []
-    begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
-    ss = split(f,r"^.*?(?=[ymuUdHMSsEe])")
-    s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSsEe]+|(?<=([ymuUdHMSsEe])(?!\1))")
-    for (i,k) in enumerate(s)
-        k == "" && break
-        tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
-        slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
-        width = length(k)
-        typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
-              'y' in k ? Year : 'm' in k ? Month :
-              'u' in k ? Month : 'U' in k ? Month :
-              'd' in k ? Day : 'H' in k ? Hour :
-              'M' in k ? Minute : 'S' in k ? Second : Millisecond
-        option = 'E' in k ? 2 : 'e' in k ? 1 :
-                 'U' in k ? 2 : 'u' in k ? 1 : 0
-        push!(slots,slot(i,typ,width,option,locale))
-        push!(trans,tran)
+    prefix = ""
+    params = ()
+    last_offset = 1
+
+    letters = join(keys(SLOT_RULE), "")
+    for m in eachmatch(Regex("([\\Q$letters\\E])\\1*"), f)
+        letter = f[m.offset]
+        typ = SLOT_RULE[letter]
+
+        width = length(m.match)
+        tran = f[last_offset:m.offset-1]
+
+        if isempty(params)
+            prefix = tran
+        else
+            slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+            push!(slots,slot)
+        end
+
+        params = (typ,letter,width)
+        last_offset = m.offset + width
     end
+
+    tran = last_offset > endof(f) ? r"(?=\s|$)" : f[last_offset:end]
+    if !isempty(params)
+        slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+        push!(slots,slot)
+    end
+
     duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
-    return DateFormat(slots,begtran,trans)
+    return DateFormat(slots,prefix,locale)
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x) = !ismatch(r"[^0-9\s]",x) ? slot.period(x) : throw(SLOTERROR)
-function slotparse(slot::Slot{Month},x)
-    if slot.option == 0
+slotparse(slot,x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(x) : throw(SLOTERROR)
+function slotparse(slot::Slot{Month},x,locale)
+    if slot.letter == 'm'
         ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
-    elseif slot.option == 1
-        return Month(MONTHTOVALUEABBR[slot.locale][lowercase(x)])
+    elseif slot.letter == 'u'
+        return Month(MONTHTOVALUEABBR[locale][lowercase(x)])
     else
-        return Month(MONTHTOVALUE[slot.locale][lowercase(x)])
+        return Month(MONTHTOVALUE[locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
-slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
+slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
 
-function getslot(x,slot::DelimitedSlot,df,cursor)
-    endind = first(search(x,df.trans[slot.i],cursor+1))
+function getslot(x,slot::DelimitedSlot,locale,cursor)
+    endind = first(search(x,slot.transition,nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
-        return (endof(x)+1, isdigit(s) ? slotparse(slot,s) : default(slot.period))
+        index = endof(x)+1
+    else
+        s = x[cursor:(endind-1)]
+        index = nextind(x,endind)
     end
-    return endind+1, slotparse(slot,x[cursor:(endind-1)])
+    return index, slotparse(slot,s,locale)
 end
-getslot(x,slot,df,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)]))
+getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
 
 function parse(x::AbstractString,df::DateFormat)
-    x = strip(replace(x, r"#.*$", ""))
-    x = replace(x,df.begtran,"")
+    x = strip(x)
+    startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    (typeof(df.slots[1]) <: DelimitedSlot && first(search(x,df.trans[1])) == 0) && throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.trans[1])\", in date string"))
+    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
+        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
+    end
     periods = Period[]
+    extra = []
     cursor = 1
     for slot in df.slots
-        cursor, pe = getslot(x,slot,df,cursor)
-        pe != nothing && push!(periods,pe)
+        cursor, pe = getslot(x,slot,df.locale,cursor)
+        pe != nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
         cursor > endof(x) && break
     end
-    return sort!(periods,rev=true,lt=periodisless)
+    return vcat(sort!(periods,rev=true,lt=periodisless), extra)
 end
 
-slotformat(slot::Slot{Year},dt) = lpad(string(value(slot.period(dt))),slot.width,"0")[(end-slot.width+1):end]
-slotformat(slot,dt) = lpad(string(value(slot.period(dt))),slot.width,"0")
-function slotformat(slot::Slot{Month},dt)
-    if slot.option == 0
+slotformat(slot::Slot{Year},dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")[(end-slot.width+1):end]
+slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
+function slotformat(slot::Slot{Month},dt,locale)
+    if slot.letter == 'm'
         return lpad(month(dt),slot.width,"0")
-    elseif slot.option == 1
-        return VALUETOMONTHABBR[slot.locale][month(dt)]
+    elseif slot.letter == 'u'
+        return VALUETOMONTHABBR[locale][month(dt)]
     else
-        return VALUETOMONTH[slot.locale][month(dt)]
+        return VALUETOMONTH[locale][month(dt)]
     end
 end
-function slotformat(slot::Slot{DayOfWeekSlot},dt)
-    if slot.option == 1
-        return VALUETODAYOFWEEKABBR[slot.locale][dayofweek(dt)]
-    else # == 2
-        return VALUETODAYOFWEEK[slot.locale][dayofweek(dt)]
+function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
+    if slot.letter == 'e'
+        return VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+    else # == 'E'
+        return VALUETODAYOFWEEK[locale][dayofweek(dt)]
     end
 end
-slotformat(slot::Slot{Millisecond},dt) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
+slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
 
 function format(dt::TimeType,df::DateFormat)
-    f = ""
+    f = df.prefix
     for slot in df.slots
-        f *= slotformat(slot,dt)
-        f *= typeof(df.trans[slot.i]) <: Regex ? "" : df.trans[slot.i]
+        f *= slotformat(slot,dt,df.locale)
+        if isa(slot, DelimitedSlot)
+            f *= isa(slot.transition, AbstractString) ? slot.transition : ""
+        end
     end
     return f
 end

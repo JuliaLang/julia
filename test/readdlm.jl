@@ -1,3 +1,19 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+# countlines
+@test countlines(IOBuffer("\n")) == 1
+@test countlines(IOBuffer("\n"),'\r') == 0
+@test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
+@test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
+@test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+file = tempname()
+open(file,"w") do f
+    write(f,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
+end
+@test countlines(file) == 4
+@test countlines(file,'\r') == 0
+@test countlines(file,'\n') == 4
+rm(file)
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 
