@@ -282,8 +282,6 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
-expm(x::Number) = exp(x)
-
 function logm(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
@@ -537,4 +535,3 @@ function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
 end
 lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
 lyap{T<:Number}(a::T, c::T) = -c/(2a)
-

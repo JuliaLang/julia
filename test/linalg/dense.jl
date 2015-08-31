@@ -69,6 +69,8 @@ debug && println("Test pinv")
     @test_approx_eq a[:,1:n1]*pinva15*a[:,1:n1] a[:,1:n1]
     @test_approx_eq pinva15*a[:,1:n1]*pinva15 pinva15
 
+    @test size(pinv(ones(eltya,0,0))) == (0,0)
+
 debug && println("Lyapunov/Sylvester")
     let
         x = lyap(a, a2)
@@ -99,6 +101,26 @@ debug && println("Powers")
         @test a^t ≈ a^2
         @test eye(eltya,n,n)^r ≈ eye(a)
     end
+
+debug && println("Factorize")
+    d = rand(eltya,n)
+    e = rand(eltya,n-1)
+    e2 = rand(eltya,n-1)
+    f = rand(eltya,n-2)
+    A = diagm(d)
+    @test factorize(A) == Diagonal(d)
+    A += diagm(e,-1)
+    @test factorize(A) == Bidiagonal(d,e,false)
+    A += diagm(f,-2)
+    @test factorize(A) == LowerTriangular(A)
+    if eltya <: Real
+        A = diagm(d) + diagm(e,1) + diagm(e,-1)
+        @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
+    end
+    A = diagm(d) + diagm(e,1) + diagm(e2,-1)
+    @test full(factorize(A)) ≈ full(factorize(Tridiagonal(e2,d,e)))
+    A = diagm(d) + diagm(e,1) + diagm(f,2)
+    @test factorize(A) == UpperTriangular(A)
 end # for eltya
 
 # test triu/tril bounds checking
@@ -118,6 +140,7 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
     @test_approx_eq gradient(x) g
+    @test gradient(ones(elty,1)) == zeros(elty,1)
 end
 
 # Tests norms
@@ -360,9 +383,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                              [4.000000000000000  -1.414213562373094  -1.414213562373095
                                               -1.414213562373095   4.999999999999996  -0.000000000000000
                                               0  -0.000000000000002   3.000000000000000])
-    @test_throws KeyError hessfact(A1)[:Z]
-    @test_approx_eq full(hessfact(A1)) A1
-    @test_approx_eq full(Base.LinAlg.HessenbergQ(hessfact(A1))) full(hessfact(A1)[:Q])
 end
 
 for elty in (Float64, Complex{Float64})
@@ -479,3 +499,8 @@ for elty in [Float32,Float64,Complex64,Complex128]
     @test logm(a) ≈ log(a)
     @test lyap(one(elty),a) == -a/2
 end
+
+# stride1
+a = rand(10)
+b = slice(a,2:2:10)
+@test Base.LinAlg.stride1(b) == 2

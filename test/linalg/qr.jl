@@ -32,6 +32,11 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
+        α = rand(eltyb)
+        aα = fill(α,1,1)
+        @test qrfact(α)[:Q]*qrfact(α)[:R] ≈ qrfact(aα)[:Q]*qrfact(aα)[:R]
+
+
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 debug && println("QR decomposition (without pivoting)")
         for i = 1:2
@@ -57,6 +62,7 @@ debug && println("Thin QR decomposition (without pivoting)")
                 @test_approx_eq_eps q*b[1:n1] full(q)*b[1:n1] 100ε
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
+                @test_throws DimensionMismatch b[1:n1 + 1]*q'
 
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
                 if eltya <: BlasFloat
@@ -71,8 +77,11 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is onl
                 @test_approx_eq q*full(q, thin=false)' eye(n1)
                 @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
                 @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:n1,:]
+                @test_approx_eq isa(qrpa, QRPivoted) ? q*r*qrpa[:P].' : q*r a[1:n1,:]
                 @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
                 @test_approx_eq full(qrpa) a[1:5,:]
+                @test_throws DimensionMismatch q*b[1:n1 + 1]
+                @test_throws DimensionMismatch b[1:n1 + 1]*q'
 
 debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
                 qrpa  = factorize(a[:,1:n1])
@@ -84,6 +93,8 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is on
                 @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:n1]
                 @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:n1]
                 @test_approx_eq full(qrpa) a[:,1:5]
+                @test_throws DimensionMismatch q*b[1:n1 + 1]
+                @test_throws DimensionMismatch b[1:n1 + 1]*q'
             end
         end
 
@@ -104,8 +115,17 @@ debug && println("Matmul with QR factorizations")
             @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
             @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
             @test_throws BoundsError size(q,-1)
-
             @test_throws DimensionMismatch q * eye(Int8,n+4)
+        end
+
+debug && println("Hessenberg")
+        if eltya != BigFloat
+            hA = hessfact(a)
+            @test size(hA[:Q],1) == size(a,1)
+            @test size(hA[:Q],2) == size(a,2)
+            @test_throws KeyError hA[:Z]
+            @test_approx_eq full(hA) a
+            @test_approx_eq full(Base.LinAlg.HessenbergQ(hA)) full(hA[:Q])
         end
     end
 end
