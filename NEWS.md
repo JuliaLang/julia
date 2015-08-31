@@ -1594,11 +1594,14 @@ Too numerous to mention.
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11279]: https://github.com/JuliaLang/julia/issues/11279
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
+[#11566]: https://github.com/JuliaLang/julia/issues/11566
 [#11686]: https://github.com/JuliaLang/julia/issues/11686
 [#11741]: https://github.com/JuliaLang/julia/issues/11741
+[#11849]: https://github.com/JuliaLang/julia/issues/11849
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
@@ -1615,4 +1618,5 @@ Too numerous to mention.
 [#12472]: https://github.com/JuliaLang/julia/issues/12472
 [#12491]: https://github.com/JuliaLang/julia/issues/12491
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
+[#12727]: https://github.com/JuliaLang/julia/issues/12727
 [#12739]: https://github.com/JuliaLang/julia/issues/12739
