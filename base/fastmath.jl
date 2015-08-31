@@ -23,7 +23,9 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: box, unbox, powi_llvm, sqrt_llvm_fast
+import Core.Intrinsics: box, unbox,
+                        cos_llvm, exp2_llvm, exp_llvm, log10_llvm, log2_llvm,
+                        log_llvm, pow_llvm, powi_llvm, sin_llvm, sqrt_llvm
 
 const fast_op =
     Dict(# basic arithmetic
@@ -250,20 +252,24 @@ end
 
 # builtins
 
+cos_fast{T<:FloatTypes}(x::T) = box(T,cos_llvm(unbox(T,x)))
+exp2_fast{T<:FloatTypes}(x::T) = box(T,exp2_llvm(unbox(T,x)))
+exp_fast{T<:FloatTypes}(x::T) = box(T,exp_llvm(unbox(T,x)))
+log10_fast{T<:FloatTypes}(x::T) = box(T,log10_llvm(unbox(T,x)))
+log2_fast{T<:FloatTypes}(x::T) = box(T,log2_llvm(unbox(T,x)))
+log_fast{T<:FloatTypes}(x::T) = box(T,log_llvm(unbox(T,x)))
+pow_fast{T<:FloatTypes}(x::T, y::T) = box(T,pow_llvm(unbox(T,x),unbox(T,y)))
 pow_fast{T<:FloatTypes}(x::T, y::Integer) =
-    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,Int32(y))))
-
-# TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
-# checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
-sqrt_fast{T<:FloatTypes}(x::T) = box(T, Base.sqrt_llvm_fast(unbox(T,x)))
+    box(T,powi_llvm(unbox(T,x),unbox(Int32,Int32(y))))
+sin_fast{T<:FloatTypes}(x::T) = box(T,sin_llvm(unbox(T,x)))
+sqrt_fast{T<:FloatTypes}(x::T) = box(T,sqrt_llvm(unbox(T,x)))
 
 # libm
 
 const libm = Base.libm_name
 
-for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cos,
-          :cosh, :exp2, :exp, :expm1, :lgamma, :log10, :log1p, :log2,
-          :log, :sin, :sinh, :tan, :tanh)
+for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cosh, :expm1,
+          :lgamma, :log1p, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
     @eval begin
         $f_fast(x::Float32) =
@@ -272,11 +278,6 @@ for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cos,
             ccall(($(string(f)),libm), Float64, (Float64,), x)
     end
 end
-
-pow_fast(x::Float32, y::Float32) =
-    ccall(("powf",libm), Float32, (Float32,Float32), x, y)
-pow_fast(x::Float64, y::Float64) =
-    ccall(("pow",libm), Float64, (Float64,Float64), x, y)
 
 atan2_fast(x::Float32, y::Float32) =
     ccall(("atan2f",libm), Float32, (Float32,Float32), x, y)
@@ -306,30 +307,30 @@ atan2_fast(x::Float64, y::Float64) =
     pow_fast{T<:FloatTypes}(x::T, y::Complex{T}) = exp(y*log(x))
     pow_fast{T<:FloatTypes}(x::Complex{T}, y::T) = exp(y*log(x))
     acos_fast{T<:ComplexTypes}(x::T) =
-        convert(T,π)/2 + im*log(im*x + sqrt(1-x*x))
+        convert(T,π)/2 + 1im*log(1im*x + sqrt(1-x*x))
     acosh_fast{T<:ComplexTypes}(x::T) = log(x + sqrt(x+1) * sqrt(x-1))
     angle_fast{T<:ComplexTypes}(x::T) = atan2(imag(x), real(x))
-    asin_fast{T<:ComplexTypes}(x::T) = -im*asinh(im*x)
+    asin_fast{T<:ComplexTypes}(x::T) = -1im*asinh(1im*x)
     asinh_fast{T<:ComplexTypes}(x::T) = log(x + sqrt(1+x*x))
-    atan_fast{T<:ComplexTypes}(x::T) = -im*atanh(im*x)
-    atanh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(log(1+x) - log(1-x))
+    atan_fast{T<:ComplexTypes}(x::T) = -1im*atanh(1im*x)
+    atanh_fast{T<:ComplexTypes}(x::T) = (log(1+x) - log(1-x))/2
     cis_fast{T<:ComplexTypes}(x::T) = exp(-imag(x)) * cis(real(x))
-    cos_fast{T<:ComplexTypes}(x::T) = cosh(im*x)
-    cosh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(exp(x) + exp(-x))
+    cos_fast{T<:ComplexTypes}(x::T) = cosh(1im*x)
+    cosh_fast{T<:ComplexTypes}(x::T) = (exp(x) + exp(-x))/2
     exp10_fast{T<:ComplexTypes}(x::T) =
         exp10(real(x)) * cis(imag(x)*log(convert(T,10)))
     exp2_fast{T<:ComplexTypes}(x::T) =
         exp2(real(x)) * cis(imag(x)*log(convert(T,2)))
     exp_fast{T<:ComplexTypes}(x::T) = exp(real(x)) * cis(imag(x))
     expm1_fast{T<:ComplexTypes}(x::T) = exp(x)-1
-    log10_fast{T<:ComplexTypes}(x::T) = log(x) / log(convert(T,10))
+    log10_fast{T<:ComplexTypes}(x::T) = log(x) * (1/log(convert(T,10)))
     log1p_fast{T<:ComplexTypes}(x::T) = log(1+x)
-    log2_fast{T<:ComplexTypes}(x::T) = log(x) / log(convert(T,2))
+    log2_fast{T<:ComplexTypes}(x::T) = log(x) * (1/log(convert(T,2)))
     log_fast{T<:ComplexTypes}(x::T) = T(log(abs2(x))/2, angle(x))
-    sin_fast{T<:ComplexTypes}(x::T) = -im*sinh(im*x)
-    sinh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(exp(x) - exp(-x))
+    sin_fast{T<:ComplexTypes}(x::T) = -1im*sinh(1im*x)
+    sinh_fast{T<:ComplexTypes}(x::T) = (exp(x) - exp(-x))/2
     sqrt_fast{T<:ComplexTypes}(x::T) = sqrt(abs(x)) * cis(angle(x)/2)
-    tan_fast{T<:ComplexTypes}(x::T) = -im*tanh(im*x)
+    tan_fast{T<:ComplexTypes}(x::T) = -1im*tanh(1im*x)
     tanh_fast{T<:ComplexTypes}(x::T) = (a=exp(x); b=exp(-x); (a-b)/(a+b))
 end
 

@@ -36,10 +36,11 @@ namespace JL_I {
         checked_smul, checked_umul,
         nan_dom_err,
         // functions
-        abs_float, copysign_float, flipsign_int, select_value,
-        ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
-        sqrt_llvm, powi_llvm,
-        sqrt_llvm_fast,
+        flipsign_int, select_value,
+        ceil_llvm, copysign_llvm, cos_llvm, exp2_llvm, exp_llvm, fabs_llvm,
+        floor_llvm, log10_llvm, log2_llvm, log_llvm,
+        nearbyint_llvm, pow_llvm, powi_llvm, rint_llvm, sin_llvm,
+        sqrt_llvm, sqrt_llvm_checked, trunc_llvm,
         // pointer access
         pointerref, pointerset,
         // c interface
@@ -824,6 +825,65 @@ static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
 
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
+#define IMPLEMENT_INTRINSIC1(intr)                                      \
+    HANDLE(intr##_llvm,1) {                                             \
+        x = FP(x);                                                      \
+        return builder.CreateCall                                       \
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::intr,      \
+                                       ArrayRef<Type*>(x->getType())), x); \
+    }
+#define IMPLEMENT_LIBCALL1(intr)                                        \
+    HANDLE(intr##_llvm,1) {                                             \
+        x = FP(x);                                                      \
+        Type *tx = x->getType();                                        \
+        Type *ts[1] = { tx };                                           \
+        return builder.CreateCall(                                      \
+            jl_Module->getOrInsertFunction(tx==T_float64 ? #intr : #intr"f", \
+                                           FunctionType::get(tx, ts, false)), \
+            x);                                                         \
+    }
+#ifdef LLVM37
+#define IMPLEMENT_INTRINSIC2(intr)                                      \
+    HANDLE(intr##_llvm,2) {                                             \
+        x = FP(x);                                                      \
+        y = FP(y);                                                      \
+        return builder.CreateCall                                       \
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::intr,      \
+                                       ArrayRef<Type*>(x->getType())),  \
+             {x, y});                                                   \
+    }
+#else
+#define IMPLEMENT_INTRINSIC2(intr)                                      \
+    HANDLE(intr##_llvm,2) {                                             \
+        x = FP(x);                                                      \
+        y = FP(y);                                                      \
+        return builder.CreateCall2                                      \
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::intr,      \
+                                       ArrayRef<Type*>(x->getType())),  \
+             x, y);                                                     \
+    }
+#endif
+#ifdef LLVM37
+#define IMPLEMENT_INTRINSIC2I(intr)                                     \
+    HANDLE(intr##_llvm,2) {                                             \
+        x = FP(x);                                                      \
+        y = JL_INT(y);                                                  \
+        return builder.CreateCall                                       \
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::intr,      \
+                                       ArrayRef<Type*>(x->getType())),  \
+             {x, y});                                                   \
+    }
+#else
+#define IMPLEMENT_INTRINSIC2I(intr)                                     \
+    HANDLE(intr##_llvm,2) {                                             \
+        x = FP(x);                                                      \
+        y = JL_INT(y);                                                  \
+        return builder.CreateCall2                                      \
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::intr,      \
+                                       ArrayRef<Type*>(x->getType())),  \
+             x, y);                                                     \
+    }
+#endif
 
 static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              jl_codectx_t *ctx)
@@ -1029,19 +1089,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
+      Value *fmuladdintr =
+        Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+                                  ArrayRef<Type*>(x->getType()));
 #ifdef LLVM37
-      return builder.CreateCall
+      return builder.CreateCall(fmuladdintr, {FP(x), FP(y), FP(z)});
 #else
-      return builder.CreateCall3
+      return builder.CreateCall3(fmuladdintr, FP(x), FP(y), FP(z));
 #endif
-        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
-                                   ArrayRef<Type*>(x->getType())),
-         #ifdef LLVM37
-         {FP(x), FP(y), FP(z)}
-         #else
-         FP(x), FP(y), FP(z)
-         #endif
-        );
     }
 #else
       return math_builder(ctx, true)().
@@ -1213,23 +1268,35 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return f;
     }
 
-    HANDLE(abs_float,1)
+    HANDLE(flipsign_int,2)
     {
-        x = FP(x);
-#ifdef LLVM34
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
-#else
-        Type *intt = JL_INTT(x->getType());
-        Value *bits = builder.CreateBitCast(FP(x), intt);
-        Value *absbits =
-            builder.CreateAnd(bits,
-                              ConstantInt::get(intt, APInt::getSignedMaxValue(((IntegerType*)intt)->getBitWidth())));
-        return builder.CreateBitCast(absbits, x->getType());
-#endif
+        x = JL_INT(x);
+        fy = JL_INT(y);
+        Type *intt = x->getType();
+        ConstantInt *cx = dyn_cast<ConstantInt>(x);
+        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
+        if (cx && cy) {
+            APInt ix = cx->getValue();
+            APInt iy = cy->getValue();
+            return ConstantInt::get(intt, iy.isNonNegative() ? ix : -ix);
+        }
+        if (cy) {
+            APInt iy = cy->getValue();
+            return iy.isNonNegative()
+                   ? x
+                   : builder.CreateSub(ConstantInt::get(intt, 0), x);
+        }
+        unsigned nb = ((IntegerType*)intt)->getBitWidth();
+        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt, nb-1));
+        return builder.CreateXor(builder.CreateAdd(x, tmp), tmp);
     }
-    HANDLE(copysign_float,2)
+
+    IMPLEMENT_INTRINSIC1(ceil)
+
+#ifdef LLVM36
+    IMPLEMENT_INTRINSIC2(copysign)
+#else
+    HANDLE(copysign_llvm,2)
     {
         x = FP(x);
         fy = FP(y);
@@ -1248,86 +1315,83 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                                 signbit0)));
         return builder.CreateBitCast(rbits, x->getType());
     }
-    HANDLE(flipsign_int,2)
+#endif
+
+#if defined LLVM34 || !defined __i386__
+    IMPLEMENT_INTRINSIC1(cos)
+#else
+    // While LLVM 3.3 supports the cos intrinsic, there seems to be a
+    // code generation error for i386 where calls to cos are
+    // "forgotten"
+    IMPLEMENT_LIBCALL1(cos)
+#endif
+
+    IMPLEMENT_INTRINSIC1(exp2)
+    IMPLEMENT_INTRINSIC1(exp)
+
+#ifdef LLVM34
+    IMPLEMENT_INTRINSIC1(fabs)
+#else
+    HANDLE(fabs_llvm,1)
     {
-        x = JL_INT(x);
-        fy = JL_INT(y);
-        Type *intt = x->getType();
-        ConstantInt *cx = dyn_cast<ConstantInt>(x);
-        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
-        if (cx && cy) {
-            APInt ix = cx->getValue();
-            APInt iy = cy->getValue();
-            return ConstantInt::get(intt, iy.isNonNegative() ? ix : -ix);
-        }
-        if (cy) {
-            APInt iy = cy->getValue();
-            return iy.isNonNegative() ? x : builder.CreateSub(ConstantInt::get(intt,0), x);
-        }
-        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
-        return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
-    }
-    HANDLE(jl_alloca,1) {
-        return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
-    }
-    HANDLE(ceil_llvm,1) {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
+        Type *intt = JL_INTT(x->getType());
+        Value *bits = builder.CreateBitCast(FP(x), intt);
+        unsigned nb = ((IntegerType*)intt)->getBitWidth();
+        APInt notsignbit = APInt::getSignedMaxValue(nb);
+        return builder.CreateAnd(bits, ConstantInt::get(intt, notsignbit));
     }
-    HANDLE(floor_llvm,1) {
-        x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::floor,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
-    }
-    HANDLE(trunc_llvm,1) {
-        x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
-    }
-    HANDLE(rint_llvm,1) {
-        x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::rint,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
-    }
-    HANDLE(sqrt_llvm,1) {
-        x = FP(x);
-        raise_exception_unless(builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(),0.0)),
-                               prepare_global(jldomerr_var), ctx);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
-    }
+#endif
+
+    IMPLEMENT_INTRINSIC1(floor)
+    IMPLEMENT_INTRINSIC1(log10)
+    IMPLEMENT_INTRINSIC1(log2)
+    IMPLEMENT_INTRINSIC1(log)
+    IMPLEMENT_INTRINSIC1(nearbyint)
+    IMPLEMENT_INTRINSIC2(pow)
+
+#ifdef LLVM36
+    IMPLEMENT_INTRINSIC2I(powi)
+#else
     HANDLE(powi_llvm,2) {
         x = FP(x);
         y = JL_INT(y);
         Type *tx = x->getType();
-#ifdef LLVM36
-        Type *ts[1] = { tx };
-        Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
-            ArrayRef<Type*>(ts));
-#ifdef LLVM37
-        return builder.CreateCall(powi, {x, y});
-#else
-        return builder.CreateCall2(powi, x, y);
-#endif
-#else
         // issue #6506
         Type *ts[2] = { tx, tx };
         Value *pow = jl_Module->getOrInsertFunction(
             tx==T_float64 ? "pow" : "powf", FunctionType::get(tx, ts, false));
         return builder.CreateCall2(pow, x, builder.CreateSIToFP(y, tx));
-#endif
     }
-    HANDLE(sqrt_llvm_fast,1) {
+#endif
+
+    IMPLEMENT_INTRINSIC1(rint)
+
+#if defined LLVM34 || !defined __i386__
+    IMPLEMENT_INTRINSIC1(sin)
+#else
+    // While LLVM 3.3 supports the sin intrinsic, there seems to be a
+    // code generation error for i386 where calls to sin are
+    // "forgotten"
+    IMPLEMENT_LIBCALL1(sin)
+#endif
+
+    IMPLEMENT_INTRINSIC1(sqrt)
+
+    HANDLE(sqrt_llvm_checked,1) {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
-                                                            ArrayRef<Type*>(x->getType())),
-                                  x);
+        raise_exception_unless
+            (builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(), 0.0)),
+             prepare_global(jldomerr_var), ctx);
+        return builder.CreateCall
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+                                       ArrayRef<Type*>(x->getType())), x);
+    }
+
+    IMPLEMENT_INTRINSIC1(trunc)
+
+    HANDLE(jl_alloca,1) {
+        return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
     }
     default:
         assert(false);
@@ -1407,11 +1471,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fptoui); ADD_I(fptosi);
     ADD_I(uitofp); ADD_I(sitofp);
     ADD_I(fptrunc); ADD_I(fpext);
-    ADD_I(abs_float); ADD_I(copysign_float);
-    ADD_I(flipsign_int); ADD_I(select_value);
-    ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
-    ADD_I(sqrt_llvm); ADD_I(powi_llvm);
-    ADD_I(sqrt_llvm_fast);
     ADD_I(pointerref); ADD_I(pointerset);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
@@ -1421,6 +1480,13 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_trunc_uint);
     ADD_I(check_top_bit);
     ADD_I(nan_dom_err);
+    ADD_I(flipsign_int); ADD_I(select_value);
+    ADD_I(ceil_llvm); ADD_I(copysign_llvm); ADD_I(cos_llvm); ADD_I(exp2_llvm);
+    ADD_I(exp_llvm); ADD_I(fabs_llvm); ADD_I(floor_llvm); ADD_I(log10_llvm);
+    ADD_I(log2_llvm); ADD_I(log_llvm);
+    ADD_I(nearbyint_llvm); ADD_I(pow_llvm); ADD_I(powi_llvm); ADD_I(rint_llvm);
+    ADD_I(sin_llvm); ADD_I(sqrt_llvm);
+    ADD_I(sqrt_llvm_checked); ADD_I(trunc_llvm);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
     ADD_I(llvmcall);

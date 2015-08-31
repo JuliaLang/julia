@@ -2,8 +2,8 @@
 
 ## floating-point functions ##
 
-copysign(x::Float64, y::Float64) = box(Float64,copysign_float(unbox(Float64,x),unbox(Float64,y)))
-copysign(x::Float32, y::Float32) = box(Float32,copysign_float(unbox(Float32,x),unbox(Float32,y)))
+copysign(x::Float64, y::Float64) = box(Float64,copysign_llvm(unbox(Float64,x),unbox(Float64,y)))
+copysign(x::Float32, y::Float32) = box(Float32,copysign_llvm(unbox(Float32,x),unbox(Float32,y)))
 copysign(x::Float32, y::Real) = copysign(x, Float32(y))
 copysign(x::Float64, y::Real) = copysign(x, Float64(y))
 @vectorize_2arg Real copysign

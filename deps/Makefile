@@ -628,12 +628,19 @@ endif # x86_64
 endif # WINNT
 
 else ifeq ($(LLVM_VER),3.6.0)
+	cd llvm-3.6.0 && patch -p1 < ../constfold-llvm-3.6.1.patch
 	cd llvm-3.6.0 && patch -p1 < ../zerosign-llvm-3.6.0.patch
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	cd llvm-3.6.0 && patch -p1 < ../win64-allocas-llvm-3.6.0.patch
 endif # x86_64
 endif # WINNT
+
+else ifeq ($(LLVM_VER),3.6.1)
+	cd llvm-3.6.1 && patch -p1 < ../constfold-llvm-3.6.1.patch
+
+else ifeq ($(LLVM_VER),3.6.2)
+	cd llvm-3.6.2 && patch -p1 < ../constfold-llvm-3.6.1.patch
 
 endif # LLVM_VER
 	touch -c $@

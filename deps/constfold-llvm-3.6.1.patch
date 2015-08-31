@@ -1,0 +1,31 @@
+--- a/lib/Analysis/ConstantFolding.cpp
++++ b/lib/Analysis/ConstantFolding.cpp
+@@ -1246,8 +1246,11 @@
+   case Intrinsic::log10:
+   case Intrinsic::exp:
+   case Intrinsic::exp2:
++  case Intrinsic::sin:
++  case Intrinsic::cos:
+   case Intrinsic::floor:
+   case Intrinsic::ceil:
++  case Intrinsic::trunc:
+   case Intrinsic::sqrt:
+   case Intrinsic::pow:
+   case Intrinsic::powi:
+@@ -1471,10 +1474,16 @@
+         case Intrinsic::exp2:
+           return ConstantFoldFP(exp2, V, Ty);
+ #endif
++        case Intrinsic::sin:
++          return ConstantFoldFP(sin, V, Ty);
++        case Intrinsic::cos:
++          return ConstantFoldFP(cos, V, Ty);
+         case Intrinsic::floor:
+           return ConstantFoldFP(floor, V, Ty);
+         case Intrinsic::ceil:
+           return ConstantFoldFP(ceil, V, Ty);
++        case Intrinsic::trunc:
++          return ConstantFoldFP(trunc, V, Ty);
+       }
+ 
+       if (!TLI)

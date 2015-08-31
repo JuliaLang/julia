@@ -29,8 +29,10 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              sign_mask, exponent_mask, exponent_one, exponent_half,
              significand_mask, significand_bits, exponent_bits, exponent_bias
 
-
-import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
+import Core.Intrinsics: box, unbox, nan_dom_err,
+                        cos_llvm, exp2_llvm, exp_llvm, log10_llvm, log2_llvm,
+                        log_llvm, pow_llvm, powi_llvm, sin_llvm,
+                        sqrt_llvm_checked
 
 # non-type specific math functions
 
@@ -108,7 +110,7 @@ const libm = Base.libm_name
 const openspecfun = "libopenspecfun"
 
 # functions with no domain error
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -116,6 +118,16 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
         @vectorize_1arg Number $f
     end
 end
+
+exp(x::Float64) = box(Float64,exp_llvm(unbox(Float64,x)))
+exp(x::Float32) = box(Float32,exp_llvm(unbox(Float32,x)))
+exp(x::Real) = exp(float(x))
+@vectorize_1arg Number exp
+
+exp2(x::Float64) = box(Float64,exp2_llvm(unbox(Float64,x)))
+exp2(x::Float32) = box(Float32,exp2_llvm(unbox(Float32,x)))
+exp2(x::Real) = exp2(float(x))
+@vectorize_1arg Number exp2
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 cbrt(x::AbstractFloat) = x^(1//3)
@@ -131,8 +143,7 @@ exp10(x::Integer) = exp10(float(x))
 @vectorize_1arg Number exp10
 
 # functions that return NaN on non-NaN argument for domain error
-for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :log1p)
+for f in (:tan, :asin, :acos, :acosh, :atanh, :lgamma, :log1p)
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
@@ -141,8 +152,34 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
-sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
+cos(x::Float64) = nan_dom_err(box(Float64,cos_llvm(unbox(Float64,x))), x)
+cos(x::Float32) = nan_dom_err(box(Float32,cos_llvm(unbox(Float32,x))), x)
+cos(x::Real) = cos(float(x))
+@vectorize_1arg Number cos
+
+log(x::Float64) = nan_dom_err(box(Float64,log_llvm(unbox(Float64,x))), x)
+log(x::Float32) = nan_dom_err(box(Float32,log_llvm(unbox(Float32,x))), x)
+log(x::Real) = log(float(x))
+@vectorize_1arg Number log
+
+log10(x::Float64) = nan_dom_err(box(Float64,log10_llvm(unbox(Float64,x))), x)
+log10(x::Float32) = nan_dom_err(box(Float32,log10_llvm(unbox(Float32,x))), x)
+log10(x::Real) = log10(float(x))
+@vectorize_1arg Number log10
+
+log2(x::Float64) = nan_dom_err(box(Float64,log2_llvm(unbox(Float64,x))), x)
+log2(x::Float32) = nan_dom_err(box(Float32,log2_llvm(unbox(Float32,x))), x)
+log2(x::Real) = log2(float(x))
+@vectorize_1arg Number log2
+
+sin(x::Float64) = nan_dom_err(box(Float64,sin_llvm(unbox(Float64,x))), x)
+sin(x::Float32) = nan_dom_err(box(Float32,sin_llvm(unbox(Float32,x))), x)
+sin(x::Real) = sin(float(x))
+@vectorize_1arg Number sin
+
+# sqrt_llvm_checked already checks for domain errors
+sqrt(x::Float64) = box(Float64,sqrt_llvm_checked(unbox(Float64,x)))
+sqrt(x::Float32) = box(Float32,sqrt_llvm_checked(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
@@ -272,8 +309,10 @@ function modf(x::Float64)
     f, _modf_temp[1]
 end
 
-^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
-^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
+^(x::Float64, y::Float64) =
+    nan_dom_err(box(Float64, pow_llvm(unbox(Float64,x), unbox(Float64,y))), x+y)
+^(x::Float32, y::Float32) =
+    nan_dom_err(box(Float32, pow_llvm(unbox(Float32,x), unbox(Float32,y))), x+y)
 
 ^(x::Float64, y::Integer) =
     box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,Int32(y))))

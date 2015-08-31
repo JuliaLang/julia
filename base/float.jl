@@ -300,8 +300,8 @@ end
 <=(x::Float32, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
 <=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
 
-abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
-abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
+abs(x::Float64) = box(Float64,fabs_llvm(unbox(Float64,x)))
+abs(x::Float32) = box(Float32,fabs_llvm(unbox(Float32,x)))
 
 isnan(x::AbstractFloat) = x != x
 isnan(x::Real) = false
