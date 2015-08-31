@@ -256,7 +256,7 @@ elseif sizeof(Cwchar_t) == 4
     const WString = UTF32String
     const wstring = utf32
 end
-wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
+wstring(s::Cwstring) = wstring(convert(Ptr{Cwchar_t}, s))
 
 # Cwstring is defined in c.jl, but conversion needs to be defined here
 # to have WString
