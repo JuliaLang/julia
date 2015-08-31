@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### truncation
 Base.trunc(dt::Date,p::Type{Year}) = Date(UTD(totaldays(year(dt),1,1)))
 Base.trunc(dt::Date,p::Type{Month}) = firstdayofmonth(dt)
@@ -37,6 +39,7 @@ function lastdayofyear(dt::Date)
     y,m,d = yearmonthday(dt)
     return Date(UTD(value(dt)+daysinyear(y)-dayofyear(y,m,d)))
 end
+lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
 
 @vectorize_1arg TimeType firstdayofyear
 @vectorize_1arg TimeType lastdayofyear
@@ -70,7 +73,7 @@ immutable DateFunction
         return new(@eval x->$n($f(x)))
     end
 end
-Base.show(io::IO,df::DateFunction) = println(df.f.code)
+Base.show(io::IO,df::DateFunction) = println(io, df.f.code)
 
 # Core adjuster
 function adjust(df::DateFunction,start,step,limit)
@@ -128,13 +131,13 @@ function toprev(func::Function,dt::TimeType;step::Period=Day(-1),negate::Bool=fa
 end
 
 # Return the first TimeType that falls on dow in the Month or Year
-function tofirst(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tofirst(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? firstdayofmonth(dt) : firstdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(1),366)
 end
 
 # Return the last TimeType that falls on dow in the Month or Year
-function tolast(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
+function tolast(dt::TimeType,dow::Int;of::Union{Type{Year},Type{Month}}=Month)
     dt = of <: Month ? lastdayofmonth(dt) : lastdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow],dt,Day(-1),366)
 end

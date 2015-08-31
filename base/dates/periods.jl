@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Period types
 value(x::Period) = x.value
 
@@ -22,14 +24,14 @@ Base.convert{T<:Period}(::Type{T},x::Real) = T(x)
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
 Base.show(io::IO,x::Period) = print(io,string(x))
-Base.zero{P<:Period}(::Union(Type{P},P)) = P(0)
-Base.one{P<:Period}(::Union(Type{P},P)) = P(1)
+Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
+Base.one{P<:Period}(::Union{Type{P},P}) = P(1)
 Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
-default{T<:DatePeriod}(p::Union(T,Type{T})) = one(p)
-default{T<:TimePeriod}(p::Union(T,Type{T})) = zero(p)
+default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
+default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
@@ -40,14 +42,7 @@ import Base: div, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
 for op in (:+,:-,:lcm,:gcd)
     @eval ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
 end
-for op in (:.+, :.-)
-    op_ = symbol(string(op)[2:end])
-    @eval begin
-        ($op){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(Y::StridedArray{P},x::P) = ($op)(Y,x)
-    end
-end
+
 for op in (:/,:%,:div,:mod)
     @eval begin
         ($op){P<:Period}(x::P,y::P) = ($op)(value(x),value(y))
@@ -59,7 +54,7 @@ end
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
 *(y::Real,x::Period) = x * y
 .*{P<:Period}(y::Real, X::StridedArray{P}) = X .* y
-for (op,Ty,Tz) in ((:.+,:P,:P),(:.-,:P,:P), (:.*,Real,:P),
+for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:./,:P,Float64), (:./,Real,:P),
                    (:.%,:P,Int64), (:.%,Integer,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
@@ -190,6 +185,7 @@ function Base.string(x::CompoundPeriod)
     end
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
+
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x,y])
 (+)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,y))
@@ -199,7 +195,30 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::Period,y::Period) = CompoundPeriod(Period[x,-y])
 (-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
-(-)(y::Union(Period,CompoundPeriod),x::CompoundPeriod) = (-x) + y
+(-)(y::Union{Period,CompoundPeriod},x::CompoundPeriod) = (-x) + y
+
+GeneralPeriod = Union{Period,CompoundPeriod}
+(+)(x::GeneralPeriod) = x
+(+){P<:GeneralPeriod}(x::StridedArray{P}) = x
+
+for op in (:.+, :.-)
+    op_ = symbol(string(op)[2:end])
+    @eval begin
+        function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
+            Z = similar(X, CompoundPeriod)
+            for i = 1:length(X)
+                @inbounds Z[i] = ($op_)(X[i],y)
+            end
+            return Z
+        end
+        ($op){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = ($op)(Y,x)
+        ($op_){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
+            reshape(CompoundPeriod[($op_)(X[i],Y[i]) for i in eachindex(X, Y)], promote_shape(size(X),size(Y)))
+    end
+end
+
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(y::Period, x::CompoundPeriod) = x == y
 (==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
@@ -218,9 +237,17 @@ function (+)(x::TimeType,y::CompoundPeriod)
 end
 (+)(x::CompoundPeriod,y::TimeType) = y + x
 
+function (-)(x::TimeType,y::CompoundPeriod)
+    for p in y.periods
+        x -= p
+    end
+    return x
+end
+(-)(x::CompoundPeriod,y::TimeType) = y - x
+
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-typealias FixedPeriod Union(Week,Day,Hour,Minute,Second,Millisecond)
+typealias FixedPeriod Union{Week,Day,Hour,Minute,Second,Millisecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x,y)
@@ -257,7 +284,7 @@ end
 Base.isless{T<:FixedPeriod,S<:FixedPeriod}(x::T,y::S) = isless(promote(x,y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
-typealias OtherPeriod Union(Month,Year)
+typealias OtherPeriod Union{Month,Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
         $vmin ≤ value(x) ≤ $vmax || throw(InexactError())

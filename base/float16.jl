@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function convert(::Type{Float32}, val::Float16)
     ival::UInt32 = reinterpret(UInt16, val)
     sign::UInt32 = (ival & 0x8000) >> 15
@@ -96,7 +98,7 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-convert(::Type{Bool},    x::Float16) = (x!=0)
+convert(::Type{Bool},    x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
 convert(::Type{UInt128}, x::Float16) = convert(UInt128, Float32(x))
 
@@ -105,7 +107,7 @@ convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
 trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
 floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
-ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
+ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 
 round(x::Float16) = Float16(round(Float32(x)))
 trunc(x::Float16) = Float16(trunc(Float32(x)))

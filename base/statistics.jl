@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ##### mean #####
 
 function mean(iterable)
@@ -24,7 +26,7 @@ end
 
 momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
-momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
+momenttype{T<:Union{Float64,Int32,Int64,UInt32,UInt64}}(::Type{T}) = Float64
 
 mean{T}(A::AbstractArray{T}, region) =
     mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
@@ -39,7 +41,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
     count = 1
     value, state = next(iterable, state)
-    if mean == nothing
+    if mean === nothing
         # Use Welford algorithm as seen in (among other places)
         # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
@@ -98,7 +100,7 @@ centralize_sumabs2(A::AbstractArray, m::Number) =
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
-stagedfunction centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+@generated function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     quote
         # following the implementation of _mapreducedim! at base/reducedim.jl
         lsiz = check_reducedims(R,A)
@@ -158,14 +160,14 @@ varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
 
 function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
     convert(momenttype(T), mean == 0 ? varzm(A; corrected=corrected) :
-                           mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
+                           mean === nothing ? varm(A, Base.mean(A); corrected=corrected) :
                            isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
                            throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::momenttype(T)
 end
 
 function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(A, region; corrected=corrected) :
-    mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
+    mean === nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
     isa(mean, AbstractArray) ? varm(A, mean::AbstractArray, region; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -175,7 +177,15 @@ varm(iterable, m::Number; corrected::Bool=true) =
 
 ## variances over ranges
 
-varm(v::Range, m::Number) = var(v)
+function varm(v::Range, m::Number)
+    f = first(v) - m
+    s = step(v)
+    l = length(v)
+    if l == 0 || l == 1
+           return NaN
+    end
+    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+end
 
 function var(v::Range)
     s = step(v)
@@ -190,7 +200,7 @@ end
 ##### standard deviation #####
 
 function sqrt!(A::AbstractArray)
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds A[i] = sqrt(A[i])
     end
     A
@@ -275,21 +285,21 @@ covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corr
 
 function cov(x::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; corrected=corrected) :
-    mean == nothing ? covm(x, Base.mean(x); corrected=corrected) :
+    mean === nothing ? covm(x, Base.mean(x); corrected=corrected) :
     isa(mean, Number) ? covm(x, mean; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; vardim=vardim, corrected=corrected) :
-    mean == nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
+    mean === nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
     isa(mean, AbstractArray) ? covm(x, mean; vardim=vardim, corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x, y; corrected=corrected) :
-    mean == nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
+    mean === nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
     isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -297,7 +307,7 @@ end
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, mean=nothing)
     if mean == 0
         covzm(x, y; vardim=vardim, corrected=corrected)
-    elseif mean == nothing
+    elseif mean === nothing
         covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
     elseif isa(mean, (Any,Any))
         covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
@@ -411,21 +421,21 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
 
 function cor(x::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x) :
-    mean == nothing ? corm(x, Base.mean(x)) :
+    mean === nothing ? corm(x, Base.mean(x)) :
     isa(mean, Number) ? corm(x, mean) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
     mean == 0 ? corzm(x; vardim=vardim) :
-    mean == nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
+    mean === nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
     isa(mean, AbstractArray) ? corm(x, mean; vardim=vardim) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x, y) :
-    mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
+    mean === nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
     isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
     throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
@@ -433,7 +443,7 @@ end
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
     if mean == 0
         corzm(x, y; vardim=vardim)
-    elseif mean == nothing
+    elseif mean === nothing
         corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
     elseif isa(mean, (Any,Any))
         corm(x, mean[1], y, mean[2]; vardim=vardim)
@@ -446,8 +456,8 @@ end
 ##### median & quantiles #####
 
 # Specialized functions for real types allow for improved performance
-middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = Float64(x)
-middle(x::FloatingPoint) = x
+middle(x::Union{Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128}) = Float64(x)
+middle(x::AbstractFloat) = x
 middle(x::Float16) = Float32(x)
 middle(x::Real) = (x + zero(x)) / 1
 middle(x::Real, y::Real) = x/2 + y/2
@@ -456,7 +466,7 @@ middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
 function median!{T}(v::AbstractVector{T})
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
-    if T<:FloatingPoint
+    if T<:AbstractFloat
         @inbounds for x in v
             isnan(x) && return x
         end
@@ -469,9 +479,10 @@ function median!{T}(v::AbstractVector{T})
         return middle(m[1], m[2])
     end
 end
+median!{T}(v::AbstractArray{T}) = median!(vec(v))
 
 median{T}(v::AbstractArray{T}) = median!(vec(copy(v)))
-median{T}(v::AbstractArray{T}, region) = mapslices(median, v, region)
+median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
@@ -515,7 +526,7 @@ end
 
 ## nice-valued ranges for histograms
 
-function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:AbstractFloat,N}(v::AbstractArray{T,N}, n::Integer)
     nv = length(v)
     if nv == 0 && n < 0
         throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
@@ -657,4 +668,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
-

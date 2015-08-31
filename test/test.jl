@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # test file to test testing
 
 # Test @test
@@ -88,7 +90,8 @@ end
 @test isapprox(.1+.1+.1, .3)
 @test !isapprox(.1+.1+.1, .4)
 
+@test_throws ErrorException Test.test_approx_eq(ones(10),ones(11),1e-8,"a","b")
+@test_throws ErrorException Test.test_approx_eq(ones(10),zeros(10),1e-8,"a","b")
 
 # Test @test_approx_eq_eps
 # TODO
-

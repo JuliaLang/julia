@@ -27,7 +27,7 @@ function shift1!(a,nx,ny,nz,index,i)
 end
 
 function shiftm1!(a,nx,ny,nz,index,i)
-    @match i begin 
+    @match i begin
         1 => shiftmi!(a,nx,ny,nz,index)
         2 => shiftmj!(a,nx,ny,nz,index)
         3 => shiftmk!(a,nx,ny,nz,index)
@@ -78,7 +78,7 @@ function shiftmi!(a,nx,ny,nz,index)
                 a[i,j,k,index] = a[i+1,j,k,index]
             end
             a[end,j,k,index] = t
-        end 
+        end
     end
 end
 
@@ -91,7 +91,7 @@ function shiftmj!(a,nx,ny,nz,index)
             end
             a[i,end,k,index] = t
        end
-    end 
+    end
 end
 
 function shiftmk!(a,nx,ny,nz,index)
@@ -104,5 +104,5 @@ function shiftmk!(a,nx,ny,nz,index)
             a[i,j,end,index] = t
        end
     end
-end 
+end
 

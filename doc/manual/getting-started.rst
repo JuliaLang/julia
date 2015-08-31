@@ -67,6 +67,10 @@ Or you could put that code into a script and run it::
     foo
     bar
 
+The ``--`` delimiter can be used to separate command-line args to the scriptfile from args to Julia::
+
+    $ julia --color=yes -O -- foo.jl arg1 arg2..
+
 Julia can be started in parallel mode with either the ``-p`` or the
 ``--machinefile`` options. ``-p n`` will launch an additional ``n`` worker
 processes, while ``--machinefile file`` will launch a worker for each line in
@@ -102,48 +106,52 @@ put it in ``~/.juliarc.jl``:
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
 
-    julia [options] [program] [args...]
+    julia [switches] -- [programfile] [args...]
      -v, --version             Display version information
      -h, --help                Print this message
-     -q, --quiet               Quiet startup without banner
+
+     -J, --sysimage <file>     Start up with the given system image file
+     --precompiled={yes|no}    Use precompiled code from system image if available
      -H, --home <dir>          Set location of julia executable
+     --startup-file={yes|no}   Load ~/.juliarc.jl
+     -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)
+     -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)
+     --handle-signals={yes|no} Enable or disable Julia's default signal handlers
 
      -e, --eval <expr>         Evaluate <expr>
      -E, --print <expr>        Evaluate and show <expr>
-     -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode
+     -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)
      -L, --load <file>         Load <file> immediately on all processors
-     -J, --sysimage <file>     Start up with the given system image file
-     -C, --cpu-target <target> Limit usage of cpu features up to <target>
 
      -p, --procs {N|auto}      Integer value N launches N additional local worker processes
-                               'auto' launches as many workers as the number of local cores
+                               "auto" launches as many workers as the number of local cores
      --machinefile <file>      Run processes on hosts listed in <file>
 
-     -i                        Force isinteractive() to be true
+     -i                        Interactive mode; REPL runs and isinteractive() is true
+     -q, --quiet               Quiet startup (no banner)
      --color={yes|no}          Enable or disable color text
-
      --history-file={yes|no}   Load or save history
      --no-history-file         Don't load history file (deprecated, use --history-file=no)
-     --startup-file={yes|no}   Load ~/.juliarc.jl
-     -f, --no-startup          Don't load ~/.juliarc   (deprecated, use --startup-file=no)
-     -F                        Load ~/.juliarc         (deprecated, use --startup-file=yes)
 
      --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation
+     -C, --cpu-target <target> Limit usage of cpu features up to <target>
+     -O, --optimize            Run time-intensive code optimizations
+     --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
+     --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
+     --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
+
+     --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)
+
+     --output-o name           Generate an object file (including system image data)
+     --output-ji name          Generate a system image data file (.ji)
+     --output-bc name          Generate LLVM bitcode (.bc)
+
+     --output-incremental=no   Generate an incremental output file (rather than complete)
 
      --code-coverage={none|user|all}, --code-coverage
-                              Count executions of source lines (omitting setting is equivalent to 'user')
-
-    --track-allocation={none|user|all}, --track-allocation
-                              Count bytes allocated by each source line
-
-    -O, --optimize
-                              Run time-intensive code optimizations
-    --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
-    --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)
-    --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings
-    --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
-    --math-mode={ieee|user}   Always use IEEE semantics for math (ignoring declarations),
-                              or adhere to declarations in source code
+                               Count executions of source lines (omitting setting is equivalent to "user")
+     --track-allocation={none|user|all}, --track-allocation
+                               Count bytes allocated by each source line
 
 Resources
 ---------

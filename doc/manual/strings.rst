@@ -11,13 +11,13 @@ comes when one asks what a character is. The characters that English
 speakers are familiar with are the letters ``A``, ``B``, ``C``, etc.,
 together with numerals and common punctuation symbols. These characters
 are standardized together with a mapping to integer values between 0 and
-127 by the `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ standard. There
+127 by the `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ standard. There
 are, of course, many other characters used in non-English languages,
 including variants of the ASCII characters with accents and other
 modifications, related scripts such as Cyrillic and Greek, and scripts
 completely unrelated to ASCII and English, including Arabic, Chinese,
 Hebrew, Hindi, Japanese, and Korean. The
-`Unicode <http://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
+`Unicode <https://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
 complexities of what exactly a character is, and is generally accepted
 as the definitive standard addressing this problem. Depending on your
 needs, you can either ignore these complexities entirely and just
@@ -53,9 +53,9 @@ There are a few noteworthy high-level features about Julia's strings:
    efficiently and simply for variable-width encodings of Unicode
    strings.
 -  Julia supports the full range of
-   `Unicode <http://en.wikipedia.org/wiki/Unicode>`_ characters: literal
-   strings are always `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ or
-   `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
+   `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters: literal
+   strings are always `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ or
+   `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
    strings from external sources can be supported.
 
 .. _man-characters:
@@ -66,7 +66,7 @@ Characters
 A :obj:`Char` value represents a single character: it is just a 32-bit
 bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
+point <https://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
 values are input and shown:
 
 .. doctest::
@@ -82,7 +82,7 @@ easily:
 
 .. doctest::
 
-    julia> int('x')
+    julia> Int('x')
     120
 
     julia> typeof(ans)
@@ -99,14 +99,14 @@ convert an integer value back to a :obj:`Char` just as easily:
 Not all integer values are valid Unicode code points, but for
 performance, the :func:`Char` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the :func:`is_valid_char` function:
+valid code point, use the :func:`isvalid` function:
 
 .. doctest::
 
     julia> Char(0x110000)
     '\U110000'
 
-    julia> is_valid_char(0x110000)
+    julia> isvalid(Char, 0x110000)
     false
 
 As of this writing, the valid Unicode code points are ``U+00`` through
@@ -137,7 +137,7 @@ Julia uses your system's locale and language settings to determine which
 characters can be printed as-is and which must be output using the
 generic, escaped ``\u`` or ``\U`` input forms. In addition to these
 Unicode escape forms, all of `C's traditional escaped input
-forms <http://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
+forms <https://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
 also be used:
 
 .. doctest::
@@ -224,16 +224,8 @@ a normal value:
     julia> str[end-1]
     '.'
 
-    julia> str[end/2]
+    julia> str[end÷2]
     ' '
-
-    julia> str[end/3]
-    ERROR: InexactError()
-     in getindex at string.jl:59
-
-    julia> str[end/4]
-    ERROR: InexactError()
-     in getindex at string.jl:59
 
 Using an index less than 1 or greater than ``end`` raises an error::
 
@@ -285,9 +277,9 @@ special characters depends on your terminal's locale settings and its
 support for Unicode. Non-ASCII string literals are encoded using the
 UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all
 characters are encoded in the same number of bytes. In UTF-8, ASCII
-characters — i.e. those with code points less than 0x80 (128) — are
+characters — i.e. those with code points less than 0x80 (128) — are
 encoded as they are in ASCII, using a single byte, while code points
-0x80 and above are encoded using multiple bytes — up to four per
+0x80 and above are encoded using multiple bytes — up to four per
 character. This means that not every byte index into a UTF-8 string is
 necessarily a valid index for a character. If you index into a string at
 such an invalid byte index, an error is thrown:
@@ -298,14 +290,14 @@ such an invalid byte index, an error is thrown:
     '∀'
 
     julia> s[2]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:69
+     in getindex at strings/basic.jl:37
 
     julia> s[3]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:69
+     in getindex at strings/basic.jl:37
 
     julia> s[4]
     ' '
@@ -510,7 +502,10 @@ contained in a string:
     false
 
     julia> contains("Xylophon", 'o')
-    ERROR: `contains` has no method matching contains(::ASCIIString, ::Char)
+    ERROR: MethodError: `contains` has no method matching contains(::ASCIIString, ::Char)
+    Closest candidates are:
+      contains(!Matched::Function, ::Any, !Matched::Any)
+      contains(::AbstractString, !Matched::AbstractString)
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
@@ -579,7 +574,7 @@ any options turned on just uses ``r"..."``:
     r"^\s*(?:#|$)"
 
     julia> typeof(ans)
-    Regex (constructor with 3 methods)
+    Regex
 
 To check if a regex matches a string, use :func:`ismatch`:
 
@@ -645,7 +640,7 @@ which to start the search. For example:
 You can extract the following info from a :obj:`RegexMatch` object:
 
 -  the entire substring matched: ``m.match``
--  the captured substrings as a tuple of strings: ``m.captures``
+-  the captured substrings as an array of strings: ``m.captures``
 -  the offset at which the whole match begins: ``m.offset``
 -  the offsets of the captured substrings as a vector: ``m.offsets``
 
@@ -661,7 +656,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Void),1}:
+    3-element Array{Union{SubString{UTF8String},Void},1}:
      "a"
      "c"
      "d"
@@ -682,7 +677,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Void),1}:
+    3-element Array{Union{SubString{UTF8String},Void},1}:
      "a"
      nothing
      "d"
@@ -696,11 +691,35 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
      0
      2
 
-It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables::
+It is convenient to have captures returned as an array so that one can
+use destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"
+
+Captures can also be accessed by indexing the :obj:`RegexMatch` object
+with the number or name of the capture group::
+
+    julia> m=match(r"(?P<hour>\d+):(?P<minute>\d+)","12:45")
+    RegexMatch("12:45", hour="12", minute="45")
+    julia> m[:minute]
+    "45"
+    julia> m[2]
+    "45"
+
+Captures can be referenced in a substitution string when using :func:`replace`
+by using ``\n`` to refer to the `n`th capture group and prefixing the
+subsitution string with ``s``. Capture group 0 refers to the entire match object.
+Named capture groups can be referenced in the substitution with ``g<groupname>``.
+For example::
+
+    julia> replace("first second", r"(\w+) (?P<agroup>\w+)", s"\g<agroup> \1")
+    julia> "second first"
+
+Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
+as in::
+    julia> replace("a", r".", "\g<0>1")
+    julia> a1
 
 You can modify the behavior of regular expressions by some combination
 of the flags ``i``, ``m``, ``s``, and ``x`` after the closing double

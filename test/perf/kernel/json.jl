@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #JSON Parser
 #Adapted from http://www.mathworks.com/matlabcentral/fileexchange/23393
 #Original BSD Licence, (c) 2011, François Glineur

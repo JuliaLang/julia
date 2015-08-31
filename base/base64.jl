@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Base64
 import Base: read, write, close, eof, empty!
 export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
@@ -59,8 +61,8 @@ for (val, ch) in enumerate(b64chars)
     revb64chars[UInt8(ch)] = UInt8(val - 1)
 end
 
-#Decode a block of at least 2 and at most 4 bytes, received in encvec
-#Returns the first decoded byte and stores up to two more in cache
+# Decode a block of at least 2 and at most 4 bytes, received in encvec
+# Returns the first decoded byte and stores up to two more in cache
 function b64decode!(encvec::Vector{UInt8}, cache::Vector{UInt8})
     if length(encvec) < 2
         throw(ArgumentError("incorrect base64 format, block must be at least 2 and at most 4 bytes"))
@@ -122,6 +124,7 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
     else
         b.nb = 0
     end
+    n
 end
 
 function write(b::Base64EncodePipe, x::UInt8)
@@ -135,6 +138,7 @@ function write(b::Base64EncodePipe, x::UInt8)
         write(b.io, b64(b.b0,b.b1,x)...)
         b.nb = 0
     end
+    1
 end
 
 function close(b::Base64EncodePipe)
@@ -161,10 +165,6 @@ base64encode(x...) = base64encode(write, x...)
 
 #############################################################################
 
-# read(b::Base64Pipe, ::Type{UInt8}) = # TODO: decode base64
-
-#############################################################################
-
 type Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
@@ -180,7 +180,7 @@ end
 
 function read(b::Base64DecodePipe, t::Type{UInt8})
     if length(b.cache) > 0
-        val = shift!(b.cache)
+        return shift!(b.cache)
     else
         empty!(b.encvec)
         while !eof(b.io) && length(b.encvec) < 4
@@ -189,24 +189,21 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
                 push!(b.encvec, c)
             end
         end
-        val = b64decode!(b.encvec,b.cache)
+        return b64decode!(b.encvec,b.cache)
     end
-    val
 end
 
-function eof(b::Base64DecodePipe)
-    return length(b.cache) == 0 && eof(b.io)
-end
-
-function close(b::Base64DecodePipe)
-end
+eof(b::Base64DecodePipe) = length(b.cache) == 0 && eof(b.io)
+close(b::Base64DecodePipe) = nothing
 
 # Decodes a base64-encoded string
 function base64decode(s)
     b = IOBuffer(s)
-    decoded = readall(Base64DecodePipe(b))
-    close(b)
-    decoded
+    try
+        return readbytes(Base64DecodePipe(b))
+    finally
+        close(b)
+    end
 end
 
 end # module

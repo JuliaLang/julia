@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Build a system image binary at sysimg_path.dlext.  By default, put the system image
 # next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
@@ -24,37 +25,45 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Enter base/ and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
+        julia = joinpath(JULIA_HOME, "julia")
+        ld = find_system_linker()
+
+        # Ensure we have write-permissions to wherever we're trying to write to
         try
-            julia = joinpath(JULIA_HOME, "julia")
-            ld = find_system_linker()
+            touch("$sysimg_path.ji")
+        catch
+            err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
+            err_msg *= "and is writable. Absolute paths work best.)"
+            error( err_msg )
+        end
 
-            # Ensure we have write-permissions to wherever we're trying to write to
-            try
-                touch("$sysimg_path.ji")
-            catch
-                err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
-                err_msg *= "and is writable. Absolute paths work best. Do you need to run this with sudo?)"
-                error( err_msg )
+        # Copy in userimg.jl if it exists...
+        if userimg_path != nothing
+            if !isreadable(userimg_path)
+                error("$userimg_path is not readable, ensure it is an absolute path!")
             end
-
-            # Copy in userimg.jl if it exists...
-            if userimg_path != nothing
-                if !isreadable(userimg_path)
-                    error("$userimg_path is not readable, ensure it is an absolute path!")
-                end
-                cp(userimg_path, "userimg.jl")
+            if isfile("userimg.jl")
+                error("$base_dir/userimg.jl already exists, delete manually to continue.")
             end
+            cp(userimg_path, "userimg.jl")
+        end
+        try
+            # Start by building inference0.{ji,o}
+            inference0_path = joinpath(dirname(sysimg_path), "inference0")
+            info("Building inference0.o...")
+            println("$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl")
+            run(`$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl`)
 
-            # Start by building sys0.{ji,o}
-            sys0_path = joinpath(dirname(sysimg_path), "sys0")
-            info("Building sys0.o...")
-            println("$julia -C $cpu_target --build $sys0_path sysimg.jl")
-            run(`$julia -C $cpu_target --build $sys0_path sysimg.jl`)
+            # Bootstrap off off that to create inference.{ji,o}
+            inference_path = joinpath(dirname(sysimg_path), "inference")
+            info("Building inference.o...")
+            println("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
+            run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
-            # Bootstrap off of that to create sys.{ji,o}
+            # Bootstrap off off that to create sys.{ji,o}
             info("Building sys.o...")
-            println("$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl")
-            run(`$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl`)
+            println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
+            run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
             if ld != nothing
                 link_sysimg(sysimg_path, ld)
@@ -63,13 +72,17 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             end
 
             if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
-                info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                if Base.isfile("$sysimg_path.$(Libdl.dlext)")
+                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.$(Libdl.dlext)")
+                else
+                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                end
             else
                 info("Julia will automatically load this system image at next startup")
             end
         finally
             # Cleanup userimg.jl
-            if isfile("userimg.jl")
+            if userimg_path != nothing && isfile("userimg.jl")
                 rm("userimg.jl")
             end
         end
@@ -117,18 +130,13 @@ function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
     FLAGS = ["-L$julia_libdir"]
     if OS_NAME == :Darwin
         push!(FLAGS, "-dylib")
-        push!(FLAGS, "-undefined")
-        push!(FLAGS, "dynamic_lookup")
         push!(FLAGS, "-macosx_version_min")
         push!(FLAGS, "10.7")
     else
         push!(FLAGS, "-shared")
-        # on windows we link using gcc for now
-        wl = @windows? "-Wl," : ""
-        push!(FLAGS, wl * "--unresolved-symbols")
-        push!(FLAGS, wl * "ignore-all")
     end
-    @windows_only append!(FLAGS, ["-ljulia", "-lssp-0"])
+    push!(FLAGS, "-ljulia")
+    @windows_only push!(FLAGS, "-lssp")
 
     info("Linking sys.$(Libdl.dlext)")
     run(`$ld $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
@@ -157,7 +165,7 @@ if !isinteractive()
         println(" Example:")
         println("   build_sysimg.jl /usr/local/lib/julia/sys core2 ~/my_usrimg.jl --force")
         println()
-        println(" Running this script with no arguments is equivalent to calling it via")
+        println(" Running this script with no arguments is equivalent to:")
         println("   build_sysimg.jl $(default_sysimg_path) native")
         return 0
     end

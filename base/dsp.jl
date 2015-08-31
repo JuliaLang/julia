@@ -1,26 +1,21 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module DSP
 
-importall Base.FFTW
-import Base.FFTW.normalization
 import Base.trailingsize
 
-export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
-       dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
-       # the rest are defined imported from FFTW:
-       fft, bfft, ifft, rfft, brfft, irfft,
-       plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
-       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
+export filt, filt!, deconv, conv, conv2, xcorr
 
 _zerosi(b,a,T) = zeros(promote_type(eltype(b), eltype(a), T), max(length(a), length(b))-1)
 
-function filt{T,S}(b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
+function filt{T,S}(b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
                    x::AbstractArray{T}, si::AbstractArray{S}=_zerosi(b,a,T))
     filt!(Array(promote_type(eltype(b), eltype(a), T, S), size(x)), b, a, x, si)
 end
 
 # in-place filtering: returns results in the out argument, which may shadow x
 # (and does so by default)
-function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
+function filt!{T,S,N}(out::AbstractArray, b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
                       x::AbstractArray{T}, si::AbstractArray{S,N}=_zerosi(b,a,T))
     isempty(b) && throw(ArgumentError("filter vector b must be non-empty"))
     isempty(a) && throw(ArgumentError("filter vector a must be non-empty"))
@@ -115,10 +110,10 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     vpad = [v; zeros(T, np2 - nv)]
     if T <: Real
         p = plan_rfft(upad)
-        y = irfft(p(upad).*p(vpad), np2)
+        y = irfft((p*upad).*(p*vpad), np2)
     else
         p = plan_fft!(upad)
-        y = ifft!(p(upad).*p(vpad))
+        y = ifft!((p*upad).*(p*vpad))
     end
     return y[1:n]
 end
@@ -147,7 +142,7 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     At[1:sa[1], 1:sa[2]] = A
     Bt[1:sb[1], 1:sb[2]] = B
     p = plan_fft(At)
-    C = ifft(p(At).*p(Bt))
+    C = ifft((p*At).*(p*Bt))
     if T <: Real
         return real(C)
     end
@@ -165,125 +160,5 @@ function xcorr(u, v)
     end
     flipdim(conv(flipdim(u, 1), v), 1)
 end
-
-fftshift(x) = circshift(x, div([size(x)...],2))
-
-function fftshift(x,dim)
-    s = zeros(Int,ndims(x))
-    s[dim] = div(size(x,dim),2)
-    circshift(x, s)
-end
-
-ifftshift(x) = circshift(x, div([size(x)...],-2))
-
-function ifftshift(x,dim)
-    s = zeros(Int,ndims(x))
-    s[dim] = -div(size(x,dim),2)
-    circshift(x, s)
-end
-
-# Discrete cosine and sine transforms via FFTW's r2r transforms;
-# we follow the Matlab convention and adopt a unitary normalization here.
-# Unlike Matlab we compute the multidimensional transform by default,
-# similar to the Julia fft functions.
-
-fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
-fftwcopy{T<:Real}(X::StridedArray{T}) = float(X)
-fftwcopy{T<:Complex}(X::StridedArray{T}) = map(Complex128,X)
-
-for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
-                         (:dct!, :r2r!, :X, :fftwNumber))
-    plan_f = symbol("plan_",f)
-    plan_fr2r = symbol("plan_",fr2r)
-    fi = symbol("i",f)
-    plan_fi = symbol("plan_",fi)
-    Ycopy = Y == :X ? 0 : :(Y = fftwcopy(X))
-    @eval begin
-        function $f{T<:$Tx}(X::StridedArray{T}, region)
-            $Y = $fr2r(X, REDFT10, region)
-            scale!($Y, sqrt(0.5^length(region) * normalization(X,region)))
-            sqrthalf = sqrt(0.5)
-            r = map(n -> 1:n, [size(X)...])
-            for d in region
-                r[d] = 1:1
-                $Y[r...] *= sqrthalf
-                r[d] = 1:size(X,d)
-            end
-            return $Y
-        end
-
-        function $plan_f{T<:$Tx}(X::StridedArray{T}, region,
-                                 flags::Unsigned, timelimit::Real)
-            p = $plan_fr2r(X, REDFT10, region, flags, timelimit)
-            sqrthalf = sqrt(0.5)
-            r = map(n -> 1:n, [size(X)...])
-            nrm = sqrt(0.5^length(region) * normalization(X,region))
-            return X::StridedArray{T} -> begin
-                $Y = p(X)
-                scale!($Y, nrm)
-                for d in region
-                    r[d] = 1:1
-                    $Y[r...] *= sqrthalf
-                    r[d] = 1:size(X,d)
-                end
-                return $Y
-            end
-        end
-
-        function $fi{T<:$Tx}(X::StridedArray{T}, region)
-            $Ycopy
-            scale!($Y, sqrt(0.5^length(region) * normalization(X, region)))
-            sqrt2 = sqrt(2)
-            r = map(n -> 1:n, [size(X)...])
-            for d in region
-                r[d] = 1:1
-                $Y[r...] *= sqrt2
-                r[d] = 1:size(X,d)
-            end
-            return r2r!($Y, REDFT01, region)
-        end
-
-        function $plan_fi{T<:$Tx}(X::StridedArray{T}, region,
-                                 flags::Unsigned, timelimit::Real)
-            p = $plan_fr2r(X, REDFT01, region, flags, timelimit)
-            sqrt2 = sqrt(2)
-            r = map(n -> 1:n, [size(X)...])
-            nrm = sqrt(0.5^length(region) * normalization(X,region))
-            return X::StridedArray{T} -> begin
-                $Ycopy
-                scale!($Y, nrm)
-                for d in region
-                    r[d] = 1:1
-                    $Y[r...] *= sqrt2
-                    r[d] = 1:size(X,d)
-                end
-                return p($Y)
-            end
-        end
-
-    end
-    for (g,plan_g) in ((f,plan_f), (fi, plan_fi))
-        @eval begin
-            $g{T<:$Tx}(X::StridedArray{T}) = $g(X, 1:ndims(X))
-
-            $plan_g(X, region, flags::Unsigned) =
-              $plan_g(X, region, flags, NO_TIMELIMIT)
-            $plan_g(X, region) =
-              $plan_g(X, region, ESTIMATE, NO_TIMELIMIT)
-            $plan_g{T<:$Tx}(X::StridedArray{T}) =
-              $plan_g(X, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
-        end
-    end
-end
-
-# DCT of scalar is just the identity:
-dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-idct(x::Number, dims) = dct(x, dims)
-dct(x::Number) = x
-idct(x::Number) = x
-plan_dct(x::Number, dims, flags, tlim) = length(dims) == 0 || dims[1] == 1 ? y::Number -> y : throw(BoundsError())
-plan_idct(x::Number, dims, flags, tlim) = plan_dct(x, dims)
-plan_dct(x::Number) = y::Number -> y
-plan_idct(x::Number) = y::Number -> y
 
 end # module

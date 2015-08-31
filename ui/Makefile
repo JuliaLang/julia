@@ -21,7 +21,11 @@ DOBJS = $(SRCS:%=%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),1)
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
+else
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
+endif
 else
 LLVMLINK =
 endif
@@ -37,8 +41,9 @@ ifeq ($(OS),WINNT)
 JLDFLAGS += -municode
 endif
 
-release debug:
-	$(MAKE) julia-$@
+default: release
+all: release debug
+release debug :  % : julia-%
 
 %.o: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
@@ -46,9 +51,6 @@ release debug:
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
-$(build_bindir)/julia.bat: $(JULIAHOME)/contrib/windows/*.bat
-	cp $(JULIAHOME)/contrib/windows/*.bat $(build_bindir)
-julia-release julia-debug: $(build_bindir)/julia.bat
 ifneq ($(USEMSVC), 1)
 julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
@@ -80,4 +82,3 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/julia*
 
 .PHONY: clean release debug julia-release julia-debug
-

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function write_and_readchomp(data, cmd::Cmd)
     r, w, p = readandwrite(cmd)
     print(w,data); close(w)

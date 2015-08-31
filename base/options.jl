@@ -1,18 +1,18 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 immutable JLOptions
-    version::Int8
     quiet::Int8
-    julia_home::Ptr{Cchar}
-    julia_bin::Ptr{Cchar}
-    build_path::Ptr{Cchar}
-    eval::Ptr{Cchar}
-    print::Ptr{Cchar}
-    postboot::Ptr{Cchar}
-    load::Ptr{Cchar}
-    image_file::Ptr{Cchar}
-    cpu_target::Ptr{Cchar}
-    nprocs::Clong
-    machinefile::Ptr{Cchar}
+    julia_home::Ptr{UInt8}
+    julia_bin::Ptr{UInt8}
+    eval::Ptr{UInt8}
+    print::Ptr{UInt8}
+    postboot::Ptr{UInt8}
+    load::Ptr{UInt8}
+    image_file::Ptr{UInt8}
+    cpu_target::Ptr{UInt8}
+    nprocs::Int32
+    machinefile::Ptr{UInt8}
     isinteractive::Int8
     color::Int8
     historyfile::Int8
@@ -22,12 +22,17 @@ immutable JLOptions
     malloc_log::Int8
     opt_level::Int8
     check_bounds::Int8
-    dumpbitcode::Int8
     depwarn::Int8
     can_inline::Int8
     fast_math::Int8
     worker::Int8
-    bindto::Ptr{Cchar}
+    handle_signals::Int8
+    use_precompiled::Int8
+    bindto::Ptr{UInt8}
+    outputbc::Ptr{UInt8}
+    outputo::Ptr{UInt8}
+    outputji::Ptr{UInt8}
+    incremental::Int8
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))

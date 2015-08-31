@@ -14,12 +14,14 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
-   Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors. (not exported)
+   .. Docstring generated from Julia source
+   .. code-block:: julia
 
+       runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``\ , which can be either a string or an array of strings, using ``numcores`` processors. (not exported)
 
 .. module:: Base.Test
-
 Test Framework
 --------------
 
@@ -53,6 +55,7 @@ Another macro is provided to check if the given expression throws an exception o
 :func:`@test_throws`::
 
   julia> @test_throws ErrorException error("An error")
+  ErrorException("An error")
 
   julia> @test_throws BoundsError error("An error")
   ERROR: test failed: error("An error")
@@ -61,6 +64,7 @@ Another macro is provided to check if the given expression throws an exception o
    in do_test_throws at test.jl:55
 
   julia> @test_throws DomainError throw(DomainError())
+  DomainError()
 
   julia> @test_throws DomainError throw(EOFError())
   ERROR: test failed: throw(EOFError())
@@ -69,7 +73,22 @@ Another macro is provided to check if the given expression throws an exception o
    in do_test_throws at test.jl:55
 
 
-As floating point comparisons can be imprecise, two additional macros exist taking in account small numerical errors::
+As floating-point values can be imprecise, you can perform approximate
+equality checks using either ``@test a ≈ b`` (where ``≈``, typed via
+tab completion of ``\approx``, is the ``isapprox`` function) or use
+the macros ``@test_approx_eq`` macro (which differs from ``isapprox``
+in that it treats NaN values as equal and has a smaller default
+tolerance) or ``@test_approx_eq_eps`` (which takes an extra argument
+indicating the relative tolerance)::
+
+  julia> @test 1 ≈ 0.999999999
+
+  julia> @test 1 ≈ 0.999999
+  ERROR: test failed: 1 isapprox 0.999999
+   in expression: 1 ≈ 0.999999
+   in error at error.jl:21
+   in default_handler at test.jl:30
+   in do_test at test.jl:53
 
   julia> @test_approx_eq 1. 0.999999999
   ERROR: assertion failed: |1.0 - 0.999999999| < 2.220446049250313e-12
@@ -133,26 +152,49 @@ Macros
 
 .. function:: @test(ex)
 
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+
+       @test(ex)
+
    Test the expression ``ex`` and calls the current handler to handle the result.
 
 .. function:: @test_throws(extype, ex)
 
-   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+
+       @test_throws(extype, ex)
+
+   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
 
 .. function:: @test_approx_eq(a, b)
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account
-   small numerical errors.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+
+       @test_approx_eq(a, b)
+
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account small numerical errors.
 
 .. function:: @test_approx_eq_eps(a, b, tol)
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account
-   a margin of tolerance given by ``tol``.
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+
+       @test_approx_eq_eps(a, b, tol)
+
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
 
 Functions
 ---------
 
 .. function:: with_handler(f, handler)
+
+   .. Docstring generated from Julia source
+   .. code-block:: julia
+
+       with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
 

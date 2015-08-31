@@ -30,13 +30,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 #include "julia.h"
+#include <pthread.h>
 #include "threadgroup.h"
 
 #define PROFILE_JL_THREADING            1
 
 
 // thread ID
-extern __thread int16_t ti_tid;
+extern JL_THREAD int16_t ti_tid;
 
 // GC
 extern struct _jl_thread_heap_t **jl_all_heaps;
@@ -72,14 +73,14 @@ enum {
 typedef struct {
     uint8_t             command;
     jl_function_t       *fun;
-    jl_tuple_t          *args;
+    jl_svec_t           *args;
     jl_value_t          *ret;
 
 } ti_threadwork_t;
 
 
 // basic functions for thread creation
-int  ti_threadcreate(uint64_t *pthread_id, int proc_num,
+int  ti_threadcreate(pthread_t *pthread_id, int proc_num,
                      void *(*thread_fun)(void *), void *thread_arg);
 void ti_threadsetaffinity(uint64_t pthread_id, int proc_num);
 
@@ -88,7 +89,7 @@ void *ti_threadfun(void *arg);
 
 // helpers for thread function
 void ti_initthread(int16_t tid);
-jl_value_t *ti_runthread(jl_function_t *f, jl_tuple_t *args, size_t nargs);
+jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
 
 
 #endif  /* THREADING_H */

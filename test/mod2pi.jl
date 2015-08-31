@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # NOTES on range reduction
 # [1] compute numbers near pi: http://www.cs.berkeley.edu/~wkahan/testpi/nearpi.c
 # [2] range reduction: http://hal-ujm.ccsd.cnrs.fr/docs/00/08/69/04/PDF/RangeReductionIEEETC0305.pdf

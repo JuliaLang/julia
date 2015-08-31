@@ -38,7 +38,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <sched.h>
 
 #include "julia.h"
@@ -88,7 +87,7 @@ uint64_t *join_ticks;
 
 
 // create a thread and affinitize it if proc_num is specified
-int ti_threadcreate(uint64_t *pthread_id, int proc_num,
+int ti_threadcreate(pthread_t *pthread_id, int proc_num,
                     void *(*thread_fun)(void *), void *thread_arg)
 {
     pthread_attr_t attr;
@@ -139,10 +138,10 @@ void ti_initthread(int16_t tid)
 
 
 // all threads call this function to run user code
-static jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args)
+static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
 {
     JL_TRY {
-        jl_apply(f, jl_tuple_data(args), jl_tuple_len(args));
+        jl_apply(f, jl_svec_data(args), jl_svec_len(args));
     }
     JL_CATCH {
         return jl_exception_in_transit;
@@ -264,7 +263,7 @@ void jl_start_threads(void)
 {
     char *cp;
     int i, exclusive;
-    uint64_t ptid;
+    pthread_t ptid;
     ti_threadarg_t **targs;
 
     // do we have exclusive use of the machine? default is no
@@ -354,16 +353,16 @@ void jl_cpu_pause()
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
-DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
+DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 {
 #if PROFILE_JL_THREADING
     uint64_t tstart = rdtsc();
 #endif
 
-    jl_tuple_t *argtypes = NULL;
+    jl_tupletype_t *argtypes = NULL;
     jl_function_t *fun = NULL;
     JL_GC_PUSH2(&argtypes, &fun);
-    argtypes = arg_type_tuple(jl_tuple_data(args), jl_tuple_len(args));
+    argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
     fun = jl_get_specialization(f, argtypes);
     if (fun == NULL)
         fun = f;

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const _fact_table64 =
     Int64[1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,
           87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,
@@ -32,16 +34,16 @@ end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
 factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(Int32(n))
-factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
+factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
+factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(Int64(n))
+factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
+function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
@@ -140,7 +142,7 @@ function permute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-permute!(a, p::AbstractVector) = permute!!(a, copy(p))
+permute!(a, p::AbstractVector) = permute!!(a, copy!(similar(p), p))
 
 function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
@@ -165,7 +167,7 @@ function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copy(p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copy!(similar(p), p))
 
 immutable Combinations{T}
     a::T
@@ -351,7 +353,7 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-let _nipartitions = Dict{(Int,Int),Int}()
+let _nipartitions = Dict{Tuple{Int,Int},Int}()
     global npartitions
     function npartitions(n::Int,m::Int)
         if n < m || m == 0

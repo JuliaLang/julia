@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # yearmonthday is the opposite of totaldays
 # taking Rata Die Day # and returning proleptic Gregorian date
 @test Dates.yearmonthday(-306) == (0,2,29)
@@ -118,7 +120,7 @@ end
 test_dates(0,2100)
 
 # week function
-# Tests from http://en.wikipedia.org/wiki/ISO_week_date
+# Tests from https://en.wikipedia.org/wiki/ISO_week_date
 @test Dates.week(Dates.Date(2005,1,1)) == 53
 @test Dates.week(Dates.Date(2005,1,2)) == 53
 @test Dates.week(Dates.Date(2005,12,31)) == 52

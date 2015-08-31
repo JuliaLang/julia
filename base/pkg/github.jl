@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module GitHub
 
 import Main, ..Git, ..Dir
@@ -23,7 +25,7 @@ function user()
 end
 
 function json()
-    isdefined(:JSON) || try require("JSON")
+    isdefined(:JSON) || try eval(Main, :(import JSON))
     catch err
         warn(err)
         error("using the GitHub API requires having the JSON package installed ")
@@ -130,7 +132,7 @@ function pushable(owner::AbstractString, repo::AbstractString, user::AbstractStr
     status, response = GET("repos/$owner/$repo/collaborators/$user")
     status == 204 && return true
     status == 404 && return false
-    error("unexpected API status code: $status – $(response["message"])")
+    error("unexpected API status code: $status – $(response["message"])")
 end
 
 function fork(owner::AbstractString, repo::AbstractString)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Date internal algorithms
 @test Dates.totaldays(0,2,28) == -307
 @test Dates.totaldays(0,2,29) == -306

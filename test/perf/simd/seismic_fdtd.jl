@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Finite-difference time-domain seismic simulation in 2D using a staggered grid.
 # The intent is to test performance of @simd on the inner loop of a 2D loop nest.
 #
@@ -21,7 +23,7 @@ function updateU( irange, jrange, U, Vx, Vy, B )
     for j in jrange
         @simd for i in irange
             @inbounds begin
-                U [i,j] += B[i,j]*((Vx[i,j]-Vx[i,j-1]) + (Vy[i,j]-Vy[i-1,j]))
+                U[i,j] += B[i,j]*((Vx[i,j]-Vx[i,j-1]) + (Vy[i,j]-Vy[i-1,j]))
             end
         end
     end

@@ -1,4 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.LineEdit
+isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 
 a_foo = 0

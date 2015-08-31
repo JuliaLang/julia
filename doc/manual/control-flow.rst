@@ -136,8 +136,9 @@ So, we could have defined the ``test`` function above as
              else
                relation = "greater than"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
+    test (generic function with 1 method)
 
 The variable ``relation`` is declared inside the ``if`` block, but used
 outside. However, when depending on this behavior, make sure all possible
@@ -152,12 +153,12 @@ the above function results in a runtime error
              elseif x == y
                relation = "equal to"
              end
-             println("x is ", relation, " than y.")
+             println("x is ", relation, " y.")
            end
     test (generic function with 1 method)
 
     julia> test(1,2)
-    x is less than than y.
+    x is less than y.
 
     julia> test(2,1)
     ERROR: UndefVarError: relation not defined
@@ -170,12 +171,13 @@ of the last executed statement in the branch that was chosen, so
 .. doctest::
 
     julia> x = 3
+    3
 
     julia> if x > 0
-             "positive!"
-          else
-             "negative..."
-          end
+               "positive!"
+           else
+               "negative..."
+           end
     "positive!"
 
 Note that very short conditional statements (one-liners) are frequently expressed using
@@ -190,10 +192,10 @@ conditional expression is anything but ``true`` or ``false``:
     julia> if 1
              println("true")
            end
-    ERROR: type: non-boolean (Int64) used in boolean context
+    ERROR: TypeError: non-boolean (Int64) used in boolean context
 
 This error indicates that the conditional was of the wrong type:
-``Int64`` rather than the required ``Bool``.
+:obj:`Int64`` rather than the required :obj:`Bool`.
 
 The so-called "ternary operator", ``?:``, is closely related to the
 ``if``-``elseif``-``else`` syntax, but is used where a conditional
@@ -391,14 +393,14 @@ except for the last entry in a conditional chain is an error:
 .. doctest::
 
     julia> 1 && true
-    ERROR: type: non-boolean (Int64) used in boolean context
+    ERROR: TypeError: non-boolean (Int64) used in boolean context
 
 On the other hand, any type of expression can be used at the end of a conditional chain.
 It will be evaluated and returned depending on the preceding conditionals:
 
 .. testsetup::
 
-    srand(123)
+    srand(123);
 
 .. doctest::
 
@@ -475,7 +477,7 @@ different variable name to test this:
     5
 
     julia> j
-    ERROR: j not defined
+    ERROR: UndefVarError: j not defined
 
 See :ref:`man-variables-and-scoping` for a detailed
 explanation of variable scope and how it works in Julia.
@@ -598,45 +600,57 @@ Built-in :exc:`Exception`\ s
 :exc:`Exception`\ s are thrown when an unexpected condition has occurred. The
 built-in :exc:`Exception`\ s listed below all interrupt the normal flow of control.
 
-+---------------------------+
-| :exc:`Exception`          |
-+===========================+
-| :exc:`ArgumentError`      |
-+---------------------------+
-| :exc:`BoundsError`        |
-+---------------------------+
-| :exc:`DivideError`        |
-+---------------------------+
-| :exc:`DomainError`        |
-+---------------------------+
-| :exc:`EOFError`           |
-+---------------------------+
-| :exc:`ErrorException`     |
-+---------------------------+
-| :exc:`InexactError`       |
-+---------------------------+
-| :exc:`InterruptException` |
-+---------------------------+
-| :exc:`KeyError`           |
-+---------------------------+
-| :exc:`LoadError`          |
-+---------------------------+
-| :exc:`OutOfMemoryError`   |
-+---------------------------+
-| :exc:`MethodError`        |
-+---------------------------+
-| :exc:`OverflowError`      |
-+---------------------------+
-| :exc:`ParseError`         |
-+---------------------------+
-| :exc:`SystemError`        |
-+---------------------------+
-| :exc:`TypeError`          |
-+---------------------------+
-| :exc:`UndefRefError`      |
-+---------------------------+
-| :exc:`UndefVarError`      |
-+---------------------------+
++------------------------------+
+| :exc:`Exception`             |
++==============================+
+| :exc:`ArgumentError`         |
++------------------------------+
+| :exc:`BoundsError`           |
++------------------------------+
+| :exc:`CompositeException`    |
++------------------------------+
+| :exc:`DivideError`           |
++------------------------------+
+| :exc:`DomainError`           |
++------------------------------+
+| :exc:`EOFError`              |
++------------------------------+
+| :exc:`ErrorException`        |
++------------------------------+
+| :exc:`InexactError`          |
++------------------------------+
+| :exc:`InitError`             |
++------------------------------+
+| :exc:`InterruptException`    |
++------------------------------+
+| :exc:`InvalidStateException` |
++------------------------------+
+| :exc:`KeyError`              |
++------------------------------+
+| :exc:`LoadError`             |
++------------------------------+
+| :exc:`OutOfMemoryError`      |
++------------------------------+
+| :exc:`ReadOnlyMemoryError`   |
++------------------------------+
+| :exc:`RemoteException`       |
++------------------------------+
+| :exc:`MethodError`           |
++------------------------------+
+| :exc:`OverflowError`         |
++------------------------------+
+| :exc:`ParseError`            |
++------------------------------+
+| :exc:`SystemError`           |
++------------------------------+
+| :exc:`TypeError`             |
++------------------------------+
+| :exc:`UndefRefError`         |
++------------------------------+
+| :exc:`UndefVarError`         |
++------------------------------+
+| :exc:`UnicodeError`          |
++------------------------------+
 
 
 For example, the :func:`sqrt` function throws a :exc:`DomainError` if applied to a
@@ -645,10 +659,10 @@ negative real value:
 .. doctest::
 
     julia> sqrt(-1)
-    ERROR: DomainError
+    ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument.
-    try sqrt(complex(x))
-     in sqrt at math.jl:132
+    try sqrt (complex(x))
+     in sqrt at math.jl:146
 
 You may define your own exceptions in the following way:
 
@@ -672,7 +686,7 @@ if the argument is negative:
     0.36787944117144233
 
     julia> f(-1)
-    ERROR: DomainError
+    ERROR: DomainError:
      in f at none:1
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
@@ -692,7 +706,7 @@ error reporting:
 .. doctest::
 
     julia> throw(UndefVarError(:x))
-    ERROR: x not defined
+    ERROR: UndefVarError: x not defined
 
 This mechanism can be implemented easily by custom exception types following
 the way :exc:`UndefVarError` is written:
@@ -770,7 +784,7 @@ execution.:
 
     julia> error("Hi"); 1+1
     ERROR: Hi
-     in error at error.jl:21
+     in error at ./error.jl:21
 
 
 The ``try/catch`` statement
@@ -828,7 +842,7 @@ assumes ``x`` is a real number and returns its square root:
     3.0
 
     julia> sqrt_second(-9)
-    ERROR: DomainError
+    ERROR: DomainError:
      in sqrt_second at none:7
 
 Note that the symbol following ``catch`` will always be interpreted as a

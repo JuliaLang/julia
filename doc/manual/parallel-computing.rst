@@ -117,6 +117,7 @@ process that owns ``r``, so the :func:`fetch` will be a no-op.
 as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
+.. _man-parallel-computing-code-availability:
 
 Code Availability and Loading Packages
 --------------------------------------
@@ -174,11 +175,7 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
 
 You can force a command to run on all processes using the :obj:`@everywhere` macro.
-Consequently, an easy way to load *and* use a package on all processes is::
-
-    @everywhere using DummyModule
-
-:obj:`@everywhere` can also be used to directly define a function on all processes::
+For example, :obj:`@everywhere` can also be used to directly define a function on all processes::
 
     julia> @everywhere id = myid()
 
@@ -206,6 +203,9 @@ The base Julia installation has in-built support for two types of clusters:
 
 Functions :func:`addprocs`, :func:`rmprocs`, :func:`workers`, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
+
+Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+(such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 Other types of clusters can be supported by writing your own custom
 :class:`ClusterManager`, as described below in the :ref:`man-clustermanagers`
@@ -444,8 +444,50 @@ preemptively. This means context switches only occur at well-defined
 points: in this case, when :func:`remotecall_fetch` is called.
 
 
-Shared Arrays (Experimental)
------------------------------------------------
+Channels
+--------
+Channels provide for a fast means of inter-task communication. A
+``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
+holding objects of type ``T``. Multiple readers can read off the channel
+via ``fetch`` and ``take!``. Multiple writers can add to the channel via
+``put!``. ``isready`` tests for the prescence of any object in
+the channel, while ``wait`` waits for an object to become available.
+``close`` closes a Channel. On a closed channel, ``put!`` will fail,
+while ``take!`` and ``fetch`` successfully return any existing values
+till it is emptied.
+
+A Channel can be used as an iterable object in a ``for`` loop, in which
+case the loop runs as long as the channel has data or is open. The loop
+variable takes on all values added to the channel. An empty, closed channel
+causes the ``for`` loop to terminate.
+
+
+RemoteRefs and AbstractChannels
+-------------------------------
+
+A ``RemoteRef`` is a proxy for an implementation of an ``AbstractChannel``
+
+A concrete implementation of an ``AbstractChannel`` (like ``Channel``), is required
+to implement ``put!``, ``take!``, ``fetch``, ``isready`` and ``wait``. The remote object
+referred to by a ``RemoteRef()`` or ``RemoteRef(pid)`` is stored in a ``Channel{Any}(1)``,
+i.e., a channel of size 1 capable of holding objects of ``Any`` type.
+
+Methods ``put!``, ``take!``, ``fetch``, ``isready`` and ``wait`` on a ``RemoteRef`` are proxied onto
+the backing store on the remote process.
+
+The constructor ``RemoteRef(f::Function, pid)`` allows us to construct references to channels holding
+more than one value of a specific type. ``f()`` is a function executed on ``pid`` and it must return
+an ``AbstractChannel``.
+
+For example, ``RemoteRef(()->Channel{Int}(10), pid)``, will return a reference to a channel of type ``Int``
+and size 10.
+
+``RemoteRef`` can thus be used to refer to user implemented ``AbstractChannel`` objects. A simple
+example of this is provided in ``examples/dictchannel.jl`` which uses a dictionary as its remote store.
+
+
+Shared Arrays
+-------------
 
 Shared Arrays use system shared memory to map the same array across
 many processes.  While there are some similarities to a :class:`DArray`,
@@ -480,15 +522,17 @@ specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a
 distinct portion of the array, thereby parallelizing initialization.
 
-Here's a brief example::
+Here's a brief example:
+
+.. doctest::
 
   julia> addprocs(3)
-  3-element Array{Any,1}:
+  3-element Array{Int64,1}:
    2
    3
    4
 
-  julia> S = SharedArray(Int, (3,4), init = S -> S[localindexes(S)] = myid())
+  julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
   3x4 SharedArray{Int64,2}:
    2  2  3  4
    2  3  3  4
@@ -503,9 +547,11 @@ Here's a brief example::
    2  3  3  4
    2  7  4  4
 
-:func:`localindexes` provides disjoint one-dimensional ranges of indexes,
+:func:`Base.localindexes` provides disjoint one-dimensional ranges of indexes,
 and is sometimes convenient for splitting up tasks among processes.
-You can, of course, divide the work any way you wish::
+You can, of course, divide the work any way you wish:
+
+.. doctest::
 
   julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
   3x4 SharedArray{Int64,2}:
@@ -529,6 +575,99 @@ would result in undefined behavior: because each process fills the
 execute (for any particular element of ``S``) will have its ``pid``
 retained.
 
+As a more extended and complex example, consider running the following
+"kernel" in parallel::
+
+    q[i,j,t+1] = q[i,j,t] + u[i,j,t]
+
+In this case, if we try to split up the work using a one-dimensional
+index, we are likely to run into trouble: if ``q[i,j,t]`` is near the
+end of the block assigned to one worker and ``q[i,j,t+1]`` is near the
+beginning of the block assigned to another, it's very likely that
+``q[i,j,t]`` will not be ready at the time it's needed for computing
+``q[i,j,t+1]``.  In such cases, one is better off chunking the array
+manually.  Let's split along the second dimension::
+
+   # This function retuns the (irange,jrange) indexes assigned to this worker
+   @everywhere function myrange(q::SharedArray)
+       idx = indexpids(q)
+       if idx == 0
+           # This worker is not assigned a piece
+           return 1:0, 1:0
+       end
+       nchunks = length(procs(q))
+       splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
+       1:size(q,1), splits[idx]+1:splits[idx+1]
+   end
+
+   # Here's the kernel
+   @everywhere function advection_chunk!(q, u, irange, jrange, trange)
+       @show (irange, jrange, trange)  # display so we can see what's happening
+       for t in trange, j in jrange, i in irange
+           q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
+       end
+       q
+   end
+
+   # Here's a convenience wrapper for a SharedArray implementation
+   @everywhere advection_shared_chunk!(q, u) = advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
+
+Now let's compare three different versions, one that runs in a single process::
+
+   advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1)
+
+one that uses ``@parallel``::
+
+   function advection_parallel!(q, u)
+       for t = 1:size(q,3)-1
+           @sync @parallel for j = 1:size(q,2)
+               for i = 1:size(q,1)
+                   q[i,j,t+1]= q[i,j,t] + u[i,j,t]
+               end
+           end
+       end
+       q
+   end
+
+and one that delegates in chunks::
+
+   function advection_shared!(q, u)
+       @sync begin
+           for p in procs(q)
+               @async remotecall_wait(p, advection_shared_chunk!, q, u)
+           end
+       end
+       q
+   end
+
+If we create SharedArrays and time these functions, we get the following results (with ``julia -p 4``)::
+
+   q = SharedArray(Float64, (500,500,500))
+   u = SharedArray(Float64, (500,500,500))
+
+   # Run once to JIT-compile
+   advection_serial!(q, u)
+   advection_parallel!(q, u)
+   advection_shared!(q,u)
+
+   # Now the real results:
+   julia> @time advection_serial!(q, u);
+   (irange,jrange,trange) = (1:500,1:500,1:499)
+    830.220 milliseconds (216 allocations: 13820 bytes)
+
+   julia> @time advection_parallel!(q, u);
+      2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)
+
+   julia> @time advection_shared!(q,u);
+           From worker 2:	(irange,jrange,trange) = (1:500,1:125,1:499)
+           From worker 4:	(irange,jrange,trange) = (1:500,251:375,1:499)
+           From worker 3:	(irange,jrange,trange) = (1:500,126:250,1:499)
+           From worker 5:	(irange,jrange,trange) = (1:500,376:500,1:499)
+    238.119 milliseconds (2264 allocations: 169 KB)
+
+The biggest advantage of ``advection_shared!`` is that it minimizes traffic
+among the workers, allowing each to compute for an extended time on the
+assigned piece.
 
 .. _man-clustermanagers:
 
@@ -633,7 +772,7 @@ object (with appropriate fields initialized) to ``launched`` ::
      port::Nullable{Integer}
 
      # Used when launching additional workers at a host
-     count::Nullable{Union(Int, Symbol)}
+     count::Nullable{Union{Int, Symbol}}
      exename::Nullable{AbstractString}
      exeflags::Nullable{Cmd}
 
@@ -736,7 +875,22 @@ implementation simply executes an ``exit()`` call on the specified remote worker
 ``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
 
 
+Specifying network topology (Experimental)
+-------------------------------------------
 
+Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers must
+be connected to each other:
+    - ``:all_to_all`` : is the default, where all workers are connected to each other.
+
+    - ``:master_slave`` : only the driver process, i.e. pid 1 has connections to the workers.
+
+    - ``:custom`` : the ``launch`` method of the cluster manager specifes the connection topology.
+      Fields ``ident`` and ``connect_idents`` in ``WorkerConfig`` are used to specify the  same.
+      ``connect_idents`` is a list of ``ClusterManager`` provided identifiers to workers that worker
+      with identified by ``ident`` must connect to.
+
+Currently sending a message between unconnected workers results in an error. This behaviour, as also the
+functionality and interface should be considered experimental in nature and may change in future releases.
 
 .. rubric:: Footnotes
 

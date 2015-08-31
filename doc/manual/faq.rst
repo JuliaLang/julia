@@ -286,7 +286,7 @@ generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -317,7 +317,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -475,10 +475,10 @@ be inferred about an object of type ``MyAmbiguousType``:
     MyAmbiguousType(17)
 
     julia> typeof(b)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
     julia> typeof(c)
-    MyAmbiguousType (constructor with 1 method)
+    MyAmbiguousType
 
 ``b`` and ``c`` have the same type, yet their underlying
 representation of data in memory is very different. Even if you stored
@@ -495,7 +495,7 @@ case the natural solution is to use parameters. For example:
 
 .. doctest::
 
-    julia> type MyType{T<:FloatingPoint}
+    julia> type MyType{T<:AbstractFloat}
              a::T
            end
 
@@ -504,7 +504,7 @@ This is a better choice than
 .. doctest::
 
     julia> type MyStillAmbiguousType
-             a::FloatingPoint
+             a::AbstractFloat
            end
 
 because the first version specifies the type of ``a`` from the type of
@@ -519,10 +519,10 @@ the wrapper object.  For example:
     MyStillAmbiguousType(3.2)
 
     julia> typeof(m)
-    MyType{Float64} (constructor with 1 method)
+    MyType{Float64}
 
     julia> typeof(t)
-    MyStillAmbiguousType (constructor with 2 methods)
+    MyStillAmbiguousType
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
@@ -561,8 +561,8 @@ an abstract type:
 
 .. doctest::
 
-    julia> m = MyType{FloatingPoint}(3.2)
-    MyType{FloatingPoint}(3.2)
+    julia> m = MyType{AbstractFloat}(3.2)
+    MyType{AbstractFloat}(3.2)
 
     julia> typeof(m.a)
     Float64
@@ -586,7 +586,7 @@ using
 ::
 
     code_llvm(func,(MyType{Float64},))
-    code_llvm(func,(MyType{FloatingPoint},))
+    code_llvm(func,(MyType{AbstractFloat},))
     code_llvm(func,(MyType,))
 
 For reasons of length the results are not shown here, but you may wish
@@ -620,22 +620,22 @@ For example:
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
+    MySimpleContainer{UnitRange{Int64}}
 
-    julia> c = MySimpleContainer([1:3]);
+    julia> c = MySimpleContainer([1:3;]);
 
     julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}} (constructor with 1 method)
+    MySimpleContainer{Array{Int64,1}}
 
     julia> b = MyAmbiguousContainer(1:3);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
-    julia> b = MyAmbiguousContainer([1:3]);
+    julia> b = MyAmbiguousContainer([1:3;]);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
+    MyAmbiguousContainer{Int64}
 
 For ``MySimpleContainer``, the object is fully-specified by its type
 and parameters, so the compiler can generate optimized functions. In
@@ -656,7 +656,7 @@ separate function::
     end
 
     foo(x::Integer) = x
-    foo(x::FloatingPoint) = round(x)
+    foo(x::AbstractFloat) = round(x)
 
 This keeps things simple, while allowing the compiler to generate
 optimized code in all cases.
@@ -665,7 +665,7 @@ However, there are cases where you may need to declare different
 versions of the outer function for different element types of
 ``a``. You could do it like this::
 
-    function myfun{T<:FloatingPoint}(c::MySimpleContainer{Vector{T}})
+    function myfun{T<:AbstractFloat}(c::MySimpleContainer{Vector{T}})
         ...
     end
     function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
@@ -699,7 +699,7 @@ With this approach, one can write functions such as::
     # the previous could have been written more succinctly as
     #     function myfunc{T<:Integer}(c::MyContainer{T})
 
-    function myfunc{T<:FloatingPoint}(c::MyContainer{T})
+    function myfunc{T<:AbstractFloat}(c::MyContainer{T})
         return c.a[1]+2
     end
 
@@ -748,6 +748,32 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
+-- _man-packages:
+
+Packages and Modules
+--------------------
+
+What is the difference between "using" and "importall"?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is only one difference, and on the surface (syntax-wise) it may seem very minor.
+The difference between ``using`` and ``importall`` is that with ``using`` you need to say
+``function Foo.bar(..`` to extend module Foo's function bar with a new method, but with
+``importall`` or ``import Foo.bar``, you only need to say ``function bar(...`` and it
+automatically extends module Foo's function bar.
+
+If you use ``importall``, then ``function Foo.bar(...`` and ``function bar(...`` become
+equivalent. If you use ``using``, then they are different.
+
+The reason this is important enough to have been given separate syntax is that you don't
+want to accidentally extend a function that you didn't know existed, because that could
+easily cause a bug. This is most likely to happen with a method that takes a common type
+like a string or integer, because both you and the other module could define a method to
+handle such a common type. If you use ``importall``, then you'll replace the other module's
+implementation of ``bar(s::AbstractString)`` with your new implementation, which could easily do
+something completely different (and break all/many future usages of the other functions
+in module Foo that depend on calling bar).
+
 .. _man-nothing:
 
 Nothingness and missing values
@@ -778,7 +804,7 @@ really be thought of as nothing but rather a tuple of zero values.
 
 In code written for Julia prior to version 0.4 you may occasionally see ``None``,
 which is quite different. It is the empty (or "bottom") type, a type with no values
-and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+and no subtypes (except itself). This is now written as ``Union{}`` (an empty union
 type). You will generally not need to use this type.
 
 Memory

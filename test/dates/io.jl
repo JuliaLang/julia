@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test string(Dates.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE
@@ -174,6 +176,17 @@ gg = "Jan-1996-15"
 f = "uuu-yyyy-dd"
 @test Dates.DateTime(gg,f) == dt
 @test Dates.format(dt,f) == gg
+hh = "1996#1#15"
+f = "yyyy#m#d"
+@test Dates.DateTime(hh,f) == dt
+@test Dates.format(dt,f) == hh
+
+# test prefix.
+s = "/1996/1/15"
+f = "/yyyy/m/d"
+@test Dates.DateTime(s,f) == dt
+@test Dates.format(dt,f) == s
+@test Dates.DateTime("1996/1/15",f) == dt
 
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)

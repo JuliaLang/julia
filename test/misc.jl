@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Tests that do not really go anywhere else
 
 # Test info
@@ -32,22 +34,11 @@ let res = assert(true)
     @test res === nothing
 end
 let
-    try
+    ex = @test_throws AssertionError begin
         assert(false)
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
     end
-end
-let
-    try
-        assert(false, "this is a test")
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
-    end
+    @test isempty(ex.msg)
 end
 
 # test @assert macro
@@ -57,53 +48,44 @@ end
 @test_throws AssertionError (@assert false "this is a test" "another test")
 @test_throws AssertionError (@assert false :a)
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
     end
+    @test contains(ex.msg, "1 == 2")
 end
 # test @assert message
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 "this is a test"
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
     end
+    @test ex.msg == "this is a test"
 end
 # @assert only uses the first message string
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 "this is a test" "this is another test"
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
     end
+    @test ex.msg == "this is a test"
 end
 # @assert calls string() on second argument
 let
-    try
+    ex = @test_throws AssertionError begin
         @assert 1 == 2 :random_object
         error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
     end
+    @test !contains(ex.msg,  "1 == 2")
+    @test contains(ex.msg, "random_object")
 end
 # if the second argument is an expression, c
 let deepthought(x, y) = 42
-    try
-        @assert 1 == 2 string("the answer to the ultimate question: ", deepthought(6,9))
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "the answer to the ultimate question: 42"
+    ex = @test_throws AssertionError begin
+        @assert 1 == 2 string("the answer to the ultimate question: ",
+                              deepthought(6, 9))
     end
+    @test ex.msg == "the answer to the ultimate question: 42"
 end
 
 let # test the process title functions, issue #9957
@@ -116,8 +98,78 @@ end
 
 
 # test gc_enable/disable
-@test gc_enable()
-@test gc_disable()
-@test gc_disable() == false
-@test gc_enable() == false
-@test gc_enable()
+@test gc_enable(true)
+@test gc_enable(false)
+@test gc_enable(false) == false
+@test gc_enable(true) == false
+@test gc_enable(true)
+
+# test methodswith
+immutable NoMethodHasThisType end
+@test isempty(methodswith(NoMethodHasThisType))
+@test !isempty(methodswith(Int))
+
+# PR #10984
+# Disable on windows because of issue (missing flush) when redirecting STDERR.
+let
+    redir_err = "redirect_stderr(STDOUT)"
+    exename = joinpath(JULIA_HOME, Base.julia_exename())
+    script = "$redir_err; f(a::Number, b...) = 1;f(a, b::Number) = 1"
+    warning_str = readall(`$exename -f -e $script`)
+    @test contains(warning_str, "f(Any, Number)")
+    @test contains(warning_str, "f(Number, Any...)")
+    @test contains(warning_str, "f(Number, Number)")
+
+    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    warning_str = readall(`$exename -f -e $script`)
+    @test contains(warning_str, "f()")
+end
+
+# lock / unlock
+let l = ReentrantLock()
+    lock(l)
+    unlock(l)
+    @test_throws ErrorException unlock(l)
+end
+
+# timing macros
+
+# test that they don't introduce global vars
+global v11801, t11801, names_before_timing
+names_before_timing = names(current_module(), true)
+
+let t = @elapsed 1+1
+    @test isa(t, Real) && t >= 0
+end
+
+let
+    val, t = @timed sin(1)
+    @test val == sin(1)
+    @test isa(t, Real) && t >= 0
+end
+
+# problem after #11801 - at global scope
+t11801 = @elapsed 1+1
+@test isa(t11801,Real) && t11801 >= 0
+v11801, t11801 = @timed sin(1)
+@test v11801 == sin(1)
+@test isa(t11801,Real) && t11801 >= 0
+
+@test names(current_module(), true) == names_before_timing
+
+# interactive utilities
+
+import Base.summarysize
+@test summarysize(Core, true) > summarysize(Core.Inference, true) > summarysize(Core, false) == summarysize(Core.Inference, false) == Core.sizeof(Core)
+@test summarysize(Base, true) > 10_000*summarysize(Base, false) > 10_000*sizeof(Int)
+@test 0 == summarysize(Int, true) == summarysize(Int, false) == summarysize(DataType, true) == summarysize(Ptr, true) == summarysize(Any, true)
+@test sprint(whos, Main, r"^$") == ""
+let v = sprint(whos, Main)
+    @test contains(v, " KB     Module : Base")
+    @test contains(v, " KB     Module : Core")
+    @test contains(v, "  0 bytes  DataType : NoMethodHasThisType")
+    @test contains(v, "\u2026\n")
+    @test match(r".\u2026$"m, v) !== nothing
+    @test match(r"\u2026."m, v) === nothing
+    @test !contains(v, "Core.Inference")
+end

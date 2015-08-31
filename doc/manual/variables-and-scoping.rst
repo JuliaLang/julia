@@ -26,6 +26,7 @@ The constructs introducing such blocks are:
 -  ``for`` loops
 -  ``try`` blocks
 -  ``catch`` blocks
+-  ``finally`` blocks
 -  ``let`` blocks
 -  ``type`` blocks.
 
@@ -38,7 +39,7 @@ scope. When a variable is introduced into a scope, it is also inherited
 by all inner scopes unless one of those inner scopes explicitly
 overrides it.
 
-Julia uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
+Julia uses `lexical scoping <https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
 meaning that a function's scope does not inherit from its caller's
 scope, but from the scope in which the function was defined.
 For example, in the following code the ``x`` inside ``foo`` is found
@@ -190,7 +191,7 @@ global scope. This is especially evident in the case of assignments:
     julia> for i = 1:1; y = 10; end
 
     julia> y
-    ERROR: y not defined
+    ERROR: UndefVarError: y not defined
 
     julia> y = 0
     0
@@ -283,16 +284,7 @@ block without creating any new bindings:
 
 .. doctest::
 
-    julia> begin
-             local x = 1
-             begin
-               local x = 2
-             end
-             x
-           end
-    ERROR: syntax: local "x" declared twice
-
-    julia> begin
+    julia> let
              local x = 1
              let
                local x = 2
@@ -301,9 +293,7 @@ block without creating any new bindings:
            end
     1
 
-The first example is invalid because you cannot declare the same
-variable as local in the same scope twice. The second example is valid
-since the ``let`` introduces a new scope block, so the inner local ``x``
+Since ``let`` introduces a new scope block, the inner local ``x``
 is a different variable than the outer local ``x``.
 
 For Loops and Comprehensions

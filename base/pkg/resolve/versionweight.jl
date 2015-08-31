@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module VersionWeights
+
+importall ....Base.Operators
 
 export VersionWeight
 
@@ -99,7 +103,7 @@ end
 
 const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 
-function VWPreBuild(ispre::Bool, desc::(Union(Int,ASCIIString)...))
+function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,ASCIIString}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0

@@ -6,7 +6,7 @@
 
 #include "platform.h"
 #include "libsupport.h"
-#include "../../deps/libuv/include/uv.h"
+#include "uv.h"
 
 //#define MEMDEBUG
 //#define MEMDEBUG2
@@ -64,7 +64,7 @@ typedef struct {
 #define tag(x) ((x)&0x7)
 #define ptr(x) ((void*)((x)&(~(value_t)0x7)))
 #define tagptr(p,t) (((value_t)(p)) | (t))
-#define fixnum(x) ((value_t)(((fixnum_t)(x))<<2))
+#define fixnum(x) ((value_t)(((uptrint_t)(x))<<2))
 #define numval(x)  (((fixnum_t)(x))>>2)
 #if NBITS==64
 #define fits_fixnum(x) (((x)>>61) == 0 || (~((x)>>61)) == 0)
@@ -346,6 +346,7 @@ size_t cvalue_arraylen(value_t v);
 value_t size_wrap(size_t sz);
 size_t tosize(value_t n, char *fname);
 value_t cvalue_string(size_t sz);
+value_t cvalue_static_cstrn(const char *str, size_t n);
 value_t cvalue_static_cstring(const char *str);
 value_t string_from_cstr(char *str);
 value_t string_from_cstrn(char *str, size_t n);

@@ -53,24 +53,12 @@ and can be passed around like any value:
     julia> g(2,3)
     5
 
-There are two other ways that functions can be applied: using special
-operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the :func:`apply`
-function:
+As with variables, Unicode can also be used for function names:
 
 .. doctest::
 
-    julia> apply(f,2,3)
-    5
-
-:func:`apply` applies its first argument — a function object —
-to its remaining arguments.
-
-As with variables, Unicode can also be used for function names::
-
     julia> ∑(x,y) = x + y
     ∑ (generic function with 1 method)
-
 
 Argument Passing Behavior
 -------------------------
@@ -148,10 +136,10 @@ Operators Are Functions
 -----------------------
 
 In Julia, most operators are just functions with support for special
-syntax. The exceptions are operators with special evaluation semantics
+syntax. (The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
 :ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
-their operands are not evaluated before evaluation of the operator.
+their operands are not evaluated before evaluation of the operator.)
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function:
 
@@ -195,6 +183,7 @@ Expression          Calls
 ``1:n``             :func:`colon`
 ``A[i]``            :func:`getindex`
 ``A[i]=x``          :func:`setindex!`
+``A(x)``            :func:`call`
 =================== ==================
 
 These functions are included in the ``Base.Operators`` module even
@@ -206,7 +195,7 @@ Anonymous Functions
 -------------------
 
 Functions in Julia are `first-class objects
-<http://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
+<https://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
@@ -303,6 +292,8 @@ You can also return multiple values via an explicit usage of the
     end
 
 This has the exact same effect as the previous definition of ``foo``.
+
+.. _man-varargs-functions:
 
 Varargs Functions
 -----------------
@@ -431,8 +422,8 @@ expressed concisely as::
         ###
     end
 
-With this definition, the function can be called with either one or two
-arguments, and ``10`` is automatically passed when a second argument is not
+With this definition, the function can be called with either two or three
+arguments, and ``10`` is automatically passed when a third argument is not
 specified:
 
 .. doctest::
@@ -448,7 +439,7 @@ specified:
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see :ref:`man-methods`).
+(see :ref:`man-note-on-optional-and-keyword-arguments`).
 
 
 Keyword Arguments

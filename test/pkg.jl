@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory
   const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
@@ -13,11 +15,48 @@ function temp_pkg_dir(fn::Function)
   end
 end
 
-# Test adding a removing a package
+# Test basic operations: adding or removing a package, status, free
+#Also test for the existence of REQUIRE and META_Branch
 temp_pkg_dir() do
+  @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
+  @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
   @test isempty(Pkg.installed())
   Pkg.add("Example")
   @test [keys(Pkg.installed())...] == ["Example"]
+  iob = IOBuffer()
+  Pkg.checkout("Example")
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test startswith(str, " - Example")
+  @test endswith(str, "master")
+  Pkg.free("Example")
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
+  Pkg.checkout("Example")
+  Pkg.free(("Example",))
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
+  Pkg.rm("Example")
+  @test isempty(Pkg.installed())
+  @test !isempty(Pkg.available("Example"))
+  @test_throws ErrorException Pkg.available("FakePackageDoesn'tExist")
+  Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+  @test [keys(Pkg.installed())...] == ["Example"]
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test startswith(str, " - Example")
+  @test endswith(str, "master")
+  Pkg.free("Example")
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
+  Pkg.checkout("Example")
+  Pkg.free(("Example",))
+  Pkg.status("Example", iob)
+  str = chomp(takebuf_string(iob))
+  @test endswith(str, string(Pkg.installed("Example")))
   Pkg.rm("Example")
   @test isempty(Pkg.installed())
 end
@@ -26,6 +65,7 @@ end
 temp_pkg_dir() do
   Pkg.generate("PackageWithTestDependencies", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
+  @test readall(Pkg.dir("PackageWithTestDependencies","REQUIRE")) == "julia $(Pkg.Generate.versionfloor(VERSION))\n"
 
   isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
   open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"w") do f
@@ -106,15 +146,20 @@ end"""
   end
 
   Pkg.test("PackageWithCodeCoverage")
-  covfile = Pkg.dir("PackageWithCodeCoverage","src","PackageWithCodeCoverage.jl.cov")
-  @test !isfile(covfile)
+  covdir = Pkg.dir("PackageWithCodeCoverage","src")
+  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
+  @test isempty(covfiles)
   Pkg.test("PackageWithCodeCoverage", coverage=true)
-  @test isfile(covfile)
-  covstr = readall(covfile)
-  srclines = split(src, '\n')
-  covlines = split(covstr, '\n')
-  for i = 1:length(linetested)
-      covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
-      @test covlines[i] == covline
+  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
+  @test !isempty(covfiles)
+  for file in covfiles
+      @test isfile(joinpath(covdir,file))
+      covstr = readall(joinpath(covdir,file))
+      srclines = split(src, '\n')
+      covlines = split(covstr, '\n')
+      for i = 1:length(linetested)
+          covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
+          @test covlines[i] == covline
+      end
   end
 end

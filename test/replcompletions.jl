@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.REPLCompletions
 
 module CompletionFoo
@@ -179,7 +181,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1, "
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Int, Int))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
 @test length(c) == 3
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -187,7 +189,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Array{Int, 1}, Any))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Array{Int, 1}, Any})[1])
 @test length(c) == 2
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -195,7 +197,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1,1,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Any, Any, Any))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Any, Any, Any})[1])
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
 
@@ -215,7 +217,7 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(prevind, (UTF8String, Int))[1])
+@test c[1] == string(methods(prevind, Tuple{UTF8String, Int})[1])
 @test r == 1:7
 @test s[r] == "prevind"
 
@@ -223,7 +225,7 @@ for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(methods(CompletionFoo.test2, (T,))[1])
+    @test c[1] == string(methods(CompletionFoo.test2, Tuple{T,})[1])
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
@@ -236,7 +238,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test3([1.,2.], 1.,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test3, (Array{Float64, 1}, Float64))[1])
+@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
 @test r == 1:19
 @test s[r] == "CompletionFoo.test3"
 
@@ -253,14 +255,31 @@ c, r, res = test_complete(s)
 @test length(c) == 0
 
 # Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkdir(p))
+mkp(p) = ((@assert !isdir(p)); mkpath(p))
 temp_pkg_dir() do
-    mkp(Pkg.dir("CompletionFooPackage"))
+    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+    # but not <Mod>/ if no corresponding .jl file is found
+    pkg_dir = Pkg.dir("CompletionFooPackage", "src")
+    mkp(pkg_dir)
+    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+
+    pkg_dir = Pkg.dir("CompletionFooPackage2.jl", "src")
+    mkp(pkg_dir)
+    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+
+    touch(Pkg.dir("CompletionFooPackage3.jl"))
+
+    mkp(Pkg.dir("CompletionFooPackageNone"))
+    mkp(Pkg.dir("CompletionFooPackageNone2.jl"))
 
     s = "using Completion"
     c,r = test_complete(s)
     @test "CompletionFoo" in c #The module
     @test "CompletionFooPackage" in c #The package
+    @test "CompletionFooPackage2" in c #The package
+    @test "CompletionFooPackage3" in c #The package
+    @test !("CompletionFooPackageNone" in c) #The package
+    @test !("CompletionFooPackageNone2" in c) #The package
     @test s[r] == "Completion"
 end
 
@@ -269,12 +288,17 @@ push!(LOAD_PATH, path)
 try
     # Should not throw an error even though the path do no exist
     test_complete("using ")
-    Pack_folder = joinpath(path,"Test_pack")
+    Pack_folder = joinpath(path, "Test_pack")
     mkpath(Pack_folder)
+
+    Pack_folder2 = joinpath(path, "Test_pack2", "src")
+    mkpath(Pack_folder2)
+    touch(joinpath(Pack_folder2, "Test_pack2.jl"))
 
     # Test it completes on folders
     c,r,res = test_complete("using Test_p")
-    @test "Test_pack" in c
+    @test !("Test_pack" in c)
+    @test "Test_pack2" in c
 
     # Test that it also completes on .jl files in pwd()
     cd(Pack_folder) do
@@ -353,6 +377,19 @@ c, r, res = test_scomplete(s)
     @test "Pkg" in c
     @test r == 6:7
     @test s[r] == "Pk"
+
+    # Tests homedir expansion
+    let
+        path = homedir()
+        dir = joinpath(path, "tmpfoobar")
+        mkdir(dir)
+        s = "\"~/tmpfoob"
+        c,r = test_complete(s)
+        @test "tmpfoobar/" in c
+        @test r == 4:10
+        @test s[r] == "tmpfoob"
+        rm(dir)
+    end
 end
 
 let #test that it can auto complete with spaces in file/path

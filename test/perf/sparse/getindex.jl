@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## getindex
 const rep = 20
 const reps = rep^2
@@ -40,7 +42,7 @@ function sparse_getindex_perf()
     ## using uint32 (works up to 10^9)
     uus = []
     for u in us
-        push!(uus, SparseMatrixCSC(u.m, u.n, UInt32(u.colptr), UInt32(u.rowval), u.nzval))
+        push!(uus, SparseMatrixCSC(u.m, u.n, map(UInt32,u.colptr), map(UInt32,u.rowval), u.nzval))
     end
 
     # test performance with matrices in us, uus and ts for
@@ -55,7 +57,7 @@ function sparse_getindex_perf()
     intinds = nothing
     logicalinds = nothing # needs to be generated for a specific matrix size.
     rangeinds = 121:237
-    orderedinds = [rangeinds]
+    orderedinds = collect(rangeinds)
     disorderedinds = orderedinds[randperm(length(orderedinds))]
 
     inds = [(intinds, "integers"), (logicalinds, "logical array"), (rangeinds, "a range"),

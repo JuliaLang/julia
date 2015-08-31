@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Run as: fixup-libgfortran.sh <$private_libdir>
 
 if [ -z "$1" ]; then

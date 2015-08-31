@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # main tests
 
 function safe_mapslices(op, A, region)
@@ -98,8 +100,8 @@ A = reshape(1:6, 3, 2)
 @test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
 
 # Heterogeneously typed arrays
-@test sum(Union(Float32, Float64)[1.0], 1) == [1.0]
-@test prod(Union(Float32, Float64)[1.0], 1) == [1.0]
+@test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
+@test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
@@ -108,7 +110,7 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
 
 # inferred return types
-rt = Base.return_types(reducedim, (Function, Array{Float64, 3}, Int, Float64))
+rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
 ## findmin/findmax
@@ -123,7 +125,7 @@ A = [1.0 3.0 6.0;
 
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], 2) == reshape([6, 16.4], 2, 1)
-@test std(FloatingPoint[1,2,3], 1) == [1.0]
+@test std(AbstractFloat[1,2,3], 1) == [1.0]
 @test sum(Any[1 2;3 4],1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], 1)[1] == [5,5]
 

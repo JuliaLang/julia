@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # get and set current directory
 
 function pwd()
@@ -8,7 +10,7 @@ function pwd()
 end
 
 function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{UInt8},), dir))
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
 end
 cd() = cd(homedir())
 
@@ -35,8 +37,8 @@ end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Ptr{UInt8},UInt32), path, mode)
-    @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(path))
+    @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
+    @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     systemerror(:mkdir, ret != 0)
 end
 
@@ -61,30 +63,70 @@ function rm(path::AbstractString; recursive::Bool=false)
                 rm(joinpath(path, p), recursive=true)
             end
         end
-        @unix_only ret = ccall(:rmdir, Int32, (Ptr{UInt8},), path)
-        @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{UInt16},), utf16(path))
+        @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
+        @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
         systemerror(:rmdir, ret != 0)
     end
 end
 
 
 # The following use Unix command line facilites
-
-function cp(src::AbstractString, dst::AbstractString; recursive::Bool=false)
-    if islink(src) || !isdir(src)
-        FS.sendfile(src, dst)
-    elseif recursive
-        mkdir(dst)
-        for p in readdir(src)
-            cp(joinpath(src, p), joinpath(dst, p), recursive=recursive)
+function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
+                                                          remove_destination::Bool=false)
+    if ispath(dst)
+        if remove_destination
+            # Check for issue when: (src == dst) or when one is a link to the other
+            # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
+            if Base.samefile(src, dst)
+                abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
+                abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                                           "This is not supported.\n  ",
+                                           "`src` refers to: $(abs_src)\n  ",
+                                           "`dst` refers to: $(abs_dst)\n")))
+            end
+            rm(dst; recursive=true)
+        else
+            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+                                       "is required to remove '$dst' before $(txt).")))
         end
-    else
-        throw(ArgumentError(string("'$src' is a directory. ",
-            "Use `cp(src, dst, recursive=true)` ",
-            "to copy directories recursively.")))
     end
 end
-mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
+
+function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
+                                                             follow_symlinks::Bool=false)
+    isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
+    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
+    mkdir(dst)
+    for name in readdir(src)
+        srcname = joinpath(src, name)
+        if !follow_symlinks && islink(srcname)
+            symlink(readlink(srcname), joinpath(dst, name))
+        elseif isdir(srcname)
+            cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
+                                                 follow_symlinks=follow_symlinks)
+        else
+            FS.sendfile(srcname, joinpath(dst, name))
+        end
+    end
+end
+
+function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
+                                                         follow_symlinks::Bool=false)
+    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
+    if !follow_symlinks && islink(src)
+        symlink(readlink(src), dst)
+    elseif isdir(src)
+        cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
+    else
+        FS.sendfile(src, dst)
+    end
+end
+
+function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
+    checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
+    FS.rename(src, dst)
+end
 
 function touch(path::AbstractString)
     f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
@@ -112,16 +154,18 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp()
-    b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{UInt8}, ), b) # modifies b
+function mktemp(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
+    systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
 
 # Create and return the name of a temporary directory
-function mktempdir()
-    b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8}, ), b)
+function mktempdir(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8},), b)
+    systemerror(:mktempdir, p == C_NULL)
     return bytestring(p)
 end
 end
@@ -131,7 +175,7 @@ function tempdir()
     temppath = Array(UInt16,32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
-        error("GetTempPath failed: $(FormatMessage())")
+        error("GetTempPath failed: $(Libc.FormatMessage())")
     end
     resize!(temppath,lentemppath+1)
     return utf8(UTF16String(temppath))
@@ -139,27 +183,25 @@ end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 function tempname(temppath::AbstractString,uunique::UInt32)
     tname = Array(UInt16,32767)
-    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}),
-        utf16(temppath),utf16("jul"),uunique,tname)
+    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32,Ptr{UInt16}), temppath,utf16("jul"),uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
-        error("GetTempFileName failed: $(FormatMessage())")
+        error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
     resize!(tname,lentname+1)
     return utf8(UTF16String(tname))
 end
-function mktemp()
-    filename = tempname()
+function mktemp(parent=tempdir())
+    filename = tempname(parent, UInt32(0))
     return (filename, open(filename,"r+"))
 end
-function mktempdir()
+function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
-    dir = tempdir()
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
         end
-        filename = tempname(dir, seed)
+        filename = tempname(parent, seed)
         ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(filename))
         if ret == 0
             return filename
@@ -170,8 +212,8 @@ function mktempdir()
 end
 end
 
-function mktemp(fn::Function)
-    (tmp_path, tmp_io) = mktemp()
+function mktemp(fn::Function, parent=tempdir())
+    (tmp_path, tmp_io) = mktemp(parent)
     try
         fn(tmp_path, tmp_io)
     finally
@@ -180,8 +222,8 @@ function mktemp(fn::Function)
     end
 end
 
-function mktempdir(fn::Function)
-    tmpdir = mktempdir()
+function mktempdir(fn::Function, parent=tempdir())
+    tmpdir = mktempdir(parent)
     try
         fn(tmpdir)
     finally
@@ -194,7 +236,7 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    file_count = ccall(:jl_readdir, Int32, (Ptr{UInt8}, Ptr{UInt8}),
+    file_count = ccall(:jl_readdir, Int32, (Cstring, Ptr{UInt8}),
                         path, uv_readdir_req)
     systemerror("unable to read directory $path", file_count < 0)
 

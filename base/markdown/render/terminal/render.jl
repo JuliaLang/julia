@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("formatting.jl")
 
 const margin = 2
@@ -90,7 +92,7 @@ function terminline(io::IO, content::Vector)
     end
 end
 
-function terminline(io::IO, md::String)
+function terminline(io::IO, md::AbstractString)
     print(io, md)
 end
 

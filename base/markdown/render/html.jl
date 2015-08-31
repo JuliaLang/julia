@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("rich.jl")
 
-# Utils
+# Utils
 
 function withtag(f, io::IO, tag, attrs...)
     print(io, "<$tag")
@@ -11,7 +13,7 @@ function withtag(f, io::IO, tag, attrs...)
         htmlesc(io, value)
         print(io, "\"")
     end
-    f == nothing && return print(io, " />")
+    f === nothing && return print(io, " />")
 
     print(io, ">")
     f()
@@ -28,7 +30,7 @@ for ch in "'`!@\$\%()=+{}[]"
     _htmlescape_chars[ch] = "&#$(Int(ch));"
 end
 
-function htmlesc(io::IO, s::String)
+function htmlesc(io::IO, s::AbstractString)
     # s1 = replace(s, r"&(?!(\w+|\#\d+);)", "&amp;")
     for ch in s
         print(io, get(_htmlescape_chars, ch, ch))
@@ -37,12 +39,12 @@ end
 function htmlesc(io::IO, s::Symbol)
     htmlesc(io, string(s))
 end
-function htmlesc(io::IO, xs::Union(String, Symbol)...)
+function htmlesc(io::IO, xs::Union{AbstractString, Symbol}...)
     for s in xs
         htmlesc(io, s)
     end
 end
-function htmlesc(s::Union(String, Symbol))
+function htmlesc(s::Union{AbstractString, Symbol})
     sprint(htmlesc, s)
 end
 
@@ -118,7 +120,7 @@ function htmlinline(io::IO, code::Code)
     end
 end
 
-function htmlinline(io::IO, md::Union(Symbol, String))
+function htmlinline(io::IO, md::Union{Symbol, AbstractString})
     htmlesc(io, md)
 end
 

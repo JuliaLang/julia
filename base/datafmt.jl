@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## file formats ##
 
 module DataFmt
@@ -11,28 +13,15 @@ export countlines, readdlm, readcsv, writedlm, writecsv
 const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
-countlines(nameorfile) = countlines(nameorfile, '\n')
-function countlines(filename::AbstractString, eol::Char)
-    open(filename) do io
-        countlines(io, eol)
-    end
-end
-function countlines(io::IO, eol::Char)
-    if !isascii(eol)
-        throw(ArgumentError("only ASCII line terminators are supported"))
-    end
+countlines(f::AbstractString,eol::Char='\n') = open(io->countlines(io,eol),f)::Int
+function countlines(io::IO, eol::Char='\n')
+    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     a = Array(UInt8, 8192)
     nl = 0
-    preceded_by_eol = true
     while !eof(io)
         nb = readbytes!(io, a)
-        for i=1:nb
-            if Char(a[i]) == eol
-                preceded_by_eol = true
-            elseif preceded_by_eol
-                preceded_by_eol = false
-                nl+=1
-            end
+        @simd for i=1:nb
+            @inbounds nl += a[i] == eol
         end
     end
     nl
@@ -59,7 +48,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(UInt8, (Int(fsz),), io)
+        Mmap.mmap(io, Vector{UInt8}, (Int(fsz),))
     end
 end
 
@@ -98,7 +87,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, st
     if length(offsets) < offidx
         offlen = offs_chunk_size * length(oarr)
         if (offlen + offs_chunk_size) > dlmoffsets.thresh
-            est_tot = Int(offlen * dlmoffsets.bufflen / endpos)
+            est_tot = round(Int, offlen * dlmoffsets.bufflen / endpos)
             if (est_tot - offlen) > offs_chunk_size    # allow another chunk
                 # abandon offset collection
                 dlmoffsets.oarr = Vector{Int}[]
@@ -256,7 +245,7 @@ function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::
 
     skipblanks = get(optsd, :skipblanks, true)
 
-    offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
+    offset_handler = (dims === nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
 
     for retry in 1:2
         try
@@ -270,7 +259,7 @@ function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::
             else
                 rethrow(ex)
             end
-            offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
+            offset_handler = (dims === nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
         end
     end
 
@@ -287,7 +276,7 @@ const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quo
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
-    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
+    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
         !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
@@ -309,7 +298,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         while idx <= length(offsets)
             row = offsets[idx]
             col = offsets[idx+1]
-            quoted = Bool(offsets[idx+2])
+            quoted = offsets[idx+2] != 0
             startpos = offsets[idx+3]
             endpos = offsets[idx+4]
 
@@ -334,13 +323,13 @@ function colval{T<:Integer, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int,
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
-    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+function colval(sbuff::ByteString, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
     isnull(n) || (cells[row,col] = get(n))
     isnull(n)
 end
@@ -358,7 +347,7 @@ function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Arra
         isnull(nb) || (cells[row,col] = get(nb); return false)
 
         # check float64
-        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), sbuff, startpos-1, endpos-startpos+1)
         isnull(nf64) || (cells[row,col] = get(nf64); return false)
     end
     cells[row,col] = SubString(sbuff, startpos, endpos)
@@ -533,7 +522,7 @@ readcsv(io; opts...)          = readdlm(io, ','; opts...)
 readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::FloatingPoint, dlm, quotes) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
 function writedlm_cell{T}(io::IO, elt::AbstractString, dlm::T, quotes::Bool)
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
@@ -560,19 +549,6 @@ function writedlm(io::IO, a::AbstractVecOrMat, dlm; opts...)
 end
 
 writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
-
-#=
-function writedlm_ndarray(io::IO, a::AbstractArray, dlm; opts...)
-    tail = size(a)[3:end]
-    function print_slice(idxs...)
-        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm; opts...)
-        if idxs != tail
-            print(io, "\n")
-        end
-    end
-    cartesianmap(print_slice, tail)
-end
-=#
 
 function writedlm(io::IO, itr, dlm; opts...)
     optsd = val_opts(opts)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Built-in SSH and Local Managers
 
 immutable SSHManager <: ClusterManager
@@ -34,7 +36,7 @@ end
 
 function check_addprocs_args(kwargs)
     for keyname in kwargs
-        !(keyname[1] in [:dir, :exename, :exeflags]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+        !(keyname[1] in [:dir, :exename, :exeflags, :topology]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
     end
 end
 
@@ -97,7 +99,9 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     host = machine_def[1]
 
     # Build up the ssh command
-    cmd = `cd $dir && $exename $exeflags` # launch julia
+    tval = haskey(ENV, "JULIA_WORKER_TIMEOUT") ? `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"]);` : ``
+
+    cmd = `cd $dir && $tval $exename $exeflags` # launch julia
     cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
     cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
 
@@ -107,11 +111,12 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     wconfig.io = io
     wconfig.host = host
+    wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
     wconfig.count = cnt
-    wconfig.max_parallel = get(params, :max_parallel, Nullable{Integer}())
+    wconfig.max_parallel = params[:max_parallel]
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -125,7 +130,7 @@ function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symb
             host = get(config.host)
             sshflags = get(config.sshflags)
             if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host "kill -2 $ospid"`)
-                println("Error sending a Ctrl-C to julia worker $id on $machine")
+                println("Error sending a Ctrl-C to julia worker $id on $host")
             end
         else
             # This state can happen immediately after an addprocs
@@ -206,6 +211,8 @@ end
 immutable DefaultClusterManager <: ClusterManager
 end
 
+const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.connect_at)
         # this is a worker-to-worker setup call.
@@ -216,6 +223,8 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     if !isnull(config.io)
         (bind_addr, port) = read_worker_host_port(get(config.io))
         pubhost=get(config.host, bind_addr)
+        config.host = pubhost
+        config.port = port
     else
         pubhost=get(config.host)
         port=get(config.port)
@@ -238,14 +247,22 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     end
 
     if tunnel
+        if !haskey(tunnel_hosts_map, pubhost)
+            tunnel_hosts_map[pubhost] = Semaphore(get(config.max_parallel, typemax(Int)))
+        end
+        sem = tunnel_hosts_map[pubhost]
+
         sshflags = get(config.sshflags)
-        (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        acquire(sem)
+        try
+            (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+        finally
+            release(sem)
+        end
     else
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
 
-    config.host = pubhost
-    config.port = port
     config.bind_addr = bind_addr
 
     # write out a subset of the connect_at required for further worker-worker connection setups
@@ -276,13 +293,47 @@ function connect_w2w(pid::Int, config::WorkerConfig)
     (s,s)
 end
 
+const client_port = Ref{Cushort}(0)
+
+function socket_reuse_port()
+    s = TCPSocket()
+    client_host = Ref{Cuint}(0)
+    ccall(:jl_tcp_bind, Int32,
+            (Ptr{Void}, UInt16, UInt32, Cuint),
+            s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+
+    # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
+    # early access to a socket fd, i.e., before a bind call.
+
+    @linux_only begin
+        try
+            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle)
+            if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
+                return s
+            elseif rc < 0
+                throw(SystemError("setsockopt() SO_REUSEPORT : "))
+            end
+
+            ccall(:jl_tcp_getsockname_v4, Int32,
+                        (Ptr{Void}, Ref{Cuint}, Ref{Cushort}),
+                        s.handle, client_host, client_port) < 0 && throw(SystemError("getsockname() : "))
+        catch e
+            # This is an issue only on systems with lots of client connections, hence delay the warning....
+            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
+            # provide a clean new socket
+            return TCPSocket()
+        end
+    end
+    return s
+end
 
 function connect_to_worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
+    s = socket_reuse_port()
     if host == string(LPROC.bind_addr)
-        s = connect("127.0.0.1", UInt16(port))
+        s = connect(s, "127.0.0.1", UInt16(port))
     else
-        s = connect(host, UInt16(port))
+        s = connect(s, host, UInt16(port))
     end
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## core stream types ##
 
 # the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
@@ -30,23 +32,31 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-write(io::IO, xs...) = for x in xs write(io, x) end
+function write(io::IO, xs...)
+    local written::Int = 0
+    for x in xs
+        written += write(io, x)
+    end
+    written
+end
 
 if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
         sz = sizeof(x)
+        local written::Int = 0
         for n = sz:-1:1
-            write(s, (x>>>((n-1)<<3))%UInt8)
+            written += write(s, (x>>>((n-1)<<3))%UInt8)
         end
-        sz
+        return written
     end
 else
     function write(s::IO, x::Integer)
         sz = sizeof(x)
+        local written::Int = 0
         for n = 1:sz
-            write(s, (x>>>((n-1)<<3))%UInt8)
+            written += write(s, (x>>>((n-1)<<3))%UInt8)
         end
-        sz
+        return written
     end
 end
 
@@ -57,47 +67,44 @@ write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
 function write(s::IO, a::AbstractArray)
     nb = 0
-    for i = 1:length(a)
+    for i in eachindex(a)
         nb += write(s, a[i])
     end
-    nb
+    return nb
 end
 
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
     if c < 0x80
-        write(s, c%UInt8)
-        return 1
+        return write(s, c%UInt8)
     elseif c < 0x800
-        write(s, (( c >> 6          ) | 0xC0)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 2
+        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x10000
-        write(s, (( c >> 12         ) | 0xE0)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 3
+        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x110000
-        write(s, (( c >> 18         ) | 0xF0)%UInt8)
-        write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 4
+        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
+               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     else
         return write(s, '\ufffd')
     end
 end
 
 function write(s::IO, p::Ptr, n::Integer)
+    local written::Int = 0
     for i=1:n
-        write(s, unsafe_load(p, i))
+        written += write(s, unsafe_load(p, i))
     end
-    n
+    return written
 end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    return write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 
 # all subtypes should implement this
@@ -120,12 +127,12 @@ read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, convert((Int...),tuple(d1,dims...)))
+    read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
 
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
 function read!{T}(s::IO, a::Array{T})
-    for i = 1:length(a)
+    for i in eachindex(a)
         a[i] = read(s, T)
     end
     return a
@@ -244,7 +251,7 @@ end
 
 function readall(s::IO)
     b = readbytes(s)
-    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
+    return isvalid(ASCIIString, b) ? ASCIIString(b) : UTF8String(b)
 end
 readall(filename::AbstractString) = open(readall, filename)
 

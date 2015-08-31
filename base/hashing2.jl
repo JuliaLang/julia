@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## efficient value-based hashing of integers ##
 
 function hash_integer(n::Integer, h::UInt)
@@ -82,7 +84,7 @@ values `num, pow, den`, such that the value of `x` is mathematically equal to
 The decomposition need not be canonical in the sense that it just needs to be *some*
 way to express `x` in this form, not any particular way – with the restriction that
 `num` and `den` may not share any odd common factors. They may, however, have powers
-of two in common – the generic hashing code will normalize those as necessary.
+of two in common – the generic hashing code will normalize those as necessary.
 
 Special values:
 
@@ -164,3 +166,15 @@ end
 ## hashing Float16s ##
 
 hash(x::Float16, h::UInt) = hash(Float64(x), h)
+
+## hashing strings ##
+
+const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
+
+function hash{T<:ByteString}(s::Union{T,SubString{T}}, h::UInt)
+    h += memhash_seed
+    # note: use pointer(s) here (see #6058).
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
+end
+hash(s::AbstractString, h::UInt) = hash(bytestring(s), h)

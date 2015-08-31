@@ -1,25 +1,27 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## reductions ##
 
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(UInt8,UInt16)
+typealias SmallSigned Union{Int8,Int16}
+typealias SmallUnsigned Union{UInt8,UInt16}
 else
-typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(UInt8,UInt16,UInt32)
+typealias SmallSigned Union{Int8,Int16,Int32}
+typealias SmallUnsigned Union{UInt8,UInt16,UInt32}
 end
 
-typealias CommonReduceResult Union(UInt64,UInt128,Int64,Int128,Float32,Float64)
-typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
+typealias CommonReduceResult Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
+typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x::WidenReduceResult) = widen(x)
 r_promote(op, x) = x
 r_promote(::AddFun, x::WidenReduceResult) = widen(x)
 r_promote(::MulFun, x::WidenReduceResult) = widen(x)
-r_promote(::AddFun, x::Number) = x + zero(x)
-r_promote(::MulFun, x::Number) = x * one(x)
+r_promote(::AddFun, x::Number) = oftype(x + zero(x), x)
+r_promote(::MulFun, x::Number) = oftype(x * one(x), x)
 r_promote(::AddFun, x) = x
 r_promote(::MulFun, x) = x
 r_promote(::MaxFun, x::WidenReduceResult) = x
@@ -153,11 +155,64 @@ end
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 mapreduce(f, op, a::Number) = f(a)
 
-mapreduce(f, op::Function, A::AbstractArray) = _mapreduce(f, specialized_binary(op), A)
+mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
 
 reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
 reduce(op, itr) = mapreduce(IdFun(), op, itr)
 reduce(op, a::Number) = a
+
+### short-circuiting specializations of mapreduce
+
+## conditions and results of short-circuiting
+
+const ShortCircuiting = Union{AndFun, OrFun}
+const ReturnsBool     = Union{EqX, Predicate}
+
+shortcircuits(::AndFun, x::Bool) = !x
+shortcircuits(::OrFun,  x::Bool) =  x
+
+shorted(::AndFun) = false
+shorted(::OrFun)  = true
+
+sc_finish(::AndFun) = true
+sc_finish(::OrFun)  = false
+
+## short-circuiting (sc) mapreduce definitions
+
+function mapreduce_sc_impl(f, op, itr::AbstractArray)
+    @inbounds for x in itr
+        shortcircuits(op, f(x)) && return shorted(op)
+    end
+    return sc_finish(op)
+end
+
+function mapreduce_sc_impl(f, op, itr)
+    for x in itr
+        shortcircuits(op, f(x)) && return shorted(op)
+    end
+    return sc_finish(op)
+end
+
+# mapreduce_sc tests if short-circuiting is safe;
+# if so, mapreduce_sc_impl is called. If it's not
+# safe, call mapreduce_no_sc, which redirects to
+# non-short-circuiting definitions.
+
+mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
+mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
+
+mapreduce_sc(f::Function,    op, itr) = mapreduce_sc(specialized_unary(f), op, itr)
+mapreduce_sc(f::ReturnsBool, op, itr) = mapreduce_sc_impl(f, op, itr)
+mapreduce_sc(f::Func{1},     op, itr) = mapreduce_no_sc(f, op, itr)
+
+mapreduce_sc(f::IdFun, op, itr) =
+    eltype(itr) <: Bool ?
+        mapreduce_sc_impl(f, op, itr) :
+        mapreduce_no_sc(f, op, itr)
+
+mapreduce(f, op::ShortCircuiting, n::Number) = n
+mapreduce(f, op::ShortCircuiting, itr::AbstractArray) = mapreduce_sc(f,op,itr)
+mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 
 
 ###### Specific reduction functions ######
@@ -184,7 +239,7 @@ sum_pairwise_blocksize(::Abs2Fun) = 4096
 mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)
+sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
@@ -192,7 +247,7 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
-function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
+function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     n = length(A)
     c = r_promote(AddFun(), zero(T)::T)
     if n == 0
@@ -215,7 +270,7 @@ end
 
 ## prod
 
-prod(f::Union(Callable,Func{1}), a) = mapreduce(f, MulFun(), a)
+prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 prod(A::AbstractArray{Bool}) =
@@ -259,8 +314,8 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union(Callable,Func{1}), a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union(Callable,Func{1}), a) = mapreduce(f, MinFun(), a)
+maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MaxFun(), a)
+minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MinFun(), a)
 
 maximum(a) = mapreduce(IdFun(), MaxFun(), a)
 minimum(a) = mapreduce(IdFun(), MinFun(), a)
@@ -296,53 +351,25 @@ end
 
 ## all & any
 
-function mapfoldl(f, ::AndFun, itr)
-    for x in itr
-        !f(x) && return false
-    end
-    return true
-end
+any(itr) = any(IdFun(), itr)
+all(itr) = all(IdFun(), itr)
 
-function mapfoldl(f, ::OrFun, itr)
-    for x in itr
-        f(x) && return true
-    end
-    return false
-end
+any(f::Any,       itr) = any(Predicate(f), itr)
+any(f::Predicate, itr) = mapreduce_sc_impl(f, OrFun(), itr)
+any(f::IdFun,     itr) =
+    eltype(itr) <: Bool ?
+        mapreduce_sc_impl(f, OrFun(), itr) :
+        nonboolean_any(itr)
 
-function mapreduce_impl(f, op::AndFun, A::AbstractArray, ifirst::Int, ilast::Int)
-    while ifirst <= ilast
-        @inbounds x = A[ifirst]
-        !f(x) && return false
-        ifirst += 1
-    end
-    return true
-end
-
-function mapreduce_impl(f, op::OrFun, A::AbstractArray, ifirst::Int, ilast::Int)
-    while ifirst <= ilast
-        @inbounds x = A[ifirst]
-        f(x) && return true
-        ifirst += 1
-    end
-    return false
-end
-
-all(a) = mapreduce(IdFun(), AndFun(), a)
-any(a) = mapreduce(IdFun(), OrFun(), a)
-
-all(pred::Union(Callable,Func{1}), a) = mapreduce(pred, AndFun(), a)
-any(pred::Union(Callable,Func{1}), a) = mapreduce(pred, OrFun(), a)
-
+all(f::Any,       itr) = all(Predicate(f), itr)
+all(f::Predicate, itr) = mapreduce_sc_impl(f, AndFun(), itr)
+all(f::IdFun,     itr) =
+    eltype(itr) <: Bool ?
+        mapreduce_sc_impl(f, AndFun(), itr) :
+        nonboolean_all(itr)
 
 ## in & contains
 
-immutable EqX{T} <: Func{1}
-    x::T
-end
-EqX{T}(x::T) = EqX{T}(x)
-
-call(f::EqX, y) = f.x == y
 in(x, itr) = any(EqX(x), itr)
 
 const ∈ = in
@@ -360,7 +387,7 @@ end
 
 ## countnz & count
 
-function count(pred::Union(Callable,Func{1}), itr)
+function count(pred, itr)
     n = 0
     for x in itr
         pred(x) && (n += 1)
@@ -368,7 +395,7 @@ function count(pred::Union(Callable,Func{1}), itr)
     return n
 end
 
-function count(pred::Union(Callable,Func{1}), a::AbstractArray)
+function count(pred, a::AbstractArray)
     n = 0
     for i = 1:length(a)
         @inbounds if pred(a[i])

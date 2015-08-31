@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 cmanpath = joinpath(dirname(@__FILE__), "UnixDomainCM.jl")
 include(cmanpath)
 

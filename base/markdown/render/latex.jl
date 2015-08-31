@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 export latex
 
 function wrapblock(f, io, env)
@@ -79,7 +81,7 @@ function latexinline(io::IO, md::Vector)
     end
 end
 
-function latexinline(io::IO, md::String)
+function latexinline(io::IO, md::AbstractString)
     latexesc(io, md)
 end
 
@@ -118,13 +120,13 @@ function latexinline(io::IO, md::Link)
     print(io, "}")
 end
 
-const _latexescape_chars = Dict{Char, String}(
+const _latexescape_chars = Dict{Char, AbstractString}(
    '~'=>"{\\sim}", '^'=>"\\^{}", '\\'=>"{\\textbackslash}")
 for ch in "&%\$#_{}"
     _latexescape_chars[ch] = "\\$ch"
 end
 
-function latexesc(io, s::String)
+function latexesc(io, s::AbstractString)
     for ch in s
         print(io, get(_latexescape_chars, ch, ch))
     end

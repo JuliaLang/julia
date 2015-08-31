@@ -38,6 +38,7 @@
                 ((lambda)       tab)
                 ((local local!) tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
+		((module)       '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
@@ -59,13 +60,14 @@
     (append
      ;; vars assigned at the outer level
      (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
-     ;; vars declared const outside any scope block
-     (find-decls 'const e '())
+     ;; vars declared const or global outside any scope block
+     (find-decls 'const e)
+     (find-decls 'global e)
      ;; vars assigned anywhere, if they have been defined as global
      (filter defined-julia-global (find-possible-globals e))))
    (append
-    (find-decls 'local  e '())
-    (find-decls 'local! e '()))))
+    (find-decls 'local e)
+    (find-decls 'local! e))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
@@ -88,7 +90,7 @@
                       (th (julia-expand1
                            `(lambda ()
                               (scope-block
-                               (block ,@(map (lambda (v) `(global ,v)) gv)
+                               (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                       ,ex))))))
                  (if (null? (car (caddr th)))
                      ;; if no locals, return just body of function
@@ -101,18 +103,12 @@
        (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
        (eq? (cadr (caddr e)) (cadadr e))))
 
-(define (lambda-ex? e)
-  (and (pair? e) (eq? (car e) 'lambda)))
-
 (define (expand-toplevel-expr- e)
   (let ((ex (expand-toplevel-expr-- e)))
     (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
           ((simple-assignment? ex)  (cadr ex))
-          ((and (length= ex 2) (eq? (car ex) 'body)
-                (not (lambda-ex? (cadadr ex))))
+          ((and (length= ex 2) (eq? (car ex) 'body))
            ;; (body (return x)) => x
-           ;; if x is not a lambda expr, so we don't think it is a thunk
-           ;; to be called immediately.
            (cadadr ex))
           (else ex))))
 
@@ -197,6 +193,12 @@
 (define (jl-parser-depwarn w)
   (let ((prev *depwarn*))
     (set! *depwarn* (eq? w #t))
+    prev))
+
+(define *deperror* #f)
+(define (jl-parser-deperror e)
+  (let ((prev *deperror*))
+    (set! *deperror* (eq? e #t))
     prev))
 
 (define (jl-parser-next)

@@ -203,9 +203,14 @@ value_t cvalue_string(size_t sz)
     return cvalue(stringtype, sz);
 }
 
+value_t cvalue_static_cstrn(const char *str, size_t n)
+{
+    return cvalue_from_ref(stringtype, (char*)str, n, NIL);
+}
+
 value_t cvalue_static_cstring(const char *str)
 {
-    return cvalue_from_ref(stringtype, (char*)str, strlen(str), NIL);
+    return cvalue_static_cstrn(str, strlen(str));
 }
 
 value_t string_from_cstrn(char *str, size_t n)

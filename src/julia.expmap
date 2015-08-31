@@ -2,8 +2,6 @@
   global:
     __asan*;
     __stack_chk_guard;
-    alloc_*w;
-    allocobj;
     asprintf;
     bitvector_*;
     clock_now;
@@ -32,9 +30,9 @@
     uv_*;
     add_library_mapping;
     utf8proc_*;
-    gc_queue_root;
-    gc_wb_slow;
     jlbacktrace;
+    _IO_stdin_used;
+    __ZN4llvm23createLowerSimdLoopPassEv;
 
     /* freebsd */
     environ;

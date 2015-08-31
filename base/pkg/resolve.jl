@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Resolve
 
 include("resolve/versionweight.jl")
@@ -62,7 +64,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
         end
     end
 
-    vers = Array((ByteString,VersionNumber,VersionNumber), 0)
+    vers = Array(Tuple{ByteString,VersionNumber,VersionNumber}, 0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
         nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
@@ -72,11 +74,11 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
 
     nv = length(vers)
 
-    svdict = ((ByteString,VersionNumber)=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
+    svdict = (Tuple{ByteString,VersionNumber}=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
 
     checked = falses(nv)
 
-    problematic = Array((ByteString,VersionNumber,ByteString),0)
+    problematic = Array(Tuple{ByteString,VersionNumber,ByteString},0)
     i = 1
     psl = 0
     for (p,vn,nvn) in vers

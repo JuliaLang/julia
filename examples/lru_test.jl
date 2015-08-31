@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using LRUExample
 
 TestLRU = LRUExample.UnboundedLRU{ASCIIString, ASCIIString}()
@@ -5,7 +7,7 @@ TestBLRU = LRUExample.BoundedLRU{ASCIIString, ASCIIString}(1000)
 
 get_str(i) = ascii(vcat(map(x->[x>>4; x&0x0F], reinterpret(UInt8, [Int32(i)]))...))
 
-isbounded{L<:LRUExample.LRU}(::Type{L}) = any(map(n->n==:maxsize, L.names))
+isbounded{L<:LRUExample.LRU}(::Type{L}) = any(map(n->n==:maxsize, fieldnames(L)))
 isbounded{L<:LRUExample.LRU}(l::L) = isbounded(L)
 
 nmax = round(Int,logspace(2, 5, 4))

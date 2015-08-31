@@ -44,7 +44,7 @@ if it really could be any integer, expressed with the abstract type
 altogether, unless it is needed to disambiguate from other method
 definitions, since a :exc:`MethodError` will be thrown anyway if a type
 is passed that does not support any of the requisite operations.
-(This is known as `duck typing <http://en.wikipedia.org/wiki/Duck_typing>`_.)
+(This is known as `duck typing <https://en.wikipedia.org/wiki/Duck_typing>`_.)
 
 For example, consider the following definitions of a function
 ``addone`` that returns one plus its argument::
@@ -118,7 +118,7 @@ such functions to also return the modified array for convenience.
 Avoid strange type Unions
 -------------------------
 
-Types such as ``Union(Function,AbstractString)`` are often a sign that some design
+Types such as ``Union{Function,AbstractString}`` are often a sign that some design
 could be cleaner.
 
 Avoid type Unions in fields
@@ -128,7 +128,7 @@ When creating a type such as::
 
     type MyType
         ...
-        x::Union(Void,T)
+        x::Union{Void,T}
     end
 
 ask whether the option for ``x`` to be ``nothing`` (of type ``Void``)
@@ -149,7 +149,7 @@ Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following::
 
-    a = Array(Union(Int,AbstractString,Tuple,Array), n)
+    a = Array(Union{Int,AbstractString,Tuple,Array}, n)
 
 In this case :func:`cell(n) <cell>` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
@@ -165,7 +165,7 @@ Use naming conventions consistent with Julia's ``base/``
   When necessary, use underscores as word separators.
   Underscores are also used to indicate a combination of
   concepts (:func:`remotecall_fetch` as a more efficient implementation
-  of ``remotecall(fetch(...))``) or as modifiers (:func:`sum_kbn`).
+  of ``fetch(remotecall(...))``) or as modifiers (:func:`sum_kbn`).
 - conciseness is valued, but avoid abbreviation
   (:func:`indexin` rather than ``indxin()``) as it becomes difficult to
   remember whether and how particular words are abbreviated.
@@ -194,7 +194,7 @@ Don't overuse ...
 -----------------
 
 Splicing function arguments can be addictive. Instead of ``[a..., b...]``,
-use simply ``[a, b]``, which already concatenates arrays.
+use simply ``[a; b]``, which already concatenates arrays.
 :func:`collect(a) <collect>` is better than ``[a...]``, but since ``a`` is already iterable
 it is often even better to leave it alone, and not convert it to an array.
 

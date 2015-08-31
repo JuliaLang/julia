@@ -1,3 +1,6 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+using Base.Test
 # import Base: ViewIndex, nextLD, dimsizeexpr, rangetype, merge_indexes, first_index, stride1expr, tailsize, subarray_linearindexing_dim
 using Base.Cartesian
 
@@ -305,10 +308,9 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
-
-index5 = (2, :, 2:5, 1:2:5, [4,1,5])  # all work with at least size 5
-index25 = (8, :, 2:11, 12:3:22, [4,1,5,9])
-index125 = (113, :, 85:121, 2:15:92, [99,14,103])
+index5 = (2, :, 2:5, 1:2:5, [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
+index25 = (8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
+index125 = (113, :, 85:121, 2:15:92, [99,14,103], sub(1:125,[66,18,59]))
 
 if testfull
     let A = reshape(1:5*7*11, 11, 7, 5)
@@ -344,13 +346,21 @@ if !testfull
                      (6,3:7,3:7),
                      (13:-2:1,:,:),
                      ([8,4,6,12,5,7],:,3:7),
-                     (6,6,[8,4,6,12,5,7]))
+                     (6,6,[8,4,6,12,5,7]),
+                     (1,:,sub(1:13,[9,12,4,13,1])),
+                     (sub(1:13,[9,12,4,13,1]),2:6,4))
             runtests(B, oind...)
             sliceB = slice(B, oind)
             runviews(sliceB, index5, index25, index125)
         end
     end
 end
+
+# issue #11289
+x11289 = randn(5,5)
+@test isempty(sub(x11289, Int[], :))
+@test isempty(sub(x11289, [2,5], Int[]))
+@test isempty(sub(x11289, Int[], 2))
 
 ####### "Classical" tests #######
 
@@ -386,13 +396,17 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
 @test sub(sub([1:5;], 1:5), 1:5) == [1:5;]
+# Test with mixed types
+@test sA[:, Int16[1,2], big(2)] == [31 40; 33 42]
 
 # sub logical indexing #4763
 A = sub([1:10;], 5:8)
 @test A[A.<7] == [5, 6]
+@test Base.unsafe_getindex(A, A.<7) == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = sub(B, 2:3, 2:3)
 @test sB[sB.>8] == [10, 11]
+@test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # slice
 A = reshape(1:120, 3, 5, 8)
@@ -439,3 +453,20 @@ sA = sub(A, 1:2, 1:3)
 sub(sA, 1:2, 1:2)
 @test_throws BoundsError sub(A, 17:23)
 sub(A, 17:20)
+
+# Linear indexing by one multidimensional array:
+A = reshape(1:120, 3, 5, 8)
+sA = sub(A, :, :, :)
+@test sA[[72 17; 107 117]] == [72 17; 107 117]
+@test sA[[99 38 119 14 76 81]] == [99 38 119 14 76 81]
+@test sA[[ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]] == [ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]
+sA = sub(A, 1:2, 2:3, 3:4)
+@test sA[(1:8)'] == [34 35 37 38 49 50 52 53]
+@test sA[[1 2 4 4; 6 1 1 4]] == [34 35 38 38; 50 34 34 38]
+
+# issue #11871
+let a = ones(Float64, (2,2)),
+    b = sub(a, 1:2, 1:2)
+    b[2] = 2
+    @test b[2] === 2.0
+end

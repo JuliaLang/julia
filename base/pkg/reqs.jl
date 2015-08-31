@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Reqs
+
+import Base: ==, hash
 
 using ..Types
 
@@ -45,12 +49,12 @@ immutable Requirement <: Line
     end
 end
 
-# TODO: shouldn't be neccessary #4648
 ==(a::Line, b::Line) = a.content == b.content
+hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
-function read(readable::Union(IO,Base.AbstractCmd))
+function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)
@@ -70,7 +74,7 @@ function write(io::IO, reqs::Requires)
         println(io, Requirement(pkg, reqs[pkg]).content)
     end
 end
-write(file::AbstractString, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
+write(file::AbstractString, r::Union{Vector{Line},Requires}) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()
@@ -108,7 +112,7 @@ function dependents(packagename::AbstractString)
     pkgs
 end
 
-# add & rm – edit the content a requires file
+# add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=VersionSet())
     v = VersionSet[]

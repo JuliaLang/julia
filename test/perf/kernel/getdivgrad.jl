@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # https://github.com/JuliaLang/julia/issues/4707
 
 #----------------- Get the A matrix

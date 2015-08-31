@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Terminals
 
 export
@@ -33,7 +35,8 @@ import Base:
     write,
     writemime,
     reseteof,
-    eof
+    eof,
+    check_open # stream.jl
 
 ## TextTerminal ##
 
@@ -78,7 +81,7 @@ function writepos{T}(t::TextTerminal, x, y, b::Array{T})
         writepos(t, x, y, reinterpret(UInt8, b))
     else
         cmove(t, x, y)
-        invoke(write, (IO, Array), s, a)
+        invoke(write, Tuple{IO, Array}, s, a)
     end
 end
 function writepos(t::TextTerminal, x, y, args...)
@@ -134,6 +137,7 @@ cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 end
 @windows ? begin
     function raw!(t::TTYTerminal,raw::Bool)
+        check_open(t.in_stream)
         if ispty(t.in_stream)
             run(if raw
                     `stty raw -echo onlcr -ocrnl opost`
@@ -148,9 +152,10 @@ end
         end
     end
 end : begin
-    raw!(t::TTYTerminal, raw::Bool) = ccall(:uv_tty_set_mode,
-                                         Int32, (Ptr{Void},Int32),
-                                         t.in_stream.handle, raw) != -1
+    function raw!(t::TTYTerminal, raw::Bool)
+        check_open(t.in_stream)
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Void},Int32), t.in_stream.handle, raw) != -1
+    end
 end
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")

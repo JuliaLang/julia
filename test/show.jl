@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 replstr(x) = sprint((io,x) -> writemime(io,MIME("text/plain"),x), x)
 
 @test replstr(cell(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
@@ -14,6 +16,16 @@ end
 s = "ccall(:f,Int,(Ptr{Void},),&x)"
 @test replstr(parse(s)) == ":($s)"
 
+# recursive array printing
+# issue #10353
+let
+    a = Any[]
+    push!(a,a)
+    show(IOBuffer(), a)
+    push!(a,a)
+    show(IOBuffer(), a)
+end
+
 # expression printing
 
 macro test_repr(x)
@@ -22,15 +34,17 @@ macro test_repr(x)
         # strings get converted to string Exprs by the first show().
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
-        local x1 = parse($x)
-        local x2 = eval(parse(repr(x1)))
-        local x3 = eval(parse(repr(x2)))
-        x3 == x1 ? nothing : error(string(
-            "repr test failed:",
-            "\noriginal: ", $x,
-            "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-        ))
+        let
+            local x1 = parse($x)
+            local x2 = eval(parse(repr(x1)))
+            local x3 = eval(parse(repr(x2)))
+            x3 == x1 ? nothing : error(string(
+                "repr test failed:",
+                "\noriginal: ", $x,
+                "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+                "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
+                ))
+        end
     end
 end
 
@@ -152,6 +166,9 @@ end"""
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 
+# issue #12477
+@test sprint(show, Union{Int64,Int32,Int16,Int8,Float64}) == "Union{Float64,Int16,Int32,Int64,Int8}"
+
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
 @test_repr "foo.bar[1]"
@@ -221,3 +238,46 @@ end
 
 # issue #9865
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+
+# issue #11413
+@test string(:(*{1,2})) == "*{1,2}"
+@test string(:(*{1,x})) == "*{1,x}"
+@test string(:(-{x}))   == "-{x}"
+
+# issue #11393
+@test_repr "@m(x,y) + z"
+@test_repr "(@m(x,y),z)"
+@test_repr "[@m(x,y),z]"
+@test_repr "A[@m(x,y),z]"
+@test_repr "T{@m(x,y),z}"
+@test_repr "@m x @n(y) z"
+@test_repr "f(@m(x,y);z=@n(a))"
+@test_repr "@m(x,y).z"
+@test_repr "::@m(x,y)+z"
+@test_repr "[@m(x) y z]"
+@test_repr "[@m(x) y; z]"
+@test_repr "let @m(x), y=z; end"
+
+@test repr(:(@m x y))    == ":(@m x y)"
+@test string(:(@m x y))  ==   "@m x y"
+@test string(:(@m x y;)) == "begin \n    @m x y\nend"
+
+# issue #11436
+@test_repr "1 => 2 => 3"
+@test_repr "1 => (2 => 3)"
+@test_repr "(1 => 2) => 3"
+
+# pr 12008
+@test_repr "bitstype A B"
+@test_repr "bitstype 100 B"
+@test repr(:(bitstype A B)) == ":(bitstype A B)"
+@test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
+
+oldout = STDOUT
+try
+    rd, wr = redirect_stdout()
+    @test dump(STDERR) == nothing
+    @test xdump(STDERR) == nothing
+finally
+    redirect_stdout(oldout)
+end

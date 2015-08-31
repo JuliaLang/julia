@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable StatStruct
     device  :: UInt
     inode   :: UInt
@@ -13,7 +15,9 @@ immutable StatStruct
     ctime   :: Float64
 end
 
-StatStruct(buf::Union(Vector{UInt8},Ptr{UInt8})) = StatStruct(
+StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
@@ -48,8 +52,8 @@ end
 
 stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
-stat(path::AbstractString)  = @stat_call jl_stat  Ptr{UInt8} path
-lstat(path::AbstractString) = @stat_call jl_lstat Ptr{UInt8} path
+stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
+lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))
@@ -113,5 +117,27 @@ filesize(path...) = stat(path...).size
    mtime(path...) = stat(path...).mtime
    ctime(path...) = stat(path...).ctime
 
+# samefile can be used for files and directories: #11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
-samefile(a::AbstractString, b::AbstractString) = samefile(stat(a),stat(b))
+function samefile(a::AbstractString, b::AbstractString)
+    if ispath(a) && ispath(b)
+        samefile(stat(a),stat(b))
+    else
+        return false
+    end
+end
+
+function ismount(path...)
+    path = joinpath(path...)
+    isdir(path) || return false
+    s1 = lstat(path)
+    # Symbolic links cannot be mount points
+    islink(s1) && return false
+    parent_path = joinpath(path, "..")
+    s2 = lstat(parent_path)
+    # If a directory and its parent are on different devices,  then the
+    # directory must be a mount point
+    (s1.device != s2.device) && return true
+    (s1.inode == s2.inode) && return true
+    false
+end

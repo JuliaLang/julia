@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function test_all_combos()
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)
@@ -256,17 +258,17 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)),drs)
 @test map(length,drs) == map(x->size(x)[1],drs)
 @test map(length,drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))),drs)
 @test map(length,drs) == map(x->length(reverse(x)),drs)
-@test all(map(x->findin(x,x)==[1:length(x);],drs[1:4]))
+@test all(x->findin(x,x)==[1:length(x);],drs[1:4])
 @test isempty(dr2)
-@test all(map(x->reverse(x) == range(last(x), -step(x), length(x)),drs))
-@test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
-@test all(map(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end]))
-@test all(map(drs[1:3]) do dd
+@test all(x->reverse(x) == range(last(x), -step(x), length(x)),drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end])
+@test all(drs[1:3]) do dd
     for (i,d) in enumerate(dd)
         @test d == (first(dd) + Dates.Day(i-1))
     end
     true
-end)
+end
 @test_throws MethodError dr + 1
 a = Dates.DateTime(2013,1,1)
 b = Dates.DateTime(2013,2,1)
@@ -281,8 +283,8 @@ b = Dates.DateTime(2013,2,1)
 @test Dates.DateTime(2013,1,26) in dr
 @test !(Dates.DateTime(2012,1,1) in dr)
 
-@test all(map(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs))
-@test all(map(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs))
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs)
 
 @test length(b:Dates.Day(-1):a) == 32
 @test length(b:a) == 0
@@ -334,17 +336,17 @@ drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
           dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 
 @test map(length,drs) == map(x->size(x)[1],drs)
-@test all(map(x->findin(x,x) == [1:length(x);], drs[1:4]))
+@test all(x->findin(x,x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(map(x->reverse(x) == last(x):-step(x):first(x),drs))
-@test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
-@test all(map(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end]))
-@test all(map(drs[1:3]) do dd
+@test all(x->reverse(x) == last(x):-step(x):first(x),drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end])
+@test all(drs[1:3]) do dd
     for (i,d) in enumerate(dd)
         @test d == (first(dd) + Dates.Day(i-1))
     end
     true
-end)
+end
 @test_throws MethodError dr + 1
 a = Dates.Date(2013,1,1)
 b = Dates.Date(2013,2,1)
@@ -359,8 +361,8 @@ b = Dates.Date(2013,2,1)
 @test Dates.Date(2013,1,26) in dr
 @test !(Dates.Date(2012,1,1) in dr)
 
-@test all(map(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs))
-@test all(map(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs))
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs)
 
 @test length(b:Dates.Day(-1):a) == 32
 @test length(b:a) == 0

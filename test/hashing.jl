@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
@@ -18,22 +20,17 @@ vals = vcat(
 
 function coerce(T::Type, x)
     if T<:Rational
-        return convert(T, coerce(typeof(num(zero(T))), x))
-    end
-    if !(T<:Integer) || T===Bool
+        convert(T, coerce(typeof(num(zero(T))), x))
+    elseif !(T<:Integer)
         convert(T, x)
-    elseif sizeof(T) < sizeof(x)
-        x % T
-    elseif sizeof(T) == sizeof(x)
-        reinterpret(T, x)
     else
-        convert(T, x)
+        x % T
     end
 end
 
 for T=types[2:end], x=vals
     a = coerce(T,x)
-    @test hash(a,zero(UInt)) == invoke(hash,(Real,UInt),a,zero(UInt))
+    @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
 end
 
 for T=types, S=types, x=vals
@@ -55,7 +52,7 @@ end
 @test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
 # issue #9264
-@test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))
+@test hash(1//6,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, 1//6, zero(UInt))
 @test hash(1//6) == hash(big(1)//big(6))
 @test hash(1//6) == hash(0x01//0x06)
 
@@ -82,7 +79,6 @@ for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
-@test hash(RopeString("1","2")) == hash("12")
 @test hash(SubString("--hello--",3,7)) == hash("hello")
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
@@ -94,3 +90,7 @@ x = sprand(10, 10, 0.5)
 x[1] = 1
 x.nzval[1] = 0
 @test hash(x) == hash(full(x))
+
+let a = QuoteNode(1), b = QuoteNode(1.0)
+    @test (hash(a)==hash(b)) == (a==b)
+end

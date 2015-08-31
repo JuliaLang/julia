@@ -1,44 +1,18 @@
-type FileMonitor
-    handle::Ptr{Void}
-    cb::Callback
-    open::Bool
-    notify::Condition
-    function FileMonitor(cb, file)
-        handle = Libc.malloc(_sizeof_uv_fs_event)
-        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32), eventloop(),handle,file,0)
-        if err < 0
-            ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
-            disassociate_julia_struct(handle)
-            ccall(:jl_forceclose_uv, Void, (Ptr{Void},), handle)
-            throw(UVError("FileMonitor",err))
-        end
-        this = new(handle,cb,false,Condition())
-        associate_julia_struct(handle,this)
-        finalizer(this,uvfinalize)
-        this
-    end
-    FileMonitor(file) = FileMonitor(false,file)
-end
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function close(t::FileMonitor)
-    if t.handle != C_NULL
-        ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-    end
-end
-
+# libuv file watching event flags
+const UV_RENAME = 1
+const UV_CHANGE = 2
 immutable FileEvent
     renamed::Bool
     changed::Bool
     timedout::Bool
 end
-# libuv file watching event flags
-const UV_RENAME = 1
-const UV_CHANGE = 2
-const FE_TIMEDOUT = 4
-FileEvent() = FileEvent(false,false,false)
+FileEvent() = FileEvent(false, false, false)
 FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
-                                      (flags & UV_CHANGE) != 0,
-                                      (flags & FE_TIMEDOUT) != 0)
+                                  (flags & UV_CHANGE) != 0,
+                                  (flags & FD_TIMEDOUT) != 0)
+fetimeout() = FileEvent(false, false, true)
 
 immutable FDEvent
     readable::Bool
@@ -52,285 +26,380 @@ const FD_TIMEDOUT = 4
 
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
-FDEvent() = FDEvent(false,false,false)
+FDEvent() = FDEvent(false, false, false)
 FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
                                   (flags & UV_WRITABLE) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
-fdtimeout() = FDEvent(false,false,true)
+fdtimeout() = FDEvent(false, false, true)
 
-#Wrapper for an OS file descriptor (for Windows)
-@windows_only immutable WindowsRawSocket
-    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
+
+type FileMonitor
+    handle::Ptr{Void}
+    file::ByteString
+    notify::Condition
+    active::Bool
+    function FileMonitor(file::AbstractString)
+        handle = Libc.malloc(_sizeof_uv_fs_event)
+        this = new(handle, file, Condition(), false)
+        associate_julia_struct(handle, this)
+        err = ccall(:uv_fs_event_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
+        if err != 0
+            Libc.free(handle)
+            throw(UVError("PollingFileWatcher", err))
+        end
+        finalizer(this, uvfinalize)
+        this
+    end
 end
-
-@windows_only export WindowsRawSocket
 
 abstract UVPollingWatcher
 
 type PollingFileWatcher <: UVPollingWatcher
     handle::Ptr{Void}
-    file::AbstractString
-    open::Bool
+    file::ByteString
+    interval::UInt32
     notify::Condition
-    cb::Callback
-    function PollingFileWatcher(cb, file)
+    active::Bool
+    function PollingFileWatcher(file::AbstractString, interval::Float64=5.007) # same default as nodejs
         handle = Libc.malloc(_sizeof_uv_fs_poll)
-        err = ccall(:uv_fs_poll_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),handle)
-        if err < 0
+        this = new(handle, file, round(UInt32, interval*1000), Condition(), false)
+        associate_julia_struct(handle, this)
+        err = ccall(:uv_fs_poll_init, Int32, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
+        if err != 0
             Libc.free(handle)
-            throw(UVError("PollingFileWatcher",err))
+            throw(UVError("PollingFileWatcher", err))
         end
-        this = new(handle, file, false, Condition(), cb)
-        associate_julia_struct(handle,this)
-        finalizer(this,uvfinalize)
-        this
+        finalizer(this, uvfinalize)
+        return this
     end
-    PollingFileWatcher(file) =  PollingFileWatcher(false,file)
 end
 
-@unix_only typealias FDW_FD RawFD
-@windows_only typealias FDW_FD WindowsRawSocket
-
-@unix_only _get_osfhandle(fd::RawFD) = fd
-@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
-@windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
-
-type FDWatcher <: UVPollingWatcher
+type _FDWatcher
     handle::Ptr{Void}
-    fd::FDW_FD
-    open::Bool
+    refcount::Tuple{Int, Int}
     notify::Condition
-    cb::Callback
-    events::FDEvent
-    FDWatcher(handle::Ptr,fd,open::Bool,notify::Condition,cb::Callback,events::FDEvent) =
-        new(handle,_get_osfhandle(fd),open,notify,cb,events)
+    active::Tuple{Bool, Bool}
+    let FDWatchers = Vector{Any}()
+        global _FDWatcher
+        function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
+            if !readable && !writable
+                throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
+            end
+            if fd.fd+1 > length(FDWatchers)
+                old_len = length(FDWatchers)
+                resize!(FDWatchers, fd.fd+1)
+                fill!(sub(FDWatchers, old_len+1:fd.fd+1), nothing)
+            elseif FDWatchers[fd.fd + 1] !== nothing
+                this = FDWatchers[fd.fd + 1]::_FDWatcher
+                this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
+                return this
+            end
+            @unix_only if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
+            end
+            handle = Libc.malloc(_sizeof_uv_poll)
+            this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
+            associate_julia_struct(handle, this)
+            err = ccall(:uv_poll_init, Int32, (Ptr{Void}, Ptr{Void}, Int32), eventloop(), handle, fd.fd)
+            if err != 0
+                Libc.free(handle)
+                throw(UVError("FDWatcher",err))
+            end
+            FDWatchers[fd.fd] = this
+            return this
+        end
+        @windows_only function _FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
+            if !readable && !writable
+                throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
+            end
+            handle = Libc.malloc(_sizeof_uv_poll)
+            this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
+            associate_julia_struct(handle, this)
+            err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
+                                                    eventloop(), handle,    fd.handle)
+            if err != 0
+                Libc.free(handle)
+                throw(UVError("FDWatcher",err))
+            end
+            return this
+        end
+        global close
+        function close(t::_FDWatcher, readable::Bool, writable::Bool)
+            if t.handle != C_NULL
+                t.refcount = (t.refcount[1] - Int(readable), t.refcount[2] - Int(writable))
+                if t.refcount == (0, 0)
+                    t.active = (false, false)
+                    disassociate_julia_struct(t)
+                    ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
+                    t.handle = C_NULL
+                    fdnum = findfirst(FDWatchers, t)
+                    if fdnum > 0
+                        FDWatchers[fdnum] = nothing
+                    end
+                    notify(t.notify, FDEvent(true, true, false))
+                    nothing
+                end
+            end
+            nothing
+        end
+        global _uv_hook_close
+        function _uv_hook_close(t::_FDWatcher)
+            # jl_atexit_hook can cause this to get called
+            t.refcount = (0, 0)
+            close(t, false, false)
+        end
+    end
 end
-function FDWatcher(fd::RawFD)
-    handle = Libc.malloc(_sizeof_uv_poll)
-    @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),fd.fd,handle,eventloop()) == 1
-        Libc.free(handle)
-        throw(ArgumentError("file descriptor $(fd.fd) is already being watched by another watcher"))
+type FDWatcher <: UVPollingWatcher
+    watcher::_FDWatcher
+    readable::Bool
+    writable::Bool
+    function FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
+        this = new(_FDWatcher(fd, readable, writable), readable, writable)
+        finalizer(this, close)
+        return this
     end
-    err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
-    if err < 0
-        Libc.free(handle)
-        throw(UVError("FDWatcher",err))
+    @windows_only function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
+        this = new(_FDWatcher(fd, readable, writable), readable, writable)
+        finalizer(this, close)
+        return this
     end
-    this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
-    associate_julia_struct(handle,this)
-    finalizer(this,uvfinalize)
-    this
-end
-@windows_only function FDWatcher(fd::WindowsRawSocket)
-    handle = Libc.malloc(_sizeof_uv_poll)
-    err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
-                                            eventloop(), handle,    fd.handle)
-    if err < 0
-        Libc.free(handle)
-        throw(UVError("FDWatcher",err))
-    end
-    this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
-    associate_julia_struct(handle,this)
-    finalizer(this,uvfinalize)
-    this
 end
 
-function fdw_wait_cb(fdw::FDWatcher, events::FDEvent, status)
-    if status == -1
-        notify_error(fdw.notify,UVError("FDWatcher",status))
+function close(t::FDWatcher)
+    r, w = t.readable, t.writable
+    t.readable = t.writable = false
+    close(t.watcher, r, w)
+end
+
+function uvfinalize(uv::Union{FileMonitor, PollingFileWatcher})
+    disassociate_julia_struct(uv)
+    close(uv)
+end
+
+function close(t::Union{FileMonitor, PollingFileWatcher})
+    if t.handle != C_NULL
+        ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
+        t.handle = C_NULL
+    end
+end
+
+function _uv_hook_close(uv::PollingFileWatcher)
+    uv.handle = C_NULL
+    uv.active = false
+    notify(uv.notify, (StatStruct(), StatStruct()))
+    nothing
+end
+
+function _uv_hook_close(uv::FileMonitor)
+    uv.handle = C_NULL
+    uv.active = false
+    notify(uv.notify, ("", FileEvent()))
+    nothing
+end
+
+function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
+    t = @handle_as handle FileMonitor
+    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{UInt8}, filename))
+    if status != 0
+        notify_error(t.notify, UVError("FileMonitor", status))
     else
-        notify(fdw.notify,events)
+        notify(t.notify, (fname, FileEvent(events)))
+    end
+    nothing
+end
+
+function uv_pollcb(handle::Ptr{Void}, status::Int32, events::Int32)
+    t = @handle_as handle _FDWatcher
+    if status != 0
+        notify_error(t.notify, UVError("FDWatcher", status))
+    else
+        notify(t.notify, FDEvent(events))
+    end
+    nothing
+end
+
+function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
+    t = @handle_as handle PollingFileWatcher
+    if status != 0
+        notify_error(t.notify, UVError("PollingFileWatcher", status))
+    else
+        prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
+        curr_stat = StatStruct(convert(Ptr{UInt8}, curr))
+        notify(t.notify, (prev_stat, curr_stat))
+    end
+    nothing
+end
+
+
+function start_watching(t::_FDWatcher)
+    read, write = t.refcount[1] > 0, t.refcount[2] > 0
+    if t.active[1] != read || t.active[2] != write
+        uv_error("start_watching (FD)",
+                 ccall(:uv_poll_start, Int32, (Ptr{Void}, Int32, Ptr{Void}),
+                       t.handle,
+                       (read ? UV_READABLE : 0) | (write ? UV_WRITABLE : 0),
+                       uv_jl_pollcb::Ptr{Void}))
+        t.active = (read, write)
     end
 end
 
-function _wait(fdw::FDWatcher,readable,writable)
-    if !readable && !writable
-        throw(ArgumentError("must watch for at least one read or write FD event"))
+function stop_watching(t::_FDWatcher)
+    if t.active[1] || t.active[2]
+        if isempty(t.notify.waitq)
+            t.active = (false, false)
+            uv_error("start_watching (FD)",
+                     ccall(:uv_poll_stop, Int32, (Ptr{Void},), t.handle))
+        else
+            start_watching(t) # make sure the READABLE / WRITEABLE state is updated
+        end
     end
-    events = FDEvent(readable | fdw.events.readable,
-                     writable | fdw.events.writable,
-                     fdw.events.timedout)
-    if !fdw.open || (events != fdw.events)
-        # (re)initialize fdw
-        start_watching(fdw_wait_cb,fdw,events)
+end
+
+function start_watching(t::PollingFileWatcher)
+    if !t.active
+        uv_error("start_watching (File)",
+                 ccall(:uv_fs_poll_start, Int32, (Ptr{Void}, Ptr{Void}, Cstring, UInt32),
+                       t.handle, uv_jl_fspollcb::Ptr{Void}, t.file, t.interval))
+        t.active = true
     end
-    while true
+end
+
+function stop_watching(t::PollingFileWatcher)
+    if t.active && isempty(t.notify.waitq)
+        t.active = false
+        uv_error("stop_watching (File)",
+                 ccall(:uv_fs_poll_stop, Int32, (Ptr{Void},), t.handle))
+    end
+end
+
+function start_watching(t::FileMonitor)
+    if !t.active
+        uv_error("start_watching (FileMonitor)",
+                 ccall(:uv_fs_event_start, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Int32),
+                       t.handle, uv_jl_fseventscb::Ptr{Void}, t.file, 0))
+        t.active = true
+    end
+end
+
+function stop_watching(t::FileMonitor)
+    if t.active && isempty(t.notify.waitq)
+        t.active = false
+        uv_error("stop_watching (FileMonitor)",
+                 ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), t.handle))
+    end
+end
+
+function wait(fdw::FDWatcher)
+    wait(fdw.watcher, readable = fdw.readable, writable = fdw.writable)
+end
+function wait(fdw::_FDWatcher; readable=true, writable=true)
+    local events
+    while fdw.refcount != (0, 0)
+        start_watching(fdw)
         events = wait(fdw.notify)
         if isa(events, FDEvent) &&
             ((readable && isreadable(events)) || (writable && iswritable(events)))
             break
         end
     end
-    if isempty(fdw.notify.waitq)
-        stop_watching(fdw)
-    end
+    stop_watching(fdw)
     events
 end
 
-# On Unix we can only have one watcher per FD, so we need to keep an explicit
-# list of them. On Windows, I think it is techincally possible to have more than one
-# watcher per FD, but in order to keep compatibility, we do the same on windows as we do
-# on unix
-
-let
-    global fdwatcher_init, wait
-    @unix_only begin
-        local fdwatcher_array
-        function fdwatcher_init()
-            fdwatcher_array = Array(FDWatcher,0)
-        end
-
-        function wait(fd::RawFD; readable=false, writable=false)
-            old_length = length(fdwatcher_array)
-            if fd.fd+1 > old_length
-                resize!(fdwatcher_array,fd.fd+1)
-            end
-            if !isdefined(fdwatcher_array,fd.fd+1)
-                fdwatcher_array[fd.fd+1] = FDWatcher(fd)
-            end
-            _wait(fdwatcher_array[fd.fd+1],readable,writable)
-        end
+function wait(fd::RawFD; readable=false, writable=false)
+    fdw = _FDWatcher(fd, readable, writable)
+    try
+        return wait(fdw, readable=readable, writable=writable)
+    finally
+        close(fdw, readable, writable)
     end
-    @windows_only begin
-        local fdwatcher_array
-        function fdwatcher_init()
-            fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
-        end
+end
 
-        function wait(fd::RawFD; readable=false, writable=false)
-            wait(_get_osfhandle(fd); readable=readable, writable=writable)
-        end
-
-        function wait(socket::WindowsRawSocket; readable=false, writable=false)
-            if !haskey(fdwatcher_array,socket.handle)
-                fdwatcher_array[socket] = FDWatcher(socket)
-            end
-            _wait(fdwatcher_array[socket],readable,writable)
+@windows_only begin
+    function wait(socket::WindowsRawSocket; readable=false, writable=false)
+        fdw = _FDWatcher(socket, readable, writable)
+        try
+            return wait(fdw, readable=readable, writable=writable)
+        finally
+            close(fdw, readable, writable)
         end
     end
 end
 
-function pfw_wait_cb(pfw::PollingFileWatcher, events, status)
-    if status < 0
-        notify_error(pfw.notify,UVError("PollingFileWatcher",status))
-    else
-        notify(pfw.notify,events)
-    end
-end
-
-function wait(pfw::PollingFileWatcher; interval=2.0)
-    if !pfw.open
-        start_watching(pfw_wait_cb,pfw,interval)
-    end
-    events = stream_wait(pfw,pfw.notify)
-    if isempty(pfw.notify.waitq)
-        stop_watching(pfw)
-    end
-    # return basename for consistency with something libuv appears to do
-    # in the FileMonitor case.
-    basename(pfw.file), events
+function wait(pfw::PollingFileWatcher)
+    start_watching(pfw)
+    prevstat, currstat = stream_wait(pfw, pfw.notify)
+    stop_watching(pfw)
+    return prevstat, currstat
 end
 
 function wait(m::FileMonitor)
-    err, filename, events = stream_wait(m,m.notify)
-    filename, events
+    start_watching(m)
+    filename, events = stream_wait(m, m.notify)
+    stop_watching(m)
+    return filename, events
 end
 
-
-close(t::UVPollingWatcher) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-
-function start_watching(t::FDWatcher, events::FDEvent)
-    associate_julia_struct(t.handle, t)
-    @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),t.fd,t.handle,eventloop()) == 1
-        throw(ArgumentError("cannot watch an FD more than once on Unix"))
-    end
-    uv_error("start_watching (FD)",
-        ccall(:jl_poll_start, Int32, (Ptr{Void},Int32), t.handle,
-              events.readable*UV_READABLE + events.writable*UV_WRITABLE + events.timedout*FD_TIMEDOUT))
-end
-start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_watching(t,events))
-
-function start_watching(t::PollingFileWatcher, interval=2.0)
-    associate_julia_struct(t.handle, t)
-    uv_error("start_watching (File)",
-             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{UInt8},UInt32),
-                   t.handle, t.file, round(UInt32,interval*1000)))
-end
-start_watching(f::Function, t::PollingFileWatcher, interval=2.0) = (t.cb = f;start_watching(t,interval))
-
-function stop_watching(t::FDWatcher)
-    disassociate_julia_struct(t.handle)
-    uv_error("stop_watching (FD)",
-        ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle))
-end
-
-function stop_watching(t::PollingFileWatcher)
-    disassociate_julia_struct(t.handle)
-    uv_error("stop_watching (File)",
-        ccall(:uv_fs_poll_stop,Int32,(Ptr{Void},),t.handle))
-end
-
-function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{UInt8},filename))
-    fe = FileEvent(events)
-    if isa(t.cb,Function)
-        t.cb(fname, fe, status)
-    end
-    if status < 0
-        notify_error(t.notify,(UVError("FileMonitor",status), fname, fe))
-    else
-        notify(t.notify,(status, fname, fe))
-    end
-end
-
-function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
-    if isa(t.cb,Function)
-        t.cb(t, FDEvent(events), status)
-    end
-end
-
-function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
-    if isa(t.cb,Function)
-        s = StatStruct(convert(Ptr{UInt8},cur))
-        t.cb(t, FDEvent(isreadable(s), iswritable(s), false), status)
-    end
-end
-
-_uv_hook_close(uv::FileMonitor) = (uv.handle = 0; nothing)
-_uv_hook_close(uv::UVPollingWatcher) = (uv.handle = 0; nothing)
-
-function poll_fd(s, seconds::Real; readable=false, writable=false)
+function poll_fd(s::Union{RawFD, @windows ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     wt = Condition()
+    fdw = _FDWatcher(s, readable, writable)
+    try
+        if timeout_s >= 0
+            result::FDEvent = fdtimeout()
 
-    @schedule (args = wait(s; readable=readable, writable=writable); notify(wt,(:poll,args)))
-    @schedule (sleep(seconds); notify(wt,(:timeout,fdtimeout())))
+            @schedule (result = wait(fdw, readable=readable, writable=writable); notify(wt))
+            @schedule (sleep(timeout_s); notify(wt))
 
-    _, ret = wait(wt)
-
-    return ret
-end
-
-function poll_file(s, interval_seconds::Real, seconds::Real)
-    wt = Condition()
-    pfw = PollingFileWatcher(s)
-
-    @schedule (wait(pfw;interval=interval_seconds); notify(wt,(:poll)))
-    @schedule (sleep(seconds); notify(wt,(:timeout)))
-
-    result = wait(wt)
-    if result == :timeout
-        stop_watching(pfw)
+            wait(wt)
+            return result
+        else
+            return wait(fdw, readable=readable, writable=writable)
+        end
+    finally
+        close(fdw, readable, writable)
     end
-    result == :poll
 end
 
-watch_file(s; poll=false) = watch_file(false, s, poll=poll)
-function watch_file(cb, s; poll=false)
-    if poll
-        pfw = PollingFileWatcher(cb,s)
-        start_watching(pfw)
-        return pfw
-    else
-        return FileMonitor(cb,s)
+function watch_file(s::AbstractString, timeout_s::Real=-1)
+    wt = Condition()
+    fm = FileMonitor(s)
+    try
+        if timeout_s >= 0
+            result = fetimeout()
+
+            @schedule (try result = wait(fm); catch e; notify_error(wt, e); end; notify(wt))
+            @schedule (sleep(timeout_s); notify(wt))
+
+            wait(wt)
+            return result
+        else
+            return wait(fm)
+        end
+    finally
+        close(fm)
+    end
+end
+
+function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)
+    wt = Condition()
+    pfw = PollingFileWatcher(s, Float64(interval_seconds))
+    try
+        if timeout_s >= 0
+            result = :timeout
+
+            @schedule (try result = wait(pfw); catch e; notify_error(wt, e); end; notify(wt))
+            @schedule (sleep(timeout_s); notify(wt))
+
+            wait(wt)
+            if result === :timeout
+                return (StatStruct(), StatStruct())
+            end
+            return result
+        else
+            return wait(pfw)
+        end
+    finally
+        close(pfw)
     end
 end

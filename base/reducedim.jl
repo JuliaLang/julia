@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
@@ -90,11 +92,11 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
 #
-promote_union(T::UnionType) = promote_type(T.types...)
+promote_union(T::Union) = promote_type(T.types...)
 promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)
-    if method_exists(zero, (Type{T},))
+    if method_exists(zero, Tuple{Type{T}})
         x = f(zero(T))
         z = zero(x) + zero(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
@@ -107,7 +109,7 @@ end
 
 function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     T = promote_union(S)
-    if method_exists(zero, (Type{T},))
+    if method_exists(zero, Tuple{Type{T}})
         x = f(zero(T))
         z = one(x) * one(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
@@ -120,7 +122,7 @@ end
 
 reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
 reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) =
+reducedim_init{T}(f::Union{AbsFun,Abs2Fun}, op::MaxFun, A::AbstractArray{T}, region) =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -129,19 +131,19 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 # specialize to make initialization more efficient for common cases
 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
-    T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
+    T = Union{[AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...}
     @eval begin
         reducedim_init(f::IdFun, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
         reducedim_init(f::IdFun, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, one($RT))
-        reducedim_init(f::Union(AbsFun,Abs2Fun), op::AddFun, A::$T, region) =
+        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, real(zero($RT)))
-        reducedim_init(f::Union(AbsFun,Abs2Fun), op::MulFun, A::$T, region) =
+        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, real(one($RT)))
     end
 end
-reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) =
+reducedim_init(f::Union{IdFun,AbsFun,Abs2Fun}, op::AddFun, A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
 
 
@@ -208,10 +210,13 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
             R[1,IR] = r
         end
     else
-        sizeR = CartesianIndex{N}(size(R))
-        @inbounds @simd for IA in CartesianRange(size(A))
-            IR = min(IA, sizeR)
-            R[IR] = op(R[IR], f(A[IA]))
+        sizeR1 = Base.size_skip1(size(R), A)
+        sizeA1 = Base.size_skip1(size(A), A)
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(IA, sizeR1)
+            @simd for i = 1:size(A, 1)
+                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+            end
         end
     end
     return R
@@ -250,11 +255,11 @@ for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun),
 
     fname! = symbol(fname, '!')
     @eval begin
-        $(fname!)(f::Union(Function,Func{1}), r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f::Union{Function,Func{1}}, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(Op)(), initarray!(r, $(Op)(), init), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(IdFun(), r, A; init=init)
 
-        $(fname)(f::Union(Function,Func{1}), A::AbstractArray, region) =
+        $(fname)(f::Union{Function,Func{1}}, A::AbstractArray, region) =
             mapreducedim(f, $(Op)(), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(IdFun(), A, region)
     end
@@ -285,10 +290,10 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     end
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
+    sizeR1 = size_skip1(size(Rval), A)
+    sizeA1 = size_skip1(size(A), A)
     k = 0
     if size(Rval, 1) < size(A, 1)
-        sizeR1 = size_skip1(size(Rval), A)
-        sizeA1 = size_skip1(size(A), A)
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(sizeR1, IA)
             tmpRv = Rval[1,IR]
@@ -305,14 +310,15 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
             Rind[1,IR] = tmpRi
         end
     else
-        sizeR = CartesianIndex(size(Rval))
-        @inbounds for IA in CartesianRange(size(A))
-            IR = min(sizeR, IA)
-            k += 1
-            tmpAv = A[IA]
-            if f(tmpAv, Rval[IR])
-                Rval[IR] = tmpAv
-                Rind[IR] = k
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(sizeR1, IA)
+            for i = 1:size(A, 1)
+                k += 1
+                tmpAv = A[i,IA]
+                if f(tmpAv, Rval[i,IR])
+                    Rval[i,IR] = tmpAv
+                    Rind[i,IR] = k
+                end
             end
         end
     end
@@ -353,7 +359,7 @@ function findmax{T}(A::AbstractArray{T}, region)
             zeros(Int, reduced_dims0(A, region)), A)
 end
 
-size_skip1{T}(dims::(), Aref::AbstractArray{T,0}) = CartesianIndex(())
+size_skip1{T}(dims::Tuple{}, Aref::AbstractArray{T,0}) = CartesianIndex(())
 size_skip1{T,N}(dims::NTuple{N,Int}, Aref::AbstractArray{T,N}) = CartesianIndex(skip1(dims...))
 @inline size_skip1{T,M,N}(dims::NTuple{M,Int}, Aref::AbstractArray{T,N}) = size_skip1(tuple(dims..., 1), Aref)
 skip1(x, t...) = t

@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module SPQR
+
+import Base: \
 
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
@@ -43,23 +47,23 @@ import Base.SparseMatrix.CHOLMOD: convert, free!
 
 
 
-immutable C_Factorization{Tv<:VTypes,Ti<:ITypes}
+immutable C_Factorization{Tv<:VTypes}
     xtype::Cint
     factors::Ptr{Tv}
 end
 
-type Factorization{Tv<:VTypes,Ti<:ITypes} <: Base.LinAlg.Factorization{Tv}
+type Factorization{Tv<:VTypes} <: Base.LinAlg.Factorization{Tv}
     m::Int
     n::Int
-    p::Ptr{C_Factorization{Tv,Ti}}
-    function Factorization(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv,Ti}})
+    p::Ptr{C_Factorization{Tv}}
+    function Factorization(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}})
         if p == C_NULL
             throw(ArgumentError("factorization failed for unknown reasons. Please submit a bug report."))
         end
         new(m, n, p)
     end
 end
-Factorization{Tv<:VTypes,Ti<:ITypes}(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv,Ti}}) = Factorization{Tv,Ti}(m, n, p)
+Factorization{Tv<:VTypes}(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}}) = Factorization{Tv}(m, n, p)
 
 size(F::Factorization) = (F.m, F.n)
 function size(F::Factorization, i::Integer)
@@ -74,37 +78,37 @@ function size(F::Factorization, i::Integer)
     return 1
 end
 
-function free!{Tv<:VTypes,Ti<:ITypes}(F::Factorization{Tv,Ti})
+function free!{Tv<:VTypes}(F::Factorization{Tv})
     ccall((:SuiteSparseQR_C_free, :libspqr), Cint,
-        (Ptr{Ptr{C_Factorization{Tv,Ti}}}, Ptr{Void}),
-            &F.p, common(Ti)) == 1
+        (Ptr{Ptr{C_Factorization{Tv}}}, Ptr{Void}),
+            &F.p, common()) == 1
 end
 
-function backslash{Tv<:VTypes,Ti<:ITypes}(ordering::Integer, tol::Real, A::Sparse{Tv,Ti}, B::Dense{Tv})
+function backslash{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv}, B::Dense{Tv})
     m, n  = size(A)
     if m != size(B, 1)
         throw(DimensionMismatch("left hand side and right hand side must have same number of rows"))
     end
     d = Dense(ccall((:SuiteSparseQR_C_backslash, :libspqr), Ptr{C_Dense{Tv}},
-        (Cint, Cdouble, Ptr{C_Sparse{Tv,Ti}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            ordering, tol, A.p, B.p, common(Ti)))
+        (Cint, Cdouble, Ptr{C_Sparse{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
+            ordering, tol, A.p, B.p, common()))
     finalizer(d, free!)
     d
 end
 
-function factorize{Tv<:VTypes,Ti<:ITypes}(ordering::Integer, tol::Real, A::Sparse{Tv,Ti})
+function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     s = unsafe_load(A.p)
     if s.stype != 0
         throw(ArgumentError("stype must be zero"))
     end
-    f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv,Ti}},
-        (Cint, Cdouble, Ptr{Sparse{Tv,Ti}}, Ptr{Void}),
-            ordering, tol, A.p, common(Ti)))
+    f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv}},
+        (Cint, Cdouble, Ptr{Sparse{Tv}}, Ptr{Void}),
+            ordering, tol, A.p, common()))
     finalizer(f, free!)
     f
 end
 
-function solve{Tv<:VTypes,Ti<:ITypes}(system::Integer, QR::Factorization{Tv,Ti}, B::Dense{Tv})
+function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
     m, n = size(QR)
     mB = size(B, 1)
     if (system == RX_EQUALS_B || system == RETX_EQUALS_B) && m != mB
@@ -113,13 +117,13 @@ function solve{Tv<:VTypes,Ti<:ITypes}(system::Integer, QR::Factorization{Tv,Ti},
         throw(DimensionMismatch("number of columns in factorized matrix must equal number of rows in right hand side"))
     end
     d = Dense(ccall((:SuiteSparseQR_C_solve, :libspqr), Ptr{C_Dense{Tv}},
-        (Cint, Ptr{C_Factorization{Tv,Ti}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            system, QR.p, B.p, common(Ti)))
+        (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
+            system, QR.p, B.p, common()))
     finalizer(d, free!)
     d
 end
 
-function qmult{Tv<:VTypes,Ti<:ITypes}(method::Integer, QR::Factorization{Tv,Ti}, X::Dense{Tv})
+function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     mQR, nQR = size(QR)
     mX, nX = size(X)
     if (method == QTX || method == QX) && mQR != mX
@@ -128,8 +132,8 @@ function qmult{Tv<:VTypes,Ti<:ITypes}(method::Integer, QR::Factorization{Tv,Ti},
         throw(DimensionMismatch("Q matrix size $mQR and dense matrix has $nX columns"))
     end
     d = Dense(ccall((:SuiteSparseQR_C_qmult, :libspqr), Ptr{C_Dense{Tv}},
-            (Cint, Ptr{C_Factorization{Tv,Ti}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-                method, QR.p, X.p, common(Ti)))
+            (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
+                method, QR.p, X.p, common()))
     finalizer(d, free!)
     d
 end
@@ -140,5 +144,6 @@ function (\){T}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
     convert(typeof(B), solve(RETX_EQUALS_B, F, QtB))
 end
+(\){T,S}(F::Factorization{T}, B::StridedVecOrMat{S}) = F\convert(AbstractArray{T}, B)
 
 end # module

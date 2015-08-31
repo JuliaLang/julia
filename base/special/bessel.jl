@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 for jy in ("j","y"), nu in (0,1)
     jynu = Expr(:quote, symbol(jy,nu))
     jynuf = Expr(:quote, symbol(jy,nu,"f"))
@@ -66,7 +68,7 @@ function airy(k::Int, z::Complex128)
     elseif k == 2 || k == 3
         return _biry(z, id, Int32(1))
     else
-        error("invalid argument")
+        throw(ArgumentError("k must be between 0 and 3"))
     end
 end
 
@@ -83,7 +85,7 @@ airybi(z) = airy(2,z)
 airybiprime(z) = airy(3,z)
 @vectorize_1arg Number airybiprime
 
-airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
+airy(k::Number, x::AbstractFloat) = oftype(x, real(airy(k, complex(x))))
 airy(k::Number, x::Real) = airy(k, float(x))
 airy(k::Number, z::Complex64) = Complex64(airy(k, Complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), Complex128(z))
@@ -96,14 +98,14 @@ function airyx(k::Int, z::Complex128)
     elseif k == 2 || k == 3
         return _biry(z, id, Int32(2))
     else
-        error("invalid argument")
+        throw(ArgumentError("k must be between 0 and 3"))
     end
 end
 
 airyx(z) = airyx(0,z)
 @vectorize_1arg Number airyx
 
-airyx(k::Number, x::FloatingPoint) = oftype(x, real(airyx(k, complex(x))))
+airyx(k::Number, x::AbstractFloat) = oftype(x, real(airyx(k, complex(x))))
 airyx(k::Number, x::Real) = airyx(k, float(x))
 airyx(k::Number, z::Complex64) = Complex64(airyx(k, Complex128(z)))
 airyx(k::Number, z::Complex) = airyx(convert(Int,k), Complex128(z))
@@ -225,7 +227,7 @@ function besselj(nu::Float64, z::Complex128)
     end
 end
 
-besselj(nu::Integer, x::FloatingPoint) = typemin(Int32) <= nu <= typemax(Int32) ?
+besselj(nu::Integer, x::AbstractFloat) = typemin(Int32) <= nu <= typemax(Int32) ?
     oftype(x, ccall((:jn, libm), Float64, (Cint, Float64), nu, x)) :
     besselj(Float64(nu), x)
 
@@ -283,21 +285,21 @@ hankelh1x(nu, z) = besselhx(nu, 1, z)
 hankelh2x(nu, z) = besselhx(nu, 2, z)
 @vectorize_2arg Number hankelh2x
 
-function besseli(nu::Real, x::FloatingPoint)
+function besseli(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
     oftype(x, real(besseli(Float64(nu), Complex128(x))))
 end
 
-function besselix(nu::Real, x::FloatingPoint)
+function besselix(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
     oftype(x, real(besselix(Float64(nu), Complex128(x))))
 end
 
-function besselj(nu::FloatingPoint, x::FloatingPoint)
+function besselj(nu::AbstractFloat, x::AbstractFloat)
     if isinteger(nu)
         if typemin(Int32) <= nu <= typemax(Int32)
             return besselj(Int(nu), x)
@@ -308,14 +310,14 @@ function besselj(nu::FloatingPoint, x::FloatingPoint)
     oftype(x, real(besselj(Float64(nu), Complex128(x))))
 end
 
-function besseljx(nu::Real, x::FloatingPoint)
+function besseljx(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
     oftype(x, real(besseljx(Float64(nu), Complex128(x))))
 end
 
-function besselk(nu::Real, x::FloatingPoint)
+function besselk(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
     end
@@ -325,7 +327,7 @@ function besselk(nu::Real, x::FloatingPoint)
     oftype(x, real(besselk(Float64(nu), Complex128(x))))
 end
 
-function besselkx(nu::Real, x::FloatingPoint)
+function besselkx(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
     end
@@ -335,7 +337,7 @@ function besselkx(nu::Real, x::FloatingPoint)
     oftype(x, real(besselkx(Float64(nu), Complex128(x))))
 end
 
-function bessely(nu::Real, x::FloatingPoint)
+function bessely(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
     end
@@ -344,7 +346,7 @@ function bessely(nu::Real, x::FloatingPoint)
     end
     oftype(x, real(bessely(Float64(nu), Complex128(x))))
 end
-function bessely(nu::Integer, x::FloatingPoint)
+function bessely(nu::Integer, x::AbstractFloat)
     if x < 0
         throw(DomainError())
     end
@@ -357,7 +359,7 @@ function bessely(nu::Integer, x::Float32)
     return ccall((:ynf, libm), Float32, (Cint, Float32), nu, x)
 end
 
-function besselyx(nu::Real, x::FloatingPoint)
+function besselyx(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
     end

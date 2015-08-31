@@ -1,12 +1,14 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module ARPACK
 
-import ..LinAlg: BlasInt, blas_int, ARPACKException
+import ..LinAlg: BlasInt, ARPACKException
 
 ## aupd and eupd wrappers
 
 function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function, n::Integer,
-                      sym::Bool, cmplx::Bool, bmat::ASCIIString,
-                      nev::Integer, ncv::Integer, which::ASCIIString,
+                      sym::Bool, cmplx::Bool, bmat::ByteString,
+                      nev::Integer, ncv::Integer, which::ByteString,
                       tol::Real, maxiter::Integer, mode::Integer, v0::Vector)
 
     lworkl = cmplx ? ncv * (3*ncv + 5) : (sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
@@ -30,9 +32,9 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
     ipntr  = zeros(BlasInt, (sym && !cmplx) ? 11 : 14)
     ido    = zeros(BlasInt, 1)
 
-    iparam[1] = blas_int(1)       # ishifts
-    iparam[3] = blas_int(maxiter) # maxiter
-    iparam[7] = blas_int(mode)    # mode
+    iparam[1] = BlasInt(1)       # ishifts
+    iparam[3] = BlasInt(maxiter) # maxiter
+    iparam[7] = BlasInt(mode)    # mode
 
     zernm1 = 0:(n-1)
 
@@ -101,8 +103,8 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
     return (resid, v, n, iparam, ipntr, workd, workl, lworkl, rwork, TOL)
 end
 
-function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
-                      nev::Integer, which::ASCIIString, ritzvec::Bool,
+function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ByteString,
+                      nev::Integer, which::ByteString, ritzvec::Bool,
                       TOL::Array, resid, ncv::Integer, v, ldv, sigma, iparam, ipntr,
                       workd, workl, lworkl, rwork)
 

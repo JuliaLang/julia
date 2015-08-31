@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Pkg
 
 export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
@@ -35,7 +37,7 @@ clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,pkg)
 checkout(pkg::AbstractString, branch::AbstractString="master"; merge::Bool=true, pull::Bool=true) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
-free(pkg::AbstractString) = cd(Entry.free,pkg)
+free(pkg) = cd(Entry.free,pkg)
 
 pin(pkg::AbstractString) = cd(Entry.pin,pkg)
 pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
@@ -61,7 +63,7 @@ publish() = cd(Entry.publish,Dir.getmetabranch())
 build() = cd(Entry.build)
 build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::AbstractString, license::AbstractString; force::Bool=false, authors::Union(AbstractString,Array) = [], config::Dict=Dict()) =
+generate(pkg::AbstractString, license::AbstractString; force::Bool=false, authors::Union{AbstractString,Array} = [], config::Dict=Dict()) =
     cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 

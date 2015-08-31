@@ -1,4 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # REPL tests
+isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
 
@@ -6,15 +9,15 @@ function fake_repl()
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-    stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+    stdin_read,stdin_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
+    stdout_read,stdout_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
+    stderr_read,stderr_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
     Base.link_pipe(stdin_read,true,stdin_write,true)
     Base.link_pipe(stdout_read,true,stdout_write,true)
     Base.link_pipe(stderr_read,true,stderr_write,true)
 
     repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
-    stdin_write, stdout_read, stdout_read, repl
+    stdin_write, stdout_read, stderr_read, repl
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
@@ -25,8 +28,8 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-begin
-stdin_write, stdout_read, stdout_read, repl = fake_repl()
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 repl.history_file = false
@@ -90,6 +93,19 @@ readuntil(stdout_read, "\n")
 rm(tmpdir)
 cd(origpwd)
 
+# Test that accepting a REPL result immediately shows up, not
+# just on the next keystroke
+write(stdin_write, "1+1\n") # populate history with a trivial input
+readline(stdout_read)
+write(stdin_write, "\e[A\n")
+t = Timer(10) do t
+    isopen(t) || return
+    error("Stuck waiting for the repl to write `1+1`")
+end
+# yield make sure this got processed
+readuntil(stdout_read, "1+1")
+close(t)
+
 # Issue #10222
 # Test ignoring insert key in standard and prefix search modes
 write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
@@ -120,6 +136,70 @@ function buffercontents(buf::IOBuffer)
     c
 end
 
+function AddCustomMode(repl)
+    # Custom REPL mode tests
+    foobar_mode = LineEdit.Prompt("Test";
+        prompt_prefix="\e[38;5;166m",
+        prompt_suffix=Base.text_colors[:white],
+        on_enter = s->true,
+        on_done = line->true)
+
+    main_mode = repl.interface.modes[1]
+    push!(repl.interface.modes,foobar_mode)
+
+    hp = main_mode.hist
+    hp.mode_mapping[:foobar] = foobar_mode
+    foobar_mode.hist = hp
+
+    const foobar_keymap = Dict{Any,Any}(
+        '<' => function (s,args...)
+            if isempty(s)
+                if !haskey(s.mode_state,foobar_mode)
+                    s.mode_state[foobar_mode] = LineEdit.init_state(repl.t,foobar_mode)
+                end
+                LineEdit.transition(s,foobar_mode)
+            else
+                LineEdit.edit_insert(s,'<')
+            end
+        end
+    )
+
+    search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
+    mk = REPL.mode_keymap(main_mode)
+
+    b = Dict{Any,Any}[skeymap, mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    foobar_mode.keymap_dict = LineEdit.keymap(b)
+
+    main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap);
+    foobar_mode, search_prompt
+end
+
+# Note: since the \t character matters for the REPL file history,
+# it is important not to have the """ code reindent this line,
+# possibly converting \t to spaces.
+fakehistory = """
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\tshell
+# time: 2014-06-30 17:32:59 EDT
+# mode: shell
+\tll
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\t1 + 1
+# time: 2014-06-30 17:35:39 EDT
+# mode: foobar
+\tbarfoo
+# time: 2014-06-30 18:44:29 EDT
+# mode: shell
+\tls
+# time: 2014-06-30 19:44:29 EDT
+# mode: foobar
+\tls
+# time: 2014-06-30 20:44:29 EDT
+# mode: julia
+\t2 + 2"""
+
 # Test various history related issues
 begin
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
@@ -127,38 +207,16 @@ begin
     # gets displayed by intercepting the display
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 
-    interface = REPL.setup_interface(repl)
-    repl_mode = interface.modes[1]
-    shell_mode = interface.modes[2]
-    help_mode = interface.modes[3]
-    histp = interface.modes[4]
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+    histp = repl.interface.modes[4]
+    prefix_mode = repl.interface.modes[5]
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
                                                    :help  => help_mode))
-    fakehistory =
-    """
-    # time: 2014-06-30 17:32:49 EDT
-    # mode: julia
-    \tshell
-    # time: 2014-06-30 17:32:59 EDT
-    # mode: shell
-    \tll
-    # time: 2014-06-30 17:32:49 EDT
-    # mode: julia
-    \t1 + 1
-    # time: 2014-06-30 17:35:39 EDT
-    # mode: foobar
-    \tbarfoo
-    # time: 2014-06-30 18:44:29 EDT
-    # mode: shell
-    \tls
-    # time: 2014-06-30 19:44:29 EDT
-    # mode: foobar
-    \tls
-    # time: 2014-06-30 20:44:29 EDT
-    # mode: julia
-    \t2 + 2"""
 
     REPL.hist_from_file(hp, IOBuffer(fakehistory))
     REPL.history_reset_state(hp)
@@ -166,7 +224,7 @@ begin
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
     # Some manual setup
-    s = LineEdit.init_state(repl.t, interface)
+    s = LineEdit.init_state(repl.t, repl.interface)
 
     # Test that navigating history skips invalid modes
     # (in both directions)
@@ -188,7 +246,7 @@ begin
     LineEdit.history_next(s, hp)
 
     # Test that the same holds for prefix search
-    ps = LineEdit.state(s,interface.modes[5])
+    ps = LineEdit.state(s, prefix_mode)
     LineEdit.history_prev_prefix(ps, hp, "")
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "2 + 2"
@@ -231,6 +289,28 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == cur_mode
     @test buffercontents(LineEdit.buffer(s)) == ""
+
+    # Test that new modes can be dynamically added to the REPL and will
+    # integrate nicely
+    foobar_mode, custom_histp = AddCustomMode(repl)
+
+    # ^R l, should now find `ls` in foobar mode
+    LineEdit.enter_search(s, histp, true)
+    ss = LineEdit.state(s, histp)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == foobar_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+
+    # Try the same for prefix search
+    LineEdit.history_next(s, hp)
+    LineEdit.history_prev_prefix(ps, hp, "l")
+    @test ps.parent == foobar_mode
+    @test LineEdit.input_string(ps) == "ls"
+
+    # Try entering search mode while in custom repl mode
+    LineEdit.enter_search(s, custom_histp, true)
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
@@ -259,23 +339,27 @@ master = Base.TTY(RawFD(fdm); readable = true)
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
 p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-start_reading(master)
-Base.wait_readnb(master,1)
+output = readuntil(master,"julia> ")
+if ccall(:jl_running_on_valgrind,Cint,()) == 0
+    # If --trace-children=yes is passed to valgrind, we will get a
+    # valgrind banner here, not just the prompt.
+    @test output == "julia> "
+end
 write(master,"1\nquit()\n")
 
 wait(p)
-
-ccall(:close,Cint,(Cint,),fds)
-output = readall(master)
-if ccall(:jl_running_on_valgrind,Cint,()) == 0
-    @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
-end
+output = readuntil(master,' ')
+@test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+@test nb_available(master) == 0
+ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
 close(master)
 
 end
 
 # Test stream mode
-outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
-write(ins,"1\nquit()\n")
-@test readall(outs) == "1\n"
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
+    write(ins,"1\nquit()\n")
+    @test readall(outs) == "1\n"
+end
 end

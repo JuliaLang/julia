@@ -7,7 +7,7 @@
 Matrix factorizations
 =====================
 
-`Matrix factorizations (a.k.a. matrix decompositions) <http://en.wikipedia.org/wiki/Matrix_decomposition>`_
+`Matrix factorizations (a.k.a. matrix decompositions) <https://en.wikipedia.org/wiki/Matrix_decomposition>`_
 compute the factorization of a matrix into a product of matrices, and
 are one of the central concepts in linear algebra.
 
@@ -16,18 +16,18 @@ implemented in Julia. Details of their associated methods can be found
 in the :ref:`stdlib-linalg` section of the standard library documentation.
 
 ======================== ======
-:class:`Cholesky`        `Cholesky factorization <http://en.wikipedia.org/wiki/Cholesky_decomposition>`_
-:class:`CholeskyPivoted` `Pivoted <http://en.wikipedia.org/wiki/Pivot_element>`_ Cholesky factorization
-:class:`LU`              `LU factorization <http://en.wikipedia.org/wiki/LU_decomposition>`_
+:class:`Cholesky`        `Cholesky factorization <https://en.wikipedia.org/wiki/Cholesky_decomposition>`_
+:class:`CholeskyPivoted` `Pivoted <https://en.wikipedia.org/wiki/Pivot_element>`_ Cholesky factorization
+:class:`LU`              `LU factorization <https://en.wikipedia.org/wiki/LU_decomposition>`_
 :class:`LUTridiagonal`   LU factorization for Tridiagonal matrices
 :class:`UmfpackLU`       LU factorization for sparse matrices (computed by UMFPack)
-:class:`QR`              `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
+:class:`QR`              `QR factorization <https://en.wikipedia.org/wiki/QR_decomposition>`_
 :class:`QRCompactWY`     Compact WY form of the QR factorization
-:class:`QRPivoted`       Pivoted `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
+:class:`QRPivoted`       Pivoted `QR factorization <https://en.wikipedia.org/wiki/QR_decomposition>`_
 :class:`Hessenberg`      `Hessenberg decomposition <http://mathworld.wolfram.com/HessenbergDecomposition.html>`_
-:class:`Eigen`           `Spectral decomposition <http://en.wikipedia.org/wiki/Eigendecomposition_(matrix)>`_
-:class:`SVD`             `Singular value decomposition <http://en.wikipedia.org/wiki/Singular_value_decomposition>`_
-:class:`GeneralizedSVD`  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
+:class:`Eigen`           `Spectral decomposition <https://en.wikipedia.org/wiki/Eigendecomposition_(matrix)>`_
+:class:`SVD`             `Singular value decomposition <https://en.wikipedia.org/wiki/Singular_value_decomposition>`_
+:class:`GeneralizedSVD`  `Generalized SVD <https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
 ======================== ======
 
 Special matrices
@@ -45,14 +45,14 @@ implemented in Julia, as well as whether hooks to various optimized methods
 for them in LAPACK are available.
 
 ======================== ==================================================================================
-:class:`Hermitian`       `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
-:class:`UpperTriangular` Upper `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
-:class:`LowerTriangular` Lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
-:class:`Tridiagonal`     `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
+:class:`Hermitian`       `Hermitian matrix <https://en.wikipedia.org/wiki/Hermitian_matrix>`_
+:class:`UpperTriangular` Upper `triangular matrix <https://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`LowerTriangular` Lower `triangular matrix <https://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`Tridiagonal`     `Tridiagonal matrix <https://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
 :class:`SymTridiagonal`  Symmetric tridiagonal matrix
-:class:`Bidiagonal`      Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
-:class:`Diagonal`        `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_
-:class:`UniformScaling`  `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_
+:class:`Bidiagonal`      Upper/lower `bidiagonal matrix <https://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
+:class:`Diagonal`        `Diagonal matrix <https://en.wikipedia.org/wiki/Diagonal_matrix>`_
+:class:`UniformScaling`  `Uniform scaling operator <https://en.wikipedia.org/wiki/Uniform_scaling>`_
 ======================== ==================================================================================
 
 Elementary operations

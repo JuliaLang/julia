@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Array test
 
 ## basics
@@ -38,6 +40,14 @@ a[2,2] = 4
 b = a'
 @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
 @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
+a[[1 2 3 4]] = 0
+@test a == zeros(2,2)
+a[[1 2], [1 2]] = 1
+@test a == ones(2,2)
+a[[1 2], 1] = 0
+@test a[1,1] == 0. && a[1,2] == 1. && a[2,1] == 0. && a[2,2] == 1.
+a[:, [1 2]] = 2
+@test a == 2ones(2,2)
 
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
@@ -52,6 +62,15 @@ b = reshape(a, (32,))
 @test b[1]  == 10
 @test b[19] == 20
 @test b[13] == 30
+@test_throws DimensionMismatch reshape(b,(5,7))
+@test_throws DimensionMismatch reshape(b,(35,))
+@test_throws DimensionMismatch reinterpret(Int, b, (35,))
+@test_throws ArgumentError reinterpret(Any, b, (32,))
+@test_throws DimensionMismatch reinterpret(Complex128, b, (32,))
+c = ["hello", "world"]
+@test_throws ArgumentError reinterpret(Float32, c, (2,))
+a = Vector(ones(5))
+@test_throws ArgumentError resize!(a, -2)
 
 b = rand(32)
 a = reshape(b, (2, 2, 2, 2, 2))
@@ -117,8 +136,27 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}))
+rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+
+# construction
+@test typeof(Vector{Int}(3)) == Vector{Int}
+@test typeof(Vector{Int}()) == Vector{Int}
+@test typeof(Vector(3)) == Vector{Any}
+@test typeof(Vector()) == Vector{Any}
+@test typeof(Matrix{Int}(2,3)) == Matrix{Int}
+@test typeof(Matrix{Int}()) == Matrix{Int}
+@test typeof(Matrix(2,3)) == Matrix{Any}
+@test typeof(Matrix()) == Matrix{Any}
+
+@test size(Vector{Int}(3)) == (3,)
+@test size(Vector{Int}()) == (0,)
+@test size(Vector(3)) == (3,)
+@test size(Vector()) == (0,)
+@test size(Matrix{Int}(2,3)) == (2,3)
+@test size(Matrix{Int}()) == (0,0)
+@test size(Matrix(2,3)) == (2,3)
+@test size(Matrix()) == (0,0)
 
 # get
 let
@@ -133,6 +171,8 @@ let
     @test x == -12
     X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
+    @test Base.elsize(X) == sizeof(Float32)
+    @test !isinteger(X)
     @test isnan(X) == [trues(6);falses(5)]
     @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
@@ -194,9 +234,9 @@ if !Base._oldstyle_array_vcat_
     @test_throws MethodError UInt8[1:3]
     @test_throws MethodError UInt8[1:3,]
     @test_throws MethodError UInt8[1:3,4:6]
-    a = Array(Range1{Int},1); a[1] = 1:3
+    a = Array(UnitRange{Int},1); a[1] = 1:3
     @test _array_equiv([1:3,], a)
-    a = Array(Range1{Int},2); a[1] = 1:3; a[2] = 4:6
+    a = Array(UnitRange{Int},2); a[1] = 1:3; a[2] = 4:6
     @test _array_equiv([1:3,4:6], a)
 end
 
@@ -351,7 +391,7 @@ for i = 1 : 3
     @test isequal(a', permutedims(a, [2, 1]))
 end
 
-begin
+let
     local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
     A = ones(Int,2,3,4)
     A1 = reshape(repmat([1,2],1,12),2,3,4)
@@ -610,7 +650,7 @@ B = cat(3, 1, 2, 3)
 @test isequal(symdiff(Int64[]), Int64[])
 
 # mapslices
-begin
+let
     local a,h,i
     a = rand(5,5)
     h = mapslices(v -> hist(v,0:0.1:1)[2], a, 1)
@@ -693,7 +733,7 @@ a[a] = [4,5,6]
 @test lexcmp([1, 1], [1]) == 1
 
 # sort on arrays
-begin
+let
     local a = rand(3,3)
 
     asr = sortrows(a)
@@ -731,9 +771,9 @@ fill!(S, 2)
 S = sub(A, 1:2, 3)
 fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
-rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
+rt = Base.return_types(fill!, Tuple{Array{Int32, 3}, UInt8})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
-A = Array(Union(UInt8,Int8), 3)
+A = Array(Union{UInt8,Int8}, 3)
 fill!(A, UInt8(3))
 @test A == [0x03, 0x03, 0x03]
 # Issue #9964
@@ -764,6 +804,7 @@ a = [1:10;]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
 @test_throws ArgumentError deleteat!(a, [5,3])
+@test_throws BoundsError deleteat!(a, 5:20)
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -791,9 +832,13 @@ end
 @test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse!([1:10;]) == [10,9,8,7,6,5,4,3,2,1]
 @test reverse!([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse!([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse!([1:10;], 11) == [1:10;]
+@test_throws BoundsError reverse!([1:10;], 1, 11)
+@test reverse!(Any[]) == Any[]
 
 # flipdim
 @test isequal(flipdim([2,3,1], 1), [1,3,2])
@@ -805,6 +850,17 @@ end
 @test isequal(flipdim(1:10, 2), 1:10)
 @test_throws ArgumentError flipdim(1:10, -1)
 @test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
+
+# isdiag, istril, istriu
+@test isdiag(3)
+@test istril(4)
+@test istriu(5)
+@test !isdiag([1 2; 3 4])
+@test !istril([1 2; 3 4])
+@test !istriu([1 2; 3 4])
+@test isdiag([1 0; 0 4])
+@test istril([1 0; 3 4])
+@test istriu([1 2; 0 4])
 
 # issue 4228
 A = [[i i; i i] for i=1:2]
@@ -838,15 +894,15 @@ A = [NaN]; B = [NaN]
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
-    args = ntuple(N, d->UnitRange{Int})
-    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
-    @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
-    @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
+    args = ntuple(d->UnitRange{Int}, N)
+    @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
+    @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
+    @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
     # Indexing with (UnitRange, UnitRange, Float64)
-    args = ntuple(N, d->d<N ? UnitRange{Int} : Float64)
-    N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N-1}]
-    N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == [BitArray{N-1}]
-    N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
+    args = ntuple(d->d<N ? UnitRange{Int} : Float64, N)
+    N > 1 && @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N-1}]
+    N > 1 && @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == [BitArray{N-1}]
+    N > 1 && @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
 end
 
 # issue #6645 (32-bit)
@@ -907,6 +963,13 @@ a = Array(Float64, 9,8,7,6,5,4,3,2,1)
 @test size(a,4) == 6
 @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
 
+# Cartesian
+function cartesian_foo()
+    Base.@nexprs 2 d->(a_d_d = d)
+    a_2_2
+end
+@test cartesian_foo() == 2
+
 # Multidimensional iterators
 for a in ([1:5;], reshape([2]))
     counter = 0
@@ -951,7 +1014,7 @@ for i = 1:10
     @test mdsum(A) == 15
     @test mdsum2(A) == 15
     AA = reshape(aa, tuple(2, shp...))
-    B = sub(AA, 1:1, ntuple(i, i->Colon())...)
+    B = sub(AA, 1:1, ntuple(i->Colon(), i)...)
     @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
     @test mdsum(B) == 15
     @test mdsum2(B) == 15
@@ -964,7 +1027,7 @@ for i = 2:10
     A = reshape(a, tuple(shp...))
     @test mdsum(A) == 55
     @test mdsum2(A) == 55
-    B = sub(A, ntuple(i, i->Colon())...)
+    B = sub(A, ntuple(i->Colon(), i)...)
     @test mdsum(B) == 55
     @test mdsum2(B) == 55
     insert!(shp, 2, 1)
@@ -980,6 +1043,25 @@ b = sub(a, :, :)
 a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
+
+a = reshape(1:60, 3, 4, 5)
+@test a[CartesianIndex{3}(2,3,4)] == 44
+a[CartesianIndex{3}(2,3,3)] = -1
+@test a[CartesianIndex{3}(2,3,3)] == -1
+@test a[2,CartesianIndex{2}(3,4)] == 44
+a[1,CartesianIndex{2}(3,4)] = -2
+@test a[1,CartesianIndex{2}(3,4)] == -2
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(4)] == 44
+a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+
+a = sub(zeros(3, 4, 5), :, :, :)
+a[CartesianIndex{3}(2,3,3)] = -1
+@test a[CartesianIndex{3}(2,3,3)] == -1
+a[1,CartesianIndex{2}(3,4)] = -2
+@test a[1,CartesianIndex{2}(3,4)] == -2
+a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
 
 I1 = CartesianIndex((2,3,0))
 I2 = CartesianIndex((-1,5,2))
@@ -1013,6 +1095,7 @@ indexes = collect(R)
 @test indexes[12] == CartesianIndex{2}(5,5)
 @test length(indexes) == 12
 @test length(R) == 12
+@test ndims(R) == 2
 
 r = 2:3
 itr = eachindex(r)
@@ -1033,6 +1116,18 @@ _, state = next(itr, state)
 val, state = next(itr, state)
 @test r[val] == 8
 @test done(itr, state)
+
+R = CartesianRange((1,3))
+@test done(R, start(R)) == false
+R = CartesianRange((0,3))
+@test done(R, start(R)) == true
+R = CartesianRange((3,0))
+@test done(R, start(R)) == true
+
+@test eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
+@test eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
+@test eachindex(zeros(3),sub(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
+@test eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
 
 
 #rotates
@@ -1056,3 +1151,91 @@ end
 # PR #10164
 @test eltype(Array{Int}) == Int
 @test eltype(Array{Int,1}) == Int
+
+# PR #11080
+let x = fill(0.9, 1000)
+    @test_approx_eq prod(x) cumprod(x)[end]
+end
+
+#binary ops on bool arrays
+A = bitunpack(trues(5))
+@test A + true == [2,2,2,2,2]
+A = bitunpack(trues(5))
+@test A + false == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test true + A == [2,2,2,2,2]
+A = bitunpack(trues(5))
+@test false + A == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test A - true == [0,0,0,0,0]
+A = bitunpack(trues(5))
+@test A - false == [1,1,1,1,1]
+A = bitunpack(trues(5))
+@test true - A == [0,0,0,0,0]
+A = bitunpack(trues(5))
+@test false - A == [-1,-1,-1,-1,-1]
+
+# simple transposes
+a = ones(Complex,1,5)
+b = zeros(Complex,5)
+c = ones(Complex,2,5)
+d = ones(Complex,6)
+@test_throws DimensionMismatch transpose!(a,d)
+@test_throws DimensionMismatch transpose!(d,a)
+@test_throws DimensionMismatch ctranspose!(a,d)
+@test_throws DimensionMismatch ctranspose!(d,a)
+@test_throws DimensionMismatch transpose!(b,c)
+@test_throws DimensionMismatch ctranspose!(b,c)
+@test_throws DimensionMismatch transpose!(c,b)
+@test_throws DimensionMismatch ctranspose!(c,b)
+transpose!(b,a)
+@test b == ones(Complex,5)
+b = ones(Complex,5)
+a = zeros(Complex,1,5)
+transpose!(a,b)
+@test a == ones(Complex,1,5)
+b = zeros(Complex,5)
+ctranspose!(b,a)
+@test b == ones(Complex,5)
+a = zeros(Complex,1,5)
+ctranspose!(a,b)
+@test a == ones(Complex,1,5)
+
+# flipdim
+a = rand(5,3)
+@test flipdim(flipdim(a,2),2) == a
+@test flipdim(a,3) == a
+
+# bounds checking for copy!
+a = rand(5,3)
+b = rand(6,7)
+@test_throws BoundsError copy!(a,b)
+@test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
+@test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+# return type declarations (promote_op)
+module RetTypeDecl
+    using Base.Test
+    import Base: +, *, .*
+
+    immutable MeterUnits{T,P} <: Number
+        val::T
+    end
+    MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
+
+    m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
+    m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
+
+    (+){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,1}(x.val+y.val)
+    (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+    (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+
+    Base.promote_op{R,S}(::Base.AddFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
+    Base.promote_op{R,S}(::Base.MulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+    Base.promote_op{R,S}(::Base.DotMulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
+
+    @test @inferred(m+[m,m]) == [m+m,m+m]
+    @test @inferred([m,m]+m) == [m+m,m+m]
+    @test @inferred(m.*[m,m]) == [m2,m2]
+    @test @inferred([m,m].*m) == [m2,m2]
+end
