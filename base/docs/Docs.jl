@@ -143,14 +143,16 @@ end
 
 FuncDoc() = FuncDoc(nothing, [], ObjectIdDict(), ObjectIdDict())
 
+# handles the :(function foo end) form
 function doc!(f::Function, data)
-    doc!(f, Tuple{Vararg{Any}}, data, nothing)
+    doc!(f, Union{}, data, nothing)
 end
 
+# handles the :(function foo(x...); ...; end) form
 function doc!(f::Function, sig::ANY, data, source)
     fd = get!(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
-    !haskey(fd.meta, sig) && push!(fd.order, sig)
+    haskey(fd.meta, sig) || push!(fd.order, sig)
     sort!(fd.order, lt = (a,b) -> ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
     if haskey(ENV, "GO_AWAY") && haskey(fd.meta, sig) # temporary
         error("Adding doc to $f($sig) forbidden GO AWAY")
@@ -256,10 +258,10 @@ isfield(x) = isexpr(x, :.) &&
   isexpr(x.args[2], QuoteNode, :quote)
 
 function fielddoc(T, k)
-  for mod in modules
-    if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
-      return meta(mod)[T].fields[k]
-    end
+    for mod in modules
+        if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
+            return meta(mod)[T].fields[k]
+        end
   end
   Text(sprint(io -> (print(io, "$T has fields: ");
                      print_joined(io, fieldnames(T), ", ", " and "))))
