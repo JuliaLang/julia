@@ -143,3 +143,17 @@ b = Array(Vector{Float64}, 2)
 b[1] = ones(3)
 b[2] = ones(2)
 @test A*b == Vector{Float64}[[2,2,1], [2,2]]
+
+@test_throws ArgumentError Base.LinAlg.copytri!(ones(10,10),'Z')
+for elty in [Float32,Float64,Complex128,Complex64]
+    @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,10),'N',rand(elty,10,10),ones(elty,11))
+    @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,11),'N',rand(elty,10,10),ones(elty,10))
+    @test Base.LinAlg.gemv!(ones(elty,0),'N',rand(elty,0,0),rand(elty,0)) == ones(elty,0)
+
+    @test Base.LinAlg.gemm_wrapper('N','N',eye(elty,10,10),eye(elty,10,10)) == eye(elty,10,10)
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,10,11),eye(elty,10,10))
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,0,0),eye(elty,0,0))
+
+    A = rand(elty,3,3)
+    @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
+end
