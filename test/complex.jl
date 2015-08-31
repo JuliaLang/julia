@@ -2,6 +2,48 @@
 
 @test reim(2 + 3im) == (2, 3)
 
+# Basic arithmetic
+for T in (Float16, Float32, Float64, BigFloat)
+    t = true
+    f = false
+
+    # Add and subtract
+    @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
+    @test isequal(T(+0.0) - im, Complex(T(+0.0), T(-1.0)))
+    @test isequal(T(-0.0) - im, Complex(T(-0.0), T(-1.0)))
+    @test isequal(T(+1.0) + im, Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(-1.0) + im, Complex(T(-1.0), T(+1.0)))
+    @test isequal(T(+1.0) - im, Complex(T(+1.0), T(-1.0)))
+    @test isequal(T(-1.0) - im, Complex(T(-1.0), T(-1.0)))
+    @test isequal(im + T(+0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(-0.0), Complex(T(-0.0), T(+1.0)))
+    @test isequal(im - T(+0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im - T(-0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(+1.0), Complex(T(+1.0), T(+1.0)))
+    @test isequal(im + T(-1.0), Complex(T(-1.0), T(+1.0)))
+    @test isequal(im - T(+1.0), Complex(T(-1.0), T(+1.0)))
+    @test isequal(im - T(-1.0), Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(f) + im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(t) + im, Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(f) - im, Complex(T(+0.0), T(-1.0)))
+    @test isequal(T(t) - im, Complex(T(+1.0), T(-1.0)))
+    @test isequal(im + T(f), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(t), Complex(T(+1.0), T(+1.0)))
+    @test isequal(im - T(f), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im - T(t), Complex(T(-1.0), T(+1.0)))
+
+    # Multiply
+    @test isequal(T(+0.0) * im, Complex(T(+0.0), T(+0.0)))
+    @test isequal(T(-0.0) * im, Complex(T(-0.0), T(-0.0)))
+    @test isequal(T(+1.0) * im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(-1.0) * im, Complex(T(-0.0), T(-1.0)))
+    @test isequal(im * T(+0.0), Complex(T(+0.0), T(+0.0)))
+    @test isequal(im * T(-0.0), Complex(T(-0.0), T(-0.0)))
+    @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
+end
+
 # Test math functions. We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independent and independently
 # tested implementation.
