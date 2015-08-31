@@ -28,8 +28,10 @@ for T in (Float32, Float64)
     @test_approx_eq exp(x) exp(big(x))
     @test_approx_eq exp10(x) exp10(big(x))
     @test_approx_eq exp2(x) exp2(big(x))
+    @test_approx_eq_eps expm1(x) expm1(big(x)) eps(T)
     @test_approx_eq log(x) log(big(x))
     @test_approx_eq log10(x) log10(big(x))
+    @test_approx_eq log1p(x) log1p(big(x))
     @test_approx_eq log2(x) log2(big(x))
     @test_approx_eq sin(x) sin(big(x))
     @test_approx_eq sinh(x) sinh(big(x))
@@ -48,8 +50,10 @@ for T in (Float32, Float64)
     @test_approx_eq exp(log(x)) x
     @test_approx_eq exp10(log10(x)) x
     @test_approx_eq exp2(log2(x)) x
+    @test_approx_eq expm1(log1p(x)) x
     @test_approx_eq log(exp(x)) x
     @test_approx_eq log10(exp10(x)) x
+    @test_approx_eq log1p(expm1(x)) x
     @test_approx_eq log2(exp2(x)) x
     @test_approx_eq sin(asin(x)) x
     @test_approx_eq sinh(asinh(x)) x
