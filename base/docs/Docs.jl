@@ -148,12 +148,15 @@ function doc!(f::Function, data)
     doc!(f, Union{}, data, nothing)
 end
 
+type_morespecific(a::Type, b::Type) =
+    (ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
+
 # handles the :(function foo(x...); ...; end) form
 function doc!(f::Function, sig::ANY, data, source)
     fd = get!(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
     haskey(fd.meta, sig) || push!(fd.order, sig)
-    sort!(fd.order, lt = (a,b) -> ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
+    sort!(fd.order, lt=type_morespecific)
     if haskey(ENV, "GO_AWAY") && haskey(fd.meta, sig) # temporary
         error("Adding doc to $f($sig) forbidden GO AWAY")
     end
@@ -164,8 +167,9 @@ end
 doc(f::Function) = doc(f, Tuple)
 
 function doc(f::Function, sig::Type)
+    isgeneric(f) && isempty(methods(f,sig)) && return nothing
     for mod in modules
-        if haskey(meta(mod), f) && isa(meta(mod)[f], FuncDoc)
+        if (haskey(meta(mod),f) && isa(meta(mod)[f],FuncDoc))
             fd = meta(mod)[f]
             results = []
             for msig in fd.order
@@ -180,7 +184,7 @@ function doc(f::Function, sig::Type)
             end
         end
     end
-    nothing
+    return nothing
 end
 doc(f::Function,args::Any...) = doc(f, Tuple{args...})
 

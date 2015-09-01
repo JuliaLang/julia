@@ -259,3 +259,6 @@ f12593_2() = 1
 
 @test (@doc f12593_1) !== nothing
 @test (@doc f12593_2) !== nothing
+
+@test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
+@test Docs.doc(svdvals, Tuple{Float64}) !== nothing
