@@ -248,6 +248,16 @@ let bad = "bad\0name"
     @test_throws ArgumentError run(setenv(`echo hello`, "good"=>bad))
 end
 
+# issue #12829
+let out = Pipe()
+    @test_throws ArgumentError write(out, "not open error")
+    open(`cat`, "w", out) do io
+        println(io, 1)
+    end
+    close(out.in)
+    @test readline(out) == "1\n"
+end
+
 # issue #8529
 let fname = tempname()
     open(fname, "w") do f
