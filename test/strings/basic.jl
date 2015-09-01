@@ -176,6 +176,11 @@ gstr = GenericString("12");
 @test getindex(gstr,Bool(1):Bool(1))=="1"
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
+@test done(eachindex("foobar"),7)
+@test eltype(Base.EachStringIndex) == Int
+@test map(uppercase, "foó") == "FOÓ"
+@test chr2ind("fóobar",3) == 4
+
 @test symbol(gstr)==symbol("12")
 
 @test_throws ErrorException sizeof(gstr)
@@ -445,6 +450,12 @@ end
 @test ucfirst("abc") == "Abc"
 @test lcfirst("ABC") == "aBC"
 @test lcfirst("aBC") == "aBC"
+@test ucfirst(utf32("")) == ""
+@test lcfirst(utf32("")) == ""
+@test ucfirst(utf32("a")) == "A"
+@test lcfirst(utf32("A")) == "a"
+@test lcfirst(utf32("a")) == "a"
+@test ucfirst(utf32("A")) == "A"
 
 # issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
