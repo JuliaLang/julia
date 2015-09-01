@@ -8,14 +8,14 @@ Dates and Time Types
 --------------------
 
 .. data:: Period
-.. data:: Year
-.. data:: Month
-.. data:: Week
-.. data:: Day
-.. data:: Hour
-.. data:: Minute
-.. data:: Second
-.. data:: Millisecond
+          Year
+          Month
+          Week
+          Day
+          Hour
+          Minute
+          Second
+          Millisecond
 
    ``Period`` types represent discrete, human representations of time.
 
