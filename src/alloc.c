@@ -554,16 +554,22 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
 
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
-    // TODO overflow check
     size_t sz = 0, alignm = 1;
     int ptrfree = 1;
+
+    assert(0 <= st->fielddesc_type && st->fielddesc_type <= 2);
+
+    uint64_t max_offset = (((uint64_t)1) <<
+                           (1 << (3 + st->fielddesc_type))) - 1;
+    uint64_t max_size = max_offset >> 1;
 
     for(size_t i=0; i < jl_datatype_nfields(st); i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
         if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
             fsz = jl_datatype_size(ty);
-            if (__unlikely(fsz > JL_FIELD_MAX_SIZE))
+            // Should never happen
+            if (__unlikely(fsz > max_size))
                 jl_throw(jl_overflow_exception);
             al = ((jl_datatype_t*)ty)->alignment;
             jl_field_setisptr(st, i, 0);
@@ -588,10 +594,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         jl_field_setoffset(st, i, sz);
         jl_field_setsize(st, i, fsz);
-        sz += fsz;
-        if (__unlikely(sz >= JL_FIELD_MAX_SIZE)) {
+        if (__unlikely(max_offset - sz < fsz))
             jl_throw(jl_overflow_exception);
-        }
+        sz += fsz;
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
