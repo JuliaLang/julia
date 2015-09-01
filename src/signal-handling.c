@@ -36,6 +36,8 @@ DLLEXPORT void jl_sigint_action(void)
     jl_throw(jl_interrupt_exception);
 }
 
+static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size);
+
 #if defined(_WIN32)
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 #include <signals-win.c>
@@ -61,6 +63,21 @@ static int is_addr_on_stack(void *addr);
 #endif
 #include "signals-unix.c"
 #endif
+
+// what to do on a critical error
+static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size)
+{
+    size_t n = *bt_size;
+    if (sig)
+        jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+    jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
+    if (context)
+        *bt_size = n = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, context);
+    for(size_t i=0; i < n; i++)
+        gdblookup(bt_data[i]);
+    gc_debug_print_status();
+}
+
 
 ///////////////////////
 // Utility functions //
