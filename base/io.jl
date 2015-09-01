@@ -303,3 +303,8 @@ function reset{T<:IO}(io::T)
 end
 
 ismarked(io::IO) = io.mark >= 0
+
+# Generic IO stubs
+
+lock(::IO) = nothing
+unlock(::IO) = nothing
