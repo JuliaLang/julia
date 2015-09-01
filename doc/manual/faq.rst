@@ -875,6 +875,7 @@ The following::
     end
 
 results in::
+
     123 Foo  Foo  Foo  Bar  Bar  Bar
 
 This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
