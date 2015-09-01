@@ -405,6 +405,8 @@ function _compat(ex::Expr)
             else
                 Expr(:tuple, args...)
             end
+        elseif VERSION < v"0.4.0-dev" && f == :Union
+            ex = Expr(:call,:Union,ex.args[2:end]...)
         end
     elseif ex.head == :macrocall
         f = ex.args[1]
