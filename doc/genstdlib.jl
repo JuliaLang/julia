@@ -72,7 +72,7 @@ function translate(file)
                 modidx = i
                 println(io, l)
             elseif startswith(l, ".. function::")
-                func = match(r".. function:: (@?[^\(\s\{]+)(.*)", l)
+                func = match(r"^\.\. function:: (@?[^\(\s\{]+)(.*)", l)
                 func == nothing && (warn("bad function $l"); continue)
                 funcname = func.captures[1]
                 rest = func.captures[2]
