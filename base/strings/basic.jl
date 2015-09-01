@@ -36,7 +36,6 @@ start(s::AbstractString) = 1
 done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
 getindex(s::AbstractString, i::Integer) = s[Int(i)]
-getindex(s::AbstractString, x::Real) = s[to_index(x)]
 getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector) =
@@ -150,9 +149,10 @@ function nextind(s::AbstractString, i::Integer)
 end
 
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds(s::AbstractString, i::Real) = checkbounds(s, to_index(i))
 checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+# The following will end up using a deprecated checkbounds, when T is not Integer
 checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
+checkbounds{T<:Integer}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end

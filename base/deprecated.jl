@@ -439,6 +439,10 @@ end
     to_indexes(I...)
 end
 
+@deprecate getindex(c::Char, I::Real...) getindex(c, map(Int, I)...)
+@deprecate getindex(s::AbstractString, x::Real) getindex(s, Int(x))
+@deprecate checkbounds(s::AbstractString, i::Real) checkbounds(s, Int(i))
+
 @noinline function float_isvalid{T<:Union{Float32,Float64}}(s::AbstractString, out::Array{T,1})
     tf = tryparse(T, s)
     isnull(tf) || (out[1] = get(tf))
