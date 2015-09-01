@@ -2207,7 +2207,11 @@ end
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if Base.is_unix(OS_NAME)
     ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
-    @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
+    @test_throws InterruptException begin
+        #ccall(:raise, Void, (Cint,), 2) # llvm installs a custom version on Darwin that resolves to pthread_kill(pthread_self(), sig), which isn't what we want
+        ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
+        Libc.systemsleep(0.1) # wait for SIGINT to arrive
+    end
     ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 end
 

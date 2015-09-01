@@ -141,9 +141,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     else {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(3)",ret);
-        jl_safe_printf("\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
-        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (unw_context_t*)&state);
-        jlbacktrace();
+        jl_critical_error(SIGSEGV, (unw_context_t*)&state, bt_data, &bt_size);
         return KERN_INVALID_ARGUMENT;
     }
 }

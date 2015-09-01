@@ -15,6 +15,9 @@ extern char *jl_stack_lo;
 extern char *jl_stack_hi;
 extern jl_function_t *jl_typeinf_func;
 
+DLLEXPORT extern int jl_lineno;
+DLLEXPORT extern const char *jl_filename;
+
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
     jl_value_t *jv = NULL;
@@ -201,6 +204,7 @@ DLLEXPORT void attach_exception_port(void);
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
+DLLEXPORT void gdblookup(ptrint_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)
