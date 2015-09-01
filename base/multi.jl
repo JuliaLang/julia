@@ -488,7 +488,10 @@ end
 
 RemoteRef(w::LocalProcess) = RemoteRef(w.id)
 RemoteRef(w::Worker) = RemoteRef(w.id)
-RemoteRef(pid::Integer=myid()) = RemoteRef(def_rv_channel, pid)
+function RemoteRef(pid::Integer=myid())
+    rrid = next_rrid_tuple()
+    RemoteRef{Channel{Any}}(pid, rrid[1], rrid[2])
+end
 
 function RemoteRef(f::Function, pid::Integer=myid())
     remotecall_fetch(pid, (f, rrid) -> begin
