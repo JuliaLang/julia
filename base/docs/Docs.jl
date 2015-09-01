@@ -173,14 +173,17 @@ function doc(f::Function, sig::Type)
             fd = meta(mod)[f]
             results = []
             for msig in fd.order
-                if msig <: sig
-                    push!(results, fd.meta[msig])
+                # try to find specific matching method signatures
+                if sig <: msig
+                    push!(results, (msig,fd.meta[msig]))
                 end
             end
+            # if all method signatures are Union{} ( ⊥ ), concat all docstrings
             if isempty(results)
                 return catdoc([fd.meta[msig] for msig in reverse(fd.order)]...)
             else
-                return catdoc(reverse(results)...)
+                sort!(results, lt=(a,b)->type_morespecific(first(a),first(b)))
+                return catdoc([last(r) for r in results]...)
             end
         end
     end

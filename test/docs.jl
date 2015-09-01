@@ -262,3 +262,7 @@ f12593_2() = 1
 
 @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
 @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
+
+# crude test to make sure we sort docstring output by method specificity
+@test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
