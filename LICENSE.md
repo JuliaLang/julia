@@ -88,3 +88,4 @@ Julia bundles the following external programs and libraries on some platforms:
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 - [CYGWIN](https://cygwin.com/licensing.html)
+- [MINTTY](https://github.com/mintty/mintty/blob/master/LICENSE)

@@ -426,9 +426,9 @@ ifeq ($(OS), WINNT)
 	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe && \
-            mkdir -p $(DESTDIR)$(prefix)/mintty/usr/bin	&& \
+            mkdir -p $(DESTDIR)$(prefix)/usr/bin	&& \
 	    cd cygwin/usr/bin && \
-            cp mintty.exe stty.exe env.exe cygwin-console-helper.exe cygwin1.dll cygintl-8.dll cygiconv-2.dll cyggcc_s-1.dll $(DESTDIR)$(prefix)/mintty/usr/bin/ )
+            cp mintty.exe stty.exe env.exe cygwin-console-helper.exe cygwin1.dll cygintl-8.dll cygiconv-2.dll cyggcc_s-1.dll $(DESTDIR)$(prefix)/usr/bin/ )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.

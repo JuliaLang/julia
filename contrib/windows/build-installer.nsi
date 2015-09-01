@@ -29,7 +29,7 @@ FunctionEnd
 Function createDesktopLink
   ${NSD_GetState} $Checkbox $0
   ${If} $0 <> 0
-    CreateShortcut "$DESKTOP\julia.lnk" "$INSTDIR\mintty\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\mintty\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"
+    CreateShortcut "$DESKTOP\julia.lnk" "$INSTDIR\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"
   ${EndIf}
 FunctionEnd
 
@@ -69,7 +69,7 @@ Section "Dummy Section" SecDummy
     SetOutPath $INSTDIR
     File /a /r "julia-${Commit}\*"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
-    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\mintty\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\mintty\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"
+    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"
 
     # ARP entries
     WriteRegStr HKCU "${ARP}" \
@@ -148,7 +148,7 @@ SectionEnd
 # Helper function to create Start Menu folder and shortcuts
 Function AddToStartMenu
     CreateDirectory "$SMPROGRAMS\${JuliaStartMenuFolder}"
-    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\julia.lnk" "$INSTDIR\mintty\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\mintty\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"    
+    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\julia.lnk" "$INSTDIR\usr\bin\env.exe" "HOME=%HOMEDRIVE%%HOMEPATH% $INSTDIR\usr\bin\mintty.exe -h error -i $INSTDIR\bin\julia.exe $INSTDIR\bin\julia.exe" "$INSTDIR\bin\julia.exe" 0 SW_SHOWNORMAL "" "The Julia REPL"    
     CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\Uninstall.lnk" "$instdir\Uninstall.exe"
 FunctionEnd
 
