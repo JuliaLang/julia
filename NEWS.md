@@ -263,7 +263,7 @@ Library improvements
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
     * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
-    * `countlines()` now also counts, non-empty lines, by default ([#11947]).
+    * `countlines()` now also counts non-empty lines by default ([#11947]).
 
   * Array and AbstractArray improvements
 
