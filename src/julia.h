@@ -266,9 +266,6 @@ typedef struct {
     uint32_t isptr:1;
 } jl_fielddesc32_t;
 
-// For both field size and total size
-#define JL_FIELD_MAX_SIZE ((((uint32_t)1) << 31) - 1)
-
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
