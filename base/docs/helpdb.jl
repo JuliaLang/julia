@@ -9061,6 +9061,10 @@ doc"""
 
 Concatenate strings. The ``*`` operator is an alias to this function.
 
+.. doctest::
+
+   julia> "Hello " * "world"
+   "Hello world"
 ```
 """
 Base.(:(*))(s::AbstractString, t::AbstractString)
