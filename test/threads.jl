@@ -3,7 +3,7 @@ using Base.Threading
 
 println("Threading tests")
 
-expected = [1:nthreads()]
+expected = [1:nthreads();]
 
 # test 1
 arr = zeros(Int16, nthreads())

@@ -32,7 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   . invoke Julia function from multiple threads
 */
 
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,7 +46,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ia_misc.h"
 #include "threadgroup.h"
 #include "threading.h"
-
 
 /* TODO:
   . ugly mixture of uv_thread* and pthread*; fix with patch to libuv?
@@ -85,7 +83,6 @@ uint64_t *user_ticks;
 uint64_t *join_ticks;
 #endif
 
-
 // create a thread and affinitize it if proc_num is specified
 int ti_threadcreate(pthread_t *pthread_id, int proc_num,
                     void *(*thread_fun)(void *), void *thread_arg)
@@ -106,7 +103,6 @@ int ti_threadcreate(pthread_t *pthread_id, int proc_num,
     return pthread_create(pthread_id, &attr, thread_fun, thread_arg);
 }
 
-
 // set thread affinity
 void ti_threadsetaffinity(uint64_t pthread_id, int proc_num)
 {
@@ -118,7 +114,6 @@ void ti_threadsetaffinity(uint64_t pthread_id, int proc_num)
     pthread_setaffinity_np(pthread_id, sizeof(cpu_set_t), &cset);
 #endif
 }
-
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 
@@ -136,7 +131,6 @@ void ti_initthread(int16_t tid)
     jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
 }
 
-
 // all threads call this function to run user code
 static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
 {
@@ -148,7 +142,6 @@ static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
     }
     return jl_nothing;
 }
-
 
 // thread function: used by all except the main thread
 void *ti_threadfun(void *arg)
@@ -216,7 +209,6 @@ void *ti_threadfun(void *arg)
 
     return NULL;
 }
-
 
 #if PROFILE_JL_THREADING
 void ti_reset_timings();
@@ -304,7 +296,6 @@ void jl_start_threads(void)
     free(targs);
 }
 
-
 // TODO: is this needed? where/when/how to call it?
 void jl_shutdown_threading(void)
 {
@@ -329,27 +320,14 @@ void jl_shutdown_threading(void)
 #endif
 }
 
-
 // return calling thread's ID
-int16_t jl_threadid()
-{
-    return ti_tid;
-}
-
+int16_t jl_threadid() { return ti_tid; }
 
 // return thread's thread group
-void *jl_threadgroup()
-{
-    return (void *)tgworld;
-}
-
+void *jl_threadgroup() { return (void *)tgworld; }
 
 // utility
-void jl_cpu_pause()
-{
-    cpu_pause();
-}
-
+void jl_cpu_pause() { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
@@ -361,7 +339,17 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 
     jl_tupletype_t *argtypes = NULL;
     jl_function_t *fun = NULL;
-    JL_GC_PUSH2(&argtypes, &fun);
+    jl_svec_t *argsvec = NULL;
+    JL_GC_PUSH3(&argtypes, &fun, &argsvec);
+    if (jl_is_tuple(args)) {
+        size_t na = jl_nfields(args);
+        argsvec = jl_alloc_svec(na);
+        size_t i;
+        for(i=0; i < na; i++) {
+            jl_svecset(argsvec, i, jl_get_nth_field((jl_value_t*)args, i));
+        }
+        args = argsvec;
+    }
     argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
     fun = jl_get_specialization(f, argtypes);
     if (fun == NULL)
@@ -408,7 +396,6 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 
     return tw->ret;
 }
-
 
 #if PROFILE_JL_THREADING
 
