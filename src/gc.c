@@ -43,6 +43,10 @@ JL_DEFINE_MUTEX(finalizers)
 #define GC_QUEUED 2 // if it is reachable it will be marked as old
 #define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
 
+// A single free object in the free list
+// This should be in the lower 2 bit and is not the mark bit
+#define GC_FL_SINGLE GC_QUEUED
+
 #define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
 
 // This struct must be kept in sync with the Julia type of the same name in base/util.jl
@@ -129,7 +133,8 @@ typedef struct _mallocarray_t {
 } mallocarray_t;
 
 typedef struct _pool_t {
-    gcval_t *freelist;   // root of list of free objects
+    gcval_t *cur_ptr;  // beginning of the current free block
+    gcval_t *end_ptr;  // last free object in the free block
     gcval_t *newpages;   // root of list of chunks of free objects
     uint16_t end_offset; // stored to avoid computing it at each allocation
     uint16_t osize;      // size of objects in this pool
@@ -159,15 +164,20 @@ typedef struct _gcpage_t {
     uint8_t *ages;
 } gcpage_t;
 
+// Address of the first free object in the page
+// This is where the previous block in the free list should point to
 static inline gcval_t *page_pfl_beg(gcpage_t *p)
 {
     return (gcval_t*)(p->data + p->fl_begin_offset);
 }
 
+// Address of the last free object in the page
+// This is where the pointer to the next free object should be stored
 static inline gcval_t *page_pfl_end(gcpage_t *p)
 {
     return (gcval_t*)(p->data + p->fl_end_offset);
 }
+
 // round an address inside a gcpage's data to its beginning
 #define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
 
@@ -1080,6 +1090,28 @@ static NOINLINE void add_page(pool_t *p)
     p->newpages = fl;
 }
 
+// Calculate the end_ptr of the current free block pointed to by _cur_ptr
+// The _cur_ptr must be the first cell in the current block (i.e. not a cell
+// in the middle of the block or the start of the block after allocating in it)
+static inline gcval_t *pool_calc_end_ptr(gcval_t *cur_ptr)
+{
+    // if `cur_ptr` is `NULL`, we don't have any free blocks
+    // anymore, set `end_ptr` to `NULL` as well and wait
+    // for the next allocation to add new pages
+    if (!cur_ptr) {
+        return NULL;
+    }
+    // Now `*cur_ptr` should usually be the last object in the free block.
+    // The only exception is when GC_FL_SINGLE is set on the lower bits,
+    // in which case this is a single free cell and the end pointer is the same
+    // with `cur_ptr`
+    if (cur_ptr->header & GC_FL_SINGLE) {
+        return cur_ptr;
+    } else {
+        return cur_ptr->next;
+    }
+}
+
 static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 {
     gcval_t *v, *end;
@@ -1091,22 +1123,30 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
     }
     gc_num.poolalloc++;
     // first try to use the freelist
-    v = p->freelist;
+    v = p->cur_ptr;
     if (v) {
-        gcval_t* next = v->next;
+        if (__likely(v < p->end_ptr)) {
+            p->cur_ptr = (gcval_t*)(((char*)v) + osize);
+        } else {
+            // Do the skipping. The high bits of `*v` is always pointing to
+            // the next free block.
+            gcval_t *next = (gcval_t*)(v->header & ~(uintptr_t)3);
+            p->cur_ptr = next;
+            p->end_ptr = pool_calc_end_ptr(next);
+            if (GC_PAGE_DATA(v) != GC_PAGE_DATA(next)) {
+                // we only update pg's fields when the freelist changes page
+                // since pg's metadata is likely not in cache
+                gcpage_t* pg = page_metadata(v);
+                assert(pg->osize == p->osize);
+                pg->nfree = 0;
+                pg->allocd = 1;
+                if (next) {
+                    p->nfree = page_metadata(next)->nfree;
+                }
+            }
+        }
         v->flags = 0;
         p->nfree--;
-        p->freelist = next;
-        if (__unlikely(GC_PAGE_DATA(v) != GC_PAGE_DATA(next))) {
-            // we only update pg's fields when the freelist changes page
-            // since pg's metadata is likely not in cache
-            gcpage_t* pg = page_metadata(v);
-            assert(pg->osize == p->osize);
-            pg->nfree = 0;
-            pg->allocd = 1;
-            if (next)
-                p->nfree = page_metadata(next)->nfree;
-        }
         return v;
     }
     // if the freelist is empty we reuse empty but not freed pages
@@ -1205,6 +1245,30 @@ static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
 
+// Append the free list that starts at begin and ends at end to the skipping
+// free list. There may be one or more free blocks in the list
+static gcval_t **append_free_list(gcval_t **pfl, gcval_t *begin, gcval_t *end)
+{
+    // we need to preserve the GC_FL_SINGLE bit in the pfl slot
+    uintptr_t single_bit = ((uintptr_t)*pfl) & GC_FL_SINGLE;
+    uintptr_t _begin = (uintptr_t)begin | single_bit;
+    *pfl = (gcval_t*)_begin;
+    return &end->next;
+}
+
+// Append the free block determined by (begin, end) to the skipping free list
+static gcval_t **chain_free_block(gcval_t **pfl, gcval_t *begin, gcval_t *end)
+{
+    if (begin == end) {
+        // single free cell
+        end->header = GC_FL_SINGLE;
+    } else {
+        begin->next = end;
+        end->header = 0;
+    }
+    return append_free_list(pfl, begin, end);
+}
+
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
                             int sweep_mask, int osize)
@@ -1229,14 +1293,15 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
     if (pg->gc_bits == GC_MARKED) {
         // this page only contains GC_MARKED and free cells
         // if we are doing a quick sweep and nothing has been allocated
-        // inside since last sweep we can skip it
+        // inside since last sweep (and is also not what the previous freepages
+        // points to) we can skip it
         if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
             // the position of the freelist begin/end in this page is
             // stored in its metadata. `-1` in fl_begin_offset means the
-            // page is full.
+            // page is full, otherwise, chain the page in the free list.
             if (pg->fl_begin_offset != (uint16_t)-1) {
-                *pfl = page_pfl_beg(pg);
-                pfl = prev_pfl = (gcval_t**)page_pfl_end(pg);
+                pfl = prev_pfl = append_free_list(pfl, page_pfl_beg(pg),
+                                                  page_pfl_end(pg));
             }
             pg_skpd++;
             freedall = 0;
@@ -1249,14 +1314,14 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
 
     {  // scope to avoid clang goto errors
         int pg_nfree = 0;
-        gcval_t **pfl_begin = NULL;
+        gcval_t **pfl_begin = NULL; // First free cell in the page
+        gcval_t *free_block_begin = NULL;
         uint8_t msk = 1; // mask for the age bit in the current age byte
         while ((char*)v <= lim) {
             int bits = gc_bits(v);
             if (!(bits & GC_MARKED)) {
-                *pfl = v;
-                pfl = &v->next;
-                pfl_begin = pfl_begin ? pfl_begin : pfl;
+                free_block_begin = free_block_begin ? free_block_begin : v;
+                pfl_begin = pfl_begin ? pfl_begin : (gcval_t**)v;
                 pg_nfree++;
                 *ages &= ~msk;
             }
@@ -1271,6 +1336,11 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
                 }
                 *ages |= msk;
                 freedall = 0;
+                if (free_block_begin) {
+                    pfl = chain_free_block(pfl, free_block_begin,
+                                           (gcval_t*)((char*)v - osize));
+                    free_block_begin = NULL;
+                }
             }
             v = (gcval_t*)((char*)v + osize);
             msk <<= 1;
@@ -1278,6 +1348,11 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl,
                 msk = 1;
                 ages++;
             }
+        }
+
+        if (free_block_begin) {
+            pfl = chain_free_block(pfl, free_block_begin,
+                                   (gcval_t*)((char*)v - osize));
         }
 
         pg->fl_begin_offset = pfl_begin ? (char*)pfl_begin - data : (uint16_t)-1;
@@ -1408,14 +1483,14 @@ static int gc_sweep_inc(int sweep_mask)
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
             pool_t* p = &pools[i];
-            gcval_t* last = p->freelist;
+            gcval_t* last = p->cur_ptr;
             if (last) {
                 gcpage_t* pg = page_metadata(last);
                 pg->allocd = 1;
                 pg->nfree = p->nfree;
             }
-            p->freelist =  NULL;
-            pfl[current_heap_index * N_POOLS + i] = &p->freelist;
+            p->cur_ptr =  NULL;
+            pfl[current_heap_index * N_POOLS + i] = &p->cur_ptr;
 
             last = p->newpages;
             if (last) {
@@ -1438,9 +1513,12 @@ static int gc_sweep_inc(int sweep_mask)
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
             pool_t* p = &pools[i];
-            *pfl[current_heap_index * N_POOLS + i] = NULL;
-            if (p->freelist) {
-                p->nfree = page_metadata(p->freelist)->nfree;
+            int pfl_idx = current_heap_index * N_POOLS + i;
+            uintptr_t single_bit = ((uintptr_t)*pfl[pfl_idx]) & GC_FL_SINGLE;
+            *pfl[pfl_idx] = (gcval_t*)single_bit;
+            p->end_ptr = pool_calc_end_ptr(p->cur_ptr);
+            if (p->cur_ptr) {
+                p->nfree = page_metadata(p->cur_ptr)->nfree;
             }
         }
     END
@@ -2451,7 +2529,8 @@ struct _jl_thread_heap_t *jl_mk_thread_heap(void)
             assert((szc[i] < 16 && szc[i] % sizeof(void*) == 0) ||
                    (szc[i] % 16 == 0));
             p[i].osize = szc[i];
-            p[i].freelist = NULL;
+            p[i].cur_ptr = NULL;
+            p[i].end_ptr = NULL;
             p[i].newpages = NULL;
             p[i].end_offset = GC_POOL_END_OFS(szc[i]);
         }
