@@ -717,21 +717,9 @@ Iterable Collections
 
    Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
-   .. code-block:: julia
-
-       collect(element_type, collection)
-
-   Return an array of type ``Array{element_type,1}`` of all items in a collection.
-
 .. function:: collect(element_type, collection)
 
    .. Docstring generated from Julia source
-
-   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
-
-   .. code-block:: julia
-
-       collect(element_type, collection)
 
    Return an array of type ``Array{element_type,1}`` of all items in a collection.
 
@@ -1033,51 +1021,15 @@ Set-Like Collections
 
    The set ``s`` is destructively modified to toggle the inclusion of integer ``n``\ .
 
-   .. code-block:: julia
-
-       symdiff!(s, itr)
-
-   For each element in ``itr``\ , destructively toggle its inclusion in set ``s``\ .
-
-   .. code-block:: julia
-
-       symdiff!(s1, s2)
-
-   Construct the symmetric difference of sets ``s1`` and ``s2``\ , storing the result in ``s1``\ .
-
 .. function:: symdiff!(s, itr)
 
    .. Docstring generated from Julia source
 
-   The set ``s`` is destructively modified to toggle the inclusion of integer ``n``\ .
-
-   .. code-block:: julia
-
-       symdiff!(s, itr)
-
    For each element in ``itr``\ , destructively toggle its inclusion in set ``s``\ .
-
-   .. code-block:: julia
-
-       symdiff!(s1, s2)
-
-   Construct the symmetric difference of sets ``s1`` and ``s2``\ , storing the result in ``s1``\ .
 
 .. function:: symdiff!(s1, s2)
 
    .. Docstring generated from Julia source
-
-   The set ``s`` is destructively modified to toggle the inclusion of integer ``n``\ .
-
-   .. code-block:: julia
-
-       symdiff!(s, itr)
-
-   For each element in ``itr``\ , destructively toggle its inclusion in set ``s``\ .
-
-   .. code-block:: julia
-
-       symdiff!(s1, s2)
 
    Construct the symmetric difference of sets ``s1`` and ``s2``\ , storing the result in ``s1``\ .
 

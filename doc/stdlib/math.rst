@@ -1790,93 +1790,21 @@ Statistics
 
    Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
 
-   .. code-block:: julia
-
-       middle(x, y)
-
-   Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
-
-   .. code-block:: julia
-
-       middle(range)
-
-   Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
-
-   .. code-block:: julia
-
-       middle(array)
-
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
-
 .. function:: middle(x, y)
 
    .. Docstring generated from Julia source
 
-   Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
-
-   .. code-block:: julia
-
-       middle(x, y)
-
    Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
-
-   .. code-block:: julia
-
-       middle(range)
-
-   Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
-
-   .. code-block:: julia
-
-       middle(array)
-
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
 
 .. function:: middle(range)
 
    .. Docstring generated from Julia source
 
-   Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
-
-   .. code-block:: julia
-
-       middle(x, y)
-
-   Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
-
-   .. code-block:: julia
-
-       middle(range)
-
    Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
-
-   .. code-block:: julia
-
-       middle(array)
-
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
 
 .. function:: middle(array)
 
    .. Docstring generated from Julia source
-
-   Compute the middle of a scalar value, which is equivalent to ``x`` itself, but of the type of ``middle(x, x)`` for consistency.
-
-   .. code-block:: julia
-
-       middle(x, y)
-
-   Compute the middle of two reals ``x`` and ``y``\ , which is equivalent in both value and type to computing their mean (``(x + y) / 2``\ ).
-
-   .. code-block:: julia
-
-       middle(range)
-
-   Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
-
-   .. code-block:: julia
-
-       middle(array)
 
    Compute the middle of an array, which consists in finding its extrema and then computing their mean.
 
@@ -1934,27 +1862,15 @@ Statistics
 
    Compute the midpoints of the bins with edges ``e``\ . The result is a vector/range of length ``length(e) - 1``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile(v, p)
+.. function:: quantile(v, ps)
 
    .. Docstring generated from Julia source
 
-   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
-
-   .. code-block:: julia
-
-       quantile(v, p)
-
-   Compute the quantile of a vector ``v`` at the probability ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
+   Compute the quantiles of a vector ``v`` at a specified set of probability values ``ps``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: quantile(v, p)
 
    .. Docstring generated from Julia source
-
-   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
-
-   .. code-block:: julia
-
-       quantile(v, p)
 
    Compute the quantile of a vector ``v`` at the probability ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
