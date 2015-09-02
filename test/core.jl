@@ -3098,14 +3098,14 @@ Base.convert(::Type{Foo11874},x::Int) = float(x)
 @test_throws TypeError bar11874(1)
 
 # issue #9233
-let
+let func = Symbol("NTuple{T, N} expression")
     err = @test_throws TypeError NTuple{Int, 1}
-    @test err.func == :apply_type
+    @test err.func == func
     @test err.expected == Int
     @test err.got == Int
 
     err = @test_throws TypeError NTuple{0x1, Int}
-    @test err.func == :apply_type
+    @test err.func == func
     @test err.expected == Int
     @test err.got == 0x1
 end

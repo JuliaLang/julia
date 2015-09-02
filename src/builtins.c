@@ -1032,7 +1032,9 @@ JL_CALLABLE(jl_f_instantiate_type)
         for(size_t i=1; i < nargs; i++) {
             jl_value_t* ty = args[i];
             if ((!jl_is_type(ty) && !jl_is_typevar(ty)) || jl_is_vararg_type(ty)) {
-                jl_type_error_rt("apply_type", "parameter of Union",
+                char pstr[32];
+                snprintf(pstr, sizeof(pstr), "parameter %d", (int)i);
+                jl_type_error_rt("Union{...} expression", pstr,
                                  (jl_value_t*)jl_type_type, args[i]);
             }
         }
@@ -1041,13 +1043,15 @@ JL_CALLABLE(jl_f_instantiate_type)
         for(size_t i=1; i < nargs; i++) {
             jl_value_t* ty = args[i];
             if (jl_is_vararg_type(ty) && i != nargs-1) {
-                jl_type_error_rt("apply_type", "parameter of Tuple",
+                char pstr[32];
+                snprintf(pstr, sizeof(pstr), "parameter %d", (int)i);
+                jl_type_error_rt("Tuple{...} expression", pstr,
                                  (jl_value_t*)jl_type_type, args[i]);
             }
         }
     }
-    else if (!jl_is_datatype(args[0])) {
-        JL_TYPECHK(instantiate_type, typector, args[0]);
+    else if (!jl_is_datatype(args[0]) && !jl_is_typector(args[0])) {
+        jl_type_error("Type{...} expression", (jl_value_t*)jl_type_type, args[0]);
     }
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
