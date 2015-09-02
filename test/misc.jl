@@ -162,12 +162,11 @@ v11801, t11801 = @timed sin(1)
 import Base.summarysize
 @test summarysize(Core) > summarysize(Core.Inference) > Core.sizeof(Core)
 @test summarysize(Base) > 10_000*sizeof(Int)
+module _test_whos_
+export x
+x = 1.0
+end
 @test sprint(whos, Main, r"^$") == ""
-let v = sprint(whos, Main)
-    @test contains(v, " KB     Module : Base")
-    @test contains(v, " KB     Module : Core")
-    @test contains(v, "\u2026\n")
-    @test match(r".\u2026$"m, v) !== nothing
-    @test match(r"\u2026."m, v) === nothing
-    @test !contains(v, "Core.Inference")
+let v = sprint(whos, _test_whos_)
+    @test contains(v, "x      8 bytes  Float64 : 1.0")
 end
