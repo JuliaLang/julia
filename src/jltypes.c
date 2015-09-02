@@ -281,6 +281,12 @@ static jl_svec_t *jl_compute_type_union(jl_value_t **types, size_t ntypes)
 jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
 {
     if (n == 0) return (jl_value_t*)jl_bottom_type;
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_value_t *pi = ts[i];
+        if (!(jl_is_type(pi) || jl_is_typevar(pi)) || jl_is_vararg_type(pi))
+            jl_type_error_rt("Union", "parameter", (jl_value_t*)jl_type_type, pi);
+    }
     if (n == 1) return ts[0];
     jl_svec_t *types = jl_compute_type_union(ts, n);
     if (jl_svec_len(types) == 0) return (jl_value_t*)jl_bottom_type;
@@ -821,6 +827,8 @@ static jl_value_t *approxify_type(jl_datatype_t *dt, jl_svec_t *pp)
 
 static int has_ntuple_intersect_tuple = 0;
 
+static jl_datatype_t *inst_tupletype_unchecked_uncached(jl_svec_t *p);
+
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
 {
@@ -1054,8 +1062,8 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     int prev_mim = match_intersection_mode;
     match_intersection_mode = 1;
     // TODO get rid of these intermediate tuple types
-    p = (jl_value_t*)jl_apply_tuple_type(super->parameters);
-    temp3 = (jl_value_t*)jl_apply_tuple_type(subs_sup_params);
+    p = (jl_value_t*)inst_tupletype_unchecked_uncached(super->parameters);
+    temp3 = (jl_value_t*)inst_tupletype_unchecked_uncached(subs_sup_params);
     env = jl_type_match(p, temp3);
     int sub_needs_parameters = 0;
     if (env == jl_false) {
@@ -1689,7 +1697,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     jl_datatype_t *stprimary = NULL;
     if (jl_is_typector(tc)) {
         tp = ((jl_typector_t*)tc)->parameters;
-        tname = "alias";
+        tname = "typealias";
     }
     else {
         assert(jl_is_datatype(tc));
@@ -1700,7 +1708,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
         if (!valid_type_param(pi)) {
-            jl_type_error_rt("apply_type", tname,
+            jl_type_error_rt(tname, "parameter",
                              jl_subtype(pi, (jl_value_t*)jl_number_type, 1) ?
                              (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
                              pi);
@@ -1712,11 +1720,10 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
             if (!jl_get_size(params[0], &nt)) {
                 // Only allow Int or TypeVar as the first parameter to
                 // NTuple. issue #9233
-                jl_type_error_rt("apply_type", "first parameter of NTuple",
+                jl_type_error_rt("NTuple", "parameter 1",
                                  (jl_value_t*)jl_long_type, params[0]);
             }
-            return jl_tupletype_fill(nt, (n==2) ? params[1] :
-                                     (jl_value_t*)jl_any_type);
+            return jl_tupletype_fill(nt, (n==2) ? params[1] : (jl_value_t*)jl_any_type);
         }
     }
     size_t ntp = jl_svec_len(tp);
@@ -2116,16 +2123,24 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     return (jl_value_t*)ndt;
 }
 
+static void check_tuple_parameter(jl_value_t *pi, size_t i, size_t np)
+{
+    if (!(jl_is_type(pi) || jl_is_typevar(pi)))
+        jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
+    if (i != np-1 && jl_is_vararg_type(pi))
+        jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
+}
+
 static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
     int isabstract = 0, cacheable = 1;
     for(size_t i=0; i < np; i++) {
-        if (!jl_is_leaf_type(p[i]))
+        jl_value_t *pi = p[i];
+        check_tuple_parameter(pi, i, np);
+        if (!jl_is_leaf_type(pi))
             isabstract = 1;
-        if (jl_has_typevars_(p[i],0))
+        if (jl_has_typevars_(pi,0))
             cacheable = 0;
-        if (i != np-1 && jl_is_vararg_type(p[i]))
-            jl_error("Vararg type in non-final position");
     }
     cacheable &= (!isabstract);
     jl_datatype_t *ndt = (jl_datatype_t*)inst_datatype(jl_anytuple_type, params, p, np,
@@ -2151,6 +2166,11 @@ jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p)
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np)
 {
     return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, 0, NULL, NULL, 0);
+}
+
+static jl_datatype_t *inst_tupletype_unchecked_uncached(jl_svec_t *p)
+{
+    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 0, 1, NULL, NULL, 0);
 }
 
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
@@ -2190,10 +2210,12 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
-        if (!isabstract && !jl_is_leaf_type(iparams[i])) {
+        jl_value_t *pi = iparams[i];
+        check_tuple_parameter(pi, i, ntp);
+        if (!isabstract && !jl_is_leaf_type(pi)) {
             cacheable = 0; isabstract = 1;
         }
-        if (cacheable && jl_has_typevars_(iparams[i],0))
+        if (cacheable && jl_has_typevars_(pi,0))
             cacheable = 0;
     }
     jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, isabstract,
