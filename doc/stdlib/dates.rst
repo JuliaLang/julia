@@ -39,6 +39,86 @@ Dates and Time Types
 
    ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
 
+.. function:: Year(dt::TimeType) -> Year
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Year(v)
+
+.. function:: Month(dt::TimeType) -> Month
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Month(v)
+
+.. function:: Week(dt::TimeType) -> Week
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Week(v)
+
+.. function:: Day(dt::TimeType) -> Day
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Day(v)
+
+.. function:: Hour(dt::TimeType) -> Hour
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Hour(v)
+
+.. function:: Minute(dt::TimeType) -> Minute
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Minute(v)
+
+.. function:: Second(dt::TimeType) -> Second
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Second(v)
+
+.. function:: Millisecond(dt::TimeType) -> Millisecond
+
+   .. Docstring generated from Julia source
+
+   Return the field part of a Date or DateTime as a ``Period`` type.
+
+   .. code-block:: julia
+
+       Millisecond(v)
+
 Dates Functions
 ---------------
 
@@ -423,15 +503,6 @@ Periods
    .. code-block:: julia
 
        Year(v)
-       Month(v)
-       Week(v)
-       Day(v)
-       Hour(v)
-       Minute(v)
-       Second(v)
-       Millisecond(v)
-
-   Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
 .. function:: default(p::Period) -> Period
 
