@@ -4812,9 +4812,44 @@ If `use_mmap` is `true`, the file specified by `source` is memory mapped for pot
 
 If `ignore_invalid_chars` is `true`, bytes in `source` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 
-If `quotes` is `true`, column enclosed within double-quote (`) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying`dims`as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If`comments`is`true`, lines beginning with`comment\_char`and text following`comment\_char`in any line are ignored.  ::             readdlm(source, delim::Char, eol::Char; options...)  If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.  ::             readdlm(source, delim::Char, T::Type; options...)  The end of line delimiter is taken as`n`.  ::             readdlm(source, delim::Char; options...)  The end of line delimiter is taken as`n`. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.  ::             readdlm(source, T::Type; options...)  The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as`n`.  ::             readdlm(source; options...)  The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as`n\`\`. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+If `quotes` is `true`, column enclosed within double-quote (") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying `dims` as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If `comments` is `true`, lines beginning with `comment_char` and text following `comment_char` in any line are ignored.
 """
-readdlm
+readdlm(source, delim, T, eol)
+
+doc"""
+    readdlm(source, delim::Char, eol::Char; options...)
+
+If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+"""
+readdlm(source, delim::Char, eol::Char)
+
+doc"""
+    readdlm(source, delim::Char, T::Type; options...)
+
+The end of line delimiter is taken as `n`.
+"""
+readdlm(source, delim::Char, T::Type)
+
+doc"""
+    readdlm(source, delim::Char; options...)
+
+The end of line delimiter is taken as `n`. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+"""
+readdlm(source, delim::Char)
+
+doc"""
+    readdlm(source, T::Type; options...)
+
+The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as `n`.
+"""
+readdlm(source, T::Type)
+
+doc"""
+    readdlm(source; options...)
+
+The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as `n`. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+"""
+readdlm(source)
 
 doc"""
     filesize(path...)
