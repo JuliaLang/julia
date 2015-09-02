@@ -2518,12 +2518,15 @@ doc"""
     maximum(itr)
 
 Returns the largest element in a collection.
+"""
+maximum(itr)
 
+doc"""
     maximum(A, dims)
 
 Compute the maximum value of an array over the given dimensions.
 """
-maximum
+maximum(A,dims)
 
 doc"""
     redisplay(x)
@@ -2913,12 +2916,15 @@ doc"""
     sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Variant of `sort!` that returns a sorted copy of `v` leaving `v` itself unmodified.
+"""
+sort(v,?,?,?,?)
 
+"""
     sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Sort a multidimensional array `A` along the given dimension.
 """
-sort
+sort(A,dim,?,?,?,?)
 
 doc"""
     kron(A, B)
@@ -6615,12 +6621,15 @@ doc"""
     minimum(itr)
 
 Returns the smallest element in a collection.
+"""
+minimum(itr)
 
+doc"""
     minimum(A, dims)
 
 Compute the minimum value of an array over the given dimensions.
 """
-minimum
+minimum(A,dims)
 
 doc"""
     var(v[, region])

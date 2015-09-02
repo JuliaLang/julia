@@ -293,21 +293,9 @@ Iterable Collections
 
    Returns the largest element in a collection.
 
-   .. code-block:: julia
-
-       maximum(A, dims)
-
-   Compute the maximum value of an array over the given dimensions.
-
 .. function:: maximum(A, dims)
 
    .. Docstring generated from Julia source
-
-   Returns the largest element in a collection.
-
-   .. code-block:: julia
-
-       maximum(A, dims)
 
    Compute the maximum value of an array over the given dimensions.
 
@@ -323,21 +311,9 @@ Iterable Collections
 
    Returns the smallest element in a collection.
 
-   .. code-block:: julia
-
-       minimum(A, dims)
-
-   Compute the minimum value of an array over the given dimensions.
-
 .. function:: minimum(A, dims)
 
    .. Docstring generated from Julia source
-
-   Returns the smallest element in a collection.
-
-   .. code-block:: julia
-
-       minimum(A, dims)
 
    Compute the minimum value of an array over the given dimensions.
 
