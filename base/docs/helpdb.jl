@@ -2292,25 +2292,6 @@ Compute the inverse cotangent of `x`, where the output is in radians
 acot
 
 doc"""
-    middle(x)
-
-Compute the middle of a scalar value, which is equivalent to `x` itself, but of the type of `middle(x, x)` for consistency.
-
-    middle(x, y)
-
-Compute the middle of two reals `x` and `y`, which is equivalent in both value and type to computing their mean (`(x + y) / 2`).
-
-    middle(range)
-
-Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
-
-    middle(array)
-
-Compute the middle of an array, which consists in finding its extrema and then computing their mean.
-"""
-middle
-
-doc"""
     oftype(x, y)
 
 Convert `y` to the type of `x` (`convert(typeof(x), y)`).
@@ -2648,17 +2629,6 @@ doc"""
 Returns the singular values of `A`, while saving space by overwriting the input.
 """
 svdvals!
-
-doc"""
-    collect(collection)
-
-Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
-
-    collect(element_type, collection)
-
-Return an array of type `Array{element_type,1}` of all items in a collection.
-"""
-collect
 
 doc"""
     consume(task, values...)
@@ -3004,21 +2974,6 @@ which must be an array of complex floating-point numbers.
 fft!
 
 doc"""
-    symdiff!(s, n)
-
-The set `s` is destructively modified to toggle the inclusion of integer `n`.
-
-    symdiff!(s, itr)
-
-For each element in `itr`, destructively toggle its inclusion in set `s`.
-
-    symdiff!(s1, s2)
-
-Construct the symmetric difference of sets `s1` and `s2`, storing the result in `s1`.
-"""
-symdiff!
-
-doc"""
     randn([rng], [dims...])
 
 Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
@@ -3038,17 +2993,6 @@ doc"""
 Construct a tuple of the given objects.
 """
 tuple
-
-doc"""
-    quantile(v, p)
-
-Compute the quantiles of a vector `v` at a specified set of probability values `p`. Note: Julia does not ignore `NaN` values in the computation.
-
-    quantile(v, p)
-
-Compute the quantile of a vector `v` at the probability `p`. Note: Julia does not ignore `NaN` values in the computation.
-"""
-quantile
 
 doc"""
 ```rst

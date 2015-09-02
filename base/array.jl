@@ -241,6 +241,11 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
+"""
+    collect(element_type, collection)
+
+Return an array of type `Array{element_type,1}` of all items in a collection.
+"""
 function collect{T}(::Type{T}, itr)
     if applicable(length, itr)
         # when length() isn't defined this branch might pollute the
@@ -259,6 +264,11 @@ function collect{T}(::Type{T}, itr)
     return a
 end
 
+"""
+    collect(collection)
+
+Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+"""
 collect(itr) = collect(eltype(itr), itr)
 
 ## Iteration ##
