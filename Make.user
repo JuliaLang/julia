@@ -1,4 +1,4 @@
-CFLAGS = -ftls-model=global-dynamic
+JCPPFLAGS = -ftls-model=global-dynamic
 LLVM_VER = svn
 LLVM_GIT_URL_LLVM = https://github.com/JuliaLang/llvm.git -b kf/tlsrebase5
 
