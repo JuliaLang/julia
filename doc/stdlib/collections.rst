@@ -455,21 +455,9 @@ Iterable Collections
 
    Sum absolute values of all elements in a collection. This is equivalent to ``sum(abs(itr))`` but faster.
 
-   .. code-block:: julia
-
-       sumabs(A, dims)
-
-   Sum absolute values of elements of an array over the given dimensions.
-
 .. function:: sumabs(A, dims)
 
    .. Docstring generated from Julia source
-
-   Sum absolute values of all elements in a collection. This is equivalent to ``sum(abs(itr))`` but faster.
-
-   .. code-block:: julia
-
-       sumabs(A, dims)
 
    Sum absolute values of elements of an array over the given dimensions.
 
