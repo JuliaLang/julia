@@ -340,21 +340,9 @@ General I/O
 
    An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
 
-   .. code-block:: julia
-
-       PipeBuffer(data::Vector{UInt8},[maxsize])
-
-   Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
-
 .. function:: PipeBuffer(data::Vector{UInt8},[maxsize])
 
    .. Docstring generated from Julia source
-
-   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
-
-   .. code-block:: julia
-
-       PipeBuffer(data::Vector{UInt8},[maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
