@@ -56,10 +56,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   .. code-block:: julia
-
-       whos([io,] [Module,] [pattern::Regex])
-
    Print information about exported global variables in a module, optionally restricted to those matching ``pattern``\ .
 
    The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
@@ -474,12 +470,6 @@ Types
    .. Docstring generated from Julia source
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
-
-   .. code-block:: julia
-
-       sizeof(s::AbstractString)
-
-   The number of bytes in string ``s``\ .
 
 .. function:: eps([type])
 
@@ -1320,21 +1310,9 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
-   .. code-block:: julia
-
-       functionloc(m::Method)
-
-   Returns a tuple ``(filename,line)`` giving the location of a method definition.
-
 .. function:: functionloc(m::Method)
 
    .. Docstring generated from Julia source
-
-   Returns a tuple ``(filename,line)`` giving the location of a method definition.
-
-   .. code-block:: julia
-
-       functionloc(m::Method)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 

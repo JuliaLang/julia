@@ -14,12 +14,6 @@
 
    .. Docstring generated from Julia source
 
-   Size, in bytes, of the canonical binary representation of the given type, if any.
-
-   .. code-block:: julia
-
-       sizeof(s::AbstractString)
-
    The number of bytes in string ``s``\ .
 
 .. function:: *(s, t)

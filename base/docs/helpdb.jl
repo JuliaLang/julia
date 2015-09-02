@@ -2050,12 +2050,15 @@ doc"""
     sizeof(type)
 
 Size, in bytes, of the canonical binary representation of the given type, if any.
+"""
+sizeof(::Type)
 
+doc"""
     sizeof(s::AbstractString)
 
 The number of bytes in string `s`.
 """
-sizeof
+sizeof(::AbstractString)
 
 doc"""
 ```rst
@@ -2092,12 +2095,15 @@ doc"""
     functionloc(f::Function, types)
 
 Returns a tuple `(filename,line)` giving the location of a method definition.
+"""
+functionloc(f, types)
 
+doc"""
     functionloc(m::Method)
 
 Returns a tuple `(filename,line)` giving the location of a method definition.
 """
-functionloc
+functionloc(m)
 
 doc"""
     stride(A, k)
@@ -2626,12 +2632,15 @@ doc"""
     sumabs(itr)
 
 Sum absolute values of all elements in a collection. This is equivalent to `sum(abs(itr))` but faster.
+"""
+sumabs(itr)
 
+doc"""
     sumabs(A, dims)
 
 Sum absolute values of elements of an array over the given dimensions.
 """
-sumabs
+sumabs(A, dims)
 
 doc"""
     svdvals!(A)
