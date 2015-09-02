@@ -12362,28 +12362,75 @@ Dates.dayofweek
 
 doc"""
     Year(dt::TimeType) -> Year
-    Month(dt::TimeType) -> Month
-    Week(dt::TimeType) -> Week
-    Day(dt::TimeType) -> Day
-    Hour(dt::TimeType) -> Hour
-    Minute(dt::TimeType) -> Minute
-    Second(dt::TimeType) -> Second
-    Millisecond(dt::TimeType) -> Millisecond
 
 Return the field part of a Date or DateTime as a `Period` type.
 
     Year(v)
-    Month(v)
-    Week(v)
-    Day(v)
-    Hour(v)
-    Minute(v)
-    Second(v)
-    Millisecond(v)
-
-Construct a `Period` type with the given `v` value. Input must be losslessly convertible to an `Int64`.
 """
-Dates.Year
+Dates.Year(dt)
+
+doc"""
+    Month(dt::TimeType) -> Month
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Month(v)
+"""
+Dates.Month(dt)
+
+doc"""
+    Week(dt::TimeType) -> Week
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Week(v)
+"""
+Dates.Week(dt)
+
+doc"""
+    Day(dt::TimeType) -> Day
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Day(v)
+"""
+Dates.Day(dt)
+
+doc"""
+    Hour(dt::TimeType) -> Hour
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Hour(v)
+"""
+Dates.Hour(dt)
+
+doc"""
+    Minute(dt::TimeType) -> Minute
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Minute(v)
+"""
+Dates.Minute(dt)
+
+doc"""
+    Second(dt::TimeType) -> Second
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Second(v)
+"""
+Dates.Second(dt)
+
+doc"""
+    Millisecond(dt::TimeType) -> Millisecond
+
+Return the field part of a Date or DateTime as a `Period` type.
+
+    Millisecond(v)
+"""
+Dates.Millisecond(dt)
 
 doc"""
     quarterofyear(dt::TimeType) -> Int
