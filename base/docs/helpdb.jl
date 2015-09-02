@@ -2002,12 +2002,15 @@ doc"""
     schurfact(A) -> Schur
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and the unitary/orthogonal Schur vectors can be obtained with `F[:vectors]` or `F[:Z]` such that `A=F[:vectors]*F[:Schur]*F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
+"""
+schurfact(A)
 
+doc"""
     schurfact(A, B) -> GeneralizedSchur
 
 Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F[:S]` and `F[:T]`, the left unitary/orthogonal Schur vectors can be obtained with `F[:left]` or `F[:Q]` and the right unitary/orthogonal Schur vectors can be obtained with `F[:right]` or `F[:Z]` such that `A=F[:left]*F[:S]*F[:right]'` and `B=F[:left]*F[:T]*F[:right]'`. The generalized eigenvalues of `A` and `B` can be obtained with `F[:alpha]./F[:beta]`.
 """
-schurfact
+schurfact(A, B)
 
 doc"""
     base64decode(string)
@@ -2238,12 +2241,15 @@ doc"""
     svdvals(A)
 
 Returns the singular values of `A`.
+"""
+svdvals(A)
 
+doc"""
     svdvals(A, B)
 
 Return only the singular values from the generalized singular value decomposition of `A` and `B`.
 """
-svdvals
+svdvals(A, B)
 
 doc"""
     issocket(path) -> Bool
@@ -3185,12 +3191,15 @@ doc"""
     PipeBuffer()
 
 An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
+"""
+PipeBuffer()
 
+doc"""
     PipeBuffer(data::Vector{UInt8},[maxsize])
 
 Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 """
-PipeBuffer
+PipeBuffer(data)
 
 doc"""
 ```rst
@@ -8128,8 +8137,7 @@ linreg(x,y)
 
 doc"""
 ```rst
-::
-           linreg(x, y, w)
+..   linreg(x, y, w)
 
 Weighted least-squares linear regression.
 ```

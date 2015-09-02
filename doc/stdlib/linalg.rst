@@ -444,12 +444,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
 
-   .. code-block:: julia
-
-       schurfact(A, B) -> GeneralizedSchur
-
-   Computes the Generalized Schur (or QZ) factorization of the matrices ``A`` and ``B``\ . The (quasi) triangular Schur factors can be obtained from the ``Schur`` object ``F`` with ``F[:S]`` and ``F[:T]``\ , the left unitary/orthogonal Schur vectors can be obtained with ``F[:left]`` or ``F[:Q]`` and the right unitary/orthogonal Schur vectors can be obtained with ``F[:right]`` or ``F[:Z]`` such that ``A=F[:left]*F[:S]*F[:right]'`` and ``B=F[:left]*F[:T]*F[:right]'``\ . The generalized eigenvalues of ``A`` and ``B`` can be obtained with ``F[:alpha]./F[:beta]``\ .
-
 .. function:: schurfact!(A)
 
    .. Docstring generated from Julia source
@@ -501,12 +495,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: schurfact(A, B) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
-
-   Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
-
-   .. code-block:: julia
-
-       schurfact(A, B) -> GeneralizedSchur
 
    Computes the Generalized Schur (or QZ) factorization of the matrices ``A`` and ``B``\ . The (quasi) triangular Schur factors can be obtained from the ``Schur`` object ``F`` with ``F[:S]`` and ``F[:T]``\ , the left unitary/orthogonal Schur vectors can be obtained with ``F[:left]`` or ``F[:Q]`` and the right unitary/orthogonal Schur vectors can be obtained with ``F[:right]`` or ``F[:Z]`` such that ``A=F[:left]*F[:S]*F[:right]'`` and ``B=F[:left]*F[:T]*F[:right]'``\ . The generalized eigenvalues of ``A`` and ``B`` can be obtained with ``F[:alpha]./F[:beta]``\ .
 
@@ -576,12 +564,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the singular values of ``A``\ .
 
-   .. code-block:: julia
-
-       svdvals(A, B)
-
-   Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
-
 .. function:: svdvals!(A)
 
    .. Docstring generated from Julia source
@@ -603,12 +585,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdvals(A, B)
 
    .. Docstring generated from Julia source
-
-   Returns the singular values of ``A``\ .
-
-   .. code-block:: julia
-
-       svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
 
@@ -909,8 +885,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ::
-              linreg(x, y, w)
+   ..   linreg(x, y, w)
 
    Weighted least-squares linear regression.
 
