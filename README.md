@@ -3,6 +3,9 @@
 [![Build Status](https://travis-ci.org/staticfloat/SHA.jl.svg?branch=master)](https://travis-ci.org/staticfloat/SHA.jl)
 [![codecov.io](http://codecov.io/github/staticfloat/SHA.jl/coverage.svg?branch=master)](http://codecov.io/github/staticfloat/SHA.jl?branch=master)
 
+[![SHA](http://pkg.julialang.org/badges/SHA_0.3.svg)](http://pkg.julialang.org/?pkg=SHA&ver=0.3)
+[![SHA](http://pkg.julialang.org/badges/SHA_0.4.svg)](http://pkg.julialang.org/?pkg=SHA&ver=0.4)
+
 Usage is very straightforward:
 ```
 julia> using SHA
