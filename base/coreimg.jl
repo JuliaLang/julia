@@ -68,7 +68,7 @@ include("iterator.jl")
 # compiler
 include("inference.jl")
 
-precompile(CallStack, (Expr, Module, (Void,), EmptyCallStack))
+precompile(CallStack, (Expr, Module, Tuple{Void}, EmptyCallStack))
 precompile(_ieval, (Symbol,))
 precompile(abstract_eval, (LambdaStaticData, ObjectIdDict, StaticVarInfo))
 precompile(abstract_interpret, (Bool, ObjectIdDict, StaticVarInfo))
