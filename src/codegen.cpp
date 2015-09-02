@@ -4946,14 +4946,14 @@ static void init_julia_llvm_env(Module *m)
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_pgcstack", NULL,
                            GlobalValue::GeneralDynamicTLSModel);
-    add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
+    add_named_global(jlpgcstack_var, jl_dlsym(jl_dl_handle, "jl_pgcstack"));
 
     jlexc_var =
         new GlobalVariable(*m, jl_pvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_exception_in_transit", NULL,
                            GlobalValue::GeneralDynamicTLSModel);
-    add_named_global(jlexc_var, (void*)&jl_exception_in_transit);
+    add_named_global(jlexc_var, jl_dlsym(jl_dl_handle, "jl_exception_in_transit"));
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
