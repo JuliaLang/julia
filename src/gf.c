@@ -17,6 +17,9 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+// ::ANY has no effect if the number of overlapping methods is greater than this
+#define MAX_UNSPECIALIZED_CONFLICTS 10
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -505,17 +508,19 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                          (jl_value_t*)temp2) !=
                     (jl_value_t*)jl_bottom_type) {
                     nintr++;
-                    break;
+                    if (nintr > MAX_UNSPECIALIZED_CONFLICTS) break;
                 }
                 curr = curr->next;
             }
-            if (nintr) {
+            if (nintr > MAX_UNSPECIALIZED_CONFLICTS) {
                 // TODO: even if different specializations of this slot need
                 // separate cache entries, have them share code.
                 jl_svecset(newparams, i, jl_tparam(type, i));
             }
             else {
                 set_to_any = 1;
+                if (nintr > 0)
+                    need_guard_entries = 1;
             }
         }
         if (set_to_any || isstaged) {
