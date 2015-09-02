@@ -8241,7 +8241,7 @@ doc"""
 Compute the matrix exponential of ``A``, defined by
 
 .. math::
-   e^A = \sum_{n=0}^{\inf} \frac{A^n}{n!}.
+   e^A = \sum_{n=0}^{\infty} \frac{A^n}{n!}.
 
 For symmetric or Hermitian ``A``, an eigendecomposition (:func:`eigfact`) is used, otherwise the scaling and squaring algorithm (see [H05]_) is chosen.
 
