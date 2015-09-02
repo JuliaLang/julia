@@ -41,6 +41,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
+    @test isposdef(apd,:U)
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
@@ -54,6 +55,7 @@ debug && println("Solve square general system of equations")
     @test_throws DimensionMismatch b'\b
     @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
+    @test zeros(eltya,n)\ones(eltya,n) ≈ zeros(eltya,n,1)\ones(eltya,n,1)
 
 
 debug && println("Test nullspace")
@@ -62,6 +64,7 @@ debug && println("Test nullspace")
         @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
         @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
         @test size(nullspace(b), 2) == 0
+        @test nullspace(zeros(eltya,n)) == eye(eltya,1)
     end # for eltyb
 
 debug && println("Test pinv")
@@ -113,9 +116,13 @@ debug && println("Factorize")
     @test factorize(A) == Bidiagonal(d,e,false)
     A += diagm(f,-2)
     @test factorize(A) == LowerTriangular(A)
+    A = diagm(d) + diagm(e,1)
+    @test factorize(A) == Bidiagonal(d,e,true)
     if eltya <: Real
         A = diagm(d) + diagm(e,1) + diagm(e,-1)
         @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
+        A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
+        @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
     end
     A = diagm(d) + diagm(e,1) + diagm(e2,-1)
     @test full(factorize(A)) ≈ full(factorize(Tridiagonal(e2,d,e)))
@@ -377,6 +384,14 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                  0.367879439109187 1.47151775849686  1.10363831732856;
                                  0.135335281175235 0.406005843524598 0.541341126763207]')
     @test_approx_eq expm(A3) eA3
+
+    A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
+    eA4 = convert(Matrix{elty}, [1.2840254166877416 0.2840254166877415; 0 1])
+    @test expm(A4) ≈ eA4
+
+    A5 = convert(Matrix{elty}, [0 0.02; 0 0])
+    eA5 = convert(Matrix{elty}, [1 0.02; 0 1])
+    @test expm(A5) ≈ eA5
 
     # Hessenberg
     @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty},
