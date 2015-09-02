@@ -128,21 +128,9 @@ Sorting Functions
 
    Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
-   .. code-block:: julia
-
-       sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-   Sort a multidimensional array ``A`` along the given dimension.
-
 .. function:: sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    .. Docstring generated from Julia source
-
-   Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
-
-   .. code-block:: julia
-
-       sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array ``A`` along the given dimension.
 
